@@ -308,7 +308,7 @@ export async function scheduleProjectBackup(projectId: string, projectPath: stri
     const interval = setInterval(async () => {
       await createProjectBackup(projectId, projectPath, 'Auto Backup');
     }, intervalMinutes * 60 * 1000);
-
+    interval.unref();
     schedulerMap.set(projectId, interval);
     return { success: true };
   } catch (err) {
@@ -320,6 +320,7 @@ export function clearProjectBackupScheduler(projectId: string): void {
   const existing = schedulerMap.get(projectId);
   if (existing) {
     clearInterval(existing);
+    existing.unref();
     schedulerMap.delete(projectId);
   }
 }
