@@ -5554,6 +5554,36 @@ electron_1.ipcMain.handle('quit-app', () => {
 electron_1.ipcMain.handle('show-window', () => {
     ensureWindow();
 });
+
+// ========== Window Control IPC Handlers (minimize/maximize/close) ==========
+electron_1.ipcMain.handle('window:minimize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.minimize();
+    }
+});
+electron_1.ipcMain.handle('window:maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+    }
+});
+electron_1.ipcMain.handle('window:close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.close();
+    }
+});
+electron_1.ipcMain.handle('window:isMaximized', () => {
+    return mainWindow ? !mainWindow.isDestroyed() && mainWindow.isMaximized() : false;
+});
+electron_1.ipcMain.handle('window:isFocused', () => {
+    return mainWindow ? !mainWindow.isDestroyed() && mainWindow.isFocused() : false;
+});
+electron_1.ipcMain.on('window:focus-change', (_event, focused: boolean) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('window:focus-change', focused);
+    }
+});
+
+
 electron_1.ipcMain.handle('get-auto-start-status', () => {
     return electron_1.app.getLoginItemSettings().openAtLogin;
 });
