@@ -3204,6 +3204,8 @@ function initializeStorage() {
         db.exec('CREATE INDEX IF NOT EXISTS idx_facts_subject ON context_facts(subject_id)');
         db.exec('CREATE INDEX IF NOT EXISTS idx_facts_predicate ON context_facts(predicate)');
         db.exec('CREATE INDEX IF NOT EXISTS idx_facts_valid ON context_facts(valid_from, valid_to)');
+        // Link table: which entities/facts belong to which episode
+        try { db.exec('CREATE TABLE IF NOT EXISTS context_entity_facts (id TEXT PRIMARY KEY, episode_id TEXT, entity_id TEXT, fact_id TEXT, role TEXT, created_at TEXT DEFAULT (datetime(\'now\')))'); } catch (e) { /* already exists */ }
 
         db.exec(`
           CREATE TABLE IF NOT EXISTS context_embeddings (
@@ -4564,6 +4566,14 @@ function isBrowserWithExtension(appName: string): boolean {
     if (browsersList.length === 0) return false;
     return browsersList.some((b: string) => isAppMatchingBrowser(appName, b));
 }
+// Check if appName matches any known browser process name (even if extension not yet identified)
+// This prevents browser apps from being logged as regular app rows when extension hasn't identified itself yet
+function isKnownBrowser(appName: string): boolean {
+    if (!appName) return false;
+    const appLower = appName.toLowerCase().replace(/\.exe$/i, '');
+    const browserNames = Object.keys(BROWSER_PROCESS_NAMES);
+    return browserNames.some(b => isAppMatchingBrowser(appLower, b));
+}
 // Calculate productivity score based on daily activity
 // Returns: { score: 0-100, productive_sec: number, neutral_sec: number, distracting_sec: number, total_sec: number }
 function calculateProductivityScore(dayLogs) {
@@ -4877,7 +4887,7 @@ async function pollForeground() {
         // The manager checks active state internally; this ensures overlay fires
         // immediately when a distracting app appears, even after same-app re-detection.
         // Skip if the app is the browser-with-extension (website-level detection handles it via handleBrowserData -> onWebActivity)
-        if (focusManager && appName && !isBrowserWithExtension(appName)) {
+        if (focusManager && appName && !isBrowserWithExtension(appName) && !isKnownBrowser(appName)) {
             focusManager.onForegroundApp(appName, categorizeApp(appName));
         }
 
@@ -5077,7 +5087,8 @@ function createWindow() {
             nodeIntegration: false,
             webSecurity: true,
         },
-        titleBarStyle: 'default',
+        titleBarStyle: 'hidden',
+        frame: false,
         backgroundColor: '#0a0a0a',
     });
     
@@ -5454,9 +5465,39 @@ function createWindow() {
                 JSON.stringify({ lastFocusTime: now }, null, 2)
             );
         } catch (err) { /* ignore */ }
+        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
     });
     mainWindow.on('blur', () => {
         lastFocusTime = Date.now();
+        mainWindow.webContents.send('window:focus-change', false);
+    });
+    // Maximize/unmaximize — notify renderer so title bar can update icon
+    mainWindow.on('maximize', () => {
+        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
+    });
+    mainWindow.on('unmaximize', () => {
+        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
+    });
+    mainWindow.on('focus', () => {
+        const now = Date.now();
+        if (lastFocusTime) {
+            checkSleepGap(lastFocusTime, now);
+        }
+        lastFocusTime = now;
+        try {
+            fs_1.default.writeFileSync(
+                path_1.default.join(userDataPath, 'deskflow-last-focus.json'),
+                JSON.stringify({ lastFocusTime: now }, null, 2)
+            );
+        } catch (err) { /* ignore */ }
+        // Notify renderer of focus change so custom title bar can update its state
+        mainWindow.webContents.send('window:focus-change', focused);
+    });
+    // Focus the main window when a desktop notification is clicked
+    mainWindow.on('activate', () => {
+        if (!mainWindow.isFocused()) {
+            mainWindow.focus();
+        }
     });
 
     // Also check for sleep gap on startup (focus event won't fire if window already focused)
@@ -5583,11 +5624,13 @@ electron_1.ipcMain.on('window:focus-change', (_event, focused: boolean) => {
     }
 });
 
+electron_1.ipcMain.handle('notification-click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.focus();
+    }
+});
 
 electron_1.ipcMain.handle('get-auto-start-status', () => {
-    return electron_1.app.getLoginItemSettings().openAtLogin;
-});
-electron_1.ipcMain.handle('set-auto-start', (_event, enabled) => {
     const exePath = electron_1.app.isPackaged 
         ? process.execPath 
         : electron_1.app.getPath('exe');
@@ -6970,6 +7013,48 @@ electron_1.ipcMain.handle('remove-keyword-domain', (event, domain) => {
     saveCategoryConfig();
     console.log(`[DeskFlow] Removed keyword domain: ${domain}`);
     return true;
+});
+
+// ========== Word Tracker IPC Handlers ==========
+const wordTrackerModule = require('./main/wordTracker');
+electron_1.ipcMain.handle('wordTrackerGetWords', () => {
+    return wordTrackerModule.getWords();
+});
+electron_1.ipcMain.handle('wordTrackerAddWord', (event, word, label, color, tolerance) => {
+    return wordTrackerModule.addWord(word, label, color, tolerance);
+});
+electron_1.ipcMain.handle('wordTrackerRemoveWord', (event, wordId) => {
+    return wordTrackerModule.removeWord(wordId);
+});
+electron_1.ipcMain.handle('wordTrackerToggleWord', (event, wordId, enabled) => {
+    return wordTrackerModule.toggleWord(wordId, enabled);
+});
+electron_1.ipcMain.handle('wordTrackerSetTolerance', (event, wordId, tolerance) => {
+    return wordTrackerModule.setTolerance(wordId, tolerance);
+});
+electron_1.ipcMain.handle('wordTrackerEditWord', (event, wordId, updates) => {
+    return wordTrackerModule.editWord(wordId, updates);
+});
+electron_1.ipcMain.handle('wordTrackerGetCounts', (event, projectId) => {
+    return wordTrackerModule.getCounts(projectId);
+});
+electron_1.ipcMain.handle('wordTrackerCountsByProject', (event, wordId) => {
+    return wordTrackerModule.getCountsByProject(wordId);
+});
+electron_1.ipcMain.handle('wordTrackerGetConfig', (event, key) => {
+    return wordTrackerModule.getConfig(key);
+});
+electron_1.ipcMain.handle('wordTrackerSetConfig', (event, key, value) => {
+    return wordTrackerModule.setConfig(key, value);
+});
+electron_1.ipcMain.handle('wordTrackerResetCounts', () => {
+    return wordTrackerModule.resetCounts();
+});
+electron_1.ipcMain.handle('wordTrackerScanJsonl', (event, projectId) => {
+    return wordTrackerModule.scanJsonl(projectId);
+});
+electron_1.ipcMain.handle('wordTrackerCountText', (event, text, projectId) => {
+    return wordTrackerModule.countText(text, projectId);
 });
 
 // === LOCKED ITEMS & AI CHANGE HISTORY ===
