@@ -42,6 +42,7 @@ export default function TitleBar() {
   const handleMinimize = () => api?.windowMinimize?.();
   const handleMaximize = () => api?.windowMaximize?.();
   const handleClose = () => api?.windowClose?.();
+  const handleNotifyClick = () => api?.notifyClick?.();
 
   return (
     <div
@@ -54,6 +55,7 @@ export default function TitleBar() {
         WebkitAppRegion: 'drag',
       }}
       data-titlebar-drag
+      onClick={handleNotifyClick}
     >
       <div className="flex-1 h-full" />
 
