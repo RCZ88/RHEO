@@ -46,23 +46,29 @@ function writeMode(next: MotionMode): void {
 
 export function useMotionPreference(): MotionMode {
   // Init from storage or system on first client mount
+  // When no stored preference, leave mode as "auto" (don't write localStorage —
+  // the nudge banner needs !hasChosen to be true). The system RM listener
+  // (below) will apply a transient mode when in auto.
   useEffect(() => {
     const stored = readStoredMode();
     if (stored) {
       writeMode(stored);
-    } else {
-      writeMode(getSystemReducedMotion() ? "off" : "on");
     }
+    // else: mode stays "auto", no localStorage write, no persistence
   }, []);
 
   // Live system reduced-motion listener when in auto mode
+  // Applies a transient mode based on system setting — does NOT persist to
+  // localStorage (that's a user choice, made via setMode/setter).
   useEffect(() => {
     if (mode !== "auto") return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => {
       const cur = readStoredMode();
       if (cur && cur !== "auto") return;
-      writeMode(mq.matches ? "off" : "on");
+      // Transient: mutate mode + notify, but don't write localStorage
+      mode = mq.matches ? "off" : "on";
+      for (const fn of [...listeners]) fn();
     };
     apply();
     const handler = () => apply();
