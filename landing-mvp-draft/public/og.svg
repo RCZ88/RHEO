@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#050506"/>
+      <stop offset="100%" stop-color="#0a0a0c"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="bloom" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
+      <stop offset="70%" stop-color="transparent"/>
+    </radialGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <circle cx="600" cy="315" r="380" fill="url(#bloom)"/>
+
+  <!-- top hairline + wordmark -->
+  <rect x="80" y="80" width="40" height="1" fill="rgba(255,255,255,0.4)"/>
+  <text x="132" y="86" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="13" letter-spacing="3">RHEO — ῥέω · GREEK: TO FLOW</text>
+  <text x="1120" y="86" text-anchor="end" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="13" letter-spacing="2">v0.1.0 · LOCAL FIRST</text>
+
+  <!-- main headline -->
+  <text x="80" y="250" fill="#f4f4f5" font-family="'Space Grotesk', sans-serif" font-size="92" font-weight="700" letter-spacing="-2">TIME,</text>
+  <text x="80" y="350" fill="#f4f4f5" font-family="'Space Grotesk', sans-serif" font-size="92" font-weight="700" letter-spacing="-2">MADE LEGIBLE.</text>
+
+  <!-- sub copy -->
+  <text x="82" y="410" fill="#a1a1aa" font-family="'Space Grotesk', sans-serif" font-size="22" font-weight="400">An AI-native time-tracking desktop app. It watches your</text>
+  <text x="82" y="440" fill="#a1a1aa" font-family="'Space Grotesk', sans-serif" font-size="22" font-weight="400">hours flow — then turns the record into understanding.</text>
+
+  <!-- mini timeline strip -->
+  <g transform="translate(80,500)">
+    <rect width="1040" height="40" rx="6" fill="#050506" stroke="rgba(255,255,255,0.08)"/>
+    <!-- phase segments -->
+    <rect x="0" y="0" width="200" height="40" fill="rgba(255,255,255,0.04)"/>
+    <rect x="330" y="0" width="280" height="40" fill="rgba(255,255,255,0.18)"/>
+    <rect x="610" y="0" width="180" height="40" fill="rgba(255,255,255,0.08)"/>
+    <rect x="880" y="0" width="160" height="40" fill="rgba(255,255,255,0.06)"/>
+    <!-- ticks -->
+    <line x1="200" y1="0" x2="200" y2="40" stroke="rgba(255,255,255,0.16)"/>
+    <line x1="330" y1="0" x2="330" y2="40" stroke="rgba(255,255,255,0.16)"/>
+    <line x1="610" y1="0" x2="610" y2="40" stroke="rgba(255,255,255,0.16)"/>
+    <line x1="790" y1="0" x2="790" y2="40" stroke="rgba(255,255,255,0.16)"/>
+    <line x1="880" y1="0" x2="880" y2="40" stroke="rgba(255,255,255,0.16)"/>
+    <!-- labels -->
+    <text x="100" y="25" text-anchor="middle" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="11" letter-spacing="2">REST</text>
+    <text x="470" y="25" text-anchor="middle" fill="#f4f4f5" font-family="'JetBrains Mono', monospace" font-size="11" letter-spacing="2">DEEP WORK</text>
+    <text x="700" y="25" text-anchor="middle" fill="#a1a1aa" font-family="'JetBrains Mono', monospace" font-size="11" letter-spacing="2">MEETINGS</text>
+    <text x="960" y="25" text-anchor="middle" fill="#a1a1aa" font-family="'JetBrains Mono', monospace" font-size="11" letter-spacing="2">LEARN</text>
+    <!-- hour ticks -->
+    <text x="0" y="58" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="10">00</text>
+    <text x="260" y="58" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="10">06</text>
+    <text x="520" y="58" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="10">12</text>
+    <text x="780" y="58" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="10">18</text>
+    <text x="1040" y="58" text-anchor="end" fill="#63636b" font-family="'JetBrains Mono', monospace" font-size="10">24</text>
+  </g>
+
+  <!-- bottom hairline -->
+  <rect x="80" y="600" width="1040" height="1" fill="rgba(255,255,255,0.08)"/>
+</svg>

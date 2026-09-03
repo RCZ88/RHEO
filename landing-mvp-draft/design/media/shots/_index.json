@@ -1,0 +1,82 @@
+[
+  {
+    "viewport": "desktop",
+    "section": "full",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\full-desktop.png"
+  },
+  {
+    "viewport": "desktop",
+    "section": "hero",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\hero-desktop.png"
+  },
+  {
+    "viewport": "desktop",
+    "section": "manifesto",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\manifesto-desktop.png"
+  },
+  {
+    "viewport": "desktop",
+    "section": "act-record",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\act_record-desktop.png"
+  },
+  {
+    "viewport": "desktop",
+    "section": "capabilities",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\capabilities-desktop.png"
+  },
+  {
+    "viewport": "desktop",
+    "section": "understand",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\understand-desktop.png"
+  },
+  {
+    "viewport": "desktop",
+    "section": "learn",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\learn-desktop.png"
+  },
+  {
+    "viewport": "desktop",
+    "section": "download",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\download-desktop.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "full",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\full-mobile.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "hero",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\hero-mobile.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "manifesto",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\manifesto-mobile.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "act-record",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\act_record-mobile.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "capabilities",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\capabilities-mobile.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "understand",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\understand-mobile.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "learn",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\learn-mobile.png"
+  },
+  {
+    "viewport": "mobile",
+    "section": "download",
+    "file": "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker\\landing-mvp-draft\\design\\media\\shots\\download-mobile.png"
+  }
+]
