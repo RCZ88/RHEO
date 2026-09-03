@@ -2720,7 +2720,8 @@ Trend: +14% vs. yesterday. Keep it up!`;
     <div className="flex flex-col h-screen overflow-hidden bg-[#121212] text-white">
       <TitleBar />
       <AppBackground />
-      {/* Sidebar � hidden on workspace (/terminal) and during solar overlay */}
+      <div className="flex flex-1 min-h-0 relative">
+      {/* Sidebar hidden on workspace (/terminal) and during solar overlay */}
       {location.pathname !== '/terminal' && !solarOverlayActive && (
       <motion.div
         className="border-r border-zinc-800 flex flex-col h-full glass overflow-hidden shrink-0"
@@ -3684,6 +3685,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
             }}
           />
         </div>
+      </div>
       </div>
       <TutorialOverlay />
     </div>
