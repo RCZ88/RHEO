@@ -6,7 +6,6 @@
 - `src/services/SymbolIndexService.ts` and `src/services/WorkspaceStateService.ts` use type imports without `type` keyword under `verbatimModuleSyntax`.
 
 ## Frontend components
-- `src/components/dashboard/QuadCardSlotResizer.tsx` — replace height-drag logic with CSS grid 2×2 layout.
 - `src/components/ui/v-calendar.tsx` — current VCalendar is effectively a single-option select, not a real date picker.
 - `src/components/ui/glare-hover.tsx` — current implementation is an empty passthrough; the actual glare sweep effect needs a LAMINAR pass (white ≤8%, hover-only, RM off) or usages should be removed.
 
