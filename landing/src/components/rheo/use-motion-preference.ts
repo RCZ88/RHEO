@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useSyncExternalStore, useCallback, useEffect } from "react";
 
 type MotionMode = "auto" | "on" | "off";
 
@@ -20,69 +20,83 @@ function readStoredMode(): MotionMode | null {
   return null;
 }
 
-export function useMotionPreference(): MotionMode {
-  const [mode, setMode] = useState<MotionMode>(() => readStoredMode() ?? "auto");
+// ---- Module-level store ----
+let mode: MotionMode = "auto";
+const listeners = new Set<() => void>();
 
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const handler = () => {
-      setMode((prev) => {
-        if (prev === "auto") {
-          // auto follows system
-          return mq.matches ? "off" : "on";
-        }
-        return prev;
-      });
-    };
+function subscribe(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
-    // Initial sync
-    if (mode === "auto") {
-      setMode(mq.matches ? "off" : "on");
-    }
+function getServerSnapshot(): MotionMode {
+  return "auto";
+}
 
-    mq.addEventListener?.("change", handler);
-    return () => mq.removeEventListener?.("change", handler);
-  }, [mode]);
-
+function getSnapshot(): MotionMode {
   return mode;
 }
 
-export function useMotionPreferenceSetter() {
-  const current = useMotionPreference();
-  const initialized = useRef(false);
+function writeMode(next: MotionMode): void {
+  if (mode === next) return;
+  mode = next;
+  try { localStorage.setItem(STORAGE_KEY, mode); } catch {}
+  for (const fn of [...listeners]) fn();
+}
 
+export function useMotionPreference(): MotionMode {
+  // Init from storage or system on first client mount
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true;
-      // On first mount, persist default if not set
-      if (!readStoredMode()) {
-        try {
-          localStorage.setItem(STORAGE_KEY, current === "auto" ? "auto" : current);
-        } catch {}
-      }
+    const stored = readStoredMode();
+    if (stored) {
+      writeMode(stored);
+    } else {
+      writeMode(getSystemReducedMotion() ? "off" : "on");
     }
-  }, [current]);
+  }, []);
 
-  const setMode = (m: MotionMode) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, m);
-    } catch {}
-  };
-
-  const [modeState, setModeState] = useState<MotionMode>(current);
-
-  // Sync external changes
+  // Live system reduced-motion listener when in auto mode
   useEffect(() => {
-    setModeState(current);
-  }, [current]);
+    if (mode !== "auto") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      const cur = readStoredMode();
+      if (cur && cur !== "auto") return;
+      writeMode(mq.matches ? "off" : "on");
+    };
+    apply();
+    const handler = () => apply();
+    mq.addEventListener?.("change", handler);
+    return () => mq.removeEventListener?.("change", handler);
+  }, []);
 
-  return { mode: modeState, setMode: setModeState };
+  // Cross-tab storage sync
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.storageArea === localStorage) {
+        const val = readStoredMode();
+        if (val) writeMode(val);
+      }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+export function useMotionPreferenceSetter() {
+  const mode = useMotionPreference();
+  const setMode = useCallback(
+    (next: MotionMode) => writeMode(next),
+    [],
+  );
+  return { mode, setMode };
 }
 
 export function useShouldAnimate(): boolean {
-  const mode = useMotionPreference();
-  if (mode === "on") return true;
-  if (mode === "off") return false;
-  // auto: follow system
+  const m = useMotionPreference();
+  if (m === "on") return true;
+  if (m === "off") return false;
   return !getSystemReducedMotion();
 }

@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useScroll, useSpring, useTransform } from "fra
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import NavClock from "./NavClock";
+import MotionChip from "./MotionChip";
 
 const LINKS = [
   { label: "PRODUCT", href: "#hero" },
@@ -130,23 +131,7 @@ export default function Nav() {
           {/* ambient clock (desktop only) + motion chip + mobile hamburger */}
           <div className="flex items-center gap-3">
             <NavClock />
-            <button
-              type="button"
-              className="mono hidden md:inline-flex"
-              style={{
-                fontSize: 10,
-                padding: "2px 8px",
-                borderRadius: 4,
-                border: "1px solid rgba(255,255,255,0.16)",
-                background: "transparent",
-                color: "#63636b",
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-              }}
-              aria-label="Motion chip"
-            >
-              MOTION AUTO
-            </button>
+            <MotionChip className="mono hidden md:inline-flex" />
             <button
               type="button"
               className="md:hidden flex items-center justify-center"
