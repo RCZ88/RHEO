@@ -20,7 +20,7 @@ import { InsightStrip } from './dashboard/InsightStrip';
 import { MomentumHero } from '../components/dashboard/MomentumHero';
 import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
 
-import { QuadCardSlotResizer } from '../components/dashboard/QuadCardSlotResizer';
+
 
 import { VCalendar } from '../components/ui/v-calendar';
 
@@ -366,8 +366,7 @@ export default function DashboardPage({
     return `${s}s`;
   };
 
-  const quadGridRef = useRef<HTMLDivElement>(null);
-  const quadCardRefs = useRef([useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)]);
+
   // Global interaction listener — detects user activity for idle-aware session tracking
   useEffect(() => {
     const update = () => { lastInteractionRef.current = Date.now(); };
@@ -2541,15 +2540,8 @@ export default function DashboardPage({
 
            {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
            <BlurFade delay={0.14} duration={0.4}>
-             <QuadCardSlotResizer
-               targetRef={quadGridRef}
-               cardRefs={quadCardRefs}
-               defaultPx={340}
-               minPx={200}
-               maxPx={600}
-             />
-             <div ref={quadGridRef} className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-4 mb-4 items-stretch">
-                <GlareHover ref={quadCardRefs.current[0]} className="rounded-xl flex flex-col">
+             <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-2 gap-2 flex-1 min-h-0 mb-4">
+                <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
                   <GoalsCard
                     goals={goals}
                     longTermGoals={longTermGoals}
@@ -2565,15 +2557,15 @@ export default function DashboardPage({
                     onDismissSuggestion={dismissSuggestion}
                     onGenerateSuggestions={generateSuggestions}
                   />
-                </GlareHover>
-                <GlareHover ref={quadCardRefs.current[1]} className="rounded-xl flex flex-col">
+                </div>
+                <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
                   <QuickFocusCard
                     state={deepFocus.state}
                     onStart={deepFocus.start}
                     onEnd={deepFocus.end}
                   />
-                </GlareHover>
-                <GlareHover ref={quadCardRefs.current[2]} className="rounded-xl flex flex-col">
+                </div>
+                <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
                   <DeadlinesCard
                     deadlines={deadlines}
                     reminders={reminders}
@@ -2590,10 +2582,10 @@ export default function DashboardPage({
                       try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
                     }}
                   />
-                </GlareHover>
-              <GlareHover ref={quadCardRefs.current[3]} className="rounded-xl flex flex-col">
+                </div>
+              <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
                 <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
-              </GlareHover>
+              </div>
              </div>
            </BlurFade>
 
