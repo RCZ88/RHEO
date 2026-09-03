@@ -21,6 +21,7 @@ export type AtlasGlyph =
   | "lyceum"
   | "ide"
   | "session-search"
+  | "gap-fill"
   | "conductor"
   | "trace"
   | "context-brain"
@@ -74,10 +75,10 @@ export const ATLAS: AtlasInstrument[] = [
   {
     id: "session-search",
     index: 6,
-    name: "Session Search",
+    name: "Gap Fill",
     status: "SHIPPED",
-    oneLiner: "Search across hundreds of AI sessions, instantly.",
-    glyph: "session-search",
+    oneLiner: "Fill untracked gaps with external sessions and activities.",
+    glyph: "gap-fill",
   },
   {
     id: "conductor",
@@ -99,7 +100,7 @@ export const ATLAS: AtlasInstrument[] = [
     id: "context-brain",
     index: 9,
     name: "Context Brain",
-    status: "VISION",
+    status: "BETA",
     oneLiner: "A self-expanding memory graph your agents share.",
     glyph: "context-brain",
   },
