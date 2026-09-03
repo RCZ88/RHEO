@@ -178,3 +178,9 @@ pnpm-lock.yaml
 agent/docs/ai-usage-city-viz.zip
 public/cyber_assets.zip
 src/**/*.d.ts
+
+.next/
+
+# nested backup dirs & incoming dumps — backups live outside git
+landing/prev-ver-backup/
+_incoming/
