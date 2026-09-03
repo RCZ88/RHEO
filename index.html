@@ -37,7 +37,9 @@
 
     <script>
       // SAFETY NET: catches JS load failures and early crashes that prevent React from mounting.
+      window.__RHEO_LOADED = false;
       window.__DESKFLOW_LOADED = false;
+      window.__RHEO_LAST_ERROR = null;
       window.__DESKFLOW_LAST_ERROR = null;
 
       function showFallback(msg, err) {
@@ -60,7 +62,11 @@
 
       window.copyError = function() {
         var text = '';
-        if (window.__DESKFLOW_LAST_ERROR) {
+        if (window.__RHEO_LAST_ERROR) {
+          text = typeof window.__RHEO_LAST_ERROR === 'string'
+            ? window.__RHEO_LAST_ERROR
+            : (window.__RHEO_LAST_ERROR.message || '') + '\n\n' + (window.__RHEO_LAST_ERROR.stack || '');
+        } else if (window.__DESKFLOW_LAST_ERROR) {
           text = typeof window.__DESKFLOW_LAST_ERROR === 'string'
             ? window.__DESKFLOW_LAST_ERROR
             : (window.__DESKFLOW_LAST_ERROR.message || '') + '\n\n' + (window.__DESKFLOW_LAST_ERROR.stack || '');
@@ -85,7 +91,7 @@
         showFallback(e.reason ? (e.reason.message || String(e.reason)) : 'Unhandled rejection', e.reason);
       });
       setTimeout(function() {
-        if (!window.__DESKFLOW_LOADED) {
+        if (!window.__RHEO_LOADED && !window.__DESKFLOW_LOADED) {
           showFallback('The application timed out while loading. Check the console for errors.');
         }
       }, 10000);
