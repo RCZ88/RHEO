@@ -483,3 +483,19 @@ attach or the user hasn't launched the app, note "NOT LAUNCHED" and proceed.
   explain why, but do NOT claim VERDICT PASS without visual verification.
 - NEVER leave `console.log` calls unprotected in HTTP server handlers (port 54321).
   Wrap them, or ensure stdout error handler is registered (process.stdout.on('error')).
+- NEVER run destructive git operations without authorization.
+
+## 8. PREVENTION RULES (REQUIRED AFTER ANY RECOVERY)
+These rules are mandatory after recovery from a broken state. Do not skip them.
+
+1. **Backup branch before ANY destructive git op.**  
+   Before `git reset`, `git checkout --`, `git clean`, or any history-rewriting command, create a non-destructive backup branch pointer: `backup/pre-repair-YYYY-MM-DD`. This is a lightweight pointer, not a clone.
+
+2. **No new components during repairs.**  
+   During recovery, do not invent new components or rewrite large files from scratch. Restore missing/corrupted code from git history or existing backups. If the original cannot be recovered, stop and report — do not invent.
+
+3. **tsc --noEmit is a gate after recovery.**  
+   After any recovery operation, run `npx tsc --noEmit --project tsconfig.app.json`. Exit code must be 0 before proceeding. If it fails, fix the TypeScript errors first.
+
+4. **dist artifacts are gitignored — verify + rebuild after history ops.**  
+   `dist/`, `dist-electron/`, and `node_modules/.vite/` are gitignored build artifacts. After any git history operation, verify they exist with non-zero size, then rebuild with `node scripts/build.mjs` if empty.
