@@ -6,7 +6,13 @@
 - 2026-09-03: Recovery performed — backup branch `backup/pre-repair-20260903` created, stale `.d.ts` files removed, source corruption patched, rebuild executed, runtime verified via fresh Electron launch.
 
 ## Root Cause
-The blank content area on every route was caused by **empty dist artifacts**, not a broken route table or TitleBar regression. Electron started, served an empty bundle, so `#root` rendered with no React tree. The empty `dist/`/`dist-electron/`/`.vite/` came from the reset/repair sequence wiping build outputs and no rebuild being run afterward.
+The blank content area on every route had **two contributing causes**:
+
+1. **Empty dist artifacts** — `dist/`, `dist-electron/`, and `node_modules/.vite/` were wiped to 0 bytes by the `git reset --hard` on 2026-09-02/03; no rebuild was run afterward, so Electron served an empty bundle and `#root` rendered with no React tree.
+
+2. **Invented resizer family + flex chain collapse** — `src/components/dashboard/QuadCardSlotResizer.tsx`, `CardHeightResizer.tsx`, and `ResizableHeightHandle.tsx` measured containers and wrote inline pixel sizes via ResizeObserver/MutationObserver. On a zero-height measure moment (after the flex-col shell change that introduced the TitleBar), the resizer pinned content containers to `height: 0px`. The DOM was present but computed height was 0px, so only the sidebar rendered and the content area was blank. The resizer family was deleted and replaced with pure CSS grid (`grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-2 gap-2 flex-1 min-h-0`, cards `h-full min-h-0 overflow-auto`). No new components; CSS only.
+
+**Lesson (verification-gap):** renderer-attach tests must be accompanied by a real shell-launch smoke test. The prior repair verified the renderer attach but did not confirm the Electron shell reaches rendered content on cold launch — that gap allowed the 0px-height collapse to go undetected until the user reported it.
 
 ## Artifact Verdicts
 - `src/services/ai/aiAgentService.ts` — fallback `apiKey` object was corrupted with redaction artifact; restored to env lookup only.

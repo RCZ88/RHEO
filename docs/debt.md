@@ -1,8 +1,12 @@
 # Debt Log — known issues to address later
 
+## Resolver family (RESOLVED)
+- `src/components/dashboard/QuadCardSlotResizer.tsx`, `CardHeightResizer.tsx`, `ResizableHeightHandle.tsx` — RESOLVED 2026-09-03. Invented resizer family measured containers and wrote inline pixel sizes via ResizeObserver/MutationObserver; on a zero-height measure moment it pinned content to 0px (the blank-content root cause). Replaced with pure CSS grid: `grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-2 gap-2 flex-1 min-h-0`, cards `h-full min-h-0 overflow-auto`. No new components; CSS only. Commits: `fc98646`, `428fc88`.
+- Root cause #3: invented resizer + shell change (TitleBar flex-col) = 0px collapse. Lesson: invented repair components get deleted, not kept (design.md §13, perf law).
+
 ## Finance/main
 - `dist-electron/main/migrations/001_relax_role_check.sql` missing after build; migration runner throws ENOENT on boot.
-- `src/services/RAGService.ts` references `ServiceResponse`, `RAGMessage`, `MessageRole` that are undefined in module scope.
+- `src/services/RAGService.ts` references `ServiceResponse`, `RAGMessage`, `MessageRole` that are undefined in module scope — DEFERRED: structural type cascade exceeds 20-line threshold; logged to `docs/debt.md`, not fixed in-place. tsc --noEmit gate passes outside these errors.
 - `src/services/SymbolIndexService.ts` and `src/services/WorkspaceStateService.ts` use type imports without `type` keyword under `verbatimModuleSyntax`.
 
 ## Frontend components
