@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-04  
 **Scope:** Full session — motion preference system + RM layout pass + hero/act-record/act-flow refinements  
-**Branch:** master (ahead 20, commits dc9b5d8 + edba8b4)
+**Branch:** master (ahead 23, commits dc9b5d8 + edba8b4 + 76148a5)
 
 ---
 
@@ -53,7 +53,16 @@
 - **MOTION=OFF pre-set**: chip shows `MOTION OFF`, ActRecord height=`auto`, `surface-panel` cards rendered ✓
 - **MOTION=ON under OS-RM**: chip shows `MOTION ON`, ActRecord=`300vh`, ActFlow=`180vh`, Hero H1 slides up 12px ✓
 - **MOTION=OFF under normal OS**: chip shows `MOTION OFF`, Hero H1 opacity-only (no y-slide) ✓
+- **Nudge banner** (OS-RM + no stored preference): chip shows `MOTION AUTO`, banner visible with ENABLE/DISMISS ✓
+- **Nudge ENABLE click**: mode→`on`, localStorage persisted, banner dismissed, chip→`MOTION ON` ✓
 - **Console**: zero errors at 1280×800 ✓
+
+### Nudge banner behavior
+- First visit with OS-RM + no preference: chip=`MOTION AUTO`, nudge visible
+- User clicks ENABLE: `setMode("on")` → localStorage persisted → nudge dismissed
+- User clicks DISMISS: `rheo-motion-dismissed` flag set, chip stays AUTO (transient OS-RM)
+- User clicks chip directly: cycles AUTO→ON→OFF with localStorage write
+- Subsequent visits: stored preference respected, no nudge (`hasChosen` true)
 
 ## RM layout pass
 
