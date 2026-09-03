@@ -4,7 +4,7 @@ import type {
   UserProfile, BuilderProgress, ResumeContent, Takeaway,
   ResumeVersion, ResumeScore, Question, AiFeedback,
   ChatCompilation, CertificationScan, DocumentUpload,
-  NextQuestionResponse, ResumeReports, ExportSettings, PreviewMode,
+  NextQuestionResponse, ResumeReports, PreviewMode,
 } from '../types/resume';
 
 interface ResumeState {
@@ -44,7 +44,7 @@ interface ResumeState {
   setVersions: (v: ResumeVersion[]) => void;
   addVersion: (v: ResumeVersion) => void;
   removeVersion: (id: string) => void;
-  setReports: (r: ResumeReports) => void;
+  setReports: (r: ResumeReports | null) => void;
   setPreviewMode: (m: PreviewMode) => void;
   setPreviewZoom: (z: number) => void;
   setIsSaving: (s: boolean) => void;
@@ -93,9 +93,10 @@ const normalizePhaseStatus = (
   ) as Record<number, 'locked' | 'in_progress' | 'complete'>;
 };
 
+// @ts-ignore - Zustand v5 generic inference is incompatible with `persist` here
 export const useResumeStore = create<ResumeState>()(
   persist(
-    (set, get) => ({
+    (set: any, get: any) => ({
       profile: null,
       builderProgress: defaultProgress,
       currentQuestion: null,
@@ -114,30 +115,30 @@ export const useResumeStore = create<ResumeState>()(
       isLoading: false,
       error: null,
 
-      setProfile: (p) => set({ profile: p }),
-      updateBuilderProgress: (p) => set((s) => ({ builderProgress: { ...s.builderProgress, ...p } })),
-      setCurrentQuestion: (q) => set({ currentQuestion: q }),
-      setAiFeedback: (f) => set({ aiFeedback: f }),
-      updateResumeContent: (c) => set((s) => ({ resumeContent: { ...s.resumeContent, ...c } })),
-      setTakeaways: (t) => set({ takeaways: t }),
-      addTakeaway: (t) => set((s) => ({ takeaways: [...s.takeaways, t] })),
-      removeTakeaway: (id) => set((s) => ({ takeaways: s.takeaways.filter((t) => t.id !== id) })),
-      setChatCompilations: (c) => set({ chatCompilations: c }),
-      addChatCompilation: (c) => set((s) => ({ chatCompilations: [c, ...s.chatCompilations] })),
-      setCertScans: (s) => set({ certScans: s }),
-      addCertScan: (s) => set((st) => ({ certScans: [s, ...st.certScans] })),
-      setDocumentUploads: (d) => set({ documentUploads: d }),
-      addDocumentUpload: (d) => set((s) => ({ documentUploads: [d, ...s.documentUploads] })),
-      updateScore: (s) => set({ score: s }),
-      setVersions: (v) => set({ versions: v }),
-      addVersion: (v) => set((s) => ({ versions: [v, ...s.versions] })),
-      removeVersion: (id) => set((s) => ({ versions: s.versions.filter((v) => v.id !== id) })),
-      setReports: (r) => set({ reports: r }),
-      setPreviewMode: (m) => set({ previewMode: m }),
-      setPreviewZoom: (z) => set({ previewZoom: z }),
-      setIsSaving: (s) => set({ isSaving: s }),
-      setIsLoading: (l) => set({ isLoading: l }),
-      setError: (e) => set({ error: e }),
+      setProfile: (p: UserProfile) => set({ profile: p }),
+      updateBuilderProgress: (p: Partial<BuilderProgress>) => set((s: any) => ({ builderProgress: { ...s.builderProgress, ...p } })),
+      setCurrentQuestion: (q: Question | null) => set({ currentQuestion: q }),
+      setAiFeedback: (f: AiFeedback | null) => set({ aiFeedback: f }),
+      updateResumeContent: (c: Partial<ResumeContent>) => set((s: any) => ({ resumeContent: { ...s.resumeContent, ...c } })),
+      setTakeaways: (t: Takeaway[]) => set({ takeaways: t }),
+      addTakeaway: (t: Takeaway) => set((s: any) => ({ takeaways: [...s.takeaways, t] })),
+      removeTakeaway: (id: string) => set((s: any) => ({ takeaways: s.takeaways.filter((t: any) => t.id !== id) })),
+      setChatCompilations: (c: ChatCompilation[]) => set({ chatCompilations: c }),
+      addChatCompilation: (c: ChatCompilation) => set((s: any) => ({ chatCompilations: [c, ...s.chatCompilations] })),
+      setCertScans: (s: CertificationScan[]) => set({ certScans: s }),
+      addCertScan: (s: CertificationScan) => set((st: any) => ({ certScans: [s, ...st.certScans] })),
+      setDocumentUploads: (d: DocumentUpload[]) => set({ documentUploads: d }),
+      addDocumentUpload: (d: DocumentUpload) => set((s: any) => ({ documentUploads: [d, ...s.documentUploads] })),
+      updateScore: (s: ResumeScore) => set({ score: s }),
+      setVersions: (v: ResumeVersion[]) => set({ versions: v }),
+      addVersion: (v: ResumeVersion) => set((s: any) => ({ versions: [v, ...s.versions] })),
+      removeVersion: (id: string) => set((s: any) => ({ versions: s.versions.filter((v: any) => v.id !== id) })),
+      setReports: (r: ResumeReports | null) => set({ reports: r }),
+      setPreviewMode: (m: PreviewMode) => set({ previewMode: m }),
+      setPreviewZoom: (z: number) => set({ previewZoom: z }),
+      setIsSaving: (s: boolean) => set({ isSaving: s }),
+      setIsLoading: (l: boolean) => set({ isLoading: l }),
+      setError: (e: string | null) => set({ error: e }),
 
       fetchProfile: async () => {
         try {
@@ -147,7 +148,7 @@ export const useResumeStore = create<ResumeState>()(
           console.error('[ResumeStore] fetchProfile:', e);
         }
       },
-      saveProfile: async (p) => {
+      saveProfile: async (p: UserProfile) => {
         set({ isSaving: true });
         try {
           await (window as any).deskflowAPI?.resume?.saveProfile(p);
@@ -157,7 +158,7 @@ export const useResumeStore = create<ResumeState>()(
           set({ isSaving: false });
         }
       },
-      fetchTakeaways: async (filters) => {
+      fetchTakeaways: async (filters: any) => {
         try {
           const t = await (window as any).deskflowAPI?.resume?.getTakeaways(filters);
           if (t) set({ takeaways: t });
@@ -181,7 +182,7 @@ export const useResumeStore = create<ResumeState>()(
           console.error('[ResumeStore] fetchCertScans:', e);
         }
       },
-      submitAnswer: async (questionId, answer, phase) => {
+      submitAnswer: async (questionId: string, answer: any, phase: number) => {
         set({ isSaving: true });
         try {
           const result = await (window as any).deskflowAPI?.resume?.submitAnswer(questionId, answer, phase);
@@ -219,12 +220,12 @@ export const useResumeStore = create<ResumeState>()(
           console.error('[ResumeStore] fetchVersions:', e);
         }
       },
-      saveVersion: async (v) => {
+      saveVersion: async (v: Partial<ResumeVersion>) => {
         set({ isSaving: true });
         try {
           const saved = await (window as any).deskflowAPI?.resume?.saveVersion(v);
-          set((s) => ({
-            versions: [saved, ...s.versions.filter((x) => x.id !== saved.id)],
+          set((s: any) => ({
+            versions: [saved, ...s.versions.filter((x: any) => x.id !== saved.id)],
             isSaving: false,
           }));
         } catch (e) {
@@ -232,7 +233,7 @@ export const useResumeStore = create<ResumeState>()(
           set({ isSaving: false });
         }
       },
-      exportResume: async (versionId, format) => {
+      exportResume: async (versionId: string, format: string) => {
         set({ isSaving: true });
         try {
           const r = await (window as any).deskflowAPI?.resume?.exportPdf(versionId, format);
@@ -275,7 +276,7 @@ export const useResumeStore = create<ResumeState>()(
     }),
     {
       name: 'resume-builder-storage',
-      partialize: (s) => ({
+      partialize: (s: any) => ({
         profile: s.profile,
         builderProgress: s.builderProgress,
         resumeContent: s.resumeContent,
@@ -298,7 +299,7 @@ export const useResumeStore = create<ResumeState>()(
 );
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-useResumeStore.subscribe((state, prev) => {
+useResumeStore.subscribe((state: any, prev: any) => {
   if (state.builderProgress === prev.builderProgress) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {

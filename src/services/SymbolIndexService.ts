@@ -1,4 +1,4 @@
-import { SymbolIndex, SymbolEntry, CallEdge, ModuleTreeNode, CallGraphNode } from './ContextStateTypes';
+import type { SymbolIndex, SymbolEntry, CallEdge, ModuleTreeNode, CallGraphNode } from './ContextStateTypes';
 
 const INDEX_FILE = '.context/index/symbols.json';
 

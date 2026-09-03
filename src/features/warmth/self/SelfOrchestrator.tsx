@@ -9,8 +9,8 @@ import { BrainManagementView } from '../context-brain/BrainManagementView'
 import { SelfErrorBoundary } from './SelfErrorBoundary'
 import { DotPattern } from '../../../components/ui/dot-pattern'
 import { NeuralFlow } from '../context-brain/NeuralFlow'
-import { ExternalAITrail } from '../context-brain/ExternalAITrail'
-import { CanvasGraph } from '../context-brain/CanvasGraph'
+import { BrainVisualization } from '../context-brain/BrainVisualization'
+import { ActivityFeed } from '../context-brain/ActivityFeed'
 import { ACCENTS } from '../ContextGraphView'
 import type { GraphNode, GraphLink } from '../context-graph/types'
 
@@ -82,8 +82,8 @@ function StatPill({ label, sublabel, value, icon, color }: StatPillProps) {
 //
 //  Reading top-to-bottom:
 //    Row 1  → Identity (who you are) + Context Brain stats (what the AI knows about you)
-//    Row 2  → Knowledge Graph — the living web of that knowledge (centerpiece)
-//    Row 3  → External AI Trail (the live pipeline feeding the brain) + Management (govern it)
+//    Row 2  → Context Brain — the living web of that knowledge (centerpiece)
+//    Row 3  → Management (govern it)
 // ═══════════════════════════════════════════════════════════════
 export function SelfOrchestrator() {
   const [stats, setStats] = useState<any>(null)
@@ -213,6 +213,31 @@ export function SelfOrchestrator() {
 
   useEffect(() => { loadGraphData() }, [loadGraphData])
 
+  // ── Track state transitions for activity events ──
+  useEffect(() => {
+    const api = (window as any).deskflowAPI
+    if (!api) return
+    let mounted = true
+    const interval = setInterval(async () => {
+      try {
+        const entities = await api.brainGetEntities?.({ limit: 300 })
+        if (!mounted) return
+        const items = entities?.items || entities || []
+        const now = Date.now()
+        const newActivity: { nodeId: string; magnitude: number; timestamp: number }[] = []
+        for (const entity of items) {
+          if (entity.state === 'active' && entity.lastFiredAt && (now - entity.lastFiredAt < 3000)) {
+            newActivity.push({ nodeId: entity.id, magnitude: 1.0, timestamp: entity.lastFiredAt })
+          }
+        }
+        if (newActivity.length > 0) {
+          setActivity(prev => [...newActivity, ...prev].slice(0, 50))
+        }
+      } catch {}
+    }, 2000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [])
+
   // ── Node handlers ──
   const handleNodeHover = useCallback((node: GraphNode | null) => setHoveredNode(node), [])
   const handleNodeClick = useCallback((node: GraphNode | null) => {
@@ -329,8 +354,8 @@ export function SelfOrchestrator() {
                 >
                   <Network size={13} style={{ color: ACCENTS.green }} />
                 </div>
-                <h2 className="text-[13px] font-semibold text-zinc-200">Knowledge Graph</h2>
-                <span className="text-[10px] text-zinc-600 font-mono">force-directed</span>
+                <h2 className="text-[13px] font-semibold text-zinc-200">Context Brain</h2>
+                <span className="text-[10px] text-zinc-600 font-mono">network at criticality</span>
                 {hasGraph && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono"
                         style={{ background: `${ACCENTS.green}10`, color: ACCENTS.green }}>
@@ -373,27 +398,32 @@ export function SelfOrchestrator() {
                   ) : !hasGraph ? (
                     emptyGraph
                   ) : (
-                    <div
-                      ref={graphContainerRef}
-                      className="relative w-full h-[420px] rounded-xl overflow-hidden"
-                      style={{ background: '#09090b', border: ACCENTS.border }}
-                    >
-                      <CanvasGraph
-                        nodes={graphNodes as GraphNode[]}
-                        links={graphLinks as GraphLink[]}
-                        width={graphW}
-                        height={graphH}
-                        onNodeHover={handleNodeHover}
-                        onNodeClick={handleNodeClick}
-                        hoveredNode={hoveredNode}
-                        selectedNode={selectedNode}
-                        selectionSet={selectedNodeIds}
-                      />
-                      {!selectedNode && !hoveredNode && (
-                        <div className="absolute bottom-3 right-3 z-20 text-[10px] text-zinc-600 font-mono pointer-events-none">
-                          Click a node to inspect · drag to rearrange
-                        </div>
-                      )}
+                    <div className="flex gap-4 h-[420px]">
+                      {/* BrainVisualization — the one generative system with two windows */}
+                      <div className="flex-1 min-w-0 h-full">
+                        <BrainVisualization
+                          nodes={graphNodes as GraphNode[]}
+                          links={graphLinks as GraphLink[]}
+                          width={graphW}
+                          height={graphH}
+                          state={stats ? 'populated' : 'loading'}
+                          onNodeHover={handleNodeHover}
+                          onNodeClick={handleNodeClick}
+                          hoveredNode={hoveredNode}
+                          selectedNode={selectedNode}
+                          selectionSet={selectedNodeIds}
+                          hideChrome
+                          reducedMotion={reducedMotion}
+                        />
+                      </div>
+                      {/* ActivityFeed — the suprathreshold avalanche readout */}
+                      <div className="w-72 shrink-0 h-full">
+                        <ActivityFeed
+                          nodes={graphNodes as GraphNode[]}
+                          activity={activity}
+                          reducedMotion={reducedMotion}
+                        />
+                      </div>
                     </div>
                   )}
                 </motion.div>
@@ -401,19 +431,14 @@ export function SelfOrchestrator() {
             </AnimatePresence>
           </motion.div>
 
-          {/* ── Row 3: External AI Trail + Brain Management (balanced two-column) ── */}
+          {/* ── Row 3: Brain Management (single column, cleaner) ── */}
           <motion.div
             custom={3}
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
-            className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"
+            className="grid grid-cols-1 gap-5 items-start"
           >
-            {/* External AI Trail */}
-            <motion.div custom={3} variants={fadeSlideUp} initial="hidden" animate="visible" className={CARD_CLASS}>
-              <ExternalAITrail />
-            </motion.div>
-
             {/* Memory & Brain Management (collapsible) */}
             <motion.div custom={4} variants={fadeSlideUp} initial="hidden" animate="visible" className={`${CARD_CLASS} overflow-hidden`}>
               <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0 -mx-5 -mt-5 mb-2">

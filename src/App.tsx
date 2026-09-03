@@ -33,7 +33,6 @@ import ActivityPage from './pages/ActivityPage';
 import DatabasePage from './pages/DatabasePage';
 import IDEProjectsPage from './pages/IDEProjectsPage';
 import IDEHelpPage from './pages/IDEHelpPage';
-import { Navigate } from 'react-router-dom';
 import TutorialPage from './pages/TutorialPage';
 import { LearnPage } from './components/learn/LearnPage';
 import GuidePage from './pages/GuidePage';
@@ -47,6 +46,7 @@ import { AiPage } from './pages/AiPage';
 import { FeatureStudioPage } from './features/overlay-studio/OverlayStudioPage';
 import { AppBackground } from './components/AppBackground';
 import { ThemeToggle } from './components/ThemeToggle';
+import TitleBar from './components/TitleBar';
 
 import InsightsPage from './pages/InsightsPage';
 import { FinancePage } from './pages/FinancePage';
@@ -2717,7 +2717,8 @@ Trend: +14% vs. yesterday. Keep it up!`;
   return (
     <VoiceProvider>
     <TutorialProvider>
-    <div className="flex h-screen overflow-hidden bg-[#121212] text-white">
+    <div className="flex flex-col h-screen overflow-hidden bg-[#121212] text-white">
+      <TitleBar />
       <AppBackground />
       {/* Sidebar � hidden on workspace (/terminal) and during solar overlay */}
       {location.pathname !== '/terminal' && !solarOverlayActive && (

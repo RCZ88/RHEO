@@ -75,7 +75,6 @@ const STATUS_COLORS: Record<string, string> = {
   published: 'bg-emerald-500/15 text-emerald-400',
   raw: 'bg-zinc-700/30 text-zinc-400',
   refined: 'bg-amber-500/15 text-amber-400',
-  approved: 'bg-emerald-500/15 text-emerald-400',
   used: 'bg-zinc-700/30 text-zinc-500',
 }
 

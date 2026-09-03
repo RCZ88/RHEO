@@ -1,0 +1,7 @@
+const Database = require('better-sqlite3')
+const db = new Database(process.env.APPDATA + '/DeskFlow/deskflow-data.db', { readonly: true })
+const tables = db.prepare("select name from sqlite_master where type='table' order by name").all().map(r => r.name)
+console.log('TOTAL TABLES:', tables.length)
+console.log('BRAIN-LIKE:', tables.filter(t => /context|brain|entity|fact|episode|embedding|extract|ai_capture|knowledge/i.test(t)).join(', '))
+console.log('ALL:', tables.join(', '))
+process.exit(0)

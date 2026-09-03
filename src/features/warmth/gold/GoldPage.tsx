@@ -6,6 +6,7 @@ import {
   CalendarDays, Calendar, NotebookPen, TrendingUp, ChevronLeft, ChevronRight,
   Sparkles, Lightbulb, Timer, Code2, Activity, Pencil, X, Wand2, Clock,
 } from 'lucide-react';
+import { MonthWall } from '../../../components/MonthWall/MonthWall';
 import { FieldAIButton } from '@/components/ai-bridge/FieldAIButton';
 import { WarmCard } from '../WarmCard';
 import { ScheduleCard } from '../../../pages/dashboard/ScheduleCard';
@@ -1493,8 +1494,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
             />
           </WarmCard>
 
-          {/* Deadlines + Reminders already shown via DeadlineRadar (calendar) + BellBoard (right column).
-              Do NOT duplicate them here — they are fixed/upcoming items, not part of the day's schedule. */}
+          {/* Goals are shown in the left column via the dedicated week-goals section, so no extra DeadlineRadar/BellBoard is needed on the right. */}
 
           {/* Goal controls */}
           <div className="flex items-center justify-between">
@@ -1655,11 +1655,16 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
           </WarmCard>
         </div>
 
-        {/* RIGHT: Radar + Reminders + Vault (1/3) */}
+        {/* RIGHT: Unified MonthWall — single 3D calendar, goals/deadlines/reminders/schedule */}
         <div className="space-y-4">
-          <DeadlineRadar marks={radarMarks} selectedDate={selectedDate} onPick={setSelectedDate} />
-          <BellBoard reminders={reminders} onCreate={createReminder} onToggle={toggleReminder} onDelete={deleteReminder} selectedDate={selectedDate} />
-          <TheVault longTermGoals={longTermGoals} todayGoals={goals} onSave={handleLTGSave} onDelete={handleLTGDelete} />
+          <MonthWall
+            accent="#f59e0b"
+            goals={goals}
+            deadlines={deadlines}
+            reminders={reminders}
+            schedule={schedule}
+            longTermGoals={longTermGoals}
+          />
         </div>
       </div>
 

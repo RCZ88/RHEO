@@ -94,6 +94,7 @@ export interface Goal {
   slippedCount?: number;
   deadline?: string;
 
+  priority?: number;
   // NEW: Unified fields (Phase 1+)
   // Optional in the migration window; hydrated goals receive defaults.
   trackingMode?: TrackingMode;

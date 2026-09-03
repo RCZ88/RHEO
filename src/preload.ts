@@ -210,6 +210,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     ipcRenderer.on('window:focus-change', handler);
     return () => ipcRenderer.removeListener('window:focus-change', handler);
   },
+  notifyClick: () => ipcRenderer.invoke('notification-click'),
   getAutoStartStatus: () => ipcRenderer.invoke('get-auto-start-status'),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('set-auto-start', enabled),
 
@@ -243,6 +244,21 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   getKeywordEnabledDomains: () => ipcRenderer.invoke('get-keyword-enabled-domains'),
   addKeywordDomain: (domain: string, keywordSets: { category: string; keywords: string[] }[]) => ipcRenderer.invoke('add-keyword-domain', domain, keywordSets),
   removeKeywordDomain: (domain: string) => ipcRenderer.invoke('remove-keyword-domain', domain),
+
+  // ========== Word Tracker ==========
+  wordTrackerGetWords: () => ipcRenderer.invoke('wordTrackerGetWords'),
+  wordTrackerAddWord: (word: string, label?: string, color?: string, tolerance?: string) => ipcRenderer.invoke('wordTrackerAddWord', word, label, color, tolerance),
+  wordTrackerRemoveWord: (wordId: number) => ipcRenderer.invoke('wordTrackerRemoveWord', wordId),
+  wordTrackerToggleWord: (wordId: number, enabled: number) => ipcRenderer.invoke('wordTrackerToggleWord', wordId, enabled),
+  wordTrackerSetTolerance: (wordId: number, tolerance: string) => ipcRenderer.invoke('wordTrackerSetTolerance', wordId, tolerance),
+  wordTrackerEditWord: (wordId: number, updates: any) => ipcRenderer.invoke('wordTrackerEditWord', wordId, updates),
+  wordTrackerCounts: (projectId?: string) => ipcRenderer.invoke('wordTrackerCounts', projectId),
+  wordTrackerCountsByProject: (wordId: number) => ipcRenderer.invoke('wordTrackerCountsByProject', wordId),
+  wordTrackerGetConfig: (key: string) => ipcRenderer.invoke('wordTrackerGetConfig', key),
+  wordTrackerSetConfig: (key: string, value: any) => ipcRenderer.invoke('wordTrackerSetConfig', key, value),
+  wordTrackerResetCounts: () => ipcRenderer.invoke('wordTrackerResetCounts'),
+  wordTrackerScanJsonl: (projectId?: string) => ipcRenderer.invoke('wordTrackerScanJsonl', projectId),
+  wordTrackerCountText: (text: string, projectId?: string) => ipcRenderer.invoke('wordTrackerCountText', text, projectId),
 
   // AI Features
   generateAIColors: (apps: string[]) => ipcRenderer.invoke('generate-ai-colors', apps),

@@ -23,15 +23,10 @@ Supported params: page (route), tab (tab key), section (section ID), label (butt
 Section IDs include: settings.ai, settings.finance, settings.tracking, settings.prompts, ide.ai-tools, ide.projects, ai.chat, ai.focus, ai.plan, ai.reflect, insights.weekly, finance.accounts, external.sleep, and more.
 
 Long-term goals: Use saveLongtermGoal to create strategic goals (life objectives, milestones). Use getLongtermGoals to review them.
-
 Goal decomposition: Break a long-term goal into smaller sub-goals with decomposeGoal(parentId, children[]). Children get parent_id linking them to the parent. Use getChildGoals(parentId) to retrieve them. For example: create a long-term goal → decompose into weekly milestones → optionally decompose weekly into daily tasks.
-
 Goal linking: Use linkGoalToProblem / linkGoalToRequest to trace which problems or requests a goal relates to. The links appear in the goal's metadata. Use unlinkGoalFromProblem / unlinkGoalFromRequest to remove links.
-
-Checklists: Use addProblemCheck(problemId, description, instruction) to create verification steps on problems, and addRequestCheck for feature requests. Use completeCheck(checkId) to mark items done after verifying. Use getProblemChecks / getRequestChecks to list existing checks. The checks live on problems and requests and can be viewed in the workspace sidebar under the Work → Issues → Checklist subtab.
-
+Checklists: Use addProblemCheck(problemId, description, instruction) to create verification steps on problems, and addRequestCheck for feature requests. Use getProblemChecks / getRequestChecks to list existing checks. The checks live on problems and requests and can be viewed in the workspace sidebar under the Work → Issues → Checklist subtab.
 Research topics: Use getInterestTopics to see what the AI tracks. Use addInterestTopic/removeInterestTopic to manage them.
-
 Rules:
 1. Use tools to answer questions — do not guess or make up data
 2. When the user asks to CREATE or DELETE something, explain what you're about to do and get confirmation before acting
@@ -265,7 +260,16 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
     if (!state) {
       state = {
         providers: [
-          { id: 'openrouter', templateId: 'openrouter', label: 'OpenRouter', enabled: true, apiKey: '', baseUrl: '', models: ['google/gemini-2.0-flash-001'], priority: 0 },
+          {
+            id: 'openrouter',
+            templateId: 'openrouter',
+            label: 'OpenRouter',
+            enabled: true,
+            apiKey: (typeof process !== 'undefined' && process.env?.OPENROUTER_API_KEY) || '',
+            baseUrl: '',
+            models: ['google/gemini-2.0-flash-001'],
+            priority: 0,
+          },
         ],
         routing: { default: { providerId: 'openrouter', model: '' } },
       }

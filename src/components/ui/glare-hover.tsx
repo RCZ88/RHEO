@@ -1,4 +1,5 @@
-import type { ComponentProps, CSSProperties } from "react"
+import { forwardRef } from "react"
+import type { ComponentProps, CSSProperties, Ref } from "react"
 import { useMemo } from "react"
 
 import { cn } from "@/lib/utils"
@@ -27,19 +28,22 @@ function parseHEX(color: string, opacity: number): string {
   return color
 }
 
-export function GlareHover({
-  background = "transparent",
-  children,
-  color = "#ffffff",
-  opacity = 0.15,
-  angle = -30,
-  size = 250,
-  duration = 700,
-  playOnce = false,
-  className,
-  style,
-  ...props
-}: GlareHoverProps) {
+export const GlareHover = forwardRef<HTMLDivElement, GlareHoverProps>(function GlareHover(
+  {
+    background = "transparent",
+    children,
+    color = "#ffffff",
+    opacity = 0.15,
+    angle = -30,
+    size = 250,
+    duration = 700,
+    playOnce = false,
+    className,
+    style,
+    ...props
+  },
+  ref
+) {
   const rgba = useMemo(() => parseHEX(color, opacity), [color, opacity])
 
   const cssVars = {
@@ -68,8 +72,9 @@ export function GlareHover({
         className
       )}
       style={cssVars}
+      ref={ref}
     >
       {children}
     </div>
   )
-}
+})

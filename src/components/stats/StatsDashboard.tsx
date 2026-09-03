@@ -52,6 +52,7 @@ interface StatsDashboardProps {
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
+  timeframeDays?: number;
 }
 
 function formatNum(n: number): string {
@@ -62,11 +63,11 @@ function formatNum(n: number): string {
   return n.toLocaleString();
 }
 
-export function StatsDashboard({ rawData, loading, error, onRetry }: StatsDashboardProps) {
+export function StatsDashboard({ rawData, loading, error, onRetry, timeframeDays }: StatsDashboardProps) {
   const stats = useMemo(() => {
     if (!rawData) return null;
-    return deriveStats(rawData);
-  }, [rawData]);
+    return deriveStats(rawData, timeframeDays);
+  }, [rawData, timeframeDays]);
 
   const isEmpty = !loading && !error && stats && !stats.hasData;
 

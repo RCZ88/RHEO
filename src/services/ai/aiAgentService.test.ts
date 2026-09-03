@@ -17,37 +17,9 @@ vi.mock('./securityGuard', () => ({
   },
 }));
 
-vi.mock('./types', () => ({
-  type AiAgentConfig = {
-    providerId: string;
-    model: string;
-    systemPrompt: string;
-    maxTokens: number;
-    temperature: number;
-    maxToolCallsPerRound: number;
-    maxRounds: number;
-  };
-  type ToolCallRequest = {
-    id: string;
-    toolName: string;
-    args: Record<string, any>;
-  };
-  type ToolCallResult = {
-    toolCallId: string;
-    toolName: string;
-    result: any;
-    error?: string;
-  };
-  type AgentMessage = {
-    role: 'system' | 'user' | 'assistant' | 'tool';
-    content: string;
-    toolCalls?: ToolCallRequest[];
-    toolCallId?: string;
-    toolName?: string;
-  };
-}));
-
 describe('AiAgentService', () => {
+  const DEFAULT_MAX_ROUNDS = 5;
+
   let aiAgentService: AiAgentService;
 
   beforeEach(() => {

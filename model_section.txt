@@ -1,0 +1,387 @@
+xt-emerald-500/60">({formatTokens(m.tokens)})</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </GlassCard>
+                )
+              })()}
+
+              {/* Model Usage Timeline */}
+              {(() => {
+                const activeAgents = aiAgents.filter(
+                  (a) => a.status !== 'inactive' && a.tokens > 0
+                )
+                const allModelNames = new Set<string>()
+                for (const agent of activeAgents) {
+                  const modelDaily =
+                    overview?.aiUsage?.byTool?.[agent.id]?.modelDaily || {}
+                  for (const modelName of Object.keys(modelDaily)) {
+                    allModelNames.add(modelName)
+                  }
+                }
+                if (allModelNames.size === 0) return null
+
+                let numDays =
+                  effectiveAiPeriod === 'week'
+                    ? 7
+                    : effectiveAiPeriod === 'month'
+                      ? 30
+                      : 7
+                let modelAnchorDate: Date | null = null
+                if (effectiveAiPeriod === 'all') {
+                  const byTool = overview?.aiUsage?.byTool || {}
+                  let allDates: string[] = []
+                  let minDate = Infinity
+                  for (const tool of Object.values(byTool) as any[]) {
+                    const toolDates = Object.keys(tool?.daily || {})
+                    for (const d of toolDates) {
+                      const t = new Date(d).getTime()
+                      if (!isSaneDay(t)) continue
+                      allDates.push(d)
+                      if (t < minDate) minDate = t
+                    }
+                  }
+                  if (allDates.length > 0) {
+                    const sorted = allDates.sort()
+                    const span =
+                      Math.ceil(
+                        (new Date(sorted[sorted.length - 1]).getTime() -
+                          new Date(sorted[0]).getTime()) /
+                          86400000
+                      ) + 14
+                    numDays = Math.min(365, Math.max(span, 60))
+                    if (minDate < Infinity) {
+                      modelAnchorDate = subDays(new Date(minDate), 3)
+                    }
+                  } else {
+                    numDays = 60
+                  }
+                }
+                const periodDays = eachDayOfInterval({
+                  start: modelAnchorDate || subDays(new Date(), numDays - 1),
+                  end: new Date(),
+                })
+                const modelColors = [
+                  '#3b82f6',
+                  '#f97316',
+                  '#22c55e',
+                  '#a855f7',
+                  '#f59e0b',
+                  '#ef4444',
+                  '#06b6d4',
+                  '#ec4899',
+                  '#14b8a6',
+                  '#8b5cf6',
+                ]
+
+                const metricField =
+                  aiChartMode === 'tokens'
+                    ? tokenDisplayMode === 'input'
+                      ? 'tokens_in'
+                      : tokenDisplayMode === 'output'
+                        ? 'tokens_out'
+                        : 'tokens'
+                    : aiChartMode === 'messages'
+                      ? 'messageCount'
+                      : aiChartMode === 'cost'
+                        ? 'cost'
+                        : 'sessions'
+                const metricLabel =
+                  aiChartMode === 'tokens'
+                    ? tokenDisplayMode === 'input'
+                      ? 'Input Tokens'
+                      : tokenDisplayMode === 'output'
+                        ? 'Output Tokens'
+                        : 'Tokens'
+                    : aiChartMode.charAt(0).toUpperCase() +
+                      aiChartMode.slice(1)
+
+                const allModelsMap = new Map<string, { agent: string; model: string; color: string }>()
+                for (const agent of activeAgents) {
+                  const modelDaily =
+                    overview?.aiUsage?.byTool?.[agent.id]?.modelDaily || {}
+                  for (const model of Object.keys(modelDaily)) {
+                    if (!allModelsMap.has(model)) {
+                      allModelsMap.set(model, {
+                        agent: agent.name,
+                        model,
+                        color: agent.color,
+                      })
+                    }
+                  }
+                }
+                const allModels = Array.from(allModelsMap.values())
+
+                const datasets = allModels
+                  .filter(m => selectedTimelineModels.length === 0 || selectedTimelineModels.includes(m.model))
+                  .slice(0, 10)
+                  .map((entry, idx) => {
+                  const byTool = overview?.aiUsage?.byTool || {}
+                  const modelColor = modelColors[idx % modelColors.length]
+                  return {
+                    label:
+                      entry.model.length > 25
+                        ? entry.model.slice(0, 22) + '...'
+                        : entry.model,
+                    data: periodDays.map((d) => {
+                      const dayStr = format(d, 'yyyy-MM-dd')
+                      let total = 0
+                      for (const tool of Object.values(byTool) as any[]) {
+                        const dayData = tool?.modelDaily?.[entry.model]?.[dayStr]
+                        if (!dayData) continue
+                        if (aiChartMode === 'tokens') {
+                          if (tokenDisplayMode === 'input') total += dayData.tokens_in || 0
+                          else if (tokenDisplayMode === 'output') total += dayData.tokens_out || 0
+                          else total += dayData.tokens || 0
+                        } else if (aiChartMode === 'messages') total += dayData.messageCount || 0
+                        else if (aiChartMode === 'sessions') total += dayData.sessions || 0
+                        else if (aiChartMode === 'cost') total += dayData.cost || 0
+                      }
+                      return total
+                    }),
+                    backgroundColor: modelColor + '60',
+                    borderColor: modelColor,
+                    borderWidth: 1.5,
+                    borderRadius: 4,
+                    borderSkipped: false,
+                  }
+                })
+
+                return (
+                  <GlassCard>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-cyan-500/15 flex items-center justify-center">
+                          <Layers className="w-4 h-4 text-cyan-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-[13px] font-semibold text-zinc-100">
+                            Model Usage Timeline
+                          </h3>
+                          <p className="text-[11px] text-zinc-600">
+                            Per-model {metricLabel.toLowerCase()} \u2014 all
+                            tools
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 bg-zinc-900/60 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                        <button
+                          onClick={() => setSelectedTimelineModels([])}
+                          className={cn(
+                            'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
+                            selectedTimelineModels.length === 0
+                              ? 'bg-violet-500/20 text-violet-400'
+                              : 'text-zinc-500 hover:text-zinc-300'
+                          )}
+                        >
+                          All
+                        </button>
+                        {allModels.slice(0, 6).map((m, i) => {
+                          const isActive = selectedTimelineModels.length === 0 || selectedTimelineModels.includes(m.model)
+                          return (
+                            <button
+                              key={m.model}
+                              onClick={() => {
+                                setSelectedTimelineModels(prev => {
+                                  if (prev.includes(m.model)) return prev.filter(x => x !== m.model)
+                                  return [...prev, m.model]
+                                })
+                              }}
+                              className={cn(
+                                'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150 max-w-[100px] truncate',
+                                isActive
+                                  ? 'bg-zinc-700/60 text-zinc-200'
+                                  : 'text-zinc-600 hover:text-zinc-400'
+                              )}
+                              title={m.model}
+                            >
+                              <span className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: modelColors[i % modelColors.length] }} />
+                                {m.model.length > 12 ? m.model.slice(0, 10) + '...' : m.model}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    {(() => {
+                      const winnerPerDay = periodDays.map((_, i) => {
+                        let best = 0
+                        let bestIdx = -1
+                        datasets.forEach((ds, di) => {
+                          const v = ds.data[i] || 0
+                          if (v > best) {
+                            best = v
+                            bestIdx = di
+                          }
+                        })
+                        return { idx: bestIdx, total: best }
+                      })
+                      const runs: {
+                        start: number
+                        end: number
+                        idx: number
+                        total: number
+                      }[] = []
+                      for (let i = 0; i < winnerPerDay.length; i++) {
+                        const w = winnerPerDay[i]
+                        if (w.idx < 0 || w.total <= 0) continue
+                        const last = runs[runs.length - 1]
+                        if (last && last.idx === w.idx && last.end === i - 1) {
+                          last.end = i
+                          last.total += w.total
+                        } else {
+                          runs.push({
+                            start: i,
+                            end: i,
+                            idx: w.idx,
+                            total: w.total,
+                          })
+                        }
+                      }
+                      if (runs.length === 0 || runs.length > 6) return null
+                      const grandTotal = runs.reduce(
+                        (s, r) => s + r.total,
+                        0
+                      )
+                      const fmtDay = (i: number) =>
+                        format(
+                          periodDays[i],
+                          numDays <= 7 ? 'EEE' : 'MMM dd'
+                        )
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mb-4">
+                          {runs.map((r) => {
+                            const ds = datasets[r.idx]
+                            return (
+                              <span
+                                key={`${r.start}-${r.end}-${ds.label}`}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-900/60 ring-1 ring-zinc-800/40 text-[10px] text-zinc-400"
+                              >
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{
+                                    backgroundColor: ds.backgroundColor,
+                                  }}
+                                />
+                                <span className="font-medium text-zinc-300 truncate max-w-[160px]">
+                                  {ds.label}
+                                </span>
+                                <span>
+                                  {fmtDay(r.start)}
+                                  {r.end > r.start
+                                    ? ` - ${fmtDay(r.end)}`
+                                    : ''}
+                                </span>
+                                <span className="text-zinc-500">
+                                  ·{' '}
+                                  {Math.round(
+                                    (r.total / grandTotal) * 100
+                                  )}
+                                  %
+                                </span>
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                    <div className="h-56">
+                      <Bar
+                        data={{
+                          labels: periodDays.map((d) =>
+                            format(
+                              d,
+                              numDays <= 7 ? 'EEE' : 'MMM dd'
+                            )
+                          ),
+                          datasets,
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              display: true,
+                              position: 'bottom',
+                              labels: {
+                                color: '#71717a',
+                                font: { size: 10 },
+                                boxWidth: 12,
+                                padding: 12,
+                                usePointStyle: true,
+                              },
+                            },
+                            tooltip: {
+                              backgroundColor: 'rgba(20, 22, 30, 0.85)',
+                              titleColor: '#FFFFFF',
+                              bodyColor: '#8E95A5',
+                              borderColor: 'rgba(255,255,255,0.12)',
+                              borderWidth: 1,
+                              cornerRadius: 10,
+                              padding: { top: 12, bottom: 12, left: 16, right: 16 },
+                              usePointStyle: true,
+                              callbacks: {
+                                label: (ctx) => {
+                                  const val = ctx.parsed.y || 0
+                                  if (aiChartMode === 'tokens') {
+                                    const mode =
+                                      tokenDisplayMode === 'input'
+                                        ? ' input'
+                                        : tokenDisplayMode === 'output'
+                                          ? ' output'
+                                          : ''
+                                    return ` ${formatTokens(val)}${mode} tokens`
+                                  }
+                                  if (aiChartMode === 'cost')
+                                    return ` ${formatCurrency(val)}`
+                                  if (aiChartMode === 'messages')
+                                    return ` ${val} messages`
+                                  return ` ${val} sessions`
+                                },
+                              },
+                            },
+                          },
+                          scales: {
+                            x: {
+                              stacked: true,
+                              ticks: {
+                                color: '#71717a',
+                                maxTicksLimit: numDays <= 7 ? 7 : 12,
+                                font: { size: 10, weight: '500' as const },
+                                maxRotation: 0,
+                              },
+                              grid: { display: false },
+                              border: { display: false },
+                            },
+                            y: {
+                              stacked: true,
+                              ticks: {
+                                color: '#71717a',
+                                font: { size: 10 },
+                                padding: 8,
+                                callback: (v) => {
+                                  if (aiChartMode === 'tokens')
+                                    return formatTokens(v as number)
+                                  if (aiChartMode === 'cost')
+                                    return `$${(v as number).toFixed(2)}`
+                                  return String(v)
+                                },
+                              },
+                              grid: { color: 'rgba(39,39,42,0.5)', drawTicks: false },
+                              border: { display: false },
+                              beginAtZero: true,
+                            },
+                          },
+                          barPercentage: 0.82,
+                          categoryPercentage: 0.85,
+                        }}
+                      />
+                    </div>
+                  </GlassCard>
+                )
+              })()}
+
+              {/* 

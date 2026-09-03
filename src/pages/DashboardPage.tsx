@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
+import { GlareHover } from '../components/ui/glare-hover';
 import { PageShell } from '../components/PageShell';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +19,10 @@ import { useDashboardData } from '../components/dashboard/useDashboardData';
 import { InsightStrip } from './dashboard/InsightStrip';
 import { MomentumHero } from '../components/dashboard/MomentumHero';
 import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
+
+import { QuadCardSlotResizer } from '../components/dashboard/QuadCardSlotResizer';
+
+import { VCalendar } from '../components/ui/v-calendar';
 
 import { SectionHeader } from '../components/SectionHeader';
 import { GlassCard } from '../components/GlassCard';
@@ -361,6 +366,8 @@ export default function DashboardPage({
     return `${s}s`;
   };
 
+  const quadGridRef = useRef<HTMLDivElement>(null);
+  const quadCardRefs = useRef([useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)]);
   // Global interaction listener — detects user activity for idle-aware session tracking
   useEffect(() => {
     const update = () => { lastInteractionRef.current = Date.now(); };
@@ -765,6 +772,7 @@ export default function DashboardPage({
   const [heatmapMode, setHeatmapMode] = useState<'device' | 'external' | 'combined'>('combined');
   const [externalHourlyData, setExternalHourlyData] = useState<Map<string, { externalSeconds: number; breakdown: Record<string, { seconds: number; color: string; icon: string }> }>>(new Map());
   const [externalSessions, setExternalSessions] = useState<any[]>([]);
+  const calendarDate = useRef<Date>(new Date()).current;
   const [expandedModal, setExpandedModalRaw] = useState<'heatmap' | 'solar' | null>(null);
   const setExpandedModal = useCallback((val: 'heatmap' | 'solar' | null) => {
     setExpandedModalRaw(val);
@@ -781,7 +789,6 @@ export default function DashboardPage({
   const hasRealApp = !!currentApp?.app || (isInBrowser && !!currentWebsite?.domain);
   const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
   const [dayDetailItems, setDayDetailItems] = useState<TimelineItem[]>([]);
-
   const computeChartDateRange = (period: string, offset: number): { start: Date; end: Date; label: string } =>
     getDateRange(period, offset);
 
@@ -2085,6 +2092,10 @@ export default function DashboardPage({
       <div className="relative w-full">
         <div className="overflow-x-auto">
           <div className="w-full bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/50 p-5">
+            <VCalendar
+              value={calendarDate}
+              onChange={setCalendarDate}
+            />
             {/* Day Headers - aligned with grid */}
             <div className="flex items-center mb-3">
               <div className="w-14 flex-shrink-0"></div>
@@ -2530,44 +2541,59 @@ export default function DashboardPage({
 
            {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
            <BlurFade delay={0.14} duration={0.4}>
-             <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-4 mb-4 items-stretch">
-                <GoalsCard
-                  goals={goals}
-                  longTermGoals={longTermGoals}
-                  suggestions={suggestions}
-                  insights={dashboardInsights}
-                  loading={dashLoading}
-                  error={dashError}
-                  onToggle={toggleGoal}
-                  onAdd={addGoal}
-                  onDelete={deleteGoal}
-                  onUpdate={updateGoal}
-                  onAcceptSuggestion={acceptSuggestion}
-                  onDismissSuggestion={dismissSuggestion}
-                  onGenerateSuggestions={generateSuggestions}
-                />
-                <QuickFocusCard
-                  state={deepFocus.state}
-                  onStart={deepFocus.start}
-                  onEnd={deepFocus.end}
-                />
-                <DeadlinesCard
-                  deadlines={deadlines}
-                  reminders={reminders}
-                  loading={dashLoading}
-                  error={dashError}
-                  onAdd={addDeadline}
-                  onDelete={deleteDeadline}
-                  onUpdate={updateDeadline}
-                  onComplete={completeDeadline}
-                  onToggleReminder={async (id, done) => {
-                    try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
-                  }}
-                  onDeleteReminder={async (id) => {
-                    try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
-                  }}
-                />
+             <QuadCardSlotResizer
+               targetRef={quadGridRef}
+               cardRefs={quadCardRefs}
+               defaultPx={340}
+               minPx={200}
+               maxPx={600}
+             />
+             <div ref={quadGridRef} className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-4 mb-4 items-stretch">
+                <GlareHover ref={quadCardRefs.current[0]} className="rounded-xl flex flex-col">
+                  <GoalsCard
+                    goals={goals}
+                    longTermGoals={longTermGoals}
+                    suggestions={suggestions}
+                    insights={dashboardInsights}
+                    loading={dashLoading}
+                    error={dashError}
+                    onToggle={toggleGoal}
+                    onAdd={addGoal}
+                    onDelete={deleteGoal}
+                    onUpdate={updateGoal}
+                    onAcceptSuggestion={acceptSuggestion}
+                    onDismissSuggestion={dismissSuggestion}
+                    onGenerateSuggestions={generateSuggestions}
+                  />
+                </GlareHover>
+                <GlareHover ref={quadCardRefs.current[1]} className="rounded-xl flex flex-col">
+                  <QuickFocusCard
+                    state={deepFocus.state}
+                    onStart={deepFocus.start}
+                    onEnd={deepFocus.end}
+                  />
+                </GlareHover>
+                <GlareHover ref={quadCardRefs.current[2]} className="rounded-xl flex flex-col">
+                  <DeadlinesCard
+                    deadlines={deadlines}
+                    reminders={reminders}
+                    loading={dashLoading}
+                    error={dashError}
+                    onAdd={addDeadline}
+                    onDelete={deleteDeadline}
+                    onUpdate={updateDeadline}
+                    onComplete={completeDeadline}
+                    onToggleReminder={async (id, done) => {
+                      try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
+                    }}
+                    onDeleteReminder={async (id) => {
+                      try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
+                    }}
+                  />
+                </GlareHover>
+              <GlareHover ref={quadCardRefs.current[3]} className="rounded-xl flex flex-col">
                 <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
+              </GlareHover>
              </div>
            </BlurFade>
 

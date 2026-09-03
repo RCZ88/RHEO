@@ -1,0 +1,10 @@
+--- a/src/types/goals.ts
++++ b/src/types/goals.ts
+@@ -168,7 +168,7 @@ export function goalToRow(goal: Partial<Goal>): Record<string, unknown> {
+     progress_seconds: goal.progressSeconds || 0,
+     completed_at: goal.completedAt || null,
+-    priority: goal.priority ?? 0,
++    priority: (goal as any).priority ?? 0,
+     parent_id: goal.parentId || null,
+     parent_ids: JSON.stringify(goal.parentIds || []),
+     deadline: goal.deadline || null,

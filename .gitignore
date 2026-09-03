@@ -177,3 +177,4 @@ pnpm-lock.yaml
 # Large files (use Git LFS or download separately)
 agent/docs/ai-usage-city-viz.zip
 public/cyber_assets.zip
+src/**/*.d.ts

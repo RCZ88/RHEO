@@ -1,4 +1,4 @@
-import { WorkspaceState, ModuleState, ComponentState, Decision, SessionSnapshot } from './ContextStateTypes';
+import type { WorkspaceState, ModuleState, ComponentState, Decision, SessionSnapshot } from './ContextStateTypes';
 
 const STATE_FILE = 'agent/workspace-state.json';
 const STATE_MD = 'agent/WORKSPACE_STATE.md';
@@ -72,7 +72,7 @@ export class WorkspaceStateService {
 
   supersedeDecision(oldId: string, newDecision: Omit<Decision, 'id' | 'date'>): Decision {
     const old = this.state.decisions.find(d => d.id === oldId);
-    if (old) old.superseded_by = newDecision.id || `dec-${Date.now()}`;
+    if (old) old.superseded_by = `dec-${Date.now()}`;
 
     const newDec = this.recordDecision(newDecision);
     return newDec;
@@ -153,7 +153,7 @@ export class WorkspaceStateService {
   }
 
   private generateMarkdown(): string {
-    const { modules, decisions, sessions } = this.state;
+    const { modules, decisions, sessions: _sessions } = this.state;
     let md = `# Workspace State\n\n*Last updated: ${this.state.lastUpdated}*\n\n`;
 
     md += `## Progress Overview\n\n`;

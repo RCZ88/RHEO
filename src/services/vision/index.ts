@@ -32,24 +32,6 @@ function getRandomPort(): Promise<number> {
   });
 }
 
-function getCacheDir(): string {
-  const base = process.env.APPDATA || path.join(process.env.HOME || '', '.local', 'share');
-  const dir = path.join(base, 'DeskFlow', 'vision-cache');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-
-function getRubricsDir(): string {
-  const sidecarRoot = path.resolve(__dirname, '..', '..', '..', 'vision-sidecar');
-  const dir = path.join(sidecarRoot, 'rubrics');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-
 function httpRequest(url: string, options?: { method?: string; body?: string; timeout?: number }): Promise<string> {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);

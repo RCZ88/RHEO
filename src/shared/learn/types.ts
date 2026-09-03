@@ -25,7 +25,8 @@ export type BlockType = 'prose' | 'math' | 'mermaid' | 'code' | 'image' | 'video
   | 'viz_heatmap' | 'viz_graph' | 'viz_timeline' | 'viz_concept_map'
   | 'flashcard' | 'flashcard_occlusion' | 'layer_reveal' | 'whiteboard'
   | 'illustration'
-  | 'animation' | 'video_asset';
+  | 'animation' | 'video_asset'
+  | 'annotated-code' | 'annotated-math';
 export type QuizFormat = 'mcq' | 'numeric' | 'open';
 export type LessonStatus = 'draft' | 'valid' | 'published';
 export type EvidenceSource = 'tutor' | 'quiz' | 'self-report';

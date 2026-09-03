@@ -1,5 +1,5 @@
 // Signal to the HTML fallback overlay that the JS bundle loaded successfully
-window.__DESKFLOW_LOADED = true;
+window.__RHEO_LOADED = true;
 
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'

@@ -29,7 +29,6 @@ import { SectionHeader } from '../components/SectionHeader';
 import { InsightCard } from '../components/insights/InsightCard';
 import { RewindPlayer } from '../components/insights/RewindPlayer';
 import type { InsightAtom } from '../shared/insights';
-import { lazy } from 'react';
 
 const RankingsPage = lazy(() => import('./RankingsPage'));
 

@@ -5491,7 +5491,7 @@ function createWindow() {
             );
         } catch (err) { /* ignore */ }
         // Notify renderer of focus change so custom title bar can update its state
-        mainWindow.webContents.send('window:focus-change', focused);
+        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
     });
     // Focus the main window when a desktop notification is clicked
     mainWindow.on('activate', () => {
@@ -5620,7 +5620,7 @@ electron_1.ipcMain.handle('window:isFocused', () => {
 });
 electron_1.ipcMain.on('window:focus-change', (_event, focused: boolean) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('window:focus-change', focused);
+        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
     }
 });
 
@@ -5631,25 +5631,8 @@ electron_1.ipcMain.handle('notification-click', () => {
 });
 
 electron_1.ipcMain.handle('get-auto-start-status', () => {
-    const exePath = electron_1.app.isPackaged 
-        ? process.execPath 
-        : electron_1.app.getPath('exe');
-    
-    const args: string[] = [];
-    if (enabled) {
-        if (!electron_1.app.isPackaged) {
-            args.push(electron_1.app.getAppPath());
-        }
-        args.push('--minimized');
-    }
-    
-    electron_1.app.setLoginItemSettings({
-        openAtLogin: enabled,
-        openAsHidden: true,
-        path: exePath,
-        args: args
-    });
-    return enabled;
+    const settings = electron_1.app.getLoginItemSettings();
+    return settings.openAtLogin;
 });
 // Migrate old logs to new schema (daily_aggregates)
 electron_1.ipcMain.handle('migrate-to-aggregates', () => {

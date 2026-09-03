@@ -58,6 +58,23 @@ ChartJS.register(
   Filler
 )
 
+// beautiful-charts: neon palette + glassmorphic tooltip defaults
+ChartJS.defaults.font.family = "Space Grotesk, sans-serif"
+ChartJS.defaults.font.size = 10
+ChartJS.defaults.color = "#71717a"
+const NEON_CHART_COLORS = { lime: "#00FF66", cyan: "#00F0FF", magenta: "#FF007A", crimson: "#FF2A4B" }
+const glassTooltip = {
+  backgroundColor: "rgba(20, 22, 30, 0.75)",
+  titleColor: "#FFFFFF",
+  bodyColor: "#8E95A5",
+  borderColor: "rgba(255, 255, 255, 0.12)",
+  borderWidth: 1,
+  cornerRadius: 8,
+  padding: { top: 10, bottom: 10, left: 14, right: 14 },
+  usePointStyle: true,
+  backdropFilter: "blur(16px)",
+}
+
 // ai_usage can contain corrupt timestamps (e.g. a codex parser bug once wrote
 // dates like '+058462-06-04', year 58462). isNaN alone is NOT enough — those
 // strings parse as valid extended-ISO dates. Guard all date math with isSaneDay.

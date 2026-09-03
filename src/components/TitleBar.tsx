@@ -4,17 +4,24 @@ import { Minus, Square, X } from 'lucide-react';
 // Live accessor — resolved fresh each call so the preload bridge is always visible
 const api = () => (window as any)?.deskflowAPI ?? null;
 
+function callApi<T>(fn: (api: any) => T): T | undefined {
+  try {
+    const a = api();
+    return a ? fn(a) : undefined;
+  } catch { return undefined; }
+}
+
 export default function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isFocused, setIsFocused] = useState(true);
 
   const refreshState = useCallback(async () => {
     try {
-      const max = await api?.windowIsMaximized?.();
+      const max = await callApi(a => a.windowIsMaximized?.());
       setIsMaximized(!!max);
     } catch { /* ignore */ }
     try {
-      const foc = await api?.windowIsFocused?.();
+      const foc = await callApi(a => a.windowIsFocused?.());
       setIsFocused(!!foc);
     } catch { /* ignore */ }
   }, []);
@@ -29,7 +36,7 @@ export default function TitleBar() {
     });
 
     const bar = document.querySelector('[data-titlebar-drag]');
-    const onDblClick = () => api?.windowMaximize?.();
+    const onDblClick = () => callApi(a => a.windowMaximize?.());
     bar?.addEventListener('dblclick', onDblClick);
 
     return () => {
@@ -39,10 +46,10 @@ export default function TitleBar() {
     };
   }, [refreshState]);
 
-  const handleMinimize = () => api?.windowMinimize?.();
-  const handleMaximize = () => api?.windowMaximize?.();
-  const handleClose = () => api?.windowClose?.();
-  const handleNotifyClick = () => api?.notifyClick?.();
+  const handleMinimize = () => callApi(a => a.windowMinimize?.());
+  const handleMaximize = () => callApi(a => a.windowMaximize?.());
+  const handleClose = () => callApi(a => a.windowClose?.());
+  const handleNotifyClick = () => callApi(a => a.notifyClick?.());
 
   return (
     <div
