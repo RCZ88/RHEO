@@ -3,6 +3,7 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import { usePrefersReducedMotion } from "./use-reduced-motion";
+import { useShouldAnimate } from "./use-motion-preference";
 import VariableProximity from "./VariableProximity";
 
 const WAVES = [
@@ -25,10 +26,14 @@ function chaosPath(y: number, seed: number): string {
 export default function ActFlow() {
   const ref = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
+  const shouldAnimate = useShouldAnimate();
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start start", "end end"],
   });
+
+  // Section height: 180vh when animating, auto when reduced-motion static
+  const sectionHeight = shouldAnimate ? "180vh" : "auto";
 
   // letters reveal across the section
   const lettersOpacity = useTransform(
@@ -55,7 +60,7 @@ export default function ActFlow() {
   const ghostOpacity = useTransform(scrollYProgress, [0, 1], [0.1, 0.1]);
 
   return (
-    <section ref={ref} id="flow" className="relative surface-page" style={{ height: "180vh" }}>
+    <section ref={ref} id="flow" className="relative surface-page" style={{ height: sectionHeight }}>
       <div className="sticky top-0 overflow-hidden" style={{ height: "100dvh" }}>
         {/* ridgeline waves */}
         <div className="absolute inset-0">

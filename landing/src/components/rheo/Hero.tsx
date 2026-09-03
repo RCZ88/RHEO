@@ -6,9 +6,11 @@ import FlowFieldCanvas from "./FlowFieldCanvas";
 import { useDetectedOS } from "./use-detected-os";
 import Def from "./Def";
 import DecryptedText from "./DecryptedText";
+import { useShouldAnimate } from "./use-motion-preference";
 
 export default function Hero() {
   const os = useDetectedOS();
+  const shouldAnimate = useShouldAnimate();
   const seconds = useRef(1204032);
   const [secondsState, setSecondsState] = useState(1204032);
   const [h1Revealed, setH1Revealed] = useState(false);
@@ -78,11 +80,8 @@ export default function Hero() {
 
         <motion.h1
           className="display-h1"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{
-            opacity: h1Revealed ? 1 : 0,
-            y: h1Revealed ? 0 : 12,
-          }}
+          initial={{ opacity: 0, y: shouldAnimate ? 12 : 0 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         >
           TIME,
@@ -92,7 +91,7 @@ export default function Hero() {
 
         <motion.p
           className="mt-8 max-w-[640px]"
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: shouldAnimate ? 12 : 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, delay: 0.9, ease: [0.16, 1, 0.3, 1] }}
           style={{
