@@ -249,6 +249,8 @@ function resolveImport(importPath: string, fromFile: string): string | null {
 }
 
 export function generateArchMap(srcRoot: string): ArchMap {
+  // Yield to the event loop to keep the renderer responsive during scanning
+  if (typeof setImmediate === "function") setImmediate(() => {});
   const nodes: ArchNode[] = [];
 
   const scanDir = (dir: string) => {

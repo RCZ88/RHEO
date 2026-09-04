@@ -19,7 +19,7 @@ interface SidebarItem {
 }
 
 // ── Navigation (§16 — URL is the single truth) ─────────────────────────
-const SIDEBAR_ITEMS: SidebarItem[] = [
+export const SIDEBAR_ITEMS: SidebarItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', group: 'OVERVIEW' },
   { icon: Activity, label: 'Activity', path: '/activity', group: 'RECORD' },
   { icon: Code2, label: 'IDE Projects', path: '/ide', group: 'RECORD' },
@@ -50,6 +50,18 @@ const GROUP_KICKER: Record<string, string> = {
 // ── Ruler: 24 ticks, labels at 00/06/12/18/24 ─────────────────────────
 const RULER_LABELS: Record<number, string> = {
   0: '00', 6: '06', 12: '12', 18: '18', 23: '24',
+};
+
+// ── Timer formatter ────────────────────────────────────────────────────
+const formatDuration = (seconds: number): string => {
+  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
+  const s = Math.floor(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m ${sec.toString().padStart(2, '0')}s`;
+  if (m > 0) return `${m}m ${sec.toString().padStart(2, '0')}s`;
+  return `${sec}s`;
 };
 const TICK_COUNT = 24;
 
@@ -115,10 +127,20 @@ export const Sidebar = memo(function SidebarComponent({
   collapsed,
   onToggle,
   pathname,
+  isTracking = false,
+  elapsedTime = 0,
+  onToggleTracking,
+  onQuickLog,
+  onOpenPalette,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   pathname?: string;
+  isTracking?: boolean;
+  elapsedTime?: number;
+  onToggleTracking?: () => void;
+  onQuickLog?: () => void;
+  onOpenPalette?: () => void;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -172,6 +194,17 @@ export const Sidebar = memo(function SidebarComponent({
       }
     }
     return undefined;
+  }, [activePath]);
+
+  // Nav marker position: map active item to a rough percentage of sidebar height
+  const activeNavPct = useMemo(() => {
+    const idx = SIDEBAR_ITEMS.findIndex((item) => {
+      const p = item.path.split('?')[0];
+      return p === '/' ? activePath === '/' : activePath === p || activePath.startsWith(p + '/');
+    });
+    if (idx < 0) return 0;
+    // Approximate: spread items across the ruler strip
+    return (idx / Math.max(SIDEBAR_ITEMS.length - 1, 1)) * 100;
   }, [activePath]);
 
   return (
@@ -334,52 +367,120 @@ export const Sidebar = memo(function SidebarComponent({
         <div
           className={cn(
             'shrink-0 border-t border-zinc-800/60',
-            collapsed ? 'p-2' : 'px-3 py-2.5',
+            collapsed ? 'p-1.5' : 'px-3 py-2.5',
           )}
         >
           {collapsed ? (
-            /* Rail mode: icon + connector to active nav item */
+            /* Rail mode: compact icon cluster */
             <div className="flex flex-col items-center gap-2">
               <div className="flex flex-col items-center gap-1.5">
+                {/* LIVE dot — only rendered when tracking */}
+                {isTracking && (
+                  <div
+                    className="flex items-center justify-center"
+                    title="Recording"
+                  >
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="absolute inset-0 rounded-full bg-emerald-400/80" />
+                      <span className="absolute inset-0 rounded-full bg-emerald-400/80 animate-ping" />
+                    </span>
+                  </div>
+                )}
                 <button
-                  onClick={handleOpenPairModal}
+                  onClick={onToggleTracking}
                   className={cn(
                     'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
-                    phoneConnected ? 'bg-emerald-400/20 text-emerald-400 hover:bg-emerald-400/30' : 'bg-zinc-700/40 text-zinc-400 hover:bg-zinc-700 hover:text-white',
+                    isTracking
+                      ? 'bg-emerald-400/20 text-emerald-400 hover:bg-emerald-400/30'
+                      : 'bg-zinc-700/40 text-zinc-400 hover:bg-zinc-700 hover:text-white',
                   )}
-                  title={phoneConnected ? 'Phone connected — open pairing' : 'No phone — pair via QR'}
+                  title={isTracking ? 'Pause tracking' : 'Resume tracking'}
                 >
-                  <Smartphone className="w-4 h-4" strokeWidth={1.75} />
+                  {isTracking ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                    </svg>
+                  )}
                 </button>
-                <ThemeToggle size="sm" />
+                <button
+                  onClick={onOpenPalette}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Command palette"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
+                </button>
               </div>
             </div>
           ) : (
             /* Expanded: full instrument strip */
-            <div className="flex items-center justify-between gap-2">
-              {/* Left: LIVE dot + phone status */}
-              <div className="flex items-center gap-2.5 min-w-0">
-                {/* Phone connection */}
-                <div
-                  className="flex items-center gap-1.5 cursor-default"
-                  title={phoneConnected ? 'Phone connected' : 'No phone paired'}
-                >
-                  <Smartphone className={cn(
-                    'w-3 h-3',
-                    phoneConnected ? 'text-emerald-400' : 'text-zinc-600',
-                  )} strokeWidth={1.5} />
-                  <span className={cn(
-                    'text-[10px] font-mono tabular-nums',
-                    phoneConnected ? 'text-emerald-400' : 'text-zinc-600',
-                  )}>
-                    {phoneConnected ? 'SYNCED' : 'NO PHONE'}
+            <div className="flex flex-col gap-2">
+              {/* Row 1: LIVE + timer + focus toggle */}
+              <div className="flex items-center justify-between gap-2">
+                {/* Left: LIVE + tabular timer */}
+                <div className="flex items-center gap-2 min-w-0">
+                  {isTracking && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inset-0 rounded-full bg-emerald-400/80" />
+                      <span className="absolute inset-0 rounded-full bg-emerald-400/80 animate-ping" />
+                    </span>
+                  )}
+                  <span className="text-[10px] font-mono tabular-nums text-zinc-400">
+                    {formatDuration(elapsedTime)}
                   </span>
                 </div>
+                {/* Right: focus toggle */}
+                <button
+                  onClick={onToggleTracking}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-medium transition-colors',
+                    isTracking
+                      ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200',
+                  )}
+                  title={isTracking ? 'Pause tracking' : 'Resume tracking'}
+                >
+                  {isTracking ? (
+                    <>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                      </svg>
+                      <span className="font-mono">LIVE</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                      </svg>
+                      <span className="font-mono">PAUSED</span>
+                    </>
+                  )}
+                </button>
               </div>
-              {/* Right: theme toggle + collapse hint */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-zinc-700 font-mono select-none">⌘K</span>
-                <ThemeToggle size="sm" />
+              {/* Row 2: Quick Log + ⌘K */}
+              <div className="flex items-center justify-between gap-1">
+                <button
+                  onClick={onQuickLog}
+                  className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Quick Log"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  <span className="font-mono">Quick Log</span>
+                </button>
+                <button
+                  onClick={onOpenPalette}
+                  className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Command palette"
+                >
+                  <span className="font-mono text-[9px]">⌘K</span>
+                </button>
               </div>
             </div>
           )}

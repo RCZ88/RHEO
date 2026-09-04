@@ -1658,7 +1658,6 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
         {/* RIGHT: Unified MonthWall — single 3D calendar, goals/deadlines/reminders/schedule */}
         <div className="space-y-4">
           <MonthWall
-            accent="#f59e0b"
             goals={goals}
             deadlines={deadlines}
             reminders={reminders}

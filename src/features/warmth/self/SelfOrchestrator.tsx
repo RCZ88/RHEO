@@ -17,6 +17,12 @@ import type { GraphNode, GraphLink } from '../context-graph/types'
 // ── Layout tokens ──
 const CARD_CLASS = "rounded-xl border border-zinc-800/50 bg-zinc-900/60 backdrop-blur-xl p-5"
 
+// ── Reduced-motion helper ──
+function getReducedMotion(): boolean {
+  const mq = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-reduced-motion: reduce)') : undefined
+  return !!(mq?.matches ?? false)
+}
+
 // ── Entrance variant ──
 const fadeSlideUp = {
   hidden: { opacity: 0, y: 10 },
@@ -90,6 +96,9 @@ export function SelfOrchestrator() {
   const [loading, setLoading] = useState(true)
   const [graphExpanded, setGraphExpanded] = useState(true)
   const [mgmtExpanded, setMgmtExpanded] = useState(false)
+
+  // ── Reduced motion ──
+  const reducedMotion = getReducedMotion()
 
   // ── Graph data ──
   const [graphLoading, setGraphLoading] = useState(true)

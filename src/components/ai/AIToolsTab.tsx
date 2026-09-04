@@ -1134,6 +1134,7 @@ export default function AIToolsTab({
         loading={analyticsLoading}
         error={analyticsError || undefined}
         onRetry={onRetryAnalytics}
+        timeframeDays={effectiveAiPeriod === 'all' ? undefined : effectiveAiPeriod === 'month' ? 30 : 7}
       />
 
       {/* ── Word Tracker ── */}

@@ -93,6 +93,12 @@ export default function ActRecord() {
 
   const [active, setActive] = useState(1); // start in DEEP WORK mid-scrub? default -1
 
+  // ActRecord renders either the animated 300vh scrub or a static
+  // collapsed layout when motion is off.
+  const sectionHeight = reduced ? "auto" : "300vh";
+  const stickyHeight = reduced ? undefined : "100dvh";
+  const showAnimated = !reduced;
+
   useEffect(() => {
     const apply = () => {
       const v = p.get();
@@ -129,12 +135,12 @@ export default function ActRecord() {
       id="act-record"
       ref={ref}
       className="relative surface-page"
-      style={{ height: "300vh" }}
+      style={{ height: sectionHeight }}
     >
       {/* sticky inner viewport */}
       <div
         className="sticky top-0 overflow-hidden"
-        style={{ height: "100dvh" }}
+        style={{ height: stickyHeight }}
       >
         <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-20 pb-20">
           {/* top-left header */}
@@ -153,19 +159,21 @@ export default function ActRecord() {
           </div>
 
           {/* LEFT: per-phase text block (crossfade) */}
-          <div
-            className="absolute left-5 sm:left-10 lg:left-16"
-            style={{ top: "44%", transform: "translateY(-50%)", maxWidth: 300 }}
-          >
-            <div className="relative" style={{ minHeight: 180 }}>
-              <AnimatePresence mode="wait">
+          {showAnimated ? (
+            <div
+              className="absolute left-5 sm:left-10 lg:left-16"
+              style={{ top: "44%", transform: "translateY(-50%)", maxWidth: 300 }}
+            >
+              <div className="relative" style={{ minHeight: 180 }}>
+                <AnimatePresence mode="wait">
+                {/* tight crossfade: out [b-0.03,b] → gap ~0.01 → in [b+0.01,b+0.05] */}
                 {active >= 0 ? (
                   <motion.div
                     key={active}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                   >
                     <p
                       className="mono-label-strong"
@@ -240,48 +248,119 @@ export default function ActRecord() {
                     </p>
                   </motion.div>
                 )}
-              </AnimatePresence>
-            </div>
+                </AnimatePresence>
+              </div>
 
-            {/* all-phase counters list */}
-            <div
-              className="mt-8 hairline-t"
-              style={{ borderTopColor: "rgba(255,255,255,0.08)", paddingTop: 12 }}
-            >
+              {/* all-phase counters list */}
+              <div
+                className="mt-8 hairline-t"
+                style={{ borderTopColor: "rgba(255,255,255,0.08)", paddingTop: 12 }}
+              >
+                {PHASES.map((ph, i) => (
+                  <div
+                    key={ph.key}
+                    className="flex items-center justify-between"
+                    style={{ padding: "6px 0" }}
+                  >
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: 11,
+                        color: active === i ? "#f4f4f5" : "#63636b",
+                        letterSpacing: "0.08em",
+                        transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
+                      }}
+                    >
+                      {ph.key}
+                    </span>
+                    <span
+                      ref={(el) => {
+                        counterRefs.current[i] = el;
+                      }}
+                      className="mono tabular-nums"
+                      style={{
+                        fontSize: 11,
+                        color: active === i ? "#f4f4f5" : "#63636b",
+                        transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
+                      }}
+                    >
+                      0h 00m
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* RM STATIC LAYOUT: compact stacked panels, full width, all content visible */
+            <div className="flex flex-col gap-6 w-full max-w-[1280px]">
+              <div className="flex flex-col gap-3">
+                <p className="mono-label" style={{ fontSize: 11 }}>
+                  <DecryptedText text="SECTION 02 / RECORD" speed={28} maxIterations={6} />
+                </p>
+                <h2 className="display-h2">A DAY, REPLAYABLE.</h2>
+                <p
+                  style={{ fontSize: 14, lineHeight: 1.6, color: "#a1a1aa" }}
+                >
+                  This page is scrubbed, not played. Drag time backward. In life you
+                  can&apos;t. Here, you can.
+                </p>
+              </div>
               {PHASES.map((ph, i) => (
                 <div
                   key={ph.key}
-                  className="flex items-center justify-between"
-                  style={{ padding: "6px 0" }}
+                  className="surface-panel"
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 12,
+                    padding: "14px 16px",
+                  }}
                 >
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: 11,
-                      color: active === i ? "#f4f4f5" : "#63636b",
-                      letterSpacing: "0.08em",
-                      transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
-                    }}
+                  <p
+                    className="mono-label-strong"
+                    style={{ fontSize: 11, color: "#f4f4f5" }}
                   >
                     {ph.key}
-                  </span>
-                  <span
-                    ref={(el) => {
-                      counterRefs.current[i] = el;
-                    }}
-                    className="mono tabular-nums"
+                  </p>
+                  <p
+                    className="mono"
+                    style={{ fontSize: 11, color: "#63636b", marginTop: 3 }}
+                  >
+                    {ph.range} · phase {i + 1}/4
+                  </p>
+                  <p
                     style={{
-                      fontSize: 11,
-                      color: active === i ? "#f4f4f5" : "#63636b",
-                      transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
+                      fontSize: 15,
+                      lineHeight: 1.5,
+                      color: "#a1a1aa",
+                      marginTop: 6,
                     }}
                   >
-                    0h 00m
-                  </span>
+                    {ph.blurb}
+                  </p>
+                  <div
+                    className="mt-3 flex items-baseline gap-2"
+                    style={{
+                      borderTop: "1px solid rgba(255,255,255,0.08)",
+                      paddingTop: 8,
+                    }}
+                  >
+                    <span
+                      className="mono"
+                      style={{ fontSize: 11, color: "#63636b" }}
+                    >
+                      recorded
+                    </span>
+                    <span
+                      className="mono tabular-nums"
+                      style={{ fontSize: 20, color: "#ffffff", letterSpacing: "-0.01em" }}
+                    >
+                      0h 00m
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          )}
 
           {/* CENTER: mock RHEO dashboard card */}
           <div

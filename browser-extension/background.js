@@ -698,19 +698,61 @@ async function relayAiContext(captures) {
   aiContextFlushTimer = setTimeout(flushAiContext, AI_CONTEXT_FLUSH_MS);
 }
 
+// --- Persistent retry queue (survives SW termination) ---
+const RETRY_QUEUE_KEY = 'deskflow_retry_queue';
+const MAX_RETRY_ATTEMPTS = 8;
+
+async function enqueueRetry(batch) {
+  const { [RETRY_QUEUE_KEY]: existing = [] } = await chrome.storage.local.get(RETRY_QUEUE_KEY);
+  const entry = { batch, attempts: 0, firstFailedAt: Date.now(), lastAttemptAt: Date.now() };
+  await chrome.storage.local.set({ [RETRY_QUEUE_KEY]: [...existing, entry] });
+}
+
+async function drainRetryQueue() {
+  const { [RETRY_QUEUE_KEY]: queue = [] } = await chrome.storage.local.get(RETRY_QUEUE_KEY);
+  if (!queue.length) return;
+  const remaining = [];
+  for (const entry of queue) {
+    if (entry.attempts >= MAX_RETRY_ATTEMPTS) continue; // drop after max attempts
+    try {
+      const res = await fetch(`${DESKFLOW_SERVER}/ai-context`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ captures: entry.batch }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      const stillFailing = entry.batch.filter(c =>
+        body.results?.find(r => r.dedup_key === c.dedup_key)?.status === 'error');
+      if (stillFailing.length) {
+        remaining.push({ ...entry, batch: stillFailing, attempts: entry.attempts + 1, lastAttemptAt: Date.now() });
+      }
+    } catch {
+      remaining.push({ ...entry, attempts: entry.attempts + 1, lastAttemptAt: Date.now() });
+    }
+  }
+  await chrome.storage.local.set({ [RETRY_QUEUE_KEY]: remaining });
+}
+
 async function flushAiContext() {
   aiContextFlushTimer = null;
   if (!aiContextBuffer.length) return;
   const batch = aiContextBuffer.splice(0, AI_CONTEXT_MAX_BATCH);
   try {
-    await fetch(`${DESKFLOW_SERVER}/ai-context`, {
+    const res = await fetch(`${DESKFLOW_SERVER}/ai-context`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ captures: batch }),
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    const stillFailing = batch.filter(c =>
+      body.results?.find(r => r.dedup_key === c.dedup_key)?.status === 'error');
+    if (stillFailing.length) {
+      await enqueueRetry(stillFailing);
+    }
   } catch (e) {
-    // Server not running — put batch back for retry
-    aiContextBuffer.unshift(...batch);
+    // Server not running — enqueue for retry
+    await enqueueRetry(batch);
   }
 }
 
@@ -760,10 +802,16 @@ setInterval(async () => {
           const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
           if (tab) chrome.tabs.sendMessage(tab.id, toInjectMessage(cmd));
         }
+        // Drain the persistent retry queue before processing new captures
+        await drainRetryQueue();
       }
     }
   } catch (e) { /* Ignore polling errors if server is offline */ }
 }, 2000);
+
+// Also drain the retry queue at startup (survives SW restart)
+chrome.runtime.onStartup.addListener(() => { drainRetryQueue(); });
+chrome.runtime.onInstalled.addListener(() => { drainRetryQueue(); });
 
 // ========================================
 // --- Cleanup on service worker shutdown ---
@@ -772,6 +820,6 @@ setInterval(async () => {
 chrome.runtime.onSuspend.addListener(async () => {
   console.log('[DeskFlow] 💤 Service worker suspending — flushing session');
   await logPreviousSession();
-  // Flush any pending AI context
-  if (aiContextBuffer.length) await flushAiContext();
+  // Persist any buffered captures to the retry queue before SW dies
+  if (aiContextBuffer.length) await enqueueRetry(aiContextBuffer.splice(0));
 });

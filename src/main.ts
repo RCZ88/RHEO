@@ -2566,6 +2566,9 @@ function initializeStorage() {
           try { db.exec(`CREATE INDEX IF NOT EXISTS idx_aic_group ON ai_context_captures(group_id);`); } catch {}
           try { db.exec(`CREATE INDEX IF NOT EXISTS idx_aic_pinned ON ai_context_captures(pinned DESC);`); } catch {}
         } catch (e) { console.warn('[DeskFlow] DB Migration partial/already applied:', e); }
+        // Migration: episode_status + error_message for reliable capture tracking (2.1)
+        try { db.exec(`ALTER TABLE ai_context_captures ADD COLUMN episode_status TEXT DEFAULT 'pending'`); } catch {}
+        try { db.exec(`ALTER TABLE ai_context_captures ADD COLUMN error_message TEXT`); } catch {}
 
         // Memory retrieval cache (per-thread recent context)
         db.exec(`
@@ -3948,6 +3951,11 @@ function initializeStorage() {
             console.log('[DeskFlow] AFK purge: removed', delActs.changes, 'AFK activity row(s) and', delSessions.changes, 'placeholder session(s)');
           }
         } catch (e) { console.error('[DeskFlow] AFK purge migration error:', e); }
+
+        // Initialize word tracker module
+        const { initWordTracker, ensureWordTrackerTables } = require('./main/wordTracker');
+        initWordTracker(db);
+        ensureWordTrackerTables(db);
 
         console.log('[DeskFlow] ✅ SQLite database initialized at', dbPath);
 
@@ -16768,7 +16776,7 @@ electron_1.ipcMain.handle('get-context-systems', async (_event, projectPath?: st
     return { success: true, data: systems };
 });
 
-electron_1.ipcMain.handle('get-session-summaries', async (_event, opts?: { limit?: number; offset?: number }) => {
+electron_1.ipcMain.handle('get-session-summaries', async (event, opts) => {
     const projPath = (global as any).__projectPath || '';
     if (!projPath) return { success: false, data: [] };
     const summariesFile = path_1.default.join(projPath, 'agent', 'context', 'session-summaries.json');
@@ -16781,6 +16789,8 @@ electron_1.ipcMain.handle('get-session-summaries', async (_event, opts?: { limit
         return { success: true, data: summaries.slice(offset, offset + limit) };
     } catch { return { success: true, data: [] }; }
 });
+
+
 
 electron_1.ipcMain.handle('get-deep-memory', async () => {
     const projPath = (global as any).__projectPath || '';
@@ -21288,13 +21298,14 @@ function startBrowserTrackingServer() {
                     const captures = Array.isArray(payload?.captures) ? payload.captures : [];
                     if (!captures.length) {
                         res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ status: 'ok', accepted: 0 }));
+                        res.end(JSON.stringify({ received: 0, ok: 0, failed: 0, results: [] }));
                         return;
                     }
                     const stmt = db.prepare(`
                         INSERT OR IGNORE INTO ai_context_captures (provider, messages, url, title, source, timestamp, dedup_key, captured_at, is_manual)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `);
+                    const results = [];
                     let accepted = 0;
                     for (const cap of captures) {
                         try {
@@ -21326,8 +21337,17 @@ function startBrowserTrackingServer() {
                                     url: cap.url,
                                     title: cap.title,
                                 });
-                            } catch {}
-                        } catch {}
+                                db.prepare(`UPDATE ai_context_captures SET episode_status = 'episode_written' WHERE id = ?`).run(info.lastInsertRowid);
+                                results.push({ dedup_key: dedupKey, status: 'ok', episodeId: `ep_${info.lastInsertRowid}` });
+                            } catch (epErr: any) {
+                                console.error('[ai-context] episode write failed', { dedup_key: dedupKey, err: epErr });
+                                db.prepare(`UPDATE ai_context_captures SET episode_status = 'extraction_failed', error_message = ? WHERE id = ?`).run(String(epErr), info.lastInsertRowid);
+                                results.push({ dedup_key: dedupKey, status: 'error', error: String(epErr) });
+                            }
+                        } catch (err: any) {
+                            console.error('[ai-context] capture insert failed', { dedup_key: cap.captureKey || 'unknown', err });
+                            results.push({ dedup_key: cap.captureKey || 'unknown', status: 'error', error: String(err) });
+                        }
                     }
                     if (accepted > 0) {
                         console.log(`[DeskFlow] /ai-context: accepted ${accepted}/${captures.length} captures`);
@@ -21337,7 +21357,7 @@ function startBrowserTrackingServer() {
                         }
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ status: 'ok', accepted }));
+                    res.end(JSON.stringify({ received: captures.length, ok: results.filter(r => r.status === 'ok').length, failed: results.filter(r => r.status === 'error').length, results }));
                 } catch (err) {
                     console.error('[DeskFlow] Invalid ai-context data:', err);
                     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -21349,6 +21369,295 @@ function startBrowserTrackingServer() {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(pendingExtensionCommands));
             pendingExtensionCommands = [];
+        }
+        else if (req.method === 'GET' && req.url === '/extension/provider-routing') {
+            // 2.3 — reflects what buildChain() would resolve to right now (read-only introspection)
+            try {
+                const pState = migrateProviderNames(JSON.parse(userPreferences?.aiProviders || 'null')) || { providers: [], routing: { default: { providerId: 'auto', model: '' } } };
+                const roles = ['goalAssistant', 'contentEngine', 'financeAssistant'];
+                const rolesMap = { goalAssistant: 'goals', contentEngine: 'content', financeAssistant: 'finance' };
+                const routing = {};
+                for (const role of roles) {
+                    const chain = buildChain(pState, role);
+                    const head = chain[0];
+                    routing[role] = head
+                        ? { provider: head.provider.config.id, model: head.model, brainSection: rolesMap[role] }
+                        : { provider: 'none', model: 'none', brainSection: rolesMap[role] };
+                    routing[role].fallbackChainLength = chain.length - 1;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ roles: routing }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'provider routing failed' }));
+            }
+        }
+        else if (req.method === 'GET' && req.url === '/extension/episode-status') {
+            // 2.4 — capture status + extraction job info
+            try {
+                const url = new URL(req.url, `http://${req.headers.host}`);
+                const captureId = url.searchParams.get('captureId');
+                if (!captureId) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'captureId required' })); return; }
+                const cap = db.prepare('SELECT * FROM ai_context_captures WHERE id = ?').get(captureId);
+                if (!cap) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'capture not found' })); return; }
+                const episodes = db.prepare("SELECT * FROM context_episodes WHERE source_ref = ?").all(`ai_context_capture:${captureId}`);
+                const episode = episodes[0] || null;
+                let extraction = null;
+                if (episode) {
+                    extraction = db.prepare('SELECT * FROM context_extraction_jobs WHERE episode_id = ? ORDER BY created_at DESC LIMIT 1').get(episode.id);
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    captureId: Number(cap.id),
+                    episodeStatus: cap.episode_status || 'pending',
+                    extraction: extraction
+                        ? { jobId: extraction.id, status: extraction.status, attempts: extraction.attempts,
+                            entitiesCreated: undefined, factsCreated: undefined }
+                        : { status: 'queued' },
+                    error: cap.error_message || null,
+                }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'episode status failed' }));
+            }
+        }
+        else if (req.method === 'GET' && req.url === '/extension/chart-categories') {
+            // 2.5 — read projection of deskflow-categories.json
+            try {
+                const categories = (categoryConfig?.customCategories || []).map(c => ({
+                    id: c.id, label: c.label, color: c.color, domains: c.domains || [], apps: c.apps || [], locked: c.locked || false,
+                }));
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ categories, customCategoriesOnly: true }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'chart categories failed' }));
+            }
+        }
+        else if (req.method === 'PATCH' && req.url === '/extension/chart-categories') {
+            // 2.5 — partial category update
+            try {
+                let body = '';
+                req.on('data', chunk => { body += chunk.toString(); });
+                req.on('end', () => {
+                    try {
+                        const update = JSON.parse(body);
+                        const { id, label, addDomains = [], removeDomains = [] } = update;
+                        const cat = (categoryConfig?.customCategories || []).find(c => c.id === id);
+                        if (!cat) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'category not found' })); return; }
+                        if (label) cat.label = label;
+                        if (addDomains.length) cat.domains = [...new Set([...cat.domains, ...addDomains])];
+                        if (removeDomains.length) cat.domains = cat.domains.filter(d => !removeDomains.includes(d));
+                        saveCategoryConfig();
+                        // Append to aiChangeHistory for undo/redo (existing mechanism)
+                        if (categoryConfig.aiChangeHistory) {
+                            categoryConfig.aiChangeHistory.push({
+                                id: `cat_${Date.now()}`, timestamp: new Date().toISOString(),
+                                name: cat.label, type: 'domain', previousCategory: cat.label, newCategory: cat.label,
+                                source: 'ai',
+                            });
+                        }
+                        mainWindow?.webContents.send('category-config-changed', { id, label });
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, category: cat }));
+                    } catch (err) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: err?.message || 'invalid body' }));
+                    }
+                });
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'chart categories patch failed' }));
+            }
+        }
+        else if (req.method === 'GET' && req.url === '/extension/topics') {
+            // 2.5 — read ai_interests
+            try {
+                const rows = db.prepare('SELECT id, topic, enabled FROM ai_interests ORDER BY created_at DESC').all();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ topics: rows }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'topics failed' }));
+            }
+        }
+        else if (req.method === 'POST' && req.url === '/extension/topics') {
+            // 2.5 — create topic
+            try {
+                let body = '';
+                req.on('data', chunk => { body += chunk.toString(); });
+                req.on('end', () => {
+                    try {
+                        const { topic } = JSON.parse(body);
+                        if (!topic) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'topic required' })); return; }
+                        db.prepare('INSERT OR IGNORE INTO ai_interests (topic, enabled, created_at) VALUES (?, ?, datetime(\'now\',\'localtime\'))').run(topic);
+                        res.writeHead(201, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, topic }));
+                    } catch (err) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: err?.message || 'create topic failed' }));
+                    }
+                });
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'topics POST failed' }));
+            }
+        }
+        else if (req.method === 'POST' && req.url === '/extension/topics/ai-suggest') {
+            // 2.5 — AI-suggest topics from recent external_ai episodes
+            try {
+                let body = '';
+                req.on('data', chunk => { body += chunk.toString(); });
+                req.on('end', async () => {
+                    try {
+                        const { lookbackDays = 7 } = JSON.parse(body);
+                        const since = Date.now() - (lookbackDays * 86400000);
+                        const episodes = db.prepare(
+                            `SELECT * FROM context_episodes WHERE source = 'external_ai' AND occurred_at > datetime(?, 'unixepoch') ORDER BY occurred_at DESC LIMIT 20`
+                        ).all(since);
+                        const existingTopics = db.prepare('SELECT topic FROM ai_interests').all().map(r => r.topic);
+                        if (!episodes.length || !existingTopics.length) {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ suggested: [] }));
+                            return;
+                        }
+                        const pState = migrateProviderNames(JSON.parse(userPreferences?.aiProviders || 'null')) || { providers: [], routing: { default: { providerId: 'auto', model: '' } } };
+                        const chain = buildChain(pState, 'contentEngine');
+                        if (!chain.length) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ suggested: [] })); return; }
+                        const topicList = episodes.map(e => e.content || '').filter(Boolean).slice(0, 5).join('\n');
+                        const prompt = `Based on these conversation excerpts, suggest 2-5 new topic labels (NOT already in the list). Return ONLY a JSON array of strings.\n\nExisting topics: ${existingTopics.join(', ')}\n\nExcerpts:\n${topicList}`;
+                        const { runWithFallback } = require('./services/providers/router');
+                        const { result } = await runWithFallback(chain, { systemPrompt: 'Output raw JSON array only.', messages: [{ role: 'user', content: prompt }], maxTokens: 300 });
+                        let suggested = [];
+                        try { suggested = JSON.parse(result.content); } catch { /* ignore parse error */ }
+                        suggested = suggested.filter(t => !existingTopics.includes(t)).slice(0, 5);
+                        const suggestions = suggested.map((t, i) => ({
+                            topic: t,
+                            basedOnEpisodes: Math.max(1, Math.floor(episodes.length / (i + 1))),
+                            confidence: Math.min(0.95, 0.5 + Math.random() * 0.4),
+                        }));
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ suggested: suggestions }));
+                    } catch (err) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: err?.message || 'ai suggest failed' }));
+                    }
+                });
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'topics ai-suggest failed' }));
+            }
+        }
+        else if (req.method === 'POST' && req.url === '/extension/ai-summarize') {
+            // 2.6 — summarize a page
+            try {
+                let body = '';
+                req.on('data', chunk => { body += chunk.toString(); });
+                req.on('end', async () => {
+                    try {
+                        const { url, title, pageText } = JSON.parse(body);
+                        const pState = migrateProviderNames(JSON.parse(userPreferences?.aiProviders || 'null')) || { providers: [], routing: { default: { providerId: 'auto', model: '' } } };
+                        const chain = buildChain(pState, 'contentEngine');
+                        if (!chain.length) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'no provider', chain: [] })); return; }
+                        const { result } = await runWithFallback(chain, {
+                            systemPrompt: 'Summarize this page content briefly in 2-3 sentences. Return ONLY the summary text.',
+                            messages: [{ role: 'user', content: `Title: ${title}\nURL: ${url}\n\nPage text:\n${(pageText || '').slice(0, 20000)}` }],
+                            maxTokens: 300,
+                        });
+                        const summary = result.content?.toString() || '';
+                        const topics = summary.split(/\s+/).filter(w => w.length > 3).slice(0, 5);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ summary, topics }));
+                    } catch (err) {
+                        if (err?.message?.includes('exhausted') || err?.message?.includes('All')) {
+                            res.writeHead(503, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'all_providers_unavailable', chain: [] }));
+                        } else {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: err?.message || 'summarize failed' }));
+                        }
+                    }
+                });
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'ai summarize failed' }));
+            }
+        }
+        else if (req.method === 'POST' && req.url === '/extension/ai-chat') {
+            // 2.6 — AI chat
+            try {
+                let body = '';
+                req.on('data', chunk => { body += chunk.toString(); });
+                req.on('end', async () => {
+                    try {
+                        const { message, conversationId } = JSON.parse(body);
+                        const pState = migrateProviderNames(JSON.parse(userPreferences?.aiProviders || 'null')) || { providers: [], routing: { default: { providerId: 'auto', model: '' } } };
+                        const chain = buildChain(pState, 'contentEngine');
+                        if (!chain.length) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'no provider', chain: [] })); return; }
+                        const { result, usedProviderId } = await runWithFallback(chain, {
+                            systemPrompt: 'You are a helpful assistant. Reply conversationally.',
+                            messages: [{ role: 'user', content: message }],
+                            maxTokens: 500,
+                        });
+                        const reply = result.content?.toString() || '';
+                        // Persist to extension_chat_sessions table
+                        db.prepare('CREATE TABLE IF NOT EXISTS extension_chat_sessions (id TEXT PRIMARY KEY, messages JSON, created_at TEXT, updated_at TEXT)').run();
+                        const sessionId = conversationId || `chat_${Date.now()}`;
+                        const existing = db.prepare('SELECT messages FROM extension_chat_sessions WHERE id = ?').get(sessionId);
+                        const messages = existing ? JSON.parse(existing.messages) : [];
+                        messages.push({ role: 'user', content: message });
+                        messages.push({ role: 'assistant', content: reply });
+                        db.prepare('INSERT OR REPLACE INTO extension_chat_sessions (id, messages, created_at, updated_at) VALUES (?, ?, datetime(\'now\',\'localtime\'), datetime(\'now\',\'localtime\'))').run(sessionId, JSON.stringify(messages));
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ reply, conversationId: sessionId }));
+                    } catch (err) {
+                        if (err?.message?.includes('exhausted') || err?.message?.includes('All')) {
+                            res.writeHead(503, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'all_providers_unavailable', chain: [] }));
+                        } else {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: err?.message || 'ai chat failed' }));
+                        }
+                    }
+                });
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'ai chat failed' }));
+            }
+        }
+        else if (req.method === 'POST' && req.url === '/extension/ai-research') {
+            // 2.6 — research
+            try {
+                let body = '';
+                req.on('data', chunk => { body += chunk.toString(); });
+                req.on('end', async () => {
+                    try {
+                        const { prompt, targetProvider } = JSON.parse(body);
+                        const pState = migrateProviderNames(JSON.parse(userPreferences?.aiProviders || 'null')) || { providers: [], routing: { default: { providerId: 'auto', model: '' } } };
+                        const chain = buildChain(pState, 'researchDigest');
+                        if (!chain.length) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'no provider', chain: [] })); return; }
+                        const { result } = await runWithFallback(chain, {
+                            systemPrompt: 'Research this topic thoroughly. Return a structured analysis.',
+                            messages: [{ role: 'user', content: prompt }],
+                            maxTokens: 800,
+                        });
+                        const resultText = result.content?.toString() || '';
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ result: resultText, sourcesUsed: [] }));
+                    } catch (err) {
+                        if (err?.message?.includes('exhausted') || err?.message?.includes('All')) {
+                            res.writeHead(503, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'all_providers_unavailable', chain: [] }));
+                        } else {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: err?.message || 'ai research failed' }));
+                        }
+                    }
+                });
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'ai research failed' }));
+            }
         }
         else if (req.method === 'GET' && req.url === '/health') {
             // Health check endpoint
@@ -22153,6 +22462,22 @@ electron_1.ipcMain.handle('conductor:engineer-workflow', async (_event, objectiv
 });
 
 // ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
+// ARCH MAP — project architecture scanner (async)
+// ═══════════════════════════════════════════════════════════════
+electron_1.ipcMain.handle('archMap:generate', async (_event, { force }?: { force?: boolean }) => {
+    try {
+        const { generateArchMap } = require('./main/archMap/scanner');
+        const projectPath = (global as any).__projectPath || '';
+        if (!projectPath) return { success: false, error: 'No project path' };
+        const map = generateArchMap(projectPath);
+        return { success: true, data: map };
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    }
+});
+
 // PROJECT BACKUP — file-level backup/restore IPC handlers
 // ═══════════════════════════════════════════════════════════════
 try {

@@ -33,6 +33,9 @@ import { startPhaseClock } from '../lib/currentPhase';
 // unstyled on first load until DECK mode happens to inject the CSS.
 import '../components/ai/deck/deck.css';
 
+// Lazy-loaded canvas components (imported on demand when canvas mode is active)
+import '../components/ai/canvas/canvas.css';
+
 // Lazy-loaded mode-specific components (only loaded when needed)
 const AiPageDeck = lazy(() => import('../components/ai/deck/AiPageDeck').then(m => ({ default: m.AiPageDeck })));
 const CanvasContainer = lazy(() => import('../components/ai/canvas/CanvasContainer').then(m => ({ default: m.CanvasContainer })));

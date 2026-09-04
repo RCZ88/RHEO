@@ -10,6 +10,7 @@
       --bg: #0e0e10; --surface: rgba(24,24,27,0.85); --border: rgba(255,255,255,0.06);
       --text: #e4e4e7; --muted: #71717a; --dim: #3f3f46;
       --emerald: #10b981; --amber: #f59e0b; --rose: #f43f5e; --provider: #10b981;
+      --accent-primary: #ec4899;
       --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
       --sans: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
     }
@@ -19,173 +20,397 @@
       font-family: var(--sans); font-size: 13px; overflow-x: hidden;
     }
 
-    /* Header */
+    /* ── Tab bar ── */
+    .dk-ext-tabbar {
+      display: flex; border-bottom: 1px solid var(--border);
+      background: rgba(14,14,16,0.95); position: sticky; top: 0; z-index: 10;
+    }
+    .dk-ext-tab {
+      flex: 1; padding: 10px 0; text-align: center; font-size: 12px; font-weight: 600;
+      color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s; background: none; border-top: none;
+      border-left: none; border-right: none; font-family: var(--sans);
+    }
+    .dk-ext-tab:hover { color: var(--text); }
+    .dk-ext-tab--active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+
+    /* ── Tab content ── */
+    .dk-ext-tab-content { display: none; padding: 14px 16px; }
+    .dk-ext-tab-content--active { display: block; }
+
+    /* ── Header ── */
     .hdr {
-      padding: 16px 18px; border-bottom: 1px solid var(--border);
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
       background: linear-gradient(180deg, rgba(24,24,27,0.95) 0%, rgba(14,14,16,0.8) 100%);
-      display: flex; align-items: center; gap: 12px;
+      display: flex; align-items: center; gap: 10px;
     }
     .hdr-logo {
-      width: 36px; height: 36px; border-radius: 10px;
+      width: 32px; height: 32px; border-radius: 10px;
       background: linear-gradient(135deg, var(--emerald), #059669);
       display: flex; align-items: center; justify-content: center;
-      font-size: 18px; font-weight: 800; color: #fff; flex-shrink: 0;
+      font-size: 16px; font-weight: 800; color: #fff; flex-shrink: 0;
     }
     .hdr-text { flex: 1; }
-    .hdr-title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-    .hdr-sub { font-size: 11px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
-    .hdr-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
-    .hdr-dot.ok { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+    .hdr-title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+    .hdr-sub { font-size: 10px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+    .hdr-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); }
+    .hdr-dot.ok { background: var(--emerald); box-shadow: 0 0 6px var(--emerald); }
     .hdr-dot.warn { background: var(--amber); }
     .hdr-dot.off { background: var(--rose); }
 
-    /* Toggle */
+    /* ── Toggle ── */
     .toggle-row {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
     }
-    .toggle-label { font-size: 13px; font-weight: 500; }
+    .toggle-label { font-size: 12px; font-weight: 500; }
     .toggle {
-      position: relative; width: 40px; height: 22px; border-radius: 999px;
+      position: relative; width: 38px; height: 20px; border-radius: 999px;
       background: rgba(255,255,255,0.1); cursor: pointer; transition: background 0.2s;
       flex-shrink: 0;
     }
     .toggle.on { background: var(--emerald); }
     .toggle .knob {
-      position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+      position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
       border-radius: 50%; background: #fff; transition: transform 0.2s;
     }
     .toggle.on .knob { transform: translateX(18px); }
 
-    /* Stats */
-    .stats { display: flex; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    /* ── Stats ── */
+    .stats { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
     .stat {
-      flex: 1; padding: 12px; border-radius: 10px;
+      flex: 1; padding: 8px; border-radius: 8px;
       background: rgba(255,255,255,0.03); border: 1px solid var(--border);
       text-align: center;
     }
-    .stat-val { font-size: 22px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+    .stat-val { font-size: 18px; font-weight: 700; font-family: var(--mono); line-height: 1; }
     .stat-val.emerald { color: var(--emerald); }
     .stat-val.amber { color: var(--amber); }
-    .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-lbl { font-size: 9px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
 
-    /* Info rows */
-    .info { padding: 4px 18px; }
+    /* ── Rows ── */
+    .info { padding: 2px 16px; }
     .row {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 0; gap: 12px;
+      padding: 8px 0; gap: 8px;
     }
     .row + .row { border-top: 1px solid rgba(255,255,255,0.03); }
-    .row-lbl { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .row-lbl { color: var(--muted); font-size: 11px; white-space: nowrap; }
     .row-val {
-      font-family: var(--mono); font-size: 12px; text-align: right;
+      font-family: var(--mono); font-size: 11px; text-align: right;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      max-width: 200px; color: var(--text);
+      max-width: 180px; color: var(--text);
     }
-    .row-val.emerald { color: var(--emerald); }
 
-    /* AI Context */
+    /* ── Capture list ── */
+    .cap-list { max-height: 240px; overflow-y: auto; }
+    .cap-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .cap-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .cap-dot--ok { background: var(--emerald); }
+    .cap-dot--pending { background: var(--amber); }
+    .cap-dot--error { background: var(--rose); }
+    .cap-info { flex: 1; min-width: 0; }
+    .cap-provider { font-size: 11px; font-weight: 600; text-transform: capitalize; }
+    .cap-title { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap-err { font-size: 9px; color: var(--rose); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+
+    /* ── Topics ── */
+    .topic-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 999px; font-size: 11px;
+      background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3);
+      color: var(--emerald); margin: 3px; cursor: pointer;
+    }
+    .topic-chip--suggested {
+      border-style: dashed; background: rgba(245,158,11,0.10);
+      border-color: var(--amber); color: var(--amber);
+    }
+    .topic-chip .remove { font-size: 13px; line-height: 1; opacity: 0.6; }
+    .topic-chip .remove:hover { opacity: 1; }
+
+    /* ── Category rows ── */
+    .dk-ext-category-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .dk-ext-category-row--editing { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px; }
+    .dk-ext-domain-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 8px; border-radius: 6px; font-size: 10px;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      color: var(--text); margin: 2px;
+    }
+    .dk-ext-domain-chip .remove { cursor: pointer; color: var(--rose); }
+    .dk-ext-domain-chip .lock { color: var(--dim); }
+
+    /* ── Chat panel ── */
+    .dk-ext-chat-panel {
+      display: flex; flex-direction: column; height: 280px;
+      background: rgba(14,14,16,0.6); border-radius: 10px; border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .dk-ext-chat-messages {
+      flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .dk-ext-chat-bubble {
+      max-width: 85%; padding: 8px 10px; border-radius: 10px; font-size: 12px; line-height: 1.4;
+    }
+    .dk-ext-chat-bubble--ai {
+      align-self: flex-start; background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      border-bottom-left-radius: 2px; color: var(--text);
+    }
+    .dk-ext-chat-bubble--user {
+      align-self: flex-end; background: var(--accent-primary); color: #fff;
+      border-bottom-right-radius: 2px;
+    }
+    .dk-ext-chat-input-row {
+      display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border);
+    }
+    .dk-ext-chat-input {
+      flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 10px; color: var(--text); font-size: 12px;
+      outline: none; font-family: var(--sans);
+    }
+    .dk-ext-chat-input:focus { border-color: var(--accent-primary); }
+    .dk-ext-chat-send {
+      padding: 7px 12px; border-radius: 8px; border: none;
+      background: var(--accent-primary); color: #fff; font-size: 11px; font-weight: 600;
+      cursor: pointer; font-family: var(--sans);
+    }
+    .dk-ext-chat-insert-btn {
+      margin-top: 6px; width: 100%; padding: 7px; border-radius: 8px;
+      border: 1px solid var(--accent-primary); background: rgba(236,72,153,0.10);
+      color: var(--accent-primary); font-size: 11px; font-weight: 600; cursor: pointer;
+      font-family: var(--sans); display: none;
+    }
+    .dk-ext-chat-insert-btn.visible { display: block; }
+
+    /* ── Status tab ── */
+    .dk-ext-queue-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; border-radius: 999px;
+      background: var(--amber); color: #fff; font-size: 10px; font-weight: 700;
+      padding: 0 5px; margin-left: 6px;
+    }
+    .dk-ext-status-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .dk-ext-flush-btn {
+      padding: 6px 12px; border-radius: 6px; border: 1px solid var(--emerald);
+      background: rgba(16,185,129,0.10); color: var(--emerald); font-size: 11px;
+      font-weight: 600; cursor: pointer; font-family: var(--sans);
+    }
+
+    /* ── AI Context ── */
     .ai-sec {
-      margin: 8px 18px; padding: 14px; border-radius: 10px;
+      margin: 8px 0; padding: 12px; border-radius: 10px;
       background: rgba(255,255,255,0.02); border: 1px solid var(--border);
     }
-    .ai-hdr { font-size: 12px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-    .ai-hdr-icon { font-size: 14px; }
+    .ai-hdr { font-size: 12px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
     .ai-btn {
-      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--emerald)30;
-      background: var(--emerald)12; color: var(--emerald); font-size: 12px; font-weight: 600;
+      width: 100%; padding: 9px; border-radius: 8px; border: 1px solid var(--emerald);
+      background: rgba(16,185,129,0.10); color: var(--emerald); font-size: 12px; font-weight: 600;
       cursor: pointer; transition: all 0.15s; font-family: var(--sans);
-      display: flex; align-items: center; justify-content: center; gap: 6px;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
     }
-    .ai-btn:hover { background: var(--emerald)20; border-color: var(--emerald)50; }
+    .ai-btn:hover { background: rgba(16,185,129,0.20); }
     .ai-btn:active { transform: scale(0.98); }
     .ai-btn.secondary {
       background: rgba(255,255,255,0.04); border-color: var(--border); color: var(--muted);
     }
     .ai-btn.secondary:hover { background: rgba(255,255,255,0.08); color: var(--text); }
-    .ai-row { display: flex; gap: 6px; margin-top: 8px; }
+    .ai-row { display: flex; gap: 6px; margin-top: 6px; }
     .ai-input {
       flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
-      border-radius: 8px; padding: 8px 10px; color: var(--text); font-size: 12px;
+      border-radius: 8px; padding: 7px 9px; color: var(--text); font-size: 12px;
       outline: none; font-family: var(--sans);
     }
     .ai-input:focus { border-color: var(--emerald); }
-    .ai-input::placeholder { color: var(--dim); }
 
-    /* Status message */
+    /* ── Messages ── */
     .status-msg {
-      font-size: 11px; text-align: center; padding: 6px 0; display: none;
-      border-radius: 6px; margin-top: 8px;
+      font-size: 11px; text-align: center; padding: 5px 0; display: none;
+      border-radius: 6px; margin-top: 6px;
     }
     .status-msg.show { display: block; }
-    .status-msg.ok { color: var(--emerald); background: var(--emerald)08; }
-    .status-msg.err { color: var(--rose); background: var(--rose)08; }
+    .status-msg.ok { color: var(--emerald); background: rgba(16,185,129,0.08); }
+    .status-msg.err { color: var(--rose); background: rgba(244,63,94,0.08); }
 
-    /* Footer */
+    /* ── Footer ── */
     .ftr {
-      padding: 12px 18px; border-top: 1px solid var(--border);
+      padding: 10px 16px; border-top: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center;
     }
-    .ftr-text { font-size: 10px; color: var(--dim); }
+    .ftr-text { font-size: 9px; color: var(--dim); }
     .ftr-pill {
-      font-size: 10px; padding: 3px 8px; border-radius: 999px;
+      font-size: 9px; padding: 2px 7px; border-radius: 999px;
       border: 1px solid var(--border); background: rgba(255,255,255,0.04);
       color: var(--muted);
     }
-
-    /* Open Panel button */
-    .open-panel {
-      margin: 12px 18px; padding: 10px; border-radius: 10px;
-      border: 1px solid var(--emerald)30; background: var(--emerald)08;
-      color: var(--emerald); font-size: 12px; font-weight: 600;
-      cursor: pointer; transition: all 0.15s; font-family: var(--sans);
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-    }
-    .open-panel:hover { background: var(--emerald)15; border-color: var(--emerald)50; }
+    .ai-sec-add { margin-top: 8px; }
   </style>
 </head>
 <body>
-  <div class="hdr">
-    <div class="hdr-logo">D</div>
-    <div class="hdr-text">
-      <div class="hdr-title">DeskFlow Bridge</div>
-      <div class="hdr-sub"><span class="hdr-dot" id="statusDot"></span><span id="statusLabel">checking…</span></div>
+  <!-- Tab bar -->
+  <div class="dk-ext-tabbar">
+    <button class="dk-ext-tab dk-ext-tab--active" data-tab="capture">Capture</button>
+    <button class="dk-ext-tab" data-tab="topics">Topics</button>
+    <button class="dk-ext-tab" data-tab="chat">AI Chat</button>
+    <button class="dk-ext-tab" data-tab="status">Status</button>
+  </div>
+
+  <!-- ═══ Capture Tab ═══ -->
+  <div class="dk-ext-tab-content dk-ext-tab-content--active" id="tab-capture">
+    <div class="hdr">
+      <div class="hdr-logo">D</div>
+      <div class="hdr-text">
+        <div class="hdr-title">DeskFlow Bridge</div>
+        <div class="hdr-sub"><span class="hdr-dot" id="statusDot"></span><span id="statusLabel">checking…</span></div>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <span class="toggle-label">Website Tracking</span>
+      <div class="toggle on" id="trackToggle" role="switch" aria-checked="true" tabindex="0"><span class="knob"></span></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-val emerald" id="captureCount">0</div>
+        <div class="stat-lbl">Captures</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val amber" id="sessionTime">0:00</div>
+        <div class="stat-lbl">Session</div>
+      </div>
+    </div>
+
+    <div class="info">
+      <div class="row"><span class="row-lbl">Server</span><span class="row-val" id="serverVal">…</span></div>
+      <div class="row"><span class="row-lbl">Domain</span><span class="row-val emerald" id="domainVal">—</span></div>
+      <div class="row"><span class="row-lbl">Page</span><span class="row-val" id="titleVal">—</span></div>
+      <div class="row"><span class="row-lbl">Last sync</span><span class="row-val" id="syncVal">—</span></div>
+    </div>
+
+    <div class="ai-sec">
+      <div class="ai-hdr"><span class="ai-hdr-icon">+</span> AI Context</div>
+      <div style="font-size:11px;color:#71717a;margin-bottom:8px;">Open the DeskFlow panel on any AI chat to capture, manage, and create.</div>
+      <button class="ai-btn" id="openPanelBtn">Open DeskFlow Panel</button>
+      <div id="manualStatus" class="status-msg"></div>
+    </div>
+
+    <div class="ai-sec ai-sec-add">
+      <div class="ai-hdr"><span class="ai-hdr-icon">◉</span> Recent Captures</div>
+      <div class="cap-list" id="capList">
+        <div style="font-size:11px;color:var(--dim);">No captures yet</div>
+      </div>
+    </div>
+
+    <div class="ftr">
+      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-pill" id="browserPill">chrome</span>
     </div>
   </div>
 
-  <div class="toggle-row">
-    <span class="toggle-label">Website Tracking</span>
-    <div class="toggle on" id="trackToggle" role="switch" aria-checked="true" tabindex="0"><span class="knob"></span></div>
-  </div>
-
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-val emerald" id="captureCount">0</div>
-      <div class="stat-lbl">Captures</div>
+  <!-- ═══ Topics Tab ═══ -->
+  <div class="dk-ext-tab-content" id="tab-topics">
+    <div class="hdr">
+      <div class="hdr-logo">◉</div>
+      <div class="hdr-text">
+        <div class="hdr-title">Topics &amp; Categories</div>
+        <div class="hdr-sub" id="topicsSub">loading…</div>
+      </div>
     </div>
-    <div class="stat">
-      <div class="stat-val amber" id="sessionTime">0:00</div>
-      <div class="stat-lbl">Session</div>
+
+    <div style="padding:0 16px;">
+      <!-- Categories -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:12px;font-weight:600;">Categories</div>
+        <button class="ai-btn secondary" id="addCatBtn" style="width:auto;padding:4px 10px;font-size:10px;">+</button>
+      </div>
+      <div id="catList"><div style="font-size:11px;color:var(--dim);">Loading…</div></div>
+
+      <!-- Topics -->
+      <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:12px;font-weight:600;">Topics</div>
+        <button class="ai-btn secondary" id="addTopicBtn" style="width:auto;padding:4px 10px;font-size:10px;">AI ✨</button>
+      </div>
+      <div id="topicList" style="margin-top:4px;"><div style="font-size:11px;color:var(--dim);">Loading…</div></div>
+    </div>
+
+    <div class="ftr">
+      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-pill" id="browserPill2">chrome</span>
     </div>
   </div>
 
-  <div class="info">
-    <div class="row"><span class="row-lbl">Server</span><span class="row-val" id="serverVal">…</span></div>
-    <div class="row"><span class="row-lbl">Domain</span><span class="row-val emerald" id="domainVal">—</span></div>
-    <div class="row"><span class="row-lbl">Page</span><span class="row-val" id="titleVal">—</span></div>
-    <div class="row"><span class="row-lbl">Last sync</span><span class="row-val" id="syncVal">—</span></div>
+  <!-- ═══ AI Chat Tab ═══ -->
+  <div class="dk-ext-tab-content" id="tab-chat">
+    <div class="hdr">
+      <div class="hdr-logo">💬</div>
+      <div class="hdr-text">
+        <div class="hdr-title">AI Chat</div>
+        <div class="hdr-sub" id="chatStatus">Connect to start</div>
+      </div>
+    </div>
+
+    <div class="dk-ext-chat-panel">
+      <div class="dk-ext-chat-messages" id="chatMessages">
+        <div style="font-size:11px;color:var(--dim);text-align:center;padding:20px;">Send a message to start chatting</div>
+      </div>
+      <div style="padding:0 10px 10px;">
+        <button class="dk-ext-chat-insert-btn" id="insertBtn">Insert reply into page</button>
+        <div class="dk-ext-chat-input-row">
+          <input class="dk-ext-chat-input" id="chatInput" placeholder="Message…" />
+          <button class="dk-ext-chat-send" id="chatSendBtn">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ftr">
+      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-pill" id="browserPill3">chrome</span>
+    </div>
   </div>
 
-  <div class="ai-sec">
-    <div class="ai-hdr"><span class="ai-hdr-icon">+</span> AI Context</div>
-    <div style="font-size:12px;color:#71717a;margin-bottom:10px;">Open the DeskFlow panel on any AI chat to capture, manage, and create.</div>
-    <button class="open-panel" id="openPanelBtn">Open DeskFlow Panel</button>
-    <div id="manualStatus" class="status-msg"></div>
-  </div>
+  <!-- ═══ Status Tab ═══ -->
+  <div class="dk-ext-tab-content" id="tab-status">
+    <div class="hdr">
+      <div class="hdr-logo">◎</div>
+      <div class="hdr-text">
+        <div class="hdr-title">Brain Sync Status</div>
+        <div class="hdr-sub" id="statusSub">checking…</div>
+      </div>
+    </div>
 
-  <div class="ftr">
-    <span class="ftr-text">DeskFlow Browser Bridge v1.3.0</span>
-    <span class="ftr-pill" id="browserPill">chrome</span>
+    <div style="padding:0 16px;">
+      <div class="dk-ext-status-row">
+        <span class="row-lbl">Pending extractions</span>
+        <span class="row-val" id="pendingExtractions">—</span>
+      </div>
+      <div class="dk-ext-status-row">
+        <span class="row-lbl">Last successful flush</span>
+        <span class="row-val" id="lastFlush">—</span>
+      </div>
+      <div class="dk-ext-status-row">
+        <span class="row-lbl">Offline queue</span>
+        <span class="row-val" id="queueLength">0 <span class="dk-ext-queue-badge" id="queueBadge" style="display:none;">0</span></span>
+      </div>
+      <div class="dk-ext-status-row">
+        <span class="row-lbl">Server</span>
+        <span class="row-val" id="statusServerVal">…</span>
+      </div>
+      <button class="dk-ext-flush-btn" id="flushNowBtn" style="width:100%;margin-top:10px;">Flush Now</button>
+    </div>
+
+    <div class="ftr">
+      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-pill" id="browserPill4">chrome</span>
+    </div>
   </div>
 
   <script src="popup.js"></script>

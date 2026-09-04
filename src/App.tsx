@@ -6,6 +6,7 @@ import { PageTitle } from './components/PageTitle';
 import confetti from 'canvas-confetti';
 import { navigateTo, scrollToSection } from './lib/deepNav';
 import { SidebarLogo } from './components/SidebarLogo';
+import Sidebar, { SIDEBAR_ITEMS } from './components/Sidebar';
 import {
   Home, Monitor, Globe, Code2, BarChart3, Settings, Play, Pause, Clock,
   Download, Trash2, Award, Zap, Users, Info, Database, CheckCircle, XCircle, AlertTriangle,
@@ -13,16 +14,7 @@ import {
   ChevronLeft, ChevronRight, Calendar, Terminal, Save, Clock4,
   X,   FolderTree, Bot, Minus, HelpCircle, Settings2, Moon, FileText, BookOpen, Wallet, GraduationCap, Activity, Smartphone, Brain,
   HeartHandshake, Sparkles, Trophy,
-  PanelLeftClose, PanelRightClose, GitBranch, FileCode, GripVertical, Pencil, Check, RotateCcw,
 } from 'lucide-react';
-import {
-  DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter,
-} from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
-import {
-  SortableContext, verticalListSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
 import { format as dateFormat } from 'date-fns';
 import SettingsPage from './pages/SettingsPage';
@@ -77,102 +69,6 @@ const LifePage = lazy(() => import('./features/warmth/LifePage'));
 // Agentic System page (agent comms + session groups + context brain)
 const AgenticSystemPage = lazy(() => import('./pages/AgenticSystemPage'));
 
-// --- Sidebar navigation (reorderable) ---
-const DEFAULT_SIDEBAR_ITEMS = [
-  { icon: Home, label: 'Dashboard', path: '/' },
-  { icon: Activity, label: 'Activity', path: '/activity' },
-  { icon: Brain, label: 'AI Assistant', path: '/ai' },
-  { icon: Sparkles, label: 'Documentation', path: '/studio' },
-  { icon: GraduationCap, label: 'Learn', path: '/learn' },
-  { icon: FileText, label: 'Resume', path: '/resume' },
-  { icon: Code2, label: 'IDE Projects', path: '/ide' },
-  { icon: Wallet, label: 'Finance', path: '/finance' },
-  { icon: BarChart3, label: 'Insights', path: '/reports' },
-  { icon: HeartHandshake, label: 'Life', path: '/life' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
-  { icon: BookOpen, label: 'Guide', path: '/guide' },
-];
-const SIDEBAR_ORDER_KEY = 'df-sidebar-order';
-
-function loadSidebarOrder(): string[] | null {
-  try {
-    const raw = localStorage.getItem(SIDEBAR_ORDER_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    return parsed.filter((p): p is string => typeof p === 'string');
-  } catch {
-    return null;
-  }
-}
-
-function persistSidebarOrder(order: string[]) {
-  try { localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(order)); } catch { /* ignore */ }
-}
-
-function clearSidebarOrder() {
-  try { localStorage.removeItem(SIDEBAR_ORDER_KEY); } catch { /* ignore */ }
-}
-
-type SidebarItem = typeof DEFAULT_SIDEBAR_ITEMS[number];
-
-function SidebarSortableItem({ item, collapsed, reorderMode, isActive, onNavigate }: {
-  item: SidebarItem;
-  collapsed: boolean;
-  reorderMode: boolean;
-  isActive: boolean;
-  onNavigate: () => void;
-}) {
-  const dragEnabled = reorderMode && !collapsed;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.path,
-    disabled: !dragEnabled,
-  });
-  const style = { transform: CSS.Transform.toString(transform), transition };
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-stretch gap-1 rounded-xl ${dragEnabled ? 'border border-dashed border-zinc-700 py-1 pl-1 pr-1.5' : ''} ${isDragging ? 'opacity-40 z-10' : ''}`}
-    >
-      {dragEnabled && (
-        <button
-          {...attributes}
-          {...listeners}
-          className="grip-handle flex items-center justify-center w-6 shrink-0 cursor-grab touch-none rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 active:cursor-grabbing transition-colors"
-          title="Drag to reorder"
-          aria-label={`Reorder ${item.label}`}
-        >
-          <GripVertical className="w-4 h-4" />
-        </button>
-      )}
-      <motion.button
-        key={item.path}
-        onClick={onNavigate}
-        className={`flex items-center rounded-xl text-sm transition-colors duration-150 flex-1 min-w-0 ${collapsed ? 'justify-center w-full px-0 py-3' : 'w-full gap-3.5 px-4 py-3'} ${isActive
-          ? 'bg-zinc-800 text-white'
-          : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
-          }`}
-        title={collapsed ? item.label : undefined}
-      >
-        <item.icon className="w-4 h-4 shrink-0" />
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ duration: 0.15, ease: 'easeInOut' }}
-              className="overflow-hidden whitespace-nowrap"
-            >
-              {item.label}
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </motion.button>
-    </div>
-  );
-}
 
 interface ActivityLog {
   id: number;
@@ -2223,6 +2119,7 @@ function App() {
   // Phase 3: Focus Time vs Total Time
   // Focus = productive categories only, Total = all categories
   const [timeMode, setTimeMode] = useState<'focus' | 'total'>('total');
+  const [focusMode, setFocusMode] = useState(false);
 
   // Total time by category (apps + all websites, used for score calculation)
   const timeByCategory = useMemo(() => {
@@ -2606,22 +2503,6 @@ Trend: +14% vs. yesterday. Keep it up!`;
   }, []);
 
   // Handle sidebar navigation with unsaved changes check
-  const handleSidebarNavigation = useCallback((path: string) => {
-    // If on Settings page with unsaved changes, show warning
-    if (location.pathname === '/settings' && settingsHasChanges) {
-      setPendingNavigation(path);
-      setShowUnsavedWarning(true);
-      return;
-    }
-    // If on Terminal page with unsaved workspace changes, show warning
-    if (location.pathname === '/terminal' && (window as any).__workspaceHasUnsavedChanges) {
-      setPendingNavigation(path);
-      setShowWorkspaceWarning(true);
-      return;
-    }
-    navigate(path);
-    console.log('[NAV] navigate called - path:', path, 'window.location.hash:', window.location.hash, 'window.location.href:', window.location.href);
-  }, [location.pathname, settingsHasChanges, navigate]);
 
   // Listen for main process requesting save on window close
   useEffect(() => {
@@ -2657,62 +2538,6 @@ Trend: +14% vs. yesterday. Keep it up!`;
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
   };
 
-  const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(loadSidebarOrder);
-  const [reorderMode, setReorderMode] = useState(false);
-  const [orderSaved, setOrderSaved] = useState(false);
-  const orderSavedTimer = useRef<number | null>(null);
-
-  const sidebarItems = useMemo(() => {
-    if (!sidebarOrder || sidebarOrder.length === 0) return DEFAULT_SIDEBAR_ITEMS;
-    const byPath = new Map(DEFAULT_SIDEBAR_ITEMS.map((i) => [i.path, i]));
-    const ordered: SidebarItem[] = [];
-    for (const p of sidebarOrder) {
-      const item = byPath.get(p);
-      if (item) { ordered.push(item); byPath.delete(p); }
-    }
-    for (const item of byPath.values()) ordered.push(item);
-    return ordered;
-  }, [sidebarOrder]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const flashOrderSaved = useCallback(() => {
-    setOrderSaved(true);
-    if (orderSavedTimer.current) window.clearTimeout(orderSavedTimer.current);
-    orderSavedTimer.current = window.setTimeout(() => setOrderSaved(false), 1600);
-  }, []);
-
-  const handleSidebarDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    setSidebarOrder((prev) => {
-      const current = prev ?? DEFAULT_SIDEBAR_ITEMS.map((i) => i.path);
-      const oldIndex = current.indexOf(String(active.id));
-      const newIndex = current.indexOf(String(over.id));
-      if (oldIndex < 0 || newIndex < 0) return prev;
-      return arrayMove(current, oldIndex, newIndex);
-    });
-    flashOrderSaved();
-  }, [flashOrderSaved]);
-
-  const handleResetSidebarOrder = useCallback(() => {
-    clearSidebarOrder();
-    setSidebarOrder(null);
-    flashOrderSaved();
-  }, [flashOrderSaved]);
-
-  // Persist the reordered sidebar to localStorage whenever it changes (skip initial mount)
-  const isFirstOrderRender = useRef(true);
-  useEffect(() => {
-    if (isFirstOrderRender.current) {
-      isFirstOrderRender.current = false;
-      return;
-    }
-    if (sidebarOrder) persistSidebarOrder(sidebarOrder);
-  }, [sidebarOrder]);
 
   return (
     <VoiceProvider>
@@ -2723,116 +2548,16 @@ Trend: +14% vs. yesterday. Keep it up!`;
       <div className="flex flex-1 min-h-0 relative">
       {/* Sidebar hidden on workspace (/terminal) and during solar overlay */}
       {location.pathname !== '/terminal' && !solarOverlayActive && (
-      <motion.div
-        className="border-r border-zinc-800 flex flex-col h-full glass overflow-hidden shrink-0"
-        animate={{ width: sidebarCollapsed ? 60 : 256 }}
-        transition={{ duration: 0.25, ease: [0.2, 0, 0, 1] }}
-      >
-        {/* Header */}
-        <div className="flex items-center shrink-0 border-b border-zinc-800">
-          {sidebarCollapsed ? (
-            <div className="w-full flex justify-center py-4">
-              <button
-                onClick={toggleSidebar}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                title="Expand sidebar"
-              >
-                <PanelRightClose className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-              <div className="flex items-center justify-between w-full pr-2">
-                <div className="p-5">
-                  <SidebarLogo />
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setReorderMode((v) => !v)}
-                    className={`p-1.5 rounded-lg transition-colors ${reorderMode ? 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'}`}
-                    title={reorderMode ? 'Done reordering' : 'Reorder navigation'}
-                  >
-                    {reorderMode ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={toggleSidebar}
-                    className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
-                    title="Collapse sidebar"
-                  >
-                    <PanelLeftClose className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-          )}
-        </div>
-
-        <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-4 flex flex-col">
-            <div className="flex flex-col gap-2 items-stretch">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSidebarDragEnd}>
-              <SortableContext items={sidebarItems.map((i) => i.path)} strategy={verticalListSortingStrategy}>
-                {sidebarItems.map((item) => (
-                  <SidebarSortableItem
-                    key={item.path}
-                    item={item}
-                    collapsed={sidebarCollapsed}
-                    reorderMode={reorderMode}
-                    isActive={location.pathname === item.path}
-                    onNavigate={() => { console.log('[NAV] fired – path:', item.path, 'current:', location.pathname); handleSidebarNavigation(item.path); }}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-            </div>
-            {reorderMode && !sidebarCollapsed && (
-              <div className="mt-3 flex items-center justify-between px-1">
-                <button
-                  onClick={handleResetSidebarOrder}
-                  className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg px-2 py-1.5 transition-colors"
-                  title="Restore default navigation order"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Reset order
-                </button>
-                <span
-                  className={`text-[11px] text-emerald-400 transition-opacity duration-300 ${orderSaved ? 'opacity-100' : 'opacity-0'}`}
-                  aria-hidden={!orderSaved}
-                >
-                  Order saved
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <AnimatePresence initial={false}>
-          {sidebarCollapsed ? (
-            <div className="px-2 py-2 border-t border-zinc-800 flex flex-col items-center gap-2 shrink-0">
-              <ThemeToggle size="sm" />
-            </div>
-          ) : !sidebarCollapsed && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="px-5 py-3 border-t border-zinc-800 flex items-center justify-between shrink-0 overflow-hidden"
-            >
-              <span className="text-[10px] text-zinc-500">Local SQLite � Zero Cloud � Privacy-First</span>
-              <div className="flex items-center gap-2">
-                <ThemeToggle size="sm" />
-                <button
-                  onClick={() => window.dispatchEvent(new CustomEvent('open-pair-modal', { detail: { terminalId: '', label: 'Phone Pairing' } }))}
-                  className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-                  title="Pair Phone"
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                </button>
-                <span className="text-[10px] text-zinc-600">RHEO v1.0.0</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+          pathname={location.pathname}
+          isTracking={isTracking}
+          elapsedTime={elapsedTime}
+          onToggleTracking={toggleTracking}
+          onQuickLog={() => {}}
+          onOpenPalette={() => setPaletteOpen(true)}
+        />
       )}
 
       {/* Main Content */}
@@ -2856,7 +2581,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
         <div className="h-16 border-b border-zinc-800 flex items-center justify-between px-8 glass">
           <div className="flex items-center gap-4">
             {(() => {
-              const match = sidebarItems.find(i => i.path === location.pathname);
+              const match = SIDEBAR_ITEMS.find(i => i.path === location.pathname);
               return match ? (
                 <PageTitle key={location.key} icon={match.icon} label={match.label} path={match.path} />
               ) : (

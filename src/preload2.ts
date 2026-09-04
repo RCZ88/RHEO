@@ -424,6 +424,20 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // ========== Context Maintenance ==========
   getContextSystems: (projectPath?: string) => ipcRenderer.invoke('get-context-systems', projectPath),
+
+  // ========== System (Advanced Configuration / New Session) ==========
+    system: {
+      list: () => ipcRenderer.invoke("get-context-systems"),
+      status: (data: any) => ipcRenderer.invoke("get-context-system-detail", data),
+      verify: (data: any) => ipcRenderer.invoke("verify-system-integrity", data),
+      getAgentsContext: (data: any) => ipcRenderer.invoke("read-agent-files", data),
+      assemble: (data: any) => ipcRenderer.invoke("assemble-context", data),
+      listInitFiles: (data: any) => ipcRenderer.invoke("list-init-files", data),
+      readInitFile: (data: any) => ipcRenderer.invoke("read-init-file", data),
+      getAgentFiles: (data: any) => ipcRenderer.invoke("read-agent-files", data),
+      readAgentFile: (data: any) => ipcRenderer.invoke("read-agent-file", data),
+      listSkills: (data: any) => ipcRenderer.invoke("get-skills", data),
+    },
   getSessionSummaries: (opts?: { limit?: number; offset?: number }) => ipcRenderer.invoke('get-session-summaries', opts),
   getDeepMemory: () => ipcRenderer.invoke('get-deep-memory'),
   getRAGStats: (projectPath?: string) => ipcRenderer.invoke('get-rag-stats', projectPath),
