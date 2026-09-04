@@ -5203,15 +5203,15 @@ function createWindow() {
     });
     
     // Handle window close — ask renderer if unsaved changes exist first
-    let closingAllowed = false;
+    let pendingClose = false; // set when window:close IPC fires, bypasses workspace warning
     mainWindow.on('close', (event) => {
-        if (closingAllowed) return; // already confirmed
+        if (pendingClose) { pendingClose = false; return; } // IPC-triggered close, allow
         event.preventDefault();
         mainWindow?.webContents.send('workspace-request-save');
     });
     // Listen for renderer saying "ok, close now"
     electron_1.ipcMain.on('workspace-allow-close', () => {
-        closingAllowed = true;
+        pendingClose = true;
         mainWindow?.close();
     });
     
