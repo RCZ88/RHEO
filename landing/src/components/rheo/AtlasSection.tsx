@@ -131,6 +131,21 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
           <line x1="24.5" y1="24.5" x2="31" y2="31" />
         </svg>
       );
+    case "gap-fill":
+      // dashed circle with plus — gap being closed
+      return (
+        <svg {...s}>
+          <circle
+            cx="20"
+            cy="20"
+            r="9"
+            strokeDasharray="4 3"
+            fill="none"
+          />
+          <line x1="20" y1="14" x2="20" y2="26" />
+          <line x1="14" y1="20" x2="26" y2="20" />
+        </svg>
+      );
     case "conductor":
       // one node fanning to three
       return (
