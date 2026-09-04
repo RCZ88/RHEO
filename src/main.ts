@@ -28220,6 +28220,52 @@ electron_1.ipcMain.handle('read-agent-file', async (_, filePath: string, project
   }
 });
 
+// ========== System Detail & Verification (for Advanced Configuration popup) ==========
+electron_1.ipcMain.handle('get-context-system-detail', async (_event, systemId?: string) => {
+    const projPath = (global as any).__projectPath || '';
+    if (!projPath) return { success: false, error: 'No project path' };
+    try {
+        const fs = fs_1.default;
+        const path = path_1.default;
+        const contextDir = path.join(projPath, 'agent', 'context');
+        if (!fs.existsSync(contextDir)) return { success: false, error: 'No context directory' };
+        const systemsFile = path.join(contextDir, 'systems.json');
+        if (!fs.existsSync(systemsFile)) return { success: false, error: 'No systems.json' };
+        const systems = JSON.parse(fs.readFileSync(systemsFile, 'utf-8'));
+        const system = systemId ? (systems.find((s: any) => s.id === systemId || s.name === systemId) || systems[0]) : systems[0];
+        if (!system) return { success: false, error: 'System not found' };
+        return { success: true, data: system };
+    } catch (error: any) {
+        console.error('[DeskFlow] get-context-system-detail error:', error);
+        return { success: false, error: error.message };
+    }
+});
+electron_1.ipcMain.handle('verify-system-integrity', async (_event, { projectPath }: { projectPath?: string } = {}) => {
+    const projPath = projectPath || (global as any).__projectPath || '';
+    if (!projPath) return { success: false, error: 'No project path' };
+    const checks: { name: string; status: 'ok' | 'missing'; detail?: string }[] = [];
+    const fs = fs_1.default;
+    const path = path_1.default;
+    const agentDir = path.join(projPath, 'agent');
+    if (!fs.existsSync(agentDir)) {
+        checks.push({ name: 'agent-dir', status: 'missing', detail: 'agent/ directory not found' });
+    } else {
+        checks.push({ name: 'agent-dir', status: 'ok', detail: 'agent/ directory exists' });
+        const required = ['AGENTS.md', 'state.md', 'context', 'skills'];
+        for (const dir of required) {
+            const fullPath = path.join(agentDir, dir);
+            if (fs.existsSync(fullPath)) {
+                checks.push({ name: 'agent/' + dir, status: 'ok', detail: 'exists' });
+            } else {
+                checks.push({ name: 'agent/' + dir, status: 'missing', detail: 'not found' });
+            }
+        }
+    }
+    const hasIntegrity = checks.every((c) => c.status === 'ok');
+    return { success: true, data: { intact: hasIntegrity, checks, projectPath: projPath } };
+});
+// ========== End System Detail & Verification ==========
+
 // General project file reader (read any file relative to project root)
 electron_1.ipcMain.handle('read-project-file', async (_, relativePath: string, projectPath?: string) => {
   try {
