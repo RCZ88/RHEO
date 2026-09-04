@@ -54,7 +54,7 @@ export function useMotionPreference(): MotionMode {
     if (stored) {
       writeMode(stored);
     }
-    // else: mode stays "auto", no localStorage write, no persistence
+    // else: mode stays "auto", no localStorage write
   }, []);
 
   // Live system reduced-motion listener when in auto mode
@@ -65,15 +65,16 @@ export function useMotionPreference(): MotionMode {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => {
       const cur = readStoredMode();
-      if (cur && cur !== "auto") return;
-      // Transient: mutate mode + notify, but don't write localStorage
+      // Only apply transient system mode when user explicitly chose "auto"
+      // (stored value is "auto"). When no stored preference, leave as "auto"
+      // so the chip shows "MOTION AUTO" and the nudge banner can fire.
+      if (!cur || cur !== "auto") return;
       mode = mq.matches ? "off" : "on";
       for (const fn of [...listeners]) fn();
     };
     apply();
-    const handler = () => apply();
-    mq.addEventListener?.("change", handler);
-    return () => mq.removeEventListener?.("change", handler);
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
   }, []);
 
   // Cross-tab storage sync
