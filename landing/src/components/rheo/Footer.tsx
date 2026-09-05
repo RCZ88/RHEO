@@ -149,6 +149,7 @@ export default function Footer() {
         {/* one-time nudge banner */}
         {showNudge && (
           <div
+            data-rheo-nudge
             className="max-w-[1280px] mx-auto flex items-center justify-between gap-3"
             style={{
               padding: "8px 12px",

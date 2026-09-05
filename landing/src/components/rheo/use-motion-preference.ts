@@ -15,6 +15,7 @@ function readStoredMode(): MotionMode | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === null || raw === "") return null;   // empty string = no stored choice
     if (raw === "auto" || raw === "on" || raw === "off") return raw;
   } catch {}
   return null;
