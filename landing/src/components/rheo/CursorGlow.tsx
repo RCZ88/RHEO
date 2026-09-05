@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useShouldAnimate } from "./use-motion-preference";
 
 /**
  * Subtle white radial glow that follows the pointer.
@@ -12,13 +13,13 @@ import { useEffect, useRef } from "react";
  */
 export default function CursorGlow() {
   const ref = useRef<HTMLDivElement>(null);
+  const shouldAnimate = useShouldAnimate();
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) return;
+    if (!shouldAnimate) return;
 
     let raf = 0;
     let targetX = 0;
