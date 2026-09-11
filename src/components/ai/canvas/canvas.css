@@ -5,12 +5,16 @@
 
 /* ── 1. CANVAS SURFACE ────────────────────────────────────────── */
 
-/* Target .dk-canvas-viewport (CanvasGrid.tsx) AND legacy .dk-canvas */
+/* Target .dk-canvas-viewport (CanvasGrid.tsx) AND legacy .dk-canvas
+   NOTE: nested inside dk-wrap flex column — height:100% of the flex child,
+   never 100dvh (that overflows the page shell and double-paints the bg). */
 .dk-canvas,
 .dk-canvas-viewport {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 0;
+  flex: 1;
   overflow: hidden;
   background: var(--dk-bg-deep);
   color: var(--dk-text-secondary);
@@ -28,7 +32,8 @@
   z-index: 0;
 }
 
-/* Film grain overlay */
+/* Film grain overlay — sits BEHIND the grid layer + cards (z:0), never over them.
+   pointer-events none. Opacity kept low so card text stays readable. */
 .dk-canvas::after,
 .dk-canvas-viewport::after {
   content: "";
@@ -38,12 +43,14 @@
   background-repeat: repeat;
   background-size: 128px 128px;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 0;
   mix-blend-mode: overlay;
-  opacity: 0.5;
+  opacity: 0.3;
 }
 
-/* Target .dk-canvas-grid-layer (CanvasGrid.tsx) AND legacy .dk-canvas-world */
+/* Dot grid — painted on the GRID LAYER (not a separate element: no
+   .dk-canvas-grid node exists in CanvasGrid.tsx), so dots pan + zoom
+   with the cards for free via the layer transform. */
 .dk-canvas-world,
 .dk-canvas-grid-layer {
   position: absolute;
@@ -51,6 +58,8 @@
   transform-origin: 0 0;
   will-change: transform;
   z-index: 1;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1.5px);
+  background-size: var(--dk-cell) var(--dk-cell);
 }
 
 /* Dot grid — subtle spatial reference */
@@ -681,4 +690,253 @@
   color: var(--dk-text-faint);
   pointer-events: none;
   animation: dk-fade-in 800ms var(--dk-ease) 1s both;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT MODE — hardcoded dark washes (tokens already remapped in
+   design-tokens.css; these are the literal rgba(255,255,255/0,0,0)
+   spots that tokens can't reach). Additive only.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Dot grid — dark dots on paper */
+html.light .dk-canvas-grid {
+  background-image: radial-gradient(circle, rgba(28,25,23,0.10) 1px, transparent 1px);
+}
+
+/* Film grain — lighten blend on paper */
+html.light .dk-canvas::after,
+html.light .dk-canvas-viewport::after {
+  mix-blend-mode: multiply;
+  opacity: 0.35;
+}
+
+/* Empty-state dashed ring */
+html.light .dk-canvas-empty-icon {
+  border-color: rgba(28,25,23,0.20);
+}
+
+/* Top grain fade — white instead of black */
+html.light .dk-grain-top {
+  background: linear-gradient(180deg, rgba(255,255,255,0.7) 0%, transparent 100%);
+}
+
+/* Manager list */
+html.light .dk-manager-list::-webkit-scrollbar-thumb { background: rgba(28,25,23,0.18); }
+html.light .dk-manager-item:hover { background: rgba(28,25,23,0.04); }
+html.light .dk-manager-item--active { background: rgba(28,25,23,0.07); }
+
+/* Drawer / palette scrims — warm veil */
+html.light .dk-drawer,
+html.light .dk-palette-backdrop { background: rgb(28 25 23 / 0.32); }
+html.light .dk-drawer-tile:hover,
+html.light .dk-drawer-tile--active { background: rgba(28,25,23,0.06); }
+html.light .dk-drawer-tile-icon { background: rgba(28,25,23,0.05); }
+html.light .dk-mini { background: rgba(28,25,23,0.05); }
+
+/* Command palette surface */
+html.light .dk-palette { background: rgba(255, 255, 255, 0.96); }
+html.light .dk-palette-item:hover,
+html.light .dk-palette-item--active { background: rgba(28,25,23,0.06); }
+
+/* Input bar — white pill, accent outline on focus (no shadow) */
+html.light .dk-input-shell { background: rgba(255, 255, 255, 0.94); }
+html.light .dk-input-shell:focus-within {
+  border-color: var(--dk-border-focus);
+  box-shadow: 0 0 0 2px rgba(14,116,144,0.18);
+}
+html.light .dk-input-voice:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-input-send { color: #ffffff; }
+html.light .dk-input-send--stop { color: #ffffff; }
+
+/* Chips */
+html.light .dk-input-chip { background: rgba(28,25,23,0.05); }
+
+/* Zoom controls — white pill */
+html.light .dk-zoom-controls { background: rgba(255, 255, 255, 0.92); }
+
+/* ═══════════════════════════════════════════════════════════════
+   CANVAS MODE — classes emitted by CanvasContainer / CanvasInput /
+   CanvasCard / CanvasCardFallback that previously had NO CSS
+   (unstyled toolbar buttons, input bar, error fallback).
+   Added 2026-09-10. APPEND ONLY — do not touch sections above.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Container — fills the ai.canvas flex child in AiPage */
+.dk-canvas-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--dk-bg-base);
+  border: 1px solid var(--dk-border-subtle);
+}
+.dk-canvas-container.fullscreen {
+  position: fixed;
+  inset: 12px;
+  z-index: 30;
+}
+
+/* Toolbar — top-center pill (mirrors .dk-marquee chrome) */
+.dk-canvas-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(11, 11, 13, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--dk-border-default);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.50), 0 0 0 1px rgba(255,255,255,0.06);
+}
+.dk-canvas-toolbar button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--dk-text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 120ms cubic-bezier(0.33, 1, 0.68, 1), background 120ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+.dk-canvas-toolbar button:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
+.dk-canvas-toolbar button:disabled { cursor: not-allowed; }
+.dk-canvas-toolbar-separator {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--dk-border-subtle);
+  flex: none;
+}
+.dk-canvas-zoom-label {
+  min-width: 40px;
+  text-align: center;
+  font: 500 10px/1 var(--dk-mono);
+  color: var(--dk-text-secondary);
+}
+
+/* Input bar — bottom-center pill (mirrors .dk-input-shell chrome) */
+.dk-canvas-input-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 20;
+  width: min(520px, calc(100% - 32px));
+}
+.dk-canvas-input-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 8px 0 14px;
+  border-radius: 999px;
+  background: rgba(11, 11, 13, 0.90);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--dk-border-default);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08);
+  transition: border-color 120ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+.dk-canvas-input-inner:focus-within {
+  border-color: var(--dk-border-focus);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 2px rgba(255,255,255,0.06);
+}
+.dk-canvas-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font: 400 0.8125rem/1 var(--dk-sans);
+  color: var(--dk-text-primary);
+}
+.dk-canvas-input::placeholder { color: var(--dk-text-placeholder); }
+.dk-canvas-input:disabled { opacity: 0.5; }
+.dk-canvas-input-thinking {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 0.6875rem/1 var(--dk-sans);
+  color: var(--dk-text-muted);
+  flex: none;
+}
+.dk-canvas-input-actions { display: flex; align-items: center; flex: none; }
+.dk-canvas-input-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: filter 120ms cubic-bezier(0.33, 1, 0.68, 1), opacity 120ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+.dk-canvas-input-btn.send { color: #0b0b0d; background: var(--dk-accent); }
+.dk-canvas-input-btn.send:hover:not(:disabled) { filter: brightness(1.15); }
+.dk-canvas-input-btn.send:disabled { opacity: 0.35; cursor: not-allowed; }
+.dk-canvas-input-btn.stop { color: #fafafa; background: var(--dk-danger); }
+.dk-canvas-stop-icon { font-size: 10px; line-height: 1; }
+.dk-canvas-input-hints {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 6px;
+  font: 400 10px/1 var(--dk-sans);
+  color: var(--dk-text-faint);
+  pointer-events: none;
+}
+
+/* Error fallback card */
+.dk-canvas-card-error { align-items: center; justify-content: center; padding: 20px; text-align: center; }
+.dk-canvas-error-icon { font-size: 20px; color: var(--dk-danger); }
+.dk-canvas-error-type { font: 600 0.8125rem/1.4 var(--dk-sans); color: var(--dk-text-primary); }
+.dk-canvas-error-msg { font: 400 0.6875rem/1.5 var(--dk-sans); color: var(--dk-text-muted); max-width: 32ch; }
+.dk-canvas-error-actions { display: flex; gap: 8px; margin-top: 4px; }
+.dk-canvas-btn-retry,
+.dk-canvas-btn-dismiss {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font: 500 11px/1 var(--dk-sans);
+  cursor: pointer;
+  transition: background 120ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+.dk-canvas-btn-retry { color: #0b0b0d; background: var(--dk-accent); border: none; }
+.dk-canvas-btn-retry:hover { filter: brightness(1.15); }
+.dk-canvas-btn-dismiss { color: var(--dk-text-secondary); background: transparent; border: 1px solid var(--dk-border-default); }
+.dk-canvas-btn-dismiss:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
+
+/* Card interaction states emitted by CanvasCard.tsx (had no CSS) */
+.dk-canvas-card.transient { opacity: 0.6; border-style: dashed; }
+.dk-canvas-card.drop-target {
+  border-color: var(--card-accent);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 2px var(--card-accent);
+}
+.dk-canvas-card.status-active { border-color: color-mix(in srgb, var(--card-accent) 24%, var(--dk-border-subtle)); }
+
+html.light .dk-canvas-container { background: #ffffff; }
+html.light .dk-canvas-toolbar { background: rgba(255, 255, 255, 0.92); }
+html.light .dk-canvas-toolbar button:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-canvas-input-inner { background: rgba(255, 255, 255, 0.94); }
+html.light .dk-canvas-input-btn.send { color: #ffffff; }
+html.light .dk-canvas-input-hints { color: rgba(28,25,23,0.40); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-canvas-toolbar button,
+  .dk-canvas-input-btn,
+  .dk-canvas-btn-retry,
+  .dk-canvas-btn-dismiss { transition: none; }
 }

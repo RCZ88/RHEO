@@ -1,12 +1,14 @@
+/** @type {import('next').NextConfig} */
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
-  typescript: {
-    ignoreBuildErrors: true,
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "www.resend.com" },
+      { protocol: "https", hostname: "plus.unsplash.com" },
+      { protocol: "https", hostname: "images.unsplash.com" },
+    ],
   },
-  reactStrictMode: false,
 };
 
 export default nextConfig;

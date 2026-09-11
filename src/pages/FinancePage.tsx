@@ -1024,7 +1024,7 @@ export function FinancePage() {
     return (
       <div className="flex flex-col h-full items-center justify-center p-5">
         <div className="text-center max-w-md">
-          <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 flex items-center justify-center mb-4">
             <Shield className="w-8 h-8 text-zinc-400" />
           </div>
           <h2 className="text-lg font-semibold text-white mb-2">Access Restricted</h2>
@@ -1063,7 +1063,7 @@ export function FinancePage() {
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setShowCurrencyPicker(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800/60 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700/30 focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 light:bg-zinc-100/60 light:bg-zinc-100 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 light:border-zinc-300/30 light:border-zinc-300/30 focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950"
             >
               <span>{getCurrencyInfo(displayCurrency).symbol}</span>
               <span>{displayCurrency}</span>
@@ -1084,10 +1084,10 @@ export function FinancePage() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.92, y: 20 }}
                   transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                  className="w-full max-w-xs bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl overflow-hidden"
+                  className="w-full max-w-xs bg-zinc-900 light:bg-white/95 backdrop-blur-xl border border-zinc-700 light:border-zinc-300/50 rounded-xl overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="px-4 pt-4 pb-2 border-b border-zinc-700/30">
+                  <div className="px-4 pt-4 pb-2 border-b border-zinc-700 light:border-zinc-300/30 light:border-zinc-300/30">
                     <h3 className="text-sm font-semibold text-white">Select Currency</h3>
                     <p className="text-[11px] text-zinc-500 mt-0.5">Display currency for all amounts</p>
                   </div>
@@ -1096,7 +1096,7 @@ export function FinancePage() {
                       <button
                         key={code}
                         onClick={() => { setDisplayCurrency(code); setShowCurrencyPicker(false); window.deskflowAPI?.financeSetDisplayCurrency(code); }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${displayCurrency === code ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-300 hover:bg-zinc-800/60'
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${displayCurrency === code ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-300 hover:bg-zinc-800 light:bg-zinc-100/60 light:bg-zinc-100'
                           }`}
                       >
                         <span className="w-6 text-center text-base">{getCurrencyInfo(code).symbol}</span>
@@ -1505,7 +1505,7 @@ export function FinancePage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-2xl p-4 w-full max-w-sm mx-4 shadow-2xl"
+            className="bg-zinc-900 light:bg-white/95 backdrop-blur-xl border border-zinc-700 light:border-zinc-300/50 rounded-2xl p-4 w-full max-w-sm mx-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Quick Transaction</p>
@@ -1535,7 +1535,7 @@ export function FinancePage() {
                           setWalletTxModal(w.type);
                           setShowWalletSelector(false);
                         }}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-700/50 transition-colors text-left focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950"
+                        className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 hover:bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 transition-colors text-left focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950"
                       >
                         <span className="text-lg shrink-0">{TYPE_EMOJI[w.type] || '📦'}</span>
                         <div className="flex-1 min-w-0">
@@ -1639,7 +1639,7 @@ export function FinancePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
-          className="fixed bottom-6 right-6 z-[200] px-4 py-2.5 rounded-xl bg-zinc-800/90 border border-zinc-700/50 text-xs text-white shadow-lg backdrop-blur-sm"
+          className="fixed bottom-6 right-6 z-[200] px-4 py-2.5 rounded-xl bg-zinc-800 light:bg-zinc-100/90 border border-zinc-700 light:border-zinc-300/50 text-xs text-white shadow-lg backdrop-blur-sm"
         >
           {notifMsg}
         </motion.div>

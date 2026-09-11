@@ -1,13 +1,19 @@
-/**
- * Atlas data — the 14-instrument catalogue for RHEO section S9 "THE ATLAS".
+/** @jsxImportSource react */
+/** @jsxFrag React.Fragment */
+/** @jsxRuntime classic */
+
+/** Atlas data — the 16-instrument catalogue for RHEO section S5 "THE ATLAS".
  * Names, statuses, and one-liners are VERBATIM per spec; do not inflate a status.
+ * Placement: provisional per P-1 (dossier-amendment task owns final grouping).
+ *
+ * NOTE: no stored index field — render order derives from array position,
+ * never a stored number. Index displayed in UI is derived at render time.
  */
 
 export type AtlasStatus = "SHIPPED" | "BETA" | "SOON" | "VISION";
 
 export type AtlasInstrument = {
   id: string;
-  index: number; // 1..14
   name: string;
   status: AtlasStatus;
   oneLiner: string;
@@ -19,8 +25,9 @@ export type AtlasGlyph =
   | "mobile"
   | "content-engine"
   | "lyceum"
+  | "recordings"
+  | "screenshots"
   | "ide"
-  | "session-search"
   | "gap-fill"
   | "conductor"
   | "trace"
@@ -34,15 +41,20 @@ export type AtlasGlyph =
 export const ATLAS: AtlasInstrument[] = [
   {
     id: "external-tracking",
-    index: 1,
     name: "External Tracking",
     status: "SHIPPED",
     oneLiner: "Real life gets logged too — manually, or captured live.",
     glyph: "external-tracking",
   },
   {
+    id: "screenshots",
+    name: "Screenshots",
+    status: "SHIPPED",
+    oneLiner: "Periodic screenshots filed to sessions, private to the user.",
+    glyph: "screenshots",
+  },
+  {
     id: "mobile-companion",
-    index: 2,
     name: "Mobile Companion",
     status: "BETA",
     oneLiner: "Your record, glanceable away from the desk. In active build.",
@@ -50,7 +62,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "content-engine",
-    index: 3,
     name: "Content Engine",
     status: "BETA",
     oneLiner: "Sessions become documentation, presentations, visual explainers.",
@@ -58,7 +69,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "lyceum",
-    index: 4,
     name: "Lyceum",
     status: "SHIPPED",
     oneLiner: "Sessions become lessons that redraw as you grow.",
@@ -66,7 +76,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "ide-projects",
-    index: 5,
     name: "IDE Projects",
     status: "SOON",
     oneLiner: "Agent sessions and coding time, organized per project.",
@@ -74,7 +83,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "session-search",
-    index: 6,
     name: "Gap Fill",
     status: "SHIPPED",
     oneLiner: "Fill untracked gaps with external sessions and activities.",
@@ -82,7 +90,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "conductor",
-    index: 7,
     name: "Conductor",
     status: "BETA",
     oneLiner: "One brief in, parallel sub-agents out, full trace back.",
@@ -90,15 +97,20 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "trace",
-    index: 8,
     name: "Trace",
     status: "SHIPPED",
     oneLiner: "Every agent decision recorded, replayable, scored.",
     glyph: "trace",
   },
   {
+    id: "recordings",
+    name: "Recordings",
+    status: "SHIPPED",
+    oneLiner: "Auto-captured session recordings. Filed to their sessions, private to the user.",
+    glyph: "recordings",
+  },
+  {
     id: "context-brain",
-    index: 9,
     name: "Context Brain",
     status: "BETA",
     oneLiner: "A self-expanding memory graph your agents share.",
@@ -106,7 +118,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "research-digest",
-    index: 10,
     name: "Research Digest",
     status: "VISION",
     oneLiner: "Papers and feeds distilled into your knowledge base.",
@@ -114,7 +125,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "resume",
-    index: 11,
     name: "Resume",
     status: "SHIPPED",
     oneLiner: "Your tracked work becomes an honest resume.",
@@ -122,7 +132,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "finance",
-    index: 12,
     name: "Finance",
     status: "SHIPPED",
     oneLiner: "Cash flow and net worth, tracked automatically.",
@@ -130,7 +139,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "life-phases",
-    index: 13,
     name: "Life Phases",
     status: "SHIPPED",
     oneLiner: "Your months as visible phases, not blur.",
@@ -138,7 +146,6 @@ export const ATLAS: AtlasInstrument[] = [
   },
   {
     id: "marketplace",
-    index: 14,
     name: "Marketplace",
     status: "VISION",
     oneLiner: "Build instruments inside RHEO; ship them to everyone.",

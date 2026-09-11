@@ -1478,7 +1478,7 @@ export function AiPage() {
               <p className="text-sm text-red-400">{bootError || 'Failed to initialize'}</p>
               <button
                 onClick={loadBoot}
-                className="rounded-lg bg-zinc-800 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
+                className="rounded-lg bg-zinc-800 light:bg-zinc-100 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 light:bg-zinc-200 transition-colors"
               >
                 Retry
               </button>
@@ -1496,18 +1496,17 @@ export function AiPage() {
             </div>
             <div className="dk-barR">
               <span className="dk-chip dk-mode"><span className="dk-dot" />{modeLabelMap[mode]}</span>
-              <button className="dk-chip dk-prov hover:bg-zinc-800/40 transition-colors" onClick={() => setConfiguringFeature('default')}><span className="dk-dot" />{defaultBadge?.label ?? "Claude Sonnet"}</button>
+              <button className="dk-chip dk-prov hover:bg-zinc-800 light:bg-zinc-100/40 light:bg-zinc-100/40 transition-colors" onClick={() => setConfiguringFeature('default')}><span className="dk-dot" />{defaultBadge?.label ?? "Claude Sonnet"}</button>
               <span className="dk-chip dk-live"><span className="dk-dot" />{chat.hasProvider ? "Connected" : "Offline"}</span>
               <button
                 onClick={() => setChatHistoryOpen(true)}
                 title="Chat History"
-                className="dk-topbar-btn"
-                style={{ height: 26, padding: "0 10px" }}
+                className="dk-topbar-btn dk-topbar-btn--sm"
               >
                 <History size={12} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>History</span>
               </button>
-              <div className="flex items-center bg-zinc-900/60 rounded-lg p-0.5 border border-zinc-800/50">
+              <div className="flex items-center bg-zinc-900 light:bg-white/60 light:bg-white/40 rounded-lg p-0.5 border border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50">
                 {(['canvas', 'deck', 'compositions'] as const).map(mode => (
                   <button
                     key={mode}
@@ -1516,7 +1515,7 @@ export function AiPage() {
                     style={{ fontFamily: "var(--mono)" }}
                   >
                     {canvasMode === mode && (
-                      <motion.div layoutId="mode-pill" className="absolute inset-0 bg-zinc-700/60 rounded-md" transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }} />
+                      <motion.div layoutId="mode-pill" className="absolute inset-0 bg-zinc-700 light:bg-zinc-200/60 rounded-md" transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }} />
                     )}
                     <span className="relative z-10">{mode === 'canvas' ? 'CANVAS' : mode === 'deck' ? 'DECK' : 'COMPS'}</span>
                   </button>
@@ -1525,8 +1524,7 @@ export function AiPage() {
               <button
                 onClick={() => setHistoryOpen(v => !v)}
                 title="Goals & Reminders"
-                className="dk-topbar-btn"
-                style={{ height: 26, padding: "0 10px" }}
+                className="dk-topbar-btn dk-topbar-btn--sm"
               >
                 <Bell size={12} className="text-amber-400" />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Goals</span>
@@ -1539,16 +1537,14 @@ export function AiPage() {
               <button
                 onClick={chat.startNewThread}
                 title="New Thread"
-                className="dk-topbar-btn"
-                style={{ height: 26, padding: "0 10px" }}
+                className="dk-topbar-btn dk-topbar-btn--sm"
               >
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>+ New</span>
               </button>
               <button
                 onClick={() => setShowFeatures(true)}
                 title="AI Features"
-                className="dk-topbar-btn"
-                style={{ height: 26, padding: "0 10px", borderColor: "rgba(167,139,250,0.3)", color: "#a78bfa" }}
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--violet"
               >
                 <Sparkles size={11} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Features</span>
@@ -1556,8 +1552,7 @@ export function AiPage() {
               <button
                 onClick={() => setAiSubPage(p => (p === 'vault' ? 'assistant' : 'vault'))}
                 title="AI Debug Vault"
-                className="dk-topbar-btn"
-                style={{ height: 26, padding: "0 10px", borderColor: aiSubPage === 'vault' ? "rgba(251,191,36,0.4)" : undefined, color: aiSubPage === 'vault' ? "#fbbf24" : undefined }}
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
               >
                 <Bug size={11} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vault</span>
@@ -1565,8 +1560,7 @@ export function AiPage() {
               <button
                 onClick={() => setAiSubPage(p => (p === 'context' ? 'assistant' : 'context'))}
                 title="AI Context Captures"
-                className="dk-topbar-btn"
-                style={{ height: 26, padding: "0 10px", borderColor: aiSubPage === 'context' ? "rgba(34,211,238,0.4)" : undefined, color: aiSubPage === 'context' ? "#22d3ee" : undefined }}
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--cyan"
               >
                 <MessageSquare size={11} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Context</span>
@@ -1574,8 +1568,7 @@ export function AiPage() {
               <button
                 onClick={() => setConfiguringFeature('vision')}
                 title="Configure Vision Model"
-                className="dk-topbar-btn"
-                style={{ height: 26, padding: "0 10px", borderColor: aiRouting.vision ? "rgba(244,114,182,0.4)" : undefined, color: aiRouting.vision ? "#f472b6" : undefined }}
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--pink"
               >
                 <Eye size={11} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vision</span>

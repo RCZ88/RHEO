@@ -21,6 +21,10 @@ import { GoalAICoach } from '../../../components/goals/GoalAICoach';
 import { GoalLanguageParser } from '../../../components/goals/GoalLanguageParser';
 import { WeeklyGoalsView } from '../../../components/goals/WeeklyGoalsView';
 import { TodoList } from '../../../components/goals/TodoList';
+import { ConnectionExplorer } from '../../../components/goals/ConnectionExplorer';
+import { HierarchyTree } from '../../../components/goals/HierarchyTree';
+import { ScheduleSyncCard } from '../../../components/dashboard/ScheduleSyncCard';
+import { DeadlinesCard } from '../../../components/dashboard/DeadlinesCard';
 import { useFocusGoals } from '../../../hooks/useFocusGoals';
 import { confetti } from '../../../components/ui/confetti';
 import { NumberTicker } from '../../../components/ui/number-ticker';
@@ -1107,8 +1111,12 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   // Schedule default = per-day (only the selected day's fixed blocks).
   // Toggle to show the whole week's fixed schedule at once.
   const [showWeekSchedule, setShowWeekSchedule] = useState(false);
-  const [todos, setTodos] = useState<{ id: string; text: string; done: boolean; createdAt: string; goalId?: string }[]>([]);
+  const [todos, setTodos] = useState<{ id: string; text: string; done: boolean; createdAt: string; goalId?: string; scheduleId?: string; deadlineId?: string; parentTodoId?: string; dueDate?: string }[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+  const [connectionEntity, setConnectionEntity] = useState<{ type: 'goal'; id: string; title: string } | null>(null);
+  const [showHierarchy, setShowHierarchy] = useState(false);
+  const [expandedHierarchy, setExpandedHierarchy] = useState<Set<string>>(new Set());
+  const [hierarchyFilter, setHierarchyFilter] = useState<'all' | 'goals' | 'todos' | 'deadlines' | 'schedule'>('all');
 
   const { focusState, activeGoalIds, getAccumulatedSeconds } = useFocusGoals(goals);
 
@@ -1183,6 +1191,9 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     })();
     (async () => {
       try { const res = await api.getSchedule(); setSchedule(res.entries || []); } catch {}
+    })();
+    (async () => {
+      try { const res = await api.todoList?.(); if (res?.success) setTodos(res.todos || []); } catch {}
     })();
   }, [api, loadLongTerm]);
 
@@ -1365,6 +1376,21 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     () => schedule.filter(e => e && e.day_of_week != null),
     [schedule]
   );
+  const goalConnections = useCallback((goal: Goal) => ({
+    todoCount: todos.filter(todo => todo.goalId === goal.id).length,
+    linkedSchedules: schedule.filter(entry => entry.goal_id === goal.id).map(entry => ({ id: entry.id, title: entry.title })),
+    linkedDeadlines: deadlines.filter(deadline => deadline.goal_id === goal.id).map(deadline => ({ id: deadline.id, title: deadline.title })),
+  }), [todos, schedule, deadlines]);
+  const hierarchyRoots = useMemo(() => goals.map(goal => ({
+    type: goal.isHabit ? 'habit' as const : 'goal' as const,
+    id: goal.id,
+    title: goal.title,
+    children: [
+      ...todos.filter(todo => todo.goalId === goal.id).map(todo => ({ type: 'todo' as const, id: todo.id, title: todo.text })),
+      ...schedule.filter(entry => entry.goal_id === goal.id).map(entry => ({ type: 'schedule' as const, id: entry.id, title: entry.title })),
+      ...deadlines.filter(deadline => deadline.goal_id === goal.id).map(deadline => ({ type: 'deadline' as const, id: deadline.id, title: deadline.title })),
+    ],
+  })), [goals, todos, schedule, deadlines]);
 
   /* fetch hard stats for the whole Mon→Sun week for the recap */
   useEffect(() => {
@@ -1394,7 +1420,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     return () => { cancelled = true; };
   }, [weekDates, api]);
 
-  /* radar marks: deadlines (rose) + reminders (amber) + long-term deadlines (violet) */
+  /* radar marks: deadlines (rose) + reminders (amber) + long-term deadlines (violet) + todo due dates (chrome) */
   const radarMarks = useMemo(() => {
     const m = new Map<string, RadarMark[]>();
     const push = (date: string, mark: RadarMark) => {
@@ -1404,19 +1430,9 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     deadlines.forEach(d => { if (d.due_date && d.status !== 'completed') push(d.due_date, { color: '#f43f5e', label: d.title }); });
     reminders.forEach(r => { if (r.due_date) push(r.due_date, { color: '#fbbf24', label: r.text }); });
     longTermGoals.forEach(l => { if (l.deadline) push(l.deadline, { color: '#a78bfa', label: l.title }); });
+    todos.forEach(t => { if (t.dueDate && !t.done) push(t.dueDate, { color: '#a1a1aa', label: t.text }); });
     return m;
-  }, [deadlines, reminders, longTermGoals]);
-
-  /* ── todo handlers ── */
-  const addTodo = (text: string) => {
-    setTodos(prev => [...prev, { id: `todo_${Date.now()}`, text, done: false, createdAt: new Date().toISOString() }]);
-  };
-  const toggleTodo = (id: string) => {
-    setTodos(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
-  };
-  const deleteTodo = (id: string) => {
-    setTodos(prev => prev.filter(t => t.id !== id));
-  };
+  }, [deadlines, reminders, longTermGoals, todos]);
 
   /* ── render ── */
   return (
@@ -1467,7 +1483,33 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
           />
 
           {/* Quick Todos */}
-          <TodoList todos={todos} onAdd={addTodo} onToggle={toggleTodo} onDelete={deleteTodo} />
+          <TodoList
+            goalOptions={goals.map(goal => ({ id: goal.id, title: goal.title, category: goal.category }))}
+            deadlineOptions={deadlines.map(deadline => ({ id: deadline.id, title: deadline.title, dueDate: deadline.due_date }))}
+            scheduleOptions={schedule.map(entry => ({ id: entry.id, title: entry.title, startTime: entry.start_time, endTime: entry.end_time }))}
+          />
+
+          <WarmCard ambient>
+            <button onClick={() => setShowHierarchy(value => !value)} className="flex w-full items-center justify-between text-left text-[12px] font-semibold text-zinc-300">
+              <span>Goal hierarchy</span>
+              <span className="text-[10px] font-normal text-zinc-600">{showHierarchy ? 'Hide tree' : 'Show linked work'}</span>
+            </button>
+            {showHierarchy && (
+              <div className="mt-3 h-64 border-t border-zinc-800/50 pt-2">
+                <HierarchyTree
+                  roots={hierarchyRoots}
+                  expanded={expandedHierarchy}
+                  onToggle={id => setExpandedHierarchy(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; })}
+                  onSelect={entity => {
+                    const goal = goals.find(item => item.id === entity.id);
+                    if (goal) setConnectionEntity({ type: 'goal', id: goal.id, title: goal.title });
+                  }}
+                  filter={hierarchyFilter}
+                  onFilterChange={value => setHierarchyFilter(value || 'all')}
+                />
+              </div>
+            )}
+          </WarmCard>
 
           {/* Schedule — defaults to the selected day only; toggle to see the whole week's fixed blocks */}
           <WarmCard ambient>
@@ -1603,7 +1645,8 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                   ) : (
                     <>
                       <GoalCard goal={goal} onToggle={handleToggle} onDelete={handleDelete} onEdit={handleEditStart}
-                        longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))} />
+                        longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
+                        {...goalConnections(goal)} onOpenConnections={g => setConnectionEntity({ type: 'goal', id: g.id, title: g.title })} />
                       {activeGoalIds.includes(goal.id) && goal.target.type === 'time' && (
                         <div className="absolute bottom-1.5 right-3 flex items-center gap-1 text-[10px] text-amber-400">
                           <span className="relative flex h-1.5 w-1.5">
@@ -1632,7 +1675,8 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden space-y-1.5 mt-2">
                     {completedDailies.map(goal => (
                       <GoalCard key={goal.id} goal={goal} onToggle={handleToggle} onDelete={handleDelete}
-                        onEdit={handleEditStart} longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))} />
+                        onEdit={handleEditStart} longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
+                        {...goalConnections(goal)} onOpenConnections={g => setConnectionEntity({ type: 'goal', id: g.id, title: g.title })} />
                     ))}
                   </motion.div>
                 )}
@@ -1655,8 +1699,8 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
           </WarmCard>
         </div>
 
-        {/* RIGHT: Unified MonthWall — single 3D calendar, goals/deadlines/reminders/schedule */}
-        <div className="space-y-4">
+        {/* RIGHT: unified calendar + schedule + deadlines */}
+        <div className="xl:col-span-7 space-y-4">
           <MonthWall
             goals={goals}
             deadlines={deadlines}
@@ -1664,6 +1708,9 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
             schedule={schedule}
             longTermGoals={longTermGoals}
           />
+          <ScheduleSyncCard schedule={schedule} goals={goals} loading={loading} />
+          <DeadlinesCard deadlines={deadlines} reminders={reminders} loading={loading} onAdd={handleAddDeadline} onDelete={handleDeleteDeadline} onUpdate={handleUpdateDeadline} onComplete={handleCompleteDeadline} onToggleReminder={handleToggleReminder} onDeleteReminder={handleDeleteReminder}
+            goalOptions={goals.map(goal => ({ id: goal.id, title: goal.title, isHabit: !!goal.isHabit }))} />
         </div>
       </div>
 
@@ -1672,6 +1719,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
         onSave={async s => { setReviewSummary(s); try { await api.saveGoalReview(selectedDate, s); } catch {} }} />
       <WeekReview weekDates={weekDates} reflections={weekReflections} />
       <LifeRiver />
+      <ConnectionExplorer entity={connectionEntity} isOpen={!!connectionEntity} onClose={() => setConnectionEntity(null)} />
     </div>
   );
 }

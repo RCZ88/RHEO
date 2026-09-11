@@ -353,7 +353,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                             <span className="mt-0.5 h-1 w-1 rounded-full opacity-0 group-hover:opacity-40" style={{ backgroundColor: 'var(--page-accent)' }} />
                           )}
                         </div>
-                        <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                        <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'var(--hairline)' }} />
                       </div>
                     </PopoverTrigger>
                     <PopoverContent className="w-72 bg-zinc-900 border-zinc-800 text-zinc-200">

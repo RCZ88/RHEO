@@ -2,6 +2,9 @@ import ctypes
 import ctypes.wintypes
 import time
 from PIL import Image
+from pathlib import Path
+SHOTS_DIR = Path(__file__).resolve().parent.parent.parent / 'design' / 'media' / 'shots'
+SHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 user32 = ctypes.windll.user32
 gdi32 = ctypes.windll.gdi32
@@ -57,7 +60,7 @@ gdi32.GetDIBits(hdc_mem, hbitmap, 0, screen_height, buffer, ctypes.byref(bmi), 0
 img = Image.frombytes('RGBA', (screen_width, screen_height), buffer)
 
 # Save
-out_path = r'C:\Users\cleme\Documents\COMPUTAH_SAYENCE\App Tracker\design\media\shots\rheo_focused.png'
+out_path = str(SHOTS_DIR / 'rheo_focused.png')
 img.save(out_path)
 print(f"Saved: {out_path}")
 

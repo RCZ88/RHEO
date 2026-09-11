@@ -144,21 +144,21 @@ export class ErrorBoundary extends Component<Props, State> {
     const reloadCount = getPersistedErrorCount();
 
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a] text-white p-8 overflow-auto">
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a] text-white p-8 overflow-auto light:bg-[var(--ws-surface)] light:text-stone-900">
         <div className="max-w-md text-center">
           <div className="text-red-400 text-6xl mb-6">!</div>
-          <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
+          <h1 className="text-2xl font-bold mb-4 light:text-stone-900">Something went wrong</h1>
 
           {showAlternative && (
-              <div className="bg-amber-900/40 border border-amber-700/50 rounded-lg p-4 mb-6 text-sm text-amber-200">
+              <div className="bg-amber-900/40 border border-amber-700/50 rounded-lg p-4 mb-6 text-sm text-amber-200 light:bg-amber-50 light:text-amber-900 light:border-amber-200">
                 The app has crashed {reloadCount} times in a row. Try navigating to a different page instead of reloading.
               </div>
             )}
 
-          <div className="bg-zinc-900 rounded-lg p-4 mb-6 text-left relative">
+          <div className="bg-zinc-900 rounded-lg p-4 mb-6 text-left relative light:bg-white light:border-[var(--ws-border-strong)]">
             <button
               onClick={this.handleCopyError}
-              className="absolute top-2 right-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1 rounded hover:bg-zinc-800"
+              className="absolute top-2 right-2 text-xs text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:text-stone-700 transition-colors px-2 py-1 rounded hover:bg-zinc-800 light:hover:bg-stone-100"
             >
               {copied ? 'Copied!' : 'Copy'}
             </button>
@@ -167,8 +167,8 @@ export class ErrorBoundary extends Component<Props, State> {
             </p>
             {error?.stack && (
               <details className="mt-2">
-                <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">Stack trace</summary>
-                <pre className="text-xs text-zinc-400 mt-2 overflow-auto max-h-60 font-mono">
+                <summary className="text-xs text-zinc-500 light:text-stone-500 cursor-pointer hover:text-zinc-300 light:text-stone-700">Stack trace</summary>
+                <pre className="text-xs text-zinc-400 light:text-stone-500 mt-2 overflow-auto max-h-60 font-mono">
                   {error.stack}
                 </pre>
               </details>
@@ -186,31 +186,31 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex flex-wrap justify-center gap-2">
               <button
                 onClick={() => this.navigateTo('/')}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]"
               >
                 Dashboard
               </button>
               <button
                 onClick={() => this.navigateTo('/activity')}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]"
               >
                 Activity
               </button>
               <button
                 onClick={() => this.navigateTo('/terminal')}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]"
               >
                 Terminal
               </button>
               <button
                 onClick={() => this.navigateTo('/ide')}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]"
               >
                 IDE
               </button>
               <button
                 onClick={() => this.navigateTo('/settings')}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]"
               >
                 Settings
               </button>

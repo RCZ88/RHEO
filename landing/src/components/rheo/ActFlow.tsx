@@ -136,7 +136,7 @@ export default function ActFlow() {
 
           <motion.p
             className="mt-6"
-            style={{ fontSize: 15, color: "#63636b", letterSpacing: "0.02em" }}
+            style={{ fontSize: 15, color: "#8a8a94", letterSpacing: "0.02em" }}
           >
             <FadeOnProgress progress={scrollYProgress} start={0.7} end={0.95}>
               Time doesn&apos;t come back. Understanding compounds.
@@ -145,7 +145,7 @@ export default function ActFlow() {
 
           <motion.p
             className="mt-3"
-            style={{ fontSize: 13, color: "#63636b", letterSpacing: "0.02em", maxWidth: 520, textAlign: "center" }}
+            style={{ fontSize: 13, color: "#8a8a94", letterSpacing: "0.02em", maxWidth: 520, textAlign: "center" }}
           >
             <FadeOnProgress progress={scrollYProgress} start={0.82} end={0.99}>
               And it grows — every instrument in the Atlas can be built from inside RHEO. By anyone.

@@ -27,7 +27,7 @@ export function AutomationList({ showHeader = true, className }: AutomationListP
     return (
       <div className={cn("space-y-3", className)}>
         {[1, 2].map(i => (
-          <div key={i} className="h-28 rounded-xl bg-zinc-900/30 animate-pulse motion-reduce:animate-none" />
+          <div key={i} className="h-28 rounded-xl bg-zinc-900 light:bg-white/30 animate-pulse motion-reduce:animate-none" />
         ))}
       </div>
     )

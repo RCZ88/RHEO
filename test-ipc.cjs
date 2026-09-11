@@ -1,4 +1,10 @@
-const db = require('better-sqlite3')('C:\\Users\\cleme\\AppData\\Roaming\\deskflow\\deskflow-data.db');
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const appDataDir = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+const dbCandidates = ['RHEO', 'DeskFlow', 'deskflow'].map((d) => path.join(appDataDir, d, 'deskflow-data.db'));
+const dbFile = dbCandidates.find((p) => fs.existsSync(p)) || dbCandidates[0];
+const db = require('better-sqlite3')(dbFile);
 
 console.log('=== Test get-external-stats IPC Handler Logic ===\n');
 

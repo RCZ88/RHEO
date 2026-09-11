@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RHEO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  /* ===== R-10 Boot Splash — Meridian Wake (Concept A) ===== */
+  /* Single LAMINAR easing, transform/opacity ONLY, one-shot, no loop */
+
+  :root {
+    --splash-field: #09090b;
+    --splash-hairline: rgba(255,255,255,0.08);
+    --splash-mono: rgba(255,255,255,0.50);
+    --splash-caption: rgba(255,255,255,0.35);
+    --splash-now-tick: #ec4899;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--splash-field);
+    color: rgba(255,255,255,0.85);
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* Full-screen field */
+  .splash-field {
+    position: fixed;
+    inset: 0;
+    background: var(--splash-field);
+  }
+
+  /* Ticks container — fixed height so children have room */
+  #ticks {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+  }
+
+  .splash-tick {
+    position: absolute;
+    left: 28px;
+    width: 2px;
+    height: 8px;
+    background: var(--splash-hairline);
+    transform-origin: center;
+    opacity: 0;
+    transform: translateY(6px);
+    will-change: transform, opacity;
+  }
+
+  .splash-num {
+    position: absolute;
+    left: 40px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--splash-mono);
+    letter-spacing: -0.02em;
+    opacity: 0;
+    transform: translateY(50%);
+    will-change: transform, opacity;
+  }
+
+  .splash-now {
+    position: absolute;
+    left: 28px;
+    width: 2px;
+    height: 8px;
+    background: var(--splash-now-tick);
+    opacity: 0;
+    transform-origin: center;
+    will-change: opacity;
+  }
+
+  .splash-now-dot {
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--splash-now-tick);
+    opacity: 0;
+    box-shadow: 0 0 8px rgba(236,72,153,0.08);
+    will-change: opacity;
+  }
+
+  .splash-sweep {
+    position: absolute;
+    left: 28px;
+    top: 50%;
+    width: 464px;
+    height: 1px;
+    background: var(--splash-hairline);
+    transform-origin: left center;
+    transform: scaleX(0);
+    will-change: transform;
+  }
+
+  .splash-logo {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    will-change: opacity, transform;
+  }
+
+  .splash-wordmark {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #fafafa;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .splash-caption {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--splash-caption);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .splash-tick, .splash-num, .splash-now, .splash-now-dot,
+    .splash-sweep, .splash-logo {
+      opacity: 1;
+      transform: none;
+      animation: none !important;
+    }
+    .splash-sweep { transform: scaleX(1); }
+    .splash-logo { transform: translate(-50%, -50%) scale(1); }
+    .splash-tick { opacity: var(--splash-mono); }
+    .splash-num { opacity: var(--splash-mono); }
+    body { animation: splash-rm-fade 140ms ease-out forwards; }
+  }
+  @keyframes splash-rm-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="splash-field" aria-hidden="true"></div>
+<div id="ticks" aria-hidden="true"></div>
+
+<div class="splash-num" id="num-00" style="top:40px">00</div>
+<div class="splash-num" id="num-06" style="top:100px">06</div>
+<div class="splash-num" id="num-12" style="top:160px">12</div>
+<div class="splash-num" id="num-18" style="top:220px">18</div>
+<div class="splash-num" id="num-24" style="top:280px">24</div>
+
+<div class="splash-now" id="now-tick" style="top:160px"></div>
+<div class="splash-now-dot" id="now-dot" style="top:158px;left:27px"></div>
+
+<div class="splash-sweep" id="sweep" aria-hidden="true"></div>
+
+<div class="splash-logo" id="logo" aria-hidden="true">
+  <span class="splash-wordmark">RHEO</span>
+  <span class="splash-caption">Productivity Tracker</span>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── DOM refs ──
+  var FIELD = document.querySelector('.splash-field');
+  var TICKS = document.getElementById('ticks');
+  var NUMS  = ['num-00','num-06','num-12','num-18','num-24'].map(function (id) {
+    return document.getElementById(id);
+  });
+  var NOW_TICK = document.getElementById('now-tick');
+  var NOW_DOT  = document.getElementById('now-dot');
+  var SWEEP    = document.getElementById('sweep');
+  var LOGO     = document.getElementById('logo');
+
+  // ── Build 24 ruler ticks ──
+  var tickFrag = document.createDocumentFragment();
+  for (var i = 0; i < 24; i++) {
+    var tick = document.createElement('div');
+    tick.className = 'splash-tick';
+    tick.style.top = (40 + i * 10) + 'px';
+    tickFrag.appendChild(tick);
+  }
+  TICKS.appendChild(tickFrag);
+  var TICK_NODES = Array.prototype.slice.call(TICKS.querySelectorAll('.splash-tick'));
+
+  // ── Easing + state ──
+  var easeOut = function (t) { return 1 - Math.pow(1 - t, 3); };
+  var startTime = performance.now();
+  var animCompleteSent = false;
+  var warmStart = false;
+
+  function sendComplete() {
+    if (animCompleteSent) return;
+    animCompleteSent = true;
+    if (window.splashAPI && window.splashAPI.sendComplete) {
+      window.splashAPI.sendComplete();
+    }
+  }
+
+  // ── Animation loop ──
+  function tick(now) {
+    var elapsed = now - startTime;
+    if (warmStart) {
+      sequenceWarm(now, elapsed);
+      if (elapsed < 600) requestAnimationFrame(tick);
+      return;
+    }
+    sequenceFull(now, elapsed);
+    if (elapsed < 1500) requestAnimationFrame(tick);
+  }
+
+  function sequenceFull(now, elapsed) {
+    if (elapsed < 500) {
+      var tFrac = Math.min(elapsed / 500, 1);
+      for (var i = 0; i < TICK_NODES.length; i++) {
+        var tickStart = i * 12;
+        var local = Math.max(0, tFrac * 500 - tickStart);
+        var e = easeOut(Math.min(local / 80, 1));
+        TICK_NODES[i].style.opacity = e;
+        TICK_NODES[i].style.transform = 'translateY(' + (6 * (1 - e)) + 'px)';
+      }
+    }
+    if (elapsed >= 350 && elapsed < 700) {
+      var nFrac = Math.min((elapsed - 350) / 350, 1);
+      var nE = easeOut(nFrac);
+      for (var j = 0; j < NUMS.length; j++) {
+        NUMS[j].style.opacity = nE;
+        NUMS[j].style.transform = 'translateY(' + (50 * (1 - nE)) + '%)';
+      }
+    }
+    if (elapsed >= 700 && elapsed < 900) {
+      var wFrac = Math.min((elapsed - 700) / 200, 1);
+      var wE = easeOut(wFrac);
+      NOW_TICK.style.opacity = wE;
+      NOW_DOT.style.opacity = wE;
+    } else if (elapsed >= 900) {
+      NOW_TICK.style.opacity = '1';
+      NOW_DOT.style.opacity = '1';
+    }
+    if (elapsed >= 850 && elapsed < 1250) {
+      var sFrac = Math.min((elapsed - 850) / 400, 1);
+      var sE = easeOut(sFrac);
+      SWEEP.style.transform = 'scaleX(' + sE + ')';
+    } else if (elapsed >= 1250) {
+      SWEEP.style.transform = 'scaleX(1)';
+    }
+    if (elapsed >= 850 && elapsed < 1250) {
+      var lFrac = Math.min((elapsed - 850) / 400, 1);
+      var lE = easeOut(lFrac);
+      LOGO.style.opacity = lE;
+      LOGO.style.transform = 'translate(-50%,-50%) scale(' + (0.9 + 0.1 * lE) + ')';
+    } else if (elapsed >= 1250) {
+      LOGO.style.opacity = '1';
+      LOGO.style.transform = 'translate(-50%,-50%) scale(1)';
+      sendComplete();
+    }
+  }
+
+  function sequenceWarm(now, elapsed) {
+    if (elapsed < 400) {
+      var tFrac = Math.min(elapsed / 400, 1);
+      for (var i = 0; i < TICK_NODES.length; i++) {
+        var tickStart = i * 12;
+        var local = Math.max(0, tFrac * 400 - tickStart);
+        var e = easeOut(Math.min(local / 80, 1));
+        TICK_NODES[i].style.opacity = e;
+        TICK_NODES[i].style.transform = 'translateY(' + (6 * (1 - e)) + 'px)';
+      }
+    }
+    if (elapsed >= 350 && elapsed < 600) {
+      var lFrac = Math.min((elapsed - 350) / 250, 1);
+      var lE = easeOut(lFrac);
+      LOGO.style.opacity = lE;
+      LOGO.style.transform = 'translate(-50%,-50%) scale(' + (0.9 + 0.1 * lE) + ')';
+    } else if (elapsed >= 600) {
+      LOGO.style.opacity = '1';
+      LOGO.style.transform = 'translate(-50%,-50%) scale(1)';
+    }
+  }
+
+  // ── Reduced motion ──
+  var rmMatch = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function handleRM() {
+    FIELD.style.opacity = '0';
+    FIELD.style.animation = 'splash-rm-fade 140ms ease-out forwards';
+    for (var i = 0; i < TICK_NODES.length; i++) {
+      TICK_NODES[i].style.opacity = '0.5';
+      TICK_NODES[i].style.transform = 'none';
+    }
+    for (var j = 0; j < NUMS.length; j++) {
+      NUMS[j].style.opacity = '0.5';
+      NUMS[j].style.transform = 'none';
+    }
+    NOW_TICK.style.opacity = '1';
+    NOW_DOT.style.opacity = '1';
+    SWEEP.style.transform = 'scaleX(1)';
+    LOGO.style.opacity = '1';
+    LOGO.style.transform = 'translate(-50%,-50%) scale(1)';
+    setTimeout(function () {
+      if (window.splashAPI && window.splashAPI.sendComplete) {
+        window.splashAPI.sendComplete();
+      }
+    }, 140);
+  }
+
+  // ── Replay handler ──
+  function startAnimation() {
+    startTime = performance.now();
+    animCompleteSent = false;
+    if (rmMatch.matches) { handleRM(); return; }
+    requestAnimationFrame(tick);
+  }
+
+  // ── Config load (async — getBootAnimationConfig returns a Promise) ──
+  function init() {
+    if (window.splashAPI && window.splashAPI.getBootAnimationConfig) {
+      window.splashAPI.getBootAnimationConfig().then(function (cfg) {
+        if (cfg && typeof cfg === 'object') {
+          if (cfg.enabled === false) { document.body.style.opacity = '1'; return; }
+          warmStart = !!cfg.warmStart;
+        }
+        startAnimation();
+      }).catch(function () {
+        startAnimation();
+      });
+    } else {
+      startAnimation();
+    }
+  }
+
+  // ── Replay via splash preload IPC channel (ruling 3 — full IPC chain) ──
+  if (window.splashAPI && window.splashAPI.onReplay) {
+    window.splashAPI.onReplay(function () {
+      startAnimation();
+    });
+  }
+
+  // ── Boot ──
+  init();
+})();
+</script>
+</body>
+</html>

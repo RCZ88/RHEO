@@ -17,6 +17,7 @@ import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { Select, SelectItem } from '../../components/ui/select';
 import type { ScheduleEntry, ScheduleCategory } from './types';
+import { EntityChip } from '../../components/goals/EntityChip';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -113,7 +114,7 @@ export function ScheduleCard({
 
   const [form, setForm] = useState({
     title: '', location: '', day: selectedDay.toString(), start: '09:00', end: '10:00',
-    category: 'class' as ScheduleCategory, color: COLORS[0],
+    category: 'class' as ScheduleCategory, color: COLORS[0], goalId: '',
   });
 
   const dayEntries = useMemo(() =>
@@ -136,7 +137,7 @@ export function ScheduleCard({
   const upcomingEntries = dayEntries.filter(e => parseTime(e.start_time) > nowMinutes);
   const pastEntries = dayEntries.filter(e => parseTime(e.end_time) <= nowMinutes);
 
-  const resetForm = () => setForm({ title: '', location: '', day: selectedDay.toString(), start: '09:00', end: '10:00', category: 'class', color: COLORS[0] });
+  const resetForm = () => setForm({ title: '', location: '', day: selectedDay.toString(), start: '09:00', end: '10:00', category: 'class', color: COLORS[0], goalId: '' });
 
   const startAdd = () => { resetForm(); setForm(p => ({ ...p, day: selectedDay.toString() })); setIsAdding(true); setEditingId(null); };
 
@@ -144,7 +145,7 @@ export function ScheduleCard({
     setEditingId(entry.id);
     setForm({
       title: entry.title, location: entry.location || '', day: entry.day_of_week.toString(),
-      start: entry.start_time, end: entry.end_time, category: entry.category || 'class', color: entry.color || COLORS[0],
+      start: entry.start_time, end: entry.end_time, category: entry.category || 'class', color: entry.color || COLORS[0], goalId: entry.goal_id || '',
     });
     setIsAdding(false);
   };
@@ -155,6 +156,7 @@ export function ScheduleCard({
       title: form.title.trim(), location: form.location.trim() || undefined,
       day_of_week: parseInt(form.day), start_time: form.start, end_time: form.end,
       category: form.category, color: form.color,
+      goal_id: form.goalId || null,
     };
     if (editingId) { onUpdate(editingId, payload); setEditingId(null); }
     else { onAdd(payload); setIsAdding(false); }
@@ -170,12 +172,12 @@ export function ScheduleCard({
 
   if (loading) {
     return (
-      <div className="relative rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 p-5 min-h-[400px]">
+      <div className="relative rounded-xl overflow-hidden border border-zinc-800 light:border-[var(--ws-border)] bg-zinc-900 light:bg-white p-5 min-h-[400px]">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
         <div className="animate-pulse space-y-4">
-          <div className="h-5 bg-zinc-800 rounded w-1/3" />
-          <div className="flex gap-2">{[1,2,3,4,5,6,7].map(i => <div key={i} className="h-8 bg-zinc-800/50 rounded-md flex-1" />)}</div>
-          {[1,2,3].map(i => <div key={i} className="h-14 bg-zinc-800/30 rounded-lg" />)}
+          <div className="h-5 bg-zinc-800 light:bg-zinc-100 rounded w-1/3" />
+          <div className="flex gap-2">{[1,2,3,4,5,6,7].map(i => <div key={i} className="h-8 bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 rounded-md flex-1" />)}</div>
+          {[1,2,3].map(i => <div key={i} className="h-14 bg-zinc-800 light:bg-zinc-100/30 rounded-lg" />)}
         </div>
       </div>
     );
@@ -183,9 +185,9 @@ export function ScheduleCard({
 
   if (error) {
     return (
-      <div className="relative rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 p-5 min-h-[400px] flex flex-col items-center justify-center text-center">
+      <div className="relative rounded-xl overflow-hidden border border-zinc-800 light:border-[var(--ws-border)] bg-zinc-900 light:bg-white p-5 min-h-[400px] flex flex-col items-center justify-center text-center">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
-        <div className="w-14 h-14 rounded-full bg-zinc-800/50 flex items-center justify-center mb-3">
+        <div className="w-14 h-14 rounded-full bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 flex items-center justify-center mb-3">
           <Calendar size={24} className="text-zinc-600" />
         </div>
         <p className="text-[14px] font-medium text-zinc-400">Could not load schedule</p>
@@ -195,7 +197,7 @@ export function ScheduleCard({
   }
 
   return (
-    <div className="relative rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 p-5 min-h-[400px] flex flex-col">
+    <div className="relative rounded-xl overflow-hidden border border-zinc-800 light:border-[var(--ws-border)] bg-zinc-900 light:bg-white p-5 min-h-[400px] flex flex-col">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
       {currentEntry && isToday && (
         <div className="absolute inset-0 pointer-events-none rounded-xl" style={{ boxShadow: `inset 0 0 0 1px ${ACCENT_BORDER}, 0 0 24px -6px ${ACCENT_SOFT}` }} />
@@ -223,7 +225,7 @@ export function ScheduleCard({
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={startAdd}
-            className="w-8 h-8 rounded-md bg-zinc-800/50 hover:bg-zinc-700/50 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+            className="w-8 h-8 rounded-md bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 hover:bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
             aria-label={isAdding || editingId ? 'Cancel' : 'Add schedule entry'}
           >
             {isAdding || editingId ? <X size={14} /> : <Plus size={14} />}
@@ -250,21 +252,21 @@ export function ScheduleCard({
         <AnimatePresence>
           {(isAdding || editingId) && (
             <motion.div variants={formVariants} initial="hidden" animate="show" exit="exit" className="overflow-hidden">
-              <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/50 space-y-2.5 mb-3">
+              <div className="p-3 rounded-lg bg-zinc-900 light:bg-white/60 light:bg-white/40 border border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50 space-y-2.5 mb-3">
                 <Input
                   value={form.title}
                   onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && handleSave()}
                   placeholder="Entry title (e.g. Linear Algebra)"
                   autoFocus
-                  className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[13px] h-9"
+                  className="bg-zinc-900 light:bg-white/80 light:bg-white/60 border-zinc-700 light:border-zinc-300/50 focus-visible:ring-amber-500/50 text-[13px] h-9"
                 />
                 <div className="flex items-center gap-2">
                   <Input
                     value={form.location}
                     onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
                     placeholder="Location (optional)"
-                    className="flex-1 bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[13px] h-9"
+                    className="flex-1 bg-zinc-900 light:bg-white/80 light:bg-white/60 border-zinc-700 light:border-zinc-300/50 focus-visible:ring-amber-500/50 text-[13px] h-9"
                   />
                   <Select value={form.day} onValueChange={v => setForm(p => ({ ...p, day: v }))} className="w-[90px]">
                     {DAYS.map((d, i) => <SelectItem key={i} value={i.toString()}>{DAY_SHORT[i]}</SelectItem>)}
@@ -272,9 +274,9 @@ export function ScheduleCard({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 flex-1">
-                    <Input type="time" value={form.start} onChange={e => setForm(p => ({ ...p, start: e.target.value }))} className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[13px] h-9" />
+                    <Input type="time" value={form.start} onChange={e => setForm(p => ({ ...p, start: e.target.value }))} className="bg-zinc-900 light:bg-white/80 light:bg-white/60 border-zinc-700 light:border-zinc-300/50 focus-visible:ring-amber-500/50 text-[13px] h-9" />
                     <span className="text-zinc-600 text-xs">to</span>
-                    <Input type="time" value={form.end} onChange={e => setForm(p => ({ ...p, end: e.target.value }))} className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[13px] h-9" />
+                    <Input type="time" value={form.end} onChange={e => setForm(p => ({ ...p, end: e.target.value }))} className="bg-zinc-900 light:bg-white/80 light:bg-white/60 border-zinc-700 light:border-zinc-300/50 focus-visible:ring-amber-500/50 text-[13px] h-9" />
                   </div>
                   <div className="flex items-center gap-1">
                     {COLORS.map(c => (
@@ -296,6 +298,17 @@ export function ScheduleCard({
                       <SelectItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</SelectItem>
                     ))}
                   </Select>
+                  {linkedGoals && linkedGoals.length > 0 && (
+                    <select
+                      value={form.goalId}
+                      onChange={e => setForm(p => ({ ...p, goalId: e.target.value }))}
+                      aria-label="Link schedule block to goal"
+                      className="h-8 min-w-0 flex-1 rounded-md border border-zinc-700/50 bg-zinc-900 px-2 text-[11px] text-zinc-400 outline-none focus:border-amber-400/50"
+                    >
+                      <option value="">No linked goal</option>
+                      {linkedGoals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                    </select>
+                  )}
                   <div className="flex-1" />
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button size="sm" onClick={handleSave} className="bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 text-[12px] h-8">
@@ -318,7 +331,7 @@ export function ScheduleCard({
             animate={{ opacity: 1, y: 0 }}
             className="flex-1 flex flex-col items-center justify-center text-center py-10"
           >
-            <div className="w-14 h-14 rounded-full bg-zinc-800/50 flex items-center justify-center mb-3">
+            <div className="w-14 h-14 rounded-full bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 flex items-center justify-center mb-3">
               <Sun size={24} className="text-zinc-600" />
             </div>
             <p className="text-[14px] font-medium text-zinc-400">Nothing scheduled for {DAY_SHORT[selectedDay]}</p>
@@ -361,7 +374,7 @@ export function ScheduleCard({
                           />
                           <span className="text-sm font-semibold text-zinc-100">{currentEntry.title}</span>
                           {showAll && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800/60 text-zinc-300 border border-zinc-700/40 shrink-0">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 light:bg-zinc-100/60 light:bg-zinc-100 text-zinc-300 border border-zinc-700 light:border-zinc-300/40 light:border-zinc-200/40 shrink-0">
                               {DAY_SHORT[currentEntry.day_of_week]}
                             </span>
                           )}
@@ -369,7 +382,7 @@ export function ScheduleCard({
                             NOW
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                <div className="flex items-center gap-3 mt-1 flex-wrap">
                           <span className="text-[11px] text-zinc-400 font-mono">
                             {formatTime(currentEntry.start_time)} – {formatTime(currentEntry.end_time)}
                           </span>
@@ -379,13 +392,14 @@ export function ScheduleCard({
                               <MapPin size={10} />{currentEntry.location}
                             </span>
                           )}
+                          {currentEntry.goal_id && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === currentEntry.goal_id)?.title || 'Linked goal'} />}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => startEdit(currentEntry)} className="w-6 h-6 rounded bg-zinc-800/50 text-zinc-400 hover:text-white flex items-center justify-center">
+                        <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => startEdit(currentEntry)} className="w-6 h-6 rounded bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 text-zinc-400 hover:text-white flex items-center justify-center">
                           <Edit3 size={10} />
                         </motion.button>
-                        <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => handleDelete(currentEntry.id)} className="w-6 h-6 rounded bg-zinc-800/50 text-zinc-400 hover:text-red-400 flex items-center justify-center">
+                        <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => handleDelete(currentEntry.id)} className="w-6 h-6 rounded bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 text-zinc-400 hover:text-red-400 flex items-center justify-center">
                           <Trash2 size={10} />
                         </motion.button>
                       </div>
@@ -400,18 +414,18 @@ export function ScheduleCard({
               const minsUntil = getMinutesUntil(entry.start_time);
               return (
                 <motion.div key={entry.id} variants={itemVariants} initial="hidden" animate="show" exit="exit" layout className="group">
-                  <div className="relative p-3 rounded-lg border border-zinc-800/50 hover:border-zinc-700/40 bg-zinc-900/20 hover:bg-zinc-900/40 transition-all duration-200">
+                  <div className="relative p-3 rounded-lg border border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50 hover:border-zinc-700 light:border-zinc-300/40 light:border-zinc-200/40 bg-zinc-900 light:bg-white/20 hover:bg-zinc-900 light:bg-white/40 light:bg-white/30 transition-all duration-200">
                     <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg" style={{ backgroundColor: entry.color || '#6b7280' }} />
                     <div className="flex items-start justify-between pl-3 gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-zinc-200">{entry.title}</span>
-                          <span className="text-[10px] text-zinc-600 px-1 py-0.5 rounded bg-zinc-800/50 border border-zinc-700/30 flex items-center gap-1">
+                          <span className="text-[10px] text-zinc-600 px-1 py-0.5 rounded bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 border border-zinc-700 light:border-zinc-300/30 light:border-zinc-300/30 flex items-center gap-1">
                             {CATEGORY_ICONS[entry.category || 'other']}
                             {CATEGORY_LABELS[entry.category || 'other']}
                           </span>
                           {showAll && (
-                            <span className="text-[10px] text-zinc-500 px-1 py-0.5 rounded bg-zinc-800/50 border border-zinc-700/30 shrink-0">
+                            <span className="text-[10px] text-zinc-500 px-1 py-0.5 rounded bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 border border-zinc-700 light:border-zinc-300/30 light:border-zinc-300/30 shrink-0">
                               {DAY_SHORT[entry.day_of_week]}
                             </span>
                           )}
@@ -422,19 +436,20 @@ export function ScheduleCard({
                           {entry.location && (
                             <span className="text-[11px] text-zinc-600 flex items-center gap-1"><MapPin size={10} />{entry.location}</span>
                           )}
+                          {entry.goal_id && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === entry.goal_id)?.title || 'Linked goal'} />}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {isToday && minsUntil > 0 && minsUntil < 180 && (
-                          <span className="text-[10px] text-zinc-500 font-mono bg-zinc-800/50 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] text-zinc-500 font-mono bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 px-1.5 py-0.5 rounded">
                             in {minsUntil}m
                           </span>
                         )}
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => startEdit(entry)} className="w-6 h-6 rounded bg-zinc-800/50 text-zinc-400 hover:text-white flex items-center justify-center">
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => startEdit(entry)} className="w-6 h-6 rounded bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 text-zinc-400 hover:text-white flex items-center justify-center">
                             <Edit3 size={10} />
                           </motion.button>
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => handleDelete(entry.id)} className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${deleteConfirmId === entry.id ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800/50 text-zinc-400 hover:text-red-400'}`}>
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => handleDelete(entry.id)} className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${deleteConfirmId === entry.id ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 text-zinc-400 hover:text-red-400'}`}>
                             <Trash2 size={10} />
                           </motion.button>
                         </div>

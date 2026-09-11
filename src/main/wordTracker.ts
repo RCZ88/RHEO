@@ -44,6 +44,7 @@ function findCount(wordId: number, projectId?: string): number {
 }
 
 export function initWordTracker(dbInstance: any): void {
+  // === FIX: word_tracker_config ===
   db = dbInstance
   // Ensure tables exist
   db.exec(`
@@ -117,6 +118,8 @@ export function initWordTracker(dbInstance: any): void {
     project_name: r.project_name,
   }))
 
+  // Ensure config table exists (must be before the SELECT)
+  db.exec('CREATE TABLE IF NOT EXISTS word_tracker_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
   // Load config
   const configRows = db.prepare('SELECT * FROM word_tracker_config').all()
   wordTrackerConfig = {}

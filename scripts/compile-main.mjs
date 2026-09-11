@@ -1,45 +1,43 @@
-import { build as viteBuild } from 'vite';
-import { existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync, readFileSync } from 'fs';
+import { execSync } from 'child_process';
+import { statSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const SRC = resolve(ROOT, 'src');
 const OUT = resolve(ROOT, 'dist-electron');
-const mainTemp = resolve(OUT, 'main-temp');
+const mainCjs = resolve(OUT, 'main.cjs');
+const tsFile = resolve(ROOT, 'src', 'main.ts');
 
-mkdirSync(mainTemp, { recursive: true });
+const externals = [
+  'electron', 'better-sqlite3', 'active-win', 'node-pty',
+  'dotenv', 'ws', 'crypto', 'os', 'path', 'fs', 'child_process',
+  'util', 'url', 'stream', 'events', 'net', 'http', 'https',
+  'tls', 'zlib', 'assert', 'querystring', 'buffer',
+];
 
-await viteBuild({
-  root: ROOT,
-  configFile: false,
-  build: {
-    outDir: mainTemp,
-    lib: {
-      entry: resolve(SRC, 'main.ts'),
-      formats: ['cjs'],
-      fileName: () => 'main.cjs',
-    },
-    rollupOptions: {
-      external: ['electron', 'better-sqlite3', 'active-win', 'node-pty', 'dotenv'],
-    },
-    ssr: undefined,
-    minify: false,
-    sourcemap: false,
-  },
-});
+const cmd = 'npx esbuild "' + tsFile + '" --outfile="' + mainCjs + '" --format=cjs --platform=node --target=node22 --bundle --external:electron --external:better-sqlite3 --external:active-win --external:node-pty --external:dotenv --external:ws --external:crypto --external:os --external:path --external:fs --external:child_process --external:util --external:url --external:stream --external:events --external:net --external:http --external:https --external:tls --external:zlib --external:assert --external:querystring --external:buffer';
 
-const mainCjs = resolve(mainTemp, 'main.cjs');
-if (existsSync(mainCjs)) {
-  renameSync(mainCjs, resolve(OUT, 'main.cjs'));
-  console.log(`main.cjs: ${(statSync(resolve(OUT, 'main.cjs')).size / 1024).toFixed(0)} KB`);
+console.log('Compiling main.ts → main.cjs...');
+try {
+  execSync(cmd, { cwd: ROOT, stdio: 'inherit', timeout: 180_000, shell: true });
+} catch (e) {
+  console.error('esbuild failed with exit code:', e.status);
+  process.exit(e.status || 1);
 }
-if (existsSync(mainTemp)) rmSync(mainTemp, { recursive: true, force: true });
 
+if (!existsSync(mainCjs)) {
+  console.error('main.cjs was not created!');
+  process.exit(1);
+}
+const stat = statSync(mainCjs);
+console.log('main.cjs:', (stat.size / 1024).toFixed(0), 'KB');
+
+// Also create main.js shim and package.json
+import { writeFileSync } from 'fs';
 writeFileSync(resolve(OUT, 'main.js'), 'module.exports = require("./main.cjs");\n');
 writeFileSync(resolve(OUT, 'package.json'), JSON.stringify({ type: 'commonjs' }, null, 2) + '\n');
 
-const content = readFileSync(resolve(OUT, 'main.cjs'), 'utf-8');
-if (content.includes('./services/') || content.includes('./gameDetection')) {
-  console.log('✅ Services externalized');
-}
-console.log('✅ main.cjs built');
+// Verify patches landed
+const content = readFileSync(mainCjs, 'utf-8');
+console.log('isQuitting in main.cjs:', content.includes('app.isQuitting = true'));
+console.log('tray.destroy in main.cjs:', content.includes('tray.destroy()'));
+console.log('DONE');

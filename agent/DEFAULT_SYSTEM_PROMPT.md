@@ -19,6 +19,74 @@ These files are force-loaded into your context via `opencode.json` "instructions
 4. Identify the active problem/request (`agent/problems.json` / `agent/requests.json`).
 Do not start coding until state is recovered.
 
+## 1b. MULTI-AGENT COORDINATION (mandatory — never skip)
+
+You are almost certainly NOT the only agent in this repo. Sub-agents, shells, and
+the app itself may be editing files, building, running, or writing to the database
+at the same moment. Ignoring that is what corrupts the DB, triggers "internal server
+error" mode, and makes agents silently overwrite each other so nothing ships.
+
+**Before ANY non-trivial action (edit, build, run app, DB migration, install deps,
+commit), you MUST read and execute the protocol below.**
+
+### The contract (non-negotiable)
+
+1. **Announce yourself, then look before you leap.**
+   ```bash
+   export AGENT_ID="<your-unique-id>"
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/coord.mjs register --agent "$AGENT_ID" --task "<what you're doing>"
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/coord.mjs status   # who else is active?
+   ```
+2. **Claim files before editing them. A DENIED claim is a hard STOP.**
+   ```bash
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/coord.mjs claim --agent "$AGENT_ID" --paths <files/dirs you'll edit>
+   ```
+3. **Never build while the app runs; never run the app while building. Never run
+   two builds or two app instances.** Use the wrappers — they enforce it:
+   ```bash
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/run-exclusive.mjs build --forbid app -- npm run build
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/run-exclusive.mjs app   --forbid build app -- npm start
+   ```
+4. **The database has exactly one writer.** better-sqlite3 is single-writer.
+   Do DB work only when the app is stopped, and always through the guard
+   (it backs up first):
+   ```bash
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/db-guard.mjs run -- node scripts/migrate.mjs
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/db-guard.mjs backup   # manual snapshot anytime
+   ```
+5. **Prefer surgical edits over whole-file rewrites**, and new files over
+   mutating shared ones. Don't `git add -A`, force-push, drop tables, or delete
+   the DB without explicit human confirmation.
+6. **Always release when done** (wrappers do this automatically, even on crash):
+   ```bash
+   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/coord.mjs done --agent "$AGENT_ID"
+   ```
+
+### Full rules, edge cases, and constraints
+
+Read **`agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/MULTI_AGENT_PROTOCOL.md`**
+before doing anything non-trivial. It covers every collision scenario (build, DB,
+filesystem, git, env) and the full workflow.
+
+### Sub-agent orchestration (parent/coordinator only)
+
+When fanning out sub-agents:
+- **Plan the partition first.** Split work into disjoint file/dir sets. Never give
+  two sub-agents the same file.
+- **Serialize shared phases.** Fan-out for editing is fine; building, running,
+  DB migration, dependency installs, and commits must be serial and go through the
+  wrappers.
+- **Barrier before packaging.** Wait until every sub-agent has `done` and all locks
+  are clear (`coord.mjs status` shows none) before building/zipping/deploying.
+- **One integrator.** After parallel edits, a single agent does the build + typecheck
+  + commit so results don't stack on each other.
+
+### If a tool is not found
+
+If `node agent-coordination/coord.mjs` or the other scripts don't exist on disk,
+STOP and tell the user. Do NOT proceed with edits/builds/DB work under the
+assumption that you have exclusive access — you do not.
+
 ## 2. Terminology resolution (HARD RULE — this is where past sessions failed)
 Before you create, move, rename, or modify anything that names a place — a page, route, session, chart, subtab, sidebar item, or file — resolve the noun against `agent/dictionary.md` FIRST.
 - "workspace" = the **Terminal Workspace** at route `/terminal` plus its internal 5-group subtabs (Setup/Work/Insights/Studio/Context) — NOT the app's router sidebar.

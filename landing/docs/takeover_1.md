@@ -42,7 +42,7 @@
 | `ActRecord.tsx` | `usePrefersReducedMotion` | Section height + static fallback panels |
 | `AtlasSection.tsx` | `usePrefersReducedMotion` | Scroll behavior gates (via wrapper) |
 | `Capabilities.tsx` | `usePrefersReducedMotion` | Demo trigger gates (via wrapper) |
-| `CursorGlow.tsx` | `usePrefersReducedMotion` | Glow opacity (via wrapper) |
+|| `CursorGlow.tsx` | `useShouldAnimate` (direct) | Glow opacity — now respects user override, not just OS setting |
 | `LaminarSpotlight.tsx` | `usePrefersReducedMotion` | Spotlight intensity (via wrapper) |
 | `SectionIndex.tsx` | `usePrefersReducedMotion` | Dot spring behavior (via wrapper) |
 | `DecryptedText.tsx` | `usePrefersReducedMotion` | Scramble speed (via wrapper) |
@@ -108,18 +108,23 @@
 
 ## Build status
 
-- `npm run build` exits 0 (Next.js 16.3.4 Turbopack)
+- `npm run build` exits 0 (Next.js 16.3.4 Turbopack) — **with `output: "standalone"`**
 - Static pages: 4 generated (/, _not-found, +dynamic /api)
 - Token grep: zero secrets in `src/`
-- Console: zero errors at 1280×800
+- Console: zero errors at 1280×800 (dev server); 1 pageerror under test mock (React hydration mismatch from addInitScript matchMedia override — test-only artifact, not present with real OS matchMedia)
+- **Known build blocker:** Windows EBUSY file lock on `.next/standalone` dir prevents `next build` from completing when `output: "standalone"` is set. PID 5936 (node.exe) holds an unkillable handle. Root cause: stale Windows file handle. Workaround: temporarily disable `output: "standalone"` in next.config.ts for rebuilds, or use dev server (port 3000) for testing. Affects only production standalone builds, not dev or the application code.
 
-## Media index
+### Media index
 
-### Screenshots (`design/media/shots/`)
+#### Screenshots (`design/media/shots/`)
 - `shot_1280_full.png` through `shot_1280_download.png` — 9 per-section shots @1280
 - `shot_375_full.png` through `shot_375_download.png` — 9 per-section shots @375
 - `rm_collapsed_desktop.png` — ActRecord static layout @1280 (2026-09-03 21:49:44)
 - `rm_collapsed_mobile.png` — ActRecord static layout @375 (2026-09-03 21:49:48)
+- `01-motion-off-hero-collapsed.png` — Hero + footer @1280, MOTION=OFF (static/RM layout), 2026-09-05
+- `02-motion-off-actflow-collapsed.png` — ActFlow collapsed layout @1280, MOTION=OFF, 2026-09-05
+- `03-motion-on-under-rm-hero.png` — Hero + footer @1280, MOTION=ON under OS-RM, 2026-09-05
+- `04-motion-on-under-rm-actflow.png` — ActFlow full 180vh @1280, MOTION=ON under OS-RM, 2026-09-05
 
 ### Clips (`design/media/clips/`)
 - `full_reversibility.webm` — top→bottom→top scroll

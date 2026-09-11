@@ -109,7 +109,7 @@ export default function DayRuler() {
                 left: 0,
                 transform: "translateY(-50%)",
                 fontSize: 10,
-                color: "#63636b",
+                color: "#8a8a94",
                 letterSpacing: "0.1em",
               }}
             >

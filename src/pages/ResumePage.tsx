@@ -34,7 +34,7 @@ export default function ResumePage() {
     <div className="min-h-full relative overflow-hidden" style={{ '--page-accent': 'rgb(99, 102, 241)' } as any}>
       {/* Ambient background glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--page-accent)]/8 via-transparent to-transparent pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[500px] h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-500/5 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[500px] h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-500/5 via-transparent to-transparent pointer-events-none light:from-amber-500/10" />
 
       <div className="max-w-6xl mx-auto space-y-8 relative py-8">
 
@@ -46,7 +46,7 @@ export default function ResumePage() {
             </AuroraText>
           </h1>
           <div className="flex justify-center">
-            <AnimatedShinyText className="text-sm text-zinc-400" shimmerWidth={120}>
+            <AnimatedShinyText className="text-sm text-zinc-400 light:text-zinc-500" shimmerWidth={120}>
               Build a resume that gets you hired — with AI coaching every step of the way
             </AnimatedShinyText>
           </div>
@@ -57,7 +57,7 @@ export default function ResumePage() {
               whileHover={{ scale: 1.04, y: -1 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => navigate('/resume/build')}
-              className="relative inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-[var(--page-accent)] text-white font-semibold text-sm shadow-[0_0_24px_rgba(99,102,241,0.3)] hover:shadow-[0_0_32px_rgba(99,102,241,0.45)] transition-shadow"
+              className="relative inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-[var(--page-accent)] text-white font-semibold text-sm shadow-[0_0_24px_rgba(99,102,241,0.3)] hover:shadow-[0_0_32px_rgba(99,102,241,0.45)] transition-shadow light:shadow-[0_0_24px_rgba(99,102,241,0.2)]"
             >
               <Rocket className="w-4 h-4" />
               {versions.length > 0 ? 'Continue Building' : 'Start Building'}
@@ -66,7 +66,7 @@ export default function ResumePage() {
               whileHover={{ scale: 1.04, y: -1 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => navigate('/resume/import')}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-zinc-700/60 bg-zinc-900/60 text-zinc-300 font-medium text-sm hover:border-zinc-600 hover:bg-zinc-800/60 transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-zinc-700/60 bg-zinc-900/60 text-zinc-300 font-medium text-sm hover:border-zinc-600 hover:bg-zinc-800/60 transition-colors light:border-zinc-300/60 light:bg-white/80 light:text-zinc-700 light:hover:border-zinc-400 light:hover:bg-zinc-50"
             >
               <Upload className="w-4 h-4" />
               Import Chat
@@ -86,7 +86,7 @@ export default function ResumePage() {
           {/* Identity Card */}
           <motion.div
             whileHover={{ y: -2 }}
-            className="md:col-span-2 relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/90 to-zinc-800/50 p-5"
+            className="md:col-span-2 relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/90 to-zinc-800/50 p-5 light:border-zinc-200/60 light:from-white/90 light:to-zinc-50/50"
           >
             <div className="absolute top-0 right-0 w-[250px] h-[250px] bg-[var(--page-accent)]/5 rounded-full blur-3xl pointer-events-none" />
             <div className="relative flex items-center gap-4">
@@ -94,11 +94,11 @@ export default function ResumePage() {
                 <span className="text-lg font-bold text-white">{(profile?.fullName || 'Y').charAt(0).toUpperCase()}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-base font-semibold text-white">{profile?.fullName || 'Your Resume'}</h2>
+                <h2 className="text-base font-semibold text-white light:text-zinc-900">{profile?.fullName || 'Your Resume'}</h2>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-sm text-zinc-400">{profile?.targetRole || 'Set up your target role'}</span>
+                  <span className="text-sm text-zinc-400 light:text-zinc-500">{profile?.targetRole || 'Set up your target role'}</span>
                   {profile?.careerLevel && (
-                    <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-500">{profile.careerLevel}</Badge>
+                    <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-500 light:border-zinc-300 light:text-zinc-600">{profile.careerLevel}</Badge>
                   )}
                 </div>
               </div>
@@ -108,7 +108,7 @@ export default function ResumePage() {
           {/* Score Card */}
           <motion.div
             whileHover={{ y: -2 }}
-            className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-[var(--page-accent)]/10 to-transparent p-5 flex flex-col items-center justify-center"
+            className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-[var(--page-accent)]/10 to-transparent p-5 flex flex-col items-center justify-center light:border-zinc-200/60 light:from-[var(--page-accent)]/15"
           >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.1)_0%,_transparent_70%)]" />
             {isLoading ? (
@@ -116,7 +116,7 @@ export default function ResumePage() {
             ) : (
               <div className="relative">
                 <ScoreGauge score={score.current} size={80} />
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-zinc-500 uppercase tracking-wider">Score</div>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-zinc-500 uppercase tracking-wider light:text-zinc-400">Score</div>
               </div>
             )}
           </motion.div>
@@ -138,8 +138,8 @@ export default function ResumePage() {
               disabled={!step.available}
               className={`relative overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 ${
                 step.available
-                  ? 'border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-800/40 cursor-pointer hover:border-zinc-700/60'
-                  : 'border-zinc-800/30 opacity-40 cursor-not-allowed bg-zinc-900/30'
+                  ? 'border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-800/40 cursor-pointer hover:border-zinc-700/60 light:border-zinc-200/60 light:from-white/80 light:to-zinc-100/40'
+                  : 'border-zinc-800/30 opacity-40 cursor-not-allowed bg-zinc-900/30 light:border-zinc-200/20 light:bg-white/50'
               }`}
             >
               {step.available && (
@@ -171,14 +171,14 @@ export default function ResumePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.08 }}
               whileHover={{ y: -2 }}
-              className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 p-4 hover:border-zinc-700/60 transition-colors"
+              className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 p-4 hover:border-zinc-700/60 transition-colors light:border-zinc-200/60 light:bg-white/70"
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <stat.icon className={`w-3.5 h-3.5 text-${stat.color}-400`} />
                 <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">{stat.label}</span>
               </div>
-              <NumberTicker value={stat.value} className="text-xl font-bold text-white tabular-nums" />
-              <div className="mt-1.5 h-1 bg-zinc-800 rounded-full overflow-hidden">
+              <NumberTicker value={stat.value} className="text-xl font-bold text-white tabular-nums light:text-zinc-900" />
+              <div className="mt-1.5 h-1 bg-zinc-800 rounded-full overflow-hidden light:bg-zinc-200/60">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min((stat.value / stat.max) * 100, 100)}%` }}
@@ -194,7 +194,7 @@ export default function ResumePage() {
         {versions.length > 0 ? (
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Recent Versions</h3>
+              <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider light:text-zinc-500">Recent Versions</h3>
               <button onClick={() => navigate('/resume/export')} className="text-[11px] text-[var(--page-accent)] hover:text-[var(--page-accent)]/80 font-medium">
                 View all →
               </button>
@@ -208,16 +208,16 @@ export default function ResumePage() {
                   transition={{ delay: i * 0.08 }}
                   whileHover={{ y: -3 }}
                   onClick={() => navigate('/resume/preview')}
-                  className="group relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-5 cursor-pointer hover:border-zinc-700/60 transition-colors"
+                  className="group relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-5 cursor-pointer hover:border-zinc-700/60 transition-colors light:border-zinc-200/60 light:bg-white/70"
                 >
                   <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[var(--page-accent)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="h-[80px] rounded-lg bg-gradient-to-br from-zinc-950 to-zinc-900 mb-3 flex items-center justify-center">
-                    <FileText className="w-8 h-8 text-zinc-700 group-hover:text-zinc-500 transition-colors" />
+                  <div className="h-[80px] rounded-lg bg-gradient-to-br from-zinc-950 to-zinc-900 mb-3 flex items-center justify-center light:from-zinc-100 light:to-zinc-200">
+                    <FileText className="w-8 h-8 text-zinc-700 group-hover:text-zinc-500 transition-colors light:text-zinc-400 light:group-hover:text-zinc-600" />
                   </div>
-                  <p className="text-sm font-semibold text-white group-hover:text-[var(--page-accent)] transition-colors truncate">{v.versionName}</p>
+                  <p className="text-sm font-semibold text-white group-hover:text-[var(--page-accent)] transition-colors truncate light:text-zinc-900 light:group-hover:text-[var(--page-accent)]">{v.versionName}</p>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-[10px] text-zinc-500">{v.targetRole}</span>
-                    <span className={`text-sm font-bold ${v.score >= 75 ? 'text-emerald-400' : v.score >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{v.score}</span>
+                    <span className="text-[10px] text-zinc-500 light:text-zinc-400">{v.targetRole}</span>
+                    <span className={`text-sm font-bold ${v.score >= 75 ? 'text-emerald-400' : v.score >= 50 ? 'text-amber-400' : 'text-red-400'} light:${v.score >= 75 ? 'text-emerald-600' : v.score >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{v.score}</span>
                   </div>
                 </motion.div>
               ))}
@@ -227,7 +227,7 @@ export default function ResumePage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-800/40 p-10 text-center"
+            className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-800/40 p-10 text-center light:border-zinc-200/60 light:from-white/80 light:to-zinc-50/40"
           >
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[var(--page-accent)]/5 rounded-full blur-3xl pointer-events-none" />
             <div className="relative z-10">

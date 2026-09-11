@@ -93,7 +93,7 @@ export function CustomConfirmDialog({
             className="fixed inset-0 z-[210] flex items-center justify-center p-4"
           >
             <div
-              className="w-full max-w-[380px] rounded-2xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden"
+              className="w-full max-w-[380px] rounded-2xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden light:bg-white light:border-[var(--ws-border-strong)]"
               onClick={e => e.stopPropagation()}
             >
               {/* Header */}
@@ -102,12 +102,12 @@ export function CustomConfirmDialog({
                   <Icon size={20} className={v.iconColor} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-[14px] font-semibold text-white">{title}</h3>
-                  <p className="text-[12px] text-zinc-400 mt-1 leading-relaxed">{message}</p>
+                  <h3 className="text-[14px] font-semibold text-white light:text-stone-900">{title}</h3>
+                  <p className="text-[12px] text-zinc-400 mt-1 leading-relaxed light:text-stone-500">{message}</p>
                 </div>
                 <button
                   onClick={onCancel}
-                  className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mt-0.5"
+                  className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mt-0.5 light:hover:bg-stone-100"
                 >
                   <X size={14} />
                 </button>
@@ -117,7 +117,7 @@ export function CustomConfirmDialog({
               <div className="flex items-center justify-end gap-2 p-4 mt-2">
                 <button
                   onClick={onCancel}
-                  className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors"
+                  className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-stone-500 light:hover:bg-stone-100"
                 >
                   {cancelLabel}
                 </button>

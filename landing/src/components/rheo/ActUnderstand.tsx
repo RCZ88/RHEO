@@ -68,7 +68,7 @@ export default function ActUnderstand() {
           className="mono"
           style={{
             fontSize: 11,
-            color: "#63636b",
+            color: "#8a8a94",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
             marginTop: 18,
@@ -203,7 +203,7 @@ function Console() {
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              style={{ fontSize: 12, color: "#63636b", marginBottom: 4 }}
+              style={{ fontSize: 12, color: "#8a8a94", marginBottom: 4 }}
             >
               → {t}
             </motion.div>
@@ -239,7 +239,7 @@ function Console() {
             background: "#0a0a0c",
           }}
         >
-          <span className="mono" style={{ fontSize: 12, color: "#63636b" }}>
+          <span className="mono" style={{ fontSize: 12, color: "#8a8a94" }}>
             ›
           </span>
           <input
@@ -297,7 +297,7 @@ function BarChart({ values }: { values: number[] }) {
               }}
             />
           </div>
-          <span className="mono" style={{ fontSize: 8, color: "#63636b" }}>
+          <span className="mono" style={{ fontSize: 8, color: "#8a8a94" }}>
             {days[i]}
           </span>
         </div>
@@ -357,7 +357,7 @@ function NodeGraph() {
             <text
               x={t.x + 16}
               y={t.y + 3}
-              fill="#63636b"
+              fill="#8a8a94"
               style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, letterSpacing: "0.08em" }}
             >
               {t.label}

@@ -56,7 +56,7 @@ export function PinnedActivities({
 
   return (
     <BlurFade delay={0.05} duration={0.4}>
-      <div className="bg-[rgba(24,24,27,0.80)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl p-5 mb-4">
+      <div className="bg-[rgba(24,24,27,0.80)] light:bg-white backdrop-blur-xl border border-[rgba(63,63,70,0.50)] light:border-[var(--ws-border)] rounded-xl p-5 mb-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <button
@@ -64,14 +64,14 @@ export function PinnedActivities({
             className="flex items-center gap-2 text-left"
           >
             {collapsible && <ChevronRight className={`w-4 h-4 text-zinc-500 transition-transform ${pinnedActivitiesExpanded ? 'rotate-90' : ''}`} />}
-            <span className="text-[13px] font-semibold text-zinc-300">Quick Activities</span>
+            <span className="text-[13px] font-semibold text-zinc-300 light:text-stone-800">Quick Activities</span>
           </button>
           <button
             onClick={() => setPinnedActivitiesEditMode(!pinnedActivitiesEditMode)}
             className={`p-1.5 rounded-lg border transition-colors duration-150 ${
               pinnedActivitiesEditMode
                 ? 'bg-emerald-500/20 border-emerald-500/50'
-                : 'bg-zinc-800/50 border-zinc-700/30 hover:border-zinc-600/50'
+                : 'bg-zinc-800 light:bg-stone-100 border-zinc-700 light:border-[var(--ws-border)] hover:border-zinc-600 hover:light:border-[var(--ws-border-strong)]'
             }`}
           >
             {pinnedActivitiesEditMode ? (
@@ -107,7 +107,7 @@ export function PinnedActivities({
                       className={`flex items-center gap-2 px-3.5 py-2 rounded-[18px] border transition-all duration-150 ${
                         isSelected
                           ? 'border-pink-500/40 bg-pink-500/[0.08] text-pink-400'
-                          : 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:border-[#3f3f46] hover:bg-[#27272a]'
+                          : 'bg-[#18181b] light:bg-white border-[#27272a] light:border-[var(--ws-border)] text-zinc-400 light:text-stone-600 hover:border-[#3f3f46] hover:light:border-[var(--ws-border-strong)] hover:bg-[#27272a] hover:light:bg-stone-50'
                       }`}
                     >
                       {isSelected && externalSessionRunning && (
@@ -172,7 +172,7 @@ export function PinnedActivities({
                 }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex-shrink-0 px-3 py-2 rounded-[18px] border border-dashed border-zinc-700/40 hover:border-zinc-600/60 transition-colors duration-150 flex items-center gap-1.5"
+                className="flex-shrink-0 px-3 py-2 rounded-[18px] border border-dashed border-zinc-700 light:border-[var(--ws-border-strong)] hover:border-zinc-600 transition-colors duration-150 flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5 text-zinc-500" />
                 <span className="text-[11px] font-medium text-zinc-500">Add</span>
@@ -195,17 +195,17 @@ export function PinnedActivities({
                 initial={{ scale: 0.92, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.92, opacity: 0, y: 10 }}
-                className="rounded-xl border overflow-hidden w-full max-w-sm bg-[#09090b] border-[#27272a] shadow-[0_25px_60px_rgba(0,0,0,0.5)]"
+                className="rounded-xl border overflow-hidden w-full max-w-sm bg-[#09090b] light:bg-white border-[#27272a] light:border-[var(--ws-border)] shadow-[0_25px_60px_rgba(0,0,0,0.5)]"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[#27272a]">
+                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[#27272a] light:border-[var(--ws-border)]">
                   <div>
-                    <h3 className="text-base font-semibold text-zinc-100">Pin Activities</h3>
+                    <h3 className="text-base font-semibold text-zinc-100 light:text-stone-900">Pin Activities</h3>
                     <p className="text-xs text-zinc-500 mt-0.5">Select activities to add to dashboard</p>
                   </div>
                   <button
                     onClick={() => { setShowAddActivityModal(false); setAddPinnedPicker([]); setSelectedAddActivities(new Set()); }}
-                    className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors"
+                    className="p-1.5 hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors"
                   >
                     <X className="w-4 h-4 text-zinc-500" />
                   </button>
@@ -224,11 +224,11 @@ export function PinnedActivities({
                           setSelectedAddActivities(next);
                         }}
                         className={`w-full px-3 py-3 text-left text-sm rounded-xl flex items-center gap-3 transition-colors duration-150 ${
-                          isSelected ? 'bg-pink-500/10' : 'hover:bg-zinc-800/50'
+                          isSelected ? 'bg-pink-500/10' : 'hover:bg-zinc-800 hover:light:bg-stone-100'
                         }`}
                       >
                         <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors duration-150 ${
-                          isSelected ? 'border-pink-500 bg-pink-500' : 'border-zinc-600 bg-transparent'
+                          isSelected ? 'border-pink-500 bg-pink-500' : 'border-zinc-600 light:border-zinc-300 bg-transparent'
                         }`}>
                           {isSelected && (
                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -237,7 +237,7 @@ export function PinnedActivities({
                           )}
                         </div>
                         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: activity.color }} />
-                        <span className={`font-medium ${isSelected ? 'text-pink-300' : 'text-zinc-300'}`}>
+                        <span className={`font-medium ${isSelected ? 'text-pink-300' : 'text-zinc-300 light:text-stone-700'}`}>
                           {activity.name}
                         </span>
                       </button>
@@ -245,10 +245,10 @@ export function PinnedActivities({
                   })}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#27272a]">
+                <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#27272a] light:border-[var(--ws-border)]">
                   <button
                     onClick={() => { setShowAddActivityModal(false); setAddPinnedPicker([]); setSelectedAddActivities(new Set()); }}
-                    className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-xl transition-colors duration-150"
+                    className="px-4 py-2 text-sm text-zinc-400 light:text-stone-500 hover:text-zinc-200 hover:light:text-stone-900 hover:bg-zinc-800 hover:light:bg-stone-100 rounded-xl transition-colors duration-150"
                   >
                     Cancel
                   </button>
@@ -264,7 +264,7 @@ export function PinnedActivities({
                     className={`px-5 py-2 text-sm font-semibold rounded-xl transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
                       selectedAddActivities.size > 0
                         ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40'
-                        : 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20'
+                        : 'bg-zinc-500/10 text-zinc-500 border border-zinc-500 light:border-zinc-400 light:border-zinc-400/20'
                     }`}
                   >
                     {selectedAddActivities.size > 0 ? `Add (${selectedAddActivities.size})` : 'Select activities'}

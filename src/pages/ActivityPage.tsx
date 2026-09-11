@@ -1,6 +1,6 @@
 import { useState, useMemo, lazy, Suspense, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Monitor, Globe, Target, Activity, Focus as FocusIcon, Clock } from 'lucide-react';
+import { Monitor, Globe, Target, Activity, Focus as FocusIcon, Clock, ArrowLeftRight } from 'lucide-react';
 import { LoadingState } from '../components/LoadingState';
 import { ManualAssignModal } from '../components/external/ManualAssignModal';
 import type { Period } from '../lib/dateRange';
@@ -26,6 +26,9 @@ interface ActivityPageProps {
   domainKeywordRules?: any[];
   externalActivities?: any[];
   externalActivityTiers?: any[];
+  platformFilter: string;
+  availablePlatforms: string[];
+  onPlatformFilterChange: (platform: string) => void;
 }
 
 const TABS = [
@@ -54,6 +57,8 @@ export default function ActivityPage(props: ActivityPageProps) {
     return 'apps';
   });
 
+  const [compareMode, setCompareMode] = useState(false);
+
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
@@ -71,16 +76,52 @@ export default function ActivityPage(props: ActivityPageProps) {
   const activeIconWrapStyle = { background: `${activeConfig.accent}22` };
   const activeIconStyle = { color: activeConfig.accent };
 
+  // Compute OS split stats for the summary card
+  const osStats = useMemo(() => {
+    const logs = (props.allLogs as any[]) || [];
+    if (logs.length === 0) return [];
+    const byPlatform: Record<string, number> = {};
+    let total = 0;
+    for (const log of logs) {
+      const p = log.platform || 'unknown';
+      byPlatform[p] = (byPlatform[p] || 0) + (log.duration || 0);
+      total += log.duration || 0;
+    }
+    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6'];
+    return Object.entries(byPlatform)
+      .map(([platform, seconds], i) => ({
+        platform,
+        seconds,
+        pct: total > 0 ? (seconds / total) * 100 : 0,
+        color: colors[i % colors.length],
+      }))
+      .sort((a, b) => b.seconds - a.seconds);
+  }, [props.allLogs]);
+
+  const platformLabel = (p: string) => {
+    if (p === 'win32') return 'Windows';
+    if (p === 'darwin') return 'macOS';
+    if (p === 'linux') return 'Linux';
+    return p;
+  };
+
+  const formatHours = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Tab Navigation Bar */}
-      <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900/20 backdrop-blur-md border-b border-zinc-800/50">
+      <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900 light:bg-white/20 backdrop-blur-md border-b border-zinc-800 light:border-zinc-200/50">
         <div className="flex items-center gap-1 py-2">
           <div className="h-9 w-9 rounded-xl grid place-items-center mr-2" style={activeIconWrapStyle}>
             <Activity className="w-5 h-5" style={activeIconStyle} />
           </div>
           
-          <div className="flex gap-1 bg-zinc-800/50 p-0.5 rounded-lg" data-tutorial="activity.tabs">
+          <div className="flex gap-1 bg-zinc-800 light:bg-zinc-100/50 p-0.5 rounded-lg" data-tutorial="activity.tabs">
             {TABS.map(tab => {
               const pillStyle = { background: `${tab.accent}22`, border: `1px solid ${tab.accent}40` };
               return (
@@ -108,6 +149,51 @@ export default function ActivityPage(props: ActivityPageProps) {
 
           <div className="flex-1" />
 
+          {/* OS Filter Bar */}
+          {props.availablePlatforms.length > 0 && (
+            <div className="flex items-center gap-1.5 mr-2">
+              <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
+              <button
+                onClick={() => props.onPlatformFilterChange('all')}
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                  props.platformFilter === 'all'
+                    ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                    : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                All
+              </button>
+              {props.availablePlatforms.map(p => (
+                <button
+                  key={p}
+                  onClick={() => props.onPlatformFilterChange(p)}
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                    props.platformFilter === p
+                      ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                      : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {platformLabel(p)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Compare Mode Toggle */}
+          {props.availablePlatforms.length > 1 && (
+            <button
+              onClick={() => setCompareMode(!compareMode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                compareMode
+                  ? 'border border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+              Compare
+            </button>
+          )}
+
           <button
             onClick={() => {
               setManualAssignGap(null);
@@ -122,6 +208,40 @@ export default function ActivityPage(props: ActivityPageProps) {
           </button>
         </div>
       </div>
+
+      {/* OS Split Summary Card */}
+      {osStats.length > 1 && props.platformFilter === 'all' && (
+        <div className="p-5 pb-0">
+          <div className="rounded-xl border border-zinc-800/50 bg-[var(--color-card)] p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-9 w-9 rounded-lg bg-[var(--page-accent)]/15 grid place-items-center">
+                <Activity className="w-4.5 h-4.5 text-[var(--page-accent)]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">OS Usage Split</h3>
+                <p className="text-[11px] text-[var(--text-secondary)]">Time distribution across operating systems</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {osStats.map(os => (
+                <div key={os.platform} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/30">
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: os.color }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">{platformLabel(os.platform)}</span>
+                      <span className="text-[11px] text-[var(--text-secondary)]">{os.pct.toFixed(1)}%</span>
+                    </div>
+                    <div className="text-[11px] text-[var(--text-muted)]">{formatHours(os.seconds)}</div>
+                    <div className="mt-1.5 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${os.pct}%`, backgroundColor: os.color }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab Content */}
       <div className="flex-1 min-h-0 overflow-auto relative">
@@ -149,6 +269,9 @@ export default function ActivityPage(props: ActivityPageProps) {
                     timeMode={props.timeMode}
                     tierAssignments={props.tierAssignments}
                     liveActivityLogs={props.liveActivityLogs}
+                    platformFilter={props.platformFilter}
+                    compareMode={compareMode}
+                    availablePlatforms={props.availablePlatforms}
                   />
                 </motion.div>
               )}
@@ -170,6 +293,9 @@ export default function ActivityPage(props: ActivityPageProps) {
                     timeMode={props.timeMode}
                     tierAssignments={props.tierAssignments}
                     allLogs={props.allLogs}
+                    platformFilter={props.platformFilter}
+                    compareMode={compareMode}
+                    availablePlatforms={props.availablePlatforms}
                   />
                 </motion.div>
               )}
@@ -196,6 +322,9 @@ export default function ActivityPage(props: ActivityPageProps) {
                     timeMode={props.timeMode}
                     externalActivities={props.externalActivities}
                     externalActivityTiers={props.externalActivityTiers}
+                    platformFilter={props.platformFilter}
+                    compareMode={compareMode}
+                    availablePlatforms={props.availablePlatforms}
                   />
                 </motion.div>
               )}

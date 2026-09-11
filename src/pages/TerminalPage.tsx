@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, X, Monitor, Play, Trash2, Clock, FolderOpen, Zap, Settings, Settings2, PanelLeftClose, PanelLeft, GripVertical, Info, PieChart, AlertCircle, FileText, Send, Folder, Link, Terminal as TerminalIcon, Bug, Sparkles, Search, Eye, MoreHorizontal, RefreshCw, CheckCircle2, ChevronLeft, Database, Palette, ListChecks, BookOpen, DollarSign, Loader2, Edit, AlertTriangle, Lock, Save, MessageSquare, Smartphone, Cpu, ChevronDown, Activity, Bot, GitBranch, Shield, Coins, Network, SwatchBook, BarChart3, DatabaseBackup, Brain } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plus, X, Monitor, Play, Trash2, Clock, FolderOpen, Zap, Settings, Settings2, PanelLeftClose, PanelLeft, GripVertical, Info, PieChart, AlertCircle, FileText, Send, Folder, Link, Terminal as TerminalIcon, Bug, Sparkles, Search, Eye, MoreHorizontal, RefreshCw, CheckCircle2, ChevronLeft, Database, Palette, ListChecks, BookOpen, DollarSign, Loader2, Edit, AlertTriangle, Lock, Save, MessageSquare, Smartphone, Cpu, ChevronDown, Activity, Bot, GitBranch, Shield, Coins, Network, SwatchBook, BarChart3, DatabaseBackup, Brain, Globe } from 'lucide-react';
 import { AnomalyBadge } from '../components/AnomalyBadge';
 import type { PaneNode } from '../components/TerminalWindow';
 import { TerminalLayout, insertIntoLayout, getLeafIds, getGroupTrees, updateGroupTree } from '../components/TerminalWindow';
@@ -39,6 +40,7 @@ import { FilesTab } from '../components/FilesTab';
 import PerformanceMetricsPanel from '../components/workspace/PerformanceMetricsPanel';
 import CodeStatsTab from '../components/workspace/CodeStatsTab';
 import { ConductorWorkspaceTab } from '../components/workspace/ConductorWorkspaceTab';
+import { AIGatewayTab } from '../components/workspace/ai-gateway/AIGatewayTab';
 import { WorkspaceDetailModal } from '../components/workspace/WorkspaceDetailModal';
 import { WorkspaceShell } from '../components/workspace/WorkspaceShell';
 import { WorkspaceGroupRail } from '../components/workspace/WorkspaceGroupRail';
@@ -160,6 +162,11 @@ const SUBPAGE_LABELS: Record<string, string> = {
   'studio/skills': 'Studio / Skills',
   'studio/styles': 'Studio / Styles',
   'studio/design': 'Studio / Design',
+  'ai-gateway/status': 'AI Gateway / Status',
+  'ai-gateway/chat': 'AI Gateway / Chat',
+  'ai-gateway/providers': 'AI Gateway / Providers',
+  'ai-gateway/runs': 'AI Gateway / Runs',
+  'ai-gateway/settings': 'AI Gateway / Settings',
   'context/context': 'Context / Context',
   'context/context-maintenance': 'Context / Maintenance',
   'context/page-context': 'Context / Page Context',
@@ -599,7 +606,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     return saved ? parseInt(saved) : 400;
   });
   const [isResizing, setIsResizing] = useState(false);
-  type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'context';
+  type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'ai-gateway' | 'context';
   const [activeGroup, setActiveGroup] = useState<GroupKey>(() => {
     const saved = localStorage.getItem('terminal-activeGroup');
     return (saved as GroupKey) || 'setup';
@@ -2123,7 +2130,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
 
       const activeSubtabs: Record<string, string> = {};
       try {
-        for (const key of ['setup', 'work', 'insights', 'studio', 'conductor', 'context']) {
+        for (const key of ['setup', 'work', 'insights', 'studio', 'conductor', 'ai-gateway', 'context']) {
           const v = localStorage.getItem(`workspace-subtab-${key}`);
           if (v) activeSubtabs[key] = v;
         }
@@ -2876,7 +2883,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     window.addEventListener('open-new-agent', handleOpenNewAgent);
     const handleSwitchSidebarTab = (e: CustomEvent) => {
       const tab = e.detail as string;
-      if (['setup', 'work', 'insights', 'studio', 'context'].includes(tab)) {
+      if (['setup', 'work', 'insights', 'studio', 'conductor', 'ai-gateway', 'context'].includes(tab)) {
         setActiveGroup(tab as GroupKey);
       }
     };
@@ -4156,6 +4163,22 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               }} />
             )}
 
+            {activeGroup === 'ai-gateway' && (
+              <WorkspaceShell accent="cyan" tabs={[
+                { key: 'status', icon: Activity, label: 'Status' },
+                { key: 'chat', icon: MessageSquare, label: 'Chat' },
+                { key: 'providers', icon: Globe, label: 'Providers' },
+                { key: 'runs', icon: Clock, label: 'Runs' },
+                { key: 'settings', icon: Settings, label: 'Settings' },
+              ]} storageKey="ai-gateway" render={(sub) => {
+                return (
+                  <GroupPanel accent="cyan">
+                    <AIGatewayTab activeTab={sub} />
+                  </GroupPanel>
+                );
+              }} />
+            )}
+
             {activeGroup === 'context' && (
               <WorkspaceShell accent="amber" tabs={[
                 { key: 'context', icon: Settings2, label: 'Context' },
@@ -4755,17 +4778,38 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
 
       {/* Collapsed sidebar strip */}
       {!sidebarOpen && (
-        <div className="h-full w-10 bg-zinc-950 ws-sidebar-edge flex flex-col items-center gap-1 py-2">
-          <button title="Workspace Features" className={`${WS_ICON_BTN} ws-tip`} data-tip="Features" onClick={() => setShowFeaturesDialog(true)}>
-            <Info className="w-4 h-4" />
-          </button>
-          <button title="Skill Configuration" className={`${WS_ICON_BTN} ws-tip`} data-tip="Skills" onClick={() => setShowGeneralistDialog(true)}>
-            <BookOpen className="w-4 h-4" />
-          </button>
-          <span className="w-5 h-px bg-zinc-800 my-1" />
-          <button title="Expand sidebar" className={`${WS_ICON_BTN} ws-tip`} data-tip="Expand" onClick={() => setSidebarOpen(true)}>
-            <PanelLeft className="w-4 h-4" />
-          </button>
+        <div className="h-full w-12 bg-zinc-950 ws-sidebar-edge flex flex-col items-center gap-2 py-3">
+          <motion.button
+            whileHover={{ scale: 1.2, y: -2 }}
+            whileTap={{ scale: 0.9 }}
+            title="Workspace Features"
+            className={`${WS_ICON_BTN} ws-tip`}
+            data-tip="Features"
+            onClick={() => setShowFeaturesDialog(true)}
+          >
+            <Info className="w-5 h-5" />
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.2, y: -2 }}
+            whileTap={{ scale: 0.9 }}
+            title="Skill Configuration"
+            className={`${WS_ICON_BTN} ws-tip`}
+            data-tip="Skills"
+            onClick={() => setShowGeneralistDialog(true)}
+          >
+            <BookOpen className="w-5 h-5" />
+          </motion.button>
+          <div className="w-6 h-px bg-zinc-800 my-1" />
+          <motion.button
+            whileHover={{ scale: 1.2, y: -2 }}
+            whileTap={{ scale: 0.9 }}
+            title="Expand sidebar"
+            className={`${WS_ICON_BTN} ws-tip`}
+            data-tip="Expand"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <PanelLeft className="w-5 h-5" />
+          </motion.button>
         </div>
       )}
 

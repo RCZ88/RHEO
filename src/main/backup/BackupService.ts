@@ -95,29 +95,41 @@ export class IntegrityError extends Error {
   }
 }
 
-export function openDatabaseSafely(): ReturnType<typeof import('better-sqlite3')> {
+export function openDatabaseSafely(): ReturnType<typeof import('better-sqlite3')> | null {
   const dbPath = getDbPath()
   if (/dist-electron|app\.asar|resources/i.test(dbPath)) {
-    throw new Error(`[DBGuard] Refusing unsafe DB path: ${dbPath}`)
+    console.error(`[DBGuard] Refusing unsafe DB path: ${dbPath}`)
+    return null
   }
   mkdirSync(dirname(dbPath), { recursive: true })
 
-  const Database = require('better-sqlite3')
-  const db = new Database(dbPath)
-  db.pragma('journal_mode = WAL')
-  db.pragma('synchronous = FULL')
-  db.pragma('foreign_keys = ON')
-  db.pragma('busy_timeout = 5000')
-
-  try { db.pragma('wal_checkpoint(TRUNCATE)') } catch (e) { console.error('[DBGuard] checkpoint failed', e) }
-
-  const integrity = db.pragma('integrity_check', { simple: true }) as string
-  if (integrity !== 'ok') {
-    console.error('[DBGuard] integrity_check =', integrity)
-    db.close()
-    throw new IntegrityError(integrity)
+  let Database: any
+  try { Database = require('better-sqlite3') } catch (e) {
+    console.error('[DBGuard] better-sqlite3 not available:', e.message)
+    return null
   }
-  return db
+
+  let db: any
+  try {
+    db = new Database(dbPath)
+    db.pragma('journal_mode = WAL')
+    db.pragma('synchronous = FULL')
+    db.pragma('foreign_keys = ON')
+    db.pragma('busy_timeout = 5000')
+    try { db.pragma('wal_checkpoint(TRUNCATE)') } catch (e) { console.error('[DBGuard] checkpoint failed', e) }
+
+    const integrity = db.pragma('integrity_check', { simple: true }) as string
+    if (integrity !== 'ok') {
+      console.error('[DBGuard] integrity_check =', integrity)
+      db.close()
+      throw new IntegrityError(integrity)
+    }
+    return db
+  } catch (e) {
+    console.error('[DBGuard] openDatabaseSafely failed:', e?.message || e)
+    if (db) { try { db.close() } catch {} }
+    return null
+  }
 }
 
 export function rowCounts(db: any): Record<string, number> {

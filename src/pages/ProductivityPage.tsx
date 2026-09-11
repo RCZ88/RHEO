@@ -117,6 +117,9 @@ interface ProductivityPageProps {
   timeMode?: 'focus' | 'total';
   externalActivities?: { id: number; name: string; type: string; is_productive: boolean }[];
   externalActivityTiers?: Record<number, string>;
+  platformFilter?: string;
+  compareMode?: boolean;
+  availablePlatforms?: string[];
 }
 
 interface AppStat {
@@ -179,7 +182,10 @@ export default function ProductivityPage({
   domainKeywordRules = {},
   timeMode = 'total',
   externalActivities = [],
-  externalActivityTiers = {}
+  externalActivityTiers = {},
+  platformFilter = 'all',
+  compareMode = false,
+  availablePlatforms = []
 }: ProductivityPageProps) {
   // Cleanup Chart.js instances on unmount to prevent memory leaks
   useEffect(() => {
@@ -248,10 +254,21 @@ export default function ProductivityPage({
   const externalTierMap = useMemo(() => {
     const map: Record<number, string> = {};
     for (const act of externalActivities) {
-      map[act.id] = externalActivityTiers[act.id] || (act.is_productive ? 'productive' : 'neutral');
+      map[act.id] = externalActivityTiers[act.id] || 'neutral';
     }
     return map;
   }, [externalActivities, externalActivityTiers]);
+
+  // Platform-filtered logs
+  const platformLogs = useMemo(() => {
+    if (platformFilter === 'all') return (logs as any[]);
+    return (logs as any[]).filter(l => l.platform === platformFilter);
+  }, [logs, platformFilter]);
+
+  const platformBrowserLogs = useMemo(() => {
+    if (platformFilter === 'all') return (browserLogsProp as any[]);
+    return (browserLogsProp as any[]).filter(l => l.platform === platformFilter);
+  }, [browserLogsProp, platformFilter]);
 
   const toggleDomain = (domain: string) => {
     setExpandedDomains(prev => {
@@ -291,7 +308,7 @@ export default function ProductivityPage({
   // Compute all websites grouped by domain for the websites section
   const allWebsites = useMemo(() => {
     const range = getDateRange(selectedPeriod, dateOffset);
-    const allLogs = (browserLogsProp as any[]).filter((log: any) => {
+    const allLogs = (platformBrowserLogs as any[]).filter((log: any) => {
       const t = new Date(log.timestamp || log.start_time).getTime();
       return t >= range.start.getTime() && t < range.end.getTime();
     });
@@ -351,11 +368,11 @@ export default function ProductivityPage({
     const range = getDateRange(selectedPeriod, dateOffset);
 
     // Filter raw logs by date range
-    const filteredLogs = (logs as any[]).filter((log: any) => {
+    const filteredLogs = (platformLogs as any[]).filter((log: any) => {
       const t = new Date(log.timestamp || log.start_time).getTime();
       return t >= range.start.getTime() && t < range.end.getTime();
     });
-    const filteredBrowserLogs = (browserLogsProp as any[]).filter((log: any) => {
+    const filteredBrowserLogs = (platformBrowserLogs as any[]).filter((log: any) => {
       const t = new Date(log.timestamp || log.start_time).getTime();
       return t >= range.start.getTime() && t < range.end.getTime();
     });
@@ -570,7 +587,7 @@ export default function ProductivityPage({
         const hourStart = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate(), hour);
         const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
 
-        const hourLogs = [...(logs as any[]), ...(browserLogsProp as any[]), ...externalTrendLogs].filter(log => {
+        const hourLogs = [...(platformLogs as any[]), ...(platformBrowserLogs as any[]), ...externalTrendLogs].filter(log => {
           const logTime = new Date(log.timestamp || log.start_time);
           return logTime >= hourStart && logTime < hourEnd;
         });
@@ -628,7 +645,7 @@ export default function ProductivityPage({
 
     // For 'all', aggregate by month to avoid freeze and show readable chart
     if (selectedPeriod === 'all') {
-      const allLogs = [...(logs as any[]), ...(browserLogsProp as any[]), ...externalTrendLogs];
+      const allLogs = [...(platformLogs as any[]), ...(platformBrowserLogs as any[]), ...externalTrendLogs];
       if (allLogs.length === 0) return [];
 
       // Single-pass month bucketing
@@ -676,7 +693,7 @@ export default function ProductivityPage({
       const dayStart = startOfDay(day);
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-      const dayLogs = [...(logs as any[]), ...(browserLogsProp as any[]), ...externalTrendLogs].filter(log => {
+      const dayLogs = [...(platformLogs as any[]), ...(platformBrowserLogs as any[]), ...externalTrendLogs].filter(log => {
         const logTime = new Date(log.timestamp || log.start_time);
         return logTime >= dayStart && logTime < dayEnd;
       });
@@ -706,7 +723,7 @@ export default function ProductivityPage({
         isCurrentHour: false,
       };
     });
-  }, [logs, browserLogsProp, selectedPeriod, tierAssignments, dateOffset, allExternalSessions, externalTierMap]);
+  }, [platformLogs, platformBrowserLogs, selectedPeriod, tierAssignments, dateOffset, allExternalSessions, externalTierMap]);
 
   // Average of daily trend scores (matches what the trend line shows)
   const trendAverageScore = useMemo(() => {

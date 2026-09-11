@@ -125,7 +125,7 @@ export function ProductivityFocusZone({
               ].map((stat) => (
                 <div
                   key={stat.label}
-                  className="relative p-3.5 rounded-xl border border-zinc-700/40 text-center overflow-hidden group"
+                  className="relative p-3.5 rounded-xl border border-zinc-700 light:border-zinc-300/40 light:border-zinc-200/40 text-center overflow-hidden group"
                   style={{ background: `linear-gradient(135deg, ${stat.color}10, rgba(9,9,11,0.8))` }}
                 >
                   {/* Top edge glow */}

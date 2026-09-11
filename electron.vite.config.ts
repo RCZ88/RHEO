@@ -1,5 +1,4 @@
 import { defineConfig } from 'electron-vite';
-import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   main: {
@@ -7,10 +6,13 @@ export default defineConfig({
       outDir: 'dist-electron',
       lib: {
         entry: 'src/main.ts',
-        fileName: () => 'main.cjs',
+        fileName: 'main',
       },
       rollupOptions: {
-        external: ['better-sqlite3'],
+        external: ['better-sqlite3', 'electron', 'active-win', 'node-pty', 'dotenv', 'ws', 'crypto', 'os', 'path', 'fs', 'child_process', 'util', 'url', 'stream', 'events', 'net', 'http', 'https', 'tls', 'zlib', 'assert', 'querystring', 'buffer'],
+        output: {
+          entryFileNames: 'main.cjs',
+        },
       },
     },
   },
@@ -19,21 +21,16 @@ export default defineConfig({
       outDir: 'dist-electron',
       lib: {
         entry: 'src/preload.ts',
-        fileName: () => 'preload.cjs',
+        fileName: 'preload',
       },
     },
   },
   renderer: {
-    plugins: [react()],
-    root: '.',
     build: {
       outDir: 'dist',
       rollupOptions: {
         input: 'index.html',
       },
-    },
-    server: {
-      mimeTypes: { 'model/gltf-binary': ['glb'] },
     },
   },
 });

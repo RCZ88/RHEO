@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Activity, Brain, Sparkles, GraduationCap,
   FileText, Code2, Wallet, HeartHandshake, Settings, BookOpen,
-  Shield, Smartphone,
+  Smartphone, Shield as ShieldIcon, Terminal,
 } from 'lucide-react';
 import { SidebarLogo } from './SidebarLogo';
+import { SidebarDock } from './SidebarDock';
 import { ThemeToggle } from './ThemeToggle';
 import { cn } from '../lib/utils';
 
@@ -24,18 +26,19 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { icon: Activity, label: 'Activity', path: '/activity', group: 'RECORD' },
   { icon: Code2, label: 'IDE Projects', path: '/ide', group: 'RECORD' },
   { icon: Brain, label: 'AI Assistant', path: '/ai', group: 'INTELLIGENCE' },
-  { icon: Shield, label: 'Insights', path: '/reports', group: 'INTELLIGENCE' },
+  { icon: ShieldIcon, label: 'Insights', path: '/reports', group: 'INTELLIGENCE' },
   { icon: GraduationCap, label: 'Lyceum', path: '/learn', group: 'INTELLIGENCE' },
   { icon: Sparkles, label: 'Content Engine', path: '/studio', group: 'CREATE' },
   { icon: FileText, label: 'Resume', path: '/resume', group: 'CREATE' },
-  { icon: HeartHandshake, label: 'Life Phases', path: '/life', group: 'LIFE' },
+  { icon: HeartHandshake, label: 'Life', path: '/life', group: 'LIFE' },
   { icon: Wallet, label: 'Finance', path: '/finance', group: 'LIFE' },
-  { icon: Shield, label: 'Agentic System', path: '/agentic', group: 'AGENTS' },
+  
   { icon: BookOpen, label: 'Guide', path: '/guide', group: 'SYSTEM' },
   { icon: Settings, label: 'Settings', path: '/settings', group: 'SYSTEM' },
+  { icon: Terminal, label: 'Penguin Console', path: '/penguin-console', group: 'SYSTEM' },
 ];
 
-const GROUP_ORDER = ['OVERVIEW', 'RECORD', 'INTELLIGENCE', 'CREATE', 'LIFE', 'AGENTS', 'SYSTEM'];
+const GROUP_ORDER = ['OVERVIEW', 'RECORD', 'INTELLIGENCE', 'CREATE', 'LIFE', 'SYSTEM'];
 
 const GROUP_KICKER: Record<string, string> = {
   OVERVIEW: 'OVERVIEW',
@@ -43,7 +46,6 @@ const GROUP_KICKER: Record<string, string> = {
   INTELLIGENCE: 'INTELLIGENCE',
   CREATE: 'CREATE',
   LIFE: 'LIFE',
-  AGENTS: 'AGENTS',
   SYSTEM: 'SYSTEM',
 };
 
@@ -79,31 +81,62 @@ const NodeDot = memo(function NodeDot({
   collapsed: boolean;
   onNavigate: (path: string) => void;
 }) {
+  const Icon = item.icon;
   return (
-    <button
+    <motion.button
+      layout
       onClick={() => onNavigate(item.path)}
       className={cn(
         'group relative flex items-center w-full transition-all duration-150',
-        collapsed ? 'justify-center py-2' : 'gap-3 py-[7px] pl-2 pr-3',
+        collapsed ? 'justify-center py-2' : 'gap-3 py-[7px] pl-9 pr-3',
       )}
       title={collapsed ? item.label : undefined}
     >
-      {/* Dot on the line */}
-      <span className="relative flex items-center justify-center shrink-0">
-        {isActive ? (
-          <span className="relative flex items-center justify-center">
-            <span className="absolute w-4 h-4 rounded-full bg-white/[0.08] blur-[6px]" />
-            <span className="relative w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.25)]" />
-          </span>
-        ) : (
-          <span className="w-1.5 h-1.5 rounded-full border border-white/[0.35] group-hover:border-white/[0.6] group-hover:bg-white/[0.1] transition-all duration-150" />
-        )}
-      </span>
-      {/* Label (hidden in rail) */}
-      {!collapsed && (
+      {/* Expanded: show icon + label, icon grows on hover */}
+      <>
+        {/* Icon chip — grows on hover */}
+        <motion.span
+          layout
+          className={cn(
+            'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg',
+            item.active
+              ? 'border-white/30 bg-white/[0.15] shadow-[0_0_24px_rgba(255,255,255,0.3)] z-10'
+              : 'border-white/[0.08] bg-white/[0.04]',
+          )}
+          style={{
+            left: '-28px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            opacity: 1,
+            scale: item.active ? 1 : 0.6,
+          }}
+          whileHover={{ scale: 1.1, rotate: 8 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        >
+          <Icon
+            className={cn(
+              'h-[22px] w-[22px] drop-shadow-md',
+              item.active ? 'text-white' : 'text-zinc-100',
+            )}
+          />
+        </motion.span>
+
+        {/* Dot on the line */}
+        <span className="relative flex items-center justify-center shrink-0">
+          {isActive ? (
+            <span className="relative flex items-center justify-center">
+              <span className="absolute w-4 h-4 rounded-full bg-white/[0.08] blur-[6px]" />
+              <span className="relative w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.25)]" />
+            </span>
+          ) : (
+            <span className="w-1.5 h-1.5 rounded-full border border-white/[0.35] group-hover:border-white/[0.6] group-hover:bg-white/[0.1] transition-all duration-150" />
+          )}
+        </span>
+
+        {/* Label */}
         <span
           className={cn(
-            'text-[13px] truncate transition-colors duration-150 flex-1 text-left',
+            'text-[13px] truncate transition-colors duration-150 flex-1 text-left py-[2px]',
             isActive
               ? 'text-[var(--text-primary)] font-medium'
               : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]',
@@ -111,14 +144,15 @@ const NodeDot = memo(function NodeDot({
         >
           {item.label}
         </span>
-      )}
-      {/* Badge */}
-      {!collapsed && item.badge && (
-        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.08] text-[var(--text-muted)] font-medium tabular-nums">
-          {item.badge}
-        </span>
-      )}
-    </button>
+
+        {/* Badge */}
+        {item.badge && (
+          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.08] text-[var(--text-muted)] font-medium tabular-nums">
+            {item.badge}
+          </span>
+        )}
+      </>
+    </motion.button>
   );
 });
 
@@ -185,6 +219,22 @@ export const Sidebar = memo(function SidebarComponent({
     for (const item of SIDEBAR_ITEMS) map.get(item.group)?.push(item);
     return map;
   }, []);
+
+  // Dock groups for the collapsed rail (icons = page logos, with active flags)
+  const dockGroups = useMemo(
+    () =>
+      GROUP_ORDER.map((group) => ({
+        name: group,
+        items: (grouped.get(group) ?? []).map((item) => ({
+          icon: item.icon,
+          label: item.label,
+          path: item.path,
+          group: item.group,
+          active: isActive(item),
+        })),
+      })).filter((g) => g.items.length > 0),
+    [grouped, isActive],
+  );
 
   const activeGroup = useMemo(() => {
     for (const item of SIDEBAR_ITEMS) {
@@ -263,12 +313,18 @@ export const Sidebar = memo(function SidebarComponent({
             <span className="block w-[3px] h-[2px] bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
           </div>
           {/* ── Nav position marker (where you are in the sidebar) ─ */}
-          <div
-            className="absolute left-[18px] z-10 pointer-events-none"
-            style={{ top: `${activeNavPct}%`, transform: 'translateY(-50%)' }}
-          >
-            <span className="block w-3 h-3 rotate-45 bg-[var(--page-accent)]/90 shadow-[0_0_6px_rgba(251,191,36,0.6)]" />
-          </div>
+                    <motion.div
+                      className="absolute left-[18px] z-10 pointer-events-none"
+                      style={{ top: `${activeNavPct}%`, translateY: '-50%' }}
+                      animate={{ y: activeNavPct }}
+                      transition={{ type: 'spring', stiffness: 250, damping: 25 }}
+                    >
+                      <motion.span
+                        className="w-2 h-2 rounded-full bg-[var(--page-accent)]"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                      />
+                    </motion.div>
         </div>
       </div>
 
@@ -282,15 +338,15 @@ export const Sidebar = memo(function SidebarComponent({
           )}
         >
           {collapsed ? (
-            <button
-              onClick={onToggle}
-              className="p-1 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
-              title="Expand sidebar"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-              </svg>
-            </button>
+          <button
+            onClick={onToggle}
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+            title="Expand sidebar"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+          </button>
           ) : (
             <div className="flex items-center justify-between w-full">
               <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest select-none">RHEO</span>
@@ -315,15 +371,17 @@ export const Sidebar = memo(function SidebarComponent({
 
             {/* Groups + items */}
             <div className="flex-1 min-w-0">
-              {GROUP_ORDER.map((group, gIdx) => {
+              {collapsed ? (
+                <SidebarDock groups={dockGroups} onNavigate={handleNavigate} />
+              ) : (
+              GROUP_ORDER.map((group, gIdx) => {
                 const items = grouped.get(group) ?? [];
                 const isGroupActive = activeGroup === group;
 
                 return (
                   <div key={group}>
                     {/* Group header (kicker) */}
-                    {!collapsed && (
-                      <div
+                    <div
                         className={cn(
                           'px-4 pt-3 pb-1 text-[10px] font-mono uppercase tracking-[0.14em] transition-colors select-none',
                           isGroupActive ? 'text-[var(--text-primary)]' : 'text-zinc-600',
@@ -331,16 +389,15 @@ export const Sidebar = memo(function SidebarComponent({
                       >
                         {GROUP_KICKER[group]}
                       </div>
-                    )}
 
-                    {/* Items */}
-                    <div className={collapsed ? 'px-1' : 'pl-1 pr-2'}>
+                    {/* Items (expanded mode — rail uses SidebarDock above) */}
+                    <div className="pl-1 pr-2">
                       {items.map((item) => (
                         <NodeDot
                           key={item.path}
                           item={item}
                           isActive={isActive(item)}
-                          collapsed={collapsed}
+                          collapsed={false}
                           onNavigate={handleNavigate}
                         />
                       ))}
@@ -358,7 +415,7 @@ export const Sidebar = memo(function SidebarComponent({
                     )}
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
         </div>
@@ -371,11 +428,27 @@ export const Sidebar = memo(function SidebarComponent({
           )}
         >
           {collapsed ? (
-            /* Rail mode: compact icon cluster */
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex flex-col items-center gap-1.5">
-                {/* LIVE dot — only rendered when tracking */}
-                {isTracking && (
+                      /* Rail mode: compact icon cluster */
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="flex flex-col items-center gap-1.5">
+                          {/* Theme toggle */}
+                          <ThemeToggle size="sm" />
+                          {/* Phone QR */}
+                          <button
+                            onClick={() => {
+                              window.dispatchEvent(
+                                new CustomEvent('open-pair-modal', {
+                                  detail: { terminalId: 'desktop', label: 'Desktop' },
+                                })
+                              );
+                            }}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                            title="Connect phone"
+                          >
+                            <Smartphone className="w-3.5 h-3.5" />
+                          </button>
+                          {/* LIVE dot — only rendered when tracking */}
+                          {isTracking && (
                   <div
                     className="flex items-center justify-center"
                     title="Recording"
@@ -462,7 +535,25 @@ export const Sidebar = memo(function SidebarComponent({
                   )}
                 </button>
               </div>
-              {/* Row 2: Quick Log + ⌘K */}
+              {/* Row 2: Theme toggle + phone QR */}
+              <div className="flex items-center justify-between gap-2">
+                <ThemeToggle size="sm" />
+                <button
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('open-pair-modal', {
+                        detail: { terminalId: 'desktop', label: 'Desktop' },
+                      })
+                    );
+                  }}
+                  className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Connect phone"
+                >
+                  <Smartphone className="w-3 h-3" />
+                  <span className="font-mono">Pair Phone</span>
+                </button>
+              </div>
+              {/* Row 3: Quick Log + ⌘K */}
               <div className="flex items-center justify-between gap-1">
                 <button
                   onClick={onQuickLog}

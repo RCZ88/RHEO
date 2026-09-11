@@ -17,55 +17,55 @@ export function TierBreakdownStrip({
   totalHours,
 }: TierBreakdownStripProps) {
   const stats = [
-    { 
-      label: 'Productive', 
-      value: productiveHours, 
-      color: '#34d399', 
-      textColor: 'text-emerald-400',
+    {
+      label: 'Productive',
+      value: productiveHours,
+      color: '#34d399',
+      textColor: 'text-emerald-400 light:text-emerald-600',
       borderColor: 'border-t-emerald-400/30',
-      icon: <CheckCircle2 size={14} /> 
+      icon: <CheckCircle2 size={14} />
     },
-    { 
-      label: 'Neutral', 
-      value: neutralHours, 
-      color: '#fbbf24', 
-      textColor: 'text-amber-400',
+    {
+      label: 'Neutral',
+      value: neutralHours,
+      color: '#fbbf24',
+      textColor: 'text-amber-400 light:text-amber-600',
       borderColor: 'border-t-amber-400/30',
-      icon: <MinusCircle size={14} /> 
+      icon: <MinusCircle size={14} />
     },
-    { 
-      label: 'Distracting', 
-      value: distractingHours, 
-      color: '#f87171', 
-      textColor: 'text-red-400',
+    {
+      label: 'Distracting',
+      value: distractingHours,
+      color: '#f87171',
+      textColor: 'text-red-400 light:text-red-600',
       borderColor: 'border-t-red-400/30',
-      icon: <XCircle size={14} /> 
+      icon: <XCircle size={14} />
     },
-    { 
-      label: 'Total', 
-      value: totalHours, 
-      color: '#ec4899', 
-      textColor: 'text-pink-400',
+    {
+      label: 'Total',
+      value: totalHours,
+      color: '#ec4899',
+      textColor: 'text-pink-400 light:text-pink-600',
       borderColor: 'border-t-pink-400/30',
-      icon: <Clock size={14} /> 
+      icon: <Clock size={14} />
     },
   ];
 
   return (
     <BlurFade delay={0.15} duration={0.4}>
-      <div className="bg-zinc-950/50 backdrop-blur-xl border border-zinc-800/40 rounded-xl mb-4 overflow-hidden">
-        <div className="grid grid-cols-2 lg:grid-cols-4">
+      <div className="bg-zinc-950 light:bg-white backdrop-blur-xl border border-zinc-800 light:border-[var(--ws-border)] rounded-xl mb-4 overflow-hidden">
+        <div className="grid grid-cols-2 md:grid-cols-4">
           {stats.map((stat, i) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className={`relative p-4 ${i < stats.length - 1 ? 'border-r border-[#27272a]' : ''} ${stat.borderColor} border-t-[1px]`}
+              className={`relative p-4 ${i < stats.length - 1 ? 'border-r border-[#27272a] light:border-[var(--ws-border)]' : ''} ${stat.borderColor} border-t-[1px]`}
             >
               <div className="flex items-center gap-1.5 mb-2">
                 <span style={{ color: stat.color }}>{stat.icon}</span>
-                <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
+                <span className="text-[11px] text-zinc-500 light:text-stone-500 uppercase tracking-wider font-medium">
                   {stat.label}
                 </span>
               </div>
@@ -79,7 +79,7 @@ export function TierBreakdownStrip({
                     duration={1200}
                   />
                 </span>
-                <span className="text-[12px] text-zinc-500">h</span>
+                <span className="text-[12px] text-zinc-500 light:text-stone-400">h</span>
               </div>
             </motion.div>
           ))}

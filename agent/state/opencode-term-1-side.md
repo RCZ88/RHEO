@@ -3,24 +3,21 @@
 
 # Agent State — opencode-term-1-side
 
-> **STATUS:** working | **UPDATED:** 2026-08-05T10:30:00.000Z
+> **STATUS:** completed | **UPDATED:** 2026-09-11T00:48:00+07:00
 
 ---
 
-## CURRENT CYCLE (2)
-**ROLE:** Hands & Eyes — Floating Canvas Navigation Mode (design phase, Stitch)
-**STATUS:** working
+## CURRENT CYCLE (3)
+**ROLE:** Hands & Eyes — Collapsed sidebar dock hover interaction
+**STATUS:** completed
 **IN FLIGHT:**
-- CZ sending design to Stitch UI (Dynamic Canvas Navigator project 876738276259824411) — CLI Stitch MCP timed out 3x (variants + edit_screens), polling found nothing
-- Implementation blocked until Stitch design returns
+- None
 **COMPLETED:**
-- Verified existing Stitch project "Dynamic Canvas Navigator" (design system Clean Glassmorphism: Deep Obsidian #020617, blur(20px), refraction borders, cyan/emerald/purple tokens, Geist) + 2 screens (System Dashboard Sidebar Mode, Canvas Navigation Hub w/ Sidebar Mode toggle)
-- Wrote Stitch-ready design brief: agent/docs/generate-prompt-docs/floating-nav-hub-05082026/PROMPT.md (verbatim prompt: 13 pages, unique per-node accent/icon, AI System + Dashboard hero nodes, hover bloom, nebula bg; per-page theme table; engineering handoff notes)
-- Checked agent/docs/generate-prompt-docs/canvas-navigation/ RESULT.md — unrelated (AI canvas minimap feature, already shipped); no conflict
-- Tracked: requests.json #061 (Floating Canvas Navigation Mode, checks c1-c7) + problems.json #173 (sidebar-only navigation), linked both; both files validated + CRLF preserved
-- Sidebar reorder feature (#059/#137) from cycle 1 still awaiting runtime verification
-**NEXT ACTION:** CZ pastes PROMPT.md into Stitch → returns design → implement in src/App.tsx (nav mode toggle df-nav-mode, NavCanvas themed nodes, hero AI/Dashboard, node order from df-sidebar-order, handleSidebarNavigation reuse)
-**NOTES:** Probe NOT LAUNCHED — no debug port on running RHEO; do not kill processes not started by agent. Stitch MCP tool args: project reads need ONLY numeric projectId (name+projectId combined = invalid argument).
+- Updated `src/components/SidebarDock.tsx` with Cupertino-style magnification: hovered icon island, two-step neighbor scale falloff, dynamic round-to-icon shape, stable hit targets, reduced-motion path retained.
+- Targeted esbuild parse/bundle check passed. Vite transform was interrupted after prolonged no-output; repository lint/type checks remain blocked by pre-existing issues.
+- Refreshed `dist/src.zip` using tar fallback because the Windows-only zip script cannot run on Linux.
+**NEXT ACTION:** Rebuild in the Linux environment and visually verify the collapsed dock with Probe.
+**NOTES:** Linux is the active environment. Probe NOT LAUNCHED — no debug port. Graphify rebuild unavailable (`No module named 'graphify'`); GRAPH_REPORT validation passed; vault sync skipped because no vault path was available.
 
 ---
 

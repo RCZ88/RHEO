@@ -111,7 +111,7 @@ export default function Nav() {
                       ? "#f4f4f5"
                       : scrolled
                       ? "#a1a1aa"
-                      : "#63636b",
+                      : "#8a8a94",
                   }}
                 >
                   {l.label}

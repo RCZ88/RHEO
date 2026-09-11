@@ -6,6 +6,7 @@ import { useContentEngine } from '../ContentEngineContext'
 import { BlurFade, BentoCard, StatusChip } from './ui-laminar'
 import { GlareHover } from '@/components/ui/glare-hover'
 import { NeonGradientCard } from '@/components/ui/neon-gradient-card'
+import { ShinyButton } from '@/components/ui/shiny-button'
 
 const api = () => (window as any).deskflowAPI?.contentEngine
 

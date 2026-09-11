@@ -130,6 +130,30 @@
   transform: scale(0.97);
 }
 
+.dk-topbar-btn--sm {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 10px;
+  gap: 4px;
+}
+
+.dk-topbar-btn--violet {
+  border-color: rgba(167,139,250,0.3);
+  color: #a78bfa;
+}
+.dk-topbar-btn--amber {
+  border-color: rgba(251,191,36,0.4);
+  color: #fbbf24;
+}
+.dk-topbar-btn--cyan {
+  border-color: rgba(34,211,238,0.4);
+  color: #22d3ee;
+}
+.dk-topbar-btn--pink {
+  border-color: rgba(244,114,182,0.4);
+  color: #f472b6;
+}
+
 /* --- Status Bar --- */
 .dk-statusbar {
   display: flex;

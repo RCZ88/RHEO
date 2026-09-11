@@ -1,3 +1,6 @@
+import { motion, useInView } from "framer-motion";
+import { useRef } from "react";
+
 const MODULES = [
   { slug: 'time', label: 'Time', desc: 'Tracks every app, every website, every minute.' },
   { slug: 'money', label: 'Money', desc: 'Wallets, subscriptions, income, expenses — all in one view.' },
@@ -14,39 +17,66 @@ const MODULES = [
 ];
 
 export function ModuleStore() {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { margin: "-10% 0px", amount: 0.2 });
+
   return (
-    <section className="relative py-24 px-8">
+    <section ref={ref} className="relative py-24 px-8">
       <div className="max-w-[1100px] mx-auto">
-        <h2 className="text-[clamp(1.5rem,3vw,2.25rem)] font-display font-bold tracking-tight text-text mb-3 text-center">
+        <motion.h2
+          className="text-[clamp(1.5rem,3vw,2.25rem)] font-display font-bold tracking-tight text-text mb-3 text-center"
+          initial={{ opacity: 0, y: 24 }}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
           Spare threads you can add
-        </h2>
-        <p className="text-text-secondary text-center max-w-[50ch] mx-auto mb-14 text-[0.95rem]">
+        </motion.h2>
+        <motion.p
+          className="text-text-secondary text-center max-w-[50ch] mx-auto mb-14 text-[0.95rem]"
+          initial={{ opacity: 0, y: 24 }}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+          transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+        >
           Every module is a thread on the same loom. Pick the ones that matter to you.
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
-          {MODULES.map((mod, i) => (
-            <div
+        </motion.p>
+        <motion.div
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5"
+          initial="hidden"
+          animate={inView ? "visible" : "hidden"}
+          variants={{
+            visible: { transition: { staggerChildren: 0.08 } },
+            hidden: {},
+          }}
+        >
+          {MODULES.map((mod) => (
+            <motion.div
               key={mod.slug}
-              className="group relative bg-surface border border-white/[0.06] rounded-xl p-5 flex flex-col items-center text-center transition-all duration-500 overflow-hidden"
-              style={{ animationDelay: `${i * 50}ms` }}
+              className="group relative bg-surface border border-white/[0.06] rounded-xl p-5 flex flex-col items-center text-center overflow-hidden"
+              style={{ borderRadius: 16 }}
+              variants={{
+                hidden: { opacity: 0, y: 24 },
+                visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+              }}
+              whileHover={{ y: -4, borderColor: "rgba(255,255,255,0.16)" }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             >
-              {/* Border-beam hover glow — matches .patch dashed-border aesthetic */}
+              {/* Hover glow — white radial, LAMINAR */}
               <div
                 className="absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                 style={{
-                  background: 'radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(251,191,36,0.08) 0%, transparent 70%)',
+                  background: 'radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.06) 0%, transparent 70%)',
                   pointerEvents: 'none',
                 }}
               />
-              {/* Animated amber border beam — sweeps on hover */}
+              {/* Animated white border beam — sweeps on hover */}
               <div
-                className="absolute inset-0 rounded-xl border border-transparent transition-all duration-700 group-hover:border-amber/40 group-hover:shadow-[0_0_24px_rgba(251,191,36,0.12)]"
+                className="absolute inset-0 rounded-xl border border-transparent transition-all duration-700 group-hover:border-white/20 group-hover:shadow-[0_0_24px_rgba(255,255,255,0.08)]"
               />
-              {/* Dashed inner border — matches .patch stitch aesthetic */}
+              {/* Dashed inner border — LAMINAR */}
               <div
-                className="absolute inset-[3px] rounded-[11px] border border-transparent transition-all duration-700 group-hover:border-amber/15"
+                className="absolute inset-[3px] rounded-[11px] border border-transparent transition-all duration-700 group-hover:border-white/10"
                 style={{
-                  backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(251,191,36,0.03) 4px, rgba(251,191,36,0.03) 5px)',
+                  backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.03) 4px, rgba(255,255,255,0.03) 5px)',
                   pointerEvents: 'none',
                 }}
               />
@@ -56,7 +86,7 @@ export function ModuleStore() {
                 <div
                   className="absolute inset-0 rounded-lg opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                   style={{
-                    boxShadow: '0 0 0 1px rgba(251,191,36,0.15), 0 4px 12px rgba(0,0,0,0.3)',
+                    boxShadow: '0 0 0 1px rgba(255,255,255,0.15), 0 4px 12px rgba(0,0,0,0.3)',
                     pointerEvents: 'none',
                   }}
                 />
@@ -67,8 +97,8 @@ export function ModuleStore() {
                 />
               </div>
 
-              {/* Label — amber, mono, uppercase — patch tag style */}
-              <span className="text-[0.65rem] tracking-[0.14em] text-amber uppercase font-mono mb-2.5 relative z-10">
+              {/* Label — white, mono, uppercase — LAMINAR */}
+              <span className="text-[0.65rem] tracking-[0.14em] text-white uppercase font-mono mb-2.5 relative z-10">
                 {mod.label}
               </span>
 
@@ -76,15 +106,9 @@ export function ModuleStore() {
               <span className="text-[0.8rem] text-text leading-snug relative z-10">
                 {mod.desc}
               </span>
-
-              {/* Hover: card lifts with spring */}
-              <div
-                className="absolute inset-0 rounded-xl transition-transform duration-700 group-hover:translate-y-[-4px]"
-                style={{ pointerEvents: 'none' }}
-              />
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

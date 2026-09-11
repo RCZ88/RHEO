@@ -75,10 +75,10 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
   }, [expanded, fetched, sessionId, tool])
 
   return (
-    <div className="border-t border-zinc-800/30">
+    <div className="border-t border-zinc-800/30 light:border-[var(--ws-border)]">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-5 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/20 transition-colors duration-150"
+        className="w-full flex items-center gap-2 px-5 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/20 light:hover:bg-stone-100 transition-colors duration-150"
       >
         {expanded ? (
           <ChevronDown className="w-3 h-3" />
@@ -88,7 +88,7 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
         <MessageSquare className="w-3 h-3" />
         <span>View Messages</span>
         {messages.length > 0 && (
-          <span className="text-zinc-600">({messages.length})</span>
+          <span className="text-zinc-600 light:text-stone-500">({messages.length})</span>
         )}
       </button>
 
@@ -104,12 +104,12 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
             <div className="px-4 pb-3 space-y-2 max-h-[400px] overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-6 gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
-                  <span className="text-[11px] text-zinc-500">Loading messages...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-500 light:text-stone-500" />
+                  <span className="text-[11px] text-zinc-500 light:text-stone-500">Loading messages...</span>
                 </div>
               ) : messages.length === 0 ? (
                 <div className="text-center py-4">
-                  <span className="text-[11px] text-zinc-600">No messages found in source files</span>
+                  <span className="text-[11px] text-zinc-600 light:text-stone-500">No messages found in source files</span>
                 </div>
               ) : (
                 messages.map((msg) => {
@@ -142,13 +142,13 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
                           </span>
                         )}
                         {msg.tokens ? (
-                          <span className="flex items-center gap-0.5 text-zinc-600">
+                          <span className="flex items-center gap-0.5 text-zinc-600 light:text-stone-500">
                             <Hash className="w-2.5 h-2.5" />
                             {formatTokens(msg.tokens)}
                           </span>
                         ) : null}
                       </div>
-                      <div className="text-zinc-300 whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6]">
+                      <div className="text-zinc-300 light:text-stone-700 whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6]">
                         {display}
                         {truncated && (
                           <button
@@ -163,7 +163,7 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
                                 )
                               )
                             }}
-                            className="ml-1 text-zinc-500 hover:text-zinc-300 underline"
+                            className="ml-1 text-zinc-500 hover:text-zinc-300 light:text-stone-500 underline"
                           >
                             show all
                           </button>

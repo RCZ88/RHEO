@@ -107,6 +107,7 @@ export function SelfOrchestrator() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
+  const [activity, setActivity] = useState<{ nodeId: string; magnitude: number; timestamp: number }[]>([])
 
   // ── Graph canvas size (measured) ──
   const graphContainerRef = useRef<HTMLDivElement>(null)

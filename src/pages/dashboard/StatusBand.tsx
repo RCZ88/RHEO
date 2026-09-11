@@ -72,7 +72,6 @@ export function StatusBand({
   const accent = getAccentColor(stateKey);
   const isActive = !isPaused && (isCurrentlyProductive || isDistracting);
   const timeStr = useMemo(() => formatTime(displayTimeMs), [displayTimeMs]);
-  const [hours, minutes, seconds] = timeStr.split(':');
 
   const dailyFocusTarget = 240;
   const focusPercent = Math.min(100, Math.round((totalMinutes / dailyFocusTarget) * 100));
@@ -129,7 +128,7 @@ export function StatusBand({
       <div
         className="w-full h-full"
         style={{
-          boxShadow: `0 0 20px 5px rgba(${rgbStr},${glowAlpha}), 0 0 50px 15px rgba(${rgbStr},${glowAlpha * 0.5})`,
+          boxShadow: `0 0 12px 2px rgba(${rgbStr},${glowAlpha * 0.5})`,
         }}
       >
       <NeonGradientCard
@@ -143,24 +142,24 @@ export function StatusBand({
           <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent z-20" />
           <div className="relative z-10 flex flex-col gap-3 p-4" style={{ minHeight: '140px' }}>
 
-            <div className="flex items-center justify-between bg-black/20 border border-white/[0.03] rounded-lg px-3 py-2">
+            <div className="flex items-center justify-between bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg px-3 py-2">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: accent.dot }} />
-                <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-400">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-400 light:text-stone-600">
                   {isPaused ? 'Paused' : isActive ? (isDistracting ? 'Distracting' : 'Locked In') : 'Idle'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                   <Zap size={11} className="text-amber-500/60" />
-                  <span className="text-[11px] text-zinc-500 font-sans">
-                    <span className="font-mono font-semibold text-zinc-300 tabular-nums">
+                  <span className="text-[11px] text-zinc-500 light:text-stone-500 font-sans">
+                    <span className="font-mono font-semibold text-zinc-300 light:text-stone-700 tabular-nums">
                       <NumberTicker value={totalMinutes} suffix="m" delay={300} duration={1200} />
                     </span>
                     {' '}focused
                   </span>
                 </div>
-                <span className="text-[10px] text-zinc-600 font-mono tabular-nums">{formatDate()}</span>
+                <span className="text-[10px] text-zinc-600 light:text-stone-400 font-mono tabular-nums">{formatDate()}</span>
               </div>
             </div>
 
@@ -170,20 +169,10 @@ export function StatusBand({
                 size={130}
                 strokeWidth={5}
                 gaugePrimaryColor={accent.arc}
-                gaugeSecondaryColor="rgba(255,255,255,0.06)"
+                gaugeSecondaryColor="rgba(128,128,128,0.18)"
               >
-                <div className="flex items-baseline gap-0.5">
-                  <span className="text-[32px] font-mono font-bold text-zinc-100 leading-none tracking-tight">
-                    {hours}
-                  </span>
-                  <span className="text-[18px] font-mono font-bold text-zinc-600 mx-0.5">:</span>
-                  <span className="text-[32px] font-mono font-bold text-zinc-100 leading-none tracking-tight">
-                    {minutes}
-                  </span>
-                  <span className="text-[18px] font-mono font-bold text-zinc-600 mx-0.5">:</span>
-                  <span className="text-[32px] font-mono font-bold text-zinc-100 leading-none tracking-tight">
-                    {seconds}
-                  </span>
+                <div className="font-mono text-[28px] font-bold leading-none tracking-tight text-zinc-100 light:text-stone-900 tabular-nums">
+                  {timeStr}
                 </div>
               </AnimatedCircularProgressBar>
             </div>
@@ -191,19 +180,19 @@ export function StatusBand({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 {currentAppName ? (
-                  <div className="flex items-center gap-2 bg-black/20 border border-white/[0.03] rounded-lg px-3 py-1.5 min-w-0">
+                  <div className="flex items-center gap-2 bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg px-3 py-1.5 min-w-0">
                     {isInBrowser ? <Globe size={12} className="text-zinc-500 shrink-0" /> : <Monitor size={12} className="text-zinc-500 shrink-0" />}
-                    <span className="text-[12px] font-medium text-zinc-300 truncate font-sans">
+                    <span className="text-[12px] font-medium text-zinc-300 light:text-stone-800 truncate font-sans">
                       {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
                     </span>
                     {isInBrowser && websiteCategory && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800/50 text-zinc-500 border border-zinc-700/20 font-sans hidden sm:inline">{websiteCategory}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 text-zinc-500 border border-zinc-700 light:border-zinc-300/20 font-sans hidden sm:inline">{websiteCategory}</span>
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 opacity-40 bg-black/20 border border-white/[0.03] rounded-lg px-3 py-1.5">
-                    <Clock size={11} className="text-zinc-600" />
-                    <span className="text-[11px] text-zinc-600 font-sans">Waiting for activity</span>
+                  <div className="flex items-center gap-2 opacity-40 bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg px-3 py-1.5">
+                    <Clock size={11} className="text-zinc-600 light:text-stone-400" />
+                    <span className="text-[11px] text-zinc-600 light:text-stone-500 font-sans">Waiting for activity</span>
                   </div>
                 )}
               </div>
@@ -213,7 +202,7 @@ export function StatusBand({
                   onClick={onStartFocus}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 border border-zinc-700/30 hover:bg-zinc-700/50 hover:text-zinc-200 transition-colors text-[11px] font-medium font-sans"
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 light:bg-white text-zinc-400 light:text-stone-600 border border-zinc-700 light:border-[var(--ws-border)] hover:bg-zinc-700 hover:light:bg-stone-100 hover:text-zinc-200 hover:light:text-stone-900 transition-colors text-[11px] font-medium font-sans"
                 >
                   <Play size={9} />
                   Focus
@@ -230,18 +219,15 @@ export function StatusBand({
                   animate={{ opacity: 1, y: 0, scaleY: 1 }}
                   exit={{ opacity: 0, y: -6, scaleY: 0.98 }}
                   transition={{
-                    type: 'spring',
-                    stiffness: 260,
-                    damping: 26,
-                    mass: 0.6,
-                    opacity: { duration: 0.2, ease: 'easeOut' },
+                    duration: 0.25,
+                    ease: [0.16, 1, 0.3, 1],
                   }}
                   className="origin-top"
                 >
-                  <div className="bg-black/20 border border-white/[0.03] rounded-lg p-3">
+                  <div className="bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg p-3">
                     <div className="flex items-center gap-1.5 mb-2">
                       <Activity size={10} className="text-zinc-500" />
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-zinc-500">Since Last Visit</span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-zinc-500 light:text-stone-500">Since Last Visit</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <AnimatePresence mode="popLayout" initial={false}>
@@ -253,16 +239,14 @@ export function StatusBand({
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9, y: -3 }}
                             transition={{
-                              type: 'spring',
-                              stiffness: 300,
-                              damping: 24,
-                              mass: 0.5,
+                              duration: 0.22,
+                              ease: [0.16, 1, 0.3, 1],
                             }}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800/40 border border-zinc-700/30 text-[10px]"
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 light:bg-white border border-zinc-700 light:border-[var(--ws-border)] text-[10px]"
                           >
                             <ArrowUp size={8} className="text-zinc-500" />
-                            <span className="text-zinc-400 font-mono">{line.text}</span>
-                            <span className="text-zinc-600">{line.ago}s ago</span>
+                            <span className="text-zinc-400 light:text-stone-600 font-mono">{line.text}</span>
+                            <span className="text-zinc-600 light:text-stone-400">{line.ago}s ago</span>
                           </motion.div>
                         ))}
                       </AnimatePresence>

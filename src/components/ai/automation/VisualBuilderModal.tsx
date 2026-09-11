@@ -35,7 +35,7 @@ const ACCENT = {
   dot: 'bg-cyan-400',
 }
 
-const inputCls = 'w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none transition-colors'
+const inputCls = 'w-full bg-zinc-900 light:bg-white border border-zinc-800 light:border-[var(--ws-border)] rounded-xl px-3 py-2 text-sm text-zinc-200 light:text-stone-800 outline-none transition-colors'
 
 function parseExisting(dsl: string): AutomationDef {
   const def = emptyAutomationDef()

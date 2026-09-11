@@ -12,6 +12,7 @@
 ## Frontend components
 - `src/components/ui/v-calendar.tsx` — current VCalendar is effectively a single-option select, not a real date picker.
 - `src/components/ui/glare-hover.tsx` — current implementation is an empty passthrough; the actual glare sweep effect needs a LAMINAR pass (white ≤8%, hover-only, RM off) or usages should be removed.
+- `src/components/MonthWall/MonthWall.tsx` — wheel-hijack month navigation, non-flat rest state, colors outside phase palette, decorative shadows/radii/transitions. LAMINAR conformance fix in progress.
 
 ## Learn types
 - `src/shared/learn/types.ts` — `AnnotatedCodeBlock`/`AnnotatedMathBlock` extend `BaseBlock` with invalid literal `type` values; needs narrowing against `BlockType`.

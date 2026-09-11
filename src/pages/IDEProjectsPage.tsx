@@ -15,7 +15,6 @@ import {
   Trash2,
   RefreshCw,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Sparkles,
   GitCommit,
@@ -45,6 +44,16 @@ import {
   FileText,
   Play,
 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import { NumberTicker } from '@/components/ui/number-ticker';
+import { Particles } from '@/components/ui/particles';
+import { BorderBeam } from '@/components/ui/border-beam';
+import { MagicCard } from '@/components/ui/magic-card';
+import { AmbientGlow } from '@/components/ui/ambient-patterns';
 import InitializeProgressModal from '../components/InitializeProgressModal';
 import {
   Chart as ChartJS,
@@ -62,7 +71,6 @@ import {
 import { Bar } from 'react-chartjs-2';
 import { format, subDays, eachDayOfInterval, formatDistanceToNow } from 'date-fns';
 const AnalyticsDashboard = lazy(() => import('../components/AnalyticsDashboard'));
-import { StatsDashboard } from '../components/stats/StatsDashboard';
 import { PageShell } from '../components/PageShell';
 import { GlassCard } from '../components/GlassCard';
 import { SectionHeader } from '../components/SectionHeader';
@@ -237,11 +245,11 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
   const month = calculateStats(30);
 
   const StatCard = ({ label, stats }: { label: string; stats: ReturnType<typeof calculateStats> }) => (
-    <div className="bg-zinc-900/60 rounded-xl p-3 border border-zinc-800/50 flex flex-col text-center">
+    <div className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-3 flex flex-col text-center">
       <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-2">{label}</div>
       
       {/* Usage bar */}
-      <div className="w-full h-1.5 bg-zinc-800 rounded-full mb-2 overflow-hidden">
+      <div className="w-full h-1.5 bg-zinc-800 light:bg-zinc-100 rounded-full mb-2 overflow-hidden">
         <div 
           className={`h-full rounded-full transition-all ${stats.overLimit ? 'bg-red-500' : stats.usagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
           style={{ width: `${Math.min(100, stats.usagePercent)}%` }}
@@ -283,7 +291,7 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
   );
 
   return (
-    <div className="bg-zinc-800/50 rounded-xl p-4 mb-6 border border-emerald-500/10">
+    <div className="bg-[var(--color-card)] rounded-lg p-4 mb-6 border border-emerald-500/10">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
@@ -303,8 +311,8 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
         <StatCard label="This Week" stats={week} />
         <StatCard label="This Month" stats={month} />
       </div>
-      <div className="mt-4 flex items-start gap-2 p-2 rounded-lg bg-zinc-900/30">
-        <div className="w-1 h-1 rounded-full bg-zinc-700 mt-1.5" />
+      <div className="mt-4 flex items-start gap-2 p-2 rounded-lg bg-[var(--color-card)] border border-[rgba(255,255,255,0.06)]">
+        <div className="w-1 h-1 rounded-full bg-zinc-700 light:bg-zinc-200 mt-1.5" />
         <p className="text-[10px] text-zinc-500 leading-relaxed italic">
           Based on your average daily usage of {formatTokens(week.avgDaily)} tokens. 
           Limits are estimated free tier allowances — actual limits may vary by provider.
@@ -320,7 +328,7 @@ const TAB_KEYS: TabKey[] = ['overview', 'projects', 'ai', 'git', 'environment', 
 
 const TAB_HOVER = { scale: 1.02 };
 const TAB_TAP = { scale: 0.98 };
-const TAB_LAYOUT_SPRING = { type: 'spring' as const, stiffness: 380, damping: 30 };
+const TAB_LAYOUT = { type: "tween" as const, duration: 200, ease: "easeOutExpo" };
 
 const TABS: Array<{ key: TabKey; label: string; icon: any }> = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -1298,7 +1306,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
   return (
     <PageShell page="ide-projects" className="max-w-7xl mx-auto space-y-6 overflow-y-auto">
-      <CurrentCanvas accent="#6366f1" render={renderMechanical} />
+      <CurrentCanvas accent="#06b6d4" render={renderMechanical} />
       <div className="relative z-10">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1306,71 +1314,80 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           <p className="text-zinc-500 mt-1">Track your development environment, AI tools, and project metrics</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          <Button
             onClick={() => setShowSetupModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors duration-150"
+            variant="outline"
+            className="flex items-center gap-2"
             title="Setup guide"
           >
             <HelpCircle className="w-4 h-4" />
             Guide
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div data-tutorial="ide.tabs" className="flex gap-1 p-1 bg-zinc-900/50 rounded-xl w-fit">
-        {TABS.map(({ key, label, icon: Icon }) => {
-          const isActive = activeTab === key;
-          return (
-            <motion.button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              whileHover={TAB_HOVER}
-              whileTap={TAB_TAP}
-              className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors duration-150 ${
-                isActive ? 'text-white' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {isActive && (
-                <motion.span
-                  layoutId="ide-tab-active"
-                  className="absolute inset-0 bg-zinc-800 rounded-xl"
-                  transition={TAB_LAYOUT_SPRING}
-                />
-              )}
-              <span className="relative z-10 flex items-center gap-2">
-                <Icon className="w-4 h-4" />
-                {label}
-              </span>
-            </motion.button>
-          );
-        })}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+        <TabsList className="flex gap-1 p-1 bg-[var(--color-card)] rounded-lg w-fit">
+          {TABS.map(({ key, label, icon: Icon }) => {
+            const isActive = activeTab === key;
+            return (
+              <TabsTrigger
+                key={key}
+                value={key}
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                  isActive ? 'text-white' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="ide-tab-active"
+                    className="absolute inset-0 bg-zinc-800 light:bg-zinc-100 rounded-lg"
+                    transition={TAB_LAYOUT}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-2">
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </Tabs>
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (
-        <div data-section="ide.overview" className="space-y-6">
+        <div data-section="ide.overview" className="space-y-6 relative z-10">
           {/* Live Pulse Grid - Replaces old navigate-away cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {[
-              { label: 'Live Coding', value: `+${fmtNum(codeActivity?.totalLinesAdded || 0)}`, sub: `-${fmtNum(codeActivity?.totalLinesRemoved || 0)} lines · ${fmtSec((codeActivity?.totalDurationMs || 0) / 1000)} active`, icon: Code2, color: '#10b981', bg: 'bg-emerald-500/10' },
-              { label: 'AI Pulse', value: <TokenValue value={overview?.aiUsage?.totalTokens || 0} />, sub: <CostValue value={overview?.aiUsage?.totalCost || 0} />, icon: Sparkles, color: '#a855f7', bg: 'bg-violet-500/10' },
-              { label: 'Git Velocity', value: overview?.commits?.totalCommits || 0, sub: `commits this period`, icon: GitCommit, color: '#f59e0b', bg: 'bg-amber-500/10' },
-              { label: 'Top Tool', value: topToolName || '—', icon: Cpu, color: '#3b82f6', bg: 'bg-blue-500/10' },
-            ].map((stat, idx) => (
-              <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}
-                className="bg-zinc-900/60 backdrop-blur-xl border border-zinc-800/50 rounded-xl p-4 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center flex-shrink-0`}>
-                  <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xl font-semibold tabular-nums tracking-tight text-white truncate">{stat.value}</div>
-                  <div className="text-xs text-zinc-400 truncate">{stat.label}</div>
-                  {stat.sub && <div className="text-[10px] text-zinc-500 truncate mt-0.5">{stat.sub}</div>}
-                </div>
-              </motion.div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[0, 1, 2, 3].map(idx => (
+                <Skeleton key={idx} className="h-24 bg-[var(--color-card)] rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[
+                { label: 'Live Coding', value: codeActivity?.totalLinesAdded == null ? '—' : <NumberTicker value={codeActivity.totalLinesAdded} />, sub: codeActivity == null ? '—' : `-${fmtNum(codeActivity.totalLinesRemoved || 0)} lines · ${codeActivity.totalDurationMs == null ? '—' : fmtSec(codeActivity.totalDurationMs / 1000) + ' active'}`, icon: Code2, color: '#10b981', bg: 'bg-emerald-500/10' },
+                { label: 'AI Pulse', value: overview?.aiUsage?.totalTokens == null ? '—' : <NumberTicker value={overview.aiUsage.totalTokens} />, sub: overview?.aiUsage?.totalCost == null ? '—' : <CostValue value={overview.aiUsage.totalCost} />, icon: Sparkles, color: '#a855f7', bg: 'bg-violet-500/10' },
+                { label: 'Git Velocity', value: overview?.commits?.totalCommits == null ? '—' : <NumberTicker value={overview.commits.totalCommits} />, sub: 'commits this period', icon: GitCommit, color: '#f59e0b', bg: 'bg-amber-500/10' },
+                { label: 'Top Tool', value: topToolName || '—', icon: Cpu, color: '#3b82f6', bg: 'bg-blue-500/10' },
+              ].map((stat, idx) => (
+                <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}
+                  className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-4 flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center flex-shrink-0`}>
+                    <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xl font-semibold tabular-nums tracking-tight text-white truncate">{stat.value}</div>
+                    <div className="text-xs text-zinc-400 truncate">{stat.label}</div>
+                    {stat.sub && <div className="text-[10px] text-zinc-500 truncate mt-0.5">{stat.sub}</div>}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
 
           {/* AI & Projects Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1380,7 +1397,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5"
+              className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-5"
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -1480,7 +1497,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
                   <div className="space-y-3">
                     {aiAgents.filter(a => a.status !== 'inactive').map((agent) => (
-                      <div key={agent.id} className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-xl">
+                      <div key={agent.id} className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: agent.color + '22' }}>
                             <Code2 className="w-4 h-4" style={{ color: agent.color }} />
@@ -1490,9 +1507,14 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             <div className="text-xs text-zinc-500">{agent.sessions} sessions &middot; {agent.messageCount} msgs</div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-emerald-400"><CostValue value={agent.cost} /></div>
-                          <div className="text-xs text-zinc-500"><CostValue value={agent.cost} /></div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={agent.status === 'active' ? 'default' : 'secondary'} className={agent.status === 'active' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-zinc-700 text-zinc-400 border-zinc-600'}>
+                            {agent.status}
+                          </Badge>
+                          <div className="text-right">
+                            <div className="text-sm font-medium text-emerald-400"><CostValue value={agent.cost} /></div>
+                            <div className="text-xs text-zinc-500"><TokenValue value={agent.tokens} /></div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1512,7 +1534,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5"
+              className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-5"
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -1535,7 +1557,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   {overview.projects.slice(0, 5).map((project: any) => (
                     <div
                       key={project.id}
-                      className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-xl hover:bg-zinc-900/70 transition-colors"
+                      className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg hover:bg-[rgba(255,255,255,0.04)] transition-colors"
                     >
                       <div>
                         <div className="text-sm font-medium text-white">{project.name}</div>
@@ -1587,7 +1609,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
         >
           {/* Toolbar */}
           <div className="flex items-center gap-2">
-            <button
+            <Button
               onClick={async () => {
                 setScanning(true);
                 try {
@@ -1600,22 +1622,24 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 setScanning(false);
               }}
               disabled={scanning}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              variant="outline"
+              className="flex items-center gap-2"
             >
               <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
               {scanning ? 'Scanning...' : 'Scan Environment'}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={async () => {
                 if (!window.confirm('WARNING: This will permanently delete all detected tools and re-scan your system. Are you sure?')) return;
                 const result = await window.deskflowAPI!.resetTools();
                 if (result.success) await loadOverview();
               }}
-              className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg text-sm transition"
+              variant="ghost"
+              className="flex items-center gap-2 text-zinc-400 hover:text-white"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Reset Tools
-            </button>
+            </Button>
           </div>
 
           {/* IDEs section */}
@@ -1627,9 +1651,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             {overview?.ides && overview.ides.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {overview.ides.map((ide: any, idx: number) => (
-                  <div key={ide.id} className="glass rounded-xl p-4 flex items-center justify-between">
+                  <MagicCard key={ide.id} className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
                         <Monitor className="w-5 h-5 text-blue-400" />
                       </div>
                       <div>
@@ -1637,8 +1661,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         {ide.version && <div className="text-xs text-zinc-500">v{ide.version}</div>}
                       </div>
                     </div>
-                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-lg">Active</span>
-                  </div>
+                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Active</Badge>
+                  </MagicCard>
                 ))}
               </div>
             ) : (
@@ -1654,27 +1678,28 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             </h3>
             {overview?.tools && overview.tools.length > 0 ? (
               <div className="space-y-2">
+                <Separator className="my-4" />
                 {Object.entries(groupToolsByCategory()).map(([category, tools], idx) => {
                   const Icon = CATEGORY_ICONS[category] || Package;
                   const label = CATEGORY_LABELS[category] || category;
                   const isExpanded = expandedCategories.has(category);
                   return (
-                    <div key={category} className="glass rounded-xl overflow-hidden">
+                    <div key={category} className="glass rounded-lg overflow-hidden">
                       <button
                         onClick={() => toggleCategory(category)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-zinc-900/30 transition-colors"
+                        className="w-full flex items-center justify-between p-4 hover:bg-[rgba(255,255,255,0.04)] transition-colors"
                       >
                         <div className="flex items-center gap-3">
                           <Icon className="w-5 h-5 text-zinc-400" />
                           <span className="text-white font-medium">{label}</span>
-                          <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded-lg">{(tools as any[]).length}</span>
+                          <Badge variant="secondary" className="bg-zinc-800 light:bg-zinc-100 text-zinc-400 text-xs">{(tools as any[]).length}</Badge>
                         </div>
                         <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </button>
                       {isExpanded && (
                         <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                           {(tools as any[]).map((tool: any) => (
-                            <div key={tool.id} className="flex items-center justify-between p-2.5 bg-zinc-900/30 rounded-xl">
+                            <div key={tool.id} className="flex items-center justify-between p-2.5 bg-[rgba(255,255,255,0.04)] rounded-lg">
                               <span className="text-sm text-zinc-300">{tool.name}</span>
                               {tool.version && <span className="text-xs text-zinc-500 font-mono">v{tool.version}</span>}
                             </div>
@@ -1727,9 +1752,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 }
               }
             }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl transition-colors duration-150"
+          
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--page-accent)] hover:opacity-90 text-zinc-950 font-medium rounded-lg transition-colors duration-150"
+            aria-label="Add new project"
           >
 <Plus className="w-4 h-4" />
             Add Project
@@ -1749,7 +1774,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="glass rounded-xl overflow-hidden"
+                  className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg overflow-hidden"
                 >
                   {/* Card Header - Always Visible */}
                   <div className="p-5">
@@ -1768,25 +1793,31 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEditProjectClick(project)}
+                          aria-label={`Edit ${project.name}`}
                           className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => toggleProjectExpand(project)}
-                          className={`p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors duration-150 ${isExpanded ? 'rotate-180' : ''}`}
+                          aria-label={isExpanded ? `Collapse ${project.name}` : `Expand ${project.name}`}
+                          className={`p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 light:bg-zinc-200 rounded-lg transition-colors duration-150 ${isExpanded ? 'rotate-180' : ''}`}
                         >
                           <ChevronDown className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteClick(project)}
+                          aria-label={`Delete ${project.name}`}
                           className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
+                  </div>
 
+                  {isExpanded && (
+                  <div className="px-5 pb-5 space-y-4">
                     {/* Quick Actions Row */}
                     <div className="flex items-center gap-3 mt-4">
                       {(() => {
@@ -1794,7 +1825,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         return isRunning ? (
                           <button
                             onClick={() => handleStopProject(project.id)}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-xl transition-colors duration-150"
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg transition-colors duration-150"
                           >
                             <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
                             <span className="text-sm font-medium">Stop</span>
@@ -1803,7 +1834,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           <button
                             onClick={() => handleRunProject(project)}
                             disabled={runningProjectLoading === project.id}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-xl transition-colors duration-150 disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg transition-colors duration-150 disabled:opacity-50"
                           >
                             {runningProjectLoading === project.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1822,7 +1853,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             handleEditProjectClick(project);
                           }
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 rounded-xl transition-colors duration-150"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 rounded-lg transition-colors duration-150"
                       >
                         <Monitor className="w-4 h-4" />
                         <span className="text-sm font-medium">{project.default_ide ? 'Open in IDE' : 'Set IDE'}</span>
@@ -1833,7 +1864,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           setWorkspaceProject(project);
                           setIsWorkspaceOpen(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600/50 text-zinc-300 rounded-xl transition-colors duration-150"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 hover:bg-zinc-700 light:bg-zinc-200 border border-zinc-600 light:border-zinc-300/50 text-zinc-300 rounded-lg transition-colors duration-150"
                       >
                         <Terminal className="w-4 h-4" />
                         <span className="text-sm font-medium">Open Workspace</span>
@@ -1862,7 +1893,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                   <span className={`px-2 py-1 text-xs rounded-lg inline-flex items-center gap-1.5 ${
                                     i === 0
                                       ? 'bg-emerald-500/20 text-emerald-400'
-                                      : 'bg-zinc-700/50 text-zinc-400'
+                                      : 'bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400'
                                   }`}>
                                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
                                       backgroundColor: i === 0 ? '#34d399' : i === 1 ? '#60a5fa' : '#a78bfa'
@@ -1871,7 +1902,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     <span className="text-[10px] opacity-70">{l.percentage}%</span>
                                   </span>
                                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10">
-                                    <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-2 shadow-xl whitespace-nowrap">
+                                    <div className="bg-zinc-800 light:bg-zinc-100 border border-zinc-700 light:border-zinc-300 rounded-lg p-2 shadow-xl whitespace-nowrap">
                                       {langs.slice(0, 5).map(l => (
                                         <div key={l.language} className="flex items-center justify-between gap-3 text-[11px]">
                                           <span className="text-zinc-300">{l.language}</span>
@@ -1904,7 +1935,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         }
                         if (isLoading) {
                           return (
-                            <span className="px-2 py-1 bg-zinc-700/30 text-zinc-500 text-xs rounded-lg flex items-center gap-1">
+                            <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/30 text-zinc-500 text-xs rounded-lg flex items-center gap-1">
                               <Loader2 className="w-3 h-3 animate-spin" />
                               Detecting...
                             </span>
@@ -1923,12 +1954,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         </span>
                       )}
                       {details?.tools?.length > 0 && (
-                        <span className="px-2 py-1 bg-zinc-700/50 text-zinc-400 text-xs rounded-lg">
+                        <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400 text-xs rounded-lg">
                           {details.tools.length} tools
                         </span>
                       )}
                       {details?.sessions?.length > 0 && (
-                        <span className="px-2 py-1 bg-zinc-700/50 text-zinc-400 text-xs rounded-lg">
+                        <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400 text-xs rounded-lg">
                           {details.sessions.length} sessions
                         </span>
                       )}
@@ -1944,6 +1975,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       )}
                     </div>
                   </div>
+                  )}
 
                   {/* Expanded Content */}
                   <AnimatePresence>
@@ -1953,7 +1985,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="border-t border-zinc-800 bg-zinc-900/30"
+                        className="border-t border-zinc-800 light:border-zinc-200 bg-[rgba(255,255,255,0.04)]"
                       >
                         <div className="p-5 space-y-5">
                           {isLoading ? (
@@ -1965,22 +1997,22 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             <>
                               {/* Health & Sessions Row */}
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div className="p-3 bg-zinc-800/50 rounded-xl">
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Health Score</div>
                                   <div className="text-xl font-bold text-white">{details.health?.healthScore || 0}<span className="text-sm text-zinc-500">/100</span></div>
                                   <div className="text-xs text-zinc-500 mt-1">{details.health?.activityLevel || 'unknown'}</div>
                                 </div>
-                                <div className="p-3 bg-zinc-800/50 rounded-xl">
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Terminal Sessions</div>
                                   <div className="text-xl font-bold text-white">{details.sessions?.length || 0}</div>
                                   <div className="text-xs text-zinc-500 mt-1">total</div>
                                 </div>
-                                <div className="p-3 bg-zinc-800/50 rounded-xl">
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Version Control</div>
                                   <div className="text-sm font-medium text-white truncate">{project.vcs_type || 'None detected'}</div>
                                   <div className="text-xs text-zinc-500 mt-1">{project.repository_url ? 'Connected' : 'No remote'}</div>
                                 </div>
-                                <div className="p-3 bg-zinc-800/50 rounded-xl">
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Repository</div>
                                   <div className="text-sm font-medium text-white truncate">{project.repository_url ? project.repository_url.split('/').slice(-2).join('/') : 'Not linked'}</div>
                                   <div className="text-xs text-zinc-500 mt-1">{project.repository_url ? 'Connected' : 'None'}</div>
@@ -1996,7 +2028,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                   </h4>
                                   <div className="space-y-2">
                                     {details.sessions.slice(0, 3).map((session: any) => (
-                                      <div key={session.id} className="flex items-center justify-between p-3 bg-zinc-800/30 rounded-lg">
+                                      <div key={session.id} className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <Terminal className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                                           <span className="text-sm text-zinc-300 truncate">{session.topic || session.agent || 'Untitled'}</span>
@@ -2021,7 +2053,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     {details.presets.map((preset: any) => (
                                       <button
                                         key={preset.id}
-                                        className="px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 text-zinc-300 text-xs rounded-lg transition-colors"
+                                        className="px-3 py-1.5 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 text-xs rounded-lg transition-colors"
                                       >
                                         {preset.name}
                                       </button>
@@ -2039,7 +2071,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 {details.tools && details.tools.length > 0 ? (
                                   <div className="flex flex-wrap gap-2">
                                     {details.tools.map((tool: any) => (
-                                      <span key={tool.id} className="px-2 py-1 bg-zinc-800 text-zinc-300 text-xs rounded-lg">
+                                      <span key={tool.id} className="px-2 py-1 bg-zinc-800 light:bg-zinc-100 text-zinc-300 text-xs rounded-lg">
                                         {tool.name}
                                       </span>
                                     ))}
@@ -2066,7 +2098,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="glass rounded-xl"
+              className="glass rounded-lg"
             >
               <EmptyState
                 icon={<Terminal className="w-16 h-16" />}
@@ -2111,23 +2143,22 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <select
                 value={selectedProject || ''}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="px-4 py-2 bg-zinc-900 text-white rounded-xl border border-zinc-700 focus:border-violet-500 focus:outline-none"
+                className="px-4 py-2 bg-[var(--color-card)] text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
               >
                 {overview?.projects?.map((project: any) => (
                   <option key={project.id} value={project.id}>{project.name}</option>
                 ))}
               </select>
             </div>
-            <motion.button
+            <Button
               onClick={handleSyncGit}
               disabled={syncingGit || !selectedProject}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl transition-colors disabled:opacity-50"
+              variant="outline"
+              className="flex items-center gap-2"
             >
               <GitCommit className={`w-4 h-4 ${syncingGit ? 'animate-spin' : ''}`} />
               {syncingGit ? 'Syncing...' : 'Sync Commits'}
-            </motion.button>
+            </Button>
           </GlassCard>
 
           {/* DORA Metrics */}
@@ -2135,7 +2166,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-xl p-5"
+              className="glass rounded-lg p-5"
             >
               <div className="flex items-center gap-3 mb-6">
                 <Zap className="w-5 h-5 text-amber-400" />
@@ -2151,7 +2182,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   { label: 'MTTR', value: doraMetrics.meanTimeToRecoveryHours, sub: '~1 day est.' },
                   { label: 'Change Failure', value: doraMetrics.changeFailureRate, sub: `${doraMetrics.changeFailureRate || 0}%` },
                 ].map((metric, idx) => (
-                  <div key={idx} className="bg-zinc-900/50 rounded-xl p-4 text-center">
+                  <div key={idx} className="bg-[var(--color-card)] rounded-lg p-4 text-center">
                     <div className={`text-2xl font-bold mb-1 ${
                       metric.value === 'elite' ? 'text-emerald-400' :
                       metric.value === 'high' ? 'text-blue-400' :
@@ -2198,7 +2229,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="glass rounded-xl p-5"
+                  className="glass rounded-lg p-5"
                 >
                   <div className="flex items-center gap-3 mb-4">
                     <GitCommit className="w-5 h-5 text-amber-400" />
@@ -2253,7 +2284,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 }}
-                  className="glass rounded-xl p-5"
+                  className="glass rounded-lg p-5"
                 >
                   <div className="flex items-center gap-3 mb-4">
                     <TrendingUp className="w-5 h-5 text-emerald-400" />
@@ -2331,10 +2362,10 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className="glass rounded-xl p-5"
+                className="glass rounded-lg p-5"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
+                  <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center`}>
                     <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
                   </div>
                 </div>
@@ -2350,7 +2381,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass rounded-xl p-5"
+            className="glass rounded-lg p-5"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -2371,9 +2402,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     } catch { setGitDiff('Failed to load diff'); }
                     setLoadingDiff(false);
                   }}
-                  whileHover={{ scale: 1.02 }}
+                  
                   whileTap={{ scale: 0.98 }}
-                  className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
+                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
                 >
                   {loadingDiff ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Show Diff'}
                 </motion.button>
@@ -2404,7 +2435,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <div key={commit.id} className="group">
                       <motion.div
                         onClick={() => setExpandedCommit(isExpanded ? null : commit.id)}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-zinc-800/50 cursor-pointer transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 cursor-pointer transition-colors"
                       >
                         <div className="w-2 h-2 rounded-full bg-amber-500/60 flex-shrink-0" />
                         <span className="font-mono text-xs text-zinc-500 w-16 flex-shrink-0">
@@ -2435,7 +2466,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className="ml-8 pl-4 border-l border-zinc-800 py-3 space-y-2">
+                            <div className="ml-8 pl-4 border-l border-zinc-800 light:border-zinc-200 py-3 space-y-2">
                               <div className="flex items-center gap-4 text-xs">
                                 <span className="text-zinc-500">
                                   <span className="text-zinc-600">Author:</span> {commit.author}
@@ -2453,7 +2484,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 <span className="text-zinc-600">SHA:</span> <span className="font-mono">{commit.sha}</span>
                               </div>
                               {commit.message?.includes('\n') && (
-                                <div className="text-xs text-zinc-400 bg-zinc-900/50 rounded-lg p-3 mt-1 whitespace-pre-wrap">
+                                <div className="text-xs text-zinc-400 bg-[var(--color-card)] rounded-lg p-3 mt-1 whitespace-pre-wrap">
                                   {commit.message}
                                 </div>
                               )}
@@ -2473,7 +2504,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-xl p-5"
+              className="glass rounded-lg p-5"
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
@@ -2485,8 +2516,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
                 <motion.button
                   onClick={() => setGitDiff(null)}
-                  whileHover={{ scale: 1.02 }}
-                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 light:bg-zinc-100 text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </motion.button>
@@ -2495,16 +2526,16 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <textarea
                 value={gitDiff}
                 onChange={(e) => setGitDiff(e.target.value)}
-                className="w-full h-40 bg-zinc-900/50 text-zinc-300 text-xs font-mono rounded-lg p-3 border border-zinc-800 focus:border-violet-500 focus:outline-none resize-y"
+                className="w-full h-40 bg-[var(--color-card)] text-zinc-300 text-xs font-mono rounded-lg p-3 border border-zinc-800 light:border-zinc-200 focus:border-violet-500 focus:outline-none resize-y"
                 placeholder="No changes detected..."
               />
 
               <div className="flex items-center justify-end gap-2 mt-3">
                 <motion.button
                   onClick={() => navigator.clipboard.writeText(gitDiff)}
-                  whileHover={{ scale: 1.02 }}
+                  
                   whileTap={{ scale: 0.98 }}
-                  className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
+                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
                 >
                   Copy Diff
                 </motion.button>
@@ -2540,7 +2571,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     setGeneratingMsg(false);
                   }}
                   disabled={generatingMsg}
-                  whileHover={{ scale: 1.02 }}
+                  
                   whileTap={{ scale: 0.98 }}
                   className="flex items-center gap-2 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
@@ -2550,14 +2581,14 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               </div>
 
               {generatedCommitMsg && (
-                <div className="mt-3 p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+                <div className="mt-3 p-3 bg-[var(--color-card)] border border-zinc-800 light:border-zinc-200 rounded-lg">
                   <div className="text-xs text-zinc-600 mb-1">Result:</div>
                   <div className="text-sm text-zinc-300 whitespace-pre-wrap">{generatedCommitMsg}</div>
                   {generatedCommitMsg.startsWith('Prompt sent') && (
                     <motion.button
                       onClick={() => navigator.clipboard.writeText(generatedCommitMsg)}
-                      whileHover={{ scale: 1.02 }}
-                      className="mt-2 px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded transition-colors"
+                      
+                      className="mt-2 px-2 py-1 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-400 rounded transition-colors"
                     >
                       Copy Note
                     </motion.button>
@@ -2646,12 +2677,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-zinc-900 rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden border border-zinc-700"
+              className="bg-[var(--color-card)] rounded-lg w-full max-w-3xl max-h-[85vh] overflow-hidden border border-zinc-700 light:border-zinc-300"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-5 border-b border-zinc-700 flex items-center justify-between sticky top-0 bg-zinc-900 z-10">
+              <div className="p-5 border-b border-zinc-700 light:border-zinc-300 flex items-center justify-between sticky top-0 bg-[var(--color-card)] z-10">
                 <h2 className="text-xl font-semibold text-white flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
                     <HelpCircle className="w-5 h-5 text-white" />
                   </div>
                   Project Tracking Setup Guide
@@ -2668,7 +2699,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               localStorage.setItem('ide-projects-onboarding-seen', 'true');
                             }
                           }}
-                          className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-zinc-600 light:border-zinc-300 bg-zinc-800 light:bg-zinc-100 text-blue-500 focus:ring-blue-500"
                         />
                       </VoiceInputWrapper>
                       Don't show again
@@ -2682,7 +2713,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         setShowOnboarding(false);
                       }
                     }}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 light:bg-zinc-100 text-zinc-400 hover:text-white transition-colors"
                   >
                     ×
                   </button>
@@ -2691,7 +2722,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
               <div className="p-5 overflow-y-auto max-h-[calc(85vh-88px)] space-y-6">
                 {showOnboarding && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-4">
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
                     <p className="text-blue-300 text-sm"> Welcome! This guide will help you set up project tracking. Follow the steps below to get started.</p>
                   </div>
                 )}
@@ -2699,7 +2730,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 1: Add Project */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-emerald-400">1</span>
                     </div>
                     <div className="flex-1">
@@ -2727,10 +2758,10 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           (Optional) Add your GitHub repository URL
                         </p>
                       </div>
-                      <div className="mt-3 p-3 bg-zinc-800/50 rounded-lg">
+                      <div className="mt-3 p-3 bg-[var(--color-card)] rounded-lg">
                         <p className="text-xs text-zinc-500 mb-1">Example paths:</p>
                         <p className="text-xs text-emerald-400 font-mono">✓ C:\Projects\MyApp</p>
-                        <p className="text-xs text-red-400 font-mono">✗ C:\Projects\MyApp\myapp.exe</p>
+                      <p className="text-xs text-red-400 font-mono">✗ C:\Projects\MyApp\myapp.exe</p>
                       </div>
                     </div>
                   </div>
@@ -2739,7 +2770,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 2: AI Usage Tracking */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-violet-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-violet-400">2</span>
                     </div>
                     <div className="flex-1">
@@ -2754,7 +2785,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           { name: 'Cursor AI', path: '%APPDATA%\\Cursor\\', color: '#a855f7' },
                           { name: 'Codex CLI', path: '~/.codex/', color: '#10b981' },
                         ].map((agent) => (
-                          <div key={agent.name} className="flex items-center gap-3 p-3 bg-zinc-800/50 rounded-xl">
+                          <div key={agent.name} className="flex items-center gap-3 p-3 bg-[var(--color-card)] rounded-lg">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: agent.color + '22' }}>
                               <Sparkles className="w-4 h-4" style={{ color: agent.color }} />
                             </div>
@@ -2780,20 +2811,20 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 3: Git Tracking */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-amber-400">3</span>
                     </div>
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-white mb-3">Track Git Commits & Metrics</h3>
                       <div className="space-y-4">
-                        <div className="p-4 bg-zinc-800/50 rounded-xl">
+                        <div className="p-4 bg-[var(--color-card)] rounded-lg">
                           <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
                             <GitBranch className="w-4 h-4 text-zinc-400" />
                             Local Repositories
                           </h4>
                           <p className="text-sm text-zinc-400">Add your project (must contain .git folder), then click "Sync Commits" to import commit history, additions, and deletions.</p>
                         </div>
-                        <div className="p-4 bg-zinc-800/50 rounded-xl">
+                        <div className="p-4 bg-[var(--color-card)] rounded-lg">
                           <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
                             <ExternalLink className="w-4 h-4 text-zinc-400" />
                             GitHub Repositories
@@ -2808,7 +2839,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 4: IDE Detection */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-blue-400">4</span>
                     </div>
                     <div className="flex-1">
@@ -2823,18 +2854,18 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           { name: 'Cursor', detected: overview?.ides?.some((i: any) => i.name === 'Cursor') },
                           { name: 'Google Antigravity', detected: overview?.ides?.some((i: any) => i.name?.includes('Antigravity')) },
                         ].map((ide) => (
-                          <div key={ide.name} className="flex items-center gap-2 p-2 bg-zinc-800/50 rounded-lg">
+                          <div key={ide.name} className="flex items-center gap-2 p-2 bg-[var(--color-card)] rounded-lg">
                             <Monitor className="w-4 h-4 text-zinc-500" />
                             <span className="text-sm text-zinc-300">{ide.name}</span>
                             {ide.detected ? (
                               <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />
                             ) : (
-                              <span className="w-4 h-4 rounded-full border border-zinc-600 ml-auto" />
+                              <span className="w-4 h-4 rounded-full border border-zinc-600 light:border-zinc-300 ml-auto" />
                             )}
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4 p-3 bg-zinc-800/50 rounded-lg">
+                      <div className="mt-4 p-3 bg-[var(--color-card)] rounded-lg">
                         <p className="text-sm text-zinc-400">Also detects: Git, Node.js, Python, Docker, npm, yarn, and more tools.</p>
                       </div>
                     </div>
@@ -2854,9 +2885,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       { label: 'Click "Sync AI Usage" to import AI data', done: false },
                       { label: 'Click "Scan Environment" to detect your setup', done: overview?.ides && overview.ides.length > 0 },
                     ].map((item, idx) => (
-                      <label key={idx} className="flex items-center gap-3 p-3 hover:bg-zinc-800/30 rounded-lg cursor-pointer transition-colors">
+                      <label key={idx} className="flex items-center gap-3 p-3 hover:bg-zinc-800 light:bg-zinc-100/30 rounded-lg cursor-pointer transition-colors">
                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                          item.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600'
+                          item.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 light:border-zinc-300'
                         }`}>
                           {item.done && <CheckCircle2 className="w-3 h-3 text-white" />}
                         </div>
@@ -2887,7 +2918,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-zinc-900 rounded-xl p-5 border border-zinc-700 max-w-sm w-full mx-4"
+              className="bg-[var(--color-card)] rounded-lg p-5 border border-zinc-700 light:border-zinc-300 max-w-sm w-full mx-4"
             >
               <div className="flex flex-col items-center text-center">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
@@ -2895,7 +2926,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">Scanning Environment</h3>
                 <p className="text-zinc-400 text-sm mb-4">Detecting IDEs and development tools...</p>
-                <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-zinc-800 light:bg-zinc-100 rounded-full h-2 overflow-hidden">
                   <motion.div
                     className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
                     initial={{ width: '0%' }}
@@ -2924,7 +2955,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 max-w-4xl w-full max-h-[85vh] overflow-y-auto"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-4xl w-full max-h-[85vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -2939,7 +2970,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
                 <button
                   onClick={() => setSelectedAgentDetail(null)}
-                  className="p-2 hover:bg-zinc-800 rounded-lg transition"
+                  className="p-2 hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition"
                 >
                   <X className="w-5 h-5 text-zinc-400" />
                 </button>
@@ -2947,10 +2978,10 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
               {/* Timeline Selector */}
               <div className="flex items-center justify-center mb-5">
-                <div className="flex bg-zinc-800 rounded-full p-1 text-xs">
+                <div className="flex bg-zinc-800 light:bg-zinc-100 rounded-full p-1 text-xs">
                   <button
                     onClick={() => { setModalExpandedPeriod(null); setModalPeriod('today'); }}
-                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'today' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'today' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                   >
                     Today
                   </button>
@@ -2959,13 +2990,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('week'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           Week
                         </button>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('7day'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '7day' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '7day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           7 Day
                         </button>
@@ -2973,7 +3004,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     ) : (
                       <button
                         onClick={() => setModalExpandedPeriod('week')}
-                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' || modalPeriod === '7day' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' || modalPeriod === '7day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                       >
                         {modalPeriod === '7day' ? '7 Day' : 'Week'}
                       </button>
@@ -2984,13 +3015,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('month'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           Month
                         </button>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('30day'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '30day' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '30day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           30d
                         </button>
@@ -2998,7 +3029,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     ) : (
                       <button
                         onClick={() => setModalExpandedPeriod('month')}
-                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' || modalPeriod === '30day' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' || modalPeriod === '30day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                       >
                         {modalPeriod === '30day' ? '30d' : 'Month'}
                       </button>
@@ -3006,7 +3037,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </div>
                   <button
                     onClick={() => { setModalExpandedPeriod(null); setModalPeriod('all'); }}
-                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'all' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'all' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                   >
                     All Time
                   </button>
@@ -3046,34 +3077,34 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   <>
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-xs text-zinc-400 font-medium">{periodLabel}</span>
-                      <div className="h-px flex-1 bg-zinc-800" />
+                      <div className="h-px flex-1 bg-zinc-800 light:bg-zinc-100" />
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-2">
-                      <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">Total Tokens</div>
                         <div className="text-base font-semibold text-white"><TokenValue value={periodTokens} /></div>
                       </div>
-                      <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">Input (You)</div>
                         <div className="text-base font-semibold text-blue-400"><TokenValue value={periodTokensIn} /></div>
                       </div>
-                      <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">Output (AI)</div>
                         <div className="text-base font-semibold text-emerald-400"><TokenValue value={periodTokensOut} /></div>
                       </div>
-                      <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">In:Out Ratio</div>
                         <div className="text-base font-semibold text-amber-400 font-mono">
                           {periodTokensIn > 0 ? `1:${(periodTokensOut / periodTokensIn).toFixed(1)}` : '∞'}
                         </div>
                       </div>
-                      <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">Input %</div>
                         <div className="text-base font-semibold text-blue-400">
                           {periodTokens > 0 ? `${((periodTokensIn / periodTokens) * 100).toFixed(1)}%` : 'N/A'}
                         </div>
                       </div>
-                      <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">Output %</div>
                         <div className="text-base font-semibold text-emerald-400">
                           {periodTokens > 0 ? `${((periodTokensOut / periodTokens) * 100).toFixed(1)}%` : 'N/A'}
@@ -3081,19 +3112,19 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       </div>
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-4 gap-3 mb-6">
-                      <div className="bg-zinc-800/30 rounded-xl p-2.5 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
                         <div className="text-[10px] text-zinc-500 mb-0.5">Messages</div>
                         <div className="text-sm font-semibold text-blue-400">{periodMessages.toLocaleString()}</div>
                       </div>
-                      <div className="bg-zinc-800/30 rounded-xl p-2.5 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
                         <div className="text-[10px] text-zinc-500 mb-0.5">Cost</div>
                         <div className="text-sm font-semibold text-emerald-400"><CostValue value={periodCost} /></div>
                       </div>
-                      <div className="bg-zinc-800/30 rounded-xl p-2.5 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
                         <div className="text-[10px] text-zinc-500 mb-0.5">Sessions</div>
                         <div className="text-sm font-semibold text-violet-400">{periodSessions.toLocaleString()}</div>
                       </div>
-                      <div className="bg-zinc-800/30 rounded-xl p-2.5 text-center">
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
                         <div className="text-[10px] text-zinc-500 mb-0.5">Tokens/Msg</div>
                         <div className="text-sm font-semibold text-amber-400">
                           {periodMessages > 0 ? <TokenValue value={Math.round(periodTokens / periodMessages)} /> : 'N/A'}
@@ -3112,10 +3143,10 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
                 {/* Timeline Chart */}
-                <div className="bg-zinc-800/50 rounded-xl p-4 lg:col-span-2">
+                <div className="bg-[var(--color-card)] rounded-lg p-4 lg:col-span-2">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-medium text-zinc-400">Daily Usage</h4>
-                    <div className="flex items-center gap-1 bg-zinc-900/60 rounded-lg p-0.5">
+                    <div className="flex items-center gap-1 bg-[var(--color-card)] rounded-lg p-0.5">
                       {(['tokens', 'messages', 'sessions', 'cost'] as const).map(mode => (
                         <button
                           key={mode}
@@ -3129,7 +3160,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           {mode.charAt(0).toUpperCase() + mode.slice(1)}
                         </button>
                       ))}
-                      {aiChartMode === 'tokens' && <div className="w-px h-4 bg-zinc-700" />}
+                      {aiChartMode === 'tokens' && <div className="w-px h-4 bg-zinc-700 light:bg-zinc-200" />}
                       {aiChartMode === 'tokens' && (
                         <>
                           {(['combined', 'input', 'output'] as const).map(sub => (
@@ -3140,7 +3171,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 tokenDisplayMode === sub
                                   ? sub === 'input' ? 'bg-blue-500/20 text-blue-400'
                                     : sub === 'output' ? 'bg-emerald-500/20 text-emerald-400'
-                                    : 'bg-zinc-700/50 text-zinc-300'
+                                    : 'bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-300'
                                   : 'text-zinc-500 hover:text-zinc-300'
                               }`}
                             >
@@ -3386,7 +3417,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   };
 
                   return (
-                    <div className="bg-zinc-800/50 rounded-xl p-4 lg:col-span-2">
+                    <div className="bg-[var(--color-card)] rounded-lg p-4 lg:col-span-2">
                       <h4 className="text-sm font-medium text-zinc-400 mb-3">Model Usage Timeline — {metricLabel}</h4>
                       <div className="h-48">
                         <Bar
@@ -3450,11 +3481,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   const projects = modalData?.aiUsage?.byTool?.[selectedAgentDetail.id]?.projects || [];
                   if (projects.length === 0) return null;
                   return (
-                    <div className="bg-zinc-800/50 rounded-xl p-4">
+                    <div className="bg-[var(--color-card)] rounded-lg p-4">
                       <h4 className="text-sm font-medium text-zinc-400 mb-3">Project Breakdown</h4>
                       <div className="space-y-2 max-h-48 overflow-y-auto">
                         {projects.slice(0, 10).map((proj: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between p-2 bg-zinc-900/40 rounded-lg">
+                          <div key={proj.model} className="flex items-center justify-between p-2 bg-[rgba(255,255,255,0.04)] rounded-lg">
                             <div className="min-w-0 flex-1">
                               <div className="text-xs text-zinc-300 truncate" title={proj.path}>{proj.path}</div>
                               <div className="text-[10px] text-zinc-500">{proj.sessions} sessions • {proj.messageCount} msgs</div>
@@ -3499,14 +3530,14 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   const periodLabel = modalPeriod === 'today' ? 'Today' : modalPeriod === 'week' ? 'This Week' : modalPeriod === '7day' ? '7 Days' : modalPeriod === 'month' ? 'This Month' : modalPeriod === '30day' ? '30 Days' : 'All Time';
 
                   return (
-                    <div className="bg-zinc-800/50 rounded-xl p-4">
+                    <div className="bg-[var(--color-card)] rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-medium text-zinc-400">Model Breakdown</h4>
-                        <span className="text-[10px] text-zinc-500 bg-zinc-700/50 px-2 py-0.5 rounded">{periodLabel}</span>
+                        <span className="text-[10px] text-zinc-500 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 px-2 py-0.5 rounded">{periodLabel}</span>
                       </div>
                       <div className="space-y-2 max-h-48 overflow-y-auto">
                         {models.slice(0, 10).map((m: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between p-2 bg-zinc-900/40 rounded-lg">
+                          <div key={m.model} className="flex items-center justify-between p-2 bg-[rgba(255,255,255,0.04)] rounded-lg">
                             <div className="min-w-0 flex-1">
                               <div className="text-xs text-zinc-300 truncate" title={m.model}>{m.model}</div>
                               <div className="text-[10px] text-zinc-500">{m.sessions} sessions • {m.messageCount} msgs</div>
@@ -3525,7 +3556,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               </div>
 
               {/* Agent-specific help info */}
-              <GlassCard className="p-4 bg-zinc-800/30 border-zinc-700/50">
+              <GlassCard className="p-4 bg-[var(--color-card)] border-zinc-700 light:border-zinc-300/50">
                 <h4 className="text-sm font-medium text-zinc-300 mb-2">How This Is Calculated</h4>
                 <div className="space-y-1 text-xs text-zinc-500">
                   <p><span className="text-zinc-300">Sessions:</span> Number of chat/conversation files. One JSONL file = one session.</p>
@@ -3574,7 +3605,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -3584,7 +3615,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </h3>
                 <button
                   onClick={() => setShowHelpModal(false)}
-                  className="px-3 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                  className="px-3 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 rounded-lg transition-colors"
                 >
                   Close
                 </button>
@@ -3653,7 +3684,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 max-w-lg w-full"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-lg w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -3705,7 +3736,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition text-sm ${
                                   isSel
                                     ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                    : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700 hover:border-indigo-500/50'
+                                    : 'bg-zinc-800 light:bg-zinc-100/80 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
                                 }`}
                               >
                                 <FolderOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -3743,7 +3774,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         const dirResults = customDirResults[dir];
                         const isLoading = scanningDirs;
                         return (
-                          <div key={dir} className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-2">
+                          <div key={dir} className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-2">
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <span className="text-xs text-zinc-400 truncate flex-1 font-mono">{dir}</span>
                               <div className="flex items-center gap-1 shrink-0">
@@ -3792,13 +3823,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                   className={`flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-lg border transition text-xs ${
                                     isSel
                                       ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700 hover:border-indigo-500/50'
+                                      : 'bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
                                   }`}
                                 >
                                   <span className="truncate max-w-[180px]">{p.name}</span>
                                   <span className="text-[10px] text-zinc-500 flex flex-wrap gap-1">
                                     {p.languages.slice(0, 3).map(lang => (
-                                      <span key={lang} className="px-1 py-0.5 bg-zinc-900 rounded text-zinc-400 border border-zinc-700">{lang}</span>
+                                      <span key={lang} className="px-1 py-0.5 bg-[var(--color-card)] rounded text-zinc-400 border border-zinc-700 light:border-zinc-300">{lang}</span>
                                     ))}
                                     {p.languages.length > 3 && <span className="text-zinc-600">+{p.languages.length - 3}</span>}
                                   </span>
@@ -3835,7 +3866,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       setScanningDirs(false);
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg border border-dashed border-zinc-700 hover:border-indigo-500/50 transition text-sm w-full justify-center"
+                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-400 hover:text-white rounded-lg border border-dashed border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50 transition text-sm w-full justify-center"
                 >
                   <FolderOpen className="w-4 h-4" />
                   Add Directory
@@ -3850,7 +3881,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         value={newProject.name}
                         onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
                         placeholder="My Project"
-                        className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                       />
                     </VoiceInputWrapper>
                   </div>
@@ -3862,7 +3893,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         value={newProject.path}
                         onChange={(e) => setNewProject({ ...newProject, path: e.target.value })}
                         placeholder="C:\Projects\my-project"
-                        className="flex-1 px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-indigo-500 focus:outline-none"
+                        className="flex-1 px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                       />
                       <button
                         onClick={async () => {
@@ -3871,7 +3902,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             setNewProject({ ...newProject, path: result.path });
                           }
                         }}
-                        className="px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 transition"
+                        className="px-4 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition"
                         title="Browse for folder"
                       >
                         <FolderOpen className="w-5 h-5" />
@@ -3885,7 +3916,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       value={newProject.repositoryUrl}
                       onChange={(e) => setNewProject({ ...newProject, repositoryUrl: e.target.value })}
                       placeholder="https://github.com/user/repo"
-                      className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-indigo-500 focus:outline-none"
+                      className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                     />
                   </div>
                   <div>
@@ -3893,7 +3924,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <select
                       value={newProject.defaultIde}
                       onChange={(e) => setNewProject({ ...newProject, defaultIde: e.target.value })}
-                      className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-indigo-500 focus:outline-none"
+                      className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                     >
                       <option value="">Select an IDE...</option>
                       {overview?.ides?.map((ide: any) => (
@@ -3904,7 +3935,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 light:border-zinc-200">
                 <button
                   onClick={() => { setShowAddProject(false); setAddProjectError(null); setCustomDirResults({}); setSelectedQuickProjects(new Set()); }}
                   className="px-4 py-2 text-zinc-400 hover:text-white transition"
@@ -3938,7 +3969,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 max-w-lg w-full"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-lg w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -3967,7 +3998,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     type="text"
                     value={editProjectForm.name}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, name: e.target.value })}
-                    className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -3977,7 +4008,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       type="text"
                       value={editProjectForm.path}
                       onChange={(e) => setEditProjectForm({ ...editProjectForm, path: e.target.value })}
-                      className="flex-1 px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-violet-500 focus:outline-none"
+                      className="flex-1 px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                     />
                     <button
                       onClick={async () => {
@@ -3986,7 +4017,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           setEditProjectForm({ ...editProjectForm, path: result.path });
                         }
                       }}
-                      className="px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 transition"
+                      className="px-4 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition"
                       title="Browse for folder"
                     >
                       <FolderOpen className="w-5 h-5" />
@@ -4000,7 +4031,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     value={editProjectForm.repositoryUrl}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, repositoryUrl: e.target.value })}
                     placeholder="https://github.com/user/repo"
-                    className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   />
                 </div>
                 <div ref={languageDropdownRef}>
@@ -4016,19 +4047,19 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         }}
                         onFocus={() => setShowLanguageDropdown(true)}
                         placeholder="Search or type a language..."
-                        className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-violet-500 focus:outline-none pr-10"
+                        className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none pr-10"
                       />
                       <ChevronDown
                         className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
                       />
                       {showLanguageDropdown && (
-                        <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg max-h-48 overflow-y-auto">
+                        <div className="absolute z-10 w-full mt-1 bg-zinc-800 light:bg-zinc-100 border border-zinc-700 light:border-zinc-300 rounded-lg max-h-48 overflow-y-auto">
                           {filteredLanguages.length > 0 ? (
                             filteredLanguages.map(lang => (
                               <button
                                 key={lang}
                                 onClick={() => handleLanguageSelect(lang)}
-                                className={`w-full text-left px-4 py-2 text-white hover:bg-zinc-700 transition ${
+                                className={`w-full text-left px-4 py-2 text-white hover:bg-zinc-700 light:bg-zinc-200 transition ${
                                   editProjectForm.primaryLanguage === lang ? 'bg-violet-500/20 text-violet-300' : ''
                                 }`}
                               >
@@ -4046,7 +4077,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <button
                       onClick={handleDetectLanguage}
                       disabled={detectingLanguage || !editProjectForm.path}
-                      className="px-3 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Auto-detect language from project files"
                     >
                       {detectingLanguage ? (
@@ -4062,7 +4093,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   <select
                     value={editProjectForm.vcsType}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, vcsType: e.target.value })}
-                    className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   >
                     <option value="">Select VCS...</option>
                     <option value="git">Git</option>
@@ -4075,7 +4106,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   <select
                     value={editProjectForm.defaultIde}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, defaultIde: e.target.value })}
-                    className="w-full px-4 py-3 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   >
                     <option value="">Select an IDE...</option>
                     {overview?.ides?.map((ide: any) => (
@@ -4085,7 +4116,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800">
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800 light:border-zinc-200">
                 <button
                   onClick={() => { setShowEditProject(false); setEditingProject(null); setAddProjectError(null); }}
                   className="px-4 py-2 text-zinc-400 hover:text-white transition"
@@ -4119,7 +4150,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 max-w-md w-full"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-md w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center gap-4 mb-4">
@@ -4171,14 +4202,14 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl"
+              className="bg-[var(--color-card)] border border-zinc-800 light:border-zinc-200 rounded-2xl w-full max-w-lg p-6 shadow-2xl"
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-xl font-semibold text-white">Configure Run Commands</h2>
                   <p className="text-sm text-zinc-500 mt-1">{runConfigProject.name}</p>
                 </div>
-                <button onClick={() => setShowRunConfig(false)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition">
+                <button onClick={() => setShowRunConfig(false)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -4199,7 +4230,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     defaultValue={detectedScripts?.single?.command || runConfigData?.single?.command || ''}
                     id="run-cmd-single"
                     placeholder="e.g., npm run dev"
-                    className="w-full px-3 py-2.5 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-emerald-500 focus:outline-none text-sm font-mono"
+                    className="w-full px-3 py-2.5 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-emerald-500 focus:outline-none text-sm font-mono"
                   />
                   <div className="flex items-center gap-2 mt-1.5">
                     <label className="text-xs text-zinc-500">Port (optional):</label>
@@ -4208,12 +4239,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       defaultValue={detectedScripts?.single?.port || runConfigData?.single?.port || ''}
                       id="run-port-single"
                       placeholder="3000"
-                      className="w-24 px-2 py-1.5 bg-zinc-800 text-white rounded border border-zinc-700 focus:border-emerald-500 focus:outline-none text-xs font-mono"
+                      className="w-24 px-2 py-1.5 bg-zinc-800 light:bg-zinc-100 text-white rounded border border-zinc-700 light:border-zinc-300 focus:border-emerald-500 focus:outline-none text-xs font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="border-t border-zinc-800 pt-4">
+                <div className="border-t border-zinc-800 light:border-zinc-200 pt-4">
                   <p className="text-xs text-zinc-500 mb-3">Or use separate frontend/backend commands:</p>
                   <div className="space-y-3">
                     <div>
@@ -4223,14 +4254,14 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         defaultValue={detectedScripts?.frontend?.command || runConfigData?.frontend?.command || ''}
                         id="run-cmd-frontend"
                         placeholder="e.g., npm run dev"
-                        className="w-full px-3 py-2 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                        className="w-full px-3 py-2 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-blue-500 focus:outline-none text-sm font-mono"
                       />
                       <input
                         type="number"
                         defaultValue={detectedScripts?.frontend?.port || runConfigData?.frontend?.port || ''}
                         id="run-port-frontend"
                         placeholder="Port (e.g., 5173)"
-                        className="w-full mt-1.5 px-2 py-1.5 bg-zinc-800 text-white rounded border border-zinc-700 focus:border-blue-500 focus:outline-none text-xs font-mono"
+                        className="w-full mt-1.5 px-2 py-1.5 bg-zinc-800 light:bg-zinc-100 text-white rounded border border-zinc-700 light:border-zinc-300 focus:border-blue-500 focus:outline-none text-xs font-mono"
                       />
                     </div>
                     <div>
@@ -4240,21 +4271,21 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         defaultValue={detectedScripts?.backend?.command || runConfigData?.backend?.command || ''}
                         id="run-cmd-backend"
                         placeholder="e.g., python manage.py runserver"
-                        className="w-full px-3 py-2 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-orange-500 focus:outline-none text-sm font-mono"
+                        className="w-full px-3 py-2 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-orange-500 focus:outline-none text-sm font-mono"
                       />
                       <input
                         type="number"
                         defaultValue={detectedScripts?.backend?.port || runConfigData?.backend?.port || ''}
                         id="run-port-backend"
                         placeholder="Port (e.g., 8000)"
-                        className="w-full mt-1.5 px-2 py-1.5 bg-zinc-800 text-white rounded border border-zinc-700 focus:border-orange-500 focus:outline-none text-xs font-mono"
+                        className="w-full mt-1.5 px-2 py-1.5 bg-zinc-800 light:bg-zinc-100 text-white rounded border border-zinc-700 light:border-zinc-300 focus:border-orange-500 focus:outline-none text-xs font-mono"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800">
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800 light:border-zinc-200">
                 <button
                   onClick={() => setShowRunConfig(false)}
                   className="px-4 py-2 text-zinc-400 hover:text-white transition text-sm"
@@ -4304,23 +4335,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             className="fixed inset-0 bg-black z-[200] flex flex-col"
           >
             {/* Workspace Header */}
-            <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800">
+            <div className="flex items-center justify-between px-4 py-2 bg-[var(--color-card)] border-b border-zinc-800 light:border-zinc-200">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('open-close-workspace-dialog'))}
-                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors"
                   title="Close workspace"
                 >
                   <X className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setIsWorkspaceOpen(false)}
-                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors"
                   title="Minimize workspace"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
-                <div className="w-px h-5 bg-zinc-700 mx-1" />
+                <div className="w-px h-5 bg-zinc-700 light:bg-zinc-200 mx-1" />
                 <Terminal className="w-4 h-4 text-emerald-400" />
                 <span className="text-[11px] font-medium text-zinc-300">{workspaceProject.name}</span>
               </div>
@@ -4342,16 +4373,16 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('open-new-agent'))}
                   disabled={!selectedProject}
-                  className="px-2 py-1.5 bg-zinc-700/60 hover:bg-zinc-600/60 border border-zinc-600/50 text-zinc-300 text-xs rounded-lg flex items-center gap-1.5 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-2 py-1.5 bg-zinc-700 light:bg-zinc-200/60 hover:bg-zinc-600/60 border border-zinc-600 light:border-zinc-300/50 text-zinc-300 text-xs rounded-lg flex items-center gap-1.5 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Start a new AI agent session"
                 >
                   <Bot className="w-3.5 h-3.5" />
                   New Agent
                 </button>
-                <div className="w-px h-5 bg-zinc-700" />
+                <div className="w-px h-5 bg-zinc-700 light:bg-zinc-200" />
                 <button
                   onClick={() => setShowSpecs(!showSpecs)}
-                  className={`px-2 py-1.5 text-xs rounded-lg flex items-center gap-1.5 transition-colors duration-150 ${showSpecs ? 'bg-cyan-700/50 text-cyan-200 border border-cyan-600/50' : 'bg-zinc-700/60 hover:bg-zinc-600/60 border border-zinc-600/50 text-zinc-300'}`}
+                  className={`px-2 py-1.5 text-xs rounded-lg flex items-center gap-1.5 transition-colors duration-150 ${showSpecs ? 'bg-cyan-700/50 text-cyan-200 border border-cyan-600/50' : 'bg-zinc-700 light:bg-zinc-200/60 hover:bg-zinc-600/60 border border-zinc-600 light:border-zinc-300/50 text-zinc-300'}`}
                   title="View feature specifications"
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -4362,11 +4393,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
             {/* Terminal Content */}
             <div className="flex-1 flex overflow-hidden">
-              <div className={`flex-1 min-w-0 ${showSpecs ? 'border-r border-zinc-800' : ''}`}>
+              <div className={`flex-1 min-w-0 ${showSpecs ? 'border-r border-zinc-800 light:border-zinc-200' : ''}`}>
                 <TerminalPage projectId={workspaceProject.id} projectPath={workspaceProject.path} onCloseWorkspace={handleCloseWorkspace} />
               </div>
               {showSpecs && (
-                <div className="w-[45%] overflow-hidden border-l border-zinc-800">
+                <div className="w-[45%] overflow-hidden border-l border-zinc-800 light:border-zinc-200">
                   <div className="h-full overflow-auto">
                     <FeatureSpecPanel projectPath={workspaceProject?.path} />
                   </div>

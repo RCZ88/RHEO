@@ -94,8 +94,8 @@ export const NeonGradientCard: React.FC<NeonGradientCardProps> = ({
           "before:bg-[linear-gradient(0deg,var(--neon-first-color),var(--neon-second-color))] before:bg-size-[100%_200%]",
           "after:absolute after:-top-(--border-size) after:-left-(--border-size) after:-z-10 after:block",
           "after:h-(--pseudo-element-height) after:w-(--pseudo-element-width) after:rounded-(--border-radius) after:blur-(--after-blur) after:content-['']",
-          "after:bg-[linear-gradient(0deg,var(--neon-first-color),var(--neon-second-color))] after:bg-size-[100%_200%] after:opacity-80",
-          "bg-zinc-950",
+          "after:bg-[linear-gradient(0deg,var(--neon-first-color),var(--neon-second-color))] after:opacity-80",
+          "bg-zinc-950 light:bg-white",
           "wrap-break-word"
         )}
       >

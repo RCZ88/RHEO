@@ -76,7 +76,7 @@ export function SummaryStrip({ summary, loading, error, onRefresh }: SummaryStri
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         {[0, 1, 2, 3].map(i => (
-          <div key={i} className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 p-4">
+          <div key={i} className="rounded-xl border border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50 bg-zinc-900 light:bg-white/40 light:bg-white/30 p-4">
             <div className="text-xs text-zinc-500">Couldn't load</div>
             <button onClick={onRefresh} className="text-xs text-pink-400 hover:text-pink-300 mt-2">Retry</button>
           </div>
@@ -89,10 +89,10 @@ export function SummaryStrip({ summary, loading, error, onRefresh }: SummaryStri
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         {[0, 1, 2, 3].map(i => (
-          <div key={i} className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 p-4 animate-pulse">
-            <div className="h-4 w-20 bg-zinc-800 rounded mb-3" />
-            <div className="h-6 w-24 bg-zinc-800 rounded mb-2" />
-            <div className="h-3 w-16 bg-zinc-800/50 rounded" />
+          <div key={i} className="rounded-xl border border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50 bg-zinc-900 light:bg-white/40 light:bg-white/30 p-4 animate-pulse">
+            <div className="h-4 w-20 bg-zinc-800 light:bg-zinc-100 rounded mb-3" />
+            <div className="h-6 w-24 bg-zinc-800 light:bg-zinc-100 rounded mb-2" />
+            <div className="h-3 w-16 bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 rounded" />
           </div>
         ))}
       </div>

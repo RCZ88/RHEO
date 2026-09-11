@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, Square, X, Bell } from 'lucide-react';
 
 // Live accessor — resolved fresh each call so the preload bridge is always visible
 const api = () => (window as any)?.deskflowAPI ?? null;
@@ -11,9 +11,14 @@ function callApi<T>(fn: (api: any) => T): T | undefined {
   } catch { return undefined; }
 }
 
-export default function TitleBar() {
+export default function TitleBar({
+  onOpenNotifPanel,
+}: {
+  onOpenNotifPanel?: () => void
+}) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isFocused, setIsFocused] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const refreshState = useCallback(async () => {
     try {
@@ -26,22 +31,48 @@ export default function TitleBar() {
     } catch { /* ignore */ }
   }, []);
 
+  // Poll unread count every 10s so the bell badge stays fresh even when the
+  // window is hidden (notifications arrive via main-process checker).
   useEffect(() => {
     refreshState();
     const poll = setInterval(refreshState, 500);
 
-    const unsub = api?.onWindowFocusChange?.((focused: boolean) => {
-      setIsFocused(focused);
-      refreshState();
-    });
+    const unsubFocus = api?.onWindowFocusChange?.(
+      (focused: boolean) => {
+        setIsFocused(focused);
+        refreshState();
+      },
+    );
+
+    let cancelled = false;
+    const refreshUnread = async () => {
+      try {
+        const res = await callApi(a => a.notificationsGet?.());
+        if (!cancelled && res) setUnreadCount(res.unread ?? 0);
+      } catch {}
+    };
+    refreshUnread();
+    const unreadInterval = setInterval(refreshUnread, 10_000);
+
+    // Live push: main process emits 'notification:new' on every enqueue — no
+    // more waiting for the 10s poll to update the badge.
+    const unsubNotif = window?.addEventListener?.(
+      'notification:new',
+      (e: any) => {
+        if (!cancelled) setUnreadCount(c => c + 1);
+      },
+    );
 
     const bar = document.querySelector('[data-titlebar-drag]');
     const onDblClick = () => callApi(a => a.windowMaximize?.());
     bar?.addEventListener('dblclick', onDblClick);
 
     return () => {
+      cancelled = true;
       clearInterval(poll);
-      unsub?.();
+      clearInterval(unreadInterval);
+      unsubFocus?.();
+      unsubNotif?.();
       bar?.removeEventListener('dblclick', onDblClick);
     };
   }, [refreshState]);
@@ -49,7 +80,9 @@ export default function TitleBar() {
   const handleMinimize = () => callApi(a => a.windowMinimize?.());
   const handleMaximize = () => callApi(a => a.windowMaximize?.());
   const handleClose = () => callApi(a => a.windowClose?.());
-  const handleNotifyClick = () => callApi(a => a.notifyClick?.());
+  const handleNotifyClick = () => {
+    onOpenNotifPanel?.()
+  };
 
   return (
     <div
@@ -62,14 +95,46 @@ export default function TitleBar() {
         WebkitAppRegion: 'drag',
       }}
       data-titlebar-drag
-      onClick={handleNotifyClick}
     >
       <div className="flex-1 h-full" />
 
+      {/* Notification bell — separate no-drag zone so dragging the titlebar
+          does NOT open the notification panel. */}
       <div
         className="flex items-center h-full shrink-0"
         style={{ WebkitAppRegion: 'no-drag' }}
       >
+        <button
+          onClick={handleNotifyClick}
+          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 relative"
+          title="Notifications"
+        >
+          <Bell
+            className="w-3.5 h-3.5 transition-colors"
+            style={{
+              color: unreadCount > 0
+                ? (isFocused ? '#fbbf24' : '#d97706')
+                : isFocused ? '#a1a1aa' : '#52525b',
+            }}
+            strokeWidth={1.5}
+          />
+          {unreadCount > 0 && (
+            <span
+              className="absolute -top-1 -right-1 flex items-center justify-center
+                text-[10px] font-bold text-white"
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                background: 'var(--accent, #6366f1)',
+                boxShadow: '0 0 0 2px #121212',
+              }}
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={handleMinimize}
           className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5"
@@ -99,7 +164,6 @@ export default function TitleBar() {
                   color: isFocused ? '#a1a1aa' : '#52525b',
                 }}
                 strokeWidth={1.5}
-                fill="none"
               />
               <Square
                 className="absolute transition-colors"

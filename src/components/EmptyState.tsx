@@ -10,8 +10,8 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, iconComponent: IconComp, title, description, hint, action, className = '' }: EmptyStateProps) {
   const iconEl = icon || (IconComp ? (
-    <div className="w-9 h-9 rounded-lg border border-zinc-800/60 bg-zinc-900 flex items-center justify-center">
-      <IconComp className="w-4 h-4 text-zinc-600" />
+    <div className="w-9 h-9 rounded-lg border border-zinc-800/60 bg-zinc-900 flex items-center justify-center light:border-[var(--ws-border)] light:bg-white">
+      <IconComp className="w-4 h-4 text-zinc-600 light:text-stone-500" />
     </div>
   ) : null);
 
@@ -26,7 +26,7 @@ export function EmptyState({ icon, iconComponent: IconComp, title, description, 
         'onClick' in (action as any) ? (
           <button
             onClick={(action as { label: string; onClick: () => void }).onClick}
-            className="mt-4 px-4 py-2 rounded-lg bg-[var(--accent-primary)] text-white text-xs font-medium hover:bg-[var(--accent-hover)] transition-colors duration-150"
+            className="mt-4 px-4 py-2 rounded-lg bg-[var(--accent-primary)] text-white text-xs font-medium hover:bg-[var(--accent-hover)] transition-colors duration-150 light:bg-[var(--ws-accent)] light:text-white light:hover:bg-[var(--ws-accent-hover)]"
           >
             {(action as { label: string; onClick: () => void }).label}
           </button>

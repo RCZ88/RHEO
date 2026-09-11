@@ -79,7 +79,7 @@ export function SectionHead({
 						aria-hidden
 						animate={ { rotate: collapsed ? 0 : 180 } }
 						transition={ { duration: reduce ? 0 : MOTION.fast, ease: MOTION.ease } }
-						className="ml-1 text-zinc-500"
+						className="ml-1 text-zinc-500 light:text-stone-500"
 					>
 						<ChevronDown size={16} />
 					</motion.span>

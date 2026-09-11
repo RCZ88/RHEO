@@ -75,7 +75,7 @@ export default function Footer() {
                 className="mono-label"
                 style={{ fontSize: 10, transition: "color 0.4s cubic-bezier(0.16,1,0.3,1)" }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "#f4f4f5")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#63636b")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#8a8a94")}
               >
                 {l.label}
               </a>
@@ -103,7 +103,7 @@ export default function Footer() {
             <span className="mono-label" style={{ fontSize: 11 }}>
               now
             </span>
-            <span className="mono-label" style={{ fontSize: 11, color: "#63636b" }}>
+            <span className="mono-label" style={{ fontSize: 11, color: "#8a8a94" }}>
               ·
             </span>
             <span
@@ -115,14 +115,14 @@ export default function Footer() {
           </div>
           <p
             className="mono"
-            style={{ fontSize: 11, color: "#63636b", letterSpacing: "0.06em" }}
+            style={{ fontSize: 11, color: "#8a8a94", letterSpacing: "0.06em" }}
           >
             Your time is still flowing. It&apos;s {time}.
           </p>
 
           {/* motion preference chip */}
           <div className="flex items-center gap-2">
-            <span className="mono-label" style={{ fontSize: 10, color: "#63636b" }}>
+            <span className="mono-label" style={{ fontSize: 10, color: "#8a8a94" }}>
               MOTION
             </span>
             <button
@@ -135,7 +135,7 @@ export default function Footer() {
                 borderRadius: 4,
                 border: "1px solid rgba(255,255,255,0.16)",
                 background: shouldAnimate ? "rgba(255,255,255,0.06)" : "transparent",
-                color: shouldAnimate ? "#f4f4f5" : "#63636b",
+                color: shouldAnimate ? "#f4f4f5" : "#8a8a94",
                 letterSpacing: "0.08em",
                 cursor: "pointer",
               }}
@@ -161,7 +161,7 @@ export default function Footer() {
           >
             <span
               className="mono"
-              style={{ fontSize: 11, color: "#63636b", letterSpacing: "0.06em" }}
+              style={{ fontSize: 11, color: "#8a8a94", letterSpacing: "0.06em" }}
             >
               SYSTEM REDUCED MOTION ON — ENABLE FULL MOTION?
             </span>
@@ -193,7 +193,7 @@ export default function Footer() {
                   borderRadius: 4,
                   border: "1px solid rgba(255,255,255,0.08)",
                   background: "transparent",
-                  color: "#63636b",
+                  color: "#8a8a94",
                   letterSpacing: "0.08em",
                   cursor: "pointer",
                 }}
@@ -207,10 +207,10 @@ export default function Footer() {
           className="max-w-[1280px] mx-auto flex flex-wrap items-center justify-between gap-2"
           style={{ paddingBottom: 16 }}
         >
-          <span className="mono" style={{ fontSize: 10, color: "#63636b", letterSpacing: "0.08em" }}>
+          <span className="mono" style={{ fontSize: 10, color: "#8a8a94", letterSpacing: "0.08em" }}>
             v0.1 PRE-RELEASE · LOCAL FIRST · 0 BYTES TO CLOUD
           </span>
-          <span className="mono" style={{ fontSize: 10, color: "#63636b", letterSpacing: "0.08em" }}>
+          <span className="mono" style={{ fontSize: 10, color: "#8a8a94", letterSpacing: "0.08em" }}>
             ῥέω · TO FLOW
           </span>
         </div>

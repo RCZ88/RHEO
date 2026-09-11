@@ -1,0 +1,132 @@
+/* ===== R-10 Boot Splash — Meridian Wake (Concept A) ===== */
+/* Single LAMINAR easing · transform/opacity ONLY · one-shot, no loop */
+
+/* --- Easing (single family for the whole sequence) --- */
+@keyframes splash-tick-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splash-num-rise {
+  from { opacity: 0; transform: translateY(50%); }
+  to   { opacity: var(--splash-mono); transform: translateY(0); }
+}
+
+@keyframes splash-now-tick-glow {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes splash-sweep {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes splash-logo-reveal {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* --- reduced motion: one-shot static rest frame, 140ms fade --- */
+@media (prefers-reduced-motion: reduce) {
+  .splash-tick   { animation: none; opacity: var(--splash-mono); }
+  .splash-num    { animation: none; opacity: var(--splash-mono); }
+  .splash-now    { animation: none; opacity: 1; }
+  .splash-sweep  { animation: none; transform: scaleX(1); }
+  .splash-logo   { animation: none; opacity: 1; }
+  .splash-field  { animation: splash-rm-fade 140ms ease-out forwards; }
+}
+@keyframes splash-rm-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* --- field (always visible, no fade-from-black flash) --- */
+.splash-field {
+  position: absolute;
+  inset: 0;
+  background: var(--splash-field);
+}
+
+/* --- 24 ruler tick hairlines (2px, cascade in 0–500ms) --- */
+.splash-tick {
+  position: absolute;
+  left: 28px;
+  width: 2px;
+  background: var(--splash-hairline);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+/* --- mono numerals 00/06/12/18/24 (11px JetBrains Mono, tabular) --- */
+.splash-num {
+  position: absolute;
+  left: 40px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--splash-mono);
+  letter-spacing: -0.02em;
+  will-change: transform, opacity;
+}
+
+/* --- now-tick (the ONE data color — CategoryColors accent + ≤8% bloom) --- */
+.splash-now {
+  position: absolute;
+  left: 28px;
+  width: 2px;
+  background: var(--splash-now-tick);
+  box-shadow: 0 0 6px var(--splash-now-tick);
+  transform-origin: center;
+  will-change: opacity;
+}
+.splash-now-dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--splash-now-tick);
+  box-shadow: 0 0 8px var(--splash-now-tick);
+}
+
+/* --- hairline sweep + logo/wordmark reveal --- */
+.splash-sweep {
+  position: absolute;
+  left: 28px;
+  top: 50%;
+  width: 464px;
+  height: 1px;
+  background: var(--splash-hairline);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.splash-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  will-change: opacity;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.splash-wordmark {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #fafafa;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.splash-caption {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--splash-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

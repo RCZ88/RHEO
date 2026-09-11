@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { confetti } from '../ui/confetti';
 import type { Goal as GoalType } from '../dashboard/types';
+import { EntityChip } from './EntityChip';
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -29,9 +30,13 @@ interface GoalCardProps {
   onDelete: (id: string) => void;
   onEdit: (goal: GoalType) => void;
   longTermGoals?: { id: string; title: string }[];
+  todoCount?: number;
+  linkedSchedules?: { id: string; title: string }[];
+  linkedDeadlines?: { id: string; title: string }[];
+  onOpenConnections?: (goal: GoalType) => void;
 }
 
-export function GoalCard({ goal, onToggle, onDelete, onEdit, longTermGoals = [] }: GoalCardProps) {
+export function GoalCard({ goal, onToggle, onDelete, onEdit, longTermGoals = [], todoCount = 0, linkedSchedules = [], linkedDeadlines = [], onOpenConnections }: GoalCardProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const handleToggle = () => {
@@ -125,6 +130,10 @@ export function GoalCard({ goal, onToggle, onDelete, onEdit, longTermGoals = [] 
                 <Calendar size={8} className="inline mr-0.5" />Scheduled
               </span>
             )}
+
+            <EntityChip kind="todo" label={`${todoCount} todo${todoCount === 1 ? '' : 's'}`} onClick={onOpenConnections ? () => onOpenConnections(goal) : undefined} />
+            {linkedSchedules.slice(0, 1).map(schedule => <EntityChip key={schedule.id} kind="schedule" label={schedule.title} onClick={onOpenConnections ? () => onOpenConnections(goal) : undefined} />)}
+            {linkedDeadlines.slice(0, 1).map(deadline => <EntityChip key={deadline.id} kind="deadline" label={deadline.title} onClick={onOpenConnections ? () => onOpenConnections(goal) : undefined} />)}
 
             {isTime && goal.target.targetSeconds && (
               <span className="text-[10px] text-zinc-600">

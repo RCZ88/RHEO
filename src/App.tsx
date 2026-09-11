@@ -12,8 +12,9 @@ import {
   Download, Trash2, Award, Zap, Users, Info, Database, CheckCircle, XCircle, AlertTriangle,
   Shield, ShieldAlert, ToggleLeft, ToggleRight, PieChart, CreditCard,
   ChevronLeft, ChevronRight, Calendar, Terminal, Save, Clock4,
-  X,   FolderTree, Bot, Minus, HelpCircle, Settings2, Moon, FileText, BookOpen, Wallet, GraduationCap, Activity, Smartphone, Brain,
-  HeartHandshake, Sparkles, Trophy,
+  X, FolderTree, Bot, Minus, HelpCircle, Settings2, Moon, FileText, BookOpen,
+  Wallet, GraduationCap, Activity, Smartphone, Brain, HeartHandshake, Sparkles, Trophy,
+  Bed, UserCheck, Bell, Command, Folder, LayoutDashboard, AlertCircle, RotateCcw,
 } from 'lucide-react';
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
 import { format as dateFormat } from 'date-fns';
@@ -29,6 +30,8 @@ import TutorialPage from './pages/TutorialPage';
 import { LearnPage } from './components/learn/LearnPage';
 import GuidePage from './pages/GuidePage';
 import TerminalPage from './pages/TerminalPage';
+import SimpleTerminalPage from './pages/SimpleTerminalPage';
+import PenguinConsole from './terminal/App';
 import ExternalPage from './pages/ExternalPage';
 import RankingsPage from './pages/RankingsPage';
 import FocusPage from './pages/FocusPage';
@@ -136,6 +139,7 @@ interface ActivityLog {
   is_browser_tracking?: boolean;
   domain?: string;
   url?: string;
+  platform?: string;
 }
 
 interface HeatmapCell {
@@ -267,6 +271,7 @@ function isAppMatchingBrowserRenderer(appName: string, browserName: string | str
 }
 
 import { GapBanner } from './components/GapBanner';
+import { TodoMiniPage } from './features/todo/TodoMiniPage';
 import { GapFillModal } from './components/external/GapFillModal';
 import { ManualAssignModal } from './components/external/ManualAssignModal';
 import { fillGapWithSegments } from './lib/external/gaps';
@@ -440,6 +445,7 @@ function App() {
           is_browser_tracking: log.is_browser_tracking === 1 || log.is_browser_tracking === true,
           domain: log.domain,
           url: log.url,
+          platform: log.platform,
         }));
 
         // Set BOTH to all data - heatmap needs allLogs, display will filter
@@ -605,7 +611,8 @@ function App() {
             project: log.project,
             is_browser_tracking: log.is_browser_tracking === 1 || log.is_browser_tracking === true,
             domain: log.domain,
-            url: log.url
+            url: log.url,
+            platform: log.platform,
           }));
           // Fingerprint: compare by count + first/last ID to skip no-op updates
           const fp = formattedLogs.length + ':' + (formattedLogs.length > 0 ? formattedLogs[0].id + '-' + formattedLogs[formattedLogs.length - 1].id : 'empty');
@@ -1385,6 +1392,7 @@ function App() {
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [showWorkspaceWarning, setShowWorkspaceWarning] = useState(false);
+  const [devTriggerOpen, setDevTriggerOpen] = useState(false);
   const [settingsHasChanges, setSettingsHasChanges] = useState(false);
   const settingsSaveFnRef = useRef<(() => void) | null>(null);
   const [aiSummary, setAiSummary] = useState('');
@@ -2539,6 +2547,118 @@ Trend: +14% vs. yesterday. Keep it up!`;
   };
 
 
+  // ── Dev Trigger Panel Handlers (Task 2) ─────────────────────────────────────
+  // Fire handlers - trigger each modal to open
+  const devFireSleepDetection = async () => {
+    if (!sleepDetectionData) {
+      try {
+        const data = await window.deskflowAPI?.checkSleepDetection?.();
+        if (data?.detected) {
+          setSleepDetectionData(data);
+          const bed = new Date(data.suggestedBedtime);
+          const wake = new Date(data.suggestedWakeTime);
+          setSleepDetectCustomBedtime({ hours: bed.getHours(), minutes: bed.getMinutes() });
+          setSleepDetectCustomWaketime({ hours: wake.getHours(), minutes: wake.getMinutes() });
+          setSleepDetectFellAsleepAt({ hours: bed.getHours(), minutes: (bed.getMinutes() + 15) % 60 });
+          setSleepDetectWakeUpAt({ hours: wake.getHours(), minutes: Math.max(0, wake.getMinutes() - 5) });
+          const bd = new Date(bed);
+          if (bd.getHours() < 12) bd.setDate(bd.getDate() - 1);
+          setSleepDetectDate(`${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(bd.getDate()).padStart(2, '0')}`);
+          setSleepModalStep('sleep');
+        }
+      } catch { /* ignore */ }
+    }
+    setShowSleepDetection(true);
+  };
+  const devFireAfkPrompt = () => {
+    const nowMs = Date.now();
+    const entry: AfkPromptEntry = {
+      id: afkQueueIdRef.current++,
+      duration: '5m',
+      idleStartMs: nowMs - 5 * 60 * 1000,
+      returnMs: nowMs,
+      defaultNotAfk: true,
+    };
+    setAfkPromptQueue(prev => [...prev, entry]);
+    afkPromptShownRef.current = false;
+  };
+  const devFireSleepGapFill = () => {
+    const now = new Date();
+    setSleepGapFillTarget({
+      start: new Date(now.getTime() - 30 * 60 * 1000).toISOString(),
+      end: now.toISOString(),
+      duration_seconds: 1800,
+    });
+  };
+  const devFireAfkGapFill = () => {
+    const now = new Date();
+    setAfkGapFillTarget({
+      start: new Date(now.getTime() - 30 * 60 * 1000).toISOString(),
+      end: now.toISOString(),
+      duration_seconds: 1800,
+    });
+  };
+  const devFireSmartFill = async () => {
+    try {
+      const gaps = await (window as any).deskflowAPI?.detectUsageGaps?.({ period: 'today', minGapMinutes: 5 });
+      if (Array.isArray(gaps) && gaps.length > 0) {
+        const fillGaps = gaps.map((g: any, i: number) => ({
+          id: `gap-${i}`,
+          start: new Date(g.start),
+          end: new Date(g.end),
+          duration_seconds: g.durationSeconds,
+        }));
+        setSmartFillGaps(fillGaps);
+        setSmartFillSource('external');
+      }
+    } catch (err) {
+      console.error('[DevTrigger] Failed to detect gaps for smart fill:', err);
+    }
+  };
+  const devFireManualAssign = () => setShowManualAssign(true);
+  const devFirePairPhone = () => setPairPhoneModal({ terminalId: 'test-terminal', label: 'Test Device' });
+  const devFireConfirmExportCsv = () => setShowConfirmExport('csv');
+  const devFireConfirmExportJson = () => setShowConfirmExport('json');
+  const devFireConfirmClear = () => setShowConfirmClear(true);
+  const devFireAiSummary = () => setShowSummary(true);
+  const [devForceGapBannerMinutes, setDevForceGapBannerMinutes] = useState<number | null>(null);
+  const devForceGapBanner = () => setDevForceGapBannerMinutes(45);
+  const devFireNotifPanel = () => setNotifPanelOpen(true);
+  const devFireCommandPalette = () => setPaletteOpen(true);
+  const devFireWorkspaceWarning = () => setShowWorkspaceWarning(true);
+  const devFireUnsavedWarning = () => setShowUnsavedWarning(true);
+  const devFireGapDrawer = () => window.dispatchEvent(new CustomEvent('open-gap-drawer'));
+  const devFireGapBannerSetting = () => {
+    setShowGapBanner(true);
+    setGapBannerMinutes(15);
+  };
+  const devFireDatabasePage = () => navigate('/database');
+  const devFireActivityLogs = () => navigate('/ai?tab=logs');
+  const devFireReports = () => navigate('/reports');
+
+  // Trigger definitions for DevTriggerPanel
+  const devTriggers = [
+    { id: 'sleep-detection', label: 'Sleep Detection Modal', icon: <Bed className="w-4 h-4" />, condition: 'On sleep cycle detection', fire: devFireSleepDetection },
+    { id: 'afk-prompt', label: 'AFK Prompt', icon: <Clock className="w-4 h-4" />, condition: 'After AFK period', fire: devFireAfkPrompt },
+    { id: 'sleep-gap-fill', label: 'Sleep Gap Fill', icon: <Zap className="w-4 h-4" />, condition: 'When sleep gap needs fill', fire: devFireSleepGapFill },
+    { id: 'afk-gap-fill', label: 'AFK Gap Fill', icon: <Zap className="w-4 h-4" />, condition: 'When AFK gap detected', fire: devFireAfkGapFill },
+    { id: 'smart-fill', label: 'Smart Fill Modal', icon: <Brain className="w-4 h-4" />, condition: 'Automatic gap detection', fire: devFireSmartFill },
+    { id: 'manual-assign', label: 'Manual Assign Modal', icon: <UserCheck className="w-4 h-4" />, condition: 'Manual time assignment', fire: devFireManualAssign },
+    { id: 'pair-phone', label: 'Pair Phone Modal', icon: <Smartphone className="w-4 h-4" />, condition: 'Device pairing', fire: devFirePairPhone },
+    { id: 'confirm-export', label: 'Confirm Export Modal', icon: <Download className="w-4 h-4" />, condition: 'Before data export', fire: devFireConfirmExportCsv, prepAndFire: devFireConfirmExportCsv, hasPrep: () => false, prepLabel: () => 'CSV | JSON' },
+    { id: 'confirm-clear', label: 'Confirm Clear Modal', icon: <Trash2 className="w-4 h-4" />, condition: 'Before clearing data', fire: devFireConfirmClear },
+    { id: 'ai-summary', label: 'AI Summary Modal', icon: <Brain className="w-4 h-4" />, condition: 'Productivity summary', fire: devFireAiSummary },
+    { id: 'gap-banner', label: 'Gap Banner', icon: <AlertCircle className="w-4 h-4" />, condition: 'Large unfilled gap', fire: devForceGapBanner },
+    { id: 'notif-panel', label: 'Notification Panel', icon: <Bell className="w-4 h-4" />, condition: 'New notification', fire: devFireNotifPanel },
+    { id: 'command-palette', label: 'Command Palette', icon: <Command className="w-4 h-4" />, condition: 'Keyboard shortcut ⌘K', fire: devFireCommandPalette },
+    { id: 'workspace-warning', label: 'Workspace Warning', icon: <Folder className="w-4 h-4" />, condition: 'Unsaved workspace changes', fire: devFireWorkspaceWarning },
+    { id: 'unsaved-warning', label: 'Unsaved Warning', icon: <Save className="w-4 h-4" />, condition: 'Unsaved settings', fire: devFireUnsavedWarning },
+    { id: 'gap-drawer', label: 'Gap Drawer', icon: <LayoutDashboard className="w-4 h-4" />, condition: 'Open gap drawer', fire: devFireGapDrawer },
+    { id: 'settings-warning', label: 'Settings Warning', icon: <Settings className="w-4 h-4" />, condition: 'Unsaved settings', fire: devFireGapBannerSetting },
+    { id: 'database-page', label: 'Database Page', icon: <Database className="w-4 h-4" />, condition: 'Navigate to database', fire: devFireDatabasePage },
+    { id: 'activity-logs', label: 'Activity Logs Tab', icon: <BarChart3 className="w-4 h-4" />, condition: 'Navigate to logs', fire: devFireActivityLogs },
+  ];
+
   return (
     <VoiceProvider>
     <TutorialProvider>
@@ -2602,10 +2722,10 @@ Trend: +14% vs. yesterday. Keep it up!`;
 
           <div className="flex items-center gap-4">
             {/* Time mode toggle: Focus vs Total */}
-            <div className="flex bg-zinc-900 rounded-full p-1 flex-shrink-0">
+            <div className="flex bg-zinc-900 rounded-full p-1 flex-shrink-0 light:bg-zinc-100">
               <button
                 onClick={() => setTimeMode('focus')}
-                className={`px-3 py-1.5 rounded-full transition flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'focus' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-full transition flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'focus' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                 title="Focus Time: Productive apps only (websites belong to the tracking browser)"
               >
                 <Zap className="w-3 h-3" />
@@ -2613,7 +2733,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
               </button>
               <button
                 onClick={() => setTimeMode('total')}
-                className={`px-3 py-1.5 rounded-full transition flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'total' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-full transition flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'total' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                 title="Total Time: Apps only (websites belong to the tracking browser)"
               >
                 <Clock className="w-3 h-3" />
@@ -2630,11 +2750,11 @@ Trend: +14% vs. yesterday. Keep it up!`;
               {formatDuration(displayTime)}
             </div>
 
-            <div className="flex bg-zinc-900 rounded-full p-1 text-xs">
+            <div className="flex bg-zinc-900 rounded-full p-1 text-xs light:bg-zinc-100">
               {/* Today */}
               <button
                 onClick={() => { setExpandedPeriod(null); setSelectedPeriod('today'); }}
-                className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'today' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'today' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
               >
                 Today
               </button>
@@ -2645,13 +2765,13 @@ Trend: +14% vs. yesterday. Keep it up!`;
                   <>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('week'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'week' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'week' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                     >
                       Week
                     </button>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('7day'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === '7day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === '7day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                     >
                       7 Day
                     </button>
@@ -2659,7 +2779,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
                 ) : (
                   <button
                     onClick={() => setExpandedPeriod('week')}
-                    className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'week' || selectedPeriod === '7day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'week' || selectedPeriod === '7day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                   >
                     {selectedPeriod === '7day' ? '7 Day' : 'Week'}
                   </button>
@@ -2672,13 +2792,13 @@ Trend: +14% vs. yesterday. Keep it up!`;
                   <>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('month'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'month' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'month' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                     >
                       Month
                     </button>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('30day'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === '30day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === '30day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                     >
                       30d
                     </button>
@@ -2686,7 +2806,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
                 ) : (
                   <button
                     onClick={() => setExpandedPeriod('month')}
-                    className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'month' || selectedPeriod === '30day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'month' || selectedPeriod === '30day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
                   >
                     {selectedPeriod === '30day' ? '30d' : 'Month'}
                   </button>
@@ -2696,7 +2816,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
               {/* All Time */}
               <button
                 onClick={() => { setExpandedPeriod(null); setSelectedPeriod('all'); }}
-                className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
               >
                 All Time
               </button>
@@ -2706,12 +2826,12 @@ Trend: +14% vs. yesterday. Keep it up!`;
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setDateOffset(o => o + 1)}
-                className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+                className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition light:bg-zinc-200/50 light:hover:bg-zinc-300/50 light:text-zinc-500 light:hover:text-zinc-700"
                 title="Previous period"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-xs text-zinc-400 min-w-[80px] text-center select-none font-medium">
+              <span className="text-xs text-zinc-400 min-w-[80px] text-center select-none font-medium light:text-zinc-500">
                 {getDateRange(selectedPeriod, dateOffset).label}
               </span>
               <button
@@ -2719,8 +2839,8 @@ Trend: +14% vs. yesterday. Keep it up!`;
                 disabled={dateOffset === 0}
                 className={`p-1.5 rounded-lg transition ${
                   dateOffset === 0
-                    ? 'bg-zinc-800/20 text-zinc-600 cursor-not-allowed'
-                    : 'bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white'
+                    ? 'bg-zinc-800/20 text-zinc-600 cursor-not-allowed light:bg-zinc-200/20 light:text-zinc-400'
+                    : 'bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white light:bg-zinc-200/50 light:hover:bg-zinc-300/50 light:text-zinc-500 light:hover:text-zinc-700'
                 }`}
                 title="Next period"
               >
@@ -2738,12 +2858,12 @@ Trend: +14% vs. yesterday. Keep it up!`;
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <div className="flex items-center gap-2 text-sm text-zinc-400 light:text-zinc-500">
                 <Clock className="w-4 h-4" />
                 {format(new Date(), 'HH:mm')}
               </div>
               {isIdle && (
-                <div className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs flex items-center gap-1">
+                <div className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs flex items-center gap-1 light:bg-amber-50/50 light:text-amber-600">
                   <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" /> IDLE
                 </div>
               )}
@@ -2752,7 +2872,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
             <button
               onClick={() => (window as any).deskflowAPI?.restartApp?.() ?? window.location.reload()}
               title="Restart app (full reload including main process)"
-              className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+              className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition light:bg-zinc-200/50 light:hover:bg-zinc-300/50 light:text-zinc-500 light:hover:text-zinc-700"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -2839,6 +2959,8 @@ Trend: +14% vs. yesterday. Keep it up!`;
               <Route path="/ide-help" element={<IDEHelpPage />} />
 
               <Route path="/terminal" element={<TerminalPage />} />
+              <Route path="/simple-terminal" element={<SimpleTerminalPage />} />
+              <Route path="/penguin-console" element={<PenguinConsole />} />
               {/* Reports/Insights Page */}
               <Route path="/reports" element={<InsightsPage
                 logs={allLogs}
@@ -2883,26 +3005,26 @@ Trend: +14% vs. yesterday. Keep it up!`;
                   </div>
 
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 mb-6 space-y-1">
-                    <p>� Your category assignments and color customizations</p>
-                    <p>� will be lost if you navigate away without saving</p>
+                    <p>⚠ Your category assignments and color customizations</p>
+                    <p>⚠ will be lost if you navigate away without saving</p>
                   </div>
 
                   <div className="flex flex-col gap-2">
                     <button
                       onClick={handleSaveAndNavigate}
-                      className="w-full py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition text-sm font-medium border border-emerald-500/30"
+                      className="w-full py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition text-sm font-medium border border-emerald-500/30 light:bg-emerald-50/50 light:text-emerald-600 light:border-emerald-200/30"
                     >
                       Save & Navigate
                     </button>
                     <button
                       onClick={handleDiscardChanges}
-                      className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-sm font-medium"
+                      className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-sm font-medium light:bg-white light:text-zinc-700 light:hover:bg-zinc-100"
                     >
                       Discard Changes
                     </button>
                     <button
                       onClick={() => { setShowUnsavedWarning(false); setPendingNavigation(null); }}
-                      className="w-full py-2 rounded-xl text-zinc-500 hover:text-zinc-400 transition text-xs"
+                      className="w-full py-2 rounded-xl text-zinc-500 hover:text-zinc-400 transition text-xs light:text-zinc-400 light:hover:text-zinc-600"
                     >
                       Cancel
                     </button>
@@ -2929,30 +3051,30 @@ Trend: +14% vs. yesterday. Keep it up!`;
                     </div>
                     <div>
                       <div className="font-semibold text-lg">Unsaved Workspace</div>
-                      <div className="text-xs text-zinc-400">You have open terminals.</div>
+                      <div className="text-xs text-zinc-400 light:text-zinc-500">You have open terminals.</div>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 mb-6">
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 mb-6 light:bg-amber-50/50 light:text-amber-600 light:border-amber-200/20">
                     <p>Save your workspace to preserve open terminals, layout, and sidebar config before leaving.</p>
                   </div>
 
                   <div className="flex flex-col gap-2">
                     <button
                       onClick={handleWorkspaceSaveAndNavigate}
-                      className="w-full py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition text-sm font-medium border border-emerald-500/30"
+                      className="w-full py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition text-sm font-medium border border-emerald-500/30 light:bg-emerald-50/50 light:text-emerald-600 light:border-emerald-200/30"
                     >
                       {pendingNavigation ? 'Save & Navigate' : 'Save & Close'}
                     </button>
                     <button
                       onClick={handleWorkspaceDiscardChanges}
-                      className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-sm font-medium"
+                      className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-sm font-medium light:bg-white light:text-zinc-700 light:hover:bg-zinc-100"
                     >
                       {pendingNavigation ? 'Discard & Navigate' : 'Discard & Close'}
                     </button>
                     <button
                       onClick={() => { setShowWorkspaceWarning(false); setPendingNavigation(null); }}
-                      className="w-full py-2 rounded-xl text-zinc-500 hover:text-zinc-400 transition text-xs"
+                      className="w-full py-2 rounded-xl text-zinc-500 hover:text-zinc-400 transition text-xs light:text-zinc-400 light:hover:text-zinc-600"
                     >
                       Cancel
                     </button>
@@ -3065,16 +3187,16 @@ Trend: +14% vs. yesterday. Keep it up!`;
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-700 text-xs text-zinc-400 mb-6">
-                    <p>� {logs.length} activity records will be exported</p>
-                    <p>� File format: <span className="text-zinc-200 uppercase">{showConfirmExport}</span></p>
-                    <p>� File stays on your device</p>
+                  <div className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-700 text-xs text-zinc-400 mb-6 light:bg-zinc-100/50 light:border-zinc-300 light:text-zinc-500">
+                    <p>⚠ {logs.length} activity records will be exported</p>
+                    <p>⚠ File format: <span className="text-zinc-200 uppercase light:text-zinc-700">{showConfirmExport}</span></p>
+                    <p>⚠ File stays on your device</p>
                   </div>
 
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowConfirmExport(null)}
-                      className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-sm font-medium"
+                      className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-sm font-medium light:bg-white light:text-zinc-700 light:hover:bg-zinc-100"
                     >
                       Cancel
                     </button>
@@ -3083,7 +3205,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
                         exportData(showConfirmExport);
                         setShowConfirmExport(null);
                       }}
-                      className="flex-1 py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition text-sm font-medium border border-emerald-500/30"
+                      className="flex-1 py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition text-sm font-medium border border-emerald-500/30 light:bg-emerald-50/50 light:text-emerald-600 light:border-emerald-200/30"
                     >
                       Export {showConfirmExport?.toUpperCase()}
                     </button>
@@ -3111,14 +3233,14 @@ Trend: +14% vs. yesterday. Keep it up!`;
                       </div>
                       <div>
                         <div className="font-semibold text-xl">SQLite Activity Logs</div>
-                        <div className="text-xs text-zinc-500">TABLE: activity_logs � {allLogs.length} rows � SQLite database</div>
+                        <div className="text-xs text-zinc-500">TABLE: activity_logs · {allLogs.length} rows · SQLite database</div>
                       </div>
                     </div>
                     <button onClick={() => setShowDatabase(false)} className="text-zinc-400 hover:text-white text-xl">?</button>
                   </div>
 
                   {/* Schema Info */}
-                  <div className="mb-4 text-xs font-mono bg-zinc-950 rounded-lg p-4 border border-zinc-800 overflow-x-auto">
+                  <div className="mb-4 text-xs font-mono bg-zinc-950 rounded-lg p-4 border border-zinc-800 overflow-x-auto light:bg-zinc-900/90 light:border-zinc-200">
                     <span className="text-emerald-400">CREATE TABLE</span> activity_logs (<br />
                     &nbsp;&nbsp;id <span className="text-amber-400">INTEGER PRIMARY KEY</span>,<br />
                     &nbsp;&nbsp;timestamp <span className="text-amber-400">DATETIME</span>,<br />
@@ -3131,43 +3253,44 @@ Trend: +14% vs. yesterday. Keep it up!`;
                   </div>
 
                   {/* Data Table */}
-                  <div className="flex-1 overflow-auto border border-zinc-800 rounded-2xl bg-zinc-950">
+                  <div className="flex-1 overflow-auto border border-zinc-800 rounded-2xl bg-zinc-950 light:bg-zinc-900/90 light:border-zinc-200">
                     <table className="w-full text-sm font-mono">
-                      <thead className="sticky top-0 bg-zinc-900 z-10">
-                        <tr className="border-b border-zinc-800 text-left text-zinc-400">
+                      <thead className="sticky top-0 bg-zinc-900 z-10 light:bg-zinc-100">
+                        <tr className="border-b border-zinc-800 text-left text-zinc-400 light:border-zinc-300 light:text-zinc-600">
                           <th className="px-4 py-3 font-medium">ID</th>
                           <th className="px-4 py-3 font-medium">Timestamp</th>
                           <th className="px-4 py-3 font-medium">App</th>
                           <th className="px-4 py-3 font-medium">Category</th>
                           <th className="px-4 py-3 font-medium">Duration</th>
-                          <th className="px-4 py-3 font-medium">Project</th>
-                          <th className="px-4 py-3 font-medium">Title</th>
+                          <th className="px-4 py-3 font-medium text-left text-zinc-400 light:text-zinc-600">Project</th>
+                          <th className="px-4 py-3 font-medium text-left text-zinc-400 light:text-zinc-600">Title</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-800">
+                      <tbody className="divide-y divide-zinc-800 light:divide-zinc-200">
                         {allLogs.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="px-4 py-12 text-center text-zinc-500">
+                            <td colSpan={7} className="px-4 py-12 text-center text-zinc-500 light:text-zinc-400">
                               No records yet. Start tracking to populate the database.
                             </td>
                           </tr>
                         ) : (
                           allLogs.slice(0, 50).map((log, idx) => (
-                            <tr key={idx} className="hover:bg-zinc-900/50 transition">
+                            <tr key={idx} className="hover:bg-zinc-900/50 transition light:hover:bg-zinc-100/50">
                               <td className="px-4 py-3 text-emerald-400">#{log.id}</td>
-                              <td className="px-4 py-3 text-zinc-400">{format(log.timestamp, 'yyyy-MM-dd HH:mm:ss')}</td>
-                              <td className="px-4 py-3 text-white font-medium">{log.app}</td>
+                              <td className="px-4 py-3 text-zinc-400 light:text-zinc-500">{format(log.timestamp, 'yyyy-MM-dd HH:mm:ss')}</td>
+                              <td className="px-4 py-3 text-white font-medium light:text-zinc-900">{log.app}</td>
                               <td className="px-4 py-3">
-                                <span className="px-2 py-0.5 rounded text-xs" style={{
-                                  backgroundColor: APP_CATEGORIES[log.app as keyof typeof APP_CATEGORIES]?.color + '22',
-                                  color: APP_CATEGORIES[log.app as keyof typeof APP_CATEGORIES]?.color
-                                }}>
+                                <span className="px-2 py-0.5 rounded text-xs"
+                                  style={{
+                                    backgroundColor: APP_CATEGORIES[log.app as keyof typeof APP_CATEGORIES]?.color + '22',
+                                    color: APP_CATEGORIES[log.app as keyof typeof APP_CATEGORIES]?.color
+                                  }}>
                                   {log.category}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 tabular-nums text-white">{log.duration} min</td>
-                              <td className="px-4 py-3 text-zinc-400">{log.project || '�'}</td>
-                              <td className="px-4 py-3 text-zinc-400 truncate max-w-[200px]">{log.title || '�'}</td>
+                              <td className="px-4 py-3 tabular-nums text-white light:text-zinc-900">{log.duration} min</td>
+                              <td className="px-4 py-3 text-zinc-400 light:text-zinc-500">{log.project || ''}</td>
+                              <td className="px-4 py-3 text-zinc-400 truncate max-w-[200px] light:text-zinc-500">{log.title || ''}</td>
                             </tr>
                           ))
                         )}
@@ -3175,21 +3298,21 @@ Trend: +14% vs. yesterday. Keep it up!`;
                     </table>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
-                    <div>Showing {Math.min(50, allLogs.length)} of {allLogs.length} records � Data persists in SQLite database</div>
+                  <div className="mt-4 flex items-center justify-between text-xs text-zinc-500 light:text-zinc-400">
+                    <div>Showing {Math.min(50, allLogs.length)} of {allLogs.length} records · Data persists in SQLite database</div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => {
                           const sql = `SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 50;`;
                           alert(`Simulated Query:\n\n${sql}\n\n${allLogs.length} rows returned`);
                         }}
-                        className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded"
+                        className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded light:bg-zinc-200 light:text-zinc-700 light:hover:bg-zinc-300"
                       >
                         Run Query
                       </button>
                       <button
                         onClick={() => exportData('json')}
-                        className="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded"
+                        className="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded light:bg-emerald-50/50 light:text-emerald-600"
                       >
                         Export Table
                       </button>
@@ -3203,7 +3326,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
           {/* AI Summary Modal */}
           <AnimatePresence>
             {showSummary && (
-              <div className="fixed inset-0 bg-black/70 backdrop-blur flex items-center justify-center z-[60]" onClick={() => setShowSummary(false)}>
+              <div className="fixed inset-0 bg-black/70 backdrop-blur flex items-center justify-center z-[60] light:bg-black/30" onClick={() => setShowSummary(false)}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -3218,13 +3341,13 @@ Trend: +14% vs. yesterday. Keep it up!`;
                       </div>
                       <div>
                         <div className="font-semibold">AI Productivity Summary</div>
-                        <div className="text-xs text-emerald-400">Generated using local heuristics</div>
+                        <div className="text-xs text-emerald-400 light:text-emerald-600">Generated using local heuristics</div>
                       </div>
                     </div>
-                    <button onClick={() => setShowSummary(false)} className="text-zinc-400">?</button>
+                    <button onClick={() => setShowSummary(false)} className="text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700">?</button>
                   </div>
 
-                  <div className="font-mono text-sm whitespace-pre-wrap bg-zinc-950 p-6 rounded-2xl leading-relaxed border border-zinc-800">
+                  <div className="font-mono text-sm whitespace-pre-wrap bg-zinc-950 p-6 rounded-2xl leading-relaxed border border-zinc-800 light:bg-zinc-900/90 light:border-zinc-200">
                     {aiSummary}
                   </div>
 
@@ -3234,13 +3357,13 @@ Trend: +14% vs. yesterday. Keep it up!`;
                         navigator.clipboard.writeText(aiSummary);
                         alert('Summary copied to clipboard');
                       }}
-                      className="flex-1 py-3 rounded-2xl border border-zinc-700 hover:bg-zinc-900"
+                      className="flex-1 py-3 rounded-2xl border border-zinc-700 hover:bg-zinc-900 text-zinc-300 light:border-zinc-300 light:hover:bg-zinc-100 light:text-zinc-700"
                     >
                       Copy to Clipboard
                     </button>
                     <button
                       onClick={() => exportData('json')}
-                      className="flex-1 py-3 rounded-2xl bg-white text-black font-medium"
+                      className="flex-1 py-3 rounded-2xl bg-white text-black font-medium light:bg-zinc-100 light:text-zinc-900"
                     >
                       Export Full Data
                     </button>
@@ -3419,5 +3542,15 @@ Trend: +14% vs. yesterday. Keep it up!`;
   );
 }
 
-export default App;
+// Pinned todo popup entry: the popup window loads the same bundle at
+// hash route #/mini-todo. Branch here — before App's hooks run — so the
+// popup renders ONLY the mini page (no shell, sidebar, or data polling).
+function AppRoot() {
+  if (typeof window !== 'undefined' && window.location.hash.startsWith('#/mini-todo')) {
+    return <TodoMiniPage />;
+  }
+  return <App />;
+}
+
+export default AppRoot;
 

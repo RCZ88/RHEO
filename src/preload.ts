@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   deleteAppLog: (id: number) => ipcRenderer.invoke('delete-app-log', id),
 
   // New: pre-aggregated dashboard data (replaces allLogs-based client-side computation)
-  getDashboardAggregates: (request: { period: string; dateOffset?: number; weekOffset?: number }) =>
+  getDashboardAggregates: (request: { period: string; dateOffset?: number; weekOffset?: number; platform?: string }) =>
     ipcRenderer.invoke('get-dashboard-aggregates', request),
 
   // New: app stats for StatsPage
@@ -79,6 +79,15 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   toggleTracking: () => ipcRenderer.invoke('toggle-tracking'),
   setTracking: (enabled: boolean) => ipcRenderer.invoke('set-tracking', enabled),
   restartTracking: () => ipcRenderer.invoke('restart-tracking'),
+  // Platform + tracking mode (Linux Wayland resilience)
+  getPlatformInfo: () => ipcRenderer.invoke('get-platform-info'),
+  getTrackingMode: () => ipcRenderer.invoke('get-tracking-mode'),
+  setTrackingMode: (mode: string) => ipcRenderer.invoke('set-tracking-mode', mode),
+  onTrackingStatusChange: (callback: (data: any) => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('tracking-status-changed', handler);
+    return () => { ipcRenderer.removeListener('tracking-status-changed', handler); };
+  },
 
   // Clear all stored data
   clearData: () => ipcRenderer.invoke('clear-data'),
@@ -94,6 +103,9 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // Get user preferences
   getPreferences: () => ipcRenderer.invoke('get-preferences'),
+
+  // Get single user preference (R-10: boot animation config)
+  getPreference: (key: string) => ipcRenderer.invoke('get-preference', key),
 
   // Set user preference
   setPreference: (key: string, value: any) => ipcRenderer.invoke('set-preference', key, value),
@@ -552,6 +564,29 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   conductorRegisterProvider: (config: any) => ipcRenderer.invoke('conductor:register-provider', config),
   conductorListProviders: () => ipcRenderer.invoke('conductor:list-providers'),
   conductorDeleteProvider: (providerId: string) => ipcRenderer.invoke('conductor:delete-provider', providerId),
+
+  // AI Gateway — browser-automation provider access
+  aigatewayListProviders: () => ipcRenderer.invoke('aigateway:list-providers'),
+  aigatewayAllStatuses: () => ipcRenderer.invoke('aigateway:all-statuses'),
+  aigatewayPlaywrightStatus: () => ipcRenderer.invoke('aigateway:playwright-status'),
+  aigatewaySetupProvider: (providerId: string) => ipcRenderer.invoke('aigateway:setup-provider', providerId),
+  aigatewayVerifySetup: (providerId: string) => ipcRenderer.invoke('aigateway:verify-setup', providerId),
+  aigatewaySendPrompt: (opts: { provider: string; prompt: string; model?: string; timeoutMs?: number }) => ipcRenderer.invoke('aigateway:send-prompt', opts),
+  aigatewayClearConversation: (providerId: string) => ipcRenderer.invoke('aigateway:clear-conversation', providerId),
+  aigatewayCloseProvider: (providerId: string) => ipcRenderer.invoke('aigateway:close-provider', providerId),
+  aigatewayLogoutProvider: (providerId: string) => ipcRenderer.invoke('aigateway:logout-provider', providerId),
+  aigatewaySetDisabled: (providerId: string, disabled: boolean) => ipcRenderer.invoke('aigateway:set-disabled', providerId, disabled),
+  aigatewayRecentRuns: (providerId: string, limit?: number) => ipcRenderer.invoke('aigateway:recent-runs', providerId, limit),
+  onAIGatewayProviderStatus: (callback: (data: { provider: string; status?: string }) => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('aigateway:provider-status', handler);
+    return () => ipcRenderer.removeListener('aigateway:provider-status', handler);
+  },
+  onAIGatewaySessionExpired: (callback: (data: { provider: string; reason: string }) => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('aigateway:session-expired', handler);
+    return () => ipcRenderer.removeListener('aigateway:session-expired', handler);
+  },
   conductorGetMissionHistory: () => ipcRenderer.invoke('conductor:get-mission-history'),
   conductorEngineerWorkflow: (objective: string, templateId?: string) => ipcRenderer.invoke('conductor:engineer-workflow', objective, templateId),
   onConductorSpawnTerminal: (callback: (data: { terminalId: string; cwd: string; cols: number; rows: number; agentType?: string }) => void) => {
@@ -1156,6 +1191,27 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   deleteDeadline: (id: string) => ipcRenderer.invoke('delete-deadline', id),
   updateDeadline: (id: string, patch: any) => ipcRenderer.invoke('update-deadline', id, patch),
   snoozeDeadline: (id: string, minutes: number) => ipcRenderer.invoke('snooze-deadline', id, minutes),
+  // ========== Pinned todo popup (always-on-top mini window) ==========
+  todoPopupToggle: () => ipcRenderer.invoke('todo-popup:toggle'),
+  todoPopupClose: () => ipcRenderer.invoke('todo-popup:close'),
+  todoPopupSetPinned: (pinned: boolean) => ipcRenderer.invoke('todo-popup:set-pinned', pinned),
+  todoPopupGetState: () => ipcRenderer.invoke('todo-popup:get-state'),
+  todoPopupMinimize: () => ipcRenderer.invoke('todo-popup:minimize'),
+  todoPopupFocusMain: () => ipcRenderer.invoke('todo-popup:focus-main'),
+  onTodoPopupState: (cb: (s: { open: boolean; pinned: boolean }) => void) => {
+    const handler = (_e: any, s: any) => cb(s);
+    ipcRenderer.on('todo-popup-state', handler);
+    return () => ipcRenderer.removeListener('todo-popup-state', handler);
+  },
+
+  // ========== Todos (persistent, linkable) ========
+  todoList: (opts?: { goalId?: string; deadlineId?: string; scheduleId?: string; limit?: number }) => ipcRenderer.invoke('todo:list', opts),
+  todoCreate: (data: { text: string; goalId?: string; deadlineId?: string; scheduleId?: string; dueDate?: string; reminder?: string; parentTodoId?: string; sortOrder?: number }) => ipcRenderer.invoke('todo:create', data),
+  todoUpdate: (id: string, patch: any) => ipcRenderer.invoke('todo:update', id, patch),
+  todoToggle: (id: string, done?: boolean) => ipcRenderer.invoke('todo:toggle', id, done),
+  todoDelete: (id: string) => ipcRenderer.invoke('todo:delete', id),
+  todoGetConnections: (entityType: string, entityId: string) => ipcRenderer.invoke('todo:get-connections', entityType, entityId),
+  goalGetConnections: (goalId: string) => ipcRenderer.invoke('goal:get-connections', goalId),
   getScheduleTemplates: () => ipcRenderer.invoke('get-schedule-templates'),
   applyScheduleTemplate: (templateId: string) => ipcRenderer.invoke('apply-schedule-template', templateId),
   saveScheduleTemplate: (data: { name: string; entries: any[] }) => ipcRenderer.invoke('save-schedule-template', data),
@@ -1710,3 +1766,13 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   compositionsSettingsGet: (key: string) => ipcRenderer.invoke('compositions:settings:get', key),
   compositionsSettingsSet: (key: string, value: string) => ipcRenderer.invoke('compositions:settings:set', key, value),
 });
+
+// R-10: Splash renderer preload bridge (single IPC channel for splash↔main)
+contextBridge.exposeInMainWorld('splashAPI', {
+  getBootAnimationConfig: () => ipcRenderer.invoke('boot-animation-config'),
+  onReplay: (cb) => ipcRenderer.on('replay-splash', () => cb()),
+  sendComplete: () => ipcRenderer.invoke('splash-complete'),
+});
+
+// R-10: Single preference getter (needed by SettingsPage mount-load)
+ipcRenderer.invoke('get-preference');

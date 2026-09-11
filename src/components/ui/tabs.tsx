@@ -29,7 +29,7 @@ interface TabsListProps {
 
 export function TabsList({ children, className = '' }: TabsListProps) {
   return (
-    <div className={`inline-flex items-center rounded-lg bg-zinc-900 ring-1 ring-zinc-800 p-0.5 ${className}`}>
+    <div className={`inline-flex items-center rounded-lg bg-zinc-900 ring-1 ring-zinc-800 p-0.5 light:bg-zinc-100 light:ring-zinc-200 ${className}`}>
       {children}
     </div>
   );
@@ -49,8 +49,8 @@ export function TabsTrigger({ value, children, className = '' }: TabsTriggerProp
       onClick={() => ctx?.onValueChange(value)}
       className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
         active
-          ? 'bg-zinc-800 text-zinc-200'
-          : 'text-zinc-500 hover:text-zinc-300'
+          ? 'bg-zinc-800 text-zinc-200 light:bg-zinc-200 light:text-zinc-900'
+          : 'text-zinc-500 hover:text-zinc-300 light:text-zinc-500 light:hover:text-zinc-700'
       } ${className}`}
     >
       {children}

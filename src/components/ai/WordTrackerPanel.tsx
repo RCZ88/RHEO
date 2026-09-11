@@ -221,7 +221,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
             <h3 className="text-[13px] font-semibold text-zinc-100">
               Word Tracker
             </h3>
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-[11px] text-zinc-500 light:text-stone-500">
               {words.length} tracked word{words.length !== 1 ? 's' : ''} &middot; {totalAllCounts.toLocaleString()} total hit{totalAllCounts !== 1 ? 's' : ''}
             </p>
           </div>
@@ -229,7 +229,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="p-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors"
+            className="p-1.5 text-zinc-500 light:text-stone-500 hover:text-zinc-200 hover:bg-zinc-800 light:bg-stone-200 rounded-lg transition-colors"
           >
             {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
@@ -247,7 +247,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
             {/* Controls Row */}
             <div className="flex items-center gap-2 flex-wrap mb-4">
               {/* Mode Toggle */}
-              <div className="flex items-center gap-1 bg-zinc-900/60 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                 <button
                   onClick={() => handleModeChange('realtime')}
                   className={cn(
@@ -292,14 +292,14 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                 <select
                   value={selectedProject}
                   onChange={(e) => setSelectedProject(e.target.value)}
-                  className="appearance-none pl-7 pr-6 py-1.5 bg-zinc-900/60 text-[11px] text-zinc-300 rounded-lg ring-1 ring-zinc-800/50 focus:outline-none focus:ring-1 focus:ring-violet-500/50 cursor-pointer"
+                  className="appearance-none pl-7 pr-6 py-1.5 bg-zinc-900/60 text-[11px] text-zinc-300 light:text-stone-700 rounded-lg ring-1 ring-zinc-800/50 focus:outline-none focus:ring-1 focus:ring-violet-500/50 cursor-pointer"
                 >
                   <option value="">All Projects</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <FolderOpen className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+                <FolderOpen className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 light:text-stone-500 pointer-events-none" />
               </div>
 
               {/* Actions */}
@@ -315,7 +315,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
               )}
               <button
                 onClick={handleReset}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800/70 text-zinc-400 hover:text-zinc-200 rounded-lg text-[11px] ring-1 ring-zinc-700/60 transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800/70 text-zinc-400 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800 rounded-lg text-[11px] ring-1 ring-zinc-700/60 transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />
                 Reset
@@ -330,7 +330,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
               {words.length === 0 && (
                 <button
                   onClick={initDefaults}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800/70 text-zinc-400 hover:text-zinc-200 rounded-lg text-[11px] ring-1 ring-zinc-700/60 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800/70 text-zinc-400 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800 rounded-lg text-[11px] ring-1 ring-zinc-700/60 transition-colors"
                 >
                   Load Defaults
                 </button>
@@ -365,10 +365,10 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden mb-3"
                 >
-                  <div className="p-3 bg-zinc-900/60 rounded-xl ring-1 ring-zinc-800/50">
+                  <div className="p-3 bg-zinc-900/60 light:bg-stone-200 rounded-xl ring-1 ring-zinc-800/50">
                     <div className="flex items-center gap-2 mb-2">
-                      <Search className="w-3.5 h-3.5 text-zinc-500" />
-                      <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
+                      <Search className="w-3.5 h-3.5 text-zinc-500 light:text-stone-500" />
+                      <span className="text-[11px] text-zinc-500 light:text-stone-500 uppercase tracking-wider font-medium">
                         Add word to track
                       </span>
                     </div>
@@ -379,7 +379,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                         onChange={(e) => setNewWord(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddWord()}
                         placeholder="Enter word..."
-                        className="flex-1 px-3 py-1.5 bg-zinc-800/60 text-sm text-zinc-100 rounded-lg ring-1 ring-zinc-700/60 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                        className="flex-1 px-3 py-1.5 bg-zinc-800/60 text-sm text-zinc-100 rounded-lg ring-1 ring-zinc-700/60 placeholder:text-zinc-600 light:text-stone-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
                       />
                       <div className="flex items-center gap-1">
                         {PRESET_COLORS.map((c) => (
@@ -403,15 +403,15 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                       </button>
                       <button
                         onClick={() => setShowAddForm(false)}
-                        className="p-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors"
+                        className="p-1.5 text-zinc-500 light:text-stone-500 hover:text-zinc-200 hover:bg-zinc-800 light:bg-stone-200 rounded-lg transition-colors"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     {/* Tolerance selector */}
                     <div className="flex items-center gap-2">
-                      <Settings2 className="w-3 h-3 text-zinc-600" />
-                      <span className="text-[10px] text-zinc-600 uppercase tracking-wider">Tolerance:</span>
+                      <Settings2 className="w-3 h-3 text-zinc-600 light:text-stone-500" />
+                      <span className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider">Tolerance:</span>
                       {(['exact', 'stem', 'fuzzy'] as const).map((t) => (
                         <button
                           key={t}
@@ -441,7 +441,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
 
             {/* Word List */}
             {words.length === 0 ? (
-              <div className="text-center py-8 text-zinc-600 text-sm">
+              <div className="text-center py-8 text-zinc-600 light:text-stone-500 text-sm">
                 No tracked words yet. Click &quot;Add Word&quot; or &quot;Load Defaults&quot; to start.
               </div>
             ) : (
@@ -453,7 +453,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
 
                   if (isEditing) {
                     return (
-                      <div key={word.id} className="p-3 bg-zinc-900/60 rounded-xl ring-1 ring-amber-500/30">
+                      <div key={word.id} className="p-3 bg-zinc-900/60 light:bg-stone-200 rounded-xl ring-1 ring-amber-500/30">
                         <div className="flex items-center gap-2 mb-2">
                           <span className="text-[10px] text-amber-400 uppercase tracking-wider font-medium">Editing</span>
                         </div>
@@ -463,7 +463,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                             value={editText}
                             onChange={(e) => setEditText(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && saveEdit()}
-                            className="flex-1 px-3 py-1.5 bg-zinc-800/60 text-sm text-zinc-100 rounded-lg ring-1 ring-zinc-700/60 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                            className="flex-1 px-3 py-1.5 bg-zinc-800/60 light:bg-stone-200 text-sm text-zinc-100 rounded-lg ring-1 ring-zinc-700/60 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
                             autoFocus
                           />
                           <input
@@ -471,7 +471,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                             value={editLabel}
                             onChange={(e) => setEditLabel(e.target.value)}
                             placeholder="Label"
-                            className="w-28 px-2 py-1.5 bg-zinc-800/60 text-sm text-zinc-300 rounded-lg ring-1 ring-zinc-700/60 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                            className="w-28 px-2 py-1.5 bg-zinc-800/60 text-sm text-zinc-300 rounded-lg ring-1 ring-zinc-700/60 placeholder:text-zinc-600 light:text-stone-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
                           />
                         </div>
                         <div className="flex items-center gap-2 mb-2">
@@ -488,7 +488,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                           ))}
                         </div>
                         <div className="flex items-center gap-2 mb-2">
-                          <Settings2 className="w-3 h-3 text-zinc-600" />
+                          <Settings2 className="w-3 h-3 text-zinc-600 light:text-stone-500" />
                           {(['exact', 'stem', 'fuzzy'] as const).map((t) => (
                             <button
                               key={t}
@@ -508,7 +508,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                         </div>
                         <div className="flex items-center gap-2">
                           <button onClick={saveEdit} className="px-3 py-1 bg-amber-500/20 text-amber-300 rounded-lg text-[11px] font-medium ring-1 ring-amber-500/30 hover:bg-amber-500/30">Save</button>
-                          <button onClick={() => setEditingWord(null)} className="px-3 py-1 bg-zinc-800/70 text-zinc-400 rounded-lg text-[11px] ring-1 ring-zinc-700/60 hover:text-zinc-200">Cancel</button>
+                          <button onClick={() => setEditingWord(null)} className="px-3 py-1 bg-zinc-800/70 text-zinc-400 light:text-stone-500 rounded-lg text-[11px] ring-1 ring-zinc-700/60 hover:text-zinc-200 light:hover:text-stone-800">Cancel</button>
                         </div>
                       </div>
                     )
@@ -534,7 +534,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                             <span className="text-[13px] font-medium text-zinc-200">
                               {word.word}
                             </span>
-                            <span className="text-[11px] text-zinc-500">
+                            <span className="text-[11px] text-zinc-500 light:text-stone-500">
                               {word.label}
                             </span>
                             {/* Tolerance badge */}
@@ -579,7 +579,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                         {/* Toggle */}
                         <button
                           onClick={() => handleToggleWord(word.id, !word.enabled)}
-                          className="text-zinc-500 hover:text-zinc-200 transition-colors"
+                          className="text-zinc-500 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800 transition-colors"
                         >
                           {word.enabled ? (
                             <ToggleRight className="w-5 h-5 text-emerald-400" />
@@ -591,7 +591,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                         {/* Edit */}
                         <button
                           onClick={() => startEdit(word)}
-                          className="p-1 text-zinc-600 hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-1 text-zinc-600 light:text-stone-500 hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-all"
                           title="Edit word"
                         >
                           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
@@ -600,7 +600,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                         {/* Delete */}
                         <button
                           onClick={() => handleRemoveWord(word.id)}
-                          className="p-1 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-1 text-zinc-600 light:text-stone-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -615,14 +615,14 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                             exit={{ opacity: 0, height: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className="ml-8 mr-2 mb-1 p-2 bg-zinc-950/60 rounded-lg ring-1 ring-zinc-800/40">
+                            <div className="ml-8 mr-2 mb-1 p-2 bg-zinc-950/60 light:bg-white rounded-lg ring-1 ring-zinc-800/40">
                               {projectCounts.length === 0 ? (
-                                <div className="text-[11px] text-zinc-600 py-1">No project data yet</div>
+                                <div className="text-[11px] text-zinc-600 light:text-stone-500 py-1">No project data yet</div>
                               ) : (
                                 <div className="space-y-1">
                                   {projectCounts.map((pc) => (
                                     <div key={pc.id} className="flex items-center justify-between text-[11px]">
-                                      <span className="text-zinc-400">{pc.project_name || 'No project'}</span>
+                                      <span className="text-zinc-400 light:text-stone-500">{pc.project_name || 'No project'}</span>
                                        <span className="text-amber-400 font-medium">{safeWordCount(pc.count).toLocaleString()}</span>
                                     </div>
                                   ))}

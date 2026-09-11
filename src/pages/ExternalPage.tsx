@@ -1693,7 +1693,12 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
           {manualSessionActivity && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setManualSessionActivity(null)} />
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-zinc-800 rounded-xl p-5 border border-zinc-700 min-w-72" style={{ borderColor: manualSessionActivity.color + '60' }}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-zinc-800 rounded-xl p-5 border border-zinc-700 min-w-72"
+                style={{ borderColor: manualSessionActivity.color + '60' }}>
                 <div className="text-center mb-5">
                   <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: manualSessionActivity.color }}>{(() => { const Icon = getIcon(manualSessionActivity.icon); return <Icon className="w-6 h-6 text-white" />; })()}</div>
                   <div className="text-lg font-semibold text-zinc-100">{manualSessionActivity.name}</div>

@@ -183,7 +183,7 @@ export default function ActRecord() {
                     </p>
                     <p
                       className="mono"
-                      style={{ fontSize: 11, color: "#63636b", marginTop: 4 }}
+                      style={{ fontSize: 11, color: "#8a8a94", marginTop: 4 }}
                     >
                       {PHASES[active].range} · phase {active + 1}/4
                     </p>
@@ -206,7 +206,7 @@ export default function ActRecord() {
                     >
                       <span
                         className="mono"
-                        style={{ fontSize: 11, color: "#63636b" }}
+                        style={{ fontSize: 11, color: "#8a8a94" }}
                       >
                         recorded
                       </span>
@@ -231,7 +231,7 @@ export default function ActRecord() {
                   >
                     <p
                       className="mono-label"
-                      style={{ fontSize: 11, color: "#63636b" }}
+                      style={{ fontSize: 11, color: "#8a8a94" }}
                     >
                       BETWEEN PHASES
                     </p>
@@ -239,7 +239,7 @@ export default function ActRecord() {
                       style={{
                         fontSize: 16,
                         lineHeight: 1.5,
-                        color: "#63636b",
+                        color: "#8a8a94",
                         marginTop: 12,
                       }}
                     >
@@ -266,7 +266,7 @@ export default function ActRecord() {
                       className="mono"
                       style={{
                         fontSize: 11,
-                        color: active === i ? "#f4f4f5" : "#63636b",
+                        color: active === i ? "#f4f4f5" : "#8a8a94",
                         letterSpacing: "0.08em",
                         transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
                       }}
@@ -280,7 +280,7 @@ export default function ActRecord() {
                       className="mono tabular-nums"
                       style={{
                         fontSize: 11,
-                        color: active === i ? "#f4f4f5" : "#63636b",
+                        color: active === i ? "#f4f4f5" : "#8a8a94",
                         transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
                       }}
                     >
@@ -323,7 +323,7 @@ export default function ActRecord() {
                   </p>
                   <p
                     className="mono"
-                    style={{ fontSize: 11, color: "#63636b", marginTop: 3 }}
+                    style={{ fontSize: 11, color: "#8a8a94", marginTop: 3 }}
                   >
                     {ph.range} · phase {i + 1}/4
                   </p>
@@ -346,7 +346,7 @@ export default function ActRecord() {
                   >
                     <span
                       className="mono"
-                      style={{ fontSize: 11, color: "#63636b" }}
+                      style={{ fontSize: 11, color: "#8a8a94" }}
                     >
                       recorded
                     </span>
@@ -551,7 +551,7 @@ function DashboardCard({
                 className="mono"
                 style={{
                   fontSize: 9,
-                  color: isActive ? "#f4f4f5" : "#63636b",
+                  color: isActive ? "#f4f4f5" : "#8a8a94",
                   letterSpacing: "0.1em",
                   transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
                 }}
@@ -605,7 +605,7 @@ function DashboardCard({
             <span
               key={t}
               className="mono"
-              style={{ fontSize: 8, color: "#63636b", letterSpacing: "0.06em" }}
+              style={{ fontSize: 8, color: "#8a8a94", letterSpacing: "0.06em" }}
             >
               {t}
             </span>
@@ -741,7 +741,7 @@ function TimelineTrack({
             top: `${(t / 24) * 100}%`,
             transform: "translateY(-50%)",
             fontSize: 10,
-            color: "#63636b",
+            color: "#8a8a94",
             letterSpacing: "0.08em",
           }}
         >
@@ -770,7 +770,7 @@ function TimelineTrack({
               className="mono"
               style={{
                 fontSize: 9,
-                color: "#63636b",
+                color: "#8a8a94",
                 letterSpacing: "0.1em",
                 writingMode: "horizontal-tb",
               }}
@@ -835,7 +835,7 @@ function TimelineTrack({
         >
           <span
             className="mono"
-            style={{ fontSize: 11, color: "#63636b", letterSpacing: "0.1em" }}
+            style={{ fontSize: 11, color: "#8a8a94", letterSpacing: "0.1em" }}
           >
             SCROLL TO REPLAY THE DAY
           </span>

@@ -44,7 +44,7 @@ export default function Preloader() {
           <div className="flex items-baseline gap-3">
             <span
               className="mono"
-              style={{ fontSize: 13, color: "#63636b", letterSpacing: "0.14em" }}
+              style={{ fontSize: 13, color: "#8a8a94", letterSpacing: "0.14em" }}
             >
               RHEO
             </span>

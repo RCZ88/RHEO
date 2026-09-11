@@ -59,9 +59,29 @@ async function main() {
     }
   }
 
-  const content = readFileSync(resolve(OUT, 'main.cjs'), 'utf-8');
+  let content = readFileSync(resolve(OUT, 'main.cjs'), 'utf-8');
+  // src/main.ts requires '../lib/scheduleParser' (correct in src/, wrong in dist-electron/)
+  if (content.includes('../lib/scheduleParser')) {
+    content = content.split('../lib/scheduleParser').join('./lib/scheduleParser');
+    const { writeFileSync: wfs } = await import('fs');
+    wfs(resolve(OUT, 'main.cjs'), content);
+    console.log('  ../lib/scheduleParser → ./lib/scheduleParser (dist path fix)');
+  }
   if (content.includes('./services/') || content.includes('./gameDetection')) {
     console.log('  ✅ Services left as external require() (expected)');
+  }
+
+  // Pre-compile src/main/terminalRelay.ts — main.cjs requires it at runtime (line 26)
+  console.log('\n=== Compiling main/terminalRelay ===');
+  {
+    const srcPath = resolve(SRC, 'main', 'terminalRelay.ts');
+    const outPath = resolve(OUT, 'main', 'terminalRelay.js');
+    mkdirSync(dirname(outPath), { recursive: true });
+    execSync(
+      `npx esbuild "${srcPath}" --outfile="${outPath}" --format=cjs --platform=node --target=node22 2>&1`,
+      { cwd: ROOT, stdio: 'inherit', shell: true }
+    );
+    console.log('  main/terminalRelay.ts → main/terminalRelay.js');
   }
 
   // Pre-compile src/main/ai/ files that main.cjs requires at runtime

@@ -37,7 +37,7 @@ export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
       {visible && (
         <div
           role="tooltip"
-          className="fixed z-50 px-2 py-1 text-[11px] font-medium text-zinc-200 bg-zinc-900/95 ring-1 ring-zinc-700 rounded-md pointer-events-none whitespace-nowrap"
+          className="fixed z-50 px-2 py-1 text-[11px] font-medium text-zinc-200 bg-zinc-900/95 ring-1 ring-zinc-700 rounded-md pointer-events-none whitespace-nowrap light:text-zinc-800 light:bg-white/95 light:ring-zinc-200"
           style={{ left: pos.x, top: pos.y, transform: `translate(-50%, ${side === 'top' ? '-100%' : side === 'bottom' ? '0%' : '-50%'})` }}
         >
           {content}

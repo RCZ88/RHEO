@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -33,7 +34,9 @@ class Program
                 using (var graphics = Graphics.FromImage(bitmap))
                 {
                     graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
-                    string path = @"C:\Users\cleme\Documents\COMPUTAH_SAYENCE\App Tracker\design\media\shots\rheo_foreground.png";
+                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    string path = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "design", "media", "shots", "rheo_foreground.png"));
+                    Directory.CreateDirectory(Path.GetDirectoryName(path));
                     bitmap.Save(path, ImageFormat.Png);
                     Console.WriteLine($"Saved: {path}");
                 }

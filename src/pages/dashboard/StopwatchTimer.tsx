@@ -288,7 +288,7 @@ export function StopwatchTimer({
                         : (currentApp?.category || (isInBrowser ? 'Browser' : (lastTier ? lastTier.charAt(0).toUpperCase() + lastTier.slice(1) : 'Unknown')))}
                     </span>
                   ) : (
-                    <span className="px-3 py-1 rounded-full text-xs font-mono font-medium bg-zinc-800/50 text-zinc-500 border border-zinc-700/30">
+                    <span className="px-3 py-1 rounded-full text-xs font-mono font-medium bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 text-zinc-500 border border-zinc-700 light:border-zinc-300/30 light:border-zinc-300/30">
                       No App
                     </span>
                   )}
@@ -325,7 +325,7 @@ export function StopwatchTimer({
               </motion.div>
             )}
 
-            <div className="text-[10px] text-zinc-600 pt-4 border-t border-zinc-800/50">
+            <div className="text-[10px] text-zinc-600 pt-4 border-t border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50">
               {externalSessionRunning
                 ? `External activity: ${selectedExternalActivity?.name}. Timer running.`
                 : (!hasRealApp

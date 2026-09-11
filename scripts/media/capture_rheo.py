@@ -6,6 +6,9 @@ import win32gui
 import win32ui
 import win32con
 import win32api
+from pathlib import Path
+SHOTS_DIR = Path(__file__).resolve().parent.parent.parent / 'design' / 'media' / 'shots'
+SHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Find RHEO window
 def find_rheo():
@@ -56,7 +59,7 @@ bmp_info = bitmap.GetInfo()
 bmp_str = bitmap.GetBitmapBits(True)
 img = Image.frombuffer('RGB', (bmp_info['bmWidth'], bmp_info['bmHeight']), bmp_str, 'raw', 'BGRX', 0, 1)
 
-out_path = r'C:\Users\cleme\Documents\COMPUTAH_SAYENCE\App Tracker\design\media\shots\dashboard.png'
+out_path = str(SHOTS_DIR / 'dashboard.png')
 img.save(out_path)
 print(f"Saved: {out_path}")
 

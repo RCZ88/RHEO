@@ -233,7 +233,16 @@ export function CanvasGrid({
       >
         {cards.length === 0 && (
           <div className="dk-canvas-empty" style={{ left: 0, top: 0 }}>
-            <span>Cards will appear here as you interact with the AI</span>
+            <div className="dk-canvas-empty-inner">
+              <div className="dk-canvas-empty-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+                </svg>
+              </div>
+              <div className="dk-canvas-empty-title">Empty canvas</div>
+              <div className="dk-canvas-empty-hint">Cards will appear here as you interact with the AI</div>
+            </div>
           </div>
         )}
         {cards

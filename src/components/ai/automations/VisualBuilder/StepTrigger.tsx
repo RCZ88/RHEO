@@ -30,7 +30,7 @@ export function StepTrigger({ selected, onSelect }: StepTriggerProps) {
           <div key={source}>
             <div className="flex items-center gap-2 mb-2">
               <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">{meta.label}</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 light:text-stone-500">{meta.label}</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {triggers.map(trigger => (

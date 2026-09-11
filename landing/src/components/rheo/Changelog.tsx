@@ -203,7 +203,7 @@ export default function Changelog() {
                       >
                         {ks.label}
                       </span>
-                      <span className="mono tabular-nums" style={{ fontSize: 10, color: "#63636b", marginLeft: "auto" }}>
+                      <span className="mono tabular-nums" style={{ fontSize: 10, color: "#8a8a94", marginLeft: "auto" }}>
                         {e.date}
                       </span>
                     </div>
@@ -214,7 +214,7 @@ export default function Changelog() {
                           className="flex items-start gap-2"
                           style={{ fontSize: 13, lineHeight: 1.6, color: "#a1a1aa" }}
                         >
-                          <span style={{ color: "#63636b", flexShrink: 0, marginTop: 7, width: 4, height: 1, background: "#63636b" }} />
+                          <span style={{ color: "#8a8a94", flexShrink: 0, marginTop: 7, width: 4, height: 1, background: "#63636b" }} />
                           <span>{n}</span>
                         </li>
                       ))}

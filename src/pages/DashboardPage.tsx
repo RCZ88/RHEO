@@ -23,6 +23,7 @@ import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
 
 
 import { VCalendar } from '../components/ui/v-calendar';
+import { WidgetGrid } from '../components/dashboard/WidgetGrid';
 
 import { SectionHeader } from '../components/SectionHeader';
 import { GlassCard } from '../components/GlassCard';
@@ -526,6 +527,79 @@ export default function DashboardPage({
     aiSuggestionCount: dashInsights.aiSuggestionCount || 0,
   }), [streak, productivityScore, dashInsights]);
 
+  // ── Foreground state (hoisted: widgetData below reads these) ──
+  const [currentApp, setCurrentApp] = useState<ForegroundData | null>(null);
+  const [isInBrowser, setIsInBrowser] = useState(false); // Track if currently in tracking browser
+  const [currentWebsite, setCurrentWebsite] = useState<{ title?: string; url?: string; category?: string; domain?: string; browserName?: string; profileName?: string; profileId?: string } | null>(null);
+
+  // ── Adaptive display time (hoisted: widgetData below reads displayTime) ──
+  // Adaptive display: show what's actually running
+  const displayTime = useMemo(() => {
+    // External takes priority (user wants to see it when running)
+    if (externalSessionRunning && externalElapsedMs > 0) {
+      return { ms: externalElapsedMs, label: `External: ${selectedExternalActivity?.name || 'Running'}` };
+    }
+
+    // Distracting app — show distracting timer
+    if (lastTier === 'distracting' && !isPaused) {
+      return { ms: currentDistractingMs, label: 'Distracting' };
+    }
+
+    // Productive app — show productive timer
+    if (lastTier === 'productive' && !isPaused) {
+      return { ms: currentProductiveMs, label: 'Productive' };
+    }
+
+    // Neutral/idle — show whichever timer was last active
+    return { ms: currentProductiveMs, label: isPaused ? 'Paused' : 'Idle' };
+  }, [externalSessionRunning, externalElapsedMs, currentProductiveMs, currentDistractingMs, selectedExternalActivity, lastTier, isPaused]);
+
+  // ── Widget Data (collected for widget system) ──
+  const widgetData = useMemo(() => ({
+    goals,
+    longTermGoals,
+    suggestions,
+    insights: dashboardInsights,
+    streak,
+    productivityScore,
+    deadlines,
+    reminders,
+    schedule,
+    overview: dashboardData?.overview || null,
+    recentSessions: dashboardData?.recentSessions || [],
+    activityFeed,
+    focusMinutes: dashboardData?.focusMinutes || 0,
+    focusProgress: dashboardData?.focusProgress || 0,
+    isPaused,
+    isCurrentlyProductive,
+    isDistracting,
+    displayTimeMs: displayTime?.ms || 0,
+    totalFocusedMs: (dashboardData?.overview?.productiveSeconds || 0) * 1000,
+    currentAppName: isInBrowser
+      ? (currentWebsite?.title || currentWebsite?.domain || '')
+      : (currentApp?.app || currentApp?.title || ''),
+    sleepData: dashboardData?.sleepData || [],
+    avgSleep: dashboardData?.avgSleep || 0,
+    sleepDebt: dashboardData?.sleepDebt || 0,
+    masteryMastered,
+    masteryTotal,
+    ftData: null,
+    ftPersons: [],
+    lastTxDate: null,
+    dashboardCurrency: 'USD',
+    weeklyHeatmap: dashboardData?.weeklyHeatmap || [],
+    aiInsights,
+    momentum: null,
+    unfilledMinutes: 0,
+    gapCount: 0,
+    loading: dashLoading,
+    error: dashError,
+  }), [goals, longTermGoals, suggestions, dashboardInsights, streak, productivityScore,
+       deadlines, reminders, schedule, dashboardData, activityFeed, isPaused,
+       isCurrentlyProductive, isDistracting, displayTime, currentApp, currentWebsite,
+       isInBrowser, masteryMastered, masteryTotal,
+       aiInsights, dashLoading, dashError]);
+
   // Fetch non-dashboard data (sleep, etc.)
   useEffect(() => {
     const api = (window as any).deskflowAPI;
@@ -554,6 +628,7 @@ export default function DashboardPage({
           period: fetchPeriod,
           dateOffset,
           weekOffset,
+          platform: platformFilter === 'all' ? undefined : platformFilter,
         });
         if (cancelled) return;
         if (thisReq !== fetchReqId.current) return;
@@ -763,8 +838,7 @@ export default function DashboardPage({
 
   const [resetCount, setResetCount] = useState(0);
   const [resetTrigger, setResetTrigger] = useState(0);
-  const [currentApp, setCurrentApp] = useState<ForegroundData | null>(null);
-  const [isInBrowser, setIsInBrowser] = useState(false); // Track if currently in tracking browser
+  // (currentApp/isInBrowser/currentWebsite hoisted above widgetData)
   const [lastNonBrowserApp, setLastNonBrowserApp] = useState<ForegroundData | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number; value: number; productivity: number; deviceSeconds?: number; externalSeconds?: number } | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ day: number; hour: number } | null>(null);
@@ -784,7 +858,6 @@ export default function DashboardPage({
     setSolarFullscreen(val);
     window.dispatchEvent(new CustomEvent('solar-fullscreen-change', { detail: { fullscreen: val } }));
   }, []);
-  const [currentWebsite, setCurrentWebsite] = useState<{ title?: string; url?: string; category?: string; domain?: string; browserName?: string; profileName?: string; profileId?: string } | null>(null);
   const hasRealApp = !!currentApp?.app || (isInBrowser && !!currentWebsite?.domain);
   const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
   const [dayDetailItems, setDayDetailItems] = useState<TimelineItem[]>([]);
@@ -1682,27 +1755,6 @@ export default function DashboardPage({
   // External activity stopwatch - adaptive: shows external activity if running
   const stopwatchIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Adaptive display: show what's actually running
-  const displayTime = useMemo(() => {
-    // External takes priority (user wants to see it when running)
-    if (externalSessionRunning && externalElapsedMs > 0) {
-      return { ms: externalElapsedMs, label: `External: ${selectedExternalActivity?.name || 'Running'}` };
-    }
-
-    // Distracting app — show distracting timer
-    if (lastTier === 'distracting' && !isPaused) {
-      return { ms: currentDistractingMs, label: 'Distracting' };
-    }
-
-    // Productive app — show productive timer
-    if (lastTier === 'productive' && !isPaused) {
-      return { ms: currentProductiveMs, label: 'Productive' };
-    }
-
-    // Neutral/idle — show whichever timer was last active
-    return { ms: currentProductiveMs, label: isPaused ? 'Paused' : 'Idle' };
-  }, [externalSessionRunning, externalElapsedMs, currentProductiveMs, currentDistractingMs, selectedExternalActivity, lastTier, isPaused]);
-
   // Stopwatch interval - only runs when external session is active
   useEffect(() => {
     // Clear any existing interval
@@ -2090,7 +2142,7 @@ export default function DashboardPage({
     return (
       <div className="relative w-full">
         <div className="overflow-x-auto">
-          <div className="w-full bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/50 p-5">
+          <div className="w-full bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/50 p-5 light:bg-white/85 light:border-[var(--ws-border)]">
             <VCalendar
               value={calendarDate}
               onChange={setCalendarDate}
@@ -2102,7 +2154,7 @@ export default function DashboardPage({
                 {DAYS.map((day, dayIdx) => (
                   <div
                     key={dayIdx}
-                    className={`flex-1 text-center text-sm font-semibold mx-px cursor-pointer hover:text-white transition ${dayIdx === currentDay ? 'text-emerald-400' : 'text-zinc-400'}`}
+                    className={`flex-1 text-center text-sm font-semibold mx-px cursor-pointer hover:text-white transition ${dayIdx === currentDay ? 'text-emerald-400' : 'text-zinc-400'} light:text-[var(--text-secondary)]`}
                     onClick={() => handleDayClick(dayIdx)}
                   >
                     {day}
@@ -2113,12 +2165,12 @@ export default function DashboardPage({
 
             {/* Mode Toggle - below day headers */}
             <div className="flex justify-end mb-3">
-              <div className="flex bg-zinc-800 rounded-lg p-1 gap-1">
+              <div className="flex bg-zinc-800 rounded-lg p-1 gap-1 light:bg-[var(--ws-surface-sunken)]">
                 {(['device', 'external', 'combined'] as const).map(mode => (
                   <button
                     key={mode}
                     onClick={() => setHeatmapMode(mode)}
-                    className={`px-3 py-1.5 text-xs rounded-md transition capitalize ${heatmapMode === mode ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1.5 text-xs rounded-md transition capitalize ${heatmapMode === mode ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'} light:${heatmapMode === mode ? 'bg-white text-stone-900 border border-[var(--ws-border-strong)]' : 'text-stone-600 hover:text-stone-900'}`}
                   >
                     {mode === 'device' ? 'Device' : mode === 'external' ? 'External' : 'Combined'}
                   </button>
@@ -2130,7 +2182,7 @@ export default function DashboardPage({
               const hourStr = hourIdx.toString().padStart(2, '0');
               return (
                 <div key={hourIdx} className="flex items-center py-[1px]">
-                  <div className={`w-10 flex-shrink-0 pr-1 text-[10px] font-mono text-right text-zinc-500`}>
+                  <div className={`w-10 flex-shrink-0 pr-1 text-[10px] font-mono text-right text-zinc-500 light:text-[var(--text-muted)]`}>
                     {hourStr}
                   </div>
                   {DAYS.map((_, dayIdx) => {
@@ -2196,7 +2248,7 @@ export default function DashboardPage({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              className="absolute glass px-4 py-2.5 rounded-xl border border-zinc-700 z-50 pointer-events-none"
+              className="absolute glass px-4 py-2.5 rounded-xl border border-zinc-700 z-50 pointer-events-none light:bg-white light:border-[var(--ws-border-strong)]"
               style={{
                 minWidth: '220px',
                 left: '50%',
@@ -2204,18 +2256,18 @@ export default function DashboardPage({
                 top: `${(hoveredCell.hour * 26) + 50}px`
               }}
             >
-              <div className="font-semibold text-white text-xs mb-2">
+              <div className="font-semibold text-white text-xs mb-2 light:text-stone-900">
                 {DAYS[hoveredCell.day]} • {hoveredCell.hour.toString().padStart(2, '0')}:00 – {(hoveredCell.hour + 1).toString().padStart(2, '0')}:00
               </div>
               <div className="space-y-1">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-zinc-400 text-xs">Device:</span>
+                  <span className="text-zinc-400 text-xs light:text-stone-500">Device:</span>
                   <span className="font-mono text-sm text-emerald-400 tabular-nums">
                     {formatDuration((hoveredCell.deviceSeconds || 0) * 1000)}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-zinc-400 text-xs">External:</span>
+                  <span className="text-zinc-400 text-xs light:text-stone-500">External:</span>
                   <span className="font-mono text-sm text-purple-400 tabular-nums">
                     {formatDuration((hoveredCell.externalSeconds || 0) * 1000)}
                   </span>
@@ -2235,7 +2287,7 @@ export default function DashboardPage({
                 initial={{ opacity: 0, y: 20, height: 0 }}
                 animate={{ opacity: 1, y: 0, height: 'auto' }}
                 exit={{ opacity: 0, y: 20, height: 0 }}
-                className="mt-6 p-4 rounded-xl border border-zinc-700 bg-zinc-900/30 space-y-4"
+                className="mt-6 p-4 rounded-xl border border-zinc-700 bg-zinc-900/30 space-y-4 light:bg-white light:border-[var(--ws-border-strong)] light:text-stone-900"
               >
                 <div className="flex items-center justify-between">
                   <div className="font-semibold text-white">
@@ -2243,7 +2295,7 @@ export default function DashboardPage({
                   </div>
                   <button
                     onClick={() => setSelectedCell(null)}
-                    className="text-zinc-400 hover:text-zinc-300 transition-colors"
+                    className="light:text-stone-500 light:hover:text-stone-700 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -2257,21 +2309,21 @@ export default function DashboardPage({
                       Device Activity
                     </div>
                     {clickedCell.deviceSeconds === 0 ? (
-                      <div className="text-xs text-zinc-500 italic">No device activity this hour</div>
+                      <div className="text-xs light:text-stone-500 italic">No device activity this hour</div>
                     ) : (
                       <div className="space-y-2">
                         <div className="flex items-baseline justify-between text-xs">
-                          <span className="text-zinc-400">Total Time:</span>
+                          <span className="light:text-stone-500">Total Time:</span>
                           <span className="font-mono text-emerald-400">{formatDuration((clickedCell.deviceSeconds || 0) * 1000)}</span>
                         </div>
                         {(() => {
                           const breakdown = clickedCell.deviceBreakdown || {};
                           const apps = Object.entries(breakdown).sort((a, b) => b[1].seconds - a[1].seconds);
                           return apps.length > 0 ? (
-                            <div className="space-y-1 border-t border-zinc-700 pt-2 mt-2">
+                            <div className="space-y-1 border-t border-zinc-700 pt-2 mt-2 light:border-[var(--ws-border)]">
                               {apps.map(([app, data]) => (
                                 <div key={app} className="flex items-baseline justify-between text-xs">
-                                  <span className="text-zinc-400 truncate flex items-center gap-1">
+                                  <span className="text-zinc-400 truncate flex items-center gap-1 light:text-stone-500">
                                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: appColors[app] || '#6b7280' }} />
                                     {app}:
                                   </span>
@@ -2292,11 +2344,11 @@ export default function DashboardPage({
                       External Activity
                     </div>
                     {clickedCell.externalSeconds === 0 ? (
-                      <div className="text-xs text-zinc-500 italic">No external activity this hour</div>
+                      <div className="text-xs light:text-stone-500 italic">No external activity this hour</div>
                     ) : (
                       <div className="space-y-2">
                         <div className="flex items-baseline justify-between text-xs">
-                          <span className="text-zinc-400">Total Time:</span>
+                          <span className="light:text-stone-500">Total Time:</span>
                           <span className="font-mono text-purple-400">{formatDuration((clickedCell.externalSeconds || 0) * 1000)}</span>
                         </div>
                         {(() => {
@@ -2305,9 +2357,9 @@ export default function DashboardPage({
 
                           return activities.length > 0 ? (
                             <div className="space-y-1 border-t border-zinc-700 pt-2 mt-2">
-                              {activities.map(([activity, data]: [string, any]) => (
-                                <div key={activity} className="flex items-baseline justify-between text-xs">
-                                  <span className="text-zinc-400 truncate flex items-center gap-1">
+                                {activities.map(([activity, data]) => (
+                                  <div key={activity} className="flex items-baseline justify-between text-xs">
+                                    <span className="text-zinc-400 truncate flex items-center gap-1 light:text-stone-500">
                                     {data.icon || '?'} {activity}:
                                   </span>
                                   <span className="font-mono text-purple-300 ml-2 flex-shrink-0">{formatDuration(data.seconds * 1000)}</span>
@@ -2481,16 +2533,86 @@ export default function DashboardPage({
   // Start the global phase clock (idempotent — safe to call multiple times)
   useEffect(() => { startPhaseClock(); }, []);
 
+  // ── Widget Grid View (opt-in, default = classic) ──
+  // The adjustable mosaic is the primary dashboard view; Classic View remains
+  // available as a low-friction fallback for users who prefer the old flow.
+  const [customView, setCustomView] = useState(true);
+
+  // ── Platform filter state ──
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
+
+  // Fetch available platforms on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const api = await awaitApi();
+        const platforms = await api.getPlatforms?.();
+        if (platforms && platforms.length > 0) {
+          setAvailablePlatforms(platforms);
+        }
+      } catch (_e) { /* platforms not available */ }
+    })();
+  }, []);
+
   return (
     <PageShell page="dashboard" variant="dashboard" className="text-white">
       <CurrentCanvas accent="#10b981" render={renderStream} />
       <TimerResetOverlay trigger={resetTrigger} />
 
-      <div className="relative z-10">
+      {/* Platform Filter Toggle */}
+      {availablePlatforms.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
+          <button
+            onClick={() => setPlatformFilter('all')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+              platformFilter === 'all'
+                ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            All
+          </button>
+          {availablePlatforms.map(p => (
+            <button
+              key={p}
+              onClick={() => setPlatformFilter(p)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                platformFilter === p
+                  ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {p === 'win32' ? 'Windows' : p === 'darwin' ? 'macOS' : p}
+            </button>
+          ))}
+        </div>
+      )}
+
+      
+          {/* View Toggle — opt-in custom widget grid */}
+          <div className="flex items-center justify-end mb-4">
+            <button
+              onClick={() => setCustomView(!customView)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
+                customView
+                  ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+                    {customView ? '✓ Mosaic View' : 'Classic View'}
+            </button>
+          </div>
+
+          {customView ? (
+            <WidgetGrid data={widgetData} />
+          ) : (
+<div className="relative z-10">
         <div className="mx-auto px-5" style={{ maxWidth: '1400px' }}>
 
           {/* Row 1: Status Band + Momentum Hero */}
-          <div className="grid grid-cols-1 lg:grid-cols-[5fr_3fr] gap-4 mb-4 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-[5fr_3fr] gap-4 mb-4 items-stretch">
             <StatusBand
               displayTimeMs={displayTime.ms}
               isCurrentlyProductive={isCurrentlyProductive}
@@ -2540,7 +2662,7 @@ export default function DashboardPage({
 
            {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
            <BlurFade delay={0.14} duration={0.4}>
-             <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-2 gap-2 flex-1 min-h-0 mb-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1 min-h-0 mb-4">
                 <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
                   <GoalsCard
                     goals={goals}
@@ -2608,7 +2730,7 @@ export default function DashboardPage({
 
           {/* Row 6: Productivity Chart */}
           <BlurFade delay={0.2} duration={0.4}>
-            <div className="relative overflow-hidden bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5 mb-4">
+            <div className="relative overflow-hidden bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5 mb-4 light:bg-white/85 light:border-[var(--ws-border)]">
               <Particles className="absolute inset-0 pointer-events-none" quantity={30} color="#34d399" />
               <div className="relative z-10">
               <div className="border-t border-emerald-400/30 -mx-5 -mt-5 mb-4" />
@@ -2668,7 +2790,7 @@ export default function DashboardPage({
                 )}
               </div>
               {/* Custom Legend */}
-              <div className="flex items-center gap-4 mt-4 text-[11px] text-zinc-500">
+              <div className="flex items-center gap-4 mt-4 text-[11px] text-zinc-500 light:text-stone-500">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-sm bg-emerald-400"></span> Productive
                 </div>
@@ -2681,11 +2803,11 @@ export default function DashboardPage({
               </div>
               <div className="flex gap-3 mt-4">
                 <button onClick={() => setExpandedModal('heatmap')}
-                  className="flex-1 py-2.5 rounded-lg text-[12px] font-medium text-zinc-400 border border-[#3f3f46] hover:border-pink-500/50 hover:text-pink-400 transition-all duration-200">
+                  className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-pink-500/50 hover:text-pink-400 transition-all duration-200">
                   View Heatmap
                 </button>
                 <button onClick={() => setExpandedModal('solar')}
-                  className="flex-1 py-2.5 rounded-lg text-[12px] font-medium text-zinc-400 border border-[#3f3f46] hover:border-indigo-500/50 hover:text-indigo-400 transition-all duration-200">
+                  className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-indigo-500/50 hover:text-indigo-400 transition-all duration-200">
                   View Solar System
                 </button>
               </div>
@@ -2695,29 +2817,29 @@ export default function DashboardPage({
 
           {/* Row 7: Activity Feed */}
           <BlurFade delay={0.35} duration={0.4}>
-            <div className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5 mb-4">
-              <div className="border-t border-zinc-500/30 -mx-5 -mt-5 mb-4" />
+            <div className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5 mb-4 light:bg-white/85 light:border-[var(--ws-border)]">
+              <div className="border-t border-zinc-500/30 -mx-5 -mt-5 mb-4 light:border-[var(--ws-border)]" />
               <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
             <div className="space-y-0.5 mt-3">
               {activityFeedWithElapsed.length === 0 ? (
-                <EmptyState icon={<Clock size={20} className="text-zinc-600" />} title="No sessions yet" description="Start an activity to see it here" />
+                <EmptyState icon={<Clock size={20} className="light:text-stone-400" />} title="No sessions yet" description="Start an activity to see it here" />
               ) : (
                 [...activityFeedWithElapsed].reverse().slice(0, 10).map((item) => {
                   const isActive = item.isActive;
                   const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
                   return (
                     <div key={item.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/30 border border-zinc-800/20 hover:bg-zinc-900/50 hover:border-zinc-700/30 transition-all duration-200 group cursor-pointer">
+                      className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/30 border border-zinc-800/20 hover:bg-zinc-900/50 hover:border-zinc-700/30 transition-all duration-200 group cursor-pointer light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border)]">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${item.tier === 'productive' ? 'bg-emerald-400' : item.tier === 'distracting' ? 'bg-rose-400' : 'bg-amber-400'} ${isActive ? 'animate-pulse' : ''}`} />
                         <div className="min-w-0">
-                          <div className="text-[13px] text-zinc-300 group-hover:text-white transition-colors truncate">{item.name}</div>
-                          <div className="text-[11px] text-zinc-600 truncate">{item.category} &bull; {item.timestamp.toLocaleTimeString()}</div>
+                          <div className="text-[13px] text-zinc-300 group-hover:text-white transition-colors truncate light:text-stone-900">{item.name}</div>
+                          <div className="text-[11px] light:text-stone-400 truncate light:text-stone-500">{item.category} &bull; {item.timestamp.toLocaleTimeString()}</div>
                         </div>
                       </div>
                       <div className="text-right shrink-0 ml-3">
-                        <div className="text-[13px] font-mono text-zinc-400">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${item.tier === 'productive' ? 'bg-emerald-500/10 text-emerald-400' : item.tier === 'distracting' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                      <div className="text-[13px] font-mono text-zinc-400 light:text-stone-600">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${item.tier === 'productive' ? 'bg-emerald-500/10 text-emerald-400 light:bg-emerald-500/20 light:text-emerald-600' : item.tier === 'distracting' ? 'bg-rose-500/10 text-rose-400 light:bg-rose-500/20 light:text-rose-600' : 'bg-amber-500/10 text-amber-400 light:bg-amber-500/20 light:text-amber-600'}`}>
                           {item.tier}
                         </span>
                       </div>
@@ -2731,6 +2853,7 @@ export default function DashboardPage({
 
         </div>
       </div>
+          )}
 
       {/* Modals — UNCHANGED */}
       <AnimatePresence>
@@ -2739,7 +2862,7 @@ export default function DashboardPage({
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setExpandedModal(null)}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-auto bg-zinc-900/95 backdrop-blur-xl border-zinc-800/60"
+              className="relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-auto bg-zinc-900/95 backdrop-blur-xl border-zinc-800/60 light:bg-white light:border-[var(--ws-border-strong)]"
               onClick={(e) => e.stopPropagation()}>
               <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-pink-500/30 via-pink-500/10 to-transparent" />
               <div className="flex items-center justify-between mb-6">
@@ -2748,20 +2871,20 @@ export default function DashboardPage({
                     <BarChart3 className="w-4 h-4 text-pink-400" />
                   </div>
                   <div>
-                    <h2 className="text-[15px] font-semibold text-zinc-100">Activity Heatmap</h2>
-                    <p className="text-[11px] text-zinc-500">{heatmapWeekLabel}</p>
+                    <h2 className="text-[15px] font-semibold text-zinc-100 light:text-stone-900">Activity Heatmap</h2>
+                    <p className="text-[11px] text-zinc-500 light:text-stone-500">{heatmapWeekLabel}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60" title="Previous week">
+                  <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60 light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]" title="Previous week">
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setWeekOffset(0)} className="px-2 py-1 text-xs text-zinc-400 hover:text-white transition-all duration-150 rounded hover:bg-zinc-800/40">Today</button>
+                  <button onClick={() => setWeekOffset(0)} className="px-2 py-1 text-xs text-zinc-400 hover:text-white transition-all duration-150 rounded hover:bg-zinc-800/40 light:text-stone-900 light:hover:bg-stone-100">Today</button>
                   <button onClick={() => setWeekOffset(w => Math.min(w + 1, 0))} disabled={weekOffset >= 0}
-                    className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60 disabled:opacity-30 disabled:cursor-not-allowed" title="Next week">
+                    className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60 disabled:opacity-30 disabled:cursor-not-allowed light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)] light:disabled:opacity-30 light:disabled:cursor-not-allowed" title="Next week">
                     <ChevronRight className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setExpandedModal(null)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50 ml-2">
+                  <button onClick={() => setExpandedModal(null)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50 ml-2 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]">
                     <X className="w-5 h-5 text-zinc-400" />
                   </button>
                 </div>
@@ -2813,7 +2936,7 @@ export default function DashboardPage({
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setExpandedModal(null)}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className={solarFullscreen ? "fixed inset-0 z-50 bg-black flex flex-col" : "relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-hidden bg-zinc-900/95 backdrop-blur-xl border-zinc-800/60"}
+              className={solarFullscreen ? "fixed inset-0 z-50 bg-black flex flex-col" : "relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-hidden light:bg-white light:border-[var(--ws-border-strong)]"}
               onClick={(e) => e.stopPropagation()}>
               {!solarFullscreen && <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/30 via-indigo-500/10 to-transparent" />}
               <div className={`flex items-center justify-between px-4 pt-4 ${solarFullscreen ? '' : 'mb-4'}`}>
@@ -2822,17 +2945,17 @@ export default function DashboardPage({
                     <Sun className="w-4 h-4 text-indigo-400" />
                   </div>
                   <div>
-                    <h2 className="text-[15px] font-semibold text-zinc-100">App Ecosystem</h2>
-                    <p className="text-[11px] text-zinc-500">Your top tools in orbit</p>
+                    <h2 className="text-[15px] font-semibold light:text-stone-900">App Ecosystem</h2>
+                    <p className="text-[11px] light:text-stone-500">Your top tools in orbit</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setSolarFullscreenWithEvent(!solarFullscreen)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50"
+                  <button onClick={() => setSolarFullscreenWithEvent(!solarFullscreen)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]"
                     title={solarFullscreen ? "Exit fullscreen" : "Fullscreen"}>
-                    {solarFullscreen ? <Minimize2 className="w-5 h-5 text-zinc-400" /> : <Maximize2 className="w-5 h-5 text-zinc-400" />}
+                    {solarFullscreen ? <Minimize2 className="w-5 h-5 light:text-stone-500" /> : <Maximize2 className="w-5 h-5 text-zinc-400" />}
                   </button>
                   <button onClick={() => { setExpandedModal(null); setSolarFullscreenWithEvent(false); }} className="p-2 hover:bg-red-900/50 rounded-lg transition-all duration-150 border border-transparent hover:border-red-500/30" title="Close">
-                    <X className="w-5 h-5 text-zinc-400" />
+                    <X className="w-5 h-5 light:text-stone-500" />
                   </button>
                 </div>
               </div>

@@ -1,25 +1,6 @@
-"use client";
-
-/**
- * S9 — "THE ATLAS"
- * Full 14-instrument catalogue of RHEO. Sticky horizontal card rail driven by
- * vertical scroll progress (pure function of progress — rewinds on scroll-up).
- * Mobile <768px OR prefers-reduced-motion: native overflow-x-auto snap row,
- * no transforms, final states.
- *
- * STYLE: strict LAMINAR monochrome. No hue, no images, no box-shadow depth.
- *
- * IMPORT (in src/app/page.tsx):
- *   import AtlasSection from "@/components/rheo/AtlasSection";
- * PLACE inside <main> (e.g. after the Compare section):
- *   <AtlasSection />
- */
 import {
   AnimatePresence,
   motion,
-  useScroll,
-  useSpring,
-  useTransform,
 } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -32,10 +13,11 @@ import {
 import DecryptedText from "./DecryptedText";
 import LaminarSpotlight, { useCardCursor } from "./LaminarSpotlight";
 
+const GRID_PAD_X = 80;
+const GRID_PAD_Y = 24;
+const GRID_PAD_BOTTOM = 80;
+const GRID_GAP = 20;
 const EASE = [0.16, 1, 0.3, 1] as const;
-const CARD_W = 320;
-const CARD_GAP = 20;
-const RAIL_PAD = 80;
 
 type StatusStyle = { border: string; color: string; dashed?: boolean };
 const STATUS_STYLE: Record<AtlasStatus, StatusStyle> = {
@@ -63,26 +45,38 @@ const ATLAS_CSS = `
 @media (prefers-reduced-motion:reduce){
   .atlas-card{ transition:none !important; transform:none !important; }
 }
+.atlas-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  gap:20px;
+  padding:24px 80px 80px;
+}
+@media (min-width:768px){
+  .atlas-grid{ grid-template-columns:repeat(2,1fr); }
+}
+@media (min-width:1280px){
+  .atlas-grid{ grid-template-columns:repeat(3,1fr); }
+}
 `;
 
-/* ----------------------- glyph micro-SVGs (40px, stroke 1.5, no fill) ----------------------- */
+/* ----------------------- glyph micro-SVGs (40px, stroke 1.5) ----------------------- */
 function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
-  const s = {
+  const stroke: React.SVGProps<SVGSVGElement> = {
     width: size,
     height: size,
     viewBox: "0 0 40 40",
     fill: "none",
     stroke: "#ffffff",
     strokeWidth: 1.5,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
   };
+  const fill: React.SVGProps<SVGSVGElement> = { ...stroke, fill: "#ffffff", stroke: "none" };
   switch (kind) {
     case "external-tracking":
       // circle + orbit tick
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <circle cx="20" cy="20" r="11" />
           <line x1="20" y1="5" x2="20" y2="9" />
         </svg>
@@ -90,7 +84,7 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "mobile":
       // rounded rect + notch line
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <rect x="12" y="6" width="16" height="28" rx="3" />
           <line x1="17" y1="30" x2="23" y2="30" />
         </svg>
@@ -98,7 +92,7 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "content-engine":
       // doc lines
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <line x1="9" y1="12" x2="31" y2="12" />
           <line x1="9" y1="20" x2="28" y2="20" />
           <line x1="9" y1="28" x2="24" y2="28" />
@@ -107,7 +101,7 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "lyceum":
       // 3-node graph
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <circle cx="11" cy="11" r="2.4" />
           <circle cx="11" cy="29" r="2.4" />
           <circle cx="29" cy="20" r="2.4" />
@@ -118,23 +112,15 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "ide":
       // terminal chevron
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <polyline points="13,15 18,20 13,25" />
           <line x1="22" y1="25" x2="29" y2="25" />
-        </svg>
-      );
-    case "session-search":
-      // magnifier
-      return (
-        <svg {...s}>
-          <circle cx="18" cy="18" r="9" />
-          <line x1="24.5" y1="24.5" x2="31" y2="31" />
         </svg>
       );
     case "gap-fill":
       // dashed circle with plus — gap being closed
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <circle
             cx="20"
             cy="20"
@@ -149,7 +135,7 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "conductor":
       // one node fanning to three
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <circle cx="8" cy="20" r="2.4" />
           <circle cx="31" cy="9" r="2.4" />
           <circle cx="31" cy="20" r="2.4" />
@@ -162,14 +148,14 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "trace":
       // step polyline
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <polyline points="8,30 15,22 22,26 29,12 32,14" />
         </svg>
       );
     case "context-brain":
       // radial node cluster
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <circle cx="20" cy="20" r="3" />
           <circle cx="9" cy="11" r="1.8" />
           <circle cx="31" cy="11" r="1.8" />
@@ -184,7 +170,7 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "research-digest":
       // converging funnel lines
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <line x1="8" y1="10" x2="20" y2="20" />
           <line x1="8" y1="20" x2="20" y2="20" />
           <line x1="8" y1="30" x2="20" y2="20" />
@@ -197,7 +183,7 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "resume":
       // page outline + lines
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <rect x="11" y="7" width="18" height="26" rx="2" />
           <line x1="15" y1="14" x2="25" y2="14" />
           <line x1="15" y1="20" x2="25" y2="20" />
@@ -207,14 +193,14 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "finance":
       // wave line
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <path d="M6 28 C 12 28, 14 14, 20 14 C 26 14, 28 24, 34 24" />
         </svg>
       );
     case "life-phases":
       // stacked ridge lines
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <path d="M6 13 C 12 10, 18 15, 24 12 C 30 9, 34 13, 34 13" />
           <path d="M6 21 C 12 18, 18 23, 24 20 C 30 17, 34 21, 34 21" opacity="0.6" />
           <path d="M6 29 C 12 26, 18 31, 24 28 C 30 25, 34 29, 34 29" opacity="0.35" />
@@ -223,16 +209,56 @@ function Glyph({ kind, size = 40 }: { kind: AtlasGlyph; size?: number }) {
     case "marketplace":
       // 2x2 grid
       return (
-        <svg {...s}>
+        <svg {...stroke}>
           <rect x="8" y="8" width="10" height="10" rx="1.5" />
           <rect x="22" y="8" width="10" height="10" rx="1.5" />
           <rect x="8" y="22" width="10" height="10" rx="1.5" />
           <rect x="22" y="22" width="10" height="10" rx="1.5" />
         </svg>
       );
+    case "recordings":
+      // record button: stroked rounded square + filled inner dot (R-8a)
+      return (
+        <svg {...stroke}>
+          <rect x="11" y="11" width="18" height="18" rx="4" fill="none" strokeWidth={1.5} />
+          <circle cx="20" cy="20" r="3.25" fill="#ffffff" stroke="none" />
+        </svg>
+      );
+    case "screenshots":
+      // camera aperture outline: circle + 6 blade chords (R-8, G-2)
+      return (
+        <svg {...stroke}>
+          <circle cx="20" cy="20" r="9" fill="none" strokeWidth={1.5} />
+          {apertureBlades(20, 20, 9, 6, 1.5).map((d, i) => (
+            <path key={i} d={d} strokeWidth={1.5} />
+          ))}
+        </svg>
+      );
     default:
       return null;
   }
+}
+
+/* chord endpoints for a blade that meets the circle at ±half-blade-count radians
+   and crosses near 55% radius — derived with trig, not hand-tuned */
+function apertureBlades(
+  cx: number,
+  cy: number,
+  r: number,
+  count: number,
+  _width: number
+): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const a0 = (i / count) * Math.PI * 2 - Math.PI / 2;
+    const a1 = ((i + 0.5) / count) * Math.PI * 2 - Math.PI / 2;
+    const ax = cx + Math.cos(a0) * r;
+    const ay = cy + Math.sin(a0) * r;
+    const bx = cx + Math.cos(a1) * r;
+    const by = cy + Math.sin(a1) * r;
+    out.push(`M ${ax} ${ay} L ${bx} ${by}`);
+  }
+  return out;
 }
 
 /* ----------------------- status chip ----------------------- */
@@ -262,29 +288,24 @@ function StatusChip({ status }: { status: AtlasStatus }) {
 /* ----------------------- card ----------------------- */
 function AtlasCard({
   inst,
-  index,
-  isActive,
+  isHovered,
+  isFocused,
+  isRevealed,
   onOpen,
 }: {
   inst: AtlasInstrument;
-  index: number;
-  isActive: number;
+  isHovered: boolean;
+  isFocused: boolean;
+  isRevealed: boolean;
   onOpen: () => void;
 }) {
-  // distance-based scale/opacity, interpolated by distance, clamped at dist 1.
-  // active (dist 0) = full; dist >= 1 = scale 0.92, opacity 0.5.
-  const dist = Math.abs(index - isActive);
-  const t = Math.min(dist, 1);
-  const scale = 1 - 0.08 * t; // 1 -> 0.92
-  const opacity = 1 - 0.5 * t; // 1 -> 0.5
-
-  // transform uses CSS vars so :hover can add translateY without JS state
   const { onMouseMove, onMouseLeave } = useCardCursor();
   const cardStyle = {
-    width: CARD_W,
-    flex: `0 0 ${CARD_W}px`,
+    width: "100%",
     background: "#0a0a0c",
-    border: "1px solid rgba(255,255,255,0.08)",
+    border: isHovered || isFocused
+      ? "1px solid rgba(255,255,255,0.16)"
+      : "1px solid rgba(255,255,255,0.08)",
     borderRadius: 16,
     padding: 24,
     display: "flex",
@@ -292,12 +313,11 @@ function AtlasCard({
     gap: 16,
     textAlign: "left" as const,
     cursor: "pointer",
-    opacity,
+    opacity: isRevealed ? 1 : 0,
+    transform: isRevealed ? "translateY(0)" : "translateY(12px)",
+    transition: "transform 0.35s cubic-bezier(0.16,1,0.3,1), opacity 0.35s cubic-bezier(0.16,1,0.3,1), border-color 0.15s cubic-bezier(0.16,1,0.3,1)",
     position: "relative",
     overflow: "hidden",
-    "--scale": String(scale),
-    "--hover-y": "0px",
-    transform: "translateY(var(--hover-y,0px)) scale(var(--scale,1))",
   } as React.CSSProperties;
 
   return (
@@ -320,11 +340,11 @@ function AtlasCard({
           style={{
             fontSize: 11,
             letterSpacing: "0.14em",
-            color: "#63636b",
+            color: "#8a8a94",
             textTransform: "uppercase",
           }}
         >
-          INSTRUMENT {String(inst.index).padStart(2, "0")}
+          INSTRUMENT {String(ATLAS.indexOf(inst) + 1).padStart(2, "0")}
         </span>
         <StatusChip status={inst.status} />
       </div>
@@ -408,7 +428,7 @@ function AtlasModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.25, ease: EASE }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -495,11 +515,11 @@ function AtlasModal({
               style={{
                 fontSize: 11,
                 letterSpacing: "0.14em",
-                color: "#63636b",
+                color: "#8a8a94",
                 textTransform: "uppercase",
               }}
             >
-              INSTRUMENT {String(inst.index).padStart(2, "0")}
+              INSTRUMENT {ORDINAL[inst.id]?.toString().padStart(2, "0") ?? "01"}
             </span>
             <StatusChip status={inst.status} />
           </div>
@@ -622,63 +642,50 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
+const ORDINAL = (() => {
+  const m: Record<string, number> = {};
+  ATLAS.forEach((a, i) => { m[a.id] = i + 1; });
+  return m;
+})();
+
 /* ----------------------- section ----------------------- */
 export default function AtlasSection() {
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const railRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
 
+  // reduced-motion gate — entrance skip, cards stay visible
   const reduced = usePrefersReducedMotion();
-  const { scrollYProgress: rawProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start start", "end end"],
-  });
-  const progress = useSpring(rawProgress, {
-    stiffness: 120,
-    damping: 25,
-    restDelta: 0.001,
-  });
 
-  // breakpoint
+  // IntersectionObserver one-shot reveal (R-5): threshold 0.15, once:true
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [revealed, setRevealed] = useState<Set<number>>(new Set());
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
-  }, []);
-
-  // desktop rail translate — pure function of progress (reversible)
-  const railWidth = ATLAS.length * CARD_W + (ATLAS.length - 1) * CARD_GAP;
-  const travel = Math.max(0, railWidth + RAIL_PAD * 2 - 1);
-  const translateX = useTransform(progress, (p) => -(p * travel));
-
-  // active card index from progress (desktop sticky only)
-  useEffect(() => {
-    if (isMobile || reduced) return;
-    const unsub = progress.on("change", (p) => {
-      const idx = Math.round(p * (ATLAS.length - 1));
-      setActiveIndex(Math.max(0, Math.min(ATLAS.length - 1, idx)));
-    });
-    return () => unsub();
-  }, [progress, isMobile, reduced]);
-
-  // mobile: track active via scroll-snap position
-  useEffect(() => {
-    if (!isMobile || reduced || !railRef.current) return;
-    const el = railRef.current;
-    const onScroll = () => {
-      const i = Math.round(el.scrollLeft / (CARD_W + CARD_GAP));
-      setActiveIndex(Math.max(0, Math.min(ATLAS.length - 1, i)));
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [isMobile, reduced]);
-
-  // reduced-motion OR mobile => native overflow row (no transforms, final states)
-  const staticLayout = isMobile || reduced;
+    if (!gridRef.current) return;
+    if (reduced) {
+      // RM: all rows visible, no entrance
+      setRevealed(new Set(ATLAS.map((_, i) => i)));
+      return;
+    }
+    const cards = Array.from(gridRef.current.querySelectorAll<HTMLElement>("[data-atlas-card]"));
+    if (cards.length === 0) return;
+    let cancelled = false;
+    const obs = new IntersectionObserver(
+      (rows) => {
+        for (const row of rows) {
+          if (row.isIntersecting) {
+            const idx = Number((row.target as HTMLElement).getAttribute("data-atlas-index"));
+            if (!Number.isNaN(idx)) setRevealed((prev) => {
+              const next = new Set(prev);
+              next.add(idx);
+              return next;
+            });
+          }
+        }
+      },
+      { threshold: 0.15, rootMargin: "0px" }
+    );
+    for (const el of cards) obs.observe(el);
+    return () => { cancelled = true; obs.disconnect(); };
+  }, [reduced]);
 
   const openInst = openId
     ? (ATLAS.find((a) => a.id === openId) ?? null)
@@ -688,14 +695,13 @@ export default function AtlasSection() {
     <>
       <style dangerouslySetInnerHTML={{ __html: ATLAS_CSS }} />
 
+      {/* free-flow: normal document flow, content height (R-5) */}
       <section
-        ref={sectionRef}
         id="atlas"
         className="relative surface-page"
-        style={{ height: staticLayout ? "auto" : "250vh" }}
         aria-label="The Atlas — every instrument, one record"
       >
-        {/* header (normal flow, above sticky area) */}
+        {/* header (normal flow, above the grid) */}
         <div
           className="px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto"
           style={{ paddingTop: 96, paddingBottom: 40 }}
@@ -705,7 +711,7 @@ export default function AtlasSection() {
             style={{
               fontSize: 11,
               letterSpacing: "0.14em",
-              color: "#63636b",
+              color: "#8a8a94",
               textTransform: "uppercase",
             }}
           >
@@ -737,66 +743,28 @@ export default function AtlasSection() {
           </p>
         </div>
 
-        {staticLayout ? (
-          /* native overflow-x-auto snap row (mobile + reduced-motion) */
-          <div style={{ paddingBottom: 80 }}>
+        {/* responsive grid — 1 col <768 / 2 cols 768–1279 / 3 cols ≥1280 (R-5) */}
+        <div
+          ref={gridRef}
+          className="atlas-grid"
+          style={{ padding: `${GRID_PAD_Y}px ${GRID_PAD_X}px ${GRID_PAD_BOTTOM}px`, gap: `${GRID_GAP}px` }}
+        >
+          {ATLAS.map((inst, i) => (
             <div
-              ref={railRef}
-              data-rail="mobile"
-              className="no-scrollbar"
-              style={{
-                display: "flex",
-                gap: CARD_GAP,
-                overflowX: "auto",
-                scrollSnapType: "x mandatory",
-                WebkitOverflowScrolling: "touch",
-                padding: `24px ${RAIL_PAD}px`,
-              }}
+              key={inst.id}
+              data-atlas-card
+              data-atlas-index={i}
             >
-              {ATLAS.map((inst, i) => (
-                <div key={inst.id} style={{ scrollSnapAlign: "center" }}>
-                  {/* pass isActive={i} so every card renders at full final state */}
-                  <AtlasCard
-                    inst={inst}
-                    index={i}
-                    isActive={i}
-                    onOpen={() => setOpenId(inst.id)}
-                  />
-                </div>
-              ))}
+              <AtlasCard
+                inst={inst}
+                isHovered={false}
+                isFocused={false}
+                isRevealed={revealed.has(i)}
+                onOpen={() => setOpenId(inst.id)}
+              />
             </div>
-          </div>
-        ) : (
-          /* desktop sticky rail — translateX is a pure function of progress */
-          <div
-            className="sticky top-0 overflow-hidden"
-            style={{ height: "100dvh" }}
-          >
-            <motion.div
-              ref={railRef}
-              data-rail="desktop"
-              style={{
-                display: "flex",
-                gap: CARD_GAP,
-                padding: `0 ${RAIL_PAD}px`,
-                alignItems: "center",
-                height: "100%",
-                transform: translateX,
-                willChange: "transform",
-              }}
-            >
-              {ATLAS.map((inst, i) => (
-                <AtlasCard
-                  key={inst.id}
-                  inst={inst}
-                  index={i}
-                  isActive={activeIndex}
-                  onOpen={() => setOpenId(inst.id)}
-                />
-              ))}
-            </motion.div>
-          </div>
-        )}
+          ))}
+        </div>
       </section>
 
       <AnimatePresence>

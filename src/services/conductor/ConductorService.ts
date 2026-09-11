@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { SignalingBus, ConductorSignal } from '../lib/signaling/SignalingBus';
+import { SignalingBus, ConductorSignal } from '../../lib/signaling/SignalingBus';
 
 export type ConductorRole = 'director' | 'planner' | 'worker' | 'qa' | 'auditor' | 'resolver';
 export type ConductorStatus = 'pending' | 'spawning' | 'running' | 'blocked' | 'awaiting-review' | 'done' | 'failed' | 'killed';

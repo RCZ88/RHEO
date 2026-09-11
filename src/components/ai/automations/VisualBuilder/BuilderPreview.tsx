@@ -24,8 +24,8 @@ export function BuilderPreview({ name, trigger, conditions, conditionLogic, acti
 
       {/* Name */}
       {name && (
-        <div className="rounded-lg bg-zinc-800/40 p-3">
-          <span className="text-[10px] text-zinc-500 block">Name</span>
+        <div className="rounded-lg bg-zinc-800 light:bg-stone-200/40 p-3">
+          <span className="text-[10px] text-zinc-500 light:text-stone-500 block">Name</span>
           <span className="text-[13px] font-medium text-zinc-200">{name}</span>
         </div>
       )}
@@ -39,14 +39,14 @@ export function BuilderPreview({ name, trigger, conditions, conditionLogic, acti
         )}>
           <div className="flex items-center gap-2 mb-1">
             <Zap size={12} className="text-amber-400" />
-            <span className="text-[10px] font-medium text-zinc-400 uppercase">Trigger</span>
+            <span className="text-[10px] font-medium text-zinc-400 light:text-stone-500 uppercase">Trigger</span>
           </div>
           {trigger ? (
             <span className="text-[12px] text-zinc-200">
               {SOURCE_META[trigger.source]?.label}.{trigger.event}
             </span>
           ) : (
-            <span className="text-[11px] text-zinc-600 italic">Not selected</span>
+            <span className="text-[11px] text-zinc-600 light:text-stone-500 italic">Not selected</span>
           )}
         </div>
 
@@ -55,17 +55,17 @@ export function BuilderPreview({ name, trigger, conditions, conditionLogic, acti
           <>
             <div className="flex items-center gap-1 pl-4">
               <div className="h-3 w-px bg-zinc-700" />
-              <ArrowRight size={10} className="text-zinc-600" />
+              <ArrowRight size={10} className="text-zinc-600 light:text-stone-500" />
             </div>
-            <div className="rounded-lg bg-zinc-900/60 ring-1 ring-zinc-700/60 p-3">
+            <div className="rounded-lg bg-zinc-900/60 light:bg-stone-200 ring-1 ring-zinc-700/60 p-3">
               <div className="flex items-center gap-2 mb-1">
                 <GitBranch size={12} className="text-violet-400" />
-                <span className="text-[10px] font-medium text-zinc-400 uppercase">
+                <span className="text-[10px] font-medium text-zinc-400 light:text-stone-500 uppercase">
                   {validConditions.length} Condition{validConditions.length > 1 ? 's' : ''} ({conditionLogic.toUpperCase()})
                 </span>
               </div>
               {validConditions.map((c, i) => (
-                <p key={c.id} className="text-[11px] text-zinc-300">
+                <p key={c.id} className="text-[11px] text-zinc-300 light:text-stone-400">
                   {i > 0 && <span className="text-violet-400 font-bold">{conditionLogic.toUpperCase()} </span>}
                   {c.field} {c.operator} {c.value}
                 </p>
@@ -77,7 +77,7 @@ export function BuilderPreview({ name, trigger, conditions, conditionLogic, acti
         {/* Action */}
         <div className="flex items-center gap-1 pl-4">
           <div className="h-3 w-px bg-zinc-700" />
-          <ArrowRight size={10} className="text-zinc-600" />
+          <ArrowRight size={10} className="text-zinc-600 light:text-stone-500" />
         </div>
         <div className={cn(
           "rounded-lg p-3 ring-1",
@@ -85,19 +85,19 @@ export function BuilderPreview({ name, trigger, conditions, conditionLogic, acti
         )}>
           <div className="flex items-center gap-2 mb-1">
             <GitCommit size={12} className="text-emerald-400" />
-            <span className="text-[10px] font-medium text-zinc-400 uppercase">Action</span>
+            <span className="text-[10px] font-medium text-zinc-400 light:text-stone-500 uppercase">Action</span>
           </div>
           {actionDef ? (
             <>
               <span className="text-[12px] text-zinc-200">{actionDef.label}</span>
               {Object.entries(actionParams).filter(([, v]) => v).map(([k, v]) => (
-                <p key={k} className="text-[10px] text-zinc-500 mt-0.5">
+                <p key={k} className="text-[10px] text-zinc-500 light:text-stone-500 mt-0.5">
                   {k}: {String(v).slice(0, 40)}{String(v).length > 40 ? '…' : ''}
                 </p>
               ))}
             </>
           ) : (
-            <span className="text-[11px] text-zinc-600 italic">Not selected</span>
+            <span className="text-[11px] text-zinc-600 light:text-stone-500 italic">Not selected</span>
           )}
         </div>
       </div>

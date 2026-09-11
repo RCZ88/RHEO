@@ -106,7 +106,7 @@ export function AutomationCard({ rule, status, isRunning, onEdit, onEvaluate, on
               )
             })}
           </div>
-          <div className="flex items-center gap-3 mt-3 text-[10px] text-zinc-500">
+          <div className="flex items-center gap-3 mt-3 text-[10px] text-zinc-500 light:text-stone-500">
             <span>v{rule.version}</span>
             <span>{rule.category}</span>
             <span>{rule.lifecycle}</span>
@@ -129,16 +129,16 @@ export function AutomationCard({ rule, status, isRunning, onEdit, onEvaluate, on
             </button>
           </label>
           <div className="flex items-center gap-1">
-            <button onClick={onEvaluate} disabled={isRunning} className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="Run now">
+            <button onClick={onEvaluate} disabled={isRunning} className="p-2 rounded-lg text-zinc-400 light:text-stone-500 hover:text-white hover:bg-zinc-800 light:hover:bg-stone-200 transition-colors" title="Run now">
               {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
             </button>
-            <button onClick={onEdit} className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="Edit">
+            <button onClick={onEdit} className="p-2 rounded-lg text-zinc-400 light:text-stone-500 hover:text-white hover:bg-zinc-800 light:hover:bg-stone-200 transition-colors" title="Edit">
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button onClick={onHistory} className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="History">
+            <button onClick={onHistory} className="p-2 rounded-lg text-zinc-400 light:text-stone-500 hover:text-white hover:bg-zinc-800 light:hover:bg-stone-200 transition-colors" title="History">
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
-            <button onClick={onDelete} className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete">
+            <button onClick={onDelete} className="p-2 rounded-lg text-zinc-400 light:text-stone-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -150,11 +150,11 @@ export function AutomationCard({ rule, status, isRunning, onEdit, onEvaluate, on
 
 export function AutomationListEmpty({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full text-zinc-500 py-16">
+    <div className="flex flex-col items-center justify-center h-full text-zinc-500 light:text-stone-500 py-16">
       <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 ring-1 ring-cyan-500/20 flex items-center justify-center mb-4">
         <Zap className="w-6 h-6 text-cyan-400" />
       </div>
-      <p className="text-sm text-zinc-300">No automations yet</p>
+      <p className="text-sm text-zinc-300 light:text-stone-400">No automations yet</p>
       <p className="text-xs mt-1 max-w-[260px] text-center">Build one visually, or describe it in plain language and the AI will wire it up.</p>
       <button onClick={onCreate} className="mt-5 flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-sm transition-colors">
         <Zap className="w-4 h-4" /> New Automation

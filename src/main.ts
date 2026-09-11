@@ -25,6 +25,7 @@ const { pathToFileURL } = require('node:url');
 const fs_1 = __importDefault(require("fs"));
 const child_process_1 = require("child_process");
 const active_win_1 = __importDefault(require("active-win"));
+const linuxForeground_1 = require("./linuxForeground");
 const http_1 = __importDefault(require("http"));
 const os = require("os");
 const ProblemsServiceModule = require("./services/ProblemsService");
@@ -3267,6 +3268,56 @@ function initializeStorage() {
           db.exec(`ALTER TABLE deadlines ADD COLUMN remind_at TEXT`);
         } catch {}
 
+        // Goal page orchestration schema. The backup is created only when an
+        // existing database needs one of the two ALTERs, before any mutation.
+        // This keeps old installs recoverable while making the migration
+        // idempotent for every later launch.
+        const scheduleColumns = db.prepare('PRAGMA table_info(schedule_entries)').all() as any[];
+        const deadlineColumns = db.prepare('PRAGMA table_info(deadlines)').all() as any[];
+        const needsGoalColumns = !scheduleColumns.some(c => c.name === 'goal_id') || !deadlineColumns.some(c => c.name === 'goal_id');
+        if (needsGoalColumns && fs_1.default.existsSync(dbPath)) {
+          const backupPath = `${dbPath}.bak-goal-orchestration-${Date.now()}`;
+          fs_1.default.copyFileSync(dbPath, backupPath);
+          console.log('[GoalOrchestration] migration backup:', backupPath);
+        }
+        const beforeCounts = {
+          schedule: (db.prepare('SELECT COUNT(*) AS c FROM schedule_entries').get() as any)?.c || 0,
+          deadlines: (db.prepare('SELECT COUNT(*) AS c FROM deadlines').get() as any)?.c || 0,
+          goals: (db.prepare('SELECT COUNT(*) AS c FROM goals').get() as any)?.c || 0,
+        };
+        if (!scheduleColumns.some(c => c.name === 'goal_id')) db.exec('ALTER TABLE schedule_entries ADD COLUMN goal_id TEXT');
+        if (!deadlineColumns.some(c => c.name === 'goal_id')) db.exec('ALTER TABLE deadlines ADD COLUMN goal_id TEXT');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_schedule_entries_goal ON schedule_entries(goal_id)');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_deadlines_goal ON deadlines(goal_id)');
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS todos (
+            id TEXT PRIMARY KEY,
+            text TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0,
+            goal_id TEXT,
+            schedule_id TEXT,
+            parent_todo_id TEXT,
+            deadline_id TEXT,
+            due_date TEXT,
+            reminder TEXT DEFAULT 'none',
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            completed_at TEXT,
+            CHECK ((goal_id IS NULL) + (schedule_id IS NULL) + (parent_todo_id IS NULL) >= 2)
+          )
+        `);
+        db.exec('CREATE INDEX IF NOT EXISTS idx_todos_goal ON todos(goal_id)');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_todos_schedule ON todos(schedule_id)');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_todos_parent ON todos(parent_todo_id)');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_todos_deadline ON todos(deadline_id)');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_todos_due ON todos(due_date)');
+        const afterCounts = {
+          schedule: (db.prepare('SELECT COUNT(*) AS c FROM schedule_entries').get() as any)?.c || 0,
+          deadlines: (db.prepare('SELECT COUNT(*) AS c FROM deadlines').get() as any)?.c || 0,
+          goals: (db.prepare('SELECT COUNT(*) AS c FROM goals').get() as any)?.c || 0,
+        };
+        console.log('[GoalOrchestration] row counts:', JSON.stringify({ before: beforeCounts, after: afterCounts }));
+
         // Migration: merge reminders into deadlines
         try {
           const reminderCount = db.prepare('SELECT COUNT(*) as c FROM reminders').get();
@@ -4757,7 +4808,13 @@ async function pollForeground() {
             gameModePollCount = 0;
         }
 
-        const result = await (0, active_win_1.default)();
+        let result = await (0, active_win_1.default)();
+        // active-win's Linux backend is X11-only and returns undefined on
+        // several Linux desktops. Give it a local X11 fallback so tracking
+        // still works when active-win cannot parse the window.
+        if (!result && process.platform === 'linux') {
+            result = await linuxForeground_1.getLinuxForegroundWindow();
+        }
         const timeSinceLastPoll = now - lastPollTime;
         lastPollTime = now;
         const resolved = await resolveForegroundApp(result ?? null);
@@ -4958,6 +5015,8 @@ let startMinimized = false;
 let pendingExtensionCommands: any[] = [];
 function ensureWindow() {
     if (!mainWindow || mainWindow.isDestroyed()) {
+        const prefService = require('./services/prefService');
+        prefService.initPrefService(userPreferences);
         createWindow();
     }
     if (mainWindow) {
@@ -5067,7 +5126,66 @@ function createWindow() {
     const preloadPath = path_1.default.join(__dirname, 'preload.cjs');
     console.log('[DeskFlow] Preload path:', preloadPath);
     console.log('[DeskFlow] __dirname:', __dirname);
-    
+
+    // ── R-10 Boot Splash ──────────────────────────────────────────────
+    // Open splash BEFORE main window, per spec. Splash is a frameless 520×320
+    // overlay that closes on the MAIN window's did-finish-load signal.
+    let splashWindow = null;
+    try {
+        const prefService = require('./services/prefService');
+        const splashCfg = prefService.getBootAnimation();
+        if (splashCfg?.enabled && splashCfg.variant === 'meridian') {
+            let splashClosed = false;
+            const closeSplash = () => {
+                if (splashClosed) return;
+                splashClosed = true;
+                if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+            };
+            splashWindow = new electron_1.BrowserWindow({
+                width: 520,
+                height: 320,
+                x: Math.round((electron_1.screen.getPrimaryDisplay().workArea.width - 520) / 2),
+                y: Math.round((electron_1.screen.getPrimaryDisplay().workArea.height - 320) / 2),
+                frame: false,
+                resizable: false,
+                skipTaskbar: true,
+                transparent: true,
+                backgroundColor: '#09090b',
+                hasShadow: false,
+                webPreferences: {
+                    preload: preloadPath,
+                    contextIsolation: true,
+                    nodeIntegration: false,
+                    webSecurity: true,
+                },
+            });
+            splashWindow.setIgnoreMouseEvents(false);
+            splashWindow.on('ready-to-show', () => {
+                if (!splashWindow || splashWindow.isDestroyed()) return;
+                splashWindow.show();
+            });
+            const splashHtmlPath = path_1.default.join(__dirname, '../dist/splash.html');
+            if (require('fs').existsSync(splashHtmlPath)) {
+                splashWindow.loadFile(splashHtmlPath);
+            } else {
+                splashWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL || 'http://localhost:38123'}/splash.html`);
+            }
+            const dismiss = () => { if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close(); };
+            splashWindow.on('closed', () => { splashWindow = null; });
+            splashWindow.webContents.on('did-fail-load', dismiss);
+            splashWindow.webContents.on('crashed', dismiss);
+            splashWindow.on('blur', () => { /* keep visible */ });
+            splashWindow.webContents.on('keydown', dismiss);
+            splashWindow.webContents.on('mouse-down', dismiss);
+            setTimeout(closeSplash, 4000); // hard cap
+            setTimeout(() => { if (!splashClosed) closeSplash(); }, 900); // min display
+            console.log('[DeskFlow] ✅ Splash window opened (Meridian wake)');
+        }
+    } catch (e) {
+        console.error('[DeskFlow] Splash init error:', e?.message || e);
+    }
+    // ── End splash block ───────────────────────────────────────────────
+
     const savedState = loadWindowState();
     const primaryDisplay = electron_1.screen.getPrimaryDisplay();
     const { x: workX, y: workY, width: workWidth, height: workHeight } = primaryDisplay.workArea;
@@ -5180,6 +5298,10 @@ function createWindow() {
     });
     mainWindow.webContents.on('did-finish-load', () => {
         console.log('[DeskFlow] Page loaded successfully');
+        // R-10: close splash on main window ready signal
+        if (splashWindow && !splashWindow.isDestroyed()) {
+            splashWindow.close();
+        }
     });
     // Renderer crash recovery — reload instead of dying silently
     mainWindow.webContents.on('render-process-gone', (event, details) => {
@@ -6586,6 +6708,46 @@ electron_1.ipcMain.handle('set-preference', (event, key, value) => {
     savePreferences();
     return true;
 });
+
+// R-10: single preference getter
+electron_1.ipcMain.handle('get-preference', (_event, key) => {
+    return userPreferences[key];
+});
+// R-10: boot animation config — preference store single source (ruling 2)
+electron_1.ipcMain.handle('boot-animation-config', () => {
+    try {
+        const raw = userPreferences['boot_animation'];
+        if (raw && typeof raw === 'object') {
+            return {
+                enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
+                variant: 'meridian',
+                warmStart: typeof raw.warmStart === 'boolean' ? raw.warmStart : false,
+            };
+        }
+    } catch { /* fallback */ }
+    return { enabled: true, variant: 'meridian', warmStart: false };
+});
+// R-10: replay trigger — fires the sequence in the splash renderer
+electron_1.ipcMain.on('replay-splash', () => {
+    const all = electron_1.BrowserWindow.getAllWindows();
+    for (const w of all) {
+        if (w.isVisible() && w.getSize()[0] === 520 && w.getTitle() === 'RHEO') {
+            w.webContents.send('replay-splash');
+            break;
+        }
+    }
+});
+// R-10: splash sequence complete — renderer calls this when anim finishes
+electron_1.ipcMain.handle('splash-complete', () => {
+    const all = electron_1.BrowserWindow.getAllWindows();
+    for (const w of all) {
+        if (w.isVisible() && w.getSize()[0] === 520 && w.getTitle() === 'RHEO') {
+            w.close();
+            break;
+        }
+    }
+});
+
 
 // ── Speech-to-Text (API primary + Windows native fallback) ─────────────
 const STT_DEFAULT_BASE_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
@@ -20276,6 +20438,95 @@ electron_1.ipcMain.handle('parse-deadline', async (_event, input: string) => {
 });
 
 // --- Schedule IPC -----------------------------------------------------------
+electron_1.ipcMain.handle('todo:list', async (_event, opts?: { goalId?: string; deadlineId?: string; scheduleId?: string; parentTodoId?: string; limit?: number }) => {
+  try {
+    const where: string[] = [];
+    const args: any[] = [];
+    for (const [key, column] of [['goalId', 'goal_id'], ['deadlineId', 'deadline_id'], ['scheduleId', 'schedule_id'], ['parentTodoId', 'parent_todo_id']] as const) {
+      const value = opts?.[key];
+      if (value) { where.push(`${column} = ?`); args.push(value); }
+    }
+    const limit = Math.min(Math.max(Number(opts?.limit) || 500, 1), 1000);
+    const rows = db!.prepare(`SELECT * FROM todos ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY done ASC, sort_order ASC, created_at ASC LIMIT ?`).all(...args, limit) as any[];
+    return { success: true, todos: rows.map(row => ({
+      id: row.id, text: row.text, done: !!row.done, goalId: row.goal_id, scheduleId: row.schedule_id,
+      parentTodoId: row.parent_todo_id, deadlineId: row.deadline_id, dueDate: row.due_date,
+      reminder: row.reminder || 'none', sortOrder: row.sort_order || 0, createdAt: row.created_at, completedAt: row.completed_at,
+      goalTitle: row.goal_id ? (db!.prepare('SELECT title, is_habit FROM goals WHERE id = ?').get(row.goal_id) as any) : null,
+      deadlineTitle: row.deadline_id ? (db!.prepare('SELECT title, due_date FROM deadlines WHERE id = ?').get(row.deadline_id) as any) : null,
+      scheduleTitle: row.schedule_id ? (db!.prepare('SELECT title, start_time, end_time FROM schedule_entries WHERE id = ?').get(row.schedule_id) as any) : null,
+    })) };
+  } catch (err: any) { return { success: false, error: String(err?.message || err), todos: [] }; }
+});
+
+electron_1.ipcMain.handle('todo:create', async (_event, data: any) => {
+  try {
+    const parents = [data.goalId, data.scheduleId, data.parentTodoId].filter(Boolean);
+    if (parents.length > 1) return { success: false, error: 'A todo can have only one hierarchy parent' };
+    const id = 'todo_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    db!.prepare(`INSERT INTO todos (id, text, goal_id, schedule_id, parent_todo_id, deadline_id, due_date, reminder, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, String(data.text || '').trim(), data.goalId || null, data.scheduleId || null, data.parentTodoId || null, data.deadlineId || null, data.dueDate || null, data.reminder || 'none', Number(data.sortOrder) || 0);
+    return { success: true, id };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+electron_1.ipcMain.handle('todo:update', async (_event, id: string, patch: any) => {
+  try {
+    const current = db!.prepare('SELECT goal_id, schedule_id, parent_todo_id FROM todos WHERE id = ?').get(id) as any;
+    if (!current) return { success: false, error: 'Todo not found' };
+    const next = { ...current, ...patch };
+    if ([next.goalId ?? next.goal_id, next.scheduleId ?? next.schedule_id, next.parentTodoId ?? next.parent_todo_id].filter(Boolean).length > 1) return { success: false, error: 'A todo can have only one hierarchy parent' };
+    const map: Record<string, string> = { text: 'text', done: 'done', goalId: 'goal_id', scheduleId: 'schedule_id', parentTodoId: 'parent_todo_id', deadlineId: 'deadline_id', dueDate: 'due_date', reminder: 'reminder', sortOrder: 'sort_order' };
+    const fields = Object.keys(patch).filter(key => map[key]);
+    if (!fields.length) return { success: true };
+    const values = fields.map(key => patch[key] ?? null);
+    db!.prepare(`UPDATE todos SET ${fields.map(key => `${map[key]} = ?`).join(', ')} WHERE id = ?`).run(...values, id);
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+electron_1.ipcMain.handle('todo:toggle', async (_event, id: string, done?: boolean) => {
+  try {
+    const row = db!.prepare('SELECT done FROM todos WHERE id = ?').get(id) as any;
+    if (!row) return { success: false, error: 'Todo not found' };
+    const next = typeof done === 'boolean' ? done : !row.done;
+    const completedAt = next ? new Date().toISOString() : null;
+    db!.prepare('UPDATE todos SET done = ?, completed_at = ? WHERE id = ?').run(next ? 1 : 0, completedAt, id);
+    return { success: true, completedAt };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+electron_1.ipcMain.handle('todo:delete', async (_event, id: string) => {
+  try {
+    const orphaned = (db!.prepare('SELECT COUNT(*) AS c FROM todos WHERE parent_todo_id = ?').get(id) as any)?.c || 0;
+    db!.prepare('UPDATE todos SET parent_todo_id = NULL WHERE parent_todo_id = ?').run(id);
+    db!.prepare('DELETE FROM todos WHERE id = ?').run(id);
+    return { success: true, orphaned: Number(orphaned) };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+electron_1.ipcMain.handle('todo:get-connections', async (_event, entityType: string, entityId: string) => {
+  try {
+    if (entityType === 'goal' || entityType === 'habit') {
+      return await getGoalConnections(entityId);
+    }
+    const todo = db!.prepare('SELECT * FROM todos WHERE id = ?').get(entityId) as any;
+    if (!todo) return { success: false, error: 'Entity not found' };
+    const parent = todo.goal_id ? db!.prepare('SELECT id, title, is_habit FROM goals WHERE id = ?').get(todo.goal_id) : todo.schedule_id ? db!.prepare('SELECT id, title, start_time, end_time FROM schedule_entries WHERE id = ?').get(todo.schedule_id) : todo.parent_todo_id ? db!.prepare('SELECT id, text FROM todos WHERE id = ?').get(todo.parent_todo_id) : null;
+    return { success: true, connections: { parent, deadline: todo.deadline_id ? db!.prepare('SELECT * FROM deadlines WHERE id = ?').get(todo.deadline_id) : null, children: db!.prepare('SELECT * FROM todos WHERE parent_todo_id = ? ORDER BY sort_order, created_at').all(entityId), todos: [] } };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+function getGoalConnections(goalId: string) {
+  const goal = db!.prepare('SELECT id, title, category, is_habit, parent_id, parent_ids FROM goals WHERE id = ?').get(goalId) as any;
+  if (!goal) return { success: false, error: 'Goal not found' };
+  return { success: true, goal, parentLtgs: goal.parent_id ? db!.prepare('SELECT id, title, category FROM goals WHERE id = ?').all(goal.parent_id) : [], childGoals: db!.prepare('SELECT id, title, category, is_habit FROM goals WHERE parent_id = ? OR parent_ids LIKE ?').all(goalId, `%"${goalId}"%`), todos: db!.prepare('SELECT * FROM todos WHERE goal_id = ? ORDER BY done, sort_order, created_at').all(goalId), schedules: db!.prepare('SELECT * FROM schedule_entries WHERE goal_id = ? ORDER BY day_of_week, start_time').all(goalId), deadlines: db!.prepare('SELECT * FROM deadlines WHERE goal_id = ? ORDER BY due_date').all(goalId), notes: [], brainEntities: [] };
+}
+
+electron_1.ipcMain.handle('goal:get-connections', async (_event, goalId: string) => {
+  try { return getGoalConnections(goalId); } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
 electron_1.ipcMain.handle('get-schedule', async () => {
   try {
     const rows = db!.prepare('SELECT * FROM schedule_entries ORDER BY day_of_week, start_time').all();
@@ -20286,8 +20537,8 @@ electron_1.ipcMain.handle('get-schedule', async () => {
 electron_1.ipcMain.handle('add-schedule-entry', async (_event, entry: any) => {
   try {
     const id = 'sch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-    db!.prepare('INSERT INTO schedule_entries (id, title, location, day_of_week, start_time, end_time, category, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, entry.title, entry.location || null, entry.day_of_week, entry.start_time, entry.end_time, entry.category || 'class', entry.color || '#22d3ee');
+    db!.prepare('INSERT INTO schedule_entries (id, title, location, day_of_week, start_time, end_time, category, color, goal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, entry.title, entry.location || null, entry.day_of_week, entry.start_time, entry.end_time, entry.category || 'class', entry.color || '#22d3ee', entry.goal_id || null);
     return { success: true, id };
   } catch (err: any) { return { success: false, error: err.message }; }
 });
@@ -20301,7 +20552,7 @@ electron_1.ipcMain.handle('delete-schedule-entry', async (_event, id: string) =>
 
 electron_1.ipcMain.handle('update-schedule-entry', async (_event, id: string, patch: any) => {
   try {
-    const fields = Object.keys(patch).filter(k => patch[k] !== undefined);
+    const fields = Object.keys(patch).filter(k => ['title', 'location', 'day_of_week', 'start_time', 'end_time', 'category', 'color', 'goal_id'].includes(k) && patch[k] !== undefined);
     if (fields.length === 0) return { success: true };
     const sets = fields.map(f => `${f} = ?`).join(', ');
     const vals = fields.map(f => patch[f]);
@@ -20330,8 +20581,8 @@ electron_1.ipcMain.handle('add-deadline', async (_event, dl: any) => {
     // and daysUntil() line up. Raw timestamps previously produced NaN + never landed.
     const normDue = dl.due_date ? dl.due_date.slice(0, 10) : null;
     const normRemind = dl.remind_at ? dl.remind_at.slice(0, 10) : null;
-    db!.prepare('INSERT INTO deadlines (id, title, course, due_date, priority, description, category, remind_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, dl.title, dl.course || null, normDue, dl.priority || 'medium', dl.description || null, dl.category || null, normRemind);
+    db!.prepare('INSERT INTO deadlines (id, title, course, due_date, priority, description, category, remind_at, goal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, dl.title, dl.course || null, normDue, dl.priority || 'medium', dl.description || null, dl.category || null, normRemind, dl.goal_id || null);
     return { success: true, id };
   } catch (err: any) { return { success: false, error: err.message }; }
 });
@@ -20360,7 +20611,7 @@ electron_1.ipcMain.handle('delete-deadline', async (_event, id: string) => {
 
 electron_1.ipcMain.handle('update-deadline', async (_event, id: string, patch: any) => {
   try {
-    const allowed = ['title', 'course', 'due_date', 'priority', 'description', 'category', 'recurrence', 'status', 'remind_at'];
+    const allowed = ['title', 'course', 'due_date', 'priority', 'description', 'category', 'recurrence', 'status', 'remind_at', 'goal_id'];
     const fields = Object.keys(patch).filter(k => allowed.includes(k) && patch[k] !== undefined);
     if (fields.length === 0) return { success: true };
     const sets = fields.map(f => `${f} = ?`).join(', ');

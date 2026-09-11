@@ -317,6 +317,105 @@
   50%      { opacity: 0; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT MODE — warm-paper overrides for canvas chrome (R-12/R-16)
+   Additive only: dark :root values above untouched. Elevation =
+   lightness step + hairline, never shadow (R-13).
+   ═══════════════════════════════════════════════════════════════ */
+html.light {
+  /* Surfaces — S0 paper → S1 card → S2 overlay → S3 sunken */
+  --dk-bg-deep:    #f5f2ec;
+  --dk-bg-base:    #f5f2ec;
+  --dk-bg-surface: rgba(252, 251, 248, 0.92);
+  --dk-bg-raised:  rgba(255, 255, 255, 0.85);
+  --dk-bg-input:   #edeae2;
+
+  /* Aurora — faint warm tint on paper instead of nebula */
+  --dk-aurora:     rgba(14, 116, 144, 0.05);
+
+  /* Elevations — hairline rings, no shadow */
+  --dk-elev-1: 0 0 0 1px rgba(28,25,23,0.08);
+  --dk-elev-2: 0 0 0 1px rgba(28,25,23,0.08);
+  --dk-elev-3: 0 0 0 1px rgba(28,25,23,0.17);
+  --dk-elev-4: 0 0 0 1px rgba(28,25,23,0.17);
+
+  /* Sheen — dark hairline on paper */
+  --dk-sheen: inset 0 1px 0 rgba(28,25,23,0.06);
+
+  /* Text — warm stone ramp */
+  --dk-text-primary:   #1c1917;
+  --dk-text-secondary: #44403c;
+  --dk-text-muted:     #57534e;
+  --dk-text-faint:     #a8a29e;
+  --dk-text-placeholder: #d6d3d1;
+
+  /* Borders — warm hairlines */
+  --dk-border-subtle:  rgba(28,25,23,0.08);
+  --dk-border-default: rgba(28,25,23,0.12);
+  --dk-border-strong:  rgba(28,25,23,0.17);
+  --dk-border-focus:   #0e7490;
+
+  /* Semantic */
+  --dk-accent:    #0e7490;
+  --dk-accent-dim: rgba(14,116,144,0.08);
+  --dk-success:   #15803d;
+  --dk-warning:   #b45309;
+  --dk-danger:    #b91c1c;
+
+  /* Type-spectrum — darkened for paper (keep hue, L*→45) */
+  --dk-type-focus:       #be185d;
+  --dk-type-plan:        #6d28d9;
+  --dk-type-finance:     #047857;
+  --dk-type-digest:      #0369a1;
+  --dk-type-reflect:     #7e22ce;
+  --dk-type-approval:    #b45309;
+  --dk-type-annotation:  #c2410c;
+  --dk-type-response:    #1d4ed8;
+  --dk-type-schedule:    #be123c;
+  --dk-type-deadlines:   #c2410c;
+  --dk-type-planner:     #0369a1;
+  --dk-type-dynamic:     #57534e;
+  --dk-type-automation:  #a21caf;
+  --dk-type-group:       rgba(28,25,23,0.45);
+  --dk-type-connectors:  rgba(109,40,217,0.65);
+}
+
+/* Light-mode glass: solidify (R-14) — blur value unchanged */
+html.light .dk-glass {
+  background: rgba(252, 251, 248, 0.92);
+  border-color: var(--dk-border-subtle);
+  box-shadow: var(--dk-elev-1);
+}
+html.light .dk-glass-heavy {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--dk-border-default);
+  box-shadow: var(--dk-elev-3);
+}
+html.light .dk-glass-card {
+  background: linear-gradient(168deg, rgba(255,255,255,0.9) 0%, rgba(252,251,248,0.85) 100%);
+  border-color: var(--dk-border-subtle);
+  box-shadow: var(--dk-elev-2);
+}
+html.light .dk-glass-inset {
+  background: #edeae2;
+  border-color: rgba(28,25,23,0.08);
+  box-shadow: inset 0 1px 2px rgba(28,25,23,0.08);
+}
+
+/* Light-mode buttons / controls */
+html.light .dk-btn { background: rgba(28,25,23,0.05); }
+html.light .dk-btn:hover { background: rgba(28,25,23,0.09); }
+html.light .dk-btn:active { background: rgba(28,25,23,0.04); }
+html.light .dk-btn--primary { background: var(--card-accent, var(--dk-accent)); color: #ffffff; }
+html.light .dk-btn--ghost:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-icon-btn:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-kbd { background: rgba(28,25,23,0.05); }
+
+/* Light-mode scrollbars */
+html.light .dk-scroll { scrollbar-color: rgba(28,25,23,0.18) transparent; }
+html.light .dk-scroll::-webkit-scrollbar-thumb { background: rgba(28,25,23,0.18); }
+html.light .dk-scroll::-webkit-scrollbar-thumb:hover { background: rgba(28,25,23,0.28); }
+
 @keyframes dk-dash {
   to { stroke-dashoffset: -24; }
 }

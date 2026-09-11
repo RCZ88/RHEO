@@ -58,22 +58,22 @@ export function AutomationCard({ data, onEdit, onToggle, onDelete, onTestRun, on
           </div>
           <div>
             <h4 className={cn("text-[12px] font-semibold leading-tight", TEXT.primary)}>{data.name}</h4>
-            <span className="text-[9px] text-zinc-600">{data.triggerSource}</span>
+            <span className="text-[9px] text-zinc-600 light:text-stone-500">{data.triggerSource}</span>
           </div>
         </div>
         <div className="relative">
-          <button onClick={() => setShowMenu(v => !v)} className="p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors">
+          <button onClick={() => setShowMenu(v => !v)} className="p-1 rounded-md text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:text-stone-400 hover:bg-zinc-800 light:bg-stone-200 transition-colors">
             <MoreHorizontal size={14} />
           </button>
           <AnimatePresence>
             {showMenu && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                className="absolute right-0 top-7 z-20 w-36 rounded-lg bg-zinc-900 ring-1 ring-zinc-700/60 py-1 shadow-xl"
+                className="absolute right-0 top-7 z-20 w-36 rounded-lg bg-zinc-900 light:bg-white ring-1 ring-zinc-700/60 py-1 shadow-xl"
               >
-                <button onClick={() => { onEdit?.(); setShowMenu(false) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] text-zinc-300 hover:bg-zinc-800">
+                <button onClick={() => { onEdit?.(); setShowMenu(false) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] text-zinc-300 light:text-stone-400 hover:bg-zinc-800 light:bg-stone-200">
                   <Pencil size={12} /> Edit
                 </button>
-                <button onClick={() => { onTestRun?.(); setShowMenu(false) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] text-zinc-300 hover:bg-zinc-800">
+                <button onClick={() => { onTestRun?.(); setShowMenu(false) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] text-zinc-300 light:text-stone-400 hover:bg-zinc-800 light:bg-stone-200">
                   <Play size={12} /> Test Run
                 </button>
                 <button onClick={() => { onDelete?.(); setShowMenu(false) }} className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] text-red-400 hover:bg-red-500/10">
@@ -89,24 +89,24 @@ export function AutomationCard({ data, onEdit, onToggle, onDelete, onTestRun, on
       <p className={cn("text-[11px] leading-relaxed mb-3", TEXT.secondary)}>{data.summary}</p>
 
       {/* Footer */}
-      <div className="mt-auto flex items-center justify-between border-t border-zinc-800/40 pt-3">
+      <div className="mt-auto flex items-center justify-between border-t border-zinc-800/40 light:border-[var(--ws-border)] pt-3">
         <div className="flex items-center gap-2">
           {/* Status dot */}
           <span className={cn("h-1.5 w-1.5 rounded-full", data.enabled ? "bg-emerald-400" : "bg-zinc-600")} />
-          <span className="text-[9px] text-zinc-500">{data.enabled ? 'Active' : 'Paused'}</span>
+          <span className="text-[9px] text-zinc-500 light:text-stone-500">{data.enabled ? 'Active' : 'Paused'}</span>
           <span className="text-[9px] text-zinc-700">·</span>
-          <span className="text-[9px] text-zinc-600">Last: {relativeTime}</span>
+          <span className="text-[9px] text-zinc-600 light:text-stone-500">Last: {relativeTime}</span>
         </div>
 
         {/* Quick actions */}
         <div className="flex items-center gap-1">
-          <button onClick={() => onTestRun?.()} title="Test Run" className="p-1.5 rounded-md text-zinc-500 hover:text-pink-300 hover:bg-pink-500/10 transition-colors">
+          <button onClick={() => onTestRun?.()} title="Test Run" className="p-1.5 rounded-md text-zinc-500 light:text-stone-500 hover:text-pink-300 hover:bg-pink-500/10 transition-colors">
             <Zap size={12} />
           </button>
-          <button onClick={() => onToggle?.()} title={data.enabled ? 'Pause' : 'Enable'} className="p-1.5 rounded-md text-zinc-500 hover:text-amber-300 hover:bg-amber-500/10 transition-colors">
+          <button onClick={() => onToggle?.()} title={data.enabled ? 'Pause' : 'Enable'} className="p-1.5 rounded-md text-zinc-500 light:text-stone-500 hover:text-amber-300 hover:bg-amber-500/10 transition-colors">
             {data.enabled ? <Pause size={12} /> : <Play size={12} />}
           </button>
-          <button onClick={() => onDismiss?.()} title="Dismiss" className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100">
+          <button onClick={() => onDismiss?.()} title="Dismiss" className="p-1.5 rounded-md text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:text-stone-400 hover:bg-zinc-800 light:bg-stone-200 transition-colors opacity-0 group-hover:opacity-100">
             <Trash2 size={12} />
           </button>
         </div>

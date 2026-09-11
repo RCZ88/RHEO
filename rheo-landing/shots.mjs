@@ -1,5 +1,13 @@
 import { chromium } from 'playwright-core';
-const CHROME = 'C:\\Users\\cleme\\AppData\\Local\\ms-playwright\\chromium-1208\\chrome-win64\\chrome.exe';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+const CHROME_CANDIDATES = [
+  process.env.CHROME_PATH,
+  process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'ms-playwright', 'chromium-1208', 'chrome-win64', 'chrome.exe') : undefined,
+  process.env.HOME ? join(process.env.HOME, '.cache/ms-playwright/chromium-1208/chrome-linux/chrome') : undefined,
+].filter(Boolean);
+const CHROME = CHROME_CANDIDATES.find((p) => existsSync(p));
+if (!CHROME) throw new Error('No Chrome found: run `npx playwright install chromium` or set CHROME_PATH');
 const URL = 'http://127.0.0.1:5173/';
 const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });

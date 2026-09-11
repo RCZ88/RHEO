@@ -26,7 +26,7 @@ const PRIORITIES: { value: Priority; label: string; color: string; dot: string }
   { value: 'critical', label: 'Critical', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20', dot: '#f87171' },
   { value: 'high', label: 'High', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20', dot: '#fb923c' },
   { value: 'medium', label: 'Medium', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20', dot: '#fbbf24' },
-  { value: 'low', label: 'Low', color: 'bg-zinc-500/10 text-white/60 border-zinc-500/20', dot: '#6b7280' },
+  { value: 'low', label: 'Low', color: 'light:bg-stone-500/5 light:text-stone-400 light:border-[var(--ws-border)]', dot: '#6b7280' },
 ];
 
 const CATEGORIES: { value: DeadlineCategory; label: string }[] = [
@@ -72,7 +72,7 @@ const URGENCY_META = {
   urgent: { color: '#f87171', bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20', label: 'Today' },
   critical: { color: '#fb923c', bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/20', label: 'Soon' },
   soon: { color: '#fbbf24', bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', label: 'Upcoming' },
-  normal: { color: '#6b7280', bg: 'bg-zinc-800/50', text: 'text-white/50', border: 'border-zinc-700/30', label: 'Later' },
+  normal: { color: '#6b7280', bg: 'light:bg-[var(--ws-surface-sunken)]', text: 'light:text-stone-400', border: 'light:border-[var(--ws-border)]', label: 'Later' },
 };
 
 function isReminder(dl: Deadline): boolean {
@@ -114,6 +114,7 @@ interface DeadlinesCardProps {
   onComplete: (id: string) => void;
   onToggleReminder?: (id: string, done: boolean) => void;
   onDeleteReminder?: (id: string) => void;
+  goalOptions?: { id: string; title: string; isHabit?: boolean }[];
 }
 
 export function DeadlinesCard({
@@ -127,6 +128,7 @@ export function DeadlinesCard({
   onComplete,
   onToggleReminder,
   onDeleteReminder,
+  goalOptions = [],
 }: DeadlinesCardProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [addType, setAddType] = useState<EntryType>('deadline');
@@ -139,9 +141,10 @@ export function DeadlinesCard({
     remindAtDate: Date | undefined;
     remindAtTime: string;
     hasReminder: boolean;
+    goalId: string;
   }>({
     title: '', dueDate: undefined, priority: 'medium', category: '', description: '',
-    remindAtDate: undefined, remindAtTime: '09:00', hasReminder: false,
+    remindAtDate: undefined, remindAtTime: '09:00', hasReminder: false, goalId: '',
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -177,7 +180,7 @@ export function DeadlinesCard({
   const resetAddForm = () => {
     setNewDl({
       title: '', dueDate: undefined, priority: 'medium', category: '', description: '',
-      remindAtDate: undefined, remindAtTime: '09:00', hasReminder: false,
+      remindAtDate: undefined, remindAtTime: '09:00', hasReminder: false, goalId: '',
     });
     setAddType('deadline');
   };
@@ -211,6 +214,7 @@ export function DeadlinesCard({
       category: newDl.category || undefined,
       description: newDl.description.trim() || undefined,
       remind_at: remindAt,
+      goal_id: newDl.goalId || null,
     });
     resetAddForm();
     setIsAdding(false);
@@ -266,13 +270,13 @@ export function DeadlinesCard({
   if (loading) {
     return (
       <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/60 p-5 h-full">
+        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 h-full">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
           <div className="animate-pulse space-y-4">
-            <div className="h-5 bg-zinc-800 rounded w-1/3" />
-            <div className="h-3 bg-zinc-800/50 rounded w-1/2" />
+            <div className="h-5 light:bg-white light:border-[var(--ws-border-strong)] rounded w-1/3" />
+            <div className="h-3 light:bg-[var(--ws-surface-sunken)] rounded w-1/2" />
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-14 bg-zinc-800/30 rounded-lg" />
+              <div key={i} className="h-14 light:bg-[var(--ws-surface-sunken)] rounded-lg" />
             ))}
           </div>
         </div>
@@ -283,13 +287,13 @@ export function DeadlinesCard({
   if (error) {
     return (
       <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/60 p-5 h-full flex flex-col items-center justify-center text-center">
+        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 h-full flex flex-col items-center justify-center text-center">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
-          <div className="w-14 h-14 rounded-full bg-zinc-800/50 flex items-center justify-center mb-3">
-            <AlertCircle size={24} className="text-white/40" />
+          <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
+            <AlertCircle size={24} className="light:text-stone-400" />
           </div>
-          <p className="text-[14px] font-medium text-white/60">Could not load items</p>
-          <p className="text-[12px] text-white/40 mt-1 max-w-[220px]">{error}</p>
+          <p className="text-[14px] font-medium light:text-stone-400">Could not load items</p>
+          <p className="text-[12px] light:text-stone-400 mt-1 max-w-[220px]">{error}</p>
         </div>
       </SpotlightCard>
     );
@@ -297,7 +301,7 @@ export function DeadlinesCard({
 
   return (
     <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-      <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/60 p-5 flex flex-col h-full">
+      <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 flex flex-col h-full">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
 
         {/* Header */}
@@ -307,8 +311,8 @@ export function DeadlinesCard({
               <AlertCircle size={15} className="text-rose-400" />
             </div>
             <div>
-              <h2 className="text-[15px] font-semibold text-white">Upcoming</h2>
-              <p className="text-[11px] text-white/50">
+              <h2 className="text-[15px] font-semibold light:text-stone-900">Upcoming</h2>
+              <p className="text-[11px] light:text-stone-400">
                 {deadlineItems.length} deadline{deadlineItems.length !== 1 ? 's' : ''} · {deadlineReminders.length} reminder{deadlineReminders.length !== 1 ? 's' : ''} · {completed.length} done
               </p>
             </div>
@@ -329,7 +333,7 @@ export function DeadlinesCard({
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsAdding(!isAdding)}
-              className="w-8 h-8 rounded-md bg-zinc-800/50 hover:bg-zinc-700/50 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+              className="w-8 h-8 rounded-md light:bg-[var(--ws-surface-sunken)] hover:light:border-[var(--ws-border-strong)] flex items-center justify-center light:text-stone-400 hover:light:text-stone-900 transition-colors"
               aria-label={isAdding ? 'Cancel adding' : 'Add new item'}
             >
               {isAdding ? <X size={14} /> : <Plus size={14} />}
@@ -341,15 +345,15 @@ export function DeadlinesCard({
         <AnimatePresence>
           {isAdding && (
             <motion.div variants={formVariants} initial="hidden" animate="show" exit="exit" className="overflow-hidden">
-              <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/50 space-y-2.5 mb-3">
+              <div className="p-3 rounded-lg light:bg-white light:border-[var(--ws-border-strong)] border light:border-[var(--ws-border)] space-y-2.5 mb-3">
                 {/* Type Toggle */}
-                <div className="flex gap-1 p-0.5 rounded-lg bg-zinc-800/50 border border-zinc-700/30">
+                <div className="flex gap-1 p-0.5 rounded-lg light:bg-[var(--ws-surface-sunken)] border light:border-[var(--ws-border)]">
                   <button
                     onClick={() => setAddType('deadline')}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
                       addType === 'deadline'
                         ? 'bg-rose-500/15 text-rose-300 border border-rose-500/20'
-                        : 'text-white/50 hover:text-white/70'
+                        : 'light:text-stone-400 hover:light:text-stone-900/70'
                     }`}
                   >
                     <Clock size={12} />
@@ -360,7 +364,7 @@ export function DeadlinesCard({
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
                       addType === 'reminder'
                         ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
-                        : 'text-white/50 hover:text-white/70'
+                        : 'light:text-stone-400 hover:light:text-stone-900/70'
                     }`}
                   >
                     <Bell size={12} />
@@ -374,13 +378,13 @@ export function DeadlinesCard({
                   onKeyDown={e => e.key === 'Enter' && handleAdd()}
                   placeholder={addType === 'deadline' ? "What's due?" : "What to remind about?"}
                   autoFocus
-                  className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-rose-500/50 text-[13px] h-9"
+                  className="light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-rose-500/50 text-[13px] h-9"
                 />
                 <Input
                   value={newDl.description}
                   onChange={e => setNewDl(p => ({ ...p, description: e.target.value }))}
                   placeholder="Description (optional)"
-                  className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-rose-500/50 text-[13px] h-9"
+                  className="light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-rose-500/50 text-[13px] h-9"
                 />
 
                 {addType === 'deadline' ? (
@@ -388,11 +392,11 @@ export function DeadlinesCard({
                     <div className="flex items-center gap-2 flex-wrap">
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button className="h-9 px-3 text-xs flex-1 justify-start rounded-md bg-zinc-900/80 border border-zinc-700/50 text-white/60 hover:text-white hover:border-zinc-600 transition-colors text-left min-w-[140px]">
+                          <button className="h-9 px-3 text-xs flex-1 justify-start rounded-md light:bg-white light:border-[var(--ws-border-strong)]/80 border light:border-[var(--ws-border-strong)] light:text-stone-400 hover:light:text-stone-900 hover:border-zinc-600 transition-colors text-left min-w-[140px]">
                             {newDl.dueDate ? format(newDl.dueDate, 'PPP') : "Pick due date"}
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800">
+                        <PopoverContent className="w-auto p-0 light:bg-white light:border-[var(--ws-border-strong)] light:border-[var(--ws-border-strong)]">
                           <CalendarComponent
                             mode="single"
                             selected={newDl.dueDate}
@@ -415,7 +419,7 @@ export function DeadlinesCard({
                         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all border ${
                           newDl.hasReminder
                             ? 'bg-amber-500/15 text-amber-300 border-amber-500/20'
-                            : 'bg-zinc-800/30 text-white/40 border-zinc-700/30 hover:text-white/60'
+                            : 'light:bg-[var(--ws-surface-sunken)] light:text-stone-400 light:border-[var(--ws-border)] hover:light:text-stone-400'
                         }`}
                       >
                         <Bell size={10} />
@@ -427,11 +431,11 @@ export function DeadlinesCard({
                       <div className="flex items-center gap-2">
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button className="h-8 px-2 text-[11px] flex-1 justify-start rounded-md bg-zinc-900/80 border border-zinc-700/50 text-white/60 hover:text-white hover:border-zinc-600 transition-colors text-left min-w-[120px]">
+                            <button className="h-8 px-2 text-[11px] flex-1 justify-start rounded-md light:bg-white light:border-[var(--ws-border-strong)]/80 border light:border-[var(--ws-border-strong)] light:text-stone-400 hover:light:text-stone-900 hover:border-zinc-600 transition-colors text-left min-w-[120px]">
                               {newDl.remindAtDate ? format(newDl.remindAtDate, 'MMM d') : "Remind date"}
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800">
+                          <PopoverContent className="w-auto p-0 light:bg-white light:border-[var(--ws-border-strong)] light:border-[var(--ws-border-strong)]">
                             <CalendarComponent
                               mode="single"
                               selected={newDl.remindAtDate}
@@ -444,7 +448,7 @@ export function DeadlinesCard({
                           type="time"
                           value={newDl.remindAtTime}
                           onChange={e => setNewDl(p => ({ ...p, remindAtTime: e.target.value }))}
-                          className="h-8 w-[90px] bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[11px]"
+                          className="h-8 w-[90px] light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-amber-500/50 text-[11px]"
                         />
                       </div>
                     )}
@@ -454,11 +458,11 @@ export function DeadlinesCard({
                   <div className="flex items-center gap-2">
                     <Popover>
                       <PopoverTrigger asChild>
-                        <button className="h-9 px-3 text-xs flex-1 justify-start rounded-md bg-zinc-900/80 border border-zinc-700/50 text-white/60 hover:text-white hover:border-zinc-600 transition-colors text-left min-w-[140px]">
+                        <button className="h-9 px-3 text-xs flex-1 justify-start rounded-md light:bg-white light:border-[var(--ws-border-strong)]/80 border light:border-[var(--ws-border-strong)] light:text-stone-400 hover:light:text-stone-900 hover:border-zinc-600 transition-colors text-left min-w-[140px]">
                           {newDl.remindAtDate ? format(newDl.remindAtDate, 'PPP') : "Pick remind date"}
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800">
+                      <PopoverContent className="w-auto p-0 light:bg-white light:border-[var(--ws-border-strong)] light:border-[var(--ws-border-strong)]">
                         <CalendarComponent
                           mode="single"
                           selected={newDl.remindAtDate}
@@ -471,7 +475,7 @@ export function DeadlinesCard({
                       type="time"
                       value={newDl.remindAtTime}
                       onChange={e => setNewDl(p => ({ ...p, remindAtTime: e.target.value }))}
-                      className="h-9 w-[100px] bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[13px]"
+                      className="h-9 w-[100px] light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-amber-500/50 text-[13px]"
                     />
                   </div>
                 )}
@@ -483,6 +487,17 @@ export function DeadlinesCard({
                       <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                     ))}
                   </Select>
+                  {goalOptions.length > 0 && (
+                    <select
+                      value={newDl.goalId}
+                      onChange={e => setNewDl(p => ({ ...p, goalId: e.target.value }))}
+                      aria-label="Link deadline to goal or habit"
+                      className="h-8 min-w-0 flex-1 rounded-md border border-zinc-700/50 bg-zinc-900 px-2 text-[11px] text-zinc-400 outline-none focus:border-rose-400/50"
+                    >
+                      <option value="">No linked goal</option>
+                      {goalOptions.map(goal => <option key={goal.id} value={goal.id}>{goal.isHabit ? 'Habit · ' : ''}{goal.title}</option>)}
+                    </select>
+                  )}
                   <div className="flex-1" />
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button size="sm" onClick={handleAdd} className={`${
@@ -493,7 +508,7 @@ export function DeadlinesCard({
                       <Plus size={12} className="mr-1" /> Add
                     </Button>
                   </motion.div>
-                  <Button size="sm" variant="ghost" onClick={() => { resetAddForm(); setIsAdding(false); }} className="text-white/60 hover:text-white text-[12px] h-8">
+                  <Button size="sm" variant="ghost" onClick={() => { resetAddForm(); setIsAdding(false); }} className="light:text-stone-400 hover:light:text-stone-900 text-[12px] h-8">
                     Cancel
                   </Button>
                 </div>
@@ -524,22 +539,22 @@ export function DeadlinesCard({
                     initial="hidden"
                     animate="show"
                     exit="exit"
-                    className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/50 space-y-2"
+                    className="p-3 rounded-lg light:bg-white light:border-[var(--ws-border-strong)] border light:border-[var(--ws-border)] space-y-2"
                   >
                     <Input
                       value={editForm.title || ''}
                       onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
-                      className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-rose-500/50 text-[13px] h-9"
+                      className="light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-rose-500/50 text-[13px] h-9"
                       autoFocus
                     />
                     <div className="flex items-center gap-2 flex-wrap">
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button className="h-9 px-3 text-xs flex-1 justify-start rounded-md bg-zinc-900/80 border border-zinc-700/50 text-white/60 hover:text-white hover:border-zinc-600 transition-colors text-left">
+                          <button className="h-9 px-3 text-xs flex-1 justify-start rounded-md light:bg-white light:border-[var(--ws-border-strong)]/80 border light:border-[var(--ws-border-strong)] light:text-stone-400 hover:light:text-stone-900 hover:border-zinc-600 transition-colors text-left">
                             {editDate ? format(editDate, 'PPP') : "Pick due date"}
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800">
+                        <PopoverContent className="w-auto p-0 light:bg-white light:border-[var(--ws-border-strong)] light:border-[var(--ws-border-strong)]">
                           <CalendarComponent mode="single" selected={editDate} onSelect={setEditDate} initialFocus />
                         </PopoverContent>
                       </Popover>
@@ -555,7 +570,7 @@ export function DeadlinesCard({
                         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all border ${
                           editHasReminder
                             ? 'bg-amber-500/15 text-amber-300 border-amber-500/20'
-                            : 'bg-zinc-800/30 text-white/40 border-zinc-700/30 hover:text-white/60'
+                            : 'light:bg-[var(--ws-surface-sunken)] light:text-stone-400 light:border-[var(--ws-border)] hover:light:text-stone-400'
                         }`}
                       >
                         <Bell size={10} />
@@ -566,11 +581,11 @@ export function DeadlinesCard({
                       <div className="flex items-center gap-2">
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button className="h-8 px-2 text-[11px] flex-1 justify-start rounded-md bg-zinc-900/80 border border-zinc-700/50 text-white/60 hover:text-white hover:border-zinc-600 transition-colors text-left min-w-[120px]">
+                            <button className="h-8 px-2 text-[11px] flex-1 justify-start rounded-md light:bg-white light:border-[var(--ws-border-strong)]/80 border light:border-[var(--ws-border-strong)] light:text-stone-400 hover:light:text-stone-900 hover:border-zinc-600 transition-colors text-left min-w-[120px]">
                               {editRemindAtDate ? format(editRemindAtDate, 'MMM d') : "Remind date"}
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800">
+                          <PopoverContent className="w-auto p-0 light:bg-white light:border-[var(--ws-border-strong)] light:border-[var(--ws-border-strong)]">
                             <CalendarComponent mode="single" selected={editRemindAtDate} onSelect={setEditRemindAtDate} initialFocus />
                           </PopoverContent>
                         </Popover>
@@ -578,7 +593,7 @@ export function DeadlinesCard({
                           type="time"
                           value={editRemindAtTime}
                           onChange={e => setEditRemindAtTime(e.target.value)}
-                          className="h-8 w-[90px] bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[11px]"
+                          className="h-8 w-[90px] light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-amber-500/50 text-[11px]"
                         />
                       </div>
                     )}
@@ -588,7 +603,7 @@ export function DeadlinesCard({
                           Save
                         </Button>
                       </motion.div>
-                      <Button size="sm" variant="ghost" onClick={() => { setEditingId(null); setEditForm({}); setEditDate(undefined); setEditRemindAtDate(undefined); setEditHasReminder(false); }} className="text-white/60 hover:text-white text-[12px] h-8">
+                      <Button size="sm" variant="ghost" onClick={() => { setEditingId(null); setEditForm({}); setEditDate(undefined); setEditRemindAtDate(undefined); setEditHasReminder(false); }} className="light:text-stone-400 hover:light:text-stone-900 text-[12px] h-8">
                         Cancel
                       </Button>
                     </div>
@@ -606,7 +621,7 @@ export function DeadlinesCard({
                   className="group"
                 >
                   <div className={`relative p-3 rounded-lg border transition-all duration-200 ${
-                    !reminder && urgency === 'overdue' ? 'border-rose-500/30 bg-rose-500/[0.03]' : 'border-zinc-800/30 hover:border-zinc-700/40 bg-zinc-900/20 hover:bg-zinc-900/40'
+                    !reminder && urgency === 'overdue' ? 'border-rose-500/30 bg-rose-500/[0.03]' : 'light:border-[var(--ws-border-strong)]/30 hover:light:border-[var(--ws-border)] light:bg-white light:border-[var(--ws-border-strong)]/20 hover:light:bg-white light:border-[var(--ws-border-strong)]/40'
                   }`}>
                     {/* Indicator bar */}
                     <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg" style={{ backgroundColor: meta.color }} />
@@ -623,7 +638,7 @@ export function DeadlinesCard({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           {reminder ? <Bell size={12} className="text-amber-400 shrink-0" /> : null}
-                          <span className="text-[13px] text-white/90 truncate">{dl.title}</span>
+                          <span className="text-[13px] light:text-stone-900/90 truncate">{dl.title}</span>
                           {!reminder && urgency === 'overdue' && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/20 text-rose-400 border border-rose-500/20">
                               OVERDUE
@@ -632,7 +647,7 @@ export function DeadlinesCard({
                         </div>
 
                         {dl.description && (
-                          <p className="text-[11px] text-white/40 mt-0.5 line-clamp-1">{dl.description}</p>
+                          <p className="text-[11px] light:text-stone-400 mt-0.5 line-clamp-1">{dl.description}</p>
                         )}
 
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -641,13 +656,14 @@ export function DeadlinesCard({
                             {dl.priority}
                           </Badge>
                           {dl.category && (
-                            <Badge className="text-[10px] px-1.5 py-0.5 bg-zinc-800/50 text-white/60 border-zinc-700/30">
+                            <Badge className="text-[10px] px-1.5 py-0.5 light:bg-[var(--ws-surface-sunken)] light:text-stone-400 light:border-[var(--ws-border)]">
                               {dl.category}
                             </Badge>
                           )}
                           {dl.course && (
-                            <span className="text-[10px] text-white/40">{dl.course}</span>
+                            <span className="text-[10px] light:text-stone-400">{dl.course}</span>
                           )}
+                          {dl.goal_id && <span className="text-[10px] rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-amber-300">{goalOptions.find(goal => goal.id === dl.goal_id)?.isHabit ? 'Habit' : 'Goal'} · {goalOptions.find(goal => goal.id === dl.goal_id)?.title || 'Unlinked'}</span>}
                           {reminder && dl.remind_at ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border shrink-0 bg-amber-500/10 text-amber-400 border-amber-500/20">
                               <Bell size={11} />
@@ -679,7 +695,7 @@ export function DeadlinesCard({
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => startEdit(dl)}
-                            className="w-7 h-7 rounded-md bg-zinc-800/50 text-white/60 hover:bg-zinc-700/50 hover:text-white flex items-center justify-center transition-colors"
+                            className="w-7 h-7 rounded-md light:bg-[var(--ws-surface-sunken)] light:text-stone-400 hover:light:border-[var(--ws-border-strong)] hover:light:text-stone-900 flex items-center justify-center transition-colors"
                             title="Edit"
                           >
                             <Edit3 size={12} />
@@ -691,7 +707,7 @@ export function DeadlinesCard({
                             className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                               deleteConfirmId === dl.id
                                 ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                                : 'bg-zinc-800/50 text-white/60 hover:bg-red-500/20 hover:text-red-400'
+                                : 'light:bg-[var(--ws-surface-sunken)] light:text-stone-400 hover:bg-red-500/20 hover:text-red-400'
                             }`}
                             title={deleteConfirmId === dl.id ? 'Click again to confirm delete' : 'Delete'}
                           >
@@ -712,11 +728,11 @@ export function DeadlinesCard({
               animate={{ opacity: 1, y: 0 }}
               className="flex-1 flex flex-col items-center justify-center text-center py-10"
             >
-              <div className="w-14 h-14 rounded-full bg-zinc-800/50 flex items-center justify-center mb-3">
-                <CheckCircle2 size={24} className="text-white/40" />
+              <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
+                <CheckCircle2 size={24} className="light:text-stone-400" />
               </div>
-              <p className="text-[14px] font-medium text-white/60">Nothing upcoming</p>
-              <p className="text-[12px] text-white/40 mt-1 max-w-[200px]">
+              <p className="text-[14px] font-medium light:text-stone-400">Nothing upcoming</p>
+              <p className="text-[12px] light:text-stone-400 mt-1 max-w-[200px]">
                 Add deadlines, exams, or reminders to stay on top of your schedule
               </p>
               <motion.button
@@ -733,26 +749,26 @@ export function DeadlinesCard({
 
           {/* Reminders from reminders table */}
           {reminders.length > 0 && !isAdding && (
-            <div className="mt-3 pt-3 border-t border-zinc-800/50">
+            <div className="mt-3 pt-3 border-t light:border-[var(--ws-border)]">
               <div className="flex items-center gap-1.5 mb-2">
                 <Bell size={11} className="text-amber-400" />
-                <span className="text-[11px] uppercase tracking-wider text-white/40">Reminders</span>
-                <span className="text-[10px] text-white/30">{reminders.filter(r => !r.done).length}</span>
+                <span className="text-[11px] uppercase tracking-wider light:text-stone-400">Reminders</span>
+                <span className="text-[10px] light:text-stone-500">{reminders.filter(r => !r.done).length}</span>
               </div>
               <div className="space-y-1">
                 {reminders.filter(r => !r.done).slice(0, 5).map(r => (
-                  <div key={r.id} className="flex items-center gap-2 p-2 rounded-md bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors group">
+                  <div key={r.id} className="flex items-center gap-2 p-2 rounded-md light:bg-white light:border-[var(--ws-border-strong)] hover:light:bg-white light:border-[var(--ws-border-strong)]/50 transition-colors group">
                     <button
                       onClick={() => onToggleReminder?.(r.id, true)}
                       className="w-4 h-4 rounded border border-amber-500/30 hover:bg-amber-500/20 transition-colors flex items-center justify-center"
                     >
                       <CheckCircle2 size={10} className="text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </button>
-                    <span className="text-[12px] text-white/70 flex-1 truncate">{r.text}</span>
+                    <span className="text-[12px] light:text-stone-900/70 flex-1 truncate">{r.text}</span>
                     {r.due_date && <span className="text-[10px] text-amber-400/60 font-mono">{r.due_date.slice(5)}</span>}
                     <button
                       onClick={() => onDeleteReminder?.(r.id)}
-                      className="text-white/20 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                      className="light:text-stone-500 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 size={10} />
                     </button>
@@ -765,10 +781,10 @@ export function DeadlinesCard({
 
         {/* Completed Section */}
         {completed.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-zinc-800/50 shrink-0">
+          <div className="mt-3 pt-3 border-t light:border-[var(--ws-border)] shrink-0">
             <button
               onClick={() => setShowCompleted(!showCompleted)}
-              className="flex items-center gap-1.5 text-[11px] text-white/50 hover:text-white/80 transition-colors w-full py-1"
+              className="flex items-center gap-1.5 text-[11px] light:text-stone-400 hover:light:text-stone-900/80 transition-colors w-full py-1"
             >
               {showCompleted ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               <span>{completed.length} completed</span>
@@ -788,15 +804,15 @@ export function DeadlinesCard({
                         key={dl.id}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="flex items-center gap-2 p-2 rounded-md bg-zinc-900/30 opacity-50 hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-2 p-2 rounded-md light:bg-white light:border-[var(--ws-border-strong)] opacity-50 hover:opacity-80 transition-opacity"
                       >
                         {isReminder(dl) ? <Bell size={12} className="text-amber-500" /> : <CheckCircle2 size={12} className="text-emerald-500" />}
-                        <span className="text-[12px] text-white/50 line-through flex-1">{dl.title}</span>
+                        <span className="text-[12px] light:text-stone-400 line-through flex-1">{dl.title}</span>
                         <motion.button
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
                           onClick={() => onUpdate(dl.id, { status: 'pending' })}
-                          className="text-white/40 hover:text-white/60 p-1 rounded"
+                          className="light:text-stone-400 hover:light:text-stone-400 p-1 rounded"
                           title="Reopen"
                         >
                           <RotateCcw size={10} />

@@ -98,7 +98,7 @@ export function EmptyState({
 }) {
 	return (
 		<div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
-			<span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900/60 text-zinc-500 ring-1 ring-zinc-800/60">
+			<span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900/60 text-zinc-500 light:text-stone-500 ring-1 ring-zinc-800/60">
 				{icon}
 			</span>
 			<div className="space-y-1">

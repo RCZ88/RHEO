@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, screen } from 'electron';
 import path from 'path';
+import path from 'path';
 import type Database from 'better-sqlite3';
 import { ensureFocusSchema } from './focusSchema';
 
@@ -205,6 +206,16 @@ export class FocusManager {
     this.hideOverlay();
     const id = this.state.sessionId;
     emitCompositionEvent(outcome === 'failed' ? 'focus.session.broken' : 'focus.session.ended', { id, outcome, reason, actualSec });
+
+    // Fire a human-centric notification when a focus session completes successfully
+    if (outcome === 'completed' && this.getMainWindow()) {
+      try {
+        const { notificationsFocusDone } = require('../../main/notifications');
+        const goalLabel = this.state.strictness === 'non_allowed' ? 'Deep Focus session' : 'Focus session';
+        notificationsFocusDone(this.db, goalLabel, actualSec);
+      } catch {}
+    }
+
     this.state = this.idle();
     this.pushState();
     this.getMainWindow()?.webContents.send('focus:ended', { outcome, reason, id });

@@ -157,7 +157,7 @@ export class SyncAgent {
   }
 
   // ── Pull remote changes and merge (LWW by updated_at) ────────────
-  async pull(): Promise<{ cursor: number }> {
+  async pull(): Promise<{ cursor: number; phoneFocusEvents: any[] }> {
     const res = await this.fetcher(
       `${this.baseUrl}/v1/sync/pull?since=${this.cursor}`,
       { headers: await this.authHeaders() },
@@ -222,17 +222,35 @@ export class SyncAgent {
 
     merge()
 
+    // ── Focus → phone link: collect inbound phone focus events ──────
+    // deep_focus_events rows are KV envelopes; value_json holds the event.
+    // Keep phone-origin events only — the main-process handler matches them
+    // against the live desktop session (dedupe there; pull repeats rows).
+    // Do NOT merge these into any desktop table; events only.
+    const phoneFocusEvents: any[] = []
+    try {
+      for (const change of changes.deep_focus_events ?? []) {
+        const row = (change.row ?? {}) as Record<string, unknown>
+        const raw = row.value_json
+        if (typeof raw !== "string" || !raw) continue
+        try {
+          const ev = JSON.parse(raw)
+          if (ev && ev.origin === "phone") phoneFocusEvents.push(ev)
+        } catch {}
+      }
+    } catch {}
+
     if (typeof cursor === "number" && cursor > this.cursor) {
       this.cursor = cursor
     }
-    return { cursor: this.cursor }
+    return { cursor: this.cursor, phoneFocusEvents }
   }
 
   // ── Convenience: push then pull in one call ───────────────────────
-  async sync(): Promise<{ pushed: number; cursor: number }> {
+  async sync(): Promise<{ pushed: number; cursor: number; phoneFocusEvents: any[] }> {
     const pushResult = await this.push()
     const pullResult = await this.pull()
-    return { pushed: pushResult.applied, cursor: pullResult.cursor }
+    return { pushed: pushResult.applied, cursor: pullResult.cursor, phoneFocusEvents: pullResult.phoneFocusEvents }
   }
 
   // ── Get current cursor (for diagnostics) ──────────────────────────

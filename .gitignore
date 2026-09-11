@@ -125,7 +125,7 @@ CZVault/
 *.csv
 !*.example.csv
 
-# Screenshots & media (unless in assets)
+# Screenshots & media (unless in assets or design/media)
 *.png
 *.jpg
 *.jpeg
@@ -133,6 +133,10 @@ CZVault/
 *.mp4
 *.mov
 !src/assets/
+!design/media/
+!design/media/shots/
+!design/media/clips/
+!design/media/context/
 
 # Backup files
 *.bak

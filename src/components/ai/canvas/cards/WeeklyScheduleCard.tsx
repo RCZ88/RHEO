@@ -106,7 +106,7 @@ export function WeeklyScheduleCard({ weekOffset = 0 }: WeeklyScheduleCardProps) 
                     <span className="dk-weekly-block-title">{s.title}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteEntry(s.id) }}
-                      className="ml-auto opacity-0 group-hover/block:opacity-100 transition-opacity text-zinc-500 hover:text-red-400 flex-shrink-0"
+                      className="ml-auto opacity-0 group-hover/block:opacity-100 transition-opacity text-zinc-500 hover:text-red-400 flex-shrink-0 light:text-stone-400"
                       title="Delete entry"
                     >
                       <Trash2 size={10} />

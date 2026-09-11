@@ -506,20 +506,20 @@ export function CanvasContainer({
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             className="fixed inset-0 z-[210] flex items-center justify-center p-4"
           >
-            <div className="w-full max-w-[380px] rounded-2xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl p-5" onClick={e => e.stopPropagation()}>
-              <h3 className="text-[14px] font-semibold text-white mb-1">Save Canvas As</h3>
-              <p className="text-[12px] text-zinc-400 mb-4">Create a new canvas with this layout.</p>
+            <div className="w-full max-w-[380px] rounded-2xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl p-5 light:bg-white light:border-[var(--ws-border-strong)]" onClick={e => e.stopPropagation()}>
+              <h3 className="text-[14px] font-semibold text-white mb-1 light:text-stone-900">Save Canvas As</h3>
+              <p className="text-[12px] text-zinc-400 mb-4 light:text-stone-500">Create a new canvas with this layout.</p>
               <input
                 type="text"
                 value={saveAsName}
                 onChange={e => setSaveAsName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && saveAsName.trim()) { onSaveAs?.(saveAsName.trim()); setShowSaveAs(false) } }}
                 autoFocus
-                className="w-full px-3 py-2 rounded-xl bg-zinc-900/60 border border-zinc-700/50 text-[13px] text-white placeholder-zinc-500 outline-none focus:border-zinc-500 transition-colors mb-4"
+                className="w-full px-3 py-2 rounded-xl bg-zinc-900/60 border border-zinc-700/50 text-[13px] text-white placeholder-zinc-500 outline-none focus:border-zinc-500 transition-colors mb-4 light:bg-[var(--ws-surface-sunken)] light:text-stone-900 light:placeholder-stone-400 light:border-[var(--ws-border)]"
                 placeholder="Canvas name..."
               />
               <div className="flex items-center justify-end gap-2">
-                <button onClick={() => setShowSaveAs(false)} className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors">Cancel</button>
+                <button onClick={() => setShowSaveAs(false)} className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-stone-500 light:hover:bg-stone-100">Cancel</button>
                 <button
                   onClick={() => { if (saveAsName.trim()) { onSaveAs?.(saveAsName.trim()); setShowSaveAs(false) } }}
                   disabled={!saveAsName.trim()}

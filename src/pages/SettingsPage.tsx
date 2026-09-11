@@ -554,6 +554,30 @@ export default function SettingsPage({
     }
     return 'normal';
   });
+
+  // R-10: Boot Animation state (single source = preference store, ruling 2)
+  const [bootAnimEnabled, setBootAnimEnabled] = useState(true);
+  const [bootAnimVariant, setBootAnimVariant] = useState<'meridian' | 'minimal'>('meridian');
+  const [bootAnimWarm, setBootAnimWarm] = useState(false);
+  const [bootAnimLoading, setBootAnimLoading] = useState(true);
+
+  // R-10: Mount-load boot animation prefs from preference store (ruling 4)
+  useEffect(() => {
+    (async () => {
+      try {
+        if (window.deskflowAPI?.getPreference) {
+          const cfg = await window.deskflowAPI.getPreference('boot_animation');
+          if (cfg && typeof cfg === 'object') {
+            setBootAnimEnabled(cfg.enabled !== false);
+            setBootAnimVariant(cfg.variant === 'minimal' ? 'minimal' : 'meridian');
+            setBootAnimWarm(!!cfg.warmStart);
+          }
+        }
+      } catch { /* keep defaults */ }
+      setBootAnimLoading(false);
+    })();
+  }, []);
+
   const [appCategoryOverrides, setAppCategoryOverrides] = useState<Record<string, string>>({});
   const [domainCategoryOverrides, setDomainCategoryOverrides] = useState<Record<string, string>>({});
 
@@ -881,6 +905,15 @@ export default function SettingsPage({
     }
     localStorage.setItem('deskflow-animation-speed', animationSpeed);
     localStorage.setItem('deskflow-agent-colors', JSON.stringify(agentColorOverrides));
+
+    // R-10: Save boot animation config to preference store (single source, ruling 2)
+    if (window.deskflowAPI?.setPreference) {
+      await window.deskflowAPI.setPreference('boot_animation', {
+        enabled: bootAnimEnabled,
+        variant: bootAnimVariant,
+        warmStart: bootAnimWarm,
+      });
+    }
 
     if (window.deskflowAPI?.setPreference) {
       await window.deskflowAPI.setPreference('trackerAppMode', trackerAppMode);
@@ -1650,7 +1683,7 @@ export default function SettingsPage({
               if (matched) setActiveTab(matched as any);
             }}
             placeholder="Search settings..."
-            className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+            className="w-full bg-zinc-900/50 light:bg-white/50 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
           />
         {settingsSearch && (
           <button onClick={() => setSettingsSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
@@ -1659,14 +1692,14 @@ export default function SettingsPage({
         )}
       </div>
 
-      <div className="flex gap-1 bg-zinc-900/50 p-1 rounded-xl">
+      <div className="flex gap-1 bg-zinc-900/50 light:bg-white/50 p-1 rounded-xl">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${activeTab === tab.id
               ? 'bg-zinc-800 text-white shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 light:bg-zinc-100/50'
               }`}
           >
             {tab.label}
@@ -1690,7 +1723,7 @@ export default function SettingsPage({
                     <button key={mode} onClick={() => import('../lib/theme').then(m => m.setTheme(mode))}
                       className={`relative flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all duration-200 ${isActive
                         ? mode === 'light' ? 'bg-amber-500/10 border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : mode === 'dark' ? 'bg-violet-500/10 border-violet-500/50 shadow-[0_0_20px_rgba(139,92,246,0.15)]' : 'bg-blue-500/10 border-blue-500/50 shadow-[0_0_20px_rgba(6,182,212,0.15)]'
-                        : 'bg-zinc-800/40 border-zinc-700/40 hover:border-zinc-600/60 hover:bg-zinc-800/60'}`}>
+                        : 'bg-zinc-800/40 light:bg-zinc-100/40 border-zinc-700/40 hover:border-zinc-600/60 hover:bg-zinc-800/60 light:bg-zinc-100'}`}>
                       <div className={`w-16 h-12 rounded-xl border-2 flex items-center justify-center transition-all duration-200 ${isActive
                         ? mode === 'light' ? 'border-amber-400 bg-white shadow-sm' : mode === 'dark' ? 'border-violet-400 bg-zinc-900 shadow-sm' : 'border-blue-400 bg-gradient-to-br from-white to-zinc-800 shadow-sm'
                         : 'border-zinc-600/40 bg-zinc-800'}`}>
@@ -1775,26 +1808,26 @@ export default function SettingsPage({
                 <p className="text-xs text-zinc-500">How your current choice looks</p>
               </div>
             </div>
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-3">
+            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-white/30 p-5 space-y-3 light:border-zinc-200/40 light:bg-white/50">
               <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-zinc-700/50 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-zinc-700/50 light:bg-zinc-200/50 flex items-center justify-center">
                   <Settings className="w-4 h-4 text-zinc-500" />
                 </div>
                 <div className="flex-1 space-y-1">
-                  <div className="h-3 w-24 rounded bg-zinc-700/50" />
+                  <div className="h-3 w-24 rounded bg-zinc-700/50 light:bg-zinc-200/50" />
                   <div className="h-2 w-full rounded bg-zinc-700/30" />
                 </div>
                 <div className="flex gap-1">
-                  <div className="w-6 h-6 rounded-full bg-zinc-700/50" />
-                  <div className="w-6 h-6 rounded-full bg-zinc-700/50" />
+                  <div className="w-6 h-6 rounded-full bg-zinc-700/50 light:bg-zinc-200/50" />
+                  <div className="w-6 h-6 rounded-full bg-zinc-700/50 light:bg-zinc-200/50" />
                 </div>
               </div>
               <div className="flex gap-2">
-                <div className="h-8 w-full rounded-lg bg-zinc-800/60 flex items-center px-3">
-                  <span className="text-xs text-zinc-500">Sample card content</span>
+                <div className="h-8 w-full rounded-lg bg-zinc-800/60 light:bg-zinc-100 flex items-center px-3 light:bg-zinc-100">
+                  <span className="text-xs text-zinc-500 light:text-zinc-400">Sample card content</span>
                 </div>
-                <div className="h-8 w-20 rounded-lg bg-zinc-800/60 flex items-center justify-center">
-                  <span className="text-xs text-zinc-500">Action</span>
+                <div className="h-8 w-20 rounded-lg bg-zinc-800/60 light:bg-zinc-100 flex items-center justify-center light:bg-zinc-100">
+                  <span className="text-xs text-zinc-500 light:text-zinc-400">Action</span>
                 </div>
               </div>
             </div>
@@ -1804,8 +1837,8 @@ export default function SettingsPage({
 
       {activeTab === 'category' && (
         <div data-section="settings.category" className="space-y-4">
-          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors duration-150 ${aiRun?.purpose === 'category' && aiRun.error ? 'bg-red-500/10 border-red-500/30' : aiRun?.purpose === 'category' && aiRun.done ? 'bg-emerald-500/10 border-emerald-500/30' : aiRun?.purpose === 'category' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-zinc-800/40 border-zinc-700/40'}`}>
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${aiRun?.purpose === 'category' && aiRun.error ? 'bg-red-500/20' : aiRun?.purpose === 'category' && aiRun.done ? 'bg-emerald-500/20' : aiRun?.purpose === 'category' ? 'bg-amber-500/20' : 'bg-zinc-700/50'}`}>
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors duration-150 ${aiRun?.purpose === 'category' && aiRun.error ? 'bg-red-500/10 border-red-500/30' : aiRun?.purpose === 'category' && aiRun.done ? 'bg-emerald-500/10 border-emerald-500/30' : aiRun?.purpose === 'category' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-zinc-800/40 light:bg-zinc-100/40 border-zinc-700/40'}`}>
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${aiRun?.purpose === 'category' && aiRun.error ? 'bg-red-500/20' : aiRun?.purpose === 'category' && aiRun.done ? 'bg-emerald-500/20' : aiRun?.purpose === 'category' ? 'bg-amber-500/20' : 'bg-zinc-700/50 light:bg-zinc-200/50'}`}>
               {aiRun?.purpose === 'category' && aiRun.error ? <AlertTriangle className="w-4 h-4 text-red-400" /> : aiRun?.purpose === 'category' && aiRun.done ? <Check className="w-4 h-4 text-emerald-400" /> : aiRun?.purpose === 'category' ? <Loader2 className="w-4 h-4 text-amber-400 animate-spin" /> : <Sparkles className="w-4 h-4 text-zinc-400" />}
             </div>
             <div className="flex-1 min-w-0">
@@ -1829,25 +1862,25 @@ export default function SettingsPage({
             {(aiRun?.prompt || aiRun?.rawOutput) && (
               <button
                 onClick={() => setShowRunLogs(!showRunLogs)}
-                className="p-1.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150 flex-shrink-0"
+                className="p-1.5 rounded bg-zinc-700/50 light:bg-zinc-200/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150 flex-shrink-0"
                 title={showRunLogs ? 'Hide provider logs' : 'Show provider logs (prompt & raw output)'}
               >
                 {showRunLogs ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             )}
-            {aiRun?.purpose === 'category' && aiRun.done && !aiRun.error && <button onClick={() => setAiRun(null)} className="p-1 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150 flex-shrink-0" title="Dismiss"><X className="w-3.5 h-3.5" /></button>}
+            {aiRun?.purpose === 'category' && aiRun.done && !aiRun.error && <button onClick={() => setAiRun(null)} className="p-1 rounded bg-zinc-700/50 light:bg-zinc-200/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150 flex-shrink-0" title="Dismiss"><X className="w-3.5 h-3.5" /></button>}
           </div>
           {showRunLogs && (aiRun?.prompt || aiRun?.rawOutput) && (
             <div className="space-y-2">
               {aiRun.prompt && (
-                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 overflow-hidden">
-                  <div className="px-3 py-1.5 bg-zinc-800/60 text-[11px] font-mono text-zinc-400 border-b border-zinc-700/40">INPUT PROMPT → provider</div>
+                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 light:bg-zinc-100/70 overflow-hidden">
+                  <div className="px-3 py-1.5 bg-zinc-800/60 light:bg-zinc-100 text-[11px] font-mono text-zinc-400 border-b border-zinc-700/40">INPUT PROMPT → provider</div>
                   <pre className="px-3 py-2 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{aiRun.prompt}</pre>
                 </div>
               )}
               {aiRun.rawOutput && (
-                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 overflow-hidden">
-                  <div className="px-3 py-1.5 bg-zinc-800/60 text-[11px] font-mono text-zinc-400 border-b border-zinc-700/40">RAW OUTPUT ← provider</div>
+                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 light:bg-zinc-100/70 overflow-hidden">
+                  <div className="px-3 py-1.5 bg-zinc-800/60 light:bg-zinc-100 text-[11px] font-mono text-zinc-400 border-b border-zinc-700/40">RAW OUTPUT ← provider</div>
                   <pre className="px-3 py-2 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{aiRun.rawOutput}</pre>
                 </div>
               )}
@@ -1867,7 +1900,7 @@ export default function SettingsPage({
                 onClick={() => setDataSyncMode('forward')}
                 className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition ${dataSyncMode === 'forward'
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 border border-transparent'
+                  : 'bg-zinc-800/50 light:bg-zinc-100/50 text-zinc-400 hover:text-zinc-200 border border-transparent'
                   }`}
               >
                 <div className="font-medium">Forward Only</div>
@@ -1877,7 +1910,7 @@ export default function SettingsPage({
                 onClick={() => setDataSyncMode('refactor')}
                 className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition ${dataSyncMode === 'refactor'
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                  : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 border border-transparent'
+                  : 'bg-zinc-800/50 light:bg-zinc-100/50 text-zinc-400 hover:text-zinc-200 border border-transparent'
                   }`}
               >
                 <div className="font-medium">Refactor All Data</div>
@@ -1890,7 +1923,7 @@ export default function SettingsPage({
                   <button
                     onClick={analyzeRefactor}
                     disabled={refactorPhase === 'analyzing' || refactorPhase === 'running'}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800/60 border border-zinc-700/50 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800/60 light:bg-zinc-100 border border-zinc-700/50 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {refactorPhase === 'analyzing' ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1902,7 +1935,7 @@ export default function SettingsPage({
                   {(refactorPhase === 'done' || refactorPhase === 'error') && (
                     <button
                       onClick={analyzeRefactor}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800/60 border border-zinc-700/50 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800/60 light:bg-zinc-100 border border-zinc-700/50 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       Re-analyze
@@ -1914,7 +1947,7 @@ export default function SettingsPage({
                 </div>
 
                 {refactorPhase === 'analyzing' && (
-                  <div className="space-y-2 px-3 py-3 bg-zinc-900/60 rounded-lg border border-zinc-800">
+                  <div className="space-y-2 px-3 py-3 bg-zinc-900/60 light:bg-white/40 rounded-lg border border-zinc-800">
                     <div className="h-3 bg-zinc-800 rounded animate-pulse w-2/3" />
                     <div className="h-3 bg-zinc-800 rounded animate-pulse w-1/2" />
                     <div className="h-3 bg-zinc-800 rounded animate-pulse w-3/4" />
@@ -1959,7 +1992,7 @@ export default function SettingsPage({
 
                       <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-800 divide-y divide-zinc-800/80">
                         {refactorPreview.mismatches.map((m) => (
-                          <div key={`${m.kind}-${m.key}`} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-zinc-900/50">
+                          <div key={`${m.kind}-${m.key}`} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-zinc-900/50 light:bg-white/50">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="text-xs text-zinc-300 truncate">{m.key}</span>
                               <span className="text-[11px] text-zinc-500 shrink-0">{m.kind === 'domain' ? 'website' : 'app'}</span>
@@ -1986,7 +2019,7 @@ export default function SettingsPage({
                 )}
 
                 {refactorPhase === 'running' && (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 text-zinc-400 rounded-lg">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 light:bg-zinc-100/50 text-zinc-400 rounded-lg">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     <span className="text-xs">Refactoring categories across all data…</span>
                   </div>
@@ -2220,7 +2253,7 @@ export default function SettingsPage({
                     <h2 className="text-lg font-semibold">External Activities</h2>
                     <p className="text-xs text-zinc-500">Click activity to change tier</p>
                   </div>
-                  <span className="text-xs text-zinc-500 bg-zinc-800/50 px-2 py-1 rounded-md">{externalActivities.length} activities</span>
+                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">{externalActivities.length} activities</span>
                 </div>
               </div>
 
@@ -2248,7 +2281,7 @@ export default function SettingsPage({
                           onClick={() => setEditingExtActivity(isEditing ? null : act.id)}
                           className={`w-full flex flex-col items-center p-3 rounded-xl border transition-colors duration-150 group ${isEditing
                             ? 'bg-zinc-700/60 border-2 border-emerald-500/60'
-                            : 'bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-700/30 hover:border-zinc-500'
+                            : 'bg-zinc-800/40 light:bg-zinc-100/40 hover:bg-zinc-800/70 border border-zinc-700/30 hover:border-zinc-500'
                             }`}
                         >
                           <div className="flex items-center justify-center gap-1.5 w-full">
@@ -2284,7 +2317,7 @@ export default function SettingsPage({
                     setExtCarouselExpanded(!extCarouselExpanded);
                     setExtCarouselIndex(0);
                   }}
-                  className="mt-3 w-full py-2 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors duration-150 flex items-center justify-center gap-2"
+                  className="mt-3 w-full py-2 bg-zinc-800/50 light:bg-zinc-100/50 hover:bg-zinc-800 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors duration-150 flex items-center justify-center gap-2"
                 >
                   {extCarouselExpanded ? (
                     <><ChevronUp className="w-4 h-4" /> Show Less</>
@@ -2299,7 +2332,7 @@ export default function SettingsPage({
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 p-4 bg-zinc-900/80 rounded-xl border border-zinc-700/50"
+                  className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
                 >
                   <div className="grid grid-cols-3 gap-2">
                     {(['productive', 'neutral', 'distracting'] as const).map(tier => {
@@ -2401,7 +2434,7 @@ export default function SettingsPage({
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 10 }}
-                            className="flex items-center gap-3 p-3 bg-zinc-800/40 rounded-xl border border-zinc-700/30"
+                            className="flex items-center gap-3 p-3 bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl border border-zinc-700/30"
                           >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
@@ -2426,7 +2459,7 @@ export default function SettingsPage({
                                 const currentIdx = cats.indexOf(change.newCategory);
                                 editPendingChange(change.id, cats[(currentIdx + 1) % cats.length]);
                               }}
-                              className="p-1.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150"
+                              className="p-1.5 rounded bg-zinc-700/50 light:bg-zinc-200/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150"
                               title="Change suggested category"
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -2450,7 +2483,7 @@ export default function SettingsPage({
                       })}
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-zinc-800 bg-zinc-900/50">
+                    <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-zinc-800 bg-zinc-900/50 light:bg-white/50">
                       {pendingChanges.length > 0 ? (
                         <>
                           <button
@@ -2488,7 +2521,7 @@ export default function SettingsPage({
             <GlassCard>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-zinc-700/50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-700/50 light:bg-zinc-200/50 flex items-center justify-center">
                     <History className="w-4 h-4 text-zinc-400" />
                   </div>
                   <div>
@@ -2499,7 +2532,7 @@ export default function SettingsPage({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowChangeHistory(!showChangeHistory)}
-                    className="px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 text-zinc-400 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-zinc-700/50 light:bg-zinc-200/50 hover:bg-zinc-700 text-zinc-400 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-1.5"
                   >
                     {showChangeHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     {showChangeHistory ? 'Hide' : 'Show'}
@@ -2534,7 +2567,7 @@ export default function SettingsPage({
                         return (
                           <div
                             key={change.id}
-                            className="flex items-center gap-3 p-5 bg-zinc-800/40 rounded-xl border border-zinc-700/30 hover:border-zinc-600/50 transition-colors duration-150"
+                            className="flex items-center gap-3 p-5 bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl border border-zinc-700/30 hover:border-zinc-600/50 transition-colors duration-150"
                           >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
@@ -2558,7 +2591,7 @@ export default function SettingsPage({
                             {/* Undo button */}
                             <button
                               onClick={() => undoChange(change.id)}
-                              className="p-1.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150"
+                              className="p-1.5 rounded bg-zinc-700/50 light:bg-zinc-200/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150"
                               title="Undo this change"
                             >
                               <Undo2 className="w-3.5 h-3.5" />
@@ -2584,7 +2617,7 @@ export default function SettingsPage({
                   <p className="text-xs text-zinc-500">Click app to change category · Lock to block AI changes</p>
                 </div>
                 {appStats.length > 0 && (
-                  <span className="text-xs text-zinc-500 bg-zinc-800/50 px-2 py-1 rounded-md">{filteredAppStats.length} apps</span>
+                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">{filteredAppStats.length} apps</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -2640,7 +2673,7 @@ export default function SettingsPage({
                         placeholder="Search apps..."
                         value={appSearchFilter}
                         onChange={(e) => { setAppSearchFilter(e.target.value); setAppCarouselIndex(0); }}
-                        className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 w-36"
+                        className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 w-36"
                       />
                   </div>
                 )}
@@ -2673,7 +2706,7 @@ export default function SettingsPage({
                             onClick={() => setEditingAppCategory(isEditing ? null : app.app)}
                             className={`w-full flex flex-col items-center p-3 rounded-xl border transition-colors duration-150 group ${isEditing
                               ? 'bg-zinc-700/60 border-2 border-emerald-500/60'
-                              : 'bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-700/30 hover:border-zinc-500'
+                              : 'bg-zinc-800/40 light:bg-zinc-100/40 hover:bg-zinc-800/70 border border-zinc-700/30 hover:border-zinc-500'
                               }`}
                           >
                             {/* Individual AI Sparkle Button */}
@@ -2763,7 +2796,7 @@ export default function SettingsPage({
                       setAppCarouselExpanded(!appCarouselExpanded);
                       setAppCarouselIndex(0);
                     }}
-                    className="mt-3 w-full py-2 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors duration-150 flex items-center justify-center gap-2"
+                    className="mt-3 w-full py-2 bg-zinc-800/50 light:bg-zinc-100/50 hover:bg-zinc-800 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors duration-150 flex items-center justify-center gap-2"
                   >
                     {appCarouselExpanded ? (
                       <>
@@ -2791,7 +2824,7 @@ export default function SettingsPage({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-zinc-900/80 rounded-xl border border-zinc-700/50"
+                className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
               >
                 {lockedApps[editingAppCategory] ? (
                   <div className="flex flex-col items-center gap-2 py-4">
@@ -2863,7 +2896,7 @@ export default function SettingsPage({
                   <p className="text-xs text-zinc-500">Click site to change category · Lock to block AI changes</p>
                 </div>
                 {domainStats.length > 0 && (
-                  <span className="text-xs text-zinc-500 bg-zinc-800/50 px-2 py-1 rounded-md">{filteredDomainStats.length} sites</span>
+                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">{filteredDomainStats.length} sites</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -2933,7 +2966,7 @@ export default function SettingsPage({
                       placeholder="Search sites..."
                       value={domainSearchFilter}
                       onChange={(e) => { setDomainSearchFilter(e.target.value); setDomainCarouselIndex(0); }}
-                      className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 w-36"
+                      className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 w-36"
                     />
                   </div>
                 )}
@@ -2966,7 +2999,7 @@ export default function SettingsPage({
                             onClick={() => setEditingDomainCategory(isEditing ? null : site.domain)}
                             className={`w-full flex flex-col items-center p-3 rounded-xl border transition-colors duration-150 group ${isEditing
                               ? 'bg-zinc-700/60 border-2 border-emerald-500/60'
-                              : 'bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-700/30 hover:border-zinc-500'
+                              : 'bg-zinc-800/40 light:bg-zinc-100/40 hover:bg-zinc-800/70 border border-zinc-700/30 hover:border-zinc-500'
                               }`}
                           >
                             {/* Individual AI Sparkle Button */}
@@ -3051,7 +3084,7 @@ export default function SettingsPage({
                       setDomainCarouselExpanded(!domainCarouselExpanded);
                       setDomainCarouselIndex(0);
                     }}
-                    className="mt-3 w-full py-2 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors duration-150 flex items-center justify-center gap-2"
+                    className="mt-3 w-full py-2 bg-zinc-800/50 light:bg-zinc-100/50 hover:bg-zinc-800 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors duration-150 flex items-center justify-center gap-2"
                   >
                     {domainCarouselExpanded ? (
                       <>
@@ -3079,7 +3112,7 @@ export default function SettingsPage({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-zinc-900/80 rounded-xl border border-zinc-700/50"
+                className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
               >
                 {lockedDomains[editingDomainCategory] ? (
                   <div className="flex flex-col items-center gap-2 py-4">
@@ -3176,7 +3209,7 @@ export default function SettingsPage({
                   return (
                     <div
                       key={domain}
-                      className="flex items-center justify-between p-3 bg-zinc-800/40 rounded-xl border border-zinc-700/30"
+                      className="flex items-center justify-between p-3 bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl border border-zinc-700/30"
                     >
                       <div className="flex items-center gap-3 flex-1">
                         <Globe className="w-4 h-4 text-zinc-500" />
@@ -3229,7 +3262,7 @@ export default function SettingsPage({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-zinc-900/80 rounded-xl border border-zinc-700/50"
+                className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold">
@@ -3272,7 +3305,7 @@ export default function SettingsPage({
                 <div className="space-y-3 mb-4">
                   {(editingKeywordDomain === 'new' ? editingKeywordSets : (domainKeywordSets[editingKeywordDomain] || []))
                     .map((set, setIdx) => (
-                      <div key={setIdx} className="p-3 bg-zinc-800/50 rounded-lg border border-zinc-700/30">
+                      <div key={setIdx} className="p-3 bg-zinc-800/50 light:bg-zinc-100/50 rounded-lg border border-zinc-700/30">
                         <div className="flex items-center justify-between mb-2">
                           <select
                             value={set.category}
@@ -3335,7 +3368,7 @@ export default function SettingsPage({
                             <span className="text-xs text-zinc-500 italic">No keywords - will always use this category</span>
                           )}
                           {/* Hide Numbers Toggle */}
-                          <GlassCard className="mt-4 p-4 bg-zinc-900/80 rounded-xl border border-zinc-700/50">
+                          <GlassCard className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <Eye className="w-5 h-5 text-emerald-400" />
@@ -3489,7 +3522,7 @@ export default function SettingsPage({
                         }}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition flex-1 ${trackerAppMode === mode
                           ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                          : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
                           }`}
                       >
                         {mode === 'show-other' ? 'Show Other Apps' : mode === 'pause' ? 'Pause Timer' : 'Track as Normal'}
@@ -3516,7 +3549,7 @@ export default function SettingsPage({
                         }}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${idleThreshold === m
                           ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                          : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
                           }`}
                       >
                         {m} min
@@ -3543,7 +3576,7 @@ export default function SettingsPage({
                         }}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${localTimerBehavior.neutralAction === action
                           ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                          : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
                           }`}
                       >
                         {action === 'pause' ? '⏸ Pause' : action === 'reset' ? '🔄 Reset' : '⏭ Ignore'}
@@ -3571,7 +3604,7 @@ export default function SettingsPage({
                         }}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${localTimerBehavior.distractingAction === action
                           ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                          : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
                           }`}
                       >
                         {action === 'pause' ? '⏸ Pause' : action === 'reset' ? '🔄 Reset' : '⏭ Ignore'}
@@ -3599,7 +3632,7 @@ export default function SettingsPage({
                         }}
                         className={`px-2 py-1 rounded text-xs font-medium transition ${m === 300
                           ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                          : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
                           }`}
                       >
                         {m < 60 ? `${m}s` : m < 3600 ? `${m / 60}m` : `${m / 3600}h`}
@@ -3668,7 +3701,7 @@ export default function SettingsPage({
                         }}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${animationSpeed === speed
                           ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
-                          : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                          : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
                           }`}
                       >
                         {speed === 'slow' ? 'Slow' : speed === 'normal' ? 'Normal' : 'Off'}
@@ -3676,11 +3709,91 @@ export default function SettingsPage({
                     ))}
                   </div>
                 </div>
+
+                {/* R-10: Boot Animation — single source = preference store (ruling 2) */}
+                <div>
+                  <label className="text-sm font-medium text-zinc-400 mb-2 block">Boot Animation</label>
+                  <p className="text-xs text-zinc-500 mb-3">Play the Meridian Wake launch animation when DeskFlow starts.</p>
+                  <div className="flex flex-col gap-3">
+                    {/* Enabled toggle */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        role="switch"
+                        aria-checked={bootAnimEnabled}
+                        onClick={() => {
+                          setBootAnimEnabled(!bootAnimEnabled);
+                          setHasChanges(true);
+                          onHasChangesChange(true);
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${bootAnimEnabled ? 'bg-violet-500' : 'bg-zinc-700'}`}
+                      >
+                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${bootAnimEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                      <span className="text-xs text-zinc-400">{bootAnimEnabled ? 'Enabled' : 'Disabled'}</span>
+                    </div>
+
+                    {/* Variant picker */}
+                    {bootAnimEnabled && (
+                      <>
+                        <div>
+                          <label className="text-xs text-zinc-500 mb-1 block">Variant</label>
+                          <div className="flex gap-1.5">
+                            {(['meridian', 'minimal'] as const).map((v) => (
+                              <button
+                                key={v}
+                                onClick={() => {
+                                  setBootAnimVariant(v);
+                                  setHasChanges(true);
+                                  onHasChangesChange(true);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${bootAnimVariant === v
+                                  ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
+                                  : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                                  }`}
+                              >
+                                {v === 'meridian' ? 'Meridian Wake' : 'Minimal'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Warm-start */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            role="switch"
+                            aria-checked={bootAnimWarm}
+                            onClick={() => {
+                              setBootAnimWarm(!bootAnimWarm);
+                              setHasChanges(true);
+                              onHasChangesChange(true);
+                            }}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${bootAnimWarm ? 'bg-violet-500' : 'bg-zinc-700'}`}
+                          >
+                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${bootAnimWarm ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </button>
+                          <span className="text-xs text-zinc-400">Warm start (shorter animation)</span>
+                        </div>
+
+                        {/* Replay Intro */}
+                        <button
+                          onClick={async () => {
+                            if (window.deskflowAPI?.replaySplash) {
+                              await window.deskflowAPI.replaySplash();
+                            }
+                          }}
+                          className="self-start px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 hover:text-white hover:border-zinc-500 transition"
+                        >
+                          ▶ Replay Intro
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <div className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/30">
+              <div className="bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl p-3 border border-zinc-700/30">
                 <div className="flex items-center gap-2 mb-2">
                   <Database className="w-3.5 h-3.5 text-zinc-400" />
                   <span className="text-sm font-medium">Storage</span>
@@ -3697,7 +3810,7 @@ export default function SettingsPage({
                 </div>
               </div>
 
-              <div className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/30">
+              <div className="bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl p-3 border border-zinc-700/30">
                 <div className="flex items-center gap-2 mb-2">
                   <Download className="w-3.5 h-3.5 text-zinc-400" />
                   <span className="text-sm font-medium">Export</span>
@@ -3705,13 +3818,13 @@ export default function SettingsPage({
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => onExportData('csv')}
-                    className="flex-1 px-2 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 rounded-md text-xs font-medium transition"
+                    className="flex-1 px-2 py-1.5 bg-zinc-700/50 light:bg-zinc-200/50 hover:bg-zinc-700 rounded-md text-xs font-medium transition"
                   >
                     CSV
                   </button>
                   <button
                     onClick={() => onExportData('json')}
-                    className="flex-1 px-2 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 rounded-md text-xs font-medium transition"
+                    className="flex-1 px-2 py-1.5 bg-zinc-700/50 light:bg-zinc-200/50 hover:bg-zinc-700 rounded-md text-xs font-medium transition"
                   >
                     JSON
                   </button>
@@ -3837,7 +3950,7 @@ export default function SettingsPage({
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition ${
                           isEnabled
                             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                            : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300'
+                            : 'bg-zinc-800/50 light:bg-zinc-100/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300'
                         }`}
                       >
                         <span className={`w-3 h-3 rounded border-2 flex items-center justify-center ${
@@ -3872,7 +3985,7 @@ export default function SettingsPage({
 
             {/* Server Status */}
             <div className="pt-4 border-t border-zinc-700/50 space-y-3">
-              <div className="p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/30">
+              <div className="p-3 rounded-lg bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/30">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full ${serverStatus && !serverStatus.error ? 'bg-emerald-400' : 'bg-red-400'}`} />
                   <span className="text-xs font-medium text-zinc-300">Extension Server (port {serverStatus?.port || 54321})</span>
@@ -3917,7 +4030,7 @@ export default function SettingsPage({
                   <button
                     key={ms}
                     onClick={() => { setTrackingPollInterval(ms); if (window.deskflowAPI?.setPreference) window.deskflowAPI.setPreference('trackingPollInterval', ms); }}
-                    className={`px-3 py-1 rounded text-xs font-medium transition ${trackingPollInterval === ms ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1 rounded text-xs font-medium transition ${trackingPollInterval === ms ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'}`}
                   >
                     {ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`}
                   </button>
@@ -3947,7 +4060,7 @@ export default function SettingsPage({
                   <button
                     key={ms}
                     onClick={() => { setSleepGapMs(ms); handleSaveTrackingSetting('sleep_gap_ms', ms); }}
-                    className={`px-3 py-1 rounded text-xs font-medium transition ${sleepGapMs === ms ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1 rounded text-xs font-medium transition ${sleepGapMs === ms ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'}`}
                   >
                     {ms / 1000}s
                   </button>
@@ -3976,7 +4089,7 @@ export default function SettingsPage({
                   <button
                     key={ms}
                     onClick={() => { setMaxSessionMs(ms); handleSaveTrackingSetting('max_session_ms', ms); }}
-                    className={`px-3 py-1 rounded text-xs font-medium transition ${maxSessionMs === ms ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'}`}
+                    className={`px-3 py-1 rounded text-xs font-medium transition ${maxSessionMs === ms ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'}`}
                   >
                     {ms === 60000 ? '1m' : ms === 180000 ? '3m' : ms === 300000 ? '5m' : '10m'}
                   </button>
@@ -3985,11 +4098,11 @@ export default function SettingsPage({
             </div>
 
             <div className="pt-4 border-t border-zinc-700/50 grid grid-cols-2 gap-4 text-xs">
-              <div className="bg-zinc-800/50 rounded-lg p-3">
+              <div className="bg-zinc-800/50 light:bg-zinc-100/50 rounded-lg p-3">
                 <div className="text-zinc-500 mb-1">Sleep Gap</div>
                 <div className="text-white font-mono">{(sleepGapMs / 1000).toFixed(1)}s</div>
               </div>
-              <div className="bg-zinc-800/50 rounded-lg p-3">
+              <div className="bg-zinc-800/50 light:bg-zinc-100/50 rounded-lg p-3">
                 <div className="text-zinc-500 mb-1">Max Session</div>
                 <div className="text-white font-mono">{(maxSessionMs / 60000).toFixed(1)}m</div>
               </div>
@@ -4015,7 +4128,7 @@ export default function SettingsPage({
                       }}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${promptHistoryLimit === n
                         ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-                        : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                        : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
                         }`}
                     >
                       {n}
@@ -4059,7 +4172,7 @@ export default function SettingsPage({
                 <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
                 View default prompt
               </summary>
-              <div className="mt-2 bg-zinc-900/80 rounded-lg border border-zinc-700/50 p-3 max-h-48 overflow-y-auto">
+              <div className="mt-2 bg-zinc-900/80 light:bg-white/60 rounded-lg border border-zinc-700/50 p-3 max-h-48 overflow-y-auto">
                 <pre className="text-[11px] text-zinc-400 font-mono whitespace-pre-wrap">{DEFAULT_SYSTEM_PROMPT}</pre>
               </div>
             </details>
@@ -4095,7 +4208,7 @@ export default function SettingsPage({
               {['claude', 'opencode', 'custom'].map((agent) => {
                 const additions = systemPrompts[agent] || '';
                 return (
-                  <div key={agent} className="p-3 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
+                  <div key={agent} className="p-3 bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl border border-zinc-700/30">
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-sm font-medium text-zinc-300 capitalize">{agent === 'custom' ? 'Custom AI' : agent}</label>
                       <button
@@ -4161,7 +4274,7 @@ export default function SettingsPage({
               {AGENTS.map(agent => {
                 const cmd = resumeCommands[agent] || DEFAULT_RESUME_COMMANDS[agent] || '{agent} -s {resumeId}';
                 return (
-                  <div key={agent} className="p-3 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
+                  <div key={agent} className="p-3 bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl border border-zinc-700/30">
                     <label className="text-sm font-medium text-zinc-300 capitalize block mb-1.5">{agent}</label>
                     <div className="flex gap-2">
                       <input
@@ -4209,7 +4322,7 @@ export default function SettingsPage({
             <p className="text-xs text-zinc-500 mb-4">Solar system colors</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
               {allCategories.map((category) => (
-                <div key={category} className="flex items-center gap-2 p-2.5 bg-zinc-800/40 hover:bg-zinc-800/70 rounded-lg border border-zinc-700/30 hover:border-zinc-600 transition-colors duration-150 group">
+                <div key={category} className="flex items-center gap-2 p-2.5 bg-zinc-800/40 light:bg-zinc-100/40 hover:bg-zinc-800/70 rounded-lg border border-zinc-700/30 hover:border-zinc-600 transition-colors duration-150 group">
                   <ColorPicker
                     value={getCategoryColor(category)}
                     onChange={(color) => handleCategoryColorChange(category, color)}
@@ -4230,7 +4343,7 @@ export default function SettingsPage({
               icon={<Palette className="w-5 h-5" />}
               action={
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 bg-zinc-800/50 px-2 py-1 rounded-md">
+                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">
                     {(colorTab === 'apps' ? appStats : domainStats).length} {colorTab}
                   </span>
                   <button
@@ -4281,12 +4394,12 @@ export default function SettingsPage({
             <p className="text-xs text-zinc-500 mb-3">Individual colors</p>
 
             {/* Apps/Websites Toggle */}
-            <div className="flex gap-1 bg-zinc-900/50 p-1 rounded-xl mb-4 w-fit">
+            <div className="flex gap-1 bg-zinc-900/50 light:bg-white/50 p-1 rounded-xl mb-4 w-fit">
               <button
                 onClick={() => setColorTab('apps')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 ${colorTab === 'apps'
                   ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 light:bg-zinc-100/50'
                   }`}
               >
                 Apps
@@ -4295,7 +4408,7 @@ export default function SettingsPage({
                 onClick={() => setColorTab('websites')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 ${colorTab === 'websites'
                   ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 light:bg-zinc-100/50'
                   }`}
               >
                 Websites
@@ -4310,7 +4423,7 @@ export default function SettingsPage({
                 placeholder={`Search ${colorTab}...`}
                 value={colorSearchFilter}
                 onChange={(e) => setColorSearchFilter(e.target.value)}
-                className="w-full sm:w-64 pl-8 pr-3 py-2 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                className="w-full sm:w-64 pl-8 pr-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
               />
             </div>
 
@@ -4324,7 +4437,7 @@ export default function SettingsPage({
                   const category = colorTab === 'apps' ? item.category : (item.category || 'Other');
                   const categoryColor = getCategoryColor(category);
                   return (
-                    <div key={name} className="relative flex flex-col p-3 bg-zinc-800/40 hover:bg-zinc-800/70 rounded-xl border border-zinc-700/30 hover:border-zinc-600 transition-colors duration-150 group">
+                    <div key={name} className="relative flex flex-col p-3 bg-zinc-800/40 light:bg-zinc-100/40 hover:bg-zinc-800/70 rounded-xl border border-zinc-700/30 hover:border-zinc-600 transition-colors duration-150 group">
                       {/* Individual AI Sparkle Button */}
                       <button
                         onClick={async () => {
@@ -4393,7 +4506,7 @@ export default function SettingsPage({
                       window.deskflowAPI.setPreference('sttApiKey', v.trim());
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono pr-10"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono pr-10"
                 />
                 <button
                   type="button"
@@ -4421,7 +4534,7 @@ export default function SettingsPage({
                       window.deskflowAPI.setPreference('sttModel', v.trim() || 'whisper-large-v3-turbo');
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono"
                 />
               </div>
               <div>
@@ -4437,12 +4550,12 @@ export default function SettingsPage({
                       window.deskflowAPI.setPreference('sttBaseUrl', v.trim());
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono"
                 />
               </div>
             </div>
 
-            <div className="rounded-lg bg-zinc-800/40 border border-zinc-700/40 p-3 space-y-1.5">
+            <div className="rounded-lg bg-zinc-800/40 light:bg-zinc-100/40 border border-zinc-700/40 p-3 space-y-1.5">
               <p className="text-xs text-zinc-400 font-medium">Fallback chain</p>
               <p className="text-xs text-zinc-500"><span className="text-emerald-400">1. Cloud API</span> — used when an API key is set. Best accuracy.</p>
               <p className="text-xs text-zinc-500"><span className="text-blue-400">2. Windows speech</span> — built-in Windows recognition, used when no API key is set. Works fully offline.</p>
@@ -4476,7 +4589,7 @@ export default function SettingsPage({
                     setHasChanges(true);
                     onHasChangesChange(true);
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono pr-10"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono pr-10"
                 />
                 <button
                   type="button"
@@ -4579,7 +4692,7 @@ export default function SettingsPage({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-medium text-zinc-300">{prov.label}</span>
-                        <span className={`text-[10px] px-1 py-0.5 rounded ${prov.enabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-700/50 text-zinc-500'}`}>{prov.enabled ? 'On' : 'Off'}</span>
+                        <span className={`text-[10px] px-1 py-0.5 rounded ${prov.enabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-700/50 light:bg-zinc-200/50 text-zinc-500'}`}>{prov.enabled ? 'On' : 'Off'}</span>
                       </div>
                       {prov.enabled && (
                         <div className="space-y-1.5 mt-1.5">
@@ -4708,7 +4821,7 @@ export default function SettingsPage({
                                     );
                                     setAiProviders(next); setHasChanges(true); onHasChangesChange(true);
                                   }}
-                                  className="text-[10px] px-1.5 py-0.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 rounded transition-colors"
+                                  className="text-[10px] px-1.5 py-0.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 light:bg-zinc-200/50 rounded transition-colors"
                                 >+</button>
                               </div>
                             </div>
@@ -4776,7 +4889,7 @@ export default function SettingsPage({
                     }
                   }}
                   placeholder="e.g., Artificial Intelligence"
-                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
                 />
                 <button
                   onClick={async () => {
@@ -4884,7 +4997,7 @@ export default function SettingsPage({
               {kbDocs.length > 0 && (
                 <div className="space-y-1.5 mb-4">
                   {kbDocs.map(doc => (
-                    <div key={doc.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/40 border border-zinc-700/30">
+                    <div key={doc.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/40 light:bg-white/30 border border-zinc-700/30">
                       <FileText className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                       <span className="text-xs text-zinc-300 truncate flex-1" title={doc.name}>{doc.name}</span>
                       <span className="text-[10px] text-zinc-500 uppercase shrink-0">{doc.type}</span>
@@ -4920,7 +5033,7 @@ export default function SettingsPage({
                     }
                   }}
                   placeholder="Test retrieval — type a question about your notes…"
-                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
                 />
                 <button
                   onClick={async () => {
@@ -4941,7 +5054,7 @@ export default function SettingsPage({
               {kbResults.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {kbResults.map((r, i) => (
-                    <div key={i} className="px-3 py-2 rounded-lg bg-zinc-900/40 border border-zinc-700/30">
+                    <div key={i} className="px-3 py-2 rounded-lg bg-zinc-900/40 light:bg-white/30 border border-zinc-700/30">
                       <div className="text-[10px] text-violet-400 mb-1 truncate">{r.docName}</div>
                       <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{r.content}</p>
                     </div>
@@ -4956,11 +5069,11 @@ export default function SettingsPage({
             <div>
               <label className="text-sm font-medium text-zinc-400 mb-2 block">Usage</label>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/30">
+                <div className="bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl p-3 border border-zinc-700/30">
                   <div className="text-xs text-zinc-500 mb-1">Total API Calls</div>
                   <div className="text-lg font-semibold text-white">{aiUsageStats.totalCalls}</div>
                 </div>
-                <div className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/30">
+                <div className="bg-zinc-800/40 light:bg-zinc-100/40 rounded-xl p-3 border border-zinc-700/30">
                   <div className="text-xs text-zinc-500 mb-1">Estimated Cost</div>
                   <div className="text-lg font-semibold text-white">${aiUsageStats.totalCost.toFixed(4)}</div>
                 </div>
@@ -5128,7 +5241,7 @@ export default function SettingsPage({
                     onClick={() => handleSetFinanceCurrency(c.code)}
                     className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-xs transition-colors ${financeCurrency === c.code
                         ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 border border-transparent hover:border-zinc-700/50'
+                        : 'bg-zinc-800/50 light:bg-zinc-100/50 text-zinc-400 hover:text-zinc-200 border border-transparent hover:border-zinc-700/50'
                       }`}
                     title={c.name}
                   >

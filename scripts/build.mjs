@@ -98,6 +98,7 @@ async function main() {
   // Copy non-TS runtime files (migrations, resources, etc.)
   const nonTsDirs = [
     { src: resolve(SRC, 'services/learn/db/migrations'), dest: resolve(OUT, 'services/learn/db/migrations') },
+    { src: resolve(SRC, 'main/migrations'), dest: resolve(OUT, 'main/migrations') },
     { src: resolve(SRC, 'schemas'), dest: resolve(OUT, 'schemas') },
     { src: resolve(ROOT, 'resources/learn'), dest: resolve(OUT, 'resources/learn') },
     { src: resolve(ROOT, 'resources/focus'), dest: resolve(OUT, 'resources/focus') },
@@ -112,6 +113,17 @@ async function main() {
           console.log(`  ${entry} → ${relative(OUT, resolve(dir.dest, entry))}`);
         }
       }
+    }
+  }
+
+  // Copy icon files for window/taskbar/tray icon (platform-appropriate format).
+  // main.ts resolveAppIcon() looks these up via path.join(__dirname, '<name>').
+  // NOTE: RHEO_AppIcon.icns must exist at repo root for mac builds + darwin runtime.
+  for (const icon of ['RHEO_AppIcon.png', 'RHEO_AppIcon.ico', 'RHEO_AppIcon.icns']) {
+    const srcPath = resolve(ROOT, icon);
+    if (existsSync(srcPath)) {
+      copyFileSync(srcPath, resolve(OUT, icon));
+      console.log(`  ${icon} → ${icon}`);
     }
   }
 
@@ -131,6 +143,7 @@ async function main() {
     'services/AIService.js',
     'services/SkillDSLParser.js',
     'services/conductor/ConductorService.js',
+    'services/ai-gateway/AIGatewayService.js',
     'services/providers/router.js',
     'services/providers/templates.js',
     'services/providers/callProvider.js',

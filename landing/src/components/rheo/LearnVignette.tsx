@@ -102,10 +102,10 @@ export default function LearnVignette() {
                   {/* axes */}
                   <line x1={20} y1={160} x2={340} y2={160} stroke="rgba(255,255,255,0.16)" strokeWidth={1} />
                   <line x1={20} y1={20} x2={20} y2={160} stroke="rgba(255,255,255,0.16)" strokeWidth={1} />
-                  <text x={20} y={14} fill="#63636b" style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, letterSpacing: "0.1em" }}>
+                  <text x={20} y={14} fill="#8a8a94" style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, letterSpacing: "0.1em" }}>
                     DEPTH
                   </text>
-                  <text x={320} y={174} fill="#63636b" style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, letterSpacing: "0.1em" }}>
+                  <text x={320} y={174} fill="#8a8a94" style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, letterSpacing: "0.1em" }}>
                     HOURS
                   </text>
                   {/* focus curve */}

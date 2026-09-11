@@ -1,4 +1,10 @@
-const db = require('better-sqlite3')('C:\\Users\\cleme\\AppData\\Roaming\\deskflow\\deskflow-data.db');
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const appDataDir = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+const dbCandidates = ['RHEO', 'DeskFlow', 'deskflow'].map((d) => path.join(appDataDir, d, 'deskflow-data.db'));
+const dbFile = dbCandidates.find((p) => fs.existsSync(p)) || dbCandidates[0];
+const db = require('better-sqlite3')(dbFile);
 console.log('Activities:', db.prepare('SELECT COUNT(*) as cnt FROM external_activities').get().cnt);
 console.log('Sessions:', db.prepare('SELECT COUNT(*) as cnt FROM external_sessions').get().cnt);
 console.log('Today:', db.prepare("SELECT COUNT(*) as cnt FROM external_sessions WHERE date(start_time) = date('now')").get().cnt);

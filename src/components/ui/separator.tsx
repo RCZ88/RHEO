@@ -8,7 +8,7 @@ export function Separator({ orientation = 'horizontal', className = '', ...props
   return (
     <div
       role="separator"
-      className={`shrink-0 bg-zinc-800/60 ${orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px'} ${className}`}
+      className={`shrink-0 bg-zinc-800/60 light:bg-zinc-200/60 ${orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px'} ${className}`}
       {...props}
     />
   );

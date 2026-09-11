@@ -3,7 +3,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const APP_DIR = 'C:/Users/cleme/Documents/COMPUTAH_SAYENCE/App Tracker';
+const APP_DIR = __dirname;
 const USER_DATA = path.join(APP_DIR, '.tmp_rheo_runtime_profile');
 const MAIN_JS = path.join(APP_DIR, 'dist-electron', 'main.cjs');
 const ELECTRON = path.join(APP_DIR, 'node_modules', 'electron', 'dist', 'electron.exe');

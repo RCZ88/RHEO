@@ -96,11 +96,11 @@ function truncatePath(p: string): string {
 function SkeletonRow() {
   return (
     <div className="flex items-center gap-3 py-3 px-4 animate-pulse">
-      <div className="h-3 w-16 rounded bg-zinc-800" />
-      <div className="h-3 w-24 rounded bg-zinc-800" />
+      <div className="h-3 w-16 rounded bg-zinc-800 light:bg-stone-200" />
+      <div className="h-3 w-24 rounded bg-zinc-800 light:bg-stone-200" />
       <div className="flex-1" />
-      <div className="h-3 w-14 rounded bg-zinc-800" />
-      <div className="h-3 w-12 rounded bg-zinc-800" />
+      <div className="h-3 w-14 rounded bg-zinc-800 light:bg-stone-200" />
+      <div className="h-3 w-12 rounded bg-zinc-800 light:bg-stone-200" />
     </div>
   )
 }
@@ -183,20 +183,21 @@ export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHisto
       }}
       className={cn(
         "rounded-xl border border-zinc-800/60 overflow-hidden",
-        SURFACE.card
+        SURFACE.card,
+        "light:border-[var(--ws-border)] light:bg-[var(--color-card)]"
       )}
     >
       {/* Tool header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/40">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/40 light:border-[var(--ws-border)]">
         <div className="flex items-center gap-2.5">
           <span
             className="w-2.5 h-2.5 rounded-full shrink-0"
             style={{ backgroundColor: meta.color }}
           />
-          <span className="text-[13px] font-medium text-zinc-100">
+          <span className="text-[13px] font-medium text-zinc-100 light:text-stone-800">
             {meta.name}
           </span>
-          <span className="text-[11px] text-zinc-600 tabular-nums">
+          <span className="text-[11px] text-zinc-600 tabular-nums light:text-stone-500">
             {total} session{total !== 1 ? "s" : ""}
           </span>
         </div>
@@ -214,7 +215,7 @@ export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHisto
           <EmptyToolState tool={activeTool} />
         ) : (
           <>
-            <div className="divide-y divide-zinc-800/40">
+            <div className="divide-y divide-zinc-800/40 light:divide-[var(--ws-border)]">
               <AnimatePresence initial={false}>
                 {sessions.map((session, sIdx) => (
                   <SessionRow
@@ -230,9 +231,9 @@ export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHisto
             </div>
 
             {/* Load more */}
-            <div className="px-5 py-3 flex justify-center border-t border-zinc-800/30">
+            <div className="px-5 py-3 flex justify-center border-t border-zinc-800/30 light:border-[var(--ws-border)]">
               {loading ? (
-                <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                <div className="flex items-center gap-2 text-[11px] text-zinc-500 light:text-stone-500">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Loading...
                 </div>
@@ -242,7 +243,7 @@ export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHisto
                   onClick={() => fetchSessions(activeTool, sessions.length)}
                   className={cn(
                     "px-4 py-1.5 rounded-lg text-[11px] font-medium transition-colors duration-150",
-                    "bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-400 hover:text-zinc-200",
+                    "bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-400 hover:text-zinc-200 light:hover:bg-stone-200 light:hover:text-stone-800 light:text-stone-500",
                     "ring-1 ring-zinc-700/60",
                     RING.focus
                   )}
@@ -250,7 +251,7 @@ export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHisto
                   Load More
                 </button>
               ) : (
-                <span className="text-[10px] text-zinc-700">
+                <span className="text-[10px] text-zinc-700 light:text-stone-500">
                   All {total} sessions shown
                 </span>
               )}
@@ -291,8 +292,8 @@ function SessionRow({
       <div
         className={cn(
           "flex items-center gap-3 px-5 py-2.5 transition-colors duration-150 group cursor-pointer",
-          "hover:bg-zinc-800/20",
-          expanded && "bg-zinc-800/10"
+          "hover:bg-zinc-800/20 light:hover:bg-stone-100",
+          expanded && "bg-zinc-800/10 light:bg-stone-100"
         )}
         onClick={() => setExpanded(!expanded)}
       >
@@ -300,16 +301,16 @@ function SessionRow({
         <div className="w-4 flex-shrink-0">
           <ChevronDown
             className={cn(
-              "w-3 h-3 text-zinc-600 transition-transform duration-150",
+              "w-3 h-3 text-zinc-600 light:text-stone-500 transition-transform duration-150",
               expanded && "rotate-180"
             )}
           />
         </div>
       {/* Time */}
       <div className="flex items-center gap-1.5 min-w-[64px]">
-        <Clock className="w-3 h-3 text-zinc-700 shrink-0" />
+        <Clock className="w-3 h-3 text-zinc-700 light:text-stone-500 shrink-0" />
         <span
-          className="text-[11px] text-zinc-500 tabular-nums"
+          className="text-[11px] text-zinc-500 tabular-nums light:text-stone-500"
           title={formatFullDate(session.created_at || session.date)}
         >
           {formatTime(session.created_at || session.date)}
@@ -333,8 +334,8 @@ function SessionRow({
       {/* Project path */}
       {session.project_path && (
         <div className="flex items-center gap-1 min-w-0 flex-1">
-          <FolderOpen className="w-3 h-3 text-zinc-700 shrink-0" />
-          <span className="text-[11px] text-zinc-600 truncate">
+          <FolderOpen className="w-3 h-3 text-zinc-700 light:text-stone-500 shrink-0" />
+          <span className="text-[11px] text-zinc-600 truncate light:text-stone-500">
             {truncatePath(session.project_path)}
           </span>
         </div>
@@ -344,17 +345,17 @@ function SessionRow({
 
       {/* Tokens */}
       <div className="flex items-center gap-1 tabular-nums">
-        <Hash className="w-3 h-3 text-zinc-700" />
-        <span className="text-[11px] text-zinc-400 font-medium">
+        <Hash className="w-3 h-3 text-zinc-700 light:text-stone-500" />
+        <span className="text-[11px] text-zinc-400 font-medium light:text-stone-400">
           {formatTokenCount(totalTokens)}
         </span>
-        <span className="text-[10px] text-zinc-700">tok</span>
+        <span className="text-[10px] text-zinc-700 light:text-stone-500">tok</span>
       </div>
 
       {/* Cost */}
       {session.cost_usd > 0 && (
         <div className="flex items-center gap-1 tabular-nums min-w-[52px] justify-end">
-          <Coins className="w-3 h-3 text-zinc-700" />
+          <Coins className="w-3 h-3 text-zinc-700 light:text-stone-500" />
           <span className="text-[11px] text-emerald-400/80 font-medium">
             {formatCost(session.cost_usd)}
           </span>
@@ -372,7 +373,7 @@ function EmptyToolState({ tool }: { tool: string }) {
   const meta = AGENT_META[tool]
   return (
     <div className="flex flex-col items-center gap-2 px-5 py-8 text-center">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900/60 text-zinc-600 ring-1 ring-zinc-800/50">
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900/60 text-zinc-600 ring-1 ring-zinc-800/50 light:bg-stone-200 light:text-stone-500 light:ring-stone-300">
         <Sparkles className="w-4 h-4" />
       </span>
       <p className={cn("text-[13px] font-medium", TEXT.secondary)}>

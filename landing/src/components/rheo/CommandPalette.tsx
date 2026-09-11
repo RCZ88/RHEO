@@ -189,7 +189,7 @@ export default function CommandPalette() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-              <Search size={16} strokeWidth={1.5} style={{ color: "#63636b", marginLeft: 18, flexShrink: 0 }} />
+              <Search size={16} strokeWidth={1.5} style={{ color: "#8a8a94", marginLeft: 18, flexShrink: 0 }} />
               <input
                 ref={inputRef}
                 value={query}
@@ -208,7 +208,7 @@ export default function CommandPalette() {
 
             <div ref={listRef} id="cmdk-list" role="listbox" style={{ maxHeight: 360, overflowY: "auto" }} className="no-scrollbar">
               {filtered.length === 0 && (
-                <div className="mono" style={{ padding: "24px 20px", fontSize: 12, color: "#63636b", textAlign: "center" }}>
+                <div className="mono" style={{ padding: "24px 20px", fontSize: 12, color: "#8a8a94", textAlign: "center" }}>
                   No matches for “{query}”
                 </div>
               )}
@@ -243,10 +243,10 @@ export default function CommandPalette() {
               <span className="kbd" style={{ height: 18, fontSize: 9 }}>↑</span>
               <span className="kbd" style={{ height: 18, fontSize: 9 }}>↓</span>
               <span>nav</span>
-              <span style={{ color: "#63636b" }}>·</span>
+              <span style={{ color: "#8a8a94" }}>·</span>
               <span className="kbd" style={{ height: 18, fontSize: 9 }}>↵</span>
               <span>run</span>
-              <span style={{ marginLeft: "auto", color: "#63636b" }}>⌘K to toggle</span>
+              <span style={{ marginLeft: "auto", color: "#8a8a94" }}>⌘K to toggle</span>
             </div>
           </motion.div>
         </motion.div>

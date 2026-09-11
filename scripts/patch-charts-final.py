@@ -1,4 +1,5 @@
-p = r'C:\Users\cleme\Documents\COMPUTAH_SAYENCE\App Tracker\src\components\ai\AIToolsTab.tsx'
+from pathlib import Path
+p = str(Path(__file__).resolve().parent.parent / 'src' / 'components' / 'ai' / 'AIToolsTab.tsx')
 with open(p,'r',encoding='utf-8',newline='') as f:
     data=f.read()
 

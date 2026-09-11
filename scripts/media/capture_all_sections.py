@@ -7,6 +7,9 @@ import win32ui
 import win32con
 import win32api
 import win32process
+from pathlib import Path
+SHOTS_DIR = Path(__file__).resolve().parent.parent.parent / 'design' / 'media' / 'shots'
+SHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Find RHEO window by PID
 def find_rheo():
@@ -94,7 +97,7 @@ buttons = {
 }
 
 # Capture Dashboard first (already on it)
-out_path = r'C:\Users\cleme\Documents\COMPUTAH_SAYENCE\App Tracker\design\media\shots\dashboard.png'
+out_path = str(SHOTS_DIR / 'dashboard.png')
 capture_window(main_hwnd, out_path)
 
 # Click and capture each section
@@ -105,7 +108,7 @@ for section, (bx, by) in buttons.items():
     click_point(bx, by)
     time.sleep(1.5)
     
-    out_path = fr'C:\Users\cleme\Documents\COMPUTAH_SAYENCE\App Tracker\design\media\shots\{section.lower().replace(" ", "_")}.png'
+    out_path = str(SHOTS_DIR / (section.lower().replace(' ', '_') + '.png'))
     capture_window(main_hwnd, out_path)
 
 print("\n=== DONE ===")

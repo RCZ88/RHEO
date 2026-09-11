@@ -67,6 +67,9 @@ interface StatsPageProps {
   timeMode?: 'focus' | 'total';
   tierAssignments?: { productive: string[]; neutral: string[]; distracting: string[] };
   liveActivityLogs?: Array<{id: string; timestamp: number; type: 'app' | 'browser' | 'ide'; name: string; category?: string; title?: string; url?: string}>;
+  platformFilter?: string;
+  compareMode?: boolean;
+  availablePlatforms?: string[];
 }
 
 // Category color map
@@ -122,7 +125,7 @@ function formatDuration(seconds: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-export default function StatsPage({ embedded, appStats, logs, allLogs, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments, liveActivityLogs }: StatsPageProps) {
+export default function StatsPage({ embedded, appStats, logs, allLogs, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments, liveActivityLogs, platformFilter = 'all', compareMode = false, availablePlatforms = [] }: StatsPageProps) {
   useEffect(() => { startPhaseClock(); }, []);
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
   const [detailPeriod, setDetailPeriod] = useState<Period>('week');
@@ -178,9 +181,15 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
   // Logs are already period-filtered by parent (App.tsx filteredLogs)
   const filteredLogs = logs;
 
+  // Platform-filtered logs (for OS split)
+  const platformLogs = useMemo(() => {
+    if (platformFilter === 'all') return filteredLogs as any[];
+    return (filteredLogs as any[]).filter(l => l.platform === platformFilter);
+  }, [filteredLogs, platformFilter]);
+
   // App-only logs (exclude browser/website tracking) — used for totals, hourly, daily charts
   // so they match the pie chart and top-apps which are apps-only from appStats
-  const appLogs = useMemo(() => (logs as any[] || []).filter(l => !l.is_browser_tracking), [logs]);
+  const appLogs = useMemo(() => (platformLogs as any[] || []).filter(l => !l.is_browser_tracking), [platformLogs]);
 
   // Filter and sort apps — use parent pre-computed appStats (already period-filtered)
   const sortedApps = useMemo(() => {

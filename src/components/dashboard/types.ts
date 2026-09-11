@@ -27,6 +27,7 @@ export interface Deadline {
   category?: DeadlineCategory;
   recurrence?: string;
   remind_at?: string;
+  goal_id?: string | null;
   createdAt: string;
 }
 

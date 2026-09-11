@@ -6,6 +6,7 @@ import FlowFieldCanvas from "./FlowFieldCanvas";
 import { useDetectedOS } from "./use-detected-os";
 import Def from "./Def";
 import DecryptedText from "./DecryptedText";
+import OSLogo from "./OSLogo";
 import { useShouldAnimate } from "./use-motion-preference";
 
 export default function Hero() {
@@ -73,7 +74,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          style={{ fontSize: 11, color: "#63636b" }}
+          style={{ fontSize: 11, color: "#8a8a94" }}
         >
           <DecryptedText text="RHEO — ῥέω · GREEK: TO FLOW" speed={28} maxIterations={6} />
         </motion.p>
@@ -126,11 +127,11 @@ export default function Hero() {
               letterSpacing: "0.02em",
             }}
           >
-            <span
-              className="mono"
-              style={{ fontWeight: 500, fontSize: 13 }}
-            >
-              Download for {os}
+            <span className="inline-flex items-center gap-2">
+              <span className="mono" style={{ fontWeight: 500, fontSize: 13 }}>
+                Download for {os}
+              </span>
+              <OSLogo os={os} />
             </span>
             {/* sheen sweep on hover */}
             <span aria-hidden className="btn-sheen-sweep" />
@@ -176,15 +177,15 @@ export default function Hero() {
           className="flex items-center gap-3 max-w-[1280px] mx-auto"
           style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
         >
-          <span className="mono" style={{ fontSize: 11, color: "#63636b", paddingTop: 8 }}>
+          <span className="mono" style={{ fontSize: 11, color: "#8a8a94", paddingTop: 8 }}>
             <span className="blink-cursor" style={{ color: "#ffffff" }}>▍</span>{" "}
             <span style={{ color: "#a1a1aa" }}>tracking</span>
-            <span style={{ color: "#63636b" }}> · </span>
+            <span style={{ color: "#8a8a94" }}> · </span>
             <span className="tabular-nums" style={{ color: "#f4f4f5" }}>
               {fmt(secondsState)} s observed
             </span>
-            <span style={{ color: "#63636b" }}> · </span>
-            <span style={{ color: "#63636b" }}>field: </span>
+            <span style={{ color: "#8a8a94" }}> · </span>
+            <span style={{ color: "#8a8a94" }}>field: </span>
             <span
               style={{
                 color: "#f4f4f5",

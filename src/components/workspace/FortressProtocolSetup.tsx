@@ -47,7 +47,7 @@ const LAYERS: FortressLayer[] = [
     commands: [
       `New-Item -ItemType Directory -Force -Path "C:\\Scripts" | Out-Null`,
       `@'
-Set-Location "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker"
+Set-Location "__PROJECT_DIR__"
 $hasChanges = git status --porcelain
 if ($hasChanges) {
     git add -A
@@ -71,7 +71,7 @@ Register-ScheduledTask -TaskName "ShadowCommitter" -Action $action -Trigger $tri
     commands: [
       `New-Item -ItemType Directory -Force -Path "C:\\FORTRESS\\App-Tracker" | Out-Null`,
       `@'
-$source = "C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker"
+$source = "__PROJECT_DIR__"
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
 $dest = "C:\\FORTRESS\\App-Tracker\\$timestamp"
 robocopy $source $dest /E /XD node_modules .git dist dist-electron dist-old .opencode .opencode-backups .playwright-mcp /XF *.tmp *.log /MT:8 /R:2 /W:1
@@ -256,14 +256,13 @@ export default function FortressProtocolSetup() {
   const [expandedLayer, setExpandedLayer] = useState<string | null>(null);
   const [quickSetupRunning, setQuickSetupRunning] = useState(false);
 
-  const executeCommand = useCallback(async (command: string): Promise<{ output: string[]; success: boolean }> => {
+  const executeCommand = useCallback(async (command: string, cwd?: string): Promise<{ output: string[]; success: boolean }> => {
     try {
       const api = (window as any).deskflowAPI;
       if (!api?.executeCommand) {
         return { output: ['[ERROR] Execute command API not available'], success: false };
       }
 
-      const cwd = 'C:\\Users\\cleme\\Documents\\COMPUTAH_SAYENCE\\App Tracker';
       const result = await api.executeCommand(command, cwd);
 
       const output: string[] = [];
@@ -295,6 +294,8 @@ export default function FortressProtocolSetup() {
 
     const allOutput: string[] = [];
     let allSuccess = true;
+    const dirProbe = await executeCommand('(Get-Location).Path');
+    const liveProjectDir = dirProbe.output.map((l) => l.trim()).find((l) => l && !l.startsWith('['));
 
     for (const cmd of layer.commands) {
       allOutput.push(`[INFO] Running: ${cmd.substring(0, 60)}...`);
@@ -303,7 +304,8 @@ export default function FortressProtocolSetup() {
         [layer.id]: { status: 'running', output: [...allOutput] },
       }));
 
-      const result = await executeCommand(cmd);
+      const resolvedCmd = liveProjectDir ? cmd.split('__PROJECT_DIR__').join(liveProjectDir) : cmd;
+      const result = await executeCommand(resolvedCmd, liveProjectDir);
       allOutput.push(...result.output);
       if (!result.success) allSuccess = false;
 

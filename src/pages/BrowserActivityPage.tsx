@@ -75,6 +75,9 @@ interface BrowserActivityPageProps {
   timeMode?: 'focus' | 'total';
   tierAssignments?: { productive: string[]; neutral: string[]; distracting: string[] };
   allLogs?: unknown[];
+  platformFilter?: string;
+  compareMode?: boolean;
+  availablePlatforms?: string[];
 }
 
 interface BrowserProfile {
@@ -107,7 +110,7 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-export default function BrowserActivityPage({ embedded, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments: tierAssignmentsProp, allLogs }: BrowserActivityPageProps) {
+export default function BrowserActivityPage({ embedded, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments: tierAssignmentsProp, allLogs, platformFilter = 'all', compareMode = false, availablePlatforms = [] }: BrowserActivityPageProps) {
   const [domainStats, setDomainStats] = useState<any[]>([]);
   const [categoryStats, setCategoryStats] = useState<any[]>([]);
   const [browserLogs, setBrowserLogs] = useState<any[]>([]);
@@ -302,7 +305,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
   const aggregatedLogs = useMemo(() => {
     const grouped: Record<string, { sessions: any[]; totalDuration: number }> = {};
     
-    browserLogs.forEach(log => {
+    platformBrowserLogs.forEach(log => {
       const domain = log.domain;
       if (!grouped[domain]) {
         grouped[domain] = { sessions: [], totalDuration: 0 };
@@ -319,7 +322,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
         category: data.sessions[0]?.category || 'Other'
       }))
       .sort((a, b) => b.totalDuration - a.totalDuration);
-  }, [browserLogs]);
+  }, [platformBrowserLogs]);
 
   // Build a lookup from browser_name or known_app_name to profile data
   const profileByBrowser = useMemo(() => {
@@ -343,9 +346,9 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
 
   // Filter browser logs by selected browser profile
   const filteredBrowserLogs = useMemo(() => {
-    if (selectedBrowserProfile === 'all') return browserLogs;
-    return browserLogs.filter((l: any) => l.browser_name === selectedBrowserProfile);
-  }, [browserLogs, selectedBrowserProfile]);
+    if (selectedBrowserProfile === 'all') return platformBrowserLogs;
+    return platformBrowserLogs.filter((l: any) => l.browser_name === selectedBrowserProfile);
+  }, [platformBrowserLogs, selectedBrowserProfile]);
 
   const fetchData = useCallback(async () => {
     if (!isMountedRef.current) return;
@@ -383,6 +386,12 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
       setLoading(false);
     }
   }, [selectedPeriod, dateOffset]);
+
+  // Platform-filtered browser logs
+  const platformBrowserLogs = useMemo(() => {
+    if (platformFilter === 'all') return browserLogs;
+    return browserLogs.filter((l: any) => l.platform === platformFilter);
+  }, [browserLogs, platformFilter]);
 
   const loadBrowserProfiles = useCallback(async () => {
     try {
@@ -613,7 +622,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
   const hourlyDistribution = useMemo(() => {
     const now = new Date();
     const range = currentRange;
-    const filteredLogs = (browserLogs as any[]).filter((log: any) =>
+    const filteredLogs = (platformBrowserLogs as any[]).filter((log: any) =>
       isInRange(log.timestamp, range)
     );
 
@@ -678,7 +687,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
       });
     }
     return result;
-  }, [browserLogs, selectedPeriod, currentRange]);
+  }, [platformBrowserLogs, selectedPeriod, currentRange]);
 
   // Bar chart data
   const hourlyChartData = {

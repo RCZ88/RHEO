@@ -165,7 +165,7 @@ function TimelineDemo() {
             <span
               key={t}
               className="mono"
-              style={{ fontSize: 8, color: "#63636b", letterSpacing: "0.06em" }}
+              style={{ fontSize: 8, color: "#8a8a94", letterSpacing: "0.06em" }}
             >
               {t}
             </span>
@@ -174,7 +174,7 @@ function TimelineDemo() {
       </div>
       <p
         className="mono"
-        style={{ fontSize: 10, color: "#63636b", marginTop: 12, letterSpacing: "0.06em" }}
+        style={{ fontSize: 10, color: "#8a8a94", marginTop: 12, letterSpacing: "0.06em" }}
       >
         scroll-linked · reversible
       </p>
@@ -253,7 +253,7 @@ function TerminalDemo() {
         <span style={dotStyle(0.08)} />
         <span
           className="mono"
-          style={{ fontSize: 9, color: "#63636b", marginLeft: 6, letterSpacing: "0.1em" }}
+          style={{ fontSize: 9, color: "#8a8a94", marginLeft: 6, letterSpacing: "0.1em" }}
         >
           rheo · query
         </span>
@@ -409,7 +409,7 @@ function TuiDemo() {
       </div>
       <p
         className="mono"
-        style={{ fontSize: 10, color: "#63636b", marginTop: 10, letterSpacing: "0.06em" }}
+        style={{ fontSize: 10, color: "#8a8a94", marginTop: 10, letterSpacing: "0.06em" }}
       >
         the room your agents work in.
       </p>
@@ -439,7 +439,7 @@ function Pane({
     >
       <span
         className="mono"
-        style={{ fontSize: 8, color: "#63636b", letterSpacing: "0.1em", marginBottom: 2 }}
+        style={{ fontSize: 8, color: "#8a8a94", letterSpacing: "0.1em", marginBottom: 2 }}
       >
         {title}
       </span>
@@ -453,7 +453,7 @@ function TuiLine({ text, active }: { text: string; active?: boolean }) {
       className="mono"
       style={{
         fontSize: 9,
-        color: active ? "#ffffff" : "#63636b",
+        color: isActive ? "#ffffff" : "#8a8a94",
         letterSpacing: "0.04em",
         lineHeight: 1.5,
       }}
