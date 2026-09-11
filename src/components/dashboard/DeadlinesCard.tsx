@@ -558,7 +558,7 @@ export function DeadlinesCard({
                           <CalendarComponent mode="single" selected={editDate} onSelect={setEditDate} initialFocus />
                         </PopoverContent>
                       </Popover>
-                      <Select value={editForm.priority} onValueChange={v => setEditForm(p => ({ ...p, priority: v as Priority }))} className="w-[100px]">
+                      <Select value={editForm.priority} onValueChange={v => setEditForm(p => ({ ...p, priority: v as Priority }))} className="w-[100px] light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border)]">
                         {PRIORITIES.map(p => (
                           <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                         ))}

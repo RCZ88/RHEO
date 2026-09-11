@@ -57,6 +57,8 @@ export default function SleepDetectionModal({
   onDone,
   activities = [],
   sessions = [],
+  onFillGapRequest,
+  filledGapStarts = [],
 }: {
   data: { gapMinutes: number; suggestedBedtime: string; suggestedWakeTime: string };
   customBedtime: TimeState;

@@ -7,7 +7,6 @@ import {
   Smartphone, Shield as ShieldIcon, Terminal,
 } from 'lucide-react';
 import { SidebarLogo } from './SidebarLogo';
-import { SidebarDock } from './SidebarDock';
 import { ThemeToggle } from './ThemeToggle';
 import { cn } from '../lib/utils';
 
@@ -92,58 +91,82 @@ const NodeDot = memo(function NodeDot({
       )}
       title={collapsed ? item.label : undefined}
     >
-      {/* Expanded: show icon + label, icon grows on hover */}
       <>
-        {/* Icon chip — grows on hover */}
-        <motion.span
-          layout
-          className={cn(
-            'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg',
-            item.active
-              ? 'border-white/30 bg-white/[0.15] shadow-[0_0_24px_rgba(255,255,255,0.3)] z-10'
-              : 'border-white/[0.08] bg-white/[0.04]',
-          )}
-          style={{
-            left: '-28px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            opacity: 1,
-            scale: item.active ? 1 : 0.6,
-          }}
-          whileHover={{ scale: 1.1, rotate: 8 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        >
-          <Icon
+        {/* Icon chip — centered in collapsed; off-screen left in expanded */}
+        {collapsed ? (
+          <motion.span
+            layout
             className={cn(
-              'h-[22px] w-[22px] drop-shadow-md',
-              item.active ? 'text-white' : 'text-zinc-100',
+              'flex h-[32px] w-[32px] items-center justify-center rounded-xl border-2 shadow-lg',
+              item.active
+                ? 'border-white/30 bg-white/[0.15] shadow-[0_0_16px_rgba(255,255,255,0.3)] z-10'
+                : 'border-white/[0.08] bg-white/[0.04]',
             )}
-          />
-        </motion.span>
+            whileHover={{ scale: 1.1, rotate: 8 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          >
+            <Icon
+              className={cn(
+                'h-[18px] w-[18px] drop-shadow-md',
+                item.active ? 'text-white' : 'text-zinc-100',
+              )}
+            />
+          </motion.span>
+        ) : (
+          <motion.span
+            layout
+            className={cn(
+              'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg',
+              item.active
+                ? 'border-white/30 bg-white/[0.15] shadow-[0_0_24px_rgba(255,255,255,0.3)] z-10'
+                : 'border-white/[0.08] bg-white/[0.04]',
+            )}
+            style={{
+              left: '-28px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              opacity: 1,
+              scale: item.active ? 1 : 0.6,
+            }}
+            whileHover={{ scale: 1.1, rotate: 8 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          >
+            <Icon
+              className={cn(
+                'h-[22px] w-[22px] drop-shadow-md',
+                item.active ? 'text-white' : 'text-zinc-100',
+              )}
+            />
+          </motion.span>
+        )}
 
-        {/* Dot on the line */}
-        <span className="relative flex items-center justify-center shrink-0">
-          {isActive ? (
-            <span className="relative flex items-center justify-center">
-              <span className="absolute w-4 h-4 rounded-full bg-white/[0.08] blur-[6px]" />
-              <span className="relative w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.25)]" />
-            </span>
-          ) : (
-            <span className="w-1.5 h-1.5 rounded-full border border-white/[0.35] group-hover:border-white/[0.6] group-hover:bg-white/[0.1] transition-all duration-150" />
-          )}
-        </span>
+        {/* Dot on the line — only in expanded mode */}
+        {!collapsed && (
+          <span className="relative flex items-center justify-center shrink-0">
+            {isActive ? (
+              <span className="relative flex items-center justify-center">
+                <span className="absolute w-4 h-4 rounded-full bg-white/[0.08] blur-[6px]" />
+                <span className="relative w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.25)]" />
+              </span>
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full border border-white/[0.35] group-hover:border-white/[0.6] group-hover:bg-white/[0.1] transition-all duration-150" />
+            )}
+          </span>
+        )}
 
-        {/* Label */}
-        <span
-          className={cn(
-            'text-[13px] truncate transition-colors duration-150 flex-1 text-left py-[2px]',
-            isActive
-              ? 'text-[var(--text-primary)] font-medium'
-              : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]',
-          )}
-        >
-          {item.label}
-        </span>
+        {/* Label — only in expanded mode */}
+        {!collapsed && (
+          <span
+            className={cn(
+              'text-[13px] truncate transition-colors duration-150 flex-1 text-left py-[2px]',
+              isActive
+                ? 'text-[var(--text-primary)] font-medium'
+                : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]',
+            )}
+          >
+            {item.label}
+          </span>
+        )}
 
         {/* Badge */}
         {item.badge && (
@@ -220,22 +243,7 @@ export const Sidebar = memo(function SidebarComponent({
     return map;
   }, []);
 
-  // Dock groups for the collapsed rail (icons = page logos, with active flags)
-  const dockGroups = useMemo(
-    () =>
-      GROUP_ORDER.map((group) => ({
-        name: group,
-        items: (grouped.get(group) ?? []).map((item) => ({
-          icon: item.icon,
-          label: item.label,
-          path: item.path,
-          group: item.group,
-          active: isActive(item),
-        })),
-      })).filter((g) => g.items.length > 0),
-    [grouped, isActive],
-  );
-
+  // Active group: which group contains the currently active item
   const activeGroup = useMemo(() => {
     for (const item of SIDEBAR_ITEMS) {
       const p = item.path.split('?')[0];
@@ -369,12 +377,9 @@ export const Sidebar = memo(function SidebarComponent({
             {/* Vertical node hairline */}
             <div className="absolute left-[18px] top-0 bottom-0 w-px bg-white/[0.06]" />
 
-            {/* Groups + items */}
+            {/* Groups + items — same NodeDot list in both modes */}
             <div className="flex-1 min-w-0">
-              {collapsed ? (
-                <SidebarDock groups={dockGroups} onNavigate={handleNavigate} />
-              ) : (
-              GROUP_ORDER.map((group, gIdx) => {
+              {GROUP_ORDER.map((group, gIdx) => {
                 const items = grouped.get(group) ?? [];
                 const isGroupActive = activeGroup === group;
 
@@ -390,14 +395,14 @@ export const Sidebar = memo(function SidebarComponent({
                         {GROUP_KICKER[group]}
                       </div>
 
-                    {/* Items (expanded mode — rail uses SidebarDock above) */}
+                    {/* Items — NodeDot in both modes */}
                     <div className="pl-1 pr-2">
                       {items.map((item) => (
                         <NodeDot
                           key={item.path}
                           item={item}
                           isActive={isActive(item)}
-                          collapsed={false}
+                          collapsed={collapsed}
                           onNavigate={handleNavigate}
                         />
                       ))}
@@ -415,7 +420,7 @@ export const Sidebar = memo(function SidebarComponent({
                     )}
                   </div>
                 );
-              }))}
+              })}
             </div>
           </div>
         </div>

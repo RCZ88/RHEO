@@ -845,7 +845,7 @@ export default function DashboardPage({
   const [heatmapMode, setHeatmapMode] = useState<'device' | 'external' | 'combined'>('combined');
   const [externalHourlyData, setExternalHourlyData] = useState<Map<string, { externalSeconds: number; breakdown: Record<string, { seconds: number; color: string; icon: string }> }>>(new Map());
   const [externalSessions, setExternalSessions] = useState<any[]>([]);
-  const calendarDate = useRef<Date>(new Date()).current;
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [expandedModal, setExpandedModalRaw] = useState<'heatmap' | 'solar' | null>(null);
   const setExpandedModal = useCallback((val: 'heatmap' | 'solar' | null) => {
     setExpandedModalRaw(val);
@@ -2144,8 +2144,8 @@ export default function DashboardPage({
         <div className="overflow-x-auto">
           <div className="w-full bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/50 p-5 light:bg-white/85 light:border-[var(--ws-border)]">
             <VCalendar
-              value={calendarDate}
-              onChange={setCalendarDate}
+              selected={calendarDate}
+              onSelect={(d) => { if (d && !Array.isArray(d)) setCalendarDate(d); }}
             />
             {/* Day Headers - aligned with grid */}
             <div className="flex items-center mb-3">
@@ -2533,11 +2533,6 @@ export default function DashboardPage({
   // Start the global phase clock (idempotent — safe to call multiple times)
   useEffect(() => { startPhaseClock(); }, []);
 
-  // ── Widget Grid View (opt-in, default = classic) ──
-  // The adjustable mosaic is the primary dashboard view; Classic View remains
-  // available as a low-friction fallback for users who prefer the old flow.
-  const [customView, setCustomView] = useState(true);
-
   // ── Platform filter state ──
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
@@ -2590,24 +2585,7 @@ export default function DashboardPage({
         </div>
       )}
 
-      
-          {/* View Toggle — opt-in custom widget grid */}
-          <div className="flex items-center justify-end mb-4">
-            <button
-              onClick={() => setCustomView(!customView)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
-                customView
-                  ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-                    {customView ? '✓ Mosaic View' : 'Classic View'}
-            </button>
-          </div>
-
-          {customView ? (
-            <WidgetGrid data={widgetData} />
-          ) : (
+      <WidgetGrid data={widgetData} />
 <div className="relative z-10">
         <div className="mx-auto px-5" style={{ maxWidth: '1400px' }}>
 
@@ -2853,8 +2831,6 @@ export default function DashboardPage({
 
         </div>
       </div>
-          )}
-
       {/* Modals — UNCHANGED */}
       <AnimatePresence>
         {expandedModal === 'heatmap' && (

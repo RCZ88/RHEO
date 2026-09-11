@@ -4448,6 +4448,7 @@ let focusManager = null;
 let focusGroupManager = null;
 let compositionEngine = null;
 let lastPollTime = Date.now();
+let lastSuccessfulObservationTime = Date.now();
 let consecutiveNullPolls = 0;
 let MAX_SESSION_MS = 120 * 60 * 1000; // 120 minutes — cap for long sessions (was 30min)
 const MAX_LOGGED_SESSION_MS = 3600000; // 1 hour - cap logged sessions to prevent heatmap inflation
@@ -4764,6 +4765,13 @@ async function pollForeground() {
     if (!isTracking)
         return;
     const now = Date.now();
+    // Capture the previous poll attempt time BEFORE updating lastPollTime.
+    // timeSinceLastPoll (sleep-gap detection) uses this old value.
+    const previousPollTime = lastPollTime;
+    // Update lastPollTime at the start of each poll attempt (before any await).
+    // This marks "we tried" — distinct from lastSuccessfulObservationTime which
+    // marks "we got a valid result".
+    lastPollTime = now;
     // --- Idle-based sleep detection (runs every poll, independent of window focus/poll gaps) ---
     // Catches "fell asleep with RHEO focused" — no blur/focus event ever fires there.
     try {
@@ -4788,7 +4796,6 @@ async function pollForeground() {
         if (isInGame) {
             gameModePollCount++;
             if (gameModePollCount < GAME_POLL_SKIP) {
-                lastPollTime = now;
                 // Still checkpoint long game sessions even without active-win
                 if (now - lastCheckpointTime > CHECKPOINT_INTERVAL_MS) {
                     const checkpointDuration = now - sessionStart;
@@ -4801,6 +4808,8 @@ async function pollForeground() {
                     }
                     lastCheckpointTime = now;
                 }
+                // Skip poll — no window observation this cycle. Do NOT increment
+                // consecutiveNullPolls: game skip is deliberate, not a collection failure.
                 return;
             }
             gameModePollCount = 0;
@@ -4808,72 +4817,55 @@ async function pollForeground() {
             gameModePollCount = 0;
         }
 
-        let result = await (0, active_win_1.default)();
-        // active-win's Linux backend is X11-only and returns undefined on
-        // several Linux desktops. Give it a local X11 fallback so tracking
-        // still works when active-win cannot parse the window.
-        if (!result && process.platform === 'linux') {
-            result = await linuxForeground_1.getLinuxForegroundWindow();
+        // --- Collect foreground from primary collector, then Linux fallback ---
+        let result = null;
+        let collectorError = null;
+        try {
+            result = await (0, active_win_1.default)();
+        } catch (e) {
+            collectorError = e;
+            console.error('[DeskFlow] active-win error:', e.message);
         }
-        const timeSinceLastPoll = now - lastPollTime;
-        lastPollTime = now;
+
+        // active-win's Linux backend is X11-only and returns undefined on
+        // several Linux desktops. The fallback also runs after a primary
+        // collector exception, so a transient active-win crash still gives
+        // X11 a chance to report the foreground window.
+        if ((!result || collectorError) && process.platform === 'linux') {
+            try {
+                const fallback = await linuxForeground_1.getLinuxForegroundWindow();
+                if (fallback) result = fallback;
+            } catch (e) {
+                if (!collectorError) console.error('[DeskFlow] linuxForeground error:', e.message);
+            }
+        }
+
+        // Time since the previous poll attempt.
+        // previousPollTime was captured before lastPollTime was overwritten at
+        // the top of this function, so this correctly measures wall-clock gap.
+        const timeSinceLastPoll = now - previousPollTime;
+
         const resolved = await resolveForegroundApp(result ?? null);
         // Resolver sources other than 'raw' mean an actual game was detected
         currentIsResolvedGame = !!resolved && resolved.source !== 'raw';
 
-        // --- Sleep / gap detection ---
-        if (!result) {
+        // --- A completed polling attempt ends here. Increment failure counter once. ---
+        const attemptFailed = !result || !resolved;
+        if (attemptFailed) {
             consecutiveNullPolls++;
-            if (consecutiveNullPolls >= 30) {
-                if (currentApp) {
-                    // Keep-alive: null poll during a known game keeps session alive
-                    if (resolved && resolved.source === 'keepalive') {
-                        if (DEBUG_TRACKING) console.log(`[DeskFlow] 🎮 Keep-alive: ${resolved.name} (source=keepalive, ${consecutiveNullPolls} null polls)`);
-                        consecutiveNullPolls = 0;
-                        sessionStart = sessionStart ?? now;
-                        return;
-                    }
-                    // Never reset session for games (fullscreen games don't report windows due to anti-cheat)
-                    if (categorizeApp(currentApp) === 'Gaming') {
-                        if (DEBUG_TRACKING) console.log(`[DeskFlow] 🎮 Keep-alive: ${currentApp} (Gaming category, ${consecutiveNullPolls} null polls)`);
-                        sessionStart = now;
-                        return;
-                    }
-                    // Give browser sessions extra slack before assuming sleep
-                    if (isBrowserWithExtension(currentApp)) {
-                        if (consecutiveNullPolls >= 60) {
-                            const knownDuration = (now - timeSinceLastPoll) - sessionStart;
-                            if (knownDuration > 5000) {
-                                const duration = Math.min(knownDuration, MAX_SESSION_MS);
-                                const category = categorizeApp(currentApp);
-                                addLog(new Date(sessionStart).toISOString(), currentApp, category, duration, `${currentApp} Window`, null);
-                                console.log(`[DeskFlow] System appears asleep (60+ browser null polls), resetting session for: ${currentApp}`);
-                                currentApp = null;
-                            }
-                            sessionStart = now;
-                        }
-                        return;
-                    }
-                    // Normal apps — existing logic
-                    const knownDuration = (now - timeSinceLastPoll) - sessionStart;
-                    if (knownDuration > 5000 && currentApp !== 'RHEO' && currentApp !== 'DeskFlow' && currentApp !== 'Electron') {
-                        const duration = Math.min(knownDuration, MAX_SESSION_MS);
-                        const category = categorizeApp(currentApp);
-                        addLog(new Date(sessionStart).toISOString(), currentApp, category, duration, `${currentApp} Window`, null);
-                        console.log(`[DeskFlow] System appears asleep (30+ null polls), resetting session for: ${currentApp}`);
-                        currentApp = null;
-                    }
-                    sessionStart = now;
-                }
-                return;
-            }
         }
-        // If we get a result after a gap, check if the gap was large enough to indicate sleep
+
+        // --- Sleep / gap detection (time-based, independent of null-counter) ---
+        // If enough real time elapsed since the previous poll attempt, the system
+        // was likely suspended. This fires regardless of how many null polls
+        // accumulated — it is driven by wall-clock gap, not by consecutiveNullPolls.
         if (timeSinceLastPoll > SLEEP_GAP_MS) {
             console.log(`[DeskFlow] 💤 Sleep gap detected (${Math.round(timeSinceLastPoll / 1000)}s). Resetting session.`);
             if (currentApp && currentApp !== 'RHEO' && currentApp !== 'DeskFlow' && currentApp !== 'Electron') {
-                const previousPollTime = now - timeSinceLastPoll;
-                const knownDuration = previousPollTime - sessionStart;
+                // Known duration uses the last successful observation, not the
+                // last poll attempt, so a failed poll never inflates the logged
+                // interval with unobservable time.
+                const knownDuration = lastSuccessfulObservationTime - sessionStart;
                 if (knownDuration > 5000) {
                     const duration = Math.min(knownDuration, MAX_SESSION_MS);
                     const category = categorizeApp(currentApp);
@@ -4882,19 +4874,88 @@ async function pollForeground() {
             }
             currentApp = null;
             sessionStart = now;
+            lastSuccessfulObservationTime = now;
             consecutiveNullPolls = 0;
             // Trigger sleep detection popup (covers case where window never lost focus)
             checkSleepGap(now - timeSinceLastPoll, now);
             return;
         }
 
-        // Handle resolved result
-        if (!resolved) {
-            consecutiveNullPolls++;
+        // --- Handle the absent-observation case ---
+        // Both collectors returned nothing and the time gap is normal — the
+        // foreground is unknown. Do NOT treat this as sleep or idle evidence;
+        // do NOT log or charge any duration to the previous app.
+        if (!result) {
+            // Keep-alive: a known game with a keepalive resolver keeps the
+            // session alive across null polls (anti-cheat hides windows).
+            if (resolved && resolved.source === 'keepalive' && currentApp) {
+                if (DEBUG_TRACKING) console.log(`[DeskFlow] 🎮 Keep-alive: ${resolved.name} (source=keepalive, ${consecutiveNullPolls} null polls)`);
+                consecutiveNullPolls = 0;
+                sessionStart = sessionStart ?? now;
+                return;
+            }
+            // Never reset session for games (fullscreen games don't report windows due to anti-cheat)
+            if (currentApp && categorizeApp(currentApp) === 'Gaming') {
+                if (DEBUG_TRACKING) console.log(`[DeskFlow] 🎮 Keep-alive: ${currentApp} (Gaming category, ${consecutiveNullPolls} null polls)`);
+                sessionStart = now;
+                return;
+            }
+            // Give browser sessions extra slack before assuming the session ended.
+            // Browsers ALWAYS get an early return here — the normal 30-poll
+            // threshold below must not fire for browser apps. The counter is
+            // NOT reset here so it can accumulate to the 60-poll browser
+            // logging threshold. Only sessionStart is refreshed; do NOT update
+            // lastSuccessfulObservationTime here (that would make knownDuration
+            // always 0 and prevent browser logging entirely).
+            if (currentApp && isBrowserWithExtension(currentApp)) {
+                if (consecutiveNullPolls >= BROWSER_MAX_NULL_POLL) {
+                    // Known duration from last successful observation, not last poll attempt.
+                    const knownDuration = lastSuccessfulObservationTime - sessionStart;
+                    if (knownDuration > 5000) {
+                        const duration = Math.min(knownDuration, MAX_SESSION_MS);
+                        const category = categorizeApp(currentApp);
+                        addLog(new Date(sessionStart).toISOString(), currentApp, category, duration, `${currentApp} Window`, null);
+                        console.log(`[DeskFlow] System appears asleep (60+ browser null polls), resetting session for: ${currentApp}`);
+                        currentApp = null;
+                    }
+                    consecutiveNullPolls = 0;
+                    sessionStart = now;
+                    lastSuccessfulObservationTime = now;
+                    return;
+                }
+                // Below threshold: just return early without mutating session state.
+                // Do NOT update sessionStart here — the original code only reset it
+                // at the 60-poll browser threshold.
+                return;
+            }
+            // Normal apps: after 30 consecutive failed attempts, close the session
+            // using the last successful observation time (not the poll attempt time).
+            if (currentApp && consecutiveNullPolls >= 30) {
+                const knownDuration = lastSuccessfulObservationTime - sessionStart;
+                if (knownDuration > 5000 && currentApp !== 'RHEO' && currentApp !== 'DeskFlow' && currentApp !== 'Electron') {
+                    const duration = Math.min(knownDuration, MAX_SESSION_MS);
+                    const category = categorizeApp(currentApp);
+                    addLog(new Date(sessionStart).toISOString(), currentApp, category, duration, `${currentApp} Window`, null);
+                    console.log(`[DeskFlow] System appears asleep (30+ null polls), resetting session for: ${currentApp}`);
+                    currentApp = null;
+                }
+                sessionStart = now;
+                lastSuccessfulObservationTime = now;
+                consecutiveNullPolls = 0;
+            }
             return;
         }
 
+        // We have a result. If it resolved to nothing (unknown app), treat as
+        // an unsuccessful attempt (already counted above) and do not advance
+        // lastSuccessfulObservationTime.
+        if (!resolved) {
+            return;
+        }
+
+        // --- Valid observation: reset failure counter and update successful time ---
         consecutiveNullPolls = 0;
+        lastSuccessfulObservationTime = now;
         const isResolvedGame = ['map', 'index', 'scan', 'keepalive', 'title'].includes(resolved.source);
 
         // Handle keepalive for fullscreen/anti-cheat games (no window)
@@ -4926,7 +4987,7 @@ async function pollForeground() {
                 // Don't reset currentApp so session tracking works
             } else {
                 // show-other or pause: notify renderer but don't log.
-                // IMPORTANT: do NOT null currentApp here � the renderer decides what
+                // IMPORTANT: do NOT null currentApp here — the renderer decides what
                 // to display. Nulling it made the dashboard drop the currently tracked
                 // website (or previous app) and show "Waiting for app" / jump to the
                 // nearest other app instead of keeping the previous tracked thing
@@ -4934,6 +4995,7 @@ async function pollForeground() {
                 // Still reset sessionStart so time in the tracker app is never
                 // attributed to the previous app's session on the next log.
                 sessionStart = now;
+                lastSuccessfulObservationTime = now;
                 if (mainWindow && !mainWindow.isDestroyed()) {
                     mainWindow.webContents.send('foreground-changed', {
                         app: appName,
@@ -4958,7 +5020,9 @@ async function pollForeground() {
 
         // Only log if app changed
         if (appName !== currentApp) {
-            const rawDuration = now - sessionStart;
+            // Session duration uses lastSuccessfulObservationTime: the elapsed time
+            // since the last valid observation, not since the last poll attempt.
+            const rawDuration = lastSuccessfulObservationTime - sessionStart;
             const isTrackerApp = appLower.includes('electron') || appLower.includes('deskflow') || appLower.includes('rheo');
             // The browser IS logged as a normal app row (Comet appears in the app list with its
             // full time). Website rows are separate (handleBrowserData) and excluded from totals.
@@ -4974,6 +5038,7 @@ async function pollForeground() {
             // Start new session
             currentApp = appName || null;
             sessionStart = now;
+            lastSuccessfulObservationTime = now;
             // Send to renderer
             if (mainWindow && !mainWindow.isDestroyed()) {
                 const isReal = !!appName;
@@ -4998,12 +5063,16 @@ async function pollForeground() {
                 addLog(new Date(sessionStart).toISOString(), currentApp, category, duration, `${currentApp} Window`, null);
                 console.log(`[DeskFlow] 📝 Checkpoint: ${currentApp} → ${Math.round(duration / 1000)}s`);
                 sessionStart = now;
+                lastSuccessfulObservationTime = now;
             }
             lastCheckpointTime = now;
         }
     }
     catch (err) {
-        console.error('[DeskFlow] active-win error:', err.message);
+        console.error('[DeskFlow] pollForeground error:', err.message);
+        // A top-level exception in the poll body is a single failed attempt.
+        // The Linux fallback is attempted inside the inner try above; if we reach
+        // this catch, both collectors already failed this cycle.
         consecutiveNullPolls++;
     }
 }
@@ -22831,7 +22900,7 @@ electron_1.app.whenReady().then(() => {
 
     // ── Deadline notifications (check every 5 minutes) ──
     try {
-      const { checkDeadlines } = require('./main/notifications');
+      const { checkDeadlinesAndNotify: checkDeadlines } = require('./main/notifications');
       setInterval(() => { if (db) checkDeadlines(db); }, 5 * 60 * 1000);
     } catch {}
 

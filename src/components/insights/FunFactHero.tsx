@@ -90,23 +90,23 @@ export function FunFactHero() {
         initial={{ opacity: 0, y: -8, height: 0 }}
         animate={{ opacity: 1, y: 0, height: 'auto' }}
         exit={{ opacity: 0, y: -8, height: 0 }}
-        className={`w-full rounded-xl border border-zinc-700/40 bg-gradient-to-br ${gradient} p-4 relative overflow-hidden mb-4`}
-        style={{ boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.05)' }}
+        className={`w-full rounded-xl border border-zinc-700/40 bg-gradient-to-br ${gradient} light:bg-[var(--color-card)]/85 p-4 relative overflow-hidden mb-4 light:border-[var(--ws-border)]`}
+        style={{ boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.05)', lightBoxShadow: 'inset 0 1px 0 0 rgba(0,0,0,0.06)' }}
       >
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className={`w-3.5 h-3.5 ${accent}`} />
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
-                Today&apos;s insight
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium light:text-stone-500">
+                Today's insight
               </span>
             </div>
-            <h3 className="text-base font-semibold text-zinc-100 leading-tight">
+            <h3 className="text-base font-semibold text-zinc-100 leading-tight light:text-stone-900">
               <AnimatedGradientText colorFrom="#ec4899" colorTo="#f43f5e" speed={0.5}>
                 {fact.copy.headline}
               </AnimatedGradientText>
             </h3>
-            <p className="text-sm text-zinc-400 mt-0.5">
+            <p className="text-sm text-zinc-400 mt-0.5 light:text-stone-500">
               {fact.copy.subtext}
             </p>
           </div>
@@ -119,7 +119,7 @@ export function FunFactHero() {
             )}
             <button
               onClick={handleDismiss}
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors light:text-stone-500 hover:light:text-stone-700 hover:light:bg-stone-200/60"
               title="Dismiss for today"
             >
               <X className="w-3.5 h-3.5" />

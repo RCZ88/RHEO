@@ -22,10 +22,18 @@ export interface FerrofluidProps {
   mouseDampening?: number;
   mixBlendMode?: string;
   ref?: React.Ref<FerrofluidHandle>;
+  // [BACKGROUND-V2] seeded warmup → monochrome freeze → permanent GL stop
+  seed?: number;
+  warmupFrames?: number;
+  monochrome?: boolean;
 }
 
 export interface FerrofluidHandle {
   setPointer: (clientX: number, clientY: number) => void;
+  // [BACKGROUND-V2] after monochrome freeze + loseContext(), the GL context is
+  // dead. This flag is set true so external code (e.g. test suites) can detect
+  // that the background is in its zero-cost frozen state.
+  isFrozen: () => boolean;
 }
 
 type RGB = [number, number, number];
@@ -113,6 +121,16 @@ uniform float uOpacity;
 uniform float uMouseEnabled;
 uniform float uMouseStrength;
 uniform float uMouseRadius;
+// [BACKGROUND-V2] seeded noise field — day-of-year variety, no storage
+uniform float uSeed;
+// [BACKGROUND-V2] monochrome: 1 = luminance mix (RGB → gray), kills hue in frozen frame
+uniform float uMonochrome;
+// [BACKGROUND-V2] time frozen after warmup — field locks, no further drift
+uniform float uTimeFrozen;
+// [BACKGROUND-V2] luminance mix factor (RGB → gray weight, 0..1)
+uniform float uLuminanceMix;
+// [BACKGROUND-V2] kill switch — after warmup frames, set to 1; shader bails early
+uniform float uKillSwitch;
 
 varying vec2 vUv;
 
@@ -132,8 +150,8 @@ vec3 palette(float h) {
   return uColor7;
 }
 
-float hash(vec3 p3) {
-  p3 = fract(p3 * 0.1031);
+float hash(vec3 p3, float seed) {
+  p3 = fract(p3 * 0.1031 + seed * 0.001);
   p3 += dot(p3, p3.zyx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
 }
@@ -153,10 +171,10 @@ float sinlerp(float a, float b, float w) {
 float vn(vec2 p, float s, float seed) {
   vec2 cellp = floor(p / s);
   vec2 relp = mod(p, s);
-  float g1 = hash(vec3(cellp, seed));
-  float g2 = hash(vec3(cellp.x + 1.0, cellp.y, seed));
-  float g3 = hash(vec3(cellp.x + 1.0, cellp.y + 1.0, seed));
-  float g4 = hash(vec3(cellp.x, cellp.y + 1.0, seed));
+  float g1 = hash(vec3(cellp, seed), seed);
+  float g2 = hash(vec3(cellp.x + 1.0, cellp.y, seed), seed);
+  float g3 = hash(vec3(cellp.x + 1.0, cellp.y + 1.0, seed), seed);
+  float g4 = hash(vec3(cellp.x, cellp.y + 1.0, seed), seed);
   float bx = sinlerp(g1, g2, relp.x / s);
   float tx = sinlerp(g4, g3, relp.x / s);
   return sinlerp(bx, tx, relp.y / s);
@@ -165,6 +183,8 @@ float vn(vec2 p, float s, float seed) {
 float dbn(vec2 p, float s, float seed) {
   // [PERF-FIX] 4 taps, weights renormalized (2+1.5+1.25+1.25 = 6.0);
   // center-weighted character preserved.
+  // [BACKGROUND-V2] seed flows into vn → hash, so each seed gives a different
+  // noise field. The frozen frame's lobe configuration is seed-determined.
   float o = s / 2.0;
   float n0 = vn(p, s, seed);
   float n1 = vn(p + vec2(o, o), s, seed + 0.1);
@@ -174,23 +194,51 @@ float dbn(vec2 p, float s, float seed) {
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  // [BACKGROUND-V2] kill switch — after warmup frames, set to 1; shader bails early
+  // This is the "permanent stop" path: the GL context is killed from JS side,
+  // but the shader also bails so no further fragment work happens even if the
+  // context were somehow still alive.
+  if (uKillSwitch > 0.5) {
+    fragColor = vec4(0.0, 0.0, 0.0, 0.0);
+    return;
+  }
+
+  // ── Time frozen vs. live ────────────────────────────────────────────────
+  // During warmup, iTime advances normally and the field drifts toward its
+  // frozen configuration. After warmupFrames render, JS sets uTimeFrozen=1
+  // and stops advancing iTime. From that frame on, the field is locked.
+  //
+  // We compute two time values: tLive (advancing) and tFrozen (locked at 0).
+  // If uTimeFrozen > 0.5, t = 0 (frozen). Otherwise t = iTime (live drift).
+  // The field settles during warmup; the monochrome mix is applied at the end.
+
+  float t = uTimeFrozen > 0.5 ? 0.0 : iTime;
+
   float ref = 700.0 / max(uScale, 0.05);
   vec2 p = fragCoord / iResolution.y * ref;
 
   float spd = 200.0 * uSpeed;
-  float t = iTime;
-
   vec2 dir = uFlow;
   vec2 perp = vec2(-dir.y, dir.x);
 
-  float distort1 = vn(p + perp * (t * spd), 60.0, 10.0) * 50.0 * uTurbulence;
-  float distort2 = vn(p - perp * (t * spd), 120.0, 15.0) * 100.0 * uTurbulence;
+  // ── Distort fields (now seed-based, not hardcoded) ──────────────────────
+  // [BACKGROUND-V2] every vn/dbN call that was a hardcoded seed literal is now
+  // uSeed-based. Different seeds → different lobe configurations → different
+  // "frozen freeze" for each day of the year. Offsets are small so the noise
+  // field stays coherent across the distort chain.
+  float distort1 = vn(p + perp * (t * spd), 60.0, uSeed) * 50.0 * uTurbulence;
+  float distort2 = vn(p - perp * (t * spd), 120.0, uSeed + 0.001) * 100.0 * uTurbulence;
 
-  float peaks = dbn(p + distort1 + dir * (t * spd * 0.5), 40.0, 1.0);
-  float peaks2 = dbn(p + distort2 - dir * (t * spd * 0.5), 40.0, 0.0);
+  float peaks = dbn(p + distort1 + dir * (t * spd * 0.5), 40.0, uSeed + 0.002);
+  float peaks2 = dbn(p + distort2 - dir * (t * spd * 0.5), 40.0, uSeed + 0.003);
 
   float mapeaks = smin(peaks, peaks2, max(uFluidity, 0.001));
 
+  // ── Mouse glow ───────────────────────────────────────────────────────────
+  // [BACKGROUND-V2] uMouseEnabled is forced to 0 in the frozen seed config, so
+  // this branch is never taken. The pointer path is never registered. The frozen
+  // frame has no mouse glow — it's a pure static texture. (If someone sets
+  // mouseInteraction=true, the old mouse path still works via iMouse.)
   float mGlow = 0.0;
   if (uMouseEnabled > 0.5) {
     vec2 mp = iMouse / iResolution.y * ref;
@@ -199,15 +247,31 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     mGlow = exp(-md * md / (rr * rr)) * uMouseStrength;
   }
 
+  // ── Rim band + luminance ─────────────────────────────────────────────────
   float band = (uRimWidth - abs((mapeaks - 0.4) * 2.0)) * 5.0;
-  float ltn = clamp(band - vn(p + dir * (t * spd * 0.5), 60.0, 12.0) * uShimmer, 0.0, 1.0);
+  float ltn = clamp(band - vn(p + dir * (t * spd * 0.5), 60.0, uSeed + 0.004) * uShimmer, 0.0, 1.0);
   ltn = pow(ltn, uSharpness) * uGlow;
   ltn *= clamp(1.0 - mGlow, 0.0, 1.0);
 
+  // ── Color ────────────────────────────────────────────────────────────────
   float h = clamp(0.5 + (peaks - peaks2) * 0.8, 0.0, 1.0);
   vec3 col = palette(h);
 
+  // ── Output color (with monochrome mix) ──────────────────────────────────
+  // [BACKGROUND-V2] monochrome: when uMonochrome=1, mix the colored output
+  // toward its luminance value. uLuminanceMix controls the blend factor.
+  // At uLuminanceMix=1.0 (our config), the output is pure luminance (gray) —
+  // no hue, no saturation, just the luminance field. This is the "monochrome
+  // frozen frame" that R-35 requires.
+  //
+  // The luminance of a color is: 0.2126*R + 0.7152*G + 0.0722*B (Rec. 709).
+  // We mix col toward vec3(luminance) by uLuminanceMix.
   vec3 outc = col * ltn;
+  if (uMonochrome > 0.5) {
+    float lum = dot(outc, vec3(0.2126, 0.7152, 0.0722));
+    outc = mix(outc, vec3(lum), uLuminanceMix);
+  }
+
   float a = clamp(max(outc.r, max(outc.g, outc.b)), 0.0, 1.0);
   fragColor = vec4(outc, a * uOpacity);
 }
@@ -239,7 +303,11 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
   mouseRadius = 0.35,
   mouseDampening = 0.15,
   mixBlendMode,
-  ref
+  ref,
+  // [BACKGROUND-V2] seeded warmup → monochrome freeze → permanent GL stop
+  seed = 1,
+  warmupFrames = 10,
+  monochrome = false,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -251,6 +319,14 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
   const lastTimeRef = useRef(0);
   // [PERF-FIX] pointer coalescing + frame gating
   const pointerPendingRef = useRef<[number, number] | null>(null);
+  // [BACKGROUND-V2] warmup frame tracking — counts up to warmupFrames, then
+  // locks the field (uTimeFrozen=1), sets uKillSwitch=1, and kills the GL
+  // context permanently if monochrome=1. After that, the loop never runs again.
+  const warmupDoneRef = useRef(false);
+  const warmupFrameCountRef = useRef(0);
+  // [BACKGROUND-V2] set to true after loseContext() — gates wakeRef so the
+  // dead canvas is never re-armed by pointer input or visibility changes.
+  const killDoneRef = useRef(false);
   const IDLE_MS = 33;      // ~30fps ambient (speed=0.1 → slow field; imperceptible)
   const ACTIVE_MS = 16;    // ~60fps for a beat after input
   const IDLE_FREEZE_MS = 8000; // [PERF-FIX2] full rAF stop after 8s idle — static frame costs zero
@@ -278,6 +354,10 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
     // fullscreen triangle (no geometric edges — all edges are shader-made).
     // [PERF-FIX2] half-res backing store, upscale via CSS.
     // Under a 60% overlay + glass blur the difference is invisible; 4x fewer pixels.
+    // [BACKGROUND-V2] extra half-res pass to reduce warmup cost (seed=seed,
+    // monochrome=monochrome, warmupFrames=warmupFrames). The warmup runs at
+    // half-res (RENDER_SCALE=0.5), then the GL context is killed permanently —
+    // the canvas becomes a dead texture, zero per-frame cost.
     const RENDER_SCALE = 0.5;
     const renderer = new Renderer({
       dpr: (dpr ?? 1) * RENDER_SCALE,
@@ -295,6 +375,9 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
 
     const { arr, count, avg } = prepColors(colors);
 
+    // [BACKGROUND-V2] seeded noise — every seed picks a different "frozen freeze"
+    // day-of-year variety without any storage/IPC. The seed flows into the shader's
+    // hash() via uSeed; different seeds → different lobe configurations.
     const uniforms = {
       iResolution: { value: [gl.drawingBufferWidth, gl.drawingBufferHeight, 1] },
       iMouse: { value: [0, 0] },
@@ -319,9 +402,20 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
       uShimmer: { value: shimmer },
       uGlow: { value: glow },
       uOpacity: { value: opacity },
-      uMouseEnabled: { value: mouseInteraction ? 1 : 0 },
-      uMouseStrength: { value: mouseStrength },
-      uMouseRadius: { value: mouseRadius }
+      // [BACKGROUND-V2] mouse disabled in frozen mode — no pointer path, zero cost
+      uMouseEnabled: { value: 0 },
+      uMouseStrength: { value: 0 },
+      uMouseRadius: { value: mouseRadius },
+      // [BACKGROUND-V2] seed for noise field variety (day-of-year deterministic)
+      uSeed: { value: seed },
+      // [BACKGROUND-V2] monochrome: 1 = luminance mix (RGB→gray), kills hue in frozen frame
+      uMonochrome: { value: monochrome ? 1 : 0 },
+      // [BACKGROUND-V2] time frozen after warmup — iTime stops advancing, field locks
+      uTimeFrozen: { value: 0 },
+      // [BACKGROUND-V2] luminance mix factor for monochrome blend (RGB→gray weight)
+      uLuminanceMix: { value: 1.0 },
+      // [BACKGROUND-V2] kill switch — set to 1 after warmup frames, shader bails early
+      uKillSwitch: { value: 0 },
     };
 
     const program = new Program(gl, { vertex, fragment, uniforms });
@@ -375,13 +469,17 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
       if (document.hidden) {
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
-      } else if (!rafRef.current) {
+      } else if (!rafRef.current && !killDoneRef.current) {
         lastTimeRef.current = 0; lastRender = 0;
         rafRef.current = requestAnimationFrame(loop);
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     wakeRef.current = () => { // [PERF-FIX2] restart after idle freeze
+      // [BACKGROUND-V2] if the GL context has been killed (monochrome freeze),
+      // do NOT re-arm the loop — the canvas is a dead texture and any further
+      // render calls would fail. The wake is silently dropped.
+      if (killDoneRef.current) return;
       if (!rafRef.current && !document.hidden) {
         lastTimeRef.current = 0; lastRender = 0;
         rafRef.current = requestAnimationFrame(loop);
@@ -391,12 +489,44 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
     const loop = (t: number) => {
       rafRef.current = requestAnimationFrame(loop);
       if (paused) return;
+
+      // [BACKGROUND-V2] warmup frame counter — counts up to warmupFrames,
+      // then locks the field (uTimeFrozen=1), sets uKillSwitch=1, and if
+      // monochrome=1, kills the GL context permanently. After that, this
+      // loop never runs again (rafRef stays null, wakeRef no-ops because
+      // the context is dead).
+      if (warmupFrames > 0 && !warmupDoneRef.current) {
+        warmupFrameCountRef.current++;
+        if (warmupFrameCountRef.current >= warmupFrames) {
+          warmupDoneRef.current = true;
+          uniforms.uTimeFrozen.value = 1;
+          uniforms.uKillSwitch.value = 1;
+          if (monochrome) {
+            // Permanent stop: kill the GL context. The canvas becomes a
+            // dead <canvas> with a frozen texture baked into it. Zero
+            // per-frame cost, zero rAF, zero loops from this point onward.
+            const gl2 = gl as WebGL2RenderingContext | null;
+            if (gl2?.loseContext) {
+              try { gl2.loseContext(); } catch (e) { console.warn('[RHEO] loseContext failed:', e); }
+            }
+            killDoneRef.current = true;
+            console.log(`[RHEO] Background frozen (seed=${seed}, frames=${warmupFrames})`);
+          }
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+          return;
+        }
+      }
+
       // [PERF-FIX2] full freeze after 8s idle: static frame costs zero; input wakes via wakeRef.
-      if (performance.now() > activeUntil + IDLE_FREEZE_MS) {
+      // (Only applies when monochrome is OFF — under monochrome the warmup above
+      // is the permanent freeze path and this branch is never reached.)
+      if (!monochrome && performance.now() > activeUntil + IDLE_FREEZE_MS) {
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
         return;
       }
+
       const interval = performance.now() < activeUntil ? ACTIVE_MS : IDLE_MS;
       if (t - lastRender < interval - 1) return;   // frame gate — skip is ~free
       lastRender = t;
@@ -470,7 +600,13 @@ const Ferrofluid: React.FC<FerrofluidProps> = ({
     mouseInteraction,
     mouseStrength,
     mouseRadius,
-    mouseDampening
+    mouseDampening,
+    // [BACKGROUND-V2] seed/warmup/monochrome — changing these restarts the
+    // whole effect with a fresh GL context. The old context is cleaned up by
+    // the effect's return() before the new one starts.
+    seed,
+    warmupFrames,
+    monochrome,
   ]);
 
   return (

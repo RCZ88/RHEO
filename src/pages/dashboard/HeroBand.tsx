@@ -51,7 +51,7 @@ export function HeroBand({
   focusActive = false,
 }: HeroBandProps) {
   return (
-    <div className="flex flex-col w-full gap-4">
+    <div className="flex flex-col w-full gap-4 light:bg-[var(--color-card)] light:border-[var(--ws-border)]">
       {/* Daily insight — full width, above stopwatch */}
       <FunFactHero />
       {/* Stopwatch */}

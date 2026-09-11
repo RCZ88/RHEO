@@ -26,9 +26,9 @@ interface ActivityPageProps {
   domainKeywordRules?: any[];
   externalActivities?: any[];
   externalActivityTiers?: any[];
-  platformFilter: string;
-  availablePlatforms: string[];
-  onPlatformFilterChange: (platform: string) => void;
+  platformFilter?: string;
+  availablePlatforms?: string[];
+  onPlatformFilterChange?: (platform: string) => void;
 }
 
 const TABS = [
@@ -150,7 +150,7 @@ export default function ActivityPage(props: ActivityPageProps) {
           <div className="flex-1" />
 
           {/* OS Filter Bar */}
-          {props.availablePlatforms.length > 0 && (
+          {(props.availablePlatforms ?? []).length > 0 && (
             <div className="flex items-center gap-1.5 mr-2">
               <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
               <button
@@ -163,7 +163,7 @@ export default function ActivityPage(props: ActivityPageProps) {
               >
                 All
               </button>
-              {props.availablePlatforms.map(p => (
+              {props.onPlatformFilterChange && props.availablePlatforms?.map(p => (
                 <button
                   key={p}
                   onClick={() => props.onPlatformFilterChange(p)}
@@ -180,7 +180,7 @@ export default function ActivityPage(props: ActivityPageProps) {
           )}
 
           {/* Compare Mode Toggle */}
-          {props.availablePlatforms.length > 1 && (
+          {props.availablePlatforms?.length > 1 && (
             <button
               onClick={() => setCompareMode(!compareMode)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${

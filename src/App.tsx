@@ -405,7 +405,16 @@ function App() {
     const range = getDateRange(selectedPeriod, dateOffset);
     return allLogs.filter(log => log.timestamp >= range.start && log.timestamp < range.end);
   }, [allLogs, selectedPeriod, dateOffset]);
-  
+
+  // Platform filter state for ActivityPage OS split feature
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const availablePlatforms = Array.from(new Set(allLogs.map((l: any) => l.platform).filter(Boolean)));
+
+  const platformFilteredLogs = useMemo(() => {
+    if (platformFilter === 'all') return filteredLogs;
+    return filteredLogs.filter((log: any) => log.platform === platformFilter);
+  }, [filteredLogs, platformFilter]);
+
   // Track filteredLogs fingerprint to avoid unnecessary logs sync
   const prevFilteredFingerprint = useRef('');
   useEffect(() => {
@@ -2920,8 +2929,8 @@ Trend: +14% vs. yesterday. Keep it up!`;
                 />
               } />
               {/* Stats Page */}
-              {/* Activity Page � unified Apps/Websites/Productivity */}
-              <Route path="/activity" element={<ActivityPage appStats={appStats} logs={filteredLogs} allLogs={allLogs} browserLogs={browserLogs} selectedPeriod={selectedPeriod} dateOffset={dateOffset} onDateOffsetChange={setDateOffset} timeMode={timeMode} tierAssignments={tierAssignments || DEFAULT_TIER_ASSIGNMENTS} liveActivityLogs={liveActivityLogs} domainKeywordRules={domainKeywordRules} externalActivities={externalActivities} externalActivityTiers={externalActivityTiers} />} />
+              {/* Activity Page — unified Apps/Websites/Productivity */}
+              <Route path="/activity" element={<ActivityPage appStats={appStats} logs={platformFilter === 'all' ? filteredLogs : filteredLogs.filter((l: any) => l.platform === platformFilter)} allLogs={allLogs} browserLogs={browserLogs} selectedPeriod={selectedPeriod} dateOffset={dateOffset} onDateOffsetChange={setDateOffset} timeMode={timeMode} tierAssignments={tierAssignments || DEFAULT_TIER_ASSIGNMENTS} liveActivityLogs={liveActivityLogs} domainKeywordRules={domainKeywordRules} externalActivities={externalActivities} externalActivityTiers={externalActivityTiers} platformFilter={platformFilter} availablePlatforms={availablePlatforms} onPlatformFilterChange={setPlatformFilter} />} />
               {/* Rankings Page */}
               <Route path="/rankings" element={<RankingsPage selectedPeriod={selectedPeriod} dateOffset={dateOffset} onDateOffsetChange={setDateOffset} tierAssignments={tierAssignments || DEFAULT_TIER_ASSIGNMENTS} />} />
               {/* Legacy routes � redirect to unified Activity page */}
@@ -3479,14 +3488,13 @@ Trend: +14% vs. yesterday. Keep it up!`;
                   await window.deskflowAPI?.addExternalTime(activityId, minutes, startedAt, endedAt);
                 }
               );
-              // Mark filled gaps in the originating popup's tracking state
-              if (smartFillSource === 'afk' && smartFillGaps) {
-                setAfkFilledGapStarts(prev => [...prev, ...smartFillGaps.map(g => g.start.toISOString())]);
-              } else if (smartFillSource === 'sleep' && smartFillGaps) {
-                setSleepFilledGapStarts(prev => [...prev, ...smartFillGaps.map(g => g.start.toISOString())]);
+              // Mark **only the gap that just got filled** (not the whole smartFillGaps list)
+              const startKey = gap.start.toISOString();
+              if (smartFillSource === 'afk') {
+                setAfkFilledGapStarts(prev => [...prev, startKey]);
+              } else if (smartFillSource === 'sleep') {
+                setSleepFilledGapStarts(prev => [...prev, startKey]);
               }
-              setSmartFillGaps(null);
-              setSmartFillSource(null);
               window.dispatchEvent(new CustomEvent('external-data-changed'));
               fetchGaps();
             }}

@@ -78,6 +78,64 @@ echo "[keys] RELAY_TICKET_SECRET ... $relay_disp"
 SYNC_PORT="${SYNC_PORT:-8787}"
 RELAY_PORT="${RELAY_PORT:-8788}"
 
+# ── kill stale instances (run BEFORE sync server so ports are free) ──
+# Unconditionally kills any leftover RHEO / Electron processes and
+# anything holding SYNC_PORT or RELAY_PORT.  Any process on those
+# project ports is assumed to be a stale RHEO instance from a prior
+# run — this is what makes `./start-dev.sh` work on the first try.
+kill_stale() {
+  if $IS_WIN; then
+    stale=$(powershell -Command "Get-CimInstance Win32_Process -Filter 'Name = \"electron.exe\" OR Name = \"RHEO.exe\"' | Where-Object { $_.CommandLine -like '*'\"$PROJECT_DIR\"*' } | ForEach-Object { $_.ProcessId }" 2>/dev/null || true)
+    if [ -n "$stale" ]; then
+      for pid in $stale; do
+        echo "[desktop] Killing stale RHEO instance (PID $pid)..."
+        taskkill /F /PID "$pid" 2>/dev/null || true
+      done
+    fi
+  else
+    # kill any electron process belonging to this project (including the
+    # binary under node_modules so a globally-installed electron is still
+    # caught when its cmdline references the project dir)
+    stale=$(pgrep -af "$PROJECT_DIR" 2>/dev/null | grep -iE 'electron|RHEO' || true)
+    if [ -n "$stale" ]; then
+      echo "$stale" | while read -r line; do
+        pid_num=$(echo "$line" | awk '{print $1}')
+        if [ -n "$pid_num" ] && [ "$pid_num" -gt 0 ] 2>/dev/null; then
+          echo "[desktop] Killing stale RHEO instance (PID $pid_num)..."
+          kill -9 "$pid_num" 2>/dev/null || true
+        fi
+      done
+    fi
+
+    # kill anything holding our ports — always, regardless of parentage.
+    # Tries lsof, then ss (iproute2, always present on modern Linux),
+    # then fuser as a last resort.
+    for port in "$RELAY_PORT" "$SYNC_PORT"; do
+      port_pids=""
+      if command -v lsof >/dev/null 2>&1; then
+        port_pids=$(lsof -ti :"$port" 2>/dev/null || true)
+      fi
+      if [ -z "$port_pids" ] && command -v ss >/dev/null 2>&1; then
+        port_pids=$(ss -tlnp "sport = :$port" 2>/dev/null | grep -oE 'pid=[0-9]+' | grep -oE '[0-9]+' || true)
+      fi
+      if [ -z "$port_pids" ] && command -v fuser >/dev/null 2>&1; then
+        port_pids=$(fuser "$port/tcp" 2>/dev/null || true)
+        port_pids=$(echo "$port_pids" | tr -d '[:space:]' || true)
+      fi
+      if [ -n "$port_pids" ]; then
+        echo "[desktop] Port $port held by PIDs: $port_pids"
+        for pid in $port_pids; do
+          echo "[desktop] Killing PID $pid on port $port..."
+          kill -9 "$pid" 2>/dev/null || true
+        done
+        sleep 0.5
+      fi
+    done
+  fi
+}
+
+kill_stale
+
 # ── sync server ────────────────────────────────────────────────────────
 if ! $NO_SYNC; then
   echo ""
@@ -180,46 +238,11 @@ if ! $NO_DESKTOP; then
   echo ""
   echo "[desktop] Starting RHEO app ..."
 
-  # ── kill stale RHEO instances ────────────────────────────────────────
-  if $IS_WIN; then
-    stale=$(powershell -Command "Get-CimInstance Win32_Process -Filter 'Name = \"electron.exe\" OR Name = \"RHEO.exe\"' | Where-Object { \$_.CommandLine -like '*'"$PROJECT_DIR"*' } | ForEach-Object { \$_.ProcessId }" 2>/dev/null || true)
-    if [ -n "$stale" ]; then
-      for pid in $stale; do
-        echo "[desktop] Killing stale RHEO instance (PID $pid)..."
-        taskkill /F /PID "$pid" 2>/dev/null || true
-      done
-    fi
-  else
-    # kill by project-specific electron binary path
-    stale=$(pgrep -af "$PROJECT_DIR/node_modules/electron" 2>/dev/null || true)
-    if [ -n "$stale" ]; then
-      for pid in $stale; do
-        # pgrep -af returns "pid cmdline" — extract just the pid
-        pid_num=$(echo "$pid" | awk '{print $1}')
-        if [ -n "$pid_num" ] && [ "$pid_num" -gt 0 ] 2>/dev/null; then
-          echo "[desktop] Killing stale RHEO instance (PID $pid_num)..."
-          kill -9 "$pid_num" 2>/dev/null || true
-        fi
-      done
-    fi
-
-    # kill whatever is holding our ports (stale relay / leftover processes)
-    for port in "$RELAY_PORT" "$SYNC_PORT"; do
-      port_pids=$(lsof -ti :"$port" 2>/dev/null || true)
-      if [ -n "$port_pids" ]; then
-        for pid in $port_pids; do
-          echo "[desktop] Killing process on port $port (PID $pid)..."
-          kill -9 "$pid" 2>/dev/null || true
-        done
-      fi
-    done
-  fi
-
   # production mode — not vite dev server
   unset VITE_DEV_SERVER_URL 2>/dev/null || true
 
   # ── build gating ─────────────────────────────────────────────────────
-  echo "[build] Checking staleness... "
+  echo "[build] Checking build artifacts..."
 
   NODE_MODULES="$PROJECT_DIR/node_modules"
   if [ ! -d "$NODE_MODULES" ]; then
@@ -227,17 +250,19 @@ if ! $NO_DESKTOP; then
     if $IS_WIN; then npm.cmd install; else npm install; fi
   fi
 
+  # Canonical artifact check (existence only — freshness is not asserted).
+  # Use --build to force a full rebuild after source changes.
   PRELOAD_OK=false
   MAIN_OK=false
   HTML_OK=false
   INDEX_JS_OK=false
 
-  [ -f "$PROJECT_DIR/dist-electron/preload.cjs" ] && PRELOAD_OK=true
-  [ -f "$PROJECT_DIR/dist-electron/main.cjs" ] && MAIN_OK=true
-  [ -f "$PROJECT_DIR/dist/index.html" ] && HTML_OK=true
+  [ -f "${PROJECT_DIR}/dist-electron/preload.cjs" ] && PRELOAD_OK=true
+  [ -f "${PROJECT_DIR}/dist-electron/main.cjs" ] && MAIN_OK=true
+  [ -f "${PROJECT_DIR}/dist/index.html" ] && HTML_OK=true
 
-  if [ -d "$PROJECT_DIR/dist/assets" ]; then
-    ls "$PROJECT_DIR/dist/assets" 2>/dev/null | grep -qE '^index\..*\.js$' && INDEX_JS_OK=true
+  if [ -d "${PROJECT_DIR}/dist/assets" ]; then
+    ls "${PROJECT_DIR}/dist/assets" 2>/dev/null | grep -qE '^index\..*\.js$' && INDEX_JS_OK=true
   fi
 
   NEED_BUILD=$FORCE_BUILD
@@ -258,35 +283,52 @@ if ! $NO_DESKTOP; then
   if $NEED_BUILD; then
     echo "[build] $BUILD_REASON"
 
-    if ! $PRELOAD_OK; then
-      echo "[build] Building preload..."
-      if ! npx esbuild "src/preload.ts" --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs; then
-        echo "[build] Preload failed!"; exit 1
-      fi
-    else
-      echo "[build] Preload OK (skipping)"
-    fi
-
-    if ! $MAIN_OK; then
-      echo "[build] Building main..."
-      node scripts/rebuild-main.mjs
-      if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "[build] Main build failed!"; exit 1; fi
-    else
-      echo "[build] Main OK (skipping)"
-    fi
-
-    if ! $HTML_OK || ! $INDEX_JS_OK; then
-      echo "[build] Building renderer..."
-      if npx vite build; then
-        echo "[build] Renderer build OK"
+    if $FORCE_BUILD; then
+      # Full canonical build pipeline: renderer + preload + all per-file service compilations
+      echo "[build] Running full build pipeline (npm run build)..."
+      if $IS_WIN; then
+        npm.cmd run build
       else
-        echo "[build] Renderer build failed!"; exit 1
+        npm run build
       fi
+      BUILD_EXIT=$?
+      if [ $BUILD_EXIT -ne 0 ]; then
+        echo "[build] Full build failed (exit $BUILD_EXIT). Aborting launch."
+        exit 1
+      fi
+      echo "[build] Full build OK"
     else
-      echo "[build] Renderer OK (skipping)"
+      # Piecemeal rebuild only for missing artifacts (first run / partial corruption)
+      if ! $PRELOAD_OK; then
+        echo "[build] Building preload..."
+        if ! npx esbuild "src/preload.ts" --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs; then
+          echo "[build] Preload failed!"; exit 1
+        fi
+      else
+        echo "[build] Preload OK (skipping)"
+      fi
+
+      if ! $MAIN_OK; then
+        echo "[build] Building main..."
+        node scripts/rebuild-main.mjs
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "[build] Main build failed!"; exit 1; fi
+      else
+        echo "[build] Main OK (skipping)"
+      fi
+
+      if ! $HTML_OK || ! $INDEX_JS_OK; then
+        echo "[build] Building renderer..."
+        if npx vite build; then
+          echo "[build] Renderer build OK"
+        else
+          echo "[build] Renderer build failed!"; exit 1
+        fi
+      else
+        echo "[build] Renderer OK (skipping)"
+      fi
     fi
   else
-    echo "[build] Skipped (use --build to force)"
+    echo "[build] Skipped (use --build to force full rebuild)"
   fi
 
   # ── launch electron ──────────────────────────────────────────────────
@@ -343,7 +385,7 @@ if ! $NO_DESKTOP; then
     export ELECTRON_OZONE_PLATFORM="${ELECTRON_OZONE_PLATFORM:-x11}"
   fi
 
-  echo "[desktop] RHEO starting with user-data-dir=$ELECTRON_USER_DATA_DIR"
+  echo "[desktop] RHEO starting with user-data-dir=${ELECTRON_USER_DATA_DIR:-unset}"
   echo "[desktop] Electron args: ${ELECTRON_ARGS_ARR[*]}"
 
   if $IS_WIN; then
@@ -366,9 +408,4 @@ if ! $NO_DESKTOP; then
     fi
     exit $EXIT_CODE
   fi
-else
-  echo ""
-  echo "=== Quick Reference ==="
-  echo "Sync server:     http://127.0.0.1:$SYNC_PORT"
-  echo "Desktop relay:  ws://$RELAY_HOST:$RELAY_PORT"
 fi

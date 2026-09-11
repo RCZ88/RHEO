@@ -88,9 +88,7 @@ export default function TitleBar({
     <div
       className="shrink-0 h-9 flex items-center justify-between select-none"
       style={{
-        background: isFocused
-          ? 'linear-gradient(180deg, #1a1a1a 0%, #141414 100%)'
-          : 'linear-gradient(180deg, #111111 0%, #0d0d0d 100%)',
+        background: isFocused ? '#1a1a1a' : '#111111',
         borderBottom: 'none',
         WebkitAppRegion: 'drag',
       }}

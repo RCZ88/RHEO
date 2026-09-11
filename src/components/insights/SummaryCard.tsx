@@ -20,7 +20,7 @@ export function SummaryCard({ title, value, subtitle, icon, accentColor, accentH
       whileHover={{ scale: 1.03, y: -3 }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
-      className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/60 backdrop-blur-md p-4 text-left w-full overflow-hidden group transition-all duration-200 hover:border-zinc-500/60"
+      className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/60 backdrop-blur-md p-4 text-left w-full overflow-hidden group transition-all duration-200 hover:border-zinc-500/60 light:bg-[var(--color-card)] light:border-[var(--ws-border)]"
       style={{
         boxShadow: `inset 0 1px 0 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(255,255,255,0.02)`,
       }}
