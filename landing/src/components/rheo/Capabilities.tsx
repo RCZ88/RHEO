@@ -453,7 +453,7 @@ function TuiLine({ text, active }: { text: string; active?: boolean }) {
       className="mono"
       style={{
         fontSize: 9,
-        color: isActive ? "#ffffff" : "#8a8a94",
+        color: active ? "#ffffff" : "#8a8a94",
         letterSpacing: "0.04em",
         lineHeight: 1.5,
       }}

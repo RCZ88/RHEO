@@ -49,11 +49,10 @@ export default function FlowFieldCanvas({}: Props) {
   });
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) return;
-
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
+    const context = canvasEl.getContext("2d", { alpha: true });
+    if (!context) return;
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches;
@@ -87,15 +86,16 @@ export default function FlowFieldCanvas({}: Props) {
     }
 
     function resize() {
+      if (!canvasEl || !context) return;
       viewW = window.innerWidth;
       viewH = window.innerHeight;
       cell = viewW < 640 ? 14 : 12;
       dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      canvas.width = Math.floor((viewW * dpr) / 1);
-      canvas.height = Math.floor((viewH * dpr) / 1);
-      canvas.style.width = viewW + "px";
-      canvas.style.height = viewH + "px";
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      canvasEl.width = Math.floor((viewW * dpr) / 1);
+      canvasEl.height = Math.floor((viewH * dpr) / 1);
+      canvasEl.style.width = viewW + "px";
+      canvasEl.style.height = viewH + "px";
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
       cols = Math.ceil(viewW / cell);
       rows = Math.ceil(viewH / cell);
       // cap glyph budget
@@ -143,7 +143,7 @@ export default function FlowFieldCanvas({}: Props) {
     const CAP = 0.55; // turbulence cap
 
     function renderStatic() {
-      ctx.clearRect(0, 0, viewW, viewH);
+      context!.clearRect(0, 0, viewW, viewH);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const cx = c * cell + cell / 2;
@@ -154,8 +154,8 @@ export default function FlowFieldCanvas({}: Props) {
             Math.max(0, Math.floor(n * (RAMP_LEN - 1)))
           );
           const alpha = 0.25 + n * 0.6;
-          ctx.globalAlpha = Math.max(0.25, Math.min(0.9, alpha));
-          ctx.drawImage(
+          context!.globalAlpha = Math.max(0.25, Math.min(0.9, alpha));
+          context!.drawImage(
             sprites[idx],
             0,
             0,
@@ -168,7 +168,7 @@ export default function FlowFieldCanvas({}: Props) {
           );
         }
       }
-      ctx.globalAlpha = 1;
+      context!.globalAlpha = 1;
     }
 
     function renderAnimated() {
@@ -190,7 +190,7 @@ export default function FlowFieldCanvas({}: Props) {
 
       time += 0.0028;
 
-      ctx.clearRect(0, 0, viewW, viewH);
+      context!.clearRect(0, 0, viewW, viewH);
 
       const px = pointerRef.current.x;
       const py = pointerRef.current.y;
@@ -228,8 +228,8 @@ export default function FlowFieldCanvas({}: Props) {
             Math.max(0, Math.floor(intensity * (RAMP_LEN - 1)))
           );
           const alpha = 0.25 + intensity * 0.65; // 0.25..0.9
-          ctx.globalAlpha = Math.max(0.25, Math.min(0.9, alpha));
-          ctx.drawImage(
+          context!.globalAlpha = Math.max(0.25, Math.min(0.9, alpha));
+          context!.drawImage(
             sprites[idx],
             0,
             0,
@@ -242,7 +242,7 @@ export default function FlowFieldCanvas({}: Props) {
           );
         }
       }
-      ctx.globalAlpha = 1;
+      context!.globalAlpha = 1;
 
       raf = requestAnimationFrame(renderAnimated);
     }
