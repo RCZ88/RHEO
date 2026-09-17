@@ -1,14 +1,20 @@
+import { useMemo } from 'react'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js'
 import { Line } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
 interface AIUsageChartProps {
-  data: { date: string; tokens: number }[]
+  data?: { date: string; tokens: number }[]
 }
 
-export function AIUsageChart({ data }: AIUsageChartProps) {
-  const chartData = {
+const DEFAULT_DATA = Array.from({ length: 30 }, (_, i) => ({
+  date: `Day ${i + 1}`,
+  tokens: Math.floor(Math.random() * 50000) + 10000,
+}))
+
+export function AIUsageChart({ data = DEFAULT_DATA }: AIUsageChartProps) {
+  const chartData = useMemo(() => ({
     labels: data.map(d => d.date),
     datasets: [{
       label: 'Tokens',
@@ -18,43 +24,13 @@ export function AIUsageChart({ data }: AIUsageChartProps) {
       fill: true,
       tension: 0.4,
       pointRadius: 0,
-      pointHoverRadius: 4,
-      pointHoverBackgroundColor: '#06b6d4',
-    }]
-  }
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: 'rgba(24, 24, 27, 0.95)',
-        titleColor: '#fafafa',
-        bodyColor: '#a1a1aa',
-        borderColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1,
-        callbacks: {
-          label: (ctx: any) => `${ctx.parsed.y.toLocaleString()} tokens`
-        }
-      }
-    },
-    scales: {
-      x: { display: false },
-      y: { display: false }
-    },
-    interaction: { intersect: false, mode: 'index' }
-  }
+    }],
+  }), [data])
 
   return (
-    <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-[var(--text-primary)]">AI Usage</h3>
-        <span className="text-xs text-[var(--text-muted)]">Last 30 days</span>
-      </div>
-      <div className="mt-4 h-32">
-        <Line data={chartData} options={options} />
-      </div>
+    <div className="rounded-[10px] border border-[var(--border-hairline)] bg-[var(--color-card)] p-4">
+      <h3 className="text-sm font-medium text-[var(--text-primary)] mb-2">AI Usage (Last 30 Days)</h3>
+      <Line data={chartData} options={{ responsive: true, plugins: { legend: { display: false } } }} />
     </div>
   )
 }

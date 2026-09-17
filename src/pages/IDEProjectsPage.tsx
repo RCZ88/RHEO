@@ -2078,7 +2078,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {(showSetupModal || showOnboarding) && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
             onClick={() => {
               setShowSetupModal(false);
               if (showOnboarding) {
@@ -2320,7 +2320,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {scanning && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center"
+            className="fixed inset-0 bg-black/70 backdrop-none z-[60] flex items-center justify-center"
           >
             <div
               exit={{ scale: 0.9, opacity: 0 }}
@@ -2347,7 +2347,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {selectedAgentDetail && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
             onClick={() => setSelectedAgentDetail(null)}
           >
             <div
@@ -2991,7 +2991,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {showHelpModal && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
             onClick={() => setShowHelpModal(false)}
           >
             <div
@@ -3064,7 +3064,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {showAddProject && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
             onClick={() => { setShowAddProject(false); setAddProjectError(null); setSelectedQuickProjects(new Set()); }}
           >
             <div
@@ -3343,7 +3343,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {showEditProject && editingProject && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
             onClick={() => { setShowEditProject(false); setEditingProject(null); setAddProjectError(null); }}
           >
             <div
@@ -3518,7 +3518,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {showDeleteConfirm && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
             onClick={() => { setShowDeleteConfirm(false); setDeletingProjectId(null); setDeletingProjectName(''); }}
           >
             <div
@@ -3563,7 +3563,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       {showRunConfig && runConfigProject && (
           <div
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 backdrop-none z-50 flex items-center justify-center p-4"
             onClick={() => setShowRunConfig(false)}
           >
             <div

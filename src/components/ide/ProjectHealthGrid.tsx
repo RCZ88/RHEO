@@ -19,44 +19,39 @@ export function ProjectHealthCard({ name, status, lastCommit, commits, issues }:
   const StatusIcon = config.icon
 
   return (
-    <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4 transition-colors duration-200 hover:bg-[var(--color-card-sunken)]">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-[var(--text-primary)]">{name}</h4>
-        <div className={`flex items-center gap-1 text-xs ${config.color}`}>
-          <StatusIcon className="h-3 w-3" />
-          {config.label}
-        </div>
+    <div className="rounded-[10px] border border-[var(--border-hairline)] bg-[var(--color-card)] p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium text-[var(--text-primary)]">{name}</h3>
+        <StatusIcon className={`h-4 w-4 ${config.color}`} />
       </div>
-      <div className="mt-3 flex items-center gap-4 text-xs text-[var(--text-muted)]">
-        <div className="flex items-center gap-1">
-          <GitCommit className="h-3 w-3" />
-          <span>{commits} commits</span>
-        </div>
-        {issues !== undefined && (
-          <div className="flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
-            <span>{issues} issues</span>
-          </div>
-        )}
+      <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+        <span>{commits} commits</span>
+        {issues !== undefined && <span>{issues} issues</span>}
+        {lastCommit && <span>{lastCommit}</span>}
       </div>
-      {lastCommit && (
-        <div className="mt-2 text-[10px] text-[var(--text-muted)]">
-          Last commit: {lastCommit}
-        </div>
-      )}
     </div>
   )
 }
 
 interface ProjectHealthGridProps {
-  projects: ProjectHealthCardProps[]
+  overview?: { projects?: ProjectHealthCardProps[] }
 }
 
-export function ProjectHealthGrid({ projects }: ProjectHealthGridProps) {
+export function ProjectHealthGrid({ overview }: ProjectHealthGridProps) {
+  const projects = overview?.projects ?? []
+
+  if (projects.length === 0) {
+    return (
+      <div className="rounded-[10px] border border-[var(--border-hairline)] bg-[var(--color-card)] p-8 text-center">
+        <p className="text-sm text-[var(--text-muted)]">No projects tracked yet</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {projects.map((project) => (
-        <ProjectHealthCard key={project.name} {...project} />
+        <ProjectHealthCard key={project.id} {...project} />
       ))}
     </div>
   )
