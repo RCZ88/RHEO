@@ -327,9 +327,9 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
   );
 }
 
-type TabKey = 'overview' | 'projects' | 'ai' | 'git' | 'environment' | 'analytics' | 'backup';
+type TabKey = 'overview' | 'projects' | 'ai' | 'git' | 'environment' | 'analytics' | 'backup' | 'activity';
 
-const TAB_KEYS: TabKey[] = ['overview', 'projects', 'ai', 'git', 'environment', 'analytics', 'backup'];
+const TAB_KEYS: TabKey[] = ['overview', 'projects', 'ai', 'git', 'environment', 'analytics', 'backup', 'activity'];
 
 const TAB_HOVER = { scale: 1.02 };
 const TAB_TAP = { scale: 0.98 };
@@ -342,6 +342,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: any }> = [
   { key: 'environment', label: 'Environment', icon: Boxes },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'backup', label: 'Backup', icon: Archive },
+  { key: 'activity', label: 'Activity', icon: Activity },
 ];
 
 // Back-compat: retired keys map to their new home.
@@ -1353,6 +1354,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-white">IDE &amp; Projects</h1>
+          <PulseRing count={3} label="commits" />
           <p className="text-[var(--text-muted)] mt-1">Track your development environment, AI tools, and project metrics</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -2062,6 +2064,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             projectId={selectedProject}
             projectPath={overview?.projects?.find((p: any) => p.id === selectedProject)?.path || null}
           />
+        </div>
+      )}
+
+      {/* Activity Feed Tab */}
+      {activeTab === 'activity' && (
+        <div data-section="ide.activity" className="space-y-6">
+          <ActivityFeed overview={overview} />
         </div>
       )}
 
