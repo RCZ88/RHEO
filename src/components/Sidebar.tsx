@@ -27,6 +27,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { icon: Brain, label: 'AI Assistant', path: '/ai', group: 'INTELLIGENCE' },
   { icon: ShieldIcon, label: 'Insights', path: '/reports', group: 'INTELLIGENCE' },
   { icon: GraduationCap, label: 'Lyceum', path: '/learn', group: 'INTELLIGENCE' },
+  { icon: GraduationCap, label: 'Lecture', path: '/lecture', group: 'INTELLIGENCE' },
   { icon: Sparkles, label: 'Content Engine', path: '/studio', group: 'CREATE' },
   { icon: FileText, label: 'Resume', path: '/resume', group: 'CREATE' },
   { icon: HeartHandshake, label: 'Life', path: '/life', group: 'LIFE' },
