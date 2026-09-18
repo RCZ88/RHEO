@@ -5,16 +5,33 @@
     <link rel="icon" href="/deskflow-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RHEO</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <!-- FALLBACK STYLES: only visible when the main JS bundle fails to load -->
     <style>
       html { background: #121212; }
       body { margin: 0; background: #121212; min-height: 100vh; }
       #root { min-height: 100vh; background: #121212; }
       #df-fallback { display: none; }
+      #df-startup { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: var(--color-background, #09090b); color: var(--color-foreground, #fafafa); font-family: Inter, system-ui, sans-serif; }
+      #df-startup[hidden] { display: none; }
+      .df-startup-content { width: min(520px, calc(100vw - 48px)); box-sizing: border-box; padding: 20px; border: 1px solid var(--color-border, #27272a); border-radius: 12px; background: var(--color-card, #18181b); }
+      .df-startup-title { margin: 0 0 16px; font-size: 15px; font-weight: 600; letter-spacing: .3em; }
+      .df-startup-status { display: flex; align-items: center; gap: 12px; color: var(--color-muted-foreground, #a1a1aa); font-size: 14px; line-height: 1.5; }
+      .df-startup-spinner { width: 16px; height: 16px; flex: none; animation: df-startup-spin 1s linear infinite; }
+      @keyframes df-startup-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .df-startup-spinner { animation: none; } }
     </style>
   </head>
   <body>
+    <div id="df-startup" role="status" aria-live="polite" aria-busy="true">
+      <div class="df-startup-content">
+        <div class="df-startup-title">RHEO</div>
+        <div class="df-startup-status">
+          <svg class="df-startup-spinner" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v4m4.2 1.8 2.9-2.9M18 12h4m-5.8 4.2 2.9 2.9M12 18v4m-7.1-2.9 2.9-2.9M2 12h4m-1.1-7.1 2.9 2.9" /></svg>
+          <span id="df-startup-message">Loading application…</span>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
 
     <!-- FALLBACK OVERLAY: visible when JS fails to load or crashes before mount -->
@@ -41,6 +58,18 @@
       window.__DESKFLOW_LOADED = false;
       window.__RHEO_LAST_ERROR = null;
       window.__DESKFLOW_LAST_ERROR = null;
+      window.addEventListener('rheo:boot-ready', function() {
+        document.documentElement.dataset.bootReady = 'true';
+      });
+      setTimeout(function() {
+        var message = document.getElementById('df-startup-message');
+        if (message) message.textContent = 'Still loading application…';
+      }, 4000);
+      setTimeout(function() {
+        if (document.documentElement.dataset.bootReady !== 'true') {
+          showFallback('Startup is taking longer than expected. You can reload the application.');
+        }
+      }, 30000);
 
       function showFallback(msg, err) {
         var fb = document.getElementById('df-fallback');
