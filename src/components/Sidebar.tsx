@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, LayoutGroup } from 'framer-motion';
+import { motion, LayoutGroup } from 'motion/react';
 import {
   LayoutDashboard, Activity, Brain, Sparkles, GraduationCap,
   FileText, Code2, Wallet, HeartHandshake, Settings, BookOpen,
