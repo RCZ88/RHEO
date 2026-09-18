@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, LayoutGroup } from 'framer-motion';
 import {
   LayoutDashboard, Activity, Brain, Sparkles, GraduationCap,
   FileText, Code2, Wallet, HeartHandshake, Settings, BookOpen,
@@ -372,6 +372,7 @@ export const Sidebar = memo(function SidebarComponent({
         </div>
 
         {/* ── Node line (scrollable navigation) ─────────────────── */}
+        <LayoutGroup>
         <div className="flex-1 min-h-0 overflow-y-auto py-2 hide-scrollbar">
           <div className="relative flex">
             {/* Vertical node hairline */}
@@ -424,6 +425,7 @@ export const Sidebar = memo(function SidebarComponent({
             </div>
           </div>
         </div>
+        </LayoutGroup>
 
         {/* ── Instrument Strip (bottom: state, not destinations) ── */}
         <div
