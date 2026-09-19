@@ -396,7 +396,8 @@ export const Sidebar = memo(function SidebarComponent({
 
                 return (
                   <div key={group}>
-                    {/* Group header (kicker) */}
+                    {/* Group header (kicker) — hidden in collapsed mode */}
+                    {!collapsed && (
                     <div
                         className={cn(
                           'px-4 pt-3 pb-1 text-[10px] font-mono uppercase tracking-[0.14em] transition-colors select-none',
@@ -405,9 +406,10 @@ export const Sidebar = memo(function SidebarComponent({
                       >
                         {GROUP_KICKER[group]}
                       </div>
+                    )}
 
                     {/* Items — NodeDot in both modes */}
-                    <div className="pl-1 pr-2">
+                    <div className={cn('pl-1 pr-2', collapsed && 'pl-0')}>
                       {items.map((item) => (
                         <NodeDot
                           key={item.path}
@@ -420,8 +422,8 @@ export const Sidebar = memo(function SidebarComponent({
                       ))}
                     </div>
 
-                    {/* Group break: 3 tiny ticks crossing the hairline */}
-                    {gIdx < GROUP_ORDER.length - 1 && (
+                    {/* Group break: 3 tiny ticks crossing the hairline — hidden in collapsed mode */}
+                    {gIdx < GROUP_ORDER.length - 1 && !collapsed && (
                       <div className="relative h-2 flex items-center justify-center">
                         <div className="absolute left-[14px] flex flex-col gap-[3px]">
                           <span className="block w-[9px] h-px bg-white/[0.1]" />
