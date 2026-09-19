@@ -99,7 +99,7 @@ const NodeDot = memo(function NodeDot({
             layout
             className={cn(
               'flex h-[32px] w-[32px] items-center justify-center rounded-xl border-2 shadow-lg',
-              item.active
+              isActive
                 ? 'border-white/30 bg-white/[0.15] shadow-[0_0_16px_rgba(255,255,255,0.3)] z-10'
                 : 'border-white/[0.08] bg-white/[0.04]',
             )}
@@ -109,7 +109,7 @@ const NodeDot = memo(function NodeDot({
             <Icon
               className={cn(
                 'h-[18px] w-[18px] drop-shadow-md',
-                item.active ? 'text-white' : 'text-zinc-100',
+                isActive ? 'text-white' : 'text-zinc-100',
               )}
             />
           </motion.span>
@@ -118,7 +118,7 @@ const NodeDot = memo(function NodeDot({
             layout
             className={cn(
               'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg',
-              item.active
+              isActive
                 ? 'border-white/30 bg-white/[0.15] shadow-[0_0_24px_rgba(255,255,255,0.3)] z-10'
                 : 'border-white/[0.08] bg-white/[0.04]',
             )}
@@ -127,7 +127,7 @@ const NodeDot = memo(function NodeDot({
               top: '50%',
               transform: 'translateY(-50%)',
               opacity: 1,
-              scale: item.active ? 1 : 0.6,
+              scale: isActive ? 1 : 0.6,
             }}
             whileHover={{ scale: 1.1, rotate: 8 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
@@ -135,7 +135,7 @@ const NodeDot = memo(function NodeDot({
             <Icon
               className={cn(
                 'h-[22px] w-[22px] drop-shadow-md',
-                item.active ? 'text-white' : 'text-zinc-100',
+                isActive ? 'text-white' : 'text-zinc-100',
               )}
             />
           </motion.span>
