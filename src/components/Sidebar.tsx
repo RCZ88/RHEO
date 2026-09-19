@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, memo, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, LayoutGroup } from 'framer-motion';
+
 import {
   LayoutDashboard, Activity, Brain, Sparkles, GraduationCap,
   FileText, Code2, Wallet, HeartHandshake, Settings, BookOpen,
-  Smartphone, Shield as ShieldIcon, Terminal, Search,
+  Smartphone, Shield as ShieldIcon, Terminal, Search, Lock,
 } from 'lucide-react';
 import { SidebarLogo } from './SidebarLogo';
 import { ThemeToggle } from './ThemeToggle';
@@ -84,8 +84,7 @@ const NodeDot = memo(function NodeDot({
 }) {
   const Icon = item.icon;
   return (
-    <motion.button
-      layout
+    <button
       onClick={() => onNavigate(item.path)}
       className={cn(
         'group relative flex items-center w-full transition-all duration-150',
@@ -96,15 +95,14 @@ const NodeDot = memo(function NodeDot({
       <>
         {/* Icon chip — centered in collapsed; off-screen left in expanded */}
         {collapsed ? (
-          <motion.span
+          <span
             className={cn(
-              'flex h-[32px] w-[32px] items-center justify-center rounded-xl border-2 shadow-lg',
+              'flex h-[32px] w-[32px] items-center justify-center rounded-xl border-2 shadow-lg transition-all duration-150 hover:scale-110 hover:rotate-[8deg]',
               isActive
                 ? 'border-white/30 bg-white/[0.15] shadow-[0_0_16px_rgba(255,255,255,0.3)] z-10'
                 : 'border-white/[0.08] bg-white/[0.04]',
             )}
-            whileHover={{ scale: 1.1, rotate: 8 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            style={{ scale: isActive ? 1 : 0.6 }}
           >
             <Icon
               className={cn(
@@ -112,11 +110,11 @@ const NodeDot = memo(function NodeDot({
                 isActive ? 'text-white' : 'text-zinc-100',
               )}
             />
-          </motion.span>
+          </span>
         ) : (
-          <motion.span
+          <span
             className={cn(
-              'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg',
+              'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg transition-all duration-150 hover:scale-110 hover:rotate-[8deg]',
               isActive
                 ? 'border-white/30 bg-white/[0.15] shadow-[0_0_24px_rgba(255,255,255,0.3)] z-10'
                 : 'border-white/[0.08] bg-white/[0.04]',
@@ -128,8 +126,6 @@ const NodeDot = memo(function NodeDot({
               opacity: 1,
               scale: isActive ? 1 : 0.6,
             }}
-            whileHover={{ scale: 1.1, rotate: 8 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
           >
             <Icon
               className={cn(
@@ -137,10 +133,10 @@ const NodeDot = memo(function NodeDot({
                 isActive ? 'text-white' : 'text-zinc-100',
               )}
             />
-          </motion.span>
+          </span>
         )}
 
-        {/* Dot on the line — only in expanded mode */}
+          {/* Dot on the line — only in expanded mode */}
         {!collapsed && (
           <span className="relative flex items-center justify-center shrink-0">
             {isActive ? (
@@ -175,7 +171,7 @@ const NodeDot = memo(function NodeDot({
           </span>
         )}
       </>
-    </motion.button>
+    </button>
   );
 });
 
@@ -346,16 +342,12 @@ export const Sidebar = memo(function SidebarComponent({
             <span className="block w-[3px] h-[2px] bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
           </div>
           {/* ── Nav position marker (where you are in the sidebar) ─ */}
-                    <motion.div
-                      layout
+                    <div
                       className="absolute left-[18px] z-10 pointer-events-none"
-                      style={{ top: `${activeNavPct}%`, translateY: '-50%' }}
-                      transition={{ type: 'spring', stiffness: 250, damping: 25 }}
+                      style={{ top: `${activeNavPct}%`, transform: 'translateY(-50%)', transition: 'top 0.4s ease' }}
                     >
-                      <motion.span
-                        className="w-2 h-2 rounded-full bg-[var(--page-accent)]"
-                      />
-                    </motion.div>
+                      <span className="w-2 h-2 rounded-full bg-[var(--page-accent)]" />
+                    </div>
         </div>
       </div>
 
@@ -395,7 +387,7 @@ export const Sidebar = memo(function SidebarComponent({
         </div>
 
         {/* ── Node line (scrollable navigation) ─────────────────── */}
-        <LayoutGroup>
+        
         <div className="flex-1 min-h-0 overflow-y-auto py-2 hide-scrollbar">
           <div className="relative flex">
             {/* Vertical node hairline */}
@@ -451,7 +443,7 @@ export const Sidebar = memo(function SidebarComponent({
             </div>
           </div>
         </div>
-        </LayoutGroup>
+        
 
         {/* ── Instrument Strip (bottom: state, not destinations) ── */}
         <div
