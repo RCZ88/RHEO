@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageTitle } from './components/PageTitle';
 import confetti from 'canvas-confetti';
 import { navigateTo, scrollToSection } from './lib/deepNav';
+import { resolvePageRoute } from './lib/smartSearchPages';
 import { SidebarLogo } from './components/SidebarLogo';
 import Sidebar, { SIDEBAR_ITEMS } from './components/Sidebar';
 import { openSmartSearch, type SearchHit } from './hooks/useAppSmartSearch';
@@ -316,7 +317,19 @@ function App() {
 
   const handleSmartSearchSelect = useCallback((hit: SearchHit) => {
     console.debug('[SmartSearch] selected:', hit);
-    window.dispatchEvent(new CustomEvent('smart-search:select', { detail: hit }));
+    const route = resolvePageRoute(hit.pageId);
+    if (route) {
+      navigateTo({ route: route.route, tab: hit.section ? route.tab : undefined });
+      // Try to scroll to the section if one was specified
+      if (hit.section) {
+        setTimeout(() => {
+          scrollToSection(hit.section);
+        }, 300);
+      }
+    } else {
+      // Fallback: dispatch event for pages that want custom handling
+      window.dispatchEvent(new CustomEvent('smart-search:select', { detail: hit }));
+    }
   }, []);
 
   // Keyboard shortcut: Ctrl+F / Ctrl+K — open smart search overlay

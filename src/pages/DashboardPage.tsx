@@ -17,6 +17,8 @@ import { DeadlinesCard } from '../components/dashboard/DeadlinesCard';
 import { LongestFocusCard } from '../components/dashboard/LongestFocusCard';
 import { useDashboardData } from '../components/dashboard/useDashboardData';
 import { InsightStrip } from './dashboard/InsightStrip';
+import { useSmartSearch } from '../hooks/useSmartSearch';
+import type { SearchableSegment } from '../services/search/index';
 import { MomentumHero } from '../components/dashboard/MomentumHero';
 import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
 
@@ -385,6 +387,23 @@ export default function DashboardPage({
       window.removeEventListener('click', update);
     };
   }, []);
+
+  // ── Smart search: register dashboard sections as searchable content ──────────
+  const _smartSearchRegistered = useSmartSearch('dashboard', [
+    { id: 'hero', pageId: 'dashboard', title: 'Welcome back', section: 'Hero', text: 'Your focus dashboard — see today\'s productivity at a glance, pick a task, and start focusing.', rank: 2.0 },
+    { id: 'summary', pageId: 'dashboard', title: 'Today\'s Summary', section: 'Summary Strip', text: 'Quick overview of your focus sessions, productive time, and distractions so far today.', rank: 1.5 },
+    { id: 'pinned', pageId: 'dashboard', title: 'Pinned Activities', section: 'Pinned', text: 'Activities you\'ve pinned to the dashboard for quick access. Pin any activity from the activity list.', rank: 1.2 },
+    { id: 'quick-focus', pageId: 'dashboard', title: 'Quick Focus', section: 'Focus Start', text: 'Start a focused work session on a task. Track productive time and build streaks.', rank: 1.5 },
+    { id: 'schedule', pageId: 'dashboard', title: 'Today\'s Schedule', section: 'Schedule', text: 'Your planned schedule for today — focus sessions, meetings, and planned work blocks.', rank: 1.2 },
+    { id: 'status', pageId: 'dashboard', title: 'Status', section: 'Status Band', text: 'Current tracking status, active sessions, and system state for the RHEO desktop tracker.', rank: 1.0 },
+    { id: 'goals', pageId: 'dashboard', title: 'Goals', section: 'Goals Card', text: 'Your active goals and progress toward each one. Set and track long-term objectives.', rank: 1.2 },
+    { id: 'deadlines', pageId: 'dashboard', title: 'Deadlines', section: 'Deadlines Card', text: 'Upcoming deadlines from your tracked activities. Stay on top of due dates.', rank: 1.2 },
+    { id: 'longest-focus', pageId: 'dashboard', title: 'Longest Focus Session', section: 'Longest Focus', text: 'Your longest uninterrupted focus session — track and beat your personal best.', rank: 1.0 },
+    { id: 'insights', pageId: 'dashboard', title: 'Insights', section: 'Insight Strip', text: 'AI-powered insights and recommendations based on your focus patterns and productivity data.', rank: 1.0 },
+    { id: 'momentum', pageId: 'dashboard', title: 'Momentum', section: 'Momentum Hero', text: 'Your momentum score — how consistently you\'re building productive habits over time.', rank: 0.8 },
+    { id: 'tier-breakdown', pageId: 'dashboard', title: 'Tier Breakdown', section: 'Tier Breakdown', text: 'Breakdown of your time across productive, neutral, and distracting app categories.', rank: 0.8 },
+    { id: 'widget-grid', pageId: 'dashboard', title: 'Widget Grid', section: 'Dashboard Widgets', text: 'Customizable widget grid — rearrange, add, or remove dashboard widgets to fit your workflow.', rank: 0.5 },
+  ]);
 
   // Persist external stopwatch too
   // FIX: If session is running but start time is missing, recalculate from database
