@@ -67,12 +67,7 @@ const formatDuration = (seconds: number): string => {
 };
 const TICK_COUNT = 24;
 
-function getNowTickPercent(): number {
-  const now = new Date();
-  return ((now.getHours() + now.getMinutes() / 60) / 24) * 100;
-}
-
-// ── Node dot ───────────────────────────────────────────────────────────
+// ── Node dot ───────────────────────────────────────────
 const NodeDot = memo(function NodeDot({
   item, isActive, collapsed, onNavigate, mouseY,
 }: {
@@ -97,12 +92,11 @@ const NodeDot = memo(function NodeDot({
         {collapsed ? (
           <span
             className={cn(
-              'flex h-[32px] w-[32px] items-center justify-center rounded-xl border-2 shadow-lg transition-all duration-150 hover:scale-110 hover:rotate-[8deg]',
+              'flex h-[32px] w-[32px] items-center justify-center rounded-xl border-2 shadow-lg transition-all duration-200',
               isActive
-                ? 'border-white/30 bg-white/[0.15] shadow-[0_0_16px_rgba(255,255,255,0.3)] z-10'
-                : 'border-white/[0.08] bg-white/[0.04]',
+                ? 'scale-100 border-white/30 bg-white/[0.15] shadow-[0_0_16px_rgba(255,255,255,0.3)] z-10'
+                : 'scale-60 border-white/[0.08] bg-white/[0.04] group-hover:scale-[0.85] group-hover:border-white/20 group-hover:shadow-[0_0_12px_rgba(255,255,255,0.15)]',
             )}
-            style={{ scale: isActive ? 1 : 0.6 }}
           >
             <Icon
               className={cn(
@@ -114,25 +108,13 @@ const NodeDot = memo(function NodeDot({
         ) : (
           <span
             className={cn(
-              'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg transition-all duration-150 hover:scale-110 hover:rotate-[8deg]',
+              'flex items-center justify-center shrink-0 transition-all duration-150',
               isActive
-                ? 'border-white/30 bg-white/[0.15] shadow-[0_0_24px_rgba(255,255,255,0.3)] z-10'
-                : 'border-white/[0.08] bg-white/[0.04]',
+                ? 'text-white'
+                : 'text-zinc-400 group-hover:text-white',
             )}
-            style={{
-              left: '-28px',
-              top: `${mouseY}px`,
-              transform: 'translateY(-50%)',
-              opacity: 1,
-              scale: isActive ? 1 : 0.6,
-            }}
           >
-            <Icon
-              className={cn(
-                'h-[22px] w-[22px] drop-shadow-md',
-                isActive ? 'text-white' : 'text-zinc-100',
-              )}
-            />
+            <Icon className={cn('h-[18px] w-[18px]')} />
           </span>
         )}
 
@@ -198,7 +180,6 @@ export const Sidebar = memo(function SidebarComponent({
   const navigate = useNavigate();
   const location = useLocation();
   const activePath = pathname ?? location.pathname;
-  const [nowTick, setNowTick] = useState(getNowTickPercent);
   const [phoneConnected, setPhoneConnected] = useState(false);
   const [mouseY, setMouseY] = useState(0);
   const [authenticated, setAuthenticated] = useState(false);
@@ -214,13 +195,7 @@ export const Sidebar = memo(function SidebarComponent({
     return () => window.removeEventListener('mousemove', handleMove);
   }, []);
 
-  // Live now-tick: update once per minute (state, not animation loop)
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(getNowTickPercent()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Phone connection polling + auth check
+  // Phone connection polling
   useEffect(() => {
     let alive = true;
 
@@ -334,20 +309,18 @@ export const Sidebar = memo(function SidebarComponent({
               </div>
             );
           })}
-          {/* ── Now tick (live, once per minute) ───────────────── */}
+          {/* ── Nav needle (slides between pages) ──────── */}
           <div
             className="absolute left-[18px] z-10 pointer-events-none"
-            style={{ top: `${nowTick}%`, transform: 'translateY(-50%)', transition: 'top 60s linear' }}
+            style={{ top: `${activeNavPct}%`, transform: 'translateY(-50%)', transition: 'top 0.4s ease' }}
           >
-            <span className="block w-[3px] h-[2px] bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
+            <span className="w-2 h-2 rounded-full bg-[var(--page-accent)] shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
           </div>
-          {/* ── Nav position marker (where you are in the sidebar) ─ */}
-                    <div
-                      className="absolute left-[18px] z-10 pointer-events-none"
-                      style={{ top: `${activeNavPct}%`, transform: 'translateY(-50%)', transition: 'top 0.4s ease' }}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-[var(--page-accent)]" />
-                    </div>
+          {/* Mouse Y needle (red line) */}
+          <div
+            className="absolute left-0 right-0 pointer-events-none z-20"
+            style={{ top: `${mouseY}px`, height: '1px', backgroundColor: 'rgba(255,60,60,0.7)', transition: 'top 0.05s linear' }}
+          />
         </div>
       </div>
 
@@ -427,7 +400,10 @@ export const Sidebar = memo(function SidebarComponent({
                       ))}
                     </div>
 
-                    {/* Group break: 3 tiny ticks crossing the hairline — hidden in collapsed mode */}
+                    {/* Group separator — horizontal line in collapsed mode */}
+                    {gIdx < GROUP_ORDER.length - 1 && collapsed && (
+                      <div className="w-full h-px bg-white/[0.15] my-1 mx-2" />
+                    )}
                     {gIdx < GROUP_ORDER.length - 1 && !collapsed && (
                       <div className="relative h-2 flex items-center justify-center">
                         <div className="absolute left-[14px] flex flex-col gap-[3px]">
