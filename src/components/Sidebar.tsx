@@ -83,7 +83,7 @@ const NodeDot = memo(function NodeDot({
       onClick={() => onNavigate(item.path)}
       className={cn(
         'group relative flex items-center w-full transition-all duration-150',
-        collapsed ? 'justify-center py-2' : 'gap-3 py-[7px] pl-9 pr-3',
+        collapsed ? 'justify-center py-2' : 'gap-3 py-[7px] pl-3 pr-3',
       )}
       title={collapsed ? item.label : undefined}
     >
