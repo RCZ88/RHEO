@@ -97,7 +97,6 @@ const NodeDot = memo(function NodeDot({
         {/* Icon chip — centered in collapsed; off-screen left in expanded */}
         {collapsed ? (
           <motion.span
-            layout
             className={cn(
               'flex h-[32px] w-[32px] items-center justify-center rounded-xl border-2 shadow-lg',
               isActive
@@ -116,7 +115,6 @@ const NodeDot = memo(function NodeDot({
           </motion.span>
         ) : (
           <motion.span
-            layout
             className={cn(
               'absolute flex h-[44px] w-[44px] items-center justify-center rounded-xl border-2 shadow-lg',
               isActive
@@ -209,9 +207,14 @@ export const Sidebar = memo(function SidebarComponent({
   const [mouseY, setMouseY] = useState(0);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const rect = sidebarRef.current?.getBoundingClientRect();
-    if (rect) setMouseY(e.clientY - rect.top);
+  // Track mouse Y globally so the expanded chip (at left:-28px) follows cursor
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      const rect = sidebarRef.current?.getBoundingClientRect();
+      if (rect) setMouseY(e.clientY - rect.top);
+    };
+    window.addEventListener('mousemove', handleMove);
+    return () => window.removeEventListener('mousemove', handleMove);
   }, []);
 
   // Live now-tick: update once per minute (state, not animation loop)
@@ -285,9 +288,7 @@ export const Sidebar = memo(function SidebarComponent({
       style={{
         transition: 'width 250ms cubic-bezier(0.16,1,0.3,1)',
         WebkitAppRegion: 'no-drag' as any,
-      }}
-      onMouseMove={handleMouseMove}
-    >
+      }}>
       {/* ── Ruler strip (16px, left edge) ────────────────────────── */}
       <div className="relative w-4 shrink-0 flex flex-col items-center border-r border-zinc-800/40">
         {/* Spacer where logo lives in main pane */}
@@ -333,15 +334,13 @@ export const Sidebar = memo(function SidebarComponent({
           </div>
           {/* ── Nav position marker (where you are in the sidebar) ─ */}
                     <motion.div
+                      layout
                       className="absolute left-[18px] z-10 pointer-events-none"
                       style={{ top: `${activeNavPct}%`, translateY: '-50%' }}
-                      animate={{ y: activeNavPct }}
                       transition={{ type: 'spring', stiffness: 250, damping: 25 }}
                     >
                       <motion.span
                         className="w-2 h-2 rounded-full bg-[var(--page-accent)]"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
                       />
                     </motion.div>
         </div>
