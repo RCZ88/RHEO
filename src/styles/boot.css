@@ -1,0 +1,116 @@
+/* Boot overlay — tokens only; no invented token names; no black backdrop. */
+
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: var(--color-background);
+  cursor: default;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.boot-glass {
+  width: min(520px, calc(100vw - 48px));
+  padding: 26px 24px 20px;
+  border-radius: var(--radius-card, 12px);
+  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.08));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+    rgba(9, 9, 11, 0.80);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.boot-head { display: flex; flex-direction: column; gap: 6px; }
+
+.boot-wordmark {
+  font-family: var(--font-display, 'Space Grotesk'), sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-hi, #f4f4f5);
+}
+
+.boot-status {
+  font-family: var(--font-mono, 'JetBrains Mono'), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text-mid, rgba(244, 244, 245, 0.64));
+  min-height: 1em;
+}
+
+.boot-ruler { position: relative; height: 44px; }
+
+.boot-ticks {
+  position: absolute;
+  inset: auto 0 14px 0;
+  height: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.boot-tick {
+  width: 1px;
+  height: 8px;
+  background: var(--hairline-strong, rgba(255, 255, 255, 0.14));
+}
+.boot-tick:nth-child(4n + 1) { height: 14px; }
+
+.boot-tick--now {
+  width: 2px;
+  height: 14px;
+  background: var(--ws-accent, #06b6d4);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.55);
+  animation: boot-now-pulse 2.2s var(--ease-out-expo, ease-out) 0.9s infinite;
+}
+
+.boot-sweep {
+  position: absolute;
+  left: 0;
+  bottom: 14px;
+  height: 1px;
+  width: 0;
+  background: linear-gradient(90deg, transparent, var(--ws-accent, #06b6d4), transparent);
+}
+
+.boot-numerals {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono, 'JetBrains Mono'), monospace;
+  font-size: 10px;
+  color: var(--text-mid, rgba(244, 244, 245, 0.64));
+}
+
+.boot-progress {
+  height: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--surface-1, rgba(255, 255, 255, 0.03));
+}
+
+.boot-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--ws-accent, #06b6d4), rgba(6, 182, 212, 0.4));
+}
+
+@keyframes boot-now-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-tick--now { animation: none; }
+}

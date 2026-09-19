@@ -123,6 +123,34 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     };
   },
 
+  // STT transcript persistence (SQLite)
+  sttTranscriptList: () => ipcRenderer.invoke('stt:transcript-list'),
+  sttTranscriptSave: (entry: any) => ipcRenderer.invoke('stt:transcript-save', entry),
+  sttTranscriptUpdate: (id: string, changes: any) => ipcRenderer.invoke('stt:transcript-update', id, changes),
+  sttTranscriptRemove: (id: string) => ipcRenderer.invoke('stt:transcript-remove', id),
+  sttTranscriptToggleFavorite: (id: string) => ipcRenderer.invoke('stt:transcript-toggle-favorite', id),
+
+  // ── Local STT overlay (R-46/R-47/R-48) ──
+  sttLocalStatus: () => ipcRenderer.invoke('stt:local-status'),
+  sttLocalStartRecording: () => ipcRenderer.invoke('stt:local-start-recording'),
+  sttLocalStopRecording: () => ipcRenderer.invoke('stt:local-stop-recording'),
+  sttLocalVocabAdd: (entry: any) => ipcRenderer.invoke('stt:local-vocab-add', entry),
+  sttLocalVocabRemove: (canonical: string) => ipcRenderer.invoke('stt:local-vocab-remove', canonical),
+  sttLocalVocabLoad: (filePath?: string) => ipcRenderer.invoke('stt:local-vocab-load', filePath),
+  sttGetRegisteredShortcut: () => ipcRenderer.invoke('stt:get-registered-shortcut'),
+  sttRegisterShortcut: (shortcut: string) => ipcRenderer.invoke('stt:register-shortcut', shortcut),
+  onSttShortcutTriggered: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('stt:shortcut-triggered', handler);
+    return () => { ipcRenderer.removeListener('stt:shortcut-triggered', handler); };
+  },
+
+  // Keyboard shortcuts
+  getKeyboardShortcuts: () => ipcRenderer.invoke('get-keyboard-shortcuts'),
+  setKeyboardShortcuts: (shortcuts: Record<string, string>) => ipcRenderer.invoke('set-keyboard-shortcuts', shortcuts),
+  getPreference: (key: string) => ipcRenderer.invoke('get-preference', key),
+  setPreference: (key: string, value: any) => ipcRenderer.invoke('set-preference', key, value),
+
   // Get custom AI agent storage paths
   getAIAgentCustomPaths: () => ipcRenderer.invoke('get-ai-agent-custom-paths'),
 
@@ -672,6 +700,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
     destroy: (id: string) => ipcRenderer.invoke('terminal:destroy', id),
+    exec: (command: string, cwd?: string) => ipcRenderer.invoke('terminal:exec', command, cwd),
     onData: (callback: (id: string, data: string) => void) => {
       ipcRenderer.on('terminal:data', (_event, id, data) => callback(id, data));
     },
@@ -1606,13 +1635,13 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
     generate: (opts?: { force?: boolean }) => ipcRenderer.invoke('archMap:generate', opts),
   },
 
-  // ========== Workspace close guard ==========
-  onWorkspaceRequestSave: (callback: () => void) => {
-    const handler = () => callback();
-    ipcRenderer.on('workspace-request-save', handler);
-    return () => { ipcRenderer.removeListener('workspace-request-save', handler); };
-  },
-  workspaceAllowClose: () => ipcRenderer.send('workspace-allow-close'),
+  // ========== Workspace close guard (removed - close always allowed) ==========
+  // onWorkspaceRequestSave: (callback: () => void) => {
+  //   const handler = () => callback();
+  //   ipcRenderer.on('workspace-request-save', handler);
+  //   return () => { ipcRenderer.removeListener('workspace-request-save', handler); };
+  // },
+  // workspaceAllowClose: () => ipcRenderer.send('workspace-allow-close'),
 
   // ========== Desktop Bridge: Sync + Relay ==========
   syncStatus: () => ipcRenderer.invoke('sync:status'),
@@ -1634,6 +1663,7 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   authLogin: (args: { email: string; password: string }) => ipcRenderer.invoke('auth:login', args),
   authPairGenerate: () => ipcRenderer.invoke('auth:pair-generate'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
+  authUpdateSyncUrl: (url: string) => ipcRenderer.invoke('auth:update-sync-url', url),
   onRelayPaired: (callback: (data: { terminalId: string }) => void) => {
     const handler = (_event: any, terminalId: string) => callback({ terminalId });
     ipcRenderer.on('relay:paired', handler);
@@ -1752,7 +1782,15 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   brainMcpStatus: () => ipcRenderer.invoke('brain:mcp-status'),
   brainReindexEmbeddings: () => ipcRenderer.invoke('brain:reindex-embeddings'),
 
-  // ========== Compositions System ==========
+  // ========== Smart Search Overlay ────────────────────────────────────────────
+  smartSearchIndex: (segments: any[]) => ipcRenderer.invoke('smart-search:index', segments),
+  smartSearchUnindexPage: (pageId: string) => ipcRenderer.invoke('smart-search:unindex-page', pageId),
+  smartSearchQuery: (query: string, opts?: Record<string, any>) => ipcRenderer.invoke('smart-search:query', query, opts ?? {}),
+  smartSearchSuggest: (query: string, opts?: Record<string, any>) => ipcRenderer.invoke('smart-search:suggest', query, opts ?? {}),
+  smartSearchClear: () => ipcRenderer.invoke('smart-search:clear'),
+  smartSearchStats: () => ipcRenderer.invoke('smart-search:stats'),
+
+  // ========== Compositions System ==========`
   compositionsList: () => ipcRenderer.invoke('compositions:list'),
   compositionsGet: (id: string) => ipcRenderer.invoke('compositions:get', id),
   compositionsCreate: (data: any) => ipcRenderer.invoke('compositions:create', data),

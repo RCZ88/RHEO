@@ -81,7 +81,7 @@ export function TabStrip({ store, onNewTab }: { store: Store; onNewTab: () => vo
               <button title="Close tab" onClick={() => store.closeTab(t.id)} className="w-6 h-6 rounded-md grid place-items-center hover:bg-red-500/80 hover:text-white" style={{ color: "var(--t-muted)" }}><X size={13} /></button>
             </span>
             <span className="flex group-hover:hidden items-center gap-1.5 shrink-0">
-              {panes > 1 && <span className="text-[9.5px] mono font-bold px-1 rounded" style={{ background: `${t.color}22`, color: t.color }}>×{panes}</span>}
+            <span className="text-[9.5px] mono font-semibold px-1 rounded" style={{ background: `${t.color}22`, color: t.color }}>×{panes}</span>
               <span className="text-[9.5px] mono px-1 rounded" style={{ background: "color-mix(in srgb, var(--t-accent) 12%, transparent)", color: "var(--t-muted)" }}>{t.stats.cmdCount}</span>
             </span>
             {g && <span title={g.name} className="w-2 h-2 rounded-full shrink-0" style={{ background: g.color }} />}
@@ -99,7 +99,7 @@ export function TabStrip({ store, onNewTab }: { store: Store; onNewTab: () => vo
                   <button key={a.l} onClick={a.fn} className="w-full text-left px-3.5 py-2 text-[12px] font-medium hover:bg-white/5 transition" style={{ color: "var(--t-fg)" }}>{a.l}</button>
                 ))}
                 <div className="px-3.5 py-2 border-t" style={{ borderColor: "var(--t-border)" }}>
-                  <div className="text-[9.5px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--t-muted)" }}>Move to group</div>
+          <div className="text-[9.5px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--t-muted)" }}>Move to group</div>
                   <div className="flex flex-wrap gap-1">
                     {store.groups.map((gg) => (
                       <button key={gg.id} onClick={() => { store.moveTabToGroup(t.id, gg.id); setCtx(null); }} className="flex items-center gap-1 text-[10.5px] px-1.5 py-1 rounded-md border" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><span className="w-1.5 h-1.5 rounded-full" style={{ background: gg.color }} />{gg.name}</button>
@@ -130,7 +130,7 @@ export function LeftSidebar({ store, onPresets, onWorkspaces, onNewTab }: { stor
     <div className="h-full flex flex-col min-h-0" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
       <div className="p-3 pb-2 space-y-2">
         <div className="flex gap-2">
-          <button onClick={onNewTab} className="flex-1 h-9 rounded-xl text-[12.5px] font-semibold text-white flex items-center justify-center gap-1.5 transition hover:brightness-110" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Plus size={15} />New tab</button>
+          <button onClick={onNewTab} title="New tab (Ctrl+Shift+T)" className="flex-1 h-9 rounded-xl text-[12.5px] font-semibold text-white flex items-center justify-center gap-1.5 transition hover:brightness-110" style={{ background: "var(--t-accent)" }}><Plus size={15} />New tab</button>
           <button onClick={onPresets} className="h-9 px-3 rounded-xl border text-[12.5px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>Presets</button>
         </div>
         <div className="relative">
@@ -165,7 +165,7 @@ export function LeftSidebar({ store, onPresets, onWorkspaces, onNewTab }: { stor
               <button onClick={() => store.setGroups((gs) => gs.map((x) => x.id === g.id ? { ...x, collapsed: !x.collapsed } : x))} className="w-full flex items-center gap-2 px-1 mb-1.5" aria-expanded={!g.collapsed}>
                 <span className="text-[10px] mono w-3" style={{ color: "var(--t-muted)" }}>{g.collapsed ? "▸" : "▾"}</span>
                 <span className="w-2 h-2 rounded-full" style={{ background: g.color }} />
-                <span className="text-[10.5px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>{g.name}</span>
+            <span className="text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>{g.name}</span>
                 <span className="text-[10px] mono" style={{ color: "var(--t-muted)" }}>{gtabs.length}</span>
                 <div className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
               </button>
@@ -202,11 +202,11 @@ export function LeftSidebar({ store, onPresets, onWorkspaces, onNewTab }: { stor
           );
         })}
         <div className="rounded-xl border p-3" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)" }}>
-          <div className="text-[10.5px] font-bold uppercase tracking-[0.08em] mb-2" style={{ color: "var(--t-muted)" }}>Session</div>
+          <div className="text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>Session</div>
           <div className="grid grid-cols-4 gap-1.5 text-center">
             {[{ v: store.stats.total, l: "cmds" }, { v: store.stats.today, l: "today" }, { v: store.stats.week, l: "7d" }, { v: store.stats.panes, l: "panes" }].map((s) => (
               <div key={s.l} className="rounded-lg py-1.5" style={{ background: "var(--t-panel2)" }}>
-                <div className="display font-bold text-[15px]" style={{ color: "var(--t-fg)" }}>{s.v}</div>
+                <div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>{s.v}</div>
                 <div className="text-[9.5px] uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{s.l}</div>
               </div>
             ))}
@@ -215,7 +215,7 @@ export function LeftSidebar({ store, onPresets, onWorkspaces, onNewTab }: { stor
         </div>
         <div>
           <div className="flex items-center justify-between px-1 mb-1.5">
-            <span className="text-[10.5px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>Workspaces</span>
+            <span className="text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>Workspaces</span>
             <button onClick={onWorkspaces} className="text-[10.5px] font-semibold" style={{ color: "var(--t-accent)" }}>View all</button>
           </div>
           {store.workspaces.slice(0, 3).map((w) => (
@@ -243,7 +243,7 @@ export function BottomBar({ store }: { store: Store }) {
       <span className="hidden md:flex items-center gap-1"><GitBranch size={11} />{pane?.cwd.replace("/home/user", "~")}</span>
       <span className="hidden lg:inline">{store.shell} · main* ⇅ 0</span>
       <div className="flex-1" />
-      {store.broadcastTabId && <span className="font-bold" style={{ color: "#fb7185" }}>● BROADCAST</span>}
+      {store.broadcastTabId && <span className="font-semibold" style={{ color: "#fb7185" }}>● BROADCAST</span>}
       <span>{store.distro.split(" ")[0].toLowerCase()} · utf-8</span>
       <span className="hidden sm:inline" style={{ color: "var(--t-accent)" }}>⬡ mcp:{mcpOn}/{store.mcp.length}</span>
       <span className="hidden sm:inline">{store.theme.name}</span>

@@ -56,7 +56,7 @@ export function PinnedActivities({
 
   return (
     <BlurFade delay={0.05} duration={0.4}>
-      <div className="bg-[rgba(24,24,27,0.80)] light:bg-white backdrop-blur-xl border border-[rgba(63,63,70,0.50)] light:border-[var(--ws-border)] rounded-xl p-5 mb-4">
+      <div className="bg-[rgba(24,24,27,0.80)] rounded-xl p-5 mb-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <button

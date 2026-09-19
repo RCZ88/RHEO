@@ -128,6 +128,15 @@ async function main() {
     }
   }
 
+  // Copy splash.html to dist/ (splash window loads from here in production)
+  const splashHtmlSrc = resolve(SRC, 'splash.html');
+  const splashHtmlDest = resolve(ROOT, 'dist', 'splash.html');
+  if (existsSync(splashHtmlSrc)) {
+    mkdirSync(resolve(ROOT, 'dist'), { recursive: true });
+    copyFileSync(splashHtmlSrc, splashHtmlDest);
+    console.log(`  splash.html → dist/splash.html`);
+  }
+
   // Copy hand-written .cjs service files (not compiled from .ts)
   const SVC_SRC = resolve(SRC, 'services');
   const SVC_OUT = resolve(OUT, 'services');

@@ -233,7 +233,7 @@ export function FocusSection() {
             onModeChange={setMode}
             groups={groups}
             selectedGroupIds={selectedIds}
-            activeGroup={selected}
+            activeGroup={selectedId != null ? groups.find(g => g.id === selectedId) ?? null : null}
             onStartWithGroup={handleStartWithGroup}
             onStartWithGroups={handleStartWithGroups}
             onDurationDrag={sec => setMins(Math.round(sec / 60))}

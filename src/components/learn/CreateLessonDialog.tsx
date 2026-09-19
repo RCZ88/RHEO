@@ -32,6 +32,11 @@ import { ResourceInput, type Resource } from './ResourceInput';
 import { BookCard } from './BookCard';
 import { BulkAIFill } from '../../features/content-engine/components/BulkAIFill';
 import type { LessonSummary } from '../../shared/learn/types';
+import {
+  buildMaterialPackPrompt,
+  materialTypeFromName,
+  type MaterialSource,
+} from '../../services/learn/materialPrompt';
 
 const api = (window as any).deskflowAPI;
 
@@ -424,6 +429,7 @@ export function CreateLessonDialog({
   onOpenLesson?: (id: string) => void;
   savedIntentConfig?: Record<string, any> | null;
 }) {
+  console.log('%c[CreateLessonDialog] v2.1 loaded', 'color: #fbbf24; font-weight: bold');
   const [step, setStep] = useState<Step>('input');
   const [inputMode, setInputMode] = useState<InputMode>('simple');
   const [userInput, setUserInput] = useState('');
@@ -434,6 +440,7 @@ export function CreateLessonDialog({
   const [systemPrompt, setSystemPrompt] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedAssess, setCopiedAssess] = useState(false);
+  const [materialCopied, setMaterialCopied] = useState(false);
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [genError, setGenError] = useState('');
   const [genResult, setGenResult] = useState<any>(null);
@@ -461,6 +468,22 @@ export function CreateLessonDialog({
   const [depthLevel, setDepthLevel] = useState('adaptive');
   const [lessonStyle, setLessonStyle] = useState('standard');
   const [learnerContext, setLearnerContext] = useState('');
+
+  const materialPromptText = useMemo(() => {
+    if (resources.length === 0) return '';
+    const packs: MaterialSource[] = resources.map((r) => {
+      const name = r.fileName ?? (r.type === 'link' ? 'web-link' : 'reference');
+      const type = materialTypeFromName(name);
+      const binary = name.startsWith('web-link') || type === 'image' || type === 'video' || type === 'slides' || type === 'word' || type === 'pdf' || type === 'ebook' || type === 'audio';
+      return {
+        name,
+        content: !binary ? r.content : undefined,
+        note: r.type === 'link' ? `URL: ${r.content}` : undefined,
+      };
+    });
+    const topic = (inputMode === 'simple' ? userInput : description).trim();
+    return buildMaterialPackPrompt(packs, topic ? `a lesson on "${topic}"` : undefined);
+  }, [resources, userInput, description, inputMode]);
 
   // Auto-retrieve learner progress on open — topic-specific knowledge assessment
   useEffect(() => {
@@ -668,6 +691,40 @@ export function CreateLessonDialog({
     a.download = `lyceum-prompt-${slug}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleMaterialCopy = async () => {
+    if (!materialPromptText) return;
+    try {
+      await navigator.clipboard.writeText(materialPromptText);
+      setMaterialCopied(true);
+      setTimeout(() => setMaterialCopied(false), 2000);
+    } catch (e) {
+      console.error('[CreateLessonDialog] Material copy failed:', e);
+    }
+  };
+
+  const handleMaterialDownload = () => {
+    if (!materialPromptText) return;
+    const blob = new Blob([materialPromptText], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const text = (inputMode === 'simple' ? userInput.trim() : description.trim()) || 'lesson';
+    const slug = text.toLowerCase().replace(/\s+/g, '-').slice(0, 40) || 'materials';
+    a.download = `material-to-prompt-${slug}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleMaterialSend = async () => {
+    if (!materialPromptText) return;
+    try {
+      await navigator.clipboard.writeText(materialPromptText);
+      window.open('https://chatgpt.com', '_blank');
+    } catch (e) {
+      console.error('[CreateLessonDialog] Failed to copy material prompt:', e);
+    }
   };
 
   const handleExternalImport = async () => {
@@ -1487,6 +1544,64 @@ export function CreateLessonDialog({
                         {prompt}
                       </pre>
                     </div>
+
+                  {/* Materials → lightweight prompt */}
+                  {materialPromptText && (
+                    <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.04] overflow-hidden">
+                      <div className="flex items-center justify-between gap-3 border-b border-violet-500/15 px-4 py-2.5 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <BookMarked className="w-4 h-4 text-violet-400 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium text-zinc-300">Materials → Lightweight prompt</span>
+                            <span className="inline-flex items-center gap-1 ml-2 rounded-md bg-violet-500/15 border border-violet-500/25 px-1.5 py-0.5 text-[10px] text-violet-300 font-mono">
+                              {resources.length} material{resources.length === 1 ? '' : 's'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={handleMaterialCopy}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border ${
+                              materialCopied
+                                ? 'bg-sage-500/15 text-sage-300 border-sage-500/25'
+                                : 'bg-zinc-800/80 text-zinc-400 border-zinc-700/50 hover:bg-zinc-700/80 hover:text-zinc-200'
+                            }`}
+                          >
+                            {materialCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            {materialCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                          <button
+                            onClick={handleMaterialDownload}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/50 hover:bg-zinc-700/80 hover:text-zinc-200 transition-all duration-150"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Save
+                          </button>
+                          <button
+                            onClick={handleMaterialSend}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-violet-500/15 text-violet-300 border border-violet-500/30 hover:bg-violet-500/25 transition-all duration-150"
+                            title="Copy prompt and open ChatGPT with your materials attached"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Send to External AI
+                          </button>
+                        </div>
+                      </div>
+                      <div className="px-4 pt-3">
+                        <p className="text-[11px] text-zinc-500 leading-relaxed flex items-start gap-1.5">
+                          <Lightbulb className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-px" />
+                          <span>
+                            Paste this into the same external AI as your lesson prompt — it tells the AI to translate each
+                            attached material (images, videos, PowerPoint, Word, PDF, ebooks) into lightweight, lesson-builder-ready
+                            prompt texts. Attach your materials to the chat when you run it.
+                          </span>
+                        </p>
+                      </div>
+                      <pre className="max-h-56 overflow-auto p-4 mt-2 font-mono text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap">
+                        {materialPromptText}
+                      </pre>
+                    </div>
+                  )}
 
                   {/* Generate Here card */}
                   <div className="rounded-xl border border-zinc-700/40 bg-zinc-800/20 overflow-hidden">

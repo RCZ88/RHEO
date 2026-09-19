@@ -3,6 +3,7 @@ import {
   AlignHorizontalDistributeCenter, ArrowDown, ArrowRight, Award, BarChart3, Check, ChevronDown, Clock, Copy, Cpu, Download,
   Equal, Flame, FlipHorizontal2, FolderGit2, History, Keyboard, Layers, ListOrdered, Monitor, Pencil, Pin, PinOff, Play, Plus, Plug, Search,
   Settings2, Star, Terminal, Trash2, Type, X, Zap, ZoomIn,
+  Sparkles, BookOpen, AlertTriangle,
 } from "lucide-react";
 import type { MCPServer, PaneNode, SavedCommand, Shortcut, TerminalTab, ThemeDef } from "../lib/types";
 import { DEFAULT_SHORTCUTS, FONT_OPTIONS, TAB_COLORS, THEMES } from "../lib/data";
@@ -10,13 +11,16 @@ import { DISTROS, LINUX_TIPS, MAIN_SNIPPET, PRELOAD_SNIPPET, SHELLS, isElectron 
 import { cx, download, fillDynamic, fmtClock, fmtDate, fmtTime, formatDuration, keysToLabel, normalizeCombo, parseDynamicParams, timeAgo } from "../lib/utils";
 import type { Store } from "../hooks/useConsoleStore";
 import { collectSplits, countLeaves, listPaneIds } from "../hooks/useConsoleStore";
+import { CommandNotesPanel } from "./CommandNotesPanel";
+import type { CommandNote } from "./CommandNotesStore";
+import { AddPromptModal } from "./AddPromptModal";
 import { ICON_CHOICES, TabIcon } from "./TabIcon";
 
 function Section({ title, icon, right, children }: { title: string; icon?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border p-3.5" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
-      <div className="flex items-center gap-2 mb-3">
-        {icon}<h3 className="display font-bold text-[12.5px] tracking-tight flex-1" style={{ color: "var(--t-fg)" }}>{title}</h3>{right}
+    <div className="rounded-xl border p-5" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
+      <div className="flex items-center gap-2 mb-4">
+        {icon}<h3 className="font-semibold text-[12.5px] tracking-tight flex-1" style={{ color: "var(--t-fg)" }}>{title}</h3>{right}
       </div>
       {children}
     </div>
@@ -25,7 +29,7 @@ function Section({ title, icon, right, children }: { title: string; icon?: React
 
 const inputCls = "w-full h-9 px-3 rounded-xl border text-[12.5px] outline-none focus:border-[var(--t-accent)] transition";
 const inputStyle = { background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" } as const;
-const lbl = "text-[10.5px] font-bold uppercase tracking-wider";
+const lbl = "text-[11px] font-semibold uppercase tracking-[0.08em]";
 
 /* ============ INSPECT ============ */
 export function InspectPanel({ store, notify }: { store: Store; notify: (m: string) => void }) {
@@ -43,70 +47,70 @@ export function InspectPanel({ store, notify }: { store: Store; notify: (m: stri
   const saveNote = () => { store.mutateTab(t.id, (x) => ({ ...x, note: note.trim().slice(0, 140) })); notify(note.trim() ? "Note saved" : "Note cleared"); };
   return (
     <div className="space-y-3 anim-fadeUp">
-      <Section title="Active tab" icon={<Terminal size={14} style={{ color: "var(--t-accent)" }} />} right={<span className="text-[10px] mono px-1.5 py-0.5 rounded-md" style={{ background: `${t.color}1c`, color: t.color }}>{t.stats.cmdCount} cmds</span>}>
-        <label className={lbl} style={{ color: "var(--t-muted)" }}>Label</label>
-        <div className="flex gap-2 mt-1">
-          <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { saveLabel(); (e.target as HTMLInputElement).blur(); } }} placeholder={t.label} aria-label="tab label" className={cx(inputCls, "mono")} style={inputStyle} />
-          <button onClick={saveLabel} aria-label="save label" className="h-9 px-3 rounded-xl text-white text-[12px] font-semibold shrink-0" style={{ background: t.color }}><Check size={14} /></button>
-        </div>
-        <label className={cx(lbl, "mt-3 block")} style={{ color: "var(--t-muted)" }}>Note</label>
-        <div className="flex gap-2 mt-1">
-          <input value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveNote(); }} placeholder="e.g. staging tail — do not kill" aria-label="tab note" className={cx(inputCls)} style={inputStyle} />
-          <button onClick={saveNote} aria-label="save note" className="h-9 px-3 rounded-xl border text-[12px] font-semibold shrink-0" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Check size={14} /></button>
-        </div>
-        <label className={cx(lbl, "mt-3 block")} style={{ color: "var(--t-muted)" }}>Color code</label>
-        <div className="flex gap-1.5 mt-1.5 flex-wrap" role="radiogroup" aria-label="tab color">
-          {TAB_COLORS.map((c) => (
-            <button key={c} role="radio" aria-checked={t.color === c} aria-label={`color ${c}`} onClick={() => store.mutateTab(t.id, (x) => ({ ...x, color: c }))} className="w-7 h-7 rounded-lg transition hover:scale-110 grid place-items-center" style={{ background: c, outline: t.color === c ? "2px solid #fff" : "2px solid transparent", outlineOffset: 2 }}>
-              {t.color === c && <Check size={13} className="text-black/70" />}
+    <Section title="Active tab" icon={<Terminal size={14} style={{ color: "var(--t-accent)" }} />} right={<span className="text-[10px] mono px-1.5 py-0.5 rounded-md" style={{ background: `${t.color}1c`, color: t.color }}>{t.stats.cmdCount} cmds</span>}>
+      <label className={lbl} style={{ color: "var(--t-muted)" }}>Label</label>
+      <div className="flex gap-2 mt-1">
+        <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { saveLabel(); (e.target as HTMLInputElement).blur(); } }} placeholder={t.label} aria-label="tab label" className={cx(inputCls, "mono")} style={inputStyle} />
+        <button onClick={saveLabel} aria-label="save label" className="h-9 px-3 rounded-lg text-white text-[11.5px] font-semibold shrink-0" style={{ background: t.color }}><Check size={14} /></button>
+      </div>
+      <label className={cx(lbl, "mt-3 block")} style={{ color: "var(--t-muted)" }}>Note</label>
+      <div className="flex gap-2 mt-1">
+        <input value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveNote(); }} placeholder="e.g. staging tail — do not kill" aria-label="tab note" className={cx(inputCls)} style={inputStyle} />
+        <button onClick={saveNote} aria-label="save note" className="h-9 px-3 rounded-lg border text-[11.5px] font-semibold shrink-0" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Check size={14} /></button>
+      </div>
+      <label className={cx(lbl, "mt-3 block")} style={{ color: "var(--t-muted)" }}>Color code</label>
+      <div className="flex gap-1.5 mt-1.5 flex-wrap" role="radiogroup" aria-label="tab color">
+        {TAB_COLORS.map((c) => (
+          <button key={c} role="radio" aria-checked={t.color === c} aria-label={`color ${c}`} onClick={() => store.mutateTab(t.id, (x) => ({ ...x, color: c }))} className="w-7 h-7 rounded-md transition hover:scale-110 grid place-items-center" style={{ background: c, outline: t.color === c ? "2px solid #fff" : "2px solid transparent", outlineOffset: 2 }}>
+            {t.color === c && <Check size={13} className="text-black/70" />}
+          </button>
+        ))}
+      </div>
+      <label className={cx(lbl, "mt-3 block")} style={{ color: "var(--t-muted)" }}>Icon</label>
+      <div className="flex gap-1 mt-1.5 flex-wrap">
+        {ICON_CHOICES.slice(0, 12).map((ic) => (
+          <button key={ic} title={ic} onClick={() => store.mutateTab(t.id, (x) => ({ ...x, icon: ic }))} className="w-8 h-8 rounded-lg border grid place-items-center transition" style={{ borderColor: t.icon === ic ? t.color : "var(--t-border)", background: t.icon === ic ? `${t.color}18` : "transparent", color: t.icon === ic ? t.color : "var(--t-muted)" }}><TabIcon name={ic} size={14} /></button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5 mt-3">
+        <div>
+          <label className={lbl} style={{ color: "var(--t-muted)" }}>Group</label>
+          <div className="relative mt-1">
+            <button onClick={() => setShowGroups(!showGroups)} className="w-full h-8 px-3 rounded-lg border flex items-center gap-2 text-[12px] font-semibold" style={inputStyle}>
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: g?.color }} />{g?.name ?? "—"}<ChevronDown size={14} className="ml-auto" style={{ color: "var(--t-muted)" }} />
             </button>
-          ))}
-        </div>
-        <label className={cx(lbl, "mt-3 block")} style={{ color: "var(--t-muted)" }}>Icon</label>
-        <div className="flex gap-1 mt-1.5 flex-wrap">
-          {ICON_CHOICES.slice(0, 12).map((ic) => (
-            <button key={ic} title={ic} onClick={() => store.mutateTab(t.id, (x) => ({ ...x, icon: ic }))} className="w-8 h-8 rounded-lg border grid place-items-center transition" style={{ borderColor: t.icon === ic ? t.color : "var(--t-border)", background: t.icon === ic ? `${t.color}18` : "transparent", color: t.icon === ic ? t.color : "var(--t-muted)" }}><TabIcon name={ic} size={14} /></button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-1.5 mt-3">
-          <div>
-            <label className={lbl} style={{ color: "var(--t-muted)" }}>Group</label>
-            <div className="relative mt-1">
-              <button onClick={() => setShowGroups(!showGroups)} className="w-full h-9 px-3 rounded-xl border flex items-center gap-2 text-[12.5px] font-semibold" style={inputStyle}>
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: g?.color }} />{g?.name ?? "—"}<ChevronDown size={14} className="ml-auto" style={{ color: "var(--t-muted)" }} />
-              </button>
-              {showGroups && (
-                <div className="absolute z-20 left-0 right-0 mt-1 rounded-xl border overflow-hidden anim-pop max-h-48 overflow-y-auto" style={{ background: "var(--t-panel2)", borderColor: "var(--t-border)" }}>
-                  {store.groups.map((gg) => (
-                    <button key={gg.id} onClick={() => { store.moveTabToGroup(t.id, gg.id); setShowGroups(false); notify(`Moved to ${gg.name}`); }} className="w-full flex items-center gap-2 px-3 py-2 text-[12.5px] hover:bg-white/5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: gg.color }} /><span style={{ color: "var(--t-fg)" }}>{gg.name}</span>{gg.id === t.groupId && <Check size={13} className="ml-auto" style={{ color: "var(--t-accent)" }} />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div>
-            <label className={lbl} style={{ color: "var(--t-muted)" }}>Shell</label>
-            <select value={t.shell ?? store.shell} onChange={(e) => { store.mutateTab(t.id, (x) => ({ ...x, shell: e.target.value })); notify(`Shell → ${e.target.value}`); }} className="w-full h-9 px-2 rounded-xl border text-[12.5px] mt-1 outline-none mono" style={inputStyle}>
-              {SHELLS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            {showGroups && (
+              <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border overflow-hidden anim-pop max-h-48 overflow-y-auto" style={{ background: "var(--t-panel2)", borderColor: "var(--t-border)" }}>
+                {store.groups.map((gg) => (
+                  <button key={gg.id} onClick={() => { store.moveTabToGroup(t.id, gg.id); setShowGroups(false); notify(`Moved to ${gg.name}`); }} className="w-full flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-white/5">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: gg.color }} /><span style={{ color: "var(--t-fg)" }}>{gg.name}</span>{gg.id === t.groupId && <Check size={13} className="ml-auto" style={{ color: "var(--t-accent)" }} />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-1.5 mt-3">
-          <button onClick={() => store.splitPane(t.id, t.activePaneId, "row")} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><ArrowRight size={12} />Split</button>
-          <button onClick={() => store.splitPane(t.id, t.activePaneId, "col")} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><ArrowDown size={12} />Stack</button>
-          <button onClick={() => store.duplicateTab(t.id)} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Copy size={12} />Clone</button>
-          <button onClick={() => { store.togglePin(t.id); notify(t.pinned ? "Unpinned" : "Pinned to front"); }} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: t.pinned ? t.color : "var(--t-border)", color: t.pinned ? t.color : "var(--t-fg)" }}>{t.pinned ? <PinOff size={12} /> : <Pin size={12} />}{t.pinned ? "Unpin" : "Pin"}</button>
+        <div>
+          <label className={lbl} style={{ color: "var(--t-muted)" }}>Shell</label>
+          <select value={t.shell ?? store.shell} onChange={(e) => { store.mutateTab(t.id, (x) => ({ ...x, shell: e.target.value })); notify(`Shell → ${e.target.value}`); }} className="w-full h-8 px-2 rounded-lg border text-[12px] mt-1 outline-none mono" style={inputStyle}>
+            {SHELLS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
         </div>
-      </Section>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5 mt-3">
+        <button onClick={() => store.splitPane(t.id, t.activePaneId, "row")} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><ArrowRight size={12} />Split</button>
+        <button onClick={() => store.splitPane(t.id, t.activePaneId, "col")} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><ArrowDown size={12} />Stack</button>
+        <button onClick={() => store.duplicateTab(t.id)} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Copy size={12} />Clone</button>
+        <button onClick={() => { store.togglePin(t.id); notify(t.pinned ? "Unpinned" : "Pinned to front"); }} className="h-8 rounded-lg border text-[11px] font-semibold flex items-center justify-center gap-1 hover:border-[var(--t-accent)] transition" style={{ borderColor: t.pinned ? t.color : "var(--t-border)", color: t.pinned ? t.color : "var(--t-fg)" }}>{t.pinned ? <PinOff size={12} /> : <Pin size={12} />}{t.pinned ? "Unpin" : "Pin"}</button>
+      </div>
+    </Section>
       <Section title="Panes" icon={<Layers size={14} style={{ color: "var(--t-accent)" }} />} right={<span className="text-[10px] mono" style={{ color: "var(--t-muted)" }}>{leaves} live</span>}>
         <div className="space-y-1.5">
           {Object.values(t.panes).map((p, i) => (
-            <div key={p.id} onClick={() => store.focusPane(t.id, p.id)} className="flex items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition" style={{ borderColor: t.activePaneId === p.id ? t.color : "var(--t-border)", background: t.activePaneId === p.id ? `${t.color}0c` : "transparent" }}>
-              <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] mono font-bold shrink-0" style={{ background: t.activePaneId === p.id ? t.color : "var(--t-border)", color: t.activePaneId === p.id ? "#0b0e17" : "var(--t-muted)" }}>{i + 1}</span>
+            <div key={p.id} onClick={() => store.focusPane(t.id, p.id)} className="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition hover:border-[var(--t-accent)]" style={{ borderColor: t.activePaneId === p.id ? t.color : "var(--t-border)", background: t.activePaneId === p.id ? `${t.color}0c` : "transparent" }}>
+              <span className="text-[10px] mono font-bold shrink-0" style={{ background: t.activePaneId === p.id ? t.color : "var(--t-border)", color: t.activePaneId === p.id ? "#0b0e17" : "var(--t-muted)" }}>{i + 1}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-[11.5px] mono truncate" style={{ color: "var(--t-fg)" }}>{p.cwd.replace("/home/user", "~")}</div>
+                <div className="text-[11px] mono truncate" style={{ color: "var(--t-fg)" }}>{p.cwd.replace("/home/user", "~")}</div>
                 <div className="text-[10px] mono" style={{ color: "var(--t-muted)" }}>{p.cmdHistory.length} cmds · {p.lines.length} lines{p.lastExit ? ` · ✗${p.lastExit}` : ""}</div>
               </div>
               <button title="Zoom" onClick={(e) => { e.stopPropagation(); store.setZoom({ tabId: t.id, paneId: p.id }); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-white/10" style={{ color: "var(--t-muted)" }}><ZoomIn size={12} /></button>
@@ -135,7 +139,7 @@ export function GroupManager({ store, notify, compact, renameG, setRenameG, gDra
         {store.groups.map((gr) => {
           const n = store.tabs.filter((x) => x.groupId === gr.id).length;
           return (
-            <div key={gr.id} className="flex items-center gap-2 px-2.5 py-2 rounded-xl border" style={{ borderColor: "var(--t-border)" }}>
+            <div key={gr.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: "var(--t-border)" }}>
               <span className="w-3 h-3 rounded-full shrink-0" style={{ background: gr.color }} />
               <div className="flex-1 min-w-0">
                 {renameG === gr.id ? (
@@ -143,7 +147,7 @@ export function GroupManager({ store, notify, compact, renameG, setRenameG, gDra
                 ) : (
                   <div className="text-[12px] font-semibold truncate" style={{ color: "var(--t-fg)" }}>{gr.name}</div>
                 )}
-                {!compact && gr.description && <div className="text-[10.5px] truncate" style={{ color: "var(--t-muted)" }}>{gr.description}</div>}
+                {!compact && gr.description && <div className="text-[10px] truncate" style={{ color: "var(--t-muted)" }}>{gr.description}</div>}
               </div>
               <span className="text-[10px] mono px-1.5 py-0.5 rounded-md shrink-0" style={{ background: `${gr.color}1a`, color: gr.color }}>{n}</span>
               <button title="Rename group" onClick={() => { setRenameG(gr.id); setGDraft(gr.name); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><Pencil size={11} /></button>
@@ -185,7 +189,7 @@ function SplitRow({ store, tab, node, depth }: { store: Store; tab: TerminalTab;
   return (
     <div className={cx("rounded-xl border p-2.5 space-y-2", depth > 0 && "tree-guide !border-0 !rounded-none !pr-0 ml-1 pl-2.5")} style={depth === 0 ? { borderColor: "var(--t-border)", background: "var(--t-bg)" } : undefined}>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] mono font-bold px-1.5 py-0.5 rounded" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}>{node.direction === "row" ? "⇔ ROW" : "⇕ COL"}</span>
+          <span className="text-[10px] mono font-semibold px-1.5 py-0.5 rounded" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}>{node.direction === "row" ? "⇔ ROW" : "⇕ COL"}</span>
         <span className="text-[11px] mono font-bold" style={{ color: "var(--t-fg)" }}>{pct} / {100 - pct}</span>
         <div className="flex-1" />
         <button title="Flip orientation" onClick={() => store.flipSplitAction(tab.id, node.id)} className="h-7 px-2 rounded-lg border text-[10.5px] font-semibold flex items-center gap-1 hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><FlipHorizontal2 size={11} />Flip</button>
@@ -222,7 +226,7 @@ export function LayoutPanel({ store, notify }: { store: Store; notify: (m: strin
           <button onClick={() => store.balanceAction(t.id)} className="flex-1 h-8 rounded-lg text-[11.5px] font-semibold" style={{ background: "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: "var(--t-accent)" }}>Balance all</button>
           <button onClick={() => store.cyclePane(t.id, 1)} className="flex-1 h-8 rounded-lg border text-[11.5px] font-semibold" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>Focus next</button>
         </div>
-        <button onClick={() => { store.setBroadcastTabId(broadcasting ? null : t.id); notify(broadcasting ? "Broadcast off" : "Broadcast on — typing runs everywhere"); }} className="mt-1.5 w-full h-8 rounded-lg text-[11.5px] font-bold border" style={{ borderColor: broadcasting ? "#fb7185" : "var(--t-border)", color: broadcasting ? "#fb7185" : "var(--t-fg)", background: broadcasting ? "rgba(251,113,133,.08)" : undefined }}>
+        <button onClick={() => { store.setBroadcastTabId(broadcasting ? null : t.id); notify(broadcasting ? "Broadcast off" : "Broadcast on — typing runs everywhere"); }} className="mt-1.5 w-full h-8 rounded-lg text-[11.5px] font-semibold border" style={{ borderColor: broadcasting ? "#fb7185" : "var(--t-border)", color: broadcasting ? "#fb7185" : "var(--t-fg)", background: broadcasting ? "rgba(251,113,133,.08)" : undefined }}>
           {broadcasting ? "● Broadcasting to all panes — stop" : "○ Broadcast input to all panes"}
         </button>
       </Section>
@@ -275,16 +279,16 @@ export function CommandsPanel({ store, notify }: { store: Store; notify: (m: str
         ))}
       </div>
       {execFor && (
-        <div className="rounded-2xl border p-3.5 anim-pop" style={{ borderColor: "var(--t-accent)", background: "color-mix(in srgb, var(--t-accent) 8%, var(--t-panel))" }}>
+        <div className="rounded-lg border p-3 anim-pop" style={{ borderColor: "var(--t-accent)", background: "color-mix(in srgb, var(--t-accent) 8%, var(--t-panel))" }}>
           <div className="flex items-center gap-2 mb-1">
             <Zap size={14} style={{ color: "var(--t-accent)" }} />
-            <span className="text-[12.5px] font-bold" style={{ color: "var(--t-fg)" }}>{execFor.name}</span>
+            <span className="text-[12px] font-semibold" style={{ color: "var(--t-fg)" }}>{execFor.name}</span>
             <button onClick={() => setExecFor(null)} aria-label="close" className="ml-auto" style={{ color: "var(--t-muted)" }}><X size={14} /></button>
           </div>
-          <div className="text-[11px] mono p-2 rounded-lg mb-2 break-all" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>{execFor.command}</div>
+          <div className="text-[11px] mono p-2.5 rounded-lg mb-2 break-all" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>{execFor.command}</div>
           {parseDynamicParams(execFor.command).map((p) => (
             <div key={p.name} className="mb-1.5">
-              <label className="text-[10.5px] font-bold uppercase tracking-wider mono" style={{ color: "var(--t-accent)" }}>{`{{${p.name}}}`}</label>
+              <label className="text-[10px] font-semibold uppercase tracking-wider mono" style={{ color: "var(--t-accent)" }}>{`{{${p.name}}}`}</label>
               {p.options.length ? (
                 <select value={vals[p.name] ?? p.def} onChange={(e) => setVals((v) => ({ ...v, [p.name]: e.target.value }))} className={cx(inputCls, "!h-8 mono mt-0.5")} style={inputStyle}>
                   {p.options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -294,29 +298,29 @@ export function CommandsPanel({ store, notify }: { store: Store; notify: (m: str
               )}
             </div>
           ))}
-          <div className="text-[11px] mono p-2 rounded-lg mb-2 break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "#34d399" }}>$ {fillDynamic(execFor.command, vals)}</div>
-          <button onClick={() => run(execFor, vals)} className="w-full h-9 rounded-xl text-white text-[12.5px] font-bold flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Play size={14} />Execute in active pane</button>
+          <div className="text-[11px] mono p-2.5 rounded-lg mb-2 break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "#34d399" }}>$ {fillDynamic(execFor.command, vals)}</div>
+          <button onClick={() => run(execFor, vals)} className="w-full h-8 rounded-lg text-white text-[12px] font-semibold flex items-center justify-center gap-2" style={{ background: "var(--t-accent)" }}><Play size={14} />Execute in active pane</button>
         </div>
       )}
       <div className="space-y-2">
         {list.map((c) => {
           const dyn = parseDynamicParams(c.command);
           return (
-            <div key={c.id} className="rounded-xl border p-2.5 transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
+            <div key={c.id} className="rounded-lg border p-3 transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-6 rounded-full shrink-0" style={{ background: c.color }} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[12.5px] font-bold truncate" style={{ color: "var(--t-fg)" }}>{c.name}</span>
-                    {dyn.length > 0 && <span className="text-[9px] mono font-bold px-1 rounded shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}>{dyn.length} inputs</span>}
+                    <span className="text-[12px] font-semibold mono truncate" style={{ color: "var(--t-fg)" }}>{c.name}</span>
+                    {dyn.length > 0 && <span className="text-[9px] mono font-semibold px-1 rounded shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}>{dyn.length} inputs</span>}
                   </div>
-                  <div className="text-[10.5px] truncate" style={{ color: "var(--t-muted)" }}>{c.description} · {c.category}</div>
+                  <div className="text-[10px] truncate" style={{ color: "var(--t-muted)" }}>{c.description} · {c.category}</div>
                 </div>
                 <button aria-label="favorite" onClick={() => store.setCommands((cs) => cs.map((x) => x.id === c.id ? { ...x, favorite: !x.favorite } : x))} style={{ color: c.favorite ? "#fbbf24" : "var(--t-muted)" }}><Star size={14} className={c.favorite ? "fill-current" : ""} /></button>
               </div>
-              <div className="text-[11px] mono mt-1.5 p-2 rounded-lg break-all" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>$ {c.command}</div>
+              <div className="text-[11px] mono mt-1.5 p-2.5 rounded-lg break-all" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>$ {c.command}</div>
               <div className="flex items-center gap-1.5 mt-1.5">
-                <button onClick={() => { if (dyn.length) { setExecFor(c); setVals(Object.fromEntries(dyn.map((d) => [d.name, d.def]))); } else run(c, {}); }} className="flex-1 h-7 rounded-lg text-[11.5px] font-bold text-white flex items-center justify-center gap-1.5" style={{ background: c.color }}><Play size={12} />{dyn.length ? "Fill & run" : "Run"}</button>
+                <button onClick={() => { if (dyn.length) { setExecFor(c); setVals(Object.fromEntries(dyn.map((d) => [d.name, d.def]))); } else run(c, {}); }} className="flex-1 h-7 rounded-lg text-[11px] font-semibold text-white flex items-center justify-center gap-1.5" style={{ background: c.color }}><Play size={12} />{dyn.length ? "Fill & run" : "Run"}</button>
                 <button title="Copy" onClick={() => { navigator.clipboard?.writeText(c.command).catch(() => {}); notify("Command copied"); }} className="w-7 h-7 rounded-lg border grid place-items-center" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}><Copy size={12} /></button>
                 <button title="Open in new tab" onClick={() => { store.newTab({ label: c.name, color: c.color, layout: "single", bootstraps: [fillDynamic(c.command, {})] }); notify("Opened in new tab"); }} className="w-7 h-7 rounded-lg border grid place-items-center" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}><Plus size={12} /></button>
                 <button title="Delete" onClick={() => { store.setCommands((cs) => cs.filter((x) => x.id !== c.id)); notify("Command deleted"); }} className="w-7 h-7 rounded-lg border grid place-items-center hover:bg-red-500/80 hover:text-white hover:border-transparent" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}><Trash2 size={12} /></button>
@@ -325,7 +329,7 @@ export function CommandsPanel({ store, notify }: { store: Store; notify: (m: str
             </div>
           );
         })}
-        {!list.length && <div className="text-center py-8 text-[12.5px]" style={{ color: "var(--t-muted)" }}>No commands match. Save the current input as a command with ＋ Save cmd.</div>}
+        {!list.length && <div className="text-center py-8 text-[12px]" style={{ color: "var(--t-muted)" }}>No commands match. Save the current input as a command with ＋ Save cmd.</div>}
       </div>
     </div>
   );
@@ -363,7 +367,7 @@ export function HistoryPanel({ store, notify }: { store: Store; notify: (m: stri
       </div>
       <div className="flex items-center gap-1.5">
         {(["all", "ok", "err"] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className="h-7 px-2.5 rounded-lg text-[11px] font-bold border" style={{ borderColor: filter === f ? "var(--t-accent)" : "var(--t-border)", color: filter === f ? "var(--t-accent)" : "var(--t-muted)" }}>{f === "all" ? "All" : f === "ok" ? "✓ OK" : "✗ Errors"}</button>
+          <button onClick={() => setFilter(f)} className="h-7 px-2.5 rounded-lg text-[11px] font-semibold border" style={{ borderColor: filter === f ? "var(--t-accent)" : "var(--t-border)", color: filter === f ? "var(--t-accent)" : "var(--t-muted)" }}>{f === "all" ? "All" : f === "ok" ? "✓ OK" : "✗ Errors"}</button>
         ))}
         <span className="text-[10.5px] mono ml-1" style={{ color: "var(--t-muted)" }}>{store.history.length} entries</span>
         <button onClick={() => { navigator.clipboard?.writeText(store.history.map((h) => h.command).join("\n")).catch(() => {}); notify("History copied"); }} className="ml-auto flex items-center gap-1 text-[11px] hover:text-[var(--t-fg)]" style={{ color: "var(--t-muted)" }}><Copy size={11} />export</button>
@@ -372,7 +376,7 @@ export function HistoryPanel({ store, notify }: { store: Store; notify: (m: stri
       {groups.map(([day, items]) => (
         <div key={day}>
           <div className="flex items-center gap-2 my-2 px-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{new Date(day).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>{new Date(day).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
             <div className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
             <span className="text-[10px] mono" style={{ color: "var(--t-muted)" }}>{items.length}</span>
           </div>
@@ -420,17 +424,17 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
           { v: `${s.okRate}%`, l: "Success rate", c: "#22d3ee", i: <Check size={14} /> },
           { v: formatDuration(s.avgMs), l: "Avg runtime", c: "#fbbf24", i: <Clock size={14} /> },
         ].map((k) => (
-          <div key={k.l} className="rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
-            <div className="flex items-center gap-1.5" style={{ color: k.c }}>{k.i}<span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{k.l}</span></div>
-            <div className="display font-bold text-[24px] leading-tight" style={{ color: "var(--t-fg)" }}>{k.v}</div>
+          <div key={k.l} className="rounded-xl border p-3" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
+            <div className="flex items-center gap-1.5" style={{ color: k.c }}>{k.i}<span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>{k.l}</span></div>
+            <div className="font-semibold text-[24px] leading-tight" style={{ color: "var(--t-fg)" }}>{k.v}</div>
           </div>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
         {["7-day", "errors"].map((k) => (
-          <div key={k} className="rounded-2xl border px-3 py-2 flex items-center gap-2" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
-            <span className="display font-bold text-[18px]" style={{ color: k === "errors" ? "#fb7185" : "var(--t-fg)" }}>{k === "errors" ? s.errors : s.week}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{k === "errors" ? "failed runs" : "last 7 days"}</span>
+          <div key={k} className="rounded-xl border px-3 py-2 flex items-center gap-2" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
+            <span className="text-[18px] font-bold" style={{ color: k === "errors" ? "#fb7185" : "var(--t-fg)" }}>{k === "errors" ? s.errors : s.week}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{k === "errors" ? "failed runs" : "last 7 days"}</span>
           </div>
         ))}
       </div>
@@ -457,12 +461,12 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
         <div className="space-y-1.5">
           {s.top.map(([cmd, c], i) => (
             <div key={cmd} className="flex items-center gap-2">
-              <span className="text-[10px] mono font-bold w-4" style={{ color: "var(--t-muted)" }}>{i + 1}</span>
+              <span className="text-[10px] mono font-semibold w-4" style={{ color: "var(--t-muted)" }}>{i + 1}</span>
               <span className="text-[11.5px] mono truncate flex-1" style={{ color: "var(--t-fg)" }}>{cmd}</span>
               <div className="w-16 h-1.5 rounded-full overflow-hidden shrink-0" style={{ background: "var(--t-border)" }}>
                 <div className="h-full rounded-full" style={{ width: `${(c / maxTop) * 100}%`, background: "linear-gradient(90deg, var(--t-accent), var(--t-accent2))" }} />
               </div>
-              <span className="text-[10.5px] mono font-bold w-6 text-right" style={{ color: "var(--t-accent)" }}>{c}</span>
+              <span className="text-[10.5px] mono font-semibold w-6 text-right" style={{ color: "var(--t-accent)" }}>{c}</span>
               <button onClick={() => rerunTop(cmd)} title={`Run ${cmd}`} className="w-6 h-6 rounded-md grid place-items-center shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}><Play size={10} /></button>
             </div>
           ))}
@@ -478,7 +482,7 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
               <div className="w-16 h-1.5 rounded-full overflow-hidden shrink-0" style={{ background: "var(--t-border)" }}>
                 <div className="h-full rounded-full" style={{ width: `${(x.count / maxTab) * 100}%`, background: x.color }} />
               </div>
-              <span className="text-[10.5px] mono font-bold w-7 text-right" style={{ color: "var(--t-muted)" }}>{x.count}</span>
+              <span className="text-[10.5px] mono font-semibold w-7 text-right" style={{ color: "var(--t-muted)" }}>{x.count}</span>
             </div>
           ))}
         </div>
@@ -494,7 +498,7 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
                 <div className="w-16 h-1.5 rounded-full overflow-hidden shrink-0" style={{ background: "var(--t-border)" }}>
                   <div className="h-full rounded-full" style={{ width: `${(x.count / mx) * 100}%`, background: x.color }} />
                 </div>
-                <span className="text-[10.5px] mono font-bold w-7 text-right" style={{ color: "var(--t-muted)" }}>{x.count}</span>
+                <span className="text-[10.5px] mono font-semibold w-7 text-right" style={{ color: "var(--t-muted)" }}>{x.count}</span>
               </div>
             );
           })}
@@ -537,8 +541,8 @@ export function KeysPanel({ store, notify }: { store: Store; notify: (m: string)
 
   return (
     <div className="space-y-3 anim-fadeUp">
-      <div className="rounded-2xl border p-3 text-[11.5px] leading-relaxed" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "color-mix(in srgb, var(--t-accent) 8%, transparent)" }}>
-        <div className="flex items-center gap-1.5 font-bold mb-1" style={{ color: "var(--t-accent)" }}><Keyboard size={13} />Capture mode</div>
+      <div className="rounded-xl border p-3 text-[11.5px] leading-relaxed" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "color-mix(in srgb, var(--t-accent) 8%, transparent)" }}>
+        <div className="flex items-center gap-1.5 font-semibold mb-1" style={{ color: "var(--t-accent)" }}><Keyboard size={13} />Capture mode</div>
         <span style={{ color: "var(--t-muted)" }}>Click <b>Record</b>, press the combo — it saves instantly and works everywhere, even inside terminal inputs. <b>Esc</b> cancels.</span>
       </div>
       {Object.entries(byCat).map(([cat, items]) => (
@@ -552,10 +556,10 @@ export function KeysPanel({ store, notify }: { store: Store; notify: (m: string)
                 </div>
                 <div className="flex gap-1 flex-wrap justify-end">
                   {keysToLabel(s.keys).map((k) => (
-                    <kbd key={k} className="text-[10px] mono font-bold px-1.5 py-1 rounded-md border" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}>{k}</kbd>
+                    <kbd key={k} className="text-[10px] mono font-semibold px-1.5 py-1 rounded-md border" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}>{k}</kbd>
                   ))}
                 </div>
-                <button onClick={() => setRec(rec === s.id ? null : s.id)} className="h-7 px-2 rounded-lg text-[10.5px] font-bold shrink-0" style={{ background: rec === s.id ? "#fb7185" : "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: rec === s.id ? "#fff" : "var(--t-accent)" }}>{rec === s.id ? "press…" : "Record"}</button>
+                <button onClick={() => setRec(rec === s.id ? null : s.id)} className="h-7 px-2 rounded-lg text-[10.5px] font-semibold shrink-0" style={{ background: rec === s.id ? "#fb7185" : "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: rec === s.id ? "#fff" : "var(--t-accent)" }}>{rec === s.id ? "press…" : "Record"}</button>
               </div>
             ))}
           </div>
@@ -583,11 +587,11 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
   };
   return (
     <div className="space-y-3 anim-fadeUp">
-      <div className="rounded-2xl border p-3.5" style={{ borderColor: "color-mix(in srgb, #34d399 40%, transparent)", background: "linear-gradient(135deg, rgba(52,211,153,.1), transparent)" }}>
+      <div className="rounded-xl border p-3" style={{ borderColor: "color-mix(in srgb, #34d399 40%, transparent)", background: "var(--t-panel)" }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0" style={{ background: "rgba(52,211,153,.16)", color: "#34d399" }}><Plug size={16} /></div>
           <div className="flex-1 min-w-0">
-            <div className="display font-bold text-[13px]" style={{ color: "var(--t-fg)" }}>MCP Context Bus</div>
+            <div className="font-semibold text-[13px]" style={{ color: "var(--t-fg)" }}>MCP Context Bus</div>
             <div className="text-[10.5px] mono" style={{ color: "#34d399" }}>{on}/{store.mcp.length} servers · {store.mcp.reduce((a, m) => a + m.tools.length, 0)} tools · stdio</div>
           </div>
           <span className="relative flex h-2.5 w-2.5 shrink-0"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" /></span>
@@ -595,13 +599,13 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
         <p className="text-[11px] mt-2 leading-relaxed" style={{ color: "var(--t-muted)" }}>Model Context Protocol servers inject filesystem, shell, git, container and system context into every pane. Tools execute in the active pane and are logged below.</p>
       </div>
       {store.mcp.map((m: MCPServer) => (
-        <div key={m.id} className="rounded-2xl border p-3" style={{ borderColor: m.enabled ? "color-mix(in srgb, #34d399 35%, var(--t-border))" : "var(--t-border)", background: "var(--t-panel)" }}>
+        <div className="rounded-xl border p-3" style={{ borderColor: m.enabled ? "color-mix(in srgb, #34d399 35%, var(--t-border))" : "var(--t-border)", background: "var(--t-panel)" }}>
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: m.enabled ? "rgba(52,211,153,.14)" : "var(--t-bg)", color: m.enabled ? "#34d399" : "var(--t-muted)" }}><TabIcon name={m.icon} size={16} /></div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[12.5px] font-bold mono" style={{ color: "var(--t-fg)" }}>{m.name}</span>
-                <span className="text-[9px] mono font-bold px-1.5 py-px rounded-md" style={{ background: m.status === "connected" ? "rgba(52,211,153,.14)" : "rgba(251,113,133,.14)", color: m.status === "connected" ? "#34d399" : "#fb7185" }}>{m.status.toUpperCase()}</span>
+                <span className="text-[11px] font-semibold mono" style={{ color: "var(--t-fg)" }}>{m.name}</span>
+                <span className="text-[9px] mono font-semibold px-1.5 py-px rounded-md" style={{ background: m.status === "connected" ? "rgba(52,211,153,.14)" : "rgba(251,113,133,.14)", color: m.status === "connected" ? "#34d399" : "#fb7185" }}>{m.status.toUpperCase()}</span>
                 {m.enabled && <span className="text-[9px] mono" style={{ color: "var(--t-muted)" }}>{m.latencyMs}ms</span>}
               </div>
               <div className="text-[10.5px] truncate" style={{ color: "var(--t-muted)" }}>{m.description}</div>
@@ -611,16 +615,16 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
             </button>
           </div>
           <div className="mt-2 space-y-1">
-            <div className="text-[9.5px] font-bold uppercase tracking-wider px-1" style={{ color: "var(--t-muted)" }}>Tools</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>Tools</div>
             {m.tools.map((tool) => (
               <div key={tool.name} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px]" style={{ background: "var(--t-bg)" }}>
                 <Zap size={11} className="shrink-0" style={{ color: m.enabled ? "#34d399" : "var(--t-muted)" }} />
-                <span className="mono font-bold shrink-0" style={{ color: "var(--t-fg)" }}>{tool.name}</span>
+                <span className="text-[11px] font-semibold mono" style={{ color: "var(--t-fg)" }}>{tool.name}</span>
                 <span className="truncate" style={{ color: "var(--t-muted)" }}>{tool.description}</span>
-                <button title={`Run ${tool.command} in active pane`} onClick={() => runTool(m, tool.name, tool.command)} className="ml-auto text-[10px] mono font-bold shrink-0 hover:underline" style={{ color: "var(--t-accent)" }}>{tool.command}</button>
+                <button title={`Run ${tool.command} in active pane`} onClick={() => runTool(m, tool.name, tool.command)} className="ml-auto text-[10px] mono font-semibold shrink-0 hover:underline" style={{ color: "var(--t-accent)" }}>{tool.command}</button>
               </div>
             ))}
-            <div className="text-[9.5px] font-bold uppercase tracking-wider px-1 pt-1" style={{ color: "var(--t-muted)" }}>Resources · Prompts</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>Resources · Prompts</div>
             <div className="flex flex-wrap gap-1 px-1">
               {m.resources.map((r) => (
                 <button key={r.uri} title={r.uri} onClick={() => { navigator.clipboard?.writeText(r.uri).catch(() => {}); setCopied(r.uri); setTimeout(() => setCopied(null), 1200); notify("Resource URI copied"); }} className="text-[10px] mono px-1.5 py-1 rounded-md border" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>{copied === r.uri ? "copied ✓" : `${r.name}`}</button>
@@ -632,12 +636,12 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
           </div>
         </div>
       ))}
-      <Section title="Tool call log" icon={<History size={13} style={{ color: "#34d399" }} />} right={<button onClick={() => store.logMcp("bus", "clear", "log cleared", true)} className="text-[10px] font-bold" style={{ color: "var(--t-muted)" }}>clear</button>}>
+      <Section title="Tool call log" icon={<History size={13} style={{ color: "#34d399" }} />} right={<button onClick={() => store.logMcp("bus", "clear", "log cleared", true)} className="text-[10px] font-semibold" style={{ color: "var(--t-muted)" }}>clear</button>}>
         <div className="space-y-1 max-h-44 overflow-y-auto">
           {store.mcpLog.map((e) => (
             <div key={e.id} className="flex items-center gap-2 text-[10.5px] mono px-2 py-1.5 rounded-lg" style={{ background: "var(--t-bg)" }}>
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: e.ok ? "#34d399" : "#fb7185" }} />
-              <span className="font-bold shrink-0" style={{ color: "var(--t-fg)" }}>{e.server}/{e.tool}</span>
+              <span className="font-semibold shrink-0" style={{ color: "var(--t-fg)" }}>{e.server}/{e.tool}</span>
               <span className="truncate" style={{ color: "var(--t-muted)" }}>{e.detail}</span>
               <span className="ml-auto shrink-0" style={{ color: "var(--t-muted)" }}>{timeAgo(e.ts)}</span>
             </div>
@@ -661,7 +665,7 @@ export function ThemePanel({ store, notify }: { store: Store; notify: (m: string
   );
   return (
     <div className="space-y-3 anim-fadeUp">
-      <Section title="Theme" icon={<Type size={14} style={{ color: "var(--t-accent)" }} />} right={<button onClick={() => { const i = THEMES.findIndex((x) => x.id === a.themeId); const n = THEMES[(i + 1) % THEMES.length]; set({ themeId: n.id }); notify(`Theme → ${n.name}`); }} className="text-[10.5px] font-bold" style={{ color: "var(--t-accent)" }}>shuffle →</button>}>
+      <Section title="Theme" icon={<Type size={14} style={{ color: "var(--t-accent)" }} />} right={<button onClick={() => { const i = THEMES.findIndex((x) => x.id === a.themeId); const n = THEMES[(i + 1) % THEMES.length]; set({ themeId: n.id }); notify(`Theme → ${n.name}`); }} className="text-[10.5px] font-semibold" style={{ color: "var(--t-accent)" }}>shuffle →</button>}>
         <div className="grid grid-cols-2 gap-1.5">
           {THEMES.map((th: ThemeDef) => (
             <button key={th.id} onClick={() => { set({ themeId: th.id }); notify(`Theme → ${th.name}`); }} aria-pressed={a.themeId === th.id} className="rounded-xl border p-2 text-left transition hover:scale-[1.02]" style={{ borderColor: a.themeId === th.id ? th.accent : "var(--t-border)", background: th.bg }}>
@@ -669,7 +673,7 @@ export function ThemePanel({ store, notify }: { store: Store; notify: (m: string
                 {[th.accent, th.accent2, th.promptPath].map((c) => <span key={c} className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />)}
                 {a.themeId === th.id && <Check size={12} className="ml-auto" style={{ color: th.accent }} />}
               </div>
-              <div className="text-[11px] font-bold" style={{ color: th.fg }}>{th.name}</div>
+              <div className="text-[11px] font-semibold" style={{ color: th.fg }}>{th.name}</div>
               <div className="text-[9.5px] mono" style={{ color: th.muted }}>user@penguin ❯ ▊</div>
             </button>
           ))}
@@ -691,7 +695,7 @@ export function ThemePanel({ store, notify }: { store: Store; notify: (m: string
         <label className={cx(lbl, "mt-3 block")} style={{ color: "var(--t-muted)" }}>Density</label>
         <div className="grid grid-cols-2 gap-1.5 mt-1.5">
           {(["cozy", "compact"] as const).map((d) => (
-            <button key={d} onClick={() => set({ density: d })} className="h-8 rounded-lg text-[11.5px] font-bold border" style={{ borderColor: a.density === d ? "var(--t-accent)" : "var(--t-border)", color: a.density === d ? "var(--t-accent)" : "var(--t-muted)" }}>{d}</button>
+            <button key={d} onClick={() => set({ density: d })} className="h-8 rounded-lg text-[11.5px] font-semibold border" style={{ borderColor: a.density === d ? "var(--t-accent)" : "var(--t-border)", color: a.density === d ? "var(--t-accent)" : "var(--t-muted)" }}>{d}</button>
           ))}
         </div>
       </Section>
@@ -699,13 +703,13 @@ export function ThemePanel({ store, notify }: { store: Store; notify: (m: string
         <label className={lbl} style={{ color: "var(--t-muted)" }}>Prompt style</label>
         <div className="grid grid-cols-4 gap-1.5 mt-1.5 mb-3">
           {(["classic", "minimal", "powerline", "two-line"] as const).map((p) => (
-            <button key={p} onClick={() => set({ promptStyle: p })} className="h-8 rounded-lg text-[10.5px] font-bold border mono" style={{ borderColor: a.promptStyle === p ? "var(--t-accent)" : "var(--t-border)", color: a.promptStyle === p ? "var(--t-accent)" : "var(--t-muted)" }}>{p}</button>
+            <button key={p} onClick={() => set({ promptStyle: p })} className="h-8 rounded-lg text-[10.5px] font-semibold border mono" style={{ borderColor: a.promptStyle === p ? "var(--t-accent)" : "var(--t-border)", color: a.promptStyle === p ? "var(--t-accent)" : "var(--t-muted)" }}>{p}</button>
           ))}
         </div>
         <label className={lbl} style={{ color: "var(--t-muted)" }}>Cursor</label>
         <div className="grid grid-cols-3 gap-1.5 mt-1.5 mb-3">
           {(["block", "beam", "underline"] as const).map((c) => (
-            <button key={c} onClick={() => set({ cursorStyle: c })} className="h-8 rounded-lg text-[11px] font-bold border" style={{ borderColor: a.cursorStyle === c ? "var(--t-accent)" : "var(--t-border)", color: a.cursorStyle === c ? "var(--t-accent)" : "var(--t-muted)" }}>{c}</button>
+            <button key={c} onClick={() => set({ cursorStyle: c })} className="h-8 rounded-lg text-[11px] font-semibold border" style={{ borderColor: a.cursorStyle === c ? "var(--t-accent)" : "var(--t-border)", color: a.cursorStyle === c ? "var(--t-accent)" : "var(--t-muted)" }}>{c}</button>
           ))}
         </div>
         {[["Cursor blink", a.cursorBlink, (v: boolean) => set({ cursorBlink: v })], ["Pane status bar", a.showStatusBar, (v: boolean) => set({ showStatusBar: v })], ["Transparency blur", a.transparency, (v: boolean) => set({ transparency: v })], ["Accent glow", a.glow, (v: boolean) => set({ glow: v })]].map(([label2, v, fn]) => (
@@ -728,11 +732,11 @@ export function SysPanel({ store, notify }: { store: Store; notify: (m: string) 
   const overrides = (store.paneEnv[envKey] ?? {});
   return (
     <div className="space-y-3 anim-fadeUp">
-      <div className="rounded-2xl border p-3.5" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "linear-gradient(135deg, color-mix(in srgb, var(--t-accent) 12%, transparent), transparent)" }}>
+      <div className="rounded-xl border p-3" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "color-mix(in srgb, var(--t-accent) 8%, transparent)" }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: "var(--t-accent)" }}><Monitor size={16} /></div>
           <div className="flex-1 min-w-0">
-            <div className="display font-bold text-[13px]" style={{ color: "var(--t-fg)" }}>{electron ? "Native Electron runtime" : "Web preview · Electron-ready"}</div>
+            <div className="font-semibold text-[13px]" style={{ color: "var(--t-fg)" }}>{electron ? "Native Electron runtime" : "Web preview · Electron-ready"}</div>
             <div className="text-[10.5px] mono" style={{ color: "var(--t-muted)" }}>{electron ? "node-pty available · linux" : "simulated pty · ships with node-pty bindings"}</div>
           </div>
         </div>
@@ -775,7 +779,18 @@ export function SysPanel({ store, notify }: { store: Store; notify: (m: string) 
   );
 }
 
-export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: (m: string) => void; groupCtl: { renameG: string | null; setRenameG: (v: string | null) => void; gDraft: string; setGDraft: (v: string) => void } }) {
+export function RightPanel({ store, notify, groupCtl, notes, activeNoteId, setActiveNoteId, notesSaving, notesSavingLabel, onOpenNotesModal, selectedCmd }: {
+  store: Store;
+  notify: (m: string) => void;
+  groupCtl: { renameG: string | null; setRenameG: (v: string | null) => void; gDraft: string; setGDraft: (v: string) => void };
+  notes: CommandNote[];
+  activeNoteId?: string;
+  setActiveNoteId: (id: string) => void;
+  notesSaving: boolean;
+  notesSavingLabel: string;
+  onOpenNotesModal: () => void;
+  selectedCmd: { command: string; section: string; sectionTitle: string } | null;
+}) {
   const tabs = [
     { id: "inspect", label: "Inspect", icon: <Settings2 size={13} /> },
     { id: "layout", label: "Layout", icon: <Layers size={13} /> },
@@ -786,12 +801,13 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
     { id: "mcp", label: "MCP", icon: <Plug size={13} /> },
     { id: "theme", label: "Theme", icon: <Type size={13} /> },
     { id: "sys", label: "System", icon: <Monitor size={13} /> },
+    { id: "notes", label: "Notes", icon: <BookOpen size={13} /> },
   ] as const;
   return (
     <div className="h-full flex flex-col min-h-0" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
       <div className="grid grid-cols-3 gap-1 p-2.5 pb-1.5" role="tablist" aria-label="inspector tabs">
         {tabs.map((tb) => (
-          <button key={tb.id} role="tab" aria-selected={store.rightTab === tb.id} onClick={() => store.setRightTab(tb.id as Store["rightTab"])} className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-[9.5px] font-bold uppercase tracking-wider transition" style={{
+          <button key={tb.id} role="tab" aria-selected={store.rightTab === tb.id} onClick={() => store.setRightTab(tb.id as Store["rightTab"])} className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-semibold uppercase tracking-[0.08em] transition" style={{
             background: store.rightTab === tb.id ? "color-mix(in srgb, var(--t-accent) 16%, transparent)" : "transparent",
             color: store.rightTab === tb.id ? "var(--t-accent)" : "var(--t-muted)",
           }}>
@@ -810,6 +826,20 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
         {store.rightTab === "mcp" && <McpPanel store={store} notify={notify} />}
         {store.rightTab === "theme" && <ThemePanel store={store} notify={notify} />}
         {store.rightTab === "sys" && <SysPanel store={store} notify={notify} />}
+        {store.rightTab === "notes" && (
+          <CommandNotesPanel
+            store={store}
+            onOpenModal={onOpenNotesModal}
+            activeNoteId={activeNoteId}
+            onSelectNote={(id) => {
+              setActiveNoteId(id);
+              if (selectedCmd) setSelectedCmd(null);
+            }}
+            notes={notes}
+            saving={notesSaving}
+            savingLabel={notesSavingLabel}
+          />
+        )}
       </div>
     </div>
   );

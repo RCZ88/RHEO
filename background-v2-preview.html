@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BACKGROUND-V2 — Candidate Preview (final forms)</title>
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --fg: #d4d4d8;
+    --muted: #71717a;
+    --accent: #a8a8b0;
+    --panel: rgba(20, 20, 24, 0.88);
+    --border: rgba(255,255,255,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Background layers ── */
+  .bg-layer { position: fixed; inset: 0; z-index: 0; display: none; }
+  .bg-layer.active { display: block; }
+  .bg-layer canvas { width: 100%; height: 100%; display: block; }
+
+  /* ── Overlay content (simulates app UI) ── */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; pointer-events: none; }
+  .topbar {
+    height: 56px; display: flex; align-items: center; padding: 0 24px;
+    background: rgba(10,10,12,0.7); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border); pointer-events: auto;
+  }
+  .topbar-title { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--fg); text-transform: uppercase; }
+  .topbar-spacer { flex: 1; }
+  #candidateInfo { text-align: right; }
+  #candidateInfo .name { font-size: 12px; font-weight: 700; color: var(--fg); }
+  #candidateInfo .meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .main { flex: 1; display: grid; grid-template-columns: 240px 1fr; padding: 24px; gap: 24px; pointer-events: auto; }
+  .sidebar {
+    display: flex; flex-direction: column; gap: 8px;
+    background: rgba(10,10,12,0.6); backdrop-filter: blur(8px);
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+    align-self: start;
+  }
+  .sidebar-item { padding: 10px 12px; border-radius: 6px; font-size: 13px; color: var(--muted); border: 1px solid transparent; }
+  .sidebar-item.active { color: var(--fg); background: rgba(255,255,255,0.06); border-color: var(--border); }
+  .sidebar-item .num {
+    display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center;
+    border-radius: 50%; background: rgba(255,255,255,0.08);
+    font-size: 10px; font-weight: 700; margin-right: 8px; color: var(--muted);
+  }
+  .sidebar-item.active .num { background: var(--accent); color: #0a0a0c; }
+  .content { display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: rgba(20,20,24,0.75); backdrop-filter: blur(16px);
+    border: 1px solid var(--border); border-radius: 10px; padding: 20px;
+  }
+  .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--fg); }
+  .card p, .text-block { font-size: 13px; line-height: 1.7; color: var(--fg); max-width: 480px; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--fg); }
+
+  /* ── Selector panel ── */
+  .selector {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 20; display: flex; gap: 8px;
+    flex-wrap: wrap; justify-content: center;
+    max-width: min(96vw, 980px);
+    background: var(--panel); backdrop-filter: blur(16px);
+    border: 1px solid var(--border); border-radius: 12px; padding: 8px;
+  }
+  .sel-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 12px; background: transparent; border: 1px solid transparent;
+    border-radius: 8px; color: var(--muted); cursor: pointer;
+    min-width: 76px; pointer-events: auto;
+  }
+  .sel-btn:hover { color: var(--fg); background: rgba(255,255,255,0.04); }
+  .sel-btn.active { color: var(--fg); background: rgba(255,255,255,0.07); border-color: var(--border); }
+  .sel-btn .dot { width: 44px; height: 28px; border-radius: 4px; border: 1px solid var(--border); overflow: hidden; position: relative; background: #0a0a0c; }
+  .sel-btn .dot canvas { width: 100%; height: 100%; display: block; }
+  .sel-btn .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sel-btn .badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.06); color: var(--muted); }
+
+  /* ── Seed row (visible only for #1) ── */
+  .seedrow {
+    position: fixed; bottom: 108px; left: 50%; transform: translateX(-50%);
+    z-index: 20; display: none; gap: 6px; align-items: center;
+    background: var(--panel); backdrop-filter: blur(16px);
+    border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px;
+    font-size: 11px; color: var(--muted);
+  }
+  .seedrow.show { display: flex; }
+  .seedrow button {
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); font-size: 11px;
+  }
+  .seedrow button:hover { color: var(--fg); background: rgba(255,255,255,0.05); }
+  .seedrow button.on { color: #0a0a0c; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+
+  /* ── Candidate-specific backgrounds ── */
+
+  /* #3 MERIDIAN GRID — pure CSS, crisp */
+  #bg3 { background-color: #060608; }
+  #bg3 .wash {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 35% 20%, rgba(255,255,255,0.06) 0%, transparent 60%);
+  }
+  #bg3 .grid-minor {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 85%);
+  }
+  #bg3 .grid-major {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 160px 160px;
+    mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+  }
+  #bg3 .grid-dots {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.22) 1px, transparent 1.2px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse at center, black 25%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 25%, transparent 75%);
+  }
+  #bg3 .reticle {
+    position: absolute; left: 35%; top: 20%;
+    width: 120px; height: 120px; transform: translate(-50%,-50%);
+  }
+  #bg3 .reticle::before, #bg3 .reticle::after {
+    content: ''; position: absolute; background: rgba(255,255,255,0.18);
+  }
+  #bg3 .reticle::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+  #bg3 .reticle::after { top: 50%; left: 0; right: 0; height: 1px; }
+  #bg3 .vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.5) 100%);
+  }
+  #bg3 .grain { position: absolute; inset: 0; opacity: 0.03; mix-blend-mode: overlay; pointer-events: none; }
+
+  /* #5 SPINE — ticked ruler, crisp */
+  #bg5 { background-color: #08080a; }
+  #bg5 .wash {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.05) 0%, transparent 55%);
+  }
+  #bg5 .vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.45) 100%);
+  }
+  #bg5 .grain { position: absolute; inset: 0; opacity: 0.025; mix-blend-mode: overlay; pointer-events: none; }
+
+  /* #1 / #2 / #4 / #6 base */
+  #bg1, #bg2, #bg4, #bg6 { background-color: #08080a; }
+
+  @media (max-width: 768px) {
+    .main { grid-template-columns: 1fr; }
+    .card-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-layer" id="bg1"><canvas id="fluidCanvas"></canvas></div>
+<div class="bg-layer" id="bg2"><canvas id="threadCanvas"></canvas></div>
+<div class="bg-layer" id="bg3">
+  <div class="wash"></div>
+  <div class="grid-minor"></div>
+  <div class="grid-major"></div>
+  <div class="grid-dots"></div>
+  <div class="reticle"></div>
+  <div class="grain" data-grain></div>
+  <div class="vignette"></div>
+</div>
+<div class="bg-layer" id="bg4"><canvas id="ridgeCanvas"></canvas></div>
+<div class="bg-layer" id="bg5"><canvas id="spineCanvas"></canvas></div>
+<div class="bg-layer" id="bg6"><canvas id="rollbackCanvas"></canvas></div>
+<div class="bg-layer" id="bg7"><canvas id="auroraCanvas"></canvas></div>
+<div class="bg-layer" id="bg8"><canvas id="topoCanvas"></canvas></div>
+<div class="bg-layer" id="bg9"><canvas id="constCanvas"></canvas></div>
+<div class="bg-layer" id="bg10"><canvas id="washCanvas"></canvas></div>
+
+<div class="overlay">
+  <div class="topbar">
+    <div class="topbar-title">RHEO — Dashboard</div>
+    <div class="topbar-spacer"></div>
+    <div id="candidateInfo">
+      <div class="name">#1 STILL FLUID</div>
+      <div class="meta">T0 STILL &middot; one-shot GL, then zero &middot; seed <span id="seedLabel">7</span></div>
+    </div>
+  </div>
+  <div class="main">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-item active" data-view="overview"><span class="num">1</span> Overview</div>
+      <div class="sidebar-item" data-view="goals"><span class="num">2</span> Goals</div>
+      <div class="sidebar-item" data-view="insights"><span class="num">3</span> Insights</div>
+      <div class="sidebar-item" data-view="activity"><span class="num">4</span> Activity</div>
+      <div class="sidebar-item" data-view="settings"><span class="num">5</span> Settings</div>
+    </nav>
+    <div class="content" id="contentView">
+      <div class="card">
+        <h2>Weekly Focus</h2>
+        <div class="text-block">
+          Complete the dashboard widget revamp — dynamic widget system with registry,
+          grid, drag-drop, and edit mode. Factory script generates new widget
+          instances from config. Target: end of sprint.
+        </div>
+      </div>
+      <div class="card-grid">
+        <div class="stat"><div class="stat-label">Active Goals</div><div class="stat-value">12</div></div>
+        <div class="stat"><div class="stat-label">This Week</div><div class="stat-value">4</div></div>
+        <div class="stat"><div class="stat-label">Completed</div><div class="stat-value">28</div></div>
+        <div class="stat"><div class="stat-label">Streak</div><div class="stat-value">6d</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="seedrow" id="seedrow">
+  <span>seed</span>
+  <button data-seed="7" class="on">1</button>
+  <button data-seed="23">2</button>
+  <button data-seed="41">3</button>
+  <button data-seed="88">4</button>
+  <button data-seed="112">5</button>
+  <button data-seed="156">6</button>
+</div>
+
+<div class="selector" id="selector">
+  <button class="sel-btn active" data-candidate="1">
+    <span class="dot"><canvas id="preview1" width="88" height="56"></canvas></span>
+    <span class="lbl">Still Fluid</span><span class="badge">default</span>
+  </button>
+  <button class="sel-btn" data-candidate="2">
+    <span class="dot"><canvas id="preview2" width="88" height="56"></canvas></span>
+    <span class="lbl">Thread Field</span><span class="badge">one-shot</span>
+  </button>
+  <button class="sel-btn" data-candidate="3">
+    <span class="dot"><canvas id="preview3" width="88" height="56"></canvas></span>
+    <span class="lbl">Meridian Grid</span><span class="badge">CSS zero</span>
+  </button>
+  <button class="sel-btn" data-candidate="4">
+    <span class="dot"><canvas id="preview4" width="88" height="56"></canvas></span>
+    <span class="lbl">Ridgeline</span><span class="badge">contours</span>
+  </button>
+  <button class="sel-btn" data-candidate="5">
+    <span class="dot"><canvas id="preview5" width="88" height="56"></canvas></span>
+    <span class="lbl">Spine</span><span class="badge">minimal</span>
+  </button>
+  <button class="sel-btn" data-candidate="6">
+    <span class="dot"><canvas id="preview6" width="88" height="56"></canvas></span>
+    <span class="lbl">Rollback</span><span class="badge">animated</span>
+  </button>
+  <button class="sel-btn" data-candidate="7">
+    <span class="dot"><canvas id="preview7" width="88" height="56"></canvas></span>
+    <span class="lbl">Aurora Veil</span><span class="badge">ribbons</span>
+  </button>
+  <button class="sel-btn" data-candidate="8">
+    <span class="dot"><canvas id="preview8" width="88" height="56"></canvas></span>
+    <span class="lbl">Topo</span><span class="badge">rings</span>
+  </button>
+  <button class="sel-btn" data-candidate="9">
+    <span class="dot"><canvas id="preview9" width="88" height="56"></canvas></span>
+    <span class="lbl">Constellation</span><span class="badge">static</span>
+  </button>
+  <button class="sel-btn" data-candidate="10">
+    <span class="dot"><canvas id="preview10" width="88" height="56"></canvas></span>
+    <span class="lbl">Pure Wash</span><span class="badge">near-none</span>
+  </button>
+</div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const fract = (x) => x - Math.floor(x);
+
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// value-noise helpers (mirrors the app's shader-side vn/dbn)
+function hash2(px, py, seed) {
+  const x = Math.sin(px * 127.1 + py * 311.7 + seed * 0.731) * 43758.5453;
+  return fract(x);
+}
+function vnoise(x, y, seed) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const n00 = hash2(ix, iy, seed);
+  const n10 = hash2(ix + 1, iy, seed);
+  const n01 = hash2(ix, iy + 1, seed);
+  const n11 = hash2(ix + 1, iy + 1, seed);
+  return lerp(lerp(n00, n10, sx), lerp(n01, n11, sx), sy);
+}
+function fbm(x, y, seed, oct) {
+  let v = 0, amp = 0.5, f = 1, tot = 0;
+  for (let i = 0; i < oct; i++) {
+    v += amp * vnoise(x * f, y * f, seed + i * 7.3);
+    tot += amp; amp *= 0.55; f *= 2.03;
+  }
+  return v / tot;
+}
+function smin(a, b, k) {
+  const r = Math.pow(2, -a / k) + Math.pow(2, -b / k);
+  return -k * (Math.log(r) / Math.LN2);
+}
+
+// grain helper — static SVG turbulence as data URI
+const GRAIN_URI = "data:image/svg+xml;utf8," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'>" +
+  "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/>" +
+  "</filter><rect width='100%' height='100%' filter='url(#n)'/></svg>");
+document.querySelectorAll('[data-grain]').forEach(el => {
+  el.style.backgroundImage = 'url("' + GRAIN_URI + '")';
+  el.style.backgroundSize = '200px 200px';
+});
+function paintGrain(ctx, W, H, opacity, rnd) {
+  const gw = Math.min(220, W), gh = Math.min(220, H);
+  const g = ctx.createImageData(gw, gh);
+  for (let i = 0; i < g.data.length; i += 4) {
+    const v = (rnd() - 0.5) * 255;
+    g.data[i] = g.data[i+1] = g.data[i+2] = v; g.data[i+3] = 255;
+  }
+  const tile = document.createElement('canvas');
+  tile.width = gw; tile.height = gh;
+  tile.getContext('2d').putImageData(g, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.globalCompositeOperation = 'overlay';
+  for (let y = 0; y < H; y += gh) for (let x = 0; x < W; x += gw) ctx.drawImage(tile, x, y);
+  ctx.restore();
+}
+function paintVignette(ctx, W, H, strength) {
+  const grad = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.75);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,' + strength + ')');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+function paintWash(ctx, W, H, alpha) {
+  const grad = ctx.createRadialGradient(W*0.35, H*0.2, 0, W*0.35, H*0.2, Math.max(W,H)*0.6);
+  grad.addColorStop(0, 'rgba(255,255,255,' + alpha + ')');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ══ #1 STILL FLUID — real rim-band ferrofluid, frozen ═══════════════════════
+// Mirrors Ferrofluid.tsx mainImage at a fixed t: dual fbm peaks → smin →
+// rim band → luminance. Rendered at half-res, upscaled (same as RENDER_SCALE).
+let fluidSeed = 7;
+function renderFluid(target, W, H, seed) {
+  const hw = Math.max(2, Math.round(W / 2)), hh = Math.max(2, Math.round(H / 2));
+  const off = document.createElement('canvas');
+  off.width = hw; off.height = hh;
+  const ctx = off.getContext('2d');
+  const img = ctx.createImageData(hw, hh);
+  const d = img.data;
+  const scale = 2.4, rimWidth = 0.28, sharpness = 2.2, shimmer = 0.8, glow = 2.4;
+  const t = 3.0, spd = 200 * 0.5;
+  const ref = 700 / scale;
+  const cx = 0.40 * hw, cy = 0.30 * hh; // interest center-weighted left
+  for (let y = 0; y < hh; y++) {
+    for (let x = 0; x < hw; x++) {
+      const px = x / hh * ref, py = y / hh * ref;
+      // distort fields (seed-driven, like uSeed in the shader)
+      const d1 = vnoise(px + seed * 0.13, py - t * spd * 0.02, seed) * 50 * 0.6;
+      const d2 = vnoise(px - seed * 0.11, py + t * spd * 0.02, seed + 3) * 100 * 0.6;
+      const p1 = fbm((px + d1 * 0.05) / 40, (py + t * spd * 0.005) / 40, seed + 5, 3);
+      const p2 = fbm((px + d2 * 0.05) / 40, (py - t * spd * 0.005) / 40, seed + 11, 3);
+      const m = smin(p1, p2, 0.08);
+      const band = (rimWidth - Math.abs((m - 0.4) * 2)) * 5;
+      let ltn = clamp(band - vnoise(px / 60, py / 60, seed + 17) * shimmer, 0, 1);
+      ltn = Math.pow(ltn, sharpness) * glow;
+      // center-weight: edges dissolve into vignette
+      const dx = (x - cx) / hw, dy = (y - cy) / hh;
+      const cw = clamp(1 - Math.sqrt(dx*dx + dy*dy) * 1.15, 0, 1);
+      const v = clamp(ltn * (0.25 + 0.75 * cw), 0, 1) * 235;
+      const i = (y * hw + x) * 4;
+      d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  tctx.imageSmoothingEnabled = true; tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(off, 0, 0, W, H);
+  paintWash(tctx, W, H, 0.04);
+  paintVignette(tctx, W, H, 0.35);
+  paintGrain(tctx, W, H, 0.05, mulberry32(seed));
+}
+function drawFluid() {
+  const canvas = $('#fluidCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderFluid(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), fluidSeed);
+  $('#seedLabel').textContent = fluidSeed;
+}
+
+// ══ #2 THREAD FIELD — visible flowing hairlines ════════════════════════════
+function renderThreads(target, W, H, thumb) {
+  const rnd = mulberry32(20260911);
+  const ctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  ctx.clearRect(0, 0, W, H);
+  const N = thumb ? 60 : 340, STEPS = thumb ? 40 : 130, STEP = thumb ? 2.5 : 4.5;
+  for (let t = 0; t < N; t++) {
+    let px = rnd() * W, py = rnd() * H;
+    const so = t * 0.37;
+    const ex = Math.max(px / W, 1 - px / W, py / H, 1 - py / H);
+    const fade = clamp(1 - ex * ex * 1.5, 0.08, 1);
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    for (let s = 0; s < STEPS; s++) {
+      const a = fbm(px / W * 3 + so, py / H * 3 + so * 1.7, 99, 2) * Math.PI * 4;
+      px += Math.cos(a) * STEP; py += Math.sin(a) * STEP;
+      if (px < -10 || px > W + 10 || py < -10 || py > H + 10) break;
+      ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,' + (0.16 * fade).toFixed(3) + ')';
+    ctx.lineWidth = thumb ? 1 : (0.6 + fade * 0.9);
+    ctx.stroke();
+  }
+  paintWash(ctx, W, H, 0.035);
+  paintVignette(ctx, W, H, 0.35);
+  paintGrain(ctx, W, H, 0.05, mulberry32(5));
+}
+function drawThreads() {
+  const canvas = $('#threadCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderThreads(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), false, 0);
+}
+
+// ══ #4 RIDGELINE SHORE — filled Unknown-Pleasures stack ═════════════════════
+function renderRidges(target, W, H, thumb) {
+  const ctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  ctx.fillStyle = '#08080a';
+  ctx.fillRect(0, 0, W, H);
+  const N = thumb ? 8 : 16;
+  const top = H * 0.30, bottom = H * 0.96;
+  for (let i = 0; i < N; i++) {
+    const f = i / (N - 1);
+    const yBase = top + f * (bottom - top);
+    const amp = H * (0.028 + 0.05 * (1 - f));
+    const fr = 0.004 + f * 0.004;
+    const ph = i * 1.7;
+    ctx.beginPath();
+    ctx.moveTo(0, yBase);
+    const PTS = 90;
+    for (let j = 1; j <= PTS; j++) {
+      const x = j / PTS * W;
+      const n = fbm(x * fr + ph, i * 0.9, 313, 3);
+      ctx.lineTo(x, yBase + (n - 0.55) * amp * 2);
+    }
+    // fill down to bottom in near-black so lower ridges occlude upper ones
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+    ctx.fillStyle = '#08080a';
+    ctx.fill();
+    // redraw just the top edge as a glowing hairline, brighter toward bottom
+    ctx.beginPath();
+    ctx.moveTo(0, yBase);
+    for (let j = 1; j <= PTS; j++) {
+      const x = j / PTS * W;
+      const n = fbm(x * fr + ph, i * 0.9, 313, 3);
+      ctx.lineTo(x, yBase + (n - 0.55) * amp * 2);
+    }
+    const a = 0.10 + f * 0.30; // 0.10 top → 0.40 bottom
+    ctx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
+    ctx.lineWidth = thumb ? 1 : 1.2;
+    ctx.stroke();
+  }
+  paintWash(ctx, W, H, 0.03);
+  paintVignette(ctx, W, H, 0.32);
+  paintGrain(ctx, W, H, 0.05, mulberry32(9));
+}
+function drawRidges() {
+  const canvas = $('#ridgeCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderRidges(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), false);
+}
+
+// ══ #5 SPINE — ticked ruler, crisp ═════════════════════════════════════════
+function renderSpine(target, W, H, thumb) {
+  const ctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  ctx.fillStyle = '#08080a';
+  ctx.fillRect(0, 0, W, H);
+  const cx = W / 2;
+  // side fades so the spine sits in a soft channel
+  const side = ctx.createLinearGradient(cx - 90, 0, cx + 90, 0);
+  side.addColorStop(0, 'rgba(255,255,255,0)');
+  side.addColorStop(0.5, 'rgba(255,255,255,0.028)');
+  side.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = side;
+  ctx.fillRect(cx - 90, 0, 180, H);
+  // main hairline
+  const spine = ctx.createLinearGradient(0, 0, 0, H);
+  spine.addColorStop(0, 'rgba(255,255,255,0)');
+  spine.addColorStop(0.12, 'rgba(255,255,255,0.30)');
+  spine.addColorStop(0.5, 'rgba(255,255,255,0.38)');
+  spine.addColorStop(0.88, 'rgba(255,255,255,0.30)');
+  spine.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = spine;
+  ctx.fillRect(cx, 0, 1.2, H);
+  // ticks: minor every 32px, major every 160px with labels
+  ctx.textBaseline = 'middle';
+  let major = 0;
+  for (let y = 20; y < H - 10; y += 32) {
+    const isMajor = Math.round(y) % 160 < 32;
+    const len = isMajor ? 26 : 12;
+    const a = isMajor ? 0.30 : 0.14;
+    ctx.fillStyle = 'rgba(255,255,255,' + a + ')';
+    ctx.fillRect(cx + 2, y, len, isMajor ? 1.4 : 1);
+    ctx.fillRect(cx - 2 - len, y, len, isMajor ? 1.4 : 1);
+    if (isMajor && !thumb) {
+      major++;
+      ctx.fillStyle = 'rgba(255,255,255,0.20)';
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(String(major * 10).padStart(3, '0'), cx + 32, y);
+    }
+  }
+  // caps
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(cx - 6, 14, 13.2, 1.4);
+  ctx.fillRect(cx - 6, H - 15, 13.2, 1.4);
+  paintWash(ctx, W, H, 0.035);
+  paintVignette(ctx, W, H, 0.35);
+  paintGrain(ctx, W, H, 0.05, mulberry32(13));
+}
+function drawSpine() {
+  const canvas = $('#spineCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderSpine(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), false);
+}
+
+// ══ #6 ROLLBACK — animated particles + rays ════════════════════════════════
+let rbRunning = false, rbRAF = null, rbParts = [];
+const RB_COLS = [[255,255,255],[214,242,255],[255,232,204]];
+function startRollback() {
+  if (rbRunning) return;
+  rbRunning = true;
+  const canvas = $('#rollbackCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  const W = Math.max(50, r.width | 0), H = Math.max(50, r.height | 0);
+  canvas.width = W; canvas.height = H;
+  const rnd = mulberry32(777);
+  rbParts = [];
+  for (let i = 0; i < 90; i++) {
+    rbParts.push({
+      x: rnd() * W, y: rnd() * H,
+      r: 1.2 + rnd() * 2.6,
+      vx: (rnd() - 0.5) * 0.35, vy: 0.25 + rnd() * 0.5,
+      ci: (rnd() * 3) | 0, ph: rnd() * 6.28, ba: 0.35 + rnd() * 0.5,
+    });
+  }
+  const loop = () => {
+    if (!rbRunning) return;
+    rbRAF = requestAnimationFrame(loop);
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 4; i++) {
+      const rx = W * (0.12 + i * 0.25);
+      const g = ctx.createLinearGradient(rx, 0, rx + 90, H);
+      g.addColorStop(0, 'rgba(255,255,255,0.020)');
+      g.addColorStop(0.5, 'rgba(255,255,255,0.035)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(rx - 45, 0, 180, H);
+    }
+    const now = performance.now() * 0.001;
+    for (const p of rbParts) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.y > H + 20) { p.y = -20; p.x = Math.random() * W; }
+      if (p.x < -20) p.x = W + 20;
+      if (p.x > W + 20) p.x = -20;
+      const c = RB_COLS[p.ci];
+      ctx.globalAlpha = p.ba * (0.7 + 0.3 * Math.sin(now * 0.6 + p.ph)) * 0.55;
+      ctx.fillStyle = 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+    paintVignette(ctx, W, H, 0.3);
+  };
+  loop();
+}
+function stopRollback() {
+  rbRunning = false;
+  if (rbRAF) { cancelAnimationFrame(rbRAF); rbRAF = null; }
+}
+
+// ══ #7 AURORA VEIL — diagonal light ribbons, frozen ════════════════════════
+function renderAurora(target, W, H, thumb) {
+  const seed = 51;
+  const hw = Math.max(2, Math.round(W / 2)), hh = Math.max(2, Math.round(H / 2));
+  const off = document.createElement('canvas');
+  off.width = hw; off.height = hh;
+  const ctx = off.getContext('2d');
+  const img = ctx.createImageData(hw, hh);
+  const d = img.data;
+  const ang = -0.42, ca = Math.cos(ang), sa = Math.sin(ang);
+  for (let y = 0; y < hh; y++) {
+    for (let x = 0; x < hw; x++) {
+      const nx = x / hh, ny = y / hh;
+      const u = (nx * ca + ny * sa) * 1.6;
+      const v = (-nx * sa + ny * ca) * 4.2;
+      const n = fbm(u + seed * 0.05, v + seed * 0.03, seed, 3);
+      const ridge = 1 - Math.abs(n - 0.5) * 2; // thin ribbons, not blobs
+      let val = Math.pow(clamp(ridge, 0, 1), 3.2) * 150;
+      // fade ribbons toward edges so they dissolve into vignette
+      const ex = Math.max(nx / (hw / hh), 1 - nx / (hw / hh), ny, 1 - ny);
+      val *= clamp(1 - ex * ex * 1.3, 0.05, 1);
+      const vi = Math.round(clamp(val, 0, 255));
+      const i = (y * hw + x) * 4;
+      d[i] = d[i+1] = d[i+2] = vi; d[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  tctx.imageSmoothingEnabled = true; tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(off, 0, 0, W, H);
+  paintWash(tctx, W, H, 0.035);
+  paintVignette(tctx, W, H, 0.35);
+  paintGrain(tctx, W, H, 0.05, mulberry32(seed));
+}
+function drawAurora() {
+  const canvas = $('#auroraCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderAurora(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), false);
+}
+
+// ══ #8 TOPO — distorted contour rings, frozen ═══════════════════════════════
+function renderTopo(target, W, H, thumb) {
+  const seed = 77;
+  const hw = Math.max(2, Math.round(W / 2)), hh = Math.max(2, Math.round(H / 2));
+  const off = document.createElement('canvas');
+  off.width = hw; off.height = hh;
+  const ctx = off.getContext('2d');
+  const img = ctx.createImageData(hw, hh);
+  const d = img.data;
+  const cx = hw * 0.42, cy = hh * 0.38;
+  for (let y = 0; y < hh; y++) {
+    for (let x = 0; x < hw; x++) {
+      const dx = (x - cx) / hh, dy = (y - cy) / hh;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const wob = (fbm(x / hh * 2.2 + seed, y / hh * 2.2, seed + 4, 3) - 0.5) * 0.55;
+      const r = fract((dist + wob) * 7);
+      const edge = Math.min(r, 1 - r);
+      const line = Math.pow(clamp(1 - edge * 9, 0, 1), 1.4);
+      const fade = clamp(1 - dist * 1.5, 0, 1);
+      const vi = Math.round(line * fade * 130);
+      const i = (y * hw + x) * 4;
+      d[i] = d[i+1] = d[i+2] = vi; d[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  tctx.imageSmoothingEnabled = true; tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(off, 0, 0, W, H);
+  paintWash(tctx, W, H, 0.03);
+  paintVignette(tctx, W, H, 0.35);
+  paintGrain(tctx, W, H, 0.05, mulberry32(seed));
+}
+function drawTopo() {
+  const canvas = $('#topoCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderTopo(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), false);
+}
+
+// ══ #9 CONSTELLATION — static starfield + faint links ══════════════════════
+function renderConst(target, W, H, thumb) {
+  const rnd = mulberry32(4242);
+  const ctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  ctx.fillStyle = '#08080a';
+  ctx.fillRect(0, 0, W, H);
+  const N = thumb ? 22 : 70;
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    pts.push({ x: rnd() * W, y: rnd() * H, r: 0.8 + rnd() * 1.6, a: 0.25 + rnd() * 0.55 });
+  }
+  ctx.lineWidth = 1;
+  const LINK = thumb ? 40 : Math.min(W, H) * 0.16;
+  for (let i = 0; i < N; i++) {
+    for (let j = i + 1; j < N; j++) {
+      const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < LINK) {
+        ctx.strokeStyle = 'rgba(255,255,255,' + ((1 - dist / LINK) * 0.10).toFixed(3) + ')';
+        ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y); ctx.stroke();
+      }
+    }
+  }
+  for (const p of pts) {
+    ctx.globalAlpha = p.a;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(p.x, p.y, thumb ? p.r : p.r * 1.4, 0, 6.283); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  paintWash(ctx, W, H, 0.035);
+  paintVignette(ctx, W, H, 0.35);
+  paintGrain(ctx, W, H, 0.05, mulberry32(31));
+}
+function drawConst() {
+  const canvas = $('#constCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderConst(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), false);
+}
+
+// ══ #10 PURE WASH — near-nothing luminance haze ═════════════════════════════
+function renderWashOnly(target, W, H, thumb) {
+  const seed = 15;
+  const hw = Math.max(2, Math.round(W / 3)), hh = Math.max(2, Math.round(H / 3));
+  const off = document.createElement('canvas');
+  off.width = hw; off.height = hh;
+  const ctx = off.getContext('2d');
+  const img = ctx.createImageData(hw, hh);
+  const d = img.data;
+  for (let y = 0; y < hh; y++) {
+    for (let x = 0; x < hw; x++) {
+      const n = fbm(x / hh * 1.8 + seed, y / hh * 1.8, seed + 2, 3);
+      const vi = Math.round(Math.pow(clamp(n, 0, 1), 1.3) * 30); // barely-there
+      const i = (y * hw + x) * 4;
+      d[i] = d[i+1] = d[i+2] = vi; d[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tctx = target.getContext('2d');
+  target.width = W; target.height = H;
+  tctx.imageSmoothingEnabled = true; tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(off, 0, 0, W, H);
+  paintWash(tctx, W, H, 0.04);
+  paintVignette(tctx, W, H, 0.35);
+  paintGrain(tctx, W, H, 0.05, mulberry32(seed));
+}
+function drawWashOnly() {
+  const canvas = $('#washCanvas');
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderWashOnly(canvas, Math.max(50, r.width | 0), Math.max(50, r.height | 0), false);
+}
+
+// ══ thumbnails ═════════════════════════════════════════════════════════════
+function drawThumbs() {
+  const t1 = $('#preview1');
+  renderFluid(t1, 88, 56, fluidSeed);
+  renderThreads($('#preview2'), 88, 56, true);
+  // #3 grid thumb — CSS-like mini grid on canvas
+  const t3 = $('#preview3'), c3 = t3.getContext('2d');
+  t3.width = 88; t3.height = 56;
+  c3.fillStyle = '#060608'; c3.fillRect(0, 0, 88, 56);
+  c3.fillStyle = 'rgba(255,255,255,0.25)';
+  for (let y = 6; y < 56; y += 10) for (let x = 6; x < 88; x += 10) c3.fillRect(x, y, 1.4, 1.4);
+  c3.fillStyle = 'rgba(255,255,255,0.5)'; c3.fillRect(43, 4, 1.4, 48);
+  renderRidges($('#preview4'), 88, 56, true);
+  renderSpine($('#preview5'), 88, 56, true);
+  // #6 thumb — few static blobs
+  const t6 = $('#preview6'), c6 = t6.getContext('2d');
+  t6.width = 88; t6.height = 56;
+  c6.fillStyle = '#08080a'; c6.fillRect(0, 0, 88, 56);
+  const rnd = mulberry32(7);
+  for (let i = 0; i < 16; i++) {
+    c6.globalAlpha = 0.25 + rnd() * 0.4;
+    c6.fillStyle = '#fff';
+    c6.beginPath(); c6.arc(rnd()*88, rnd()*56, 1+rnd()*2.4, 0, 6.283); c6.fill();
+  }
+  c6.globalAlpha = 1;
+}
+function drawThumbs2() {
+  try { renderAurora($('#preview7'), 88, 56, true); } catch (e) { console.error('[preview] thumb7', e); }
+  try { renderTopo($('#preview8'), 88, 56, true); } catch (e) { console.error('[preview] thumb8', e); }
+  try { renderConst($('#preview9'), 88, 56, true); } catch (e) { console.error('[preview] thumb9', e); }
+  try { renderWashOnly($('#preview10'), 88, 56, true); } catch (e) { console.error('[preview] thumb10', e); }
+}
+
+// ══ selector ═══════════════════════════════════════════════════════════════
+const META = {
+  1: ['#1 STILL FLUID', 'T0 STILL &middot; one-shot GL, then zero &middot; seed <span id="seedLabel">' + fluidSeed + '</span>'],
+  2: ['#2 THREAD FIELD', 'T0 STILL &middot; one canvas draw &le;50ms, then frozen'],
+  3: ['#3 MERIDIAN GRID', 'T0 STILL &middot; pure CSS, literally zero cost'],
+  4: ['#4 RIDGELINE SHORE', 'T0 STILL &middot; one-shot contours, then frozen'],
+  5: ['#5 SPINE', 'T0 STILL &middot; zero cost, maximum restraint'],
+  6: ['#6 ROLLBACK', 'ANIMATED &middot; particles + rays &middot; known-good perf'],
+  7: ['#7 AURORA VEIL', 'T0 STILL &middot; diagonal light ribbons, frozen'],
+  8: ['#8 TOPO', 'T0 STILL &middot; distorted contour rings, frozen'],
+  9: ['#9 CONSTELLATION', 'T0 STILL &middot; static starfield + faint links'],
+  10: ['#10 PURE WASH', 'T0 STILL &middot; near-nothing luminance haze'],
+};
+let current = 1;
+const layers = { 1: $('#bg1'), 2: $('#bg2'), 3: $('#bg3'), 4: $('#bg4'), 5: $('#bg5'), 6: $('#bg6'), 7: $('#bg7'), 8: $('#bg8'), 9: $('#bg9'), 10: $('#bg10') };
+const buttons = document.querySelectorAll('.sel-btn');
+const seedrow = $('#seedrow');
+
+function selectCandidate(n) {
+  current = n;
+  Object.values(layers).forEach(l => l.classList.remove('active'));
+  layers[n].classList.add('active');
+  buttons.forEach(b => b.classList.toggle('active', +b.dataset.candidate === n));
+  $('#candidateInfo .name').textContent = META[n][0];
+  $('#candidateInfo .meta').innerHTML = META[n][1];
+  seedrow.classList.toggle('show', n === 1);
+  try {
+    if (n === 1) drawFluid();
+    if (n === 2) drawThreads();
+    if (n === 4) drawRidges();
+    if (n === 5) drawSpine();
+    if (n === 7) drawAurora();
+    if (n === 8) drawTopo();
+    if (n === 9) drawConst();
+    if (n === 10) drawWashOnly();
+  } catch (err) { console.error('[preview] draw failed for candidate ' + n, err); }
+  if (n === 6) startRollback(); else stopRollback();
+}
+buttons.forEach(b => b.addEventListener('click', () => selectCandidate(+b.dataset.candidate)));
+document.querySelectorAll('#seedrow button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#seedrow button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  fluidSeed = +b.dataset.seed;
+  drawFluid();
+  drawThumbs();
+}));
+
+let rsz;
+window.addEventListener('resize', () => {
+  clearTimeout(rsz);
+  rsz = setTimeout(() => {
+    if (current === 1) drawFluid();
+    if (current === 2) drawThreads();
+    if (current === 4) drawRidges();
+    if (current === 5) drawSpine();
+    if (current === 7) drawAurora();
+    if (current === 8) drawTopo();
+    if (current === 9) drawConst();
+    if (current === 10) drawWashOnly();
+    if (current === 6) { stopRollback(); startRollback(); }
+  }, 150);
+});
+
+drawThumbs();
+drawThumbs2();
+selectCandidate(1);
+
+// ══ sidebar navigation (simulated app views) ═══════════════════════════════
+const VIEWS = {
+  overview: {
+    title: 'RHEO — Dashboard',
+    html: '<div class="card"><h2>Weekly Focus</h2><div class="text-block">Complete the dashboard widget revamp — dynamic widget system with registry, grid, drag-drop, and edit mode. Factory script generates new widget instances from config. Target: end of sprint.</div></div><div class="card-grid"><div class="stat"><div class="stat-label">Active Goals</div><div class="stat-value">12</div></div><div class="stat"><div class="stat-label">This Week</div><div class="stat-value">4</div></div><div class="stat"><div class="stat-label">Completed</div><div class="stat-value">28</div></div><div class="stat"><div class="stat-label">Streak</div><div class="stat-value">6d</div></div></div>'
+  },
+  goals: {
+    title: 'RHEO — Goals',
+    html: '<div class="card"><h2>Goal Hierarchy</h2><div class="text-block">Ship BACKGROUND-V2 · Close FERROFLUID-2 · Finish migration. Each goal links upward to the weekly focus and downward to concrete tasks.</div></div><div class="card-grid"><div class="stat"><div class="stat-label">Top-Level</div><div class="stat-value">3</div></div><div class="stat"><div class="stat-label">Sub-Goals</div><div class="stat-value">9</div></div></div>'
+  },
+  insights: {
+    title: 'RHEO — Insights',
+    html: '<div class="card"><h2>Patterns</h2><div class="text-block">Deep-work blocks cluster before noon. Interruptions spike after lunch. Background animation has zero measurable effect on focus — keep it subtle.</div></div><div class="card-grid"><div class="stat"><div class="stat-label">Focus Hrs</div><div class="stat-value">24</div></div><div class="stat"><div class="stat-label">Interruptions</div><div class="stat-value">11</div></div></div>'
+  },
+  activity: {
+    title: 'RHEO — Activity',
+    html: '<div class="card"><h2>Recent Activity</h2><div class="text-block">Merged PR #342: widget grid registry refactor. Fixed sidebar focus ring (WCAG 3:1). Added goal hierarchy explorer. Background perf audit underway.</div></div>'
+  },
+  settings: {
+    title: 'RHEO — Settings',
+    html: '<div class="card"><h2>Preferences</h2><div class="text-block">Background: Thread Field (animated). Reduced motion: respected automatically. No background controls here by design — the background is ambient, not a setting.</div></div>'
+  }
+};
+document.querySelectorAll('#sidebar .sidebar-item').forEach(item => {
+  item.style.cursor = 'pointer';
+  item.addEventListener('click', () => {
+    document.querySelectorAll('#sidebar .sidebar-item').forEach(x => x.classList.remove('active'));
+    item.classList.add('active');
+    const v = VIEWS[item.dataset.view];
+    if (v) {
+      $('#contentView').innerHTML = v.html;
+      document.querySelector('.topbar-title').textContent = v.title;
+    }
+  });
+});
+</script>
+</body>
+</html>

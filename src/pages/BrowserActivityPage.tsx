@@ -301,6 +301,12 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
     });
   };
 
+  // Platform-filtered browser logs
+  const platformBrowserLogs = useMemo(() => {
+    if (platformFilter === 'all') return browserLogs;
+    return browserLogs.filter((l: any) => l.platform === platformFilter);
+  }, [browserLogs, platformFilter]);
+
   // Aggregate browser logs by domain
   const aggregatedLogs = useMemo(() => {
     const grouped: Record<string, { sessions: any[]; totalDuration: number }> = {};
@@ -386,12 +392,6 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
       setLoading(false);
     }
   }, [selectedPeriod, dateOffset]);
-
-  // Platform-filtered browser logs
-  const platformBrowserLogs = useMemo(() => {
-    if (platformFilter === 'all') return browserLogs;
-    return browserLogs.filter((l: any) => l.platform === platformFilter);
-  }, [browserLogs, platformFilter]);
 
   const loadBrowserProfiles = useCallback(async () => {
     try {

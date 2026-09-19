@@ -6,34 +6,23 @@ import {
   CalendarDays, Calendar, NotebookPen, TrendingUp, ChevronLeft, ChevronRight,
   Sparkles, Lightbulb, Timer, Code2, Activity, Pencil, X, Wand2, Clock,
 } from 'lucide-react';
-import { MonthWall } from '../../../components/MonthWall/MonthWall';
 import { FieldAIButton } from '@/components/ai-bridge/FieldAIButton';
 import { WarmCard } from '../WarmCard';
-import { ScheduleCard } from '../../../pages/dashboard/ScheduleCard';
 import { CalendarStrip } from '../../../components/goals/CalendarStrip';
 import { GoalCard, GoalCardSkeleton, GoalEmptyState, GoalErrorState } from '../../../components/goals/GoalCard';
 import { CriteriaBuilder } from '../../../components/goals/CriteriaBuilder';
 import type { CriteriaForm } from '../../../components/goals/CriteriaBuilder';
 import { MissedGoalRecoveryBanner } from '../../../components/goals/MissedGoalRecoveryBanner';
 import { getMissedGoals } from '../../../components/goals/GoalCompletionEngine';
-import { HabitTracker } from '../../../components/goals/HabitTracker';
 import { GoalAICoach } from '../../../components/goals/GoalAICoach';
-import { GoalLanguageParser } from '../../../components/goals/GoalLanguageParser';
 import { WeeklyGoalsView } from '../../../components/goals/WeeklyGoalsView';
-import { TodoList } from '../../../components/goals/TodoList';
-import { ConnectionExplorer } from '../../../components/goals/ConnectionExplorer';
-import { HierarchyTree } from '../../../components/goals/HierarchyTree';
-import { ScheduleSyncCard } from '../../../components/dashboard/ScheduleSyncCard';
-import { DeadlinesCard } from '../../../components/dashboard/DeadlinesCard';
 import { useFocusGoals } from '../../../hooks/useFocusGoals';
-import { confetti } from '../../../components/ui/confetti';
 import { NumberTicker } from '../../../components/ui/number-ticker';
 import { BorderBeam } from '../../../components/ui/border-beam';
-import { AnimatedCircularProgressBar } from '../../../components/ui/animated-circular-progress-bar';
 import { VoiceInputWrapper } from '../../../components/VoiceInputWrapper';
 import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
 import { loadCompletions } from '../../covenant/storage';
-import { LifeRiver } from '../../../components/life-river/river';
+import { CalendarSidebar } from '../../../components/goals/CalendarSidebar';
 
 /* ═══════════════════ helpers ═══════════════════ */
 
@@ -68,6 +57,33 @@ function prettyDate(dateStr: string): string {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+type CalendarSide = 'left' | 'right';
+
+// Side preference persisted in the preference store (mirror CardLibrary pattern, W-4).
+// No new localStorage key (R-59 / G-GL-4).
+export function useCalendarSide(): [CalendarSide, () => void] {
+  const [side, setSide] = useState<CalendarSide>('right');
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const api = (window as any).deskflowAPI;
+        if (!api?.getPreferences) return;
+        const prefs = await api.getPreferences();
+        const stored = prefs?.['gold_calendar_side'];
+        if (alive && stored?.schemaVersion === 1) { const v = stored.side; if (v === 'left' || v === 'right') setSide(v); }
+      } catch { /* keep default */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+  const toggle = useCallback(() => setSide(s => {
+    const next = s === 'left' ? 'right' : 'left';
+    try { (window as any).deskflowAPI?.setPreference?.('gold_calendar_side', { schemaVersion: 1, side: next }); } catch { /* ignore */ }
+    return next;
+  }), []);
+  return [side, toggle];
+}
 
 /* ── daily reflection (hard stats) ── */
 interface DailyReflection {
@@ -403,133 +419,6 @@ function WeekBoard({ weekDates, weekGoals, selectedDate, onPick, onToggleDay }: 
   );
 }
 
-/* — DeadlineRadar: mini month calendar + countdown list — */
-function DeadlineRadar({ marks, selectedDate, onPick }: {
-  marks: Map<string, RadarMark[]>;
-  selectedDate: string;
-  onPick: (d: string) => void;
-}) {
-  const [viewMonth, setViewMonth] = useState(selectedDate.slice(0, 7));
-  useEffect(() => setViewMonth(selectedDate.slice(0, 7)), [selectedDate]);
-
-  const { lead, dim, y, m } = useMemo(() => {
-    const [yy, mm] = viewMonth.split('-').map(Number);
-    const first = new Date(yy, mm - 1, 1);
-    return { lead: (first.getDay() + 6) % 7, dim: new Date(yy, mm, 0).getDate(), y: yy, m: mm };
-  }, [viewMonth]);
-
-  const shiftMonth = (n: number) => {
-    const d = new Date(y, m - 1 + n, 1);
-    setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  };
-
-  const upcoming = useMemo(() => {
-    const all: { date: string; mark: RadarMark }[] = [];
-    marks.forEach((list, date) => list.forEach(mark => all.push({ date, mark })));
-    return all.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
-  }, [marks]);
-
-  const monthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const today = todayStr();
-
-  return (
-    <WarmCard ambient>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-[12px] font-medium text-zinc-400 flex items-center gap-1.5">
-          <CalendarDays size={13} className="text-amber-400" />
-          Deadline Radar
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => shiftMonth(-1)} className="p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors"><ChevronLeft size={13} /></button>
-          <span className="text-[10px] text-zinc-500 w-[76px] text-center">{monthLabel}</span>
-          <button onClick={() => shiftMonth(1)} className="p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors"><ChevronRight size={13} /></button>
-        </div>
-      </div>
-
-      {/* month grid */}
-      <div className="grid grid-cols-7 gap-0.5 text-center">
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <div key={i} className="text-[8px] text-zinc-600 py-0.5">{d}</div>
-        ))}
-        {Array.from({ length: lead }).map((_, i) => <div key={`b${i}`} />)}
-        {Array.from({ length: dim }).map((_, i) => {
-          const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
-          const dayMarks = marks.get(dateStr) || [];
-          const isToday = dateStr === today;
-          return (
-            <button
-              key={dateStr}
-              onClick={() => onPick(dateStr)}
-              className={`relative h-7 rounded-md text-[10px] tabular-nums transition-colors flex flex-col items-center justify-center ${
-                isToday ? 'bg-amber-500/15 text-amber-300 font-semibold' : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
-              }`}
-            >
-              {i + 1}
-              {dayMarks.length > 0 && (
-                <span className="flex gap-0.5 absolute bottom-0.5">
-                  {dayMarks.slice(0, 3).map((mk, j) => (
-                    <span key={j} className="w-1 h-1 rounded-full" style={{ background: mk.color }} />
-                  ))}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* countdown list */}
-      <div className="mt-3 space-y-1.5 border-t border-zinc-800/50 pt-2">
-        {upcoming.length === 0 ? (
-          <p className="text-[11px] text-zinc-600 text-center py-1">Nothing on the horizon</p>
-        ) : (
-          upcoming.map(({ date, mark }, i) => {
-            const du = daysUntil(date)
-            const isNull = du === null
-            const overdue = !isNull && du < 0
-            return (
-              <button
-                key={i}
-                onClick={() => onPick(date)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800/40 transition-colors text-left"
-              >
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: mark.color }} />
-                <span className="flex-1 text-[11px] text-zinc-400 truncate">{mark.label}</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-full border shrink-0 tabular-nums ${
-                  overdue
-                    ? 'text-red-400 border-red-500/30 bg-red-500/10 animate-pulse'
-                    : !isNull && du <= 3
-                      ? 'text-amber-300 border-amber-500/30 bg-amber-500/10'
-                      : 'text-zinc-500 border-zinc-700/50'
-                }`}>
-                  {isNull ? '—' : overdue ? `${-du}d overdue` : du === 0 ? 'today' : `in ${du}d`}
-                </span>
-              </button>
-            );
-          })
-        )}
-      </div>
-    </WarmCard>
-  );
-}
-
-/* — TheVault: long-term goals as progress rings — */
-function ProgressRing({ pct }: { pct: number }) {
-  return (
-    <div className="relative shrink-0">
-      <AnimatedCircularProgressBar
-        value={Math.min(100, pct)}
-        size={38}
-        strokeWidth={3.5}
-        gaugePrimaryColor="#fbbf24"
-        gaugeSecondaryColor="rgba(63,63,70,0.5)"
-      />
-      <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-semibold text-zinc-300 tabular-nums">
-        {Math.round(pct)}
-      </span>
-    </div>
-  );
-}
-
 export interface LTGForm {
   title: string;
   description: string;
@@ -749,165 +638,6 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
 }
 
 /* — BellBoard: reminders as tickets with amber time-rail — */
-function BellBoard({ reminders, onCreate, onToggle, onDelete, selectedDate }: {
-  reminders: Reminder[];
-  onCreate: (text: string, dueDate?: string) => void;
-  onToggle: (id: string, done: boolean) => void;
-  onDelete: (id: string) => void;
-  selectedDate?: string;
-}) {
-  const [text, setText] = useState('');
-  const [dueDate, setDueDate] = useState(selectedDate || '');
-  const add = () => { if (text.trim()) { onCreate(text.trim(), dueDate || undefined); setText(''); setDueDate(selectedDate || ''); } };
-
-  const formatDisplayDate = (d: string) => {
-    if (!d) return '';
-    const date = new Date(d + 'T00:00:00');
-    const today = new Date(); today.setHours(0,0,0,0);
-    const diff = Math.round((date.getTime() - today.getTime()) / 86400000);
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Tomorrow';
-    if (diff === -1) return 'Yesterday';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const quickDates = useMemo(() => {
-    const today = todayStr();
-    const tomorrow = addDaysStr(today, 1);
-    const nextWeek = addDaysStr(today, 7);
-    return [
-      { label: 'Today', value: today },
-      { label: 'Tomorrow', value: tomorrow },
-      { label: 'Next week', value: nextWeek },
-    ];
-  }, []);
-
-  return (
-    <WarmCard ambient>
-      <div className="text-[12px] font-medium text-zinc-400 mb-3 flex items-center gap-1.5">
-        <Bell size={13} className="text-amber-400" />
-        Events & Reminders
-        {reminders.filter(r => !r.done).length > 0 && (
-          <span className="ml-auto text-[10px] text-amber-400/70 bg-amber-500/10 px-1.5 py-0.5 rounded-full">
-            {reminders.filter(r => !r.done).length} active
-          </span>
-        )}
-      </div>
-
-      {/* Input area — date picker always visible */}
-      <div className="space-y-2 mb-3">
-        <input
-          autoFocus
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') add(); }}
-          placeholder="What's happening? (event, reminder, task…)"
-          className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-[13px] text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"
-        />
-
-        {/* Date picker — always visible */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-3 py-1.5">
-            <Calendar size={12} className="text-amber-400/70 shrink-0" />
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className="flex-1 bg-transparent text-[12px] text-zinc-300 outline-none [&::-webkit-calendar-picker-indicator]:opacity-50"
-            />
-            {dueDate && (
-              <button onClick={() => setDueDate('')} className="text-zinc-600 hover:text-zinc-400">
-                <X size={11} />
-              </button>
-            )}
-          </div>
-          <span className="text-[11px] text-zinc-500 shrink-0">
-            {dueDate ? formatDisplayDate(dueDate) : 'Pick a date'}
-          </span>
-        </div>
-
-        {/* Quick date chips */}
-        <div className="flex items-center gap-1.5">
-          {quickDates.map(qd => (
-            <button
-              key={qd.value}
-              onClick={() => setDueDate(dueDate === qd.value ? '' : qd.value)}
-              className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${
-                dueDate === qd.value
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                  : 'bg-zinc-900/40 text-zinc-500 border-zinc-700/40 hover:text-zinc-300 hover:border-zinc-600/50'
-              }`}
-            >
-              {qd.label}
-            </button>
-          ))}
-          <div className="flex-1" />
-          <button
-            onClick={add}
-            disabled={!text.trim()}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25 hover:bg-amber-500/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-[12px] font-medium"
-          >
-            <Plus size={12} />
-            Add
-          </button>
-        </div>
-      </div>
-
-      {/* Reminders list */}
-      {reminders.length === 0 ? (
-        <div className="text-center py-4">
-          <Bell size={20} className="mx-auto text-zinc-700 mb-2" />
-          <p className="text-[11px] text-zinc-600">No reminders yet</p>
-          <p className="text-[10px] text-zinc-700 mt-0.5">Add one above to get started</p>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {reminders.map(r => {
-            const isOverdue = r.due_date && daysUntil(r.due_date) < 0 && !r.done;
-            const isToday = r.due_date && daysUntil(r.due_date) === 0 && !r.done;
-            return (
-              <div
-                key={r.id}
-                className={`group flex items-center gap-2 pl-2.5 pr-1.5 py-2 rounded-lg border-l-2 transition-colors ${
-                  r.done ? 'bg-zinc-900/20 border-l-zinc-800' : isOverdue ? 'bg-rose-500/5 border-l-rose-500/50' : isToday ? 'bg-amber-500/5 border-l-amber-500/50' : 'bg-zinc-900/30 border-l-amber-500/30 hover:bg-zinc-800/30'
-                }`}
-              >
-                <button
-                  onClick={() => onToggle(r.id, !r.done)}
-                  className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                    r.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 hover:border-amber-400/60'
-                  }`}
-                >
-                  {r.done && <CheckCircle2 size={10} className="text-white" />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <span className={`text-[12px] block truncate ${r.done ? 'text-zinc-600 line-through' : 'text-zinc-200'}`}>{r.text}</span>
-                  {r.due_date && (
-                    <span className={`text-[10px] flex items-center gap-1 mt-0.5 ${
-                      isOverdue ? 'text-rose-400' : isToday ? 'text-amber-400' : 'text-zinc-500'
-                    }`}>
-                      <Calendar size={9} />
-                      {formatDisplayDate(r.due_date)}
-                      {isOverdue && <span className="text-[9px] text-rose-400/70">(overdue)</span>}
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => onDelete(r.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-red-400 transition-all"
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </WarmCard>
-  );
-}
-
-/* — ReflectionCard: soft journal + hard stats + smart prompts, one surface — */
 function ReflectionCard({ date, data, summary, onSave }: {
   date: string; data: DailyReflection; summary: string; onSave: (s: string) => void;
 }) {
@@ -1023,72 +753,9 @@ function ReflectionCard({ date, data, summary, onSave }: {
 }
 
 /* — WeekReview: Mon→Sun hard-data recap with covenant streak dots — */
-function WeekReview({ weekDates, reflections }: {
-  weekDates: string[];
-  reflections: Record<string, DailyReflection>;
-}) {
-  const doneDates = covenantDoneDates();
-  const streak = covenantStreak();
-  const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const maxProd = Math.max(1, ...weekDates.map(d => reflections[d]?.productiveSec || 0));
-  const avgProd = weekDates.reduce((s, d) => s + (reflections[d]?.productiveSec || 0), 0) / 7;
-  const goalsSealed = weekDates.reduce((s, d) => s + (reflections[d]?.goals.completed || 0), 0);
-  const habitsKept = weekDates.reduce((s, d) => s + (reflections[d]?.habits.completed || 0), 0);
-
-  return (
-    <WarmCard>
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-[12px] font-medium text-zinc-300 flex items-center gap-1.5">
-          <TrendingUp size={13} className="text-amber-400" />
-          This week, at a glance
-          <span className="warmth-serif italic text-zinc-600 font-normal">— Monday to Sunday</span>
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        {weekDates.map((d, i) => {
-          const ref = reflections[d];
-          const prod = ref?.productiveSec || 0;
-          const isToday = d === todayStr();
-          return (
-            <div key={d} className={`flex items-center gap-3 px-2.5 py-1.5 rounded-lg ${isToday ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-zinc-900/30'}`}>
-              <div className="w-11 shrink-0">
-                <div className={`text-[9px] uppercase tracking-wider ${isToday ? 'text-amber-400' : 'text-zinc-600'}`}>{dow[i]}</div>
-                <div className={`text-[11px] font-semibold tabular-nums ${isToday ? 'text-amber-300' : 'text-zinc-500'}`}>{d.slice(5)}</div>
-              </div>
-              <div className="flex-1 h-2 rounded-full bg-zinc-800/60 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.round((prod / maxProd) * 100)}%` }}
-                  transition={{ duration: 0.5, delay: i * 0.04, ease: 'easeOut' }}
-                  className="h-full rounded-full"
-                  style={{ background: prod > 0 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'transparent' }}
-                />
-              </div>
-              <div className="w-12 text-right text-[11px] tabular-nums text-zinc-400">{prod > 0 ? formatTime(prod) : '—'}</div>
-              <div className="w-6 text-center text-[11px] tabular-nums text-emerald-400">{ref?.goals.completed || ''}</div>
-              <div className="w-5 text-center">
-                {doneDates.has(d)
-                  ? <Flame size={12} className="inline text-amber-400" />
-                  : <span className="text-zinc-700">·</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 pt-2.5 border-t border-zinc-800/50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-        <span>avg <span className="text-zinc-300 tabular-nums">{formatTime(Math.round(avgProd))}</span>/day</span>
-        <span><span className="text-emerald-400 tabular-nums">{goalsSealed}</span> routines sealed</span>
-        <span><span className="text-violet-400 tabular-nums">{habitsKept}</span> habits kept</span>
-        <span className="flex items-center gap-1"><Flame size={12} className="text-amber-400" /> <span className="text-amber-300 tabular-nums">{streak}</span> day streak</span>
-      </div>
-    </WarmCard>
-  );
-}
-
-/* ═══════════════════ main component ═══════════════════ */
-
 export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const api = (window as any).deskflowAPI;
+  const [side, toggleSide] = useCalendarSide();
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -1098,7 +765,6 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const [reviewSummary, setReviewSummary] = useState('');
   const [reflection, setReflection] = useState<DailyReflection>(emptyReflection);
-  const [weekReflections, setWeekReflections] = useState<Record<string, DailyReflection>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1110,13 +776,9 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const [showLangParser, setShowLangParser] = useState(false);
   // Schedule default = per-day (only the selected day's fixed blocks).
   // Toggle to show the whole week's fixed schedule at once.
-  const [showWeekSchedule, setShowWeekSchedule] = useState(false);
-  const [todos, setTodos] = useState<{ id: string; text: string; done: boolean; createdAt: string; goalId?: string; scheduleId?: string; deadlineId?: string; parentTodoId?: string; dueDate?: string }[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
-  const [connectionEntity, setConnectionEntity] = useState<{ type: 'goal'; id: string; title: string } | null>(null);
-  const [showHierarchy, setShowHierarchy] = useState(false);
+  const [todos, setTodos] = useState<{ id: string; text: string; done: boolean; createdAt: string; goalId?: string; scheduleId?: string; deadlineId?: string; parentTodoId?: string; dueDate?: string }[]>([]);
   const [expandedHierarchy, setExpandedHierarchy] = useState<Set<string>>(new Set());
-  const [hierarchyFilter, setHierarchyFilter] = useState<'all' | 'goals' | 'todos' | 'deadlines' | 'schedule'>('all');
 
   const { focusState, activeGoalIds, getAccumulatedSeconds } = useFocusGoals(goals);
 
@@ -1312,24 +974,6 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     try { await api.deleteReminder(id); } catch {}
   };
 
-  /* ── schedule ── */
-  const addScheduleEntry = async (entry: Omit<ScheduleEntry, 'id' | 'createdAt'>) => {
-    try {
-      const res = await api.addScheduleEntry(entry);
-      if (res?.success && res.id) {
-        setSchedule(prev => [...prev, { ...entry, id: res.id, createdAt: new Date().toISOString() }]);
-      }
-    } catch {}
-  };
-  const updateScheduleEntry = async (id: string, patch: Partial<ScheduleEntry>) => {
-    setSchedule(prev => prev.map(e => (e.id === id ? { ...e, ...patch } : e)));
-    try { await api.updateScheduleEntry(id, patch); } catch {}
-  };
-  const deleteScheduleEntry = async (id: string) => {
-    setSchedule(prev => prev.filter(e => e.id !== id));
-    try { await api.deleteScheduleEntry(id); } catch {}
-  };
-
   /* ── long-term goals (Vault) ── */
   const handleLTGSave = useCallback(async (form: LTGForm, existing?: LongTermGoal) => {
     try {
@@ -1359,6 +1003,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     } catch { return false; }
   }, [api]);
 
+  /* ── deadlines + reminders ── */
   /* ── derived ── */
   const dailies = useMemo(() => goals.filter(g => !isWeeklyish(g) && g.status !== 'suggested'), [goals]);
   const activeDailies = dailies.filter(g => g.status !== 'done');
@@ -1372,55 +1017,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     return Array.from({ length: 7 }, (_, i) => addDaysStr(mon, i));
   }, [selectedDate]);
 
-  const todaySchedule = useMemo(
-    () => schedule.filter(e => e && e.day_of_week != null),
-    [schedule]
-  );
-  const goalConnections = useCallback((goal: Goal) => ({
-    todoCount: todos.filter(todo => todo.goalId === goal.id).length,
-    linkedSchedules: schedule.filter(entry => entry.goal_id === goal.id).map(entry => ({ id: entry.id, title: entry.title })),
-    linkedDeadlines: deadlines.filter(deadline => deadline.goal_id === goal.id).map(deadline => ({ id: deadline.id, title: deadline.title })),
-  }), [todos, schedule, deadlines]);
-  const hierarchyRoots = useMemo(() => goals.map(goal => ({
-    type: goal.isHabit ? 'habit' as const : 'goal' as const,
-    id: goal.id,
-    title: goal.title,
-    children: [
-      ...todos.filter(todo => todo.goalId === goal.id).map(todo => ({ type: 'todo' as const, id: todo.id, title: todo.text })),
-      ...schedule.filter(entry => entry.goal_id === goal.id).map(entry => ({ type: 'schedule' as const, id: entry.id, title: entry.title })),
-      ...deadlines.filter(deadline => deadline.goal_id === goal.id).map(deadline => ({ type: 'deadline' as const, id: deadline.id, title: deadline.title })),
-    ],
-  })), [goals, todos, schedule, deadlines]);
 
-  /* fetch hard stats for the whole Mon→Sun week for the recap */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const results = await Promise.all(weekDates.map(async d => {
-          const res = await api.getDailyReflection(d);
-          return { d, res };
-        }));
-        if (cancelled) return;
-        const map: Record<string, DailyReflection> = {};
-        for (const { d, res } of results) {
-          if (res?.success) {
-            map[d] = {
-              productiveSec: res.productiveSec || 0,
-              codingSec: res.codingSec || 0,
-              goals: res.goals || { total: 0, completed: 0 },
-              habits: res.habits || { total: 0, completed: 0 },
-              reviewSummary: res.reviewSummary || null,
-            };
-          }
-        }
-        setWeekReflections(map);
-      } catch { if (!cancelled) setWeekReflections({}); }
-    })();
-    return () => { cancelled = true; };
-  }, [weekDates, api]);
-
-  /* radar marks: deadlines (rose) + reminders (amber) + long-term deadlines (violet) + todo due dates (chrome) */
   const radarMarks = useMemo(() => {
     const m = new Map<string, RadarMark[]>();
     const push = (date: string, mark: RadarMark) => {
@@ -1436,7 +1033,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
 
   /* ── render ── */
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="w-full max-w-[1600px] mx-auto">
       <GoldHeader date={selectedDate} done={doneCount} total={goals.length} tracked={tracked} bestStreak={bestStreak} />
 
       <CalendarStrip selectedDate={selectedDate} onDateChange={setSelectedDate}
@@ -1460,9 +1057,9 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
       </AnimatePresence>
 
       {/* ═══ Two-column layout ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* LEFT: Goals + Schedule (2/3) */}
-        <div className="lg:col-span-2 space-y-4">
+      <div className={`flex flex-col lg:flex-row gap-4 ${side === "left" ? "lg:flex-row-reverse" : ""}`}>
+        {/* LEFT: Goals + Schedule */}
+        <div className="lg:flex-2 min-w-0 space-y-4">
 
           {/* Stat Pills */}
           <div className="grid grid-cols-4 gap-2">
@@ -1481,60 +1078,6 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
             onEdit={handleEditStart}
             onDelete={handleDelete}
           />
-
-          {/* Quick Todos */}
-          <TodoList
-            goalOptions={goals.map(goal => ({ id: goal.id, title: goal.title, category: goal.category }))}
-            deadlineOptions={deadlines.map(deadline => ({ id: deadline.id, title: deadline.title, dueDate: deadline.due_date }))}
-            scheduleOptions={schedule.map(entry => ({ id: entry.id, title: entry.title, startTime: entry.start_time, endTime: entry.end_time }))}
-          />
-
-          <WarmCard ambient>
-            <button onClick={() => setShowHierarchy(value => !value)} className="flex w-full items-center justify-between text-left text-[12px] font-semibold text-zinc-300">
-              <span>Goal hierarchy</span>
-              <span className="text-[10px] font-normal text-zinc-600">{showHierarchy ? 'Hide tree' : 'Show linked work'}</span>
-            </button>
-            {showHierarchy && (
-              <div className="mt-3 h-64 border-t border-zinc-800/50 pt-2">
-                <HierarchyTree
-                  roots={hierarchyRoots}
-                  expanded={expandedHierarchy}
-                  onToggle={id => setExpandedHierarchy(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; })}
-                  onSelect={entity => {
-                    const goal = goals.find(item => item.id === entity.id);
-                    if (goal) setConnectionEntity({ type: 'goal', id: goal.id, title: goal.title });
-                  }}
-                  filter={hierarchyFilter}
-                  onFilterChange={value => setHierarchyFilter(value || 'all')}
-                />
-              </div>
-            )}
-          </WarmCard>
-
-          {/* Schedule — defaults to the selected day only; toggle to see the whole week's fixed blocks */}
-          <WarmCard ambient>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[12px] font-semibold text-zinc-300">
-                {showWeekSchedule ? "Week's Schedule" : `${DAY_SHORT[new Date(selectedDate + 'T00:00:00').getDay()]}'s Schedule`}
-              </span>
-              <button
-                onClick={() => setShowWeekSchedule(v => !v)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${showWeekSchedule ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-zinc-900/60 text-zinc-400 border-zinc-700/50 hover:border-zinc-600'}`}
-              >
-                {showWeekSchedule ? 'Whole week' : 'Today only'}
-              </button>
-            </div>
-            <ScheduleCard
-              entries={todaySchedule}
-              selectedDate={selectedDate}
-              selectedDay={new Date(selectedDate + 'T00:00:00').getDay()}
-              onAdd={addScheduleEntry}
-              onUpdate={updateScheduleEntry}
-              onDelete={deleteScheduleEntry}
-              linkedGoals={goals.map(g => ({ id: g.id, title: g.title, category: g.category }))}
-              showAll={showWeekSchedule}
-            />
-          </WarmCard>
 
           {/* Goals are shown in the left column via the dedicated week-goals section, so no extra DeadlineRadar/BellBoard is needed on the right. */}
 
@@ -1646,7 +1189,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                     <>
                       <GoalCard goal={goal} onToggle={handleToggle} onDelete={handleDelete} onEdit={handleEditStart}
                         longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
-                        {...goalConnections(goal)} onOpenConnections={g => setConnectionEntity({ type: 'goal', id: g.id, title: g.title })} />
+                         />
                       {activeGoalIds.includes(goal.id) && goal.target.type === 'time' && (
                         <div className="absolute bottom-1.5 right-3 flex items-center gap-1 text-[10px] text-amber-400">
                           <span className="relative flex h-1.5 w-1.5">
@@ -1676,18 +1219,13 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                     {completedDailies.map(goal => (
                       <GoalCard key={goal.id} goal={goal} onToggle={handleToggle} onDelete={handleDelete}
                         onEdit={handleEditStart} longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
-                        {...goalConnections(goal)} onOpenConnections={g => setConnectionEntity({ type: 'goal', id: g.id, title: g.title })} />
+                         />
                     ))}
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
           )}
-
-          {/* Habit Tracker */}
-          <WarmCard ambient>
-            <HabitTracker currentDate={selectedDate} />
-          </WarmCard>
 
           {/* AI Goal Coach */}
           <WarmCard ambient>
@@ -1699,27 +1237,18 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
           </WarmCard>
         </div>
 
-        {/* RIGHT: unified calendar + schedule + deadlines */}
-        <div className="xl:col-span-7 space-y-4">
-          <MonthWall
-            goals={goals}
-            deadlines={deadlines}
-            reminders={reminders}
-            schedule={schedule}
-            longTermGoals={longTermGoals}
-          />
-          <ScheduleSyncCard schedule={schedule} goals={goals} loading={loading} />
-          <DeadlinesCard deadlines={deadlines} reminders={reminders} loading={loading} onAdd={handleAddDeadline} onDelete={handleDeleteDeadline} onUpdate={handleUpdateDeadline} onComplete={handleCompleteDeadline} onToggleReminder={handleToggleReminder} onDeleteReminder={handleDeleteReminder}
-            goalOptions={goals.map(goal => ({ id: goal.id, title: goal.title, isHabit: !!goal.isHabit }))} />
-        </div>
+        {/* Calendar sidebar (sticky 1/3; entrance choreography; side toggle) */}
+        <CalendarSidebar
+          side={side} onToggleSide={toggleSide}
+          selectedDate={selectedDate} onDateChange={setSelectedDate}
+          weekGoals={weekGoals} marks={radarMarks} goalDates={new Set(Object.keys(weekGoals))}
+          goals={goals} deadlines={deadlines} reminders={reminders}
+          schedule={schedule} longTermGoals={longTermGoals} />
       </div>
 
       {/* Bottom full-width sections */}
       <ReflectionCard date={selectedDate} data={reflection} summary={reviewSummary}
         onSave={async s => { setReviewSummary(s); try { await api.saveGoalReview(selectedDate, s); } catch {} }} />
-      <WeekReview weekDates={weekDates} reflections={weekReflections} />
-      <LifeRiver />
-      <ConnectionExplorer entity={connectionEntity} isOpen={!!connectionEntity} onClose={() => setConnectionEntity(null)} />
     </div>
   );
 }

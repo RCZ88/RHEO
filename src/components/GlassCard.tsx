@@ -15,12 +15,12 @@ interface GlassCardProps {
 }
 
 const variantStyles: Record<string, string> = {
-  default:   'bg-[var(--color-card)] border border-zinc-800/50 light:bg-[var(--color-card)] light:border-[var(--ws-border)]',
-  compact:   'bg-[var(--color-card)] border border-zinc-800/40 p-3 light:bg-[var(--color-card)] light:border-[var(--ws-border)]',
-  subtle:    'bg-[var(--color-card)] border border-zinc-800/30 light:bg-[color-mix(in_srgb,var(--color-card)_60%,transparent)] light:border-[var(--ws-border)]',
+  default:   'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/50 light:bg-[var(--color-card)] light:border-[var(--ws-border)]',
+  compact:   'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/40 p-3 light:bg-[var(--color-card)] light:border-[var(--ws-border)]',
+  subtle:    'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/30 light:bg-[color-mix(in_srgb,var(--color-card)_60%,transparent)] light:border-[var(--ws-border)]',
   notebook:  'bg-[var(--color-card)] border-l-2 light:bg-[var(--color-card)] light:border-l-2 light:border-l-stone-300',
   bordered:  'bg-transparent border-[1.5px] light:border-[var(--ws-border-strong)]',
-  elevated:  'bg-[var(--color-card)] border border-zinc-600/40 light:bg-[var(--ws-surface-overlay)] light:border-[var(--ws-border-strong)]',
+  elevated:  'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-600/40 light:bg-[var(--ws-surface-overlay)] light:border-[var(--ws-border-strong)]',
   interactive: 'bg-[var(--color-card)] border cursor-pointer hover:-translate-y-0.5 transition-all duration-200 light:bg-white/70 light:border-[var(--ws-border)]',
 };
 

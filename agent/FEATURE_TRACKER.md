@@ -452,6 +452,13 @@ Note: the all-time Model Usage Timeline already existed (timeLock -> effectiveAi
 - **Live tracking:** Adds live `currentProductiveMs` on top of DB stats
 - **Tier fallback:** Shows tier name + "Session" when app is null but tier is known
 
+#### 1.14 Card Library Layout Persistence (fix)
+- **Feature:** Card library toggles + grid saves now update the live dashboard and persist
+- **Stale closure fixed:** `addWidget`/`removeWidget` in `CardLibrary.tsx` now compute `next` inside the `setLayout(prev => …)` updater and call `onChanged?.(next!)` (deps `[onChanged]`, no `layout` dep)
+- **Save sync:** New `onSaved` prop on `CardLibrary` + `WidgetGrid`, fired only after `persistLayout(layout)` (Save/Apply, Close & Save, WidgetGrid `saveEdit`)
+- **Dashboard reload:** `DashboardPage` bumps `layoutSyncKey` (`bumpLayoutSync`) so the storage-reload effect (deps `[showCardLibrary, layoutSyncKey]`) re-reads `loadCardLayout()` from `dashboard_layout` after saves
+- **Note:** Two layout systems share one `LAYOUT_KEY` (`dashboard_layout`); toggles alone don't persist until an explicit save (by design)
+
 ---
 
 ## °Å¸“Å  2. Stats Page (`/stats`)

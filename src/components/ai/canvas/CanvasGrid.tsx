@@ -26,7 +26,7 @@ interface CanvasGridProps {
   onDraggingChange?: (dragging: boolean) => void
 }
 
-const MIN_ZOOM = 0.15
+const MIN_ZOOM = 0.5
 const MAX_ZOOM = 3.0
 const ZOOM_STEP = 0.08
 const CELL = 40

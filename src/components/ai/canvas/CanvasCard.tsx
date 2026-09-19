@@ -75,9 +75,9 @@ function renderCardContent(card: CanvasCardType, ctx: CardContentCtx) {
     }
     case 'connectors': return <ConnectorsCard state={card.data?.state || 'loading'} connectors={card.data?.connectors || []} errorMessage={card.data?.errorMessage} onRetry={card.data?.onRetry} onAdd={card.data?.onAdd} onSync={card.data?.onSync} onRefresh={card.data?.onRefresh} syncing={card.data?.syncing} />
     case 'reflect': return <ReflectCard card={card} days={card.data?.days} loading={card.status === 'loading'} error={card.data?.error} />
-    case 'schedule': return <WeeklyScheduleCard />
-    case 'deadlines': return <DeadlineTrackerCard />
-    case 'planner': return <DailyPlannerCard />
+    case 'schedule': return <WeeklyScheduleCard weekOffset={card.data?.weekOffset || 0} />
+    case 'deadlines': return <DeadlineTrackerCard days={card.data?.days || 14} />
+    case 'planner': return <DailyPlannerCard date={card.data?.date} />
     case 'automation': {
       const auto = card.data?.automation
       if (!auto) return <div style={{ fontSize: 12, color: '#52525b' }}>Automation</div>
@@ -127,7 +127,7 @@ class CardErrorBoundary extends Component<{ cardType: string; onRetry: () => voi
   }
 }
 
-export function CanvasCard({ card, onDragEnd, onDismiss, onPin, onResize, onDragStart, onDragStop, onClick, onUpdateCard, groups, onUpdateGroup, onUngroup, onRemoveFromGroup, zoom = 1, isFocused, isDropTarget, onDropTarget }: CanvasCardProps) {
+export function CanvasCard({ card, onDragEnd, onDismiss, onPin, onResize, onDragStart, onDragStop, onClick, onUpdateCard, groups, onUpdateGroup, onUngroup, onRemoveFromGroup, zoom = 1, isFocused, isDropTarget, onDropTarget: _onDropTarget }: CanvasCardProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
   const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null)
@@ -361,6 +361,7 @@ export function CanvasCard({ card, onDragEnd, onDismiss, onPin, onResize, onDrag
       <div
         ref={cardRef}
         className={`dk-canvas-card ${isTransient ? 'transient' : ''} ${isFocused ? 'focused' : ''} ${isDropTarget ? 'drop-target' : ''} status-${card.status}`}
+        data-card-type={card.type}
         data-card-id={card.id}
         data-tutorial="ai.card-types"
         data-new={isNew ? 'true' : undefined}

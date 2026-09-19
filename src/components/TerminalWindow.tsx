@@ -781,7 +781,7 @@ export function TerminalLayout({
 
   if (!layout || getLeafIds(layout).length === 0) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-[#0d0d0d] overflow-hidden z-10">
+      <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-zinc-950 overflow-hidden z-10">
         <div className="flex flex-col items-center gap-3">
           <TerminalIcon className="w-8 h-8 text-zinc-600" />
           <button
@@ -805,7 +805,7 @@ export function TerminalLayout({
   }
 
   return (
-    <div className="w-full h-full min-h-0 bg-[#0d0d0d] overflow-hidden flex flex-col">
+    <div className="w-full h-full min-h-0 bg-zinc-950 overflow-hidden flex flex-col">
       <PaneRenderer
         node={layout}
         activeTerminalId={activeTerminalId}

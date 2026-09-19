@@ -4,7 +4,7 @@ import type {
   SavedCommand, Shortcut, TerminalLine, TerminalTab, TermGroup, Workspace, ZoomState,
 } from "../lib/types";
 import { DEFAULT_APPEARANCE, DEFAULT_COMMANDS, DEFAULT_GROUPS, DEFAULT_MCP, DEFAULT_SHORTCUTS, MOTD, TAB_COLORS, THEMES, uid } from "../lib/data";
-import { execShell } from "../lib/shell";
+import { execShell, execShellReal } from "../lib/shell";
 
 const LS_KEY = "penguin-console-v3";
 const LS_OLD = "penguin-console-v2";
@@ -165,8 +165,9 @@ export function useConsoleStore() {
     { id: uid("m"), ts: Date.now() - 1000 * 60 * 18, server: "git-ops", tool: "commit_ctx", detail: "git status → clean", ok: true },
     { id: uid("m"), ts: Date.now() - 1000 * 60 * 6, server: "shell-exec", tool: "history_ctx", detail: "injected 12 cmds as context", ok: true },
   ]);
-  const [rightTab, setRightTab] = useState<"inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys">("inspect");
+  const [rightTab, setRightTab] = useState<"inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys" | "notes">("inspect");
   const [historyQuery, setHistoryQuery] = useState("");
+  const [notesQuery, setNotesQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [tabSearch, setTabSearch] = useState("");
   const [broadcastTabId, setBroadcastTabId] = useState<string | null>(null);
@@ -174,6 +175,14 @@ export function useConsoleStore() {
   const [distro, setDistro] = useState(s?.distro ?? "Ubuntu 24.04 LTS");
   const [shell, setShell] = useState(s?.shell ?? "zsh");
   const [paneEnv, setPaneEnv] = useState<Record<string, Record<string, string>>>({});
+  const [showDemoOnly, setShowDemoOnly] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<"all" | "demo" | "real">("all");
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell } satisfies Persist));
+    } catch { /* quota */ }
+  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell]);
 
   useEffect(() => {
     try {
@@ -202,7 +211,7 @@ export function useConsoleStore() {
     setMcpLog((l) => [{ id: uid("m"), ts: Date.now(), server, tool, detail, ok }, ...l].slice(0, 80));
   }, []);
 
-  const execInPane = useCallback((tabId: string, paneId: string, raw: string, tab: TerminalTab, pane: PaneState) => {
+  const execInPane = useCallback(async (tabId: string, paneId: string, raw: string, tab: TerminalTab, pane: PaneState) => {
     const cmd = raw.trim();
     if (!cmd) return;
     const ts = Date.now();
@@ -220,7 +229,7 @@ export function useConsoleStore() {
         },
       },
     }));
-    const res = execShell(cmd, pane.cwd, env, { distro, shell: tab.shell ?? shell });
+    const res = await execShellReal(cmd, pane.cwd, env);
     if (res.envDelta) {
       setPaneEnv((prev) => {
         const key = `${tabId}:${paneId}`;
@@ -252,7 +261,7 @@ export function useConsoleStore() {
         const ws: Workspace = {
           id: uid("ws"), name, description: `${tabs.length} tabs · saved ${new Date().toLocaleString()}`,
           color: TAB_COLORS[workspaces.length % TAB_COLORS.length],
-          tabs: JSON.parse(JSON.stringify(tabs)), activeTabId: tabId, createdAt: Date.now(), updatedAt: Date.now(),
+          tabs: JSON.parse(JSON.stringify(tabs)), activeTabId, createdAt: Date.now(), updatedAt: Date.now(),
         };
         setWorkspaces((w) => [ws, ...w]);
         pushLines(tabId, paneId, [{ id: uid("l"), type: "success", text: `✓ workspace "${name}" saved`, timestamp: Date.now() }]);
@@ -260,7 +269,6 @@ export function useConsoleStore() {
         pushLines(tabId, paneId, [{ id: uid("l"), type: "dim", text: "usage: workspace save <name> · ws save <name>", timestamp: Date.now() }]);
       }
     } else if (sysText === "__CLOSE_PANE__") {
-      // handled by caller via closePane to avoid stale closure
       setHistory((h) => [{ id: uid("h"), command: cmd, preview: "pane closed", tabId, tabLabel: tab.label, paneId, cwd: pane.cwd, timestamp: ts, exitCode: 0, durationMs: res.durationMs }, ...h].slice(0, 500));
       closePaneRef.current?.(tabId, paneId);
       return;
@@ -273,7 +281,7 @@ export function useConsoleStore() {
 
   const closePaneRef = useRef<((tabId: string, paneId: string) => void) | null>(null);
 
-  const runCommand = useCallback((tabId: string, paneId: string, raw: string) => {
+  const runCommand = useCallback(async (tabId: string, paneId: string, raw: string) => {
     const tab = tabs.find((t) => t.id === tabId);
     const pane = tab?.panes[paneId];
     if (!tab || !pane) return;
@@ -281,11 +289,11 @@ export function useConsoleStore() {
       const ids = listPaneIds(tab.layout);
       ids.forEach((pid) => {
         const p = tab.panes[pid];
-        if (p) execInPane(tabId, pid, raw, tab, p);
+        if (p) void execInPane(tabId, pid, raw, tab, p);
       });
       return;
     }
-    execInPane(tabId, paneId, raw, tab, pane);
+    await execInPane(tabId, paneId, raw, tab, pane);
   }, [tabs, broadcastTabId, execInPane]);
 
   const newTab = useCallback((preset?: { label?: string; color?: string; groupId?: string; layout?: Preset["layout"]; bootstraps?: string[]; icon?: string; shell?: string }) => {
@@ -427,6 +435,11 @@ export function useConsoleStore() {
   }, [mutateTab]);
 
   const saveWorkspace = useCallback((name: string, description = "", color?: string) => {
+    const existing = workspaces.find((w) => w.name === name);
+    if (existing) {
+      setWorkspaces((w) => w.map((x) => (x.name === name ? { ...x, tabs: JSON.parse(JSON.stringify(tabs)), activeTabId, updatedAt: Date.now() } : x)));
+      return existing;
+    }
     const ws: Workspace = {
       id: uid("ws"), name, description: description || `${tabs.length} tabs · ${tabs.reduce((a, t) => a + Object.keys(t.panes).length, 0)} panes · saved ${new Date().toLocaleString()}`,
       color: color ?? TAB_COLORS[workspaces.length % TAB_COLORS.length],
@@ -473,10 +486,24 @@ export function useConsoleStore() {
     return { total, today, week, top, days, perTab, perGroup, hours, errors, okRate, avgMs, panes: tabs.reduce((a, t) => a + Object.keys(t.panes).length, 0) };
   }, [history, tabs, groups]);
 
+  const openNotesTab = useCallback(() => setRightTab("notes"), []);
+  const closeNotesTab = useCallback(() => setRightTab("inspect"), []);
+
+  const copyAllContent = useCallback(() => {
+    const lines = tabs.map((t) => t.panes).flatMap((panes) => Object.values(panes).flatMap((p) => p.lines));
+    const text = lines.map((l) => l.text).filter(Boolean).join("\n");
+    navigator.clipboard?.writeText(text).catch(() => {});
+  }, [tabs]);
+
+  const filteredHistory = useMemo(() => {
+    return history;
+  }, [history]);
+
   return {
     tabs, sortedTabs, setTabs, activeTab, activeTabId, setActiveTabId, groups, setGroups, workspaces, setWorkspaces,
     commands, setCommands, history, setHistory, shortcuts, setShortcuts, appearance, setAppearance,
-    mcp, setMcp, mcpLog, logMcp, rightTab, setRightTab, historyQuery, setHistoryQuery,
+    mcp, setMcp, mcpLog, logMcp, rightTab, setRightTab, historyQuery, setHistoryQuery, notesQuery, setNotesQuery,
+    openNotesTab, closeNotesTab,
     groupFilter, setGroupFilter, tabSearch, setTabSearch, theme, broadcastTabId, setBroadcastTabId,
     zoom, setZoom, distro, setDistro, shell, setShell, paneEnv,
     mutateTab, pushLines, runCommand, newTab, closeTab, duplicateTab, togglePin, moveTabToGroup,
@@ -492,6 +519,7 @@ export function useConsoleStore() {
       if (keep) merged[firstId] = { ...keep, id: firstId };
       return { ...t, layout, panes: merged, activePaneId: active, focusedPaneId: active };
     }),
+    showDemoOnly, setShowDemoOnly, historyFilter, setHistoryFilter, filteredHistory, copyAllContent,
   };
 }
 

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 const execFileAsync = promisify(execFile);
@@ -48,8 +49,6 @@ export function parseLinuxWindowMetadata(
     propValue(xpropOutput, '_NET_WM_NAME(UTF8_STRING)') || propValue(xpropOutput, 'WM_NAME(STRING)'),
   );
 
-  // A window without a PID is not useful to the tracker. Keep the metadata
-  // usable for unusual X11 clients, but do not invent a process identity.
   if (!windowId || (!pid && !title && className === 'Unknown')) return null;
   return {
     platform: 'linux',
@@ -75,7 +74,6 @@ async function fromX11(): Promise<LinuxForegroundWindow | undefined> {
     );
     const windowId = activeOutput.match(/0x[0-9a-f]+/i)?.[0];
     if (!windowId || /^0x0+$/i.test(windowId)) return undefined;
-
     const { stdout } = await execFileAsync(
       'xprop', ['-id', windowId], { env, timeout: COMMAND_TIMEOUT_MS },
     );
@@ -116,13 +114,42 @@ async function fromXdotool(): Promise<LinuxForegroundWindow | undefined> {
   }
 }
 
-/**
- * Linux fallback for active-win. xprop is the reliable X11 path; xdotool is
- * useful on installations where xprop is absent or its output is incomplete.
- * Wayland compositors intentionally expose no universal active-window API, so
- * returning undefined is safer than attributing time to the wrong app.
- */
+// Use qdbus (available on KDE) instead of Python gi/PyGObject which is often missing
+async function fromKWin(): Promise<LinuxForegroundWindow | undefined> {
+  if (process.platform !== 'linux') return undefined;
+  try {
+    const scriptFile = path.join(os.tmpdir(), `rheo-kwin-${Date.now()}.js`);
+    const resultFile = path.join(os.tmpdir(), `rheo-kwin-out-${Date.now()}.json`);
+    const script = [
+      `var w = workspace.activeWindow;`,
+      `var value = (w && !w.desktopWindow && !w.dock) ? { name: String(w.resourceClass || w.desktopFileName || ''), pid: Number(w.pid), title: String(w.caption || '') } : null;`,
+      `var f = new File("${resultFile}"); f.open(File.WriteOnly); f.write(JSON.stringify(value)); f.close();`,
+    ].join('\n');
+    await fs.writeFile(scriptFile, script);
+    const stdout = await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.loadScript', scriptFile, 'rheo-foreground-' + Date.now()], { timeout: COMMAND_TIMEOUT_MS });
+    const scriptId = parseInt(stdout.stdout.trim());
+    if (scriptId < 0) { await fs.rm(scriptFile, { force: true }).catch(() => {}); await fs.rm(resultFile, { force: true }).catch(() => {}); return undefined; }
+    try { await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.start'], { timeout: COMMAND_TIMEOUT_MS }); } catch {}
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const data = await fs.readFile(resultFile, 'utf8');
+      const obj = JSON.parse(data);
+      await fs.rm(scriptFile, { force: true }).catch(() => {});
+      await fs.rm(resultFile, { force: true }).catch(() => {});
+      if (obj && obj.name) {
+        return { platform: 'linux', title: obj.title || null, owner: { name: obj.name, processId: obj.pid || 0 } };
+      }
+    } catch {}
+    await fs.rm(scriptFile, { force: true }).catch(() => {});
+    await fs.rm(resultFile, { force: true }).catch(() => {});
+  } catch {}
+  return undefined;
+}
+
 export async function getLinuxForegroundWindow(): Promise<LinuxForegroundWindow | undefined> {
   if (process.platform !== 'linux') return undefined;
+  if (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) {
+    return /kde/i.test(process.env.XDG_CURRENT_DESKTOP || '') ? fromKWin() : undefined;
+  }
   return (await fromX11()) || (await fromXdotool());
 }

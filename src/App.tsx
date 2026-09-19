@@ -7,6 +7,7 @@ import confetti from 'canvas-confetti';
 import { navigateTo, scrollToSection } from './lib/deepNav';
 import { SidebarLogo } from './components/SidebarLogo';
 import Sidebar, { SIDEBAR_ITEMS } from './components/Sidebar';
+import { openSmartSearch, type SearchHit } from './hooks/useAppSmartSearch';
 import {
   Home, Monitor, Globe, Code2, BarChart3, Settings, Play, Pause, Clock,
   Download, Trash2, Award, Zap, Users, Info, Database, CheckCircle, XCircle, AlertTriangle,
@@ -14,9 +15,10 @@ import {
   ChevronLeft, ChevronRight, Calendar, Terminal, Save, Clock4,
   X, FolderTree, Bot, Minus, HelpCircle, Settings2, Moon, FileText, BookOpen,
   Wallet, GraduationCap, Activity, Smartphone, Brain, HeartHandshake, Sparkles, Trophy,
-  Bed, UserCheck, Bell, Command, Folder, LayoutDashboard, AlertCircle, RotateCcw,
+  Bed, UserCheck, Bell, Command, Folder, LayoutDashboard, AlertCircle, RotateCcw, Bug,
 } from 'lucide-react';
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
+import DevTriggerPanel from './components/DevTriggerPanel';
 import { format as dateFormat } from 'date-fns';
 import SettingsPage from './pages/SettingsPage';
 import StatsPage from './pages/StatsPage';
@@ -54,6 +56,7 @@ import DashboardPage from './pages/DashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 import FeatureSpecViewer from './components/FeatureSpecViewer';
 import AfkPromptModal from './components/AfkPromptModal';
+import SmartSearchOverlay from './components/SmartSearch/SmartSearchOverlay';
 import MissedTimePanel from './components/MissedTimePanel';
 import { PairPhoneModal } from './components/PairPhoneModal';
 import { VoiceProvider } from './context/VoiceContext';
@@ -71,6 +74,9 @@ const LifePage = lazy(() => import('./features/warmth/LifePage'));
 
 // Agentic System page (agent comms + session groups + context brain)
 const AgenticSystemPage = lazy(() => import('./pages/AgenticSystemPage'));
+
+// SlideMind lecture workspace (ported lecturer-feature) — nested routes under /lecture
+const LectureWorkspace = lazy(() => import('./features/lecture/LectureWorkspace'));
 
 
 interface ActivityLog {
@@ -301,6 +307,37 @@ function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Smart Search overlay — Ctrl+F / Ctrl+K content search
+  const [smartSearchOpen, setSmartSearchOpen] = useState(false);
+
+  const handleSmartSearchClose = useCallback(() => {
+    setSmartSearchOpen(false);
+  }, []);
+
+  const handleSmartSearchSelect = useCallback((hit: SearchHit) => {
+    console.debug('[SmartSearch] selected:', hit);
+    window.dispatchEvent(new CustomEvent('smart-search:select', { detail: hit }));
+  }, []);
+
+  // Keyboard shortcut: Ctrl+F / Ctrl+K — open smart search overlay
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === 'f' || key === 'k') {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+          if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
+        }
+        e.preventDefault();
+        setSmartSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // Fallback: poll hash and force re-render if React Router misses the change
   const lastHashRef = useRef(window.location.hash);
   useEffect(() => {
@@ -500,7 +537,9 @@ function App() {
 
   // Load real logs from Electron/SQLite on mount
   useEffect(() => {
-    loadData();
+    loadData().finally(() => {
+      window.dispatchEvent(new Event('rheo:boot-ready'));
+    });
   }, []);
 
   // Load auto-start status on mount
@@ -1400,8 +1439,25 @@ function App() {
   const [showConfirmExport, setShowConfirmExport] = useState<'csv' | 'json' | null>(null);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-  const [showWorkspaceWarning, setShowWorkspaceWarning] = useState(false);
   const [devTriggerOpen, setDevTriggerOpen] = useState(false);
+  const DEV_TRIGGER_ENABLED = true;
+
+  // ── Dev Inject State ────────────────────────────────────────────────
+  const [devSleepInject, setDevSleepInject] = useState({
+    bedtime: { hours: 22, minutes: 0 },
+    waketime: { hours: 7, minutes: 0 },
+    fellAsleepAt: { hours: 22, minutes: 15 },
+    wakeUpAt: { hours: 6, minutes: 55 },
+    date: '',
+  });
+  const [devSleepDetectionResult, setDevSleepDetectionResult] = useState<{
+    gapMinutes: number; suggestedBedtime: string; suggestedWakeTime: string; adjacentGaps?: AdjacentSleepGap[];
+  } | null>(null);
+  const [devPreviewGaps, setDevPreviewGaps] = useState<AdjacentSleepGap[]>([]);
+  const [devDetectedGaps, setDevDetectedGaps] = useState<any[]>([]);
+  const [devAfkInject, setDevAfkInject] = useState({ idleMinutes: 10, defaultNotAfk: true });
+  const [devGapsInject, setDevGapsInject] = useState({ period: 'today' as const, minGapMinutes: 5 });
+  const [devAfkQueueView, setDevAfkQueueView] = useState<any[]>([]);
   const [settingsHasChanges, setSettingsHasChanges] = useState(false);
   const settingsSaveFnRef = useRef<(() => void) | null>(null);
   const [aiSummary, setAiSummary] = useState('');
@@ -2475,26 +2531,18 @@ Trend: +14% vs. yesterday. Keep it up!`;
   }, [navigate, pendingNavigation]);
 
   const handleWorkspaceSaveAndNavigate = useCallback(async () => {
-    setShowWorkspaceWarning(false);
     const saveFn = (window as any).__workspaceSave;
     if (saveFn) await saveFn();
     if (pendingNavigation) {
       navigate(pendingNavigation);
       setPendingNavigation(null);
-    } else {
-      // Window close � allow Electron to close
-      (window as any).deskflowAPI?.workspaceAllowClose?.();
     }
   }, [navigate, pendingNavigation]);
 
   const handleWorkspaceDiscardChanges = useCallback(() => {
-    setShowWorkspaceWarning(false);
     if (pendingNavigation) {
       navigate(pendingNavigation);
       setPendingNavigation(null);
-    } else {
-      // Window close � allow Electron to close without saving
-      (window as any).deskflowAPI?.workspaceAllowClose?.();
     }
   }, [navigate, pendingNavigation]);
 
@@ -2522,17 +2570,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
   // Handle sidebar navigation with unsaved changes check
 
   // Listen for main process requesting save on window close
-  useEffect(() => {
-    const unsub = (window as any).deskflowAPI?.onWorkspaceRequestSave?.(() => {
-      if ((window as any).__workspaceHasUnsavedChanges) {
-        setPendingNavigation(null); // not a navigation � it's a window close
-        setShowWorkspaceWarning(true);
-      } else {
-        (window as any).deskflowAPI?.workspaceAllowClose?.();
-      }
-    });
-    return () => { unsub?.(); };
-  }, []);
+  // (removed - close is always allowed now)
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -2607,23 +2645,180 @@ Trend: +14% vs. yesterday. Keep it up!`;
       duration_seconds: 1800,
     });
   };
-  const devFireSmartFill = async () => {
-    try {
-      const gaps = await (window as any).deskflowAPI?.detectUsageGaps?.({ period: 'today', minGapMinutes: 5 });
-      if (Array.isArray(gaps) && gaps.length > 0) {
-        const fillGaps = gaps.map((g: any, i: number) => ({
-          id: `gap-${i}`,
-          start: new Date(g.start),
-          end: new Date(g.end),
-          duration_seconds: g.durationSeconds,
-        }));
-        setSmartFillGaps(fillGaps);
-        setSmartFillSource('external');
-      }
-    } catch (err) {
-      console.error('[DevTrigger] Failed to detect gaps for smart fill:', err);
-    }
-  };
+const devFireSmartFill = async () => {
+     try {
+       const gaps = await (window as any).deskflowAPI?.detectUsageGaps?.({ period: 'today', minGapMinutes: 5 });
+       if (Array.isArray(gaps) && gaps.length > 0) {
+         const fillGaps = gaps.map((g: any, i: number) => ({
+           id: `gap-${i}`,
+           start: new Date(g.start),
+           end: new Date(g.end),
+           duration_seconds: g.durationSeconds,
+         }));
+         setSmartFillGaps(fillGaps);
+         setSmartFillSource('external');
+       }
+     } catch (err) {
+       console.error('[DevTrigger] Failed to detect gaps for smart fill:', err);
+     }
+   };
+
+   // ── Dev Inject Handlers ───────────────────────────────────────
+   const runSleepDetectionInject = async () => {
+     try {
+       const data = await (window as any).deskflowAPI?.checkSleepDetection?.();
+       if (data?.detected) {
+         setDevSleepDetectionResult(data);
+         const bed = new Date(data.suggestedBedtime);
+         const wake = new Date(data.suggestedWakeTime);
+         setDevSleepInject(prev => ({
+           ...prev,
+           bedtime: { hours: bed.getHours(), minutes: bed.getMinutes() },
+           waketime: { hours: wake.getHours(), minutes: wake.getMinutes() },
+           date: '',
+         }));
+         const bd = new Date(bed);
+         if (bd.getHours() < 12) bd.setDate(bd.getDate() - 1);
+         setDevSleepInject(prev => ({ ...prev, date: `${bd.getFullYear()}-${String(bd.getMonth()+1).padStart(2,'0')}-${String(bd.getDate()).padStart(2,'0')}` }));
+       }
+     } catch { /* ignore */ }
+   };
+
+   const previewAdjacentGapsInject = async () => {
+     try {
+       const bedtime = new Date(devSleepInject.date + 'T00:00:00');
+       const deviceOff = new Date(bedtime);
+       deviceOff.setHours(devSleepInject.bedtime.hours, devSleepInject.bedtime.minutes, 0, 0);
+       if (devSleepInject.bedtime.hours < 12) deviceOff.setDate(deviceOff.getDate() + 1);
+       const deviceOn = new Date(bedtime);
+       deviceOn.setHours(devSleepInject.waketime.hours, devSleepInject.waketime.minutes, 0, 0);
+       if (devSleepInject.waketime.hours < 12) deviceOn.setDate(deviceOn.getDate() + 1);
+       if (deviceOn <= deviceOff) deviceOn.setDate(deviceOn.getDate() + 1);
+       const result = await (window as any).deskflowAPI?.computeAdjacentGaps?.({
+         sleepStartIso: deviceOff.toISOString(),
+         sleepEndIso: deviceOn.toISOString(),
+       });
+       const gaps = result?.gaps || [];
+       setDevPreviewGaps(gaps);
+     } catch { /* ignore */ }
+   };
+
+   const confirmSleepInject = async () => {
+     try {
+       const bedtime = new Date(devSleepInject.date + 'T00:00:00');
+       const deviceOff = new Date(bedtime);
+       deviceOff.setHours(devSleepInject.bedtime.hours, devSleepInject.bedtime.minutes, 0, 0);
+       if (devSleepInject.bedtime.hours < 12) deviceOff.setDate(deviceOff.getDate() + 1);
+       const fellAsleep = new Date(bedtime);
+       fellAsleep.setHours(devSleepInject.fellAsleepAt.hours, devSleepInject.fellAsleepAt.minutes, 0, 0);
+       if (devSleepInject.fellAsleepAt.hours < 12) fellAsleep.setDate(fellAsleep.getDate() + 1);
+       const wokeUp = new Date(bedtime);
+       wokeUp.setHours(devSleepInject.wakeUpAt.hours, devSleepInject.wakeUpAt.minutes, 0, 0);
+       if (devSleepInject.wakeUpAt.hours < 12) wokeUp.setDate(wokeUp.getDate() + 1);
+       const deviceOn = new Date(bedtime);
+       deviceOn.setHours(devSleepInject.waketime.hours, devSleepInject.waketime.minutes, 0, 0);
+       if (devSleepInject.waketime.hours < 12) deviceOn.setDate(deviceOn.getDate() + 1);
+       if (wokeUp <= deviceOff) { wokeUp.setDate(wokeUp.getDate() + 1); deviceOn.setDate(deviceOn.getDate() + 1); }
+       if (deviceOn <= wokeUp) deviceOn.setDate(deviceOn.getDate() + 1);
+       const deviceOffToSleepSec = Math.max(0, Math.round((fellAsleep.getTime() - deviceOff.getTime()) / 1000));
+       const wakeUpToAppSec = Math.max(0, Math.round((deviceOn.getTime() - wokeUp.getTime()) / 1000));
+       if (window.deskflowAPI?.confirmSleep) {
+         const result = await window.deskflowAPI.confirmSleep({
+           started_at: deviceOff.toISOString(), ended_at: wokeUp.toISOString(),
+           device_off_to_sleep_seconds: deviceOffToSleepSec, wake_up_to_app_seconds: wakeUpToAppSec,
+         });
+         if (result?.success) {
+           window.dispatchEvent(new CustomEvent('sleep-confirmed'));
+           window.dispatchEvent(new CustomEvent('external-data-changed'));
+           let gaps: any[] = [];
+           try {
+             const gapResult = await (window as any).deskflowAPI?.computeAdjacentGaps?.({
+               sleepStartIso: deviceOff.toISOString(), sleepEndIso: wokeUp.toISOString(),
+             });
+             gaps = gapResult?.gaps || [];
+           } catch {}
+           if (gaps.length === 0) gaps = devSleepDetectionResult?.adjacentGaps || [];
+           setDevSleepDetectionResult(prev => prev ? { ...prev, adjacentGaps: gaps } : prev);
+           setDevPreviewGaps(gaps);
+           setSleepModalStep('gaps');
+           setShowSleepDetection(true);
+           return;
+         }
+       }
+     } catch (err) { console.error('[App] confirmSleepInject failed:', err); }
+     setShowSleepDetection(false);
+   };
+
+   const injectAfkEntry = () => {
+     const nowMs = Date.now();
+     const entry: AfkPromptEntry = {
+       id: afkQueueIdRef.current++,
+       duration: `${devAfkInject.idleMinutes}m`,
+       idleStartMs: nowMs - devAfkInject.idleMinutes * 60 * 1000,
+       returnMs: nowMs,
+       defaultNotAfk: devAfkInject.defaultNotAfk,
+     };
+     setAfkPromptQueue(prev => {
+       setDevAfkQueueView([...prev, entry]);
+       return [...prev, entry];
+     });
+     afkPromptShownRef.current = false;
+   };
+
+   const detectGapsInject = async () => {
+     try {
+       const gaps = await (window as any).deskflowAPI?.detectUsageGaps?.({ period: devGapsInject.period, minGapMinutes: devGapsInject.minGapMinutes });
+       if (Array.isArray(gaps)) setDevDetectedGaps(gaps);
+     } catch { /* ignore */ }
+   };
+
+   const fillSleepGapsInject = () => {
+     if (sleepDetectionData?.adjacentGaps?.length) {
+       const gaps = sleepDetectionData.adjacentGaps.map((g, i) => ({
+         id: `sleep-gap-${i}`, start: new Date(g.start), end: new Date(g.end), duration_seconds: g.durationSeconds,
+       }));
+       setSmartFillGaps(gaps);
+       setSmartFillSource('sleep');
+     } else {
+       // Fallback: detect gaps around a synthetic sleep window
+       const now = new Date();
+       const sleepStart = new Date(now.getTime() - 8 * 3600000);
+       const sleepEnd = new Date(now.getTime() - 7 * 3600000);
+       (window as any).deskflowAPI?.computeAdjacentGaps?.({
+         sleepStartIso: sleepStart.toISOString(), sleepEndIso: sleepEnd.toISOString(),
+       }).then((r: any) => {
+         const gaps = (r?.gaps || []).map((g: any, i: number) => ({
+           id: `auto-sleep-gap-${i}`, start: new Date(g.start), end: new Date(g.end), duration_seconds: g.durationSeconds,
+         }));
+         setSmartFillGaps(gaps);
+         setSmartFillSource('sleep');
+       }).catch(() => {});
+     }
+   };
+
+   const fillAfkGapsInject = () => {
+     const entry = afkPromptQueue[0];
+     if (entry?.idleStartMs && entry?.returnMs) {
+       const gaps = [{ id: 'afk-gap', start: new Date(entry.idleStartMs), end: new Date(entry.returnMs), duration_seconds: Math.round((entry.returnMs - entry.idleStartMs) / 1000) }];
+       setSmartFillGaps(gaps);
+       setSmartFillSource('afk');
+     }
+   };
+
+   const dismissAllDev = () => {
+     setShowSleepDetection(false); setSleepDetectionData(null); setSleepModalStep('sleep');
+     setSleepFillActivities(null); setSleepFillSessions(null); setSleepGapFillTarget(null);
+     setSleepGapQueue([]); setSleepFilledGapStarts([]);
+     setAfkPromptQueue([]); setAfkGapsData(null); setAfkGapFillTarget(null);
+     setAfkGapQueue([]); setAfkFilledGapStarts([]);
+     setSmartFillGaps(null); setSmartFillSource(null);
+     setShowManualAssign(false); setPairPhoneModal(null); setShowConfirmClear(false);
+     setShowConfirmExport(null); setShowSummary(false); setNotifPanelOpen(false);
+     setShowWorkspaceWarning(false); setShowUnsavedWarning(false);
+     setPaletteOpen(false); setDevForceGapBannerMinutes(null);
+     setDevDetectedGaps([]); setDevSleepDetectionResult(null); setDevPreviewGaps([]);
+     setDevAfkQueueView([]); setShowGapDrawer(false); setDevTriggerOpen(false);
+   };
   const devFireManualAssign = () => setShowManualAssign(true);
   const devFirePairPhone = () => setPairPhoneModal({ terminalId: 'test-terminal', label: 'Test Device' });
   const devFireConfirmExportCsv = () => setShowConfirmExport('csv');
@@ -2634,7 +2829,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
   const devForceGapBanner = () => setDevForceGapBannerMinutes(45);
   const devFireNotifPanel = () => setNotifPanelOpen(true);
   const devFireCommandPalette = () => setPaletteOpen(true);
-  const devFireWorkspaceWarning = () => setShowWorkspaceWarning(true);
+  const devFireWorkspaceWarning = () => {};
   const devFireUnsavedWarning = () => setShowUnsavedWarning(true);
   const devFireGapDrawer = () => window.dispatchEvent(new CustomEvent('open-gap-drawer'));
   const devFireGapBannerSetting = () => {
@@ -2886,21 +3081,30 @@ Trend: +14% vs. yesterday. Keep it up!`;
               <RotateCcw className="w-4 h-4" />
             </button>
 
-            <motion.button
-              onClick={toggleTracking}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium transition ${isTracking
-                ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                }`}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              {isTracking ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              {isTracking ? 'Pause Tracking' : 'Resume Tracking'}
-            </motion.button>
-          </div>
-        </div>
-        )}
+<motion.button
+               onClick={toggleTracking}
+               className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium transition ${isTracking
+                 ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                 : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                 }`}
+               whileHover={{ scale: 1.02 }}
+               whileTap={{ scale: 0.98 }}
+             >
+               {isTracking ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+               {isTracking ? 'Pause Tracking' : 'Resume Tracking'}
+             </motion.button>
+             {DEV_TRIGGER_ENABLED && (
+               <button
+                 onClick={() => setDevTriggerOpen(true)}
+                 title="DevTrigger Panel"
+                 className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 transition"
+               >
+                 <Bug className="w-4 h-4" />
+               </button>
+             )}
+           </div>
+         </div>
+         )}
 
         {/* Main Scroll Area */}
         <div className={`flex-1 min-h-0 ${location.pathname === '/terminal' || location.pathname === '/database' ? 'flex flex-col overflow-hidden' : 'overflow-auto'}`}>
@@ -2961,6 +3165,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
               <Route path="/life" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Life...</div>}><LifePage /></Suspense></ErrorBoundary>} />
 
               <Route path="/learn" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Learn...</div>}><LearnPage /></Suspense></ErrorBoundary>} />
+              <Route path="/lecture/*" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Lecture...</div>}><LectureWorkspace /></Suspense></ErrorBoundary>} />
               <Route path="/conductor" element={<div className="flex items-center justify-center h-full text-zinc-500 text-sm">Conductor is now in the workspace sidebar</div>} />
 
               <Route path="/agentic" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Agentic System...</div>}><AgenticSystemPage /></Suspense></ErrorBoundary>} />
@@ -3043,55 +3248,7 @@ Trend: +14% vs. yesterday. Keep it up!`;
             )}
           </AnimatePresence>
 
-          {/* -- Workspace Unsaved Warning Modal -- */}
-          <AnimatePresence>
-            {showWorkspaceWarning && (
-              <div className="fixed inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-[66]" onClick={() => setShowWorkspaceWarning(false)}>
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.92 }}
-                  className="glass rounded-3xl p-8 w-full max-w-sm"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-                      <AlertTriangle className="w-5 h-5 text-amber-400" />
-                    </div>
-                    <div>
-                      <div className="font-semibold text-lg">Unsaved Workspace</div>
-                      <div className="text-xs text-zinc-400 light:text-zinc-500">You have open terminals.</div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 mb-6 light:bg-amber-50/50 light:text-amber-600 light:border-amber-200/20">
-                    <p>Save your workspace to preserve open terminals, layout, and sidebar config before leaving.</p>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={handleWorkspaceSaveAndNavigate}
-                      className="w-full py-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition text-sm font-medium border border-emerald-500/30 light:bg-emerald-50/50 light:text-emerald-600 light:border-emerald-200/30"
-                    >
-                      {pendingNavigation ? 'Save & Navigate' : 'Save & Close'}
-                    </button>
-                    <button
-                      onClick={handleWorkspaceDiscardChanges}
-                      className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-sm font-medium light:bg-white light:text-zinc-700 light:hover:bg-zinc-100"
-                    >
-                      {pendingNavigation ? 'Discard & Navigate' : 'Discard & Close'}
-                    </button>
-                    <button
-                      onClick={() => { setShowWorkspaceWarning(false); setPendingNavigation(null); }}
-                      className="w-full py-2 rounded-xl text-zinc-500 hover:text-zinc-400 transition text-xs light:text-zinc-400 light:hover:text-zinc-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
+          {/* -- Workspace Unsaved Warning Modal (removed - close always allowed) -- */}
 
           {/* -- Sleep Detection Modal -- */}
           <AnimatePresence>
@@ -3540,6 +3697,43 @@ Trend: +14% vs. yesterday. Keep it up!`;
               }
             }}
           />
+
+          {/* Smart Search Overlay — Ctrl+F / ⌘F content search within current page */}
+          <SmartSearchOverlay
+            open={smartSearchOpen}
+            onClose={handleSmartSearchClose}
+            onSelect={handleSmartSearchSelect}
+            shortcutHint="⌘F"
+          />
+          {DEV_TRIGGER_ENABLED && (
+            <DevTriggerPanel
+              open={devTriggerOpen}
+              onClose={() => setDevTriggerOpen(false)}
+              triggers={devTriggers}
+              onFire={(id) => { const t = devTriggers.find(x => x.id === id); t?.fire?.(); }}
+              onPrepAndFire={(id) => { const t = devTriggers.find(x => x.id === id); t?.prepAndFire?.(); }}
+              hasPrep={(id) => !!devTriggers.find(x => x.id === id)?.prepAndFire}
+              prepLabel={(id) => devTriggers.find(x => x.id === id)?.prepLabel?.() || 'Prep+Fire'}
+              devSleepInject={devSleepInject}
+              setDevSleepInject={setDevSleepInject}
+              devSleepDetectionResult={devSleepDetectionResult}
+              devPreviewGaps={devPreviewGaps}
+              devDetectedGaps={devDetectedGaps}
+              devAfkInject={devAfkInject}
+              setDevAfkInject={setDevAfkInject}
+              devGapsInject={devGapsInject}
+              setDevGapsInject={setDevGapsInject}
+              devAfkQueueView={devAfkQueueView}
+              runSleepDetectionInject={runSleepDetectionInject}
+              previewAdjacentGapsInject={previewAdjacentGapsInject}
+              confirmSleepInject={confirmSleepInject}
+              injectAfkEntry={injectAfkEntry}
+              detectGapsInject={detectGapsInject}
+              fillSleepGapsInject={fillSleepGapsInject}
+              fillAfkGapsInject={fillAfkGapsInject}
+              dismissAllDev={dismissAllDev}
+            />
+          )}
         </div>
       </div>
       </div>

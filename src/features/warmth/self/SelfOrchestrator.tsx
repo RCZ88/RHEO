@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo, isValidElement, cloneElement } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   User, Network, Brain, RefreshCw, ChevronDown, ChevronRight,
@@ -56,17 +56,11 @@ function StatPill({ label, sublabel, value, icon, color }: StatPillProps) {
           className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: `${color}12`, border: `1px solid ${color}25` }}
         >
-          {(() => {
-            const el = icon as React.ReactElement
-            // Clone without relying on a global `React` reference at runtime
-            // (production JSX compiled by vite does not necessarily expose global React)
-            return {
-              ...el.props,
-              size: 13,
-              style: { color, ...el.props.style },
-              children: (el.props && (el.props as any).children) ?? undefined,
-            } as any
-          })()}
+          {typeof icon === 'string'
+            ? icon
+            : isValidElement(icon)
+              ? cloneElement(icon as React.ReactElement, { size: 13, style: { color, ...(icon as React.ReactElement).props.style } } as any)
+              : null}
         </div>
         <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{sublabel}</span>
       </div>

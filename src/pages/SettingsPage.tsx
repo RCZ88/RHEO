@@ -6,7 +6,7 @@ import {
   ChevronRight, X, Plus, GripVertical, Palette, Check, ChevronDown, Globe,
   ChevronLeft, Search, AlertTriangle, Sparkles, ChevronUp, Loader2,
   Eye, EyeOff, DollarSign, Shield, Key, Save, Lock, LockOpen, History, Undo2, Pencil,
-  Upload, FileText, SearchX
+  Upload, FileText, SearchX, Inbox, Keyboard
 } from 'lucide-react';
 import { lazy } from 'react';
 
@@ -39,6 +39,7 @@ import { ProviderDiagnostics } from '../components/ProviderDiagnostics';
 import { GlassCard } from '../components/GlassCard';
 import { PageShell } from '../components/PageShell';
 import { DevicesPanel } from '../components/DevicesPanel';
+import { AuthSettings } from '../components/AuthSettings';
 import BrowserProfileSettings from '../components/BrowserProfileSettings';
 import { BorderBeam } from '../components/ui/border-beam';
 import { Badge } from '../components/ui/badge';
@@ -371,7 +372,8 @@ export default function SettingsPage({
   externalActivityTiers: externalActivityTiersProp = {},
   onExternalActivityTiersChange,
 }: Partial<SettingsPageProps> & { onRegisterSave: (fn: () => void) => void; onReloadData?: () => void }) {
-  const [activeTab, setActiveTab] = useState<'category' | 'colors' | 'general' | 'tracking' | 'prompts' | 'finance' | 'ai' | 'devices' | 'database'>(() => {
+  type TabId = 'category' | 'colors' | 'general' | 'tracking' | 'prompts' | 'finance' | 'ai' | 'devices' | 'database' | 'auth' | 'shortcuts';
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
     const saved = localStorage.getItem('settings-activeTab');
     return (saved as any) || 'category';
   });
@@ -456,6 +458,65 @@ export default function SettingsPage({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeContainer, setActiveContainer] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
+  const savedNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearSavedNoticeTimer = () => {
+    if (savedNoticeTimerRef.current) {
+      clearTimeout(savedNoticeTimerRef.current);
+      savedNoticeTimerRef.current = null;
+    }
+  };
+
+  // === KEYBOARD SHORTCUTS STATE ===
+  const [shortcuts, setShortcuts] = useState<Record<string, string>>({});
+  const [recordingKey, setRecordingKey] = useState<string | null>(null);
+
+  const SHORTCUT_CONFIG: Record<string, { label: string; description: string }> = {
+    voiceInput: { label: 'Voice Input (STT)', description: 'Toggle speech-to-text voice input' },
+    commandPalette: { label: 'Command Palette', description: 'Open command palette search' },
+    aiChatVoice: { label: 'AI Chat Voice Toggle', description: 'Toggle voice mode in AI chat (Ctrl+Shift+M)' },
+    aiPageTranscript: { label: 'AI Page Transcript Rail', description: 'Toggle transcript rail on AI page (Ctrl+Shift+L)' },
+    externalSelect: { label: 'External Activity Select', description: 'Select highlighted external activity (Enter)' },
+    externalDeselect: { label: 'External Activity Deselect', description: 'Deselect external activity (Escape)' },
+  };
+
+  // Load shortcuts on mount
+  useEffect(() => {
+    if (window.deskflowAPI?.getKeyboardShortcuts) {
+      window.deskflowAPI.getKeyboardShortcuts().then(sc => {
+        if (sc && typeof sc === 'object') setShortcuts(sc);
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Start recording a new keybinding
+  const startRecording = (key: string) => {
+    setRecordingKey(key);
+  };
+
+  // Handle key press while recording
+  useEffect(() => {
+    if (!recordingKey) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push('Ctrl');
+      if (e.metaKey) parts.push('Cmd');
+      if (e.altKey) parts.push('Alt');
+      if (e.shiftKey) parts.push('Shift');
+      const keyName = e.key === ' ' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      if (keyName) parts.push(keyName);
+      const shortcut = parts.join('+');
+      setShortcuts(prev => ({ ...prev, [recordingKey]: shortcut }));
+      setRecordingKey(null);
+      // Persist
+      if (window.deskflowAPI?.setKeyboardShortcuts) {
+        window.deskflowAPI.setKeyboardShortcuts({ ...shortcuts, [recordingKey]: shortcut }).catch(() => {});
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [recordingKey, shortcuts]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -893,15 +954,19 @@ export default function SettingsPage({
     localStorage.setItem('deskflow-domain-category-overrides', JSON.stringify(domainCategoryOverrides));
     // Push individual app overrides to main process so tracking uses updated categories immediately
     if (window.deskflowAPI?.setAppCategory) {
-      for (const [appName, category] of Object.entries(appCategoryOverrides)) {
-        await window.deskflowAPI.setAppCategory(appName, category);
-      }
+      await Promise.all(
+        Object.entries(appCategoryOverrides).map(([appName, category]) =>
+          window.deskflowAPI!.setAppCategory(appName, category)
+        )
+      );
     }
     // Push domain overrides to main process
     if (window.deskflowAPI?.setDomainCategory) {
-      for (const [domain, category] of Object.entries(domainCategoryOverrides)) {
-        await window.deskflowAPI.setDomainCategory(domain, category);
-      }
+      await Promise.all(
+        Object.entries(domainCategoryOverrides).map(([domain, category]) =>
+          window.deskflowAPI!.setDomainCategory(domain, category)
+        )
+      );
     }
     localStorage.setItem('deskflow-animation-speed', animationSpeed);
     localStorage.setItem('deskflow-agent-colors', JSON.stringify(agentColorOverrides));
@@ -965,16 +1030,16 @@ export default function SettingsPage({
     if (window.deskflowAPI?.setLockedItems) {
       await window.deskflowAPI.setLockedItems({ lockedApps, lockedDomains });
     }
-    } catch (err) {
-      console.error('[Settings] Save failed:', err);
-    } finally {
-      setHasChanges(false);
-      onHasChangesChange(false);
-      setSavedNotice(true);
-      clearSavedNoticeTimer();
-      savedNoticeTimerRef.current = setTimeout(() => setSavedNotice(false), 2500);
-    }
-  };
+  } catch (err) {
+    console.error('[Settings] Save failed:', err);
+  } finally {
+    setHasChanges(false);
+    onHasChangesChange(false);
+    setSavedNotice(true);
+    clearSavedNoticeTimer();
+    savedNoticeTimerRef.current = setTimeout(() => setSavedNotice(false), 2500);
+  }
+};
 
   const handleAppColorChange = (app: string, color: string) => {
     setLocalAppColors(prev => ({ ...prev, [app]: color }));
@@ -1041,10 +1106,10 @@ export default function SettingsPage({
   };
 
   const toggleLockAllApps = async () => {
-    const allLocked = filteredAppStats.every((a: any) => lockedApps[a.app]);
+    const allLocked = displayedAppStats.every((a: any) => lockedApps[a.app]);
     const newLocked: Record<string, boolean> = {};
     if (!allLocked) {
-      filteredAppStats.forEach((a: any) => { newLocked[a.app] = true; });
+      displayedAppStats.forEach((a: any) => { newLocked[a.app] = true; });
     }
     setLockedApps(newLocked);
     if (window.deskflowAPI?.setLockedItems) {
@@ -1053,10 +1118,10 @@ export default function SettingsPage({
   };
 
   const toggleLockAllDomains = async () => {
-    const allLocked = filteredDomainStats.every((d: any) => lockedDomains[d.domain]);
+    const allLocked = displayedDomainStats.every((d: any) => lockedDomains[d.domain]);
     const newLocked: Record<string, boolean> = {};
     if (!allLocked) {
-      filteredDomainStats.forEach((d: any) => { newLocked[d.domain] = true; });
+      displayedDomainStats.forEach((d: any) => { newLocked[d.domain] = true; });
     }
     setLockedDomains(newLocked);
     if (window.deskflowAPI?.setLockedItems) {
@@ -1319,6 +1384,8 @@ export default function SettingsPage({
     { id: 'finance', label: 'Finance' },
     { id: 'devices', label: 'Devices' },
     { id: 'database', label: 'Database' },
+    { id: 'auth', label: 'Auth' },
+    { id: 'shortcuts', label: 'Keyboard Shortcuts' },
   ];
 
   const [domainStats, setDomainStats] = useState<any[]>([]);
@@ -1339,6 +1406,18 @@ export default function SettingsPage({
   useEffect(() => {
     localStorage.setItem('settings-activeTab', activeTab);
   }, [activeTab]);
+
+  // Listen for external tab navigation requests
+  useEffect(() => {
+    const handleOpenTab = (event: CustomEvent) => {
+      const tab = event.detail;
+      if (tab && tabs.some(t => t.id === tab)) {
+        setActiveTab(tab as any);
+      }
+    };
+    window.addEventListener('settings:open-tab', handleOpenTab as any);
+    return () => window.removeEventListener('settings:open-tab', handleOpenTab as any);
+  }, [tabs]);
 
   const [editingAppCategory, setEditingAppCategory] = useState<string | null>(null);
   const [editingDomainCategory, setEditingDomainCategory] = useState<string | null>(null);
@@ -1366,6 +1445,7 @@ export default function SettingsPage({
     ai: ['ai', 'openrouter', 'api key', 'provider', 'routing', 'daily brief', 'research', 'topics', 'usage', 'cost', 'data access', 'agent color', 'diagnostics', 'multi-provider'],
     finance: ['finance', 'currency', 'auto-save', 'security', 'password', 'lock', 'masking', 'balance', 'recalculate'],
     devices: ['devices', 'device'],
+    auth: ['auth', 'login', 'register', 'sync', 'password', 'account'],
   };
 
   const findMatchingTab = (query: string): string | null => {
@@ -1649,7 +1729,11 @@ export default function SettingsPage({
     return `${diffDay}d ago`;
   };
 
+  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(false);
+
   const ITEMS_PER_PAGE = 5;
+
+  const uncategorizedCategories = ['Uncategorized', 'Other', ''];
 
   const filteredAppStats = appSearchFilter
     ? appStats.filter((a: any) => a.app.toLowerCase().includes(appSearchFilter.toLowerCase()))
@@ -1658,6 +1742,16 @@ export default function SettingsPage({
   const filteredDomainStats = domainSearchFilter
     ? domainStats.filter((s: any) => s.domain.toLowerCase().includes(domainSearchFilter.toLowerCase()))
     : domainStats;
+
+  const uncategorizedApps = filteredAppStats.filter((a: any) =>
+    uncategorizedCategories.includes(appCategoryOverrides[a.app] || a.category || 'Other')
+  );
+  const uncategorizedDomains = filteredDomainStats.filter((s: any) =>
+    uncategorizedCategories.includes(domainCategoryOverrides[s.domain] || s.category || 'Other')
+  );
+
+  const displayedAppStats = showUncategorizedOnly ? uncategorizedApps : filteredAppStats;
+  const displayedDomainStats = showUncategorizedOnly ? uncategorizedDomains : filteredDomainStats;
 
   return (
     <PageShell page="settings">
@@ -2617,10 +2711,18 @@ export default function SettingsPage({
                   <p className="text-xs text-zinc-500">Click app to change category · Lock to block AI changes</p>
                 </div>
                 {appStats.length > 0 && (
-                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">{filteredAppStats.length} apps</span>
+                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">{displayedAppStats.length} apps</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowUncategorizedOnly(!showUncategorizedOnly)}
+                  className={`px-3 py-1.5 border rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 ${showUncategorizedOnly ? 'bg-zinc-700 border-zinc-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-600 hover:border-zinc-500 text-zinc-400 hover:text-white'}`}
+                  title="Show only uncategorized apps"
+                >
+                  <Inbox className="w-3.5 h-3.5" />
+                  Uncategorized
+                </button>
                 <button
                   onClick={async () => {
                     setPreAiCategories({ ...appCategoryOverrides });
@@ -2680,7 +2782,7 @@ export default function SettingsPage({
               </div>
             </div>
 
-            {filteredAppStats.length > 0 ? (
+            {displayedAppStats.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
                   <button
@@ -2692,7 +2794,7 @@ export default function SettingsPage({
                   </button>
 
                   <div className={`flex-1 grid gap-2 ${appCarouselExpanded ? 'grid-cols-5' : 'grid-cols-5'}`}>
-                    {filteredAppStats.slice(
+                    {displayedAppStats.slice(
                       appCarouselIndex * (appCarouselExpanded ? 15 : ITEMS_PER_PAGE),
                       appCarouselIndex * (appCarouselExpanded ? 15 : ITEMS_PER_PAGE) + (appCarouselExpanded ? 15 : ITEMS_PER_PAGE)
                     ).map((app: any) => {
@@ -2779,10 +2881,10 @@ export default function SettingsPage({
                   <button
                     onClick={() => {
                       const itemsPerView = appCarouselExpanded ? 15 : ITEMS_PER_PAGE;
-                      const maxPage = Math.max(0, Math.ceil(filteredAppStats.length / itemsPerView) - 1);
+                      const maxPage = Math.max(0, Math.ceil(displayedAppStats.length / itemsPerView) - 1);
                       if (appCarouselIndex < maxPage) setAppCarouselIndex(appCarouselIndex + 1);
                     }}
-                    disabled={appCarouselIndex >= Math.max(0, Math.ceil(filteredAppStats.length / (appCarouselExpanded ? 15 : ITEMS_PER_PAGE)) - 1)}
+                    disabled={appCarouselIndex >= Math.max(0, Math.ceil(displayedAppStats.length / (appCarouselExpanded ? 15 : ITEMS_PER_PAGE)) - 1)}
                     className="flex-shrink-0 p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-150"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -2790,7 +2892,7 @@ export default function SettingsPage({
                 </div>
 
                 {/* Show More/Less Button */}
-                {filteredAppStats.length > 5 && (
+                {displayedAppStats.length > 5 && (
                   <button
                     onClick={() => {
                       setAppCarouselExpanded(!appCarouselExpanded);
@@ -2896,22 +2998,30 @@ export default function SettingsPage({
                   <p className="text-xs text-zinc-500">Click site to change category · Lock to block AI changes</p>
                 </div>
                 {domainStats.length > 0 && (
-                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">{filteredDomainStats.length} sites</span>
+                  <span className="text-xs text-zinc-500 bg-zinc-800/50 light:bg-zinc-100/50 px-2 py-1 rounded-md">{displayedDomainStats.length} sites</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {domainStats.length > 0 && (
+                <button
+                  onClick={() => setShowUncategorizedOnly(!showUncategorizedOnly)}
+                  className={`px-3 py-1.5 border rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 ${showUncategorizedOnly ? 'bg-zinc-700 border-zinc-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-600 hover:border-zinc-500 text-zinc-400 hover:text-white'}`}
+                  title="Show only uncategorized sites"
+                >
+                  <Inbox className="w-3.5 h-3.5" />
+                  Uncategorized
+                </button>
+                {displayedDomainStats.length > 0 && (
                   <button
                     onClick={toggleLockAllDomains}
                     className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 hover:border-zinc-500 text-zinc-400 hover:text-white rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-1.5"
-                    title={filteredDomainStats.every((d: any) => lockedDomains[d.domain]) ? "Unlock all domains" : "Lock all domains"}
+                    title={displayedDomainStats.every((d: any) => lockedDomains[d.domain]) ? "Unlock all domains" : "Lock all domains"}
                   >
-                    {filteredDomainStats.every((d: any) => lockedDomains[d.domain]) ? (
+                    {displayedDomainStats.every((d: any) => lockedDomains[d.domain]) ? (
                       <LockOpen className="w-3.5 h-3.5" />
                     ) : (
                       <Lock className="w-3.5 h-3.5" />
                     )}
-                    {filteredDomainStats.every((d: any) => lockedDomains[d.domain]) ? 'Unlock All' : 'Lock All'}
+                    {displayedDomainStats.every((d: any) => lockedDomains[d.domain]) ? 'Unlock All' : 'Lock All'}
                   </button>
                 )}
                 <button
@@ -2973,7 +3083,7 @@ export default function SettingsPage({
               </div>
             </div>
 
-            {filteredDomainStats.length > 0 ? (
+            {displayedDomainStats.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
                   <button
@@ -2985,7 +3095,7 @@ export default function SettingsPage({
                   </button>
 
                   <div className="flex-1 grid grid-cols-5 gap-2">
-                    {filteredDomainStats.slice(
+                    {displayedDomainStats.slice(
                       domainCarouselIndex * (domainCarouselExpanded ? 15 : ITEMS_PER_PAGE),
                       domainCarouselIndex * (domainCarouselExpanded ? 15 : ITEMS_PER_PAGE) + (domainCarouselExpanded ? 15 : ITEMS_PER_PAGE)
                     ).map((site: any) => {
@@ -3067,10 +3177,10 @@ export default function SettingsPage({
                   <button
                     onClick={() => {
                       const itemsPerView = domainCarouselExpanded ? 15 : ITEMS_PER_PAGE;
-                      const maxPage = Math.max(0, Math.ceil(filteredDomainStats.length / itemsPerView) - 1);
+                      const maxPage = Math.max(0, Math.ceil(displayedDomainStats.length / itemsPerView) - 1);
                       if (domainCarouselIndex < maxPage) setDomainCarouselIndex(domainCarouselIndex + 1);
                     }}
-                    disabled={domainCarouselIndex >= Math.max(0, Math.ceil(filteredDomainStats.length / (domainCarouselExpanded ? 15 : ITEMS_PER_PAGE)) - 1)}
+                    disabled={domainCarouselIndex >= Math.max(0, Math.ceil(displayedDomainStats.length / (domainCarouselExpanded ? 15 : ITEMS_PER_PAGE)) - 1)}
                     className="flex-shrink-0 p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-150"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -3078,7 +3188,7 @@ export default function SettingsPage({
                 </div>
 
                 {/* Show More/Less Button */}
-                {filteredDomainStats.length > 5 && (
+                {displayedDomainStats.length > 5 && (
                   <button
                     onClick={() => {
                       setDomainCarouselExpanded(!domainCarouselExpanded);
@@ -5510,10 +5620,70 @@ export default function SettingsPage({
         </div>
       )}
 
+      {activeTab === 'auth' && (
+        <div data-section="settings.auth" className="space-y-4">
+          <SearchableSection terms={['auth', 'login', 'register', 'sync', 'password']} search={settingsSearch}>
+            <AuthSettings />
+          </SearchableSection>
+        </div>
+      )}
+
       {activeTab === 'devices' && (
         <div data-section="settings.devices" className="space-y-4">
           <SearchableSection terms={['devices', 'device']} search={settingsSearch}>
           <DevicesPanel />
+          </SearchableSection>
+        </div>
+      )}
+
+      {activeTab === 'shortcuts' && (
+        <div data-section="settings.shortcuts" className="space-y-4">
+          <SearchableSection terms={['shortcut', 'keybind', 'hotkey', 'keyboard', 'key', 'bind', 'ctrl', 'command']} search={settingsSearch}>
+          <GlassCard className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold mb-1">Keyboard Shortcuts</h2>
+              <p className="text-xs text-zinc-500">Customize keyboard shortcuts for app actions</p>
+            </div>
+
+            <div className="space-y-3">
+              {Object.entries(shortcuts).map(([key, shortcut]) => {
+                const config = SHORTCUT_CONFIG[key];
+                if (!config) return null;
+                return (
+                  <div key={key} className="flex items-center justify-between py-3 border-b border-zinc-700/30 last:border-0">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <div className="text-sm font-medium text-zinc-200">{config.label}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">{config.description}</div>
+                    </div>
+                    <button
+                      onClick={() => startRecording(key)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-mono transition-colors duration-150 ${recordingKey === key
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                        : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                    >
+                      {recordingKey === key ? (
+                        <>
+                          <span className="animate-pulse text-xs">Recording...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Keyboard className="w-3.5 h-3.5" />
+                          <span className="text-xs">{shortcut}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {typeof shortcuts !== 'object' || !Object.keys(shortcuts).length ? (
+              <div className="py-8 text-center text-sm text-zinc-500">
+                Failed to load shortcuts. Using defaults.
+              </div>
+            ) : null}
+          </GlassCard>
           </SearchableSection>
         </div>
       )}

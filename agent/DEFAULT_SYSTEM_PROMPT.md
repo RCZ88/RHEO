@@ -8,7 +8,7 @@ You are a coding agent (opencode / claude / aider / codex) running **inside the 
 Execute precisely, verify honestly, report in the exact format in §8. Never invent results.
 
 ## 1. Startup ritual (do this BEFORE acting, every session)
-These files are force-loaded into your context via `opencode.json` "instructions": `AGENTS.md`, `MEMORY.md`, `agent/state.md`, `agent/state/_template.md`, `agent/dictionary.md`, `agent/FEATURE_TRACKER.md`, `agent/context.md`, `agent/PROBLEMS.md`.
+These files are force-loaded into your context via `opencode.json` "instructions": `agent/agents.md`, `MEMORY.md`, `agent/state.md`, `agent/state/_template.md`, `agent/dictionary.md`, `agent/FEATURE_TRACKER.md`, `agent/context.md`, `agent/PROBLEMS.md`.
 1. Read `MEMORY.md` FIRST (durable lessons).
 2. Read the state Hub `agent/state.md` — a READ-ONLY index of every active session. Then read
    **YOUR OWN spoke** `agent/state/{SESSION_ID}.md` (current cycle number, your role, in-flight

@@ -27,6 +27,7 @@ export function runMigrations(db: Database.Database) {
 
   const migrations = [
     { version: 1, file: '001_relax_role_check.sql' },
+    { version: 2, file: '002_stt_transcripts.sql' },
   ]
 
   for (const m of migrations) {

@@ -43,7 +43,7 @@ export function MomentumHero({ momentum, loading = false }: MomentumHeroProps) {
 
   if (loading) {
     return (
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/50 light:border-[var(--ws-border)] bg-[rgba(24,24,27,0.60)]">
+      <div className="relative overflow-hidden rounded-xl border border-zinc-800/50 light:border-[var(--ws-border)] ">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent light:from-[var(--page-accent)]/30 light:via-[var(--page-accent)]/10" />
                 <div className="relative p-5 min-h-[200px]">
                   <div className="animate-pulse space-y-3">
@@ -62,7 +62,7 @@ export function MomentumHero({ momentum, loading = false }: MomentumHeroProps) {
           }
 
           return (
-            <div className="relative overflow-hidden rounded-xl border border-zinc-800/50 bg-[rgba(24,24,27,0.60)] light:bg-[var(--color-card)] light:border-[var(--ws-border)]">
+            <div className="relative overflow-hidden rounded-r-xl rounded-l-none border-y border-r border-zinc-800/50 light:border-[var(--ws-border)] border-l-0 h-full">
               <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent light:from-[var(--page-accent)]/30 light:via-[var(--page-accent)]/10" />
 
       {isActive && (

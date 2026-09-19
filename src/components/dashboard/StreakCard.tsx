@@ -70,7 +70,7 @@ export function StreakCard({ goals, className = '' }: StreakCardProps) {
   const topCategories = Object.entries(streaks.categoryStreaks).sort(([, a], [, b]) => b - a).slice(0, 2);
 
   return (
-    <div className={`relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/50 ${className}`}>
+    <div className={`relative rounded-xl overflow-hidden  ${className}`}>
       {/* Top edge highlight */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-orange-500/30 via-orange-500/10 to-transparent" />
 

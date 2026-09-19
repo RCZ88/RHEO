@@ -37,7 +37,7 @@ export default function TitleBar({
     refreshState();
     const poll = setInterval(refreshState, 500);
 
-    const unsubFocus = api?.onWindowFocusChange?.(
+    const unsubFocus = api()?.onWindowFocusChange?.(
       (focused: boolean) => {
         setIsFocused(focused);
         refreshState();
@@ -56,12 +56,10 @@ export default function TitleBar({
 
     // Live push: main process emits 'notification:new' on every enqueue — no
     // more waiting for the 10s poll to update the badge.
-    const unsubNotif = window?.addEventListener?.(
-      'notification:new',
-      (e: any) => {
-        if (!cancelled) setUnreadCount(c => c + 1);
-      },
-    );
+    const onNotifPush = () => {
+      if (!cancelled) setUnreadCount(c => c + 1);
+    };
+    window?.addEventListener?.('notification:new', onNotifPush);
 
     const bar = document.querySelector('[data-titlebar-drag]');
     const onDblClick = () => callApi(a => a.windowMaximize?.());
@@ -72,7 +70,7 @@ export default function TitleBar({
       clearInterval(poll);
       clearInterval(unreadInterval);
       unsubFocus?.();
-      unsubNotif?.();
+      window?.removeEventListener?.('notification:new', onNotifPush);
       bar?.removeEventListener('dblclick', onDblClick);
     };
   }, [refreshState]);
@@ -86,10 +84,10 @@ export default function TitleBar({
 
   return (
     <div
-      className="shrink-0 h-9 flex items-center justify-between select-none"
+      className="relative z-20 shrink-0 h-9 flex items-center justify-between select-none light:bg-stone-200/90"
       style={{
         background: isFocused ? '#1a1a1a' : '#111111',
-        borderBottom: 'none',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
         WebkitAppRegion: 'drag',
       }}
       data-titlebar-drag
@@ -104,7 +102,7 @@ export default function TitleBar({
       >
         <button
           onClick={handleNotifyClick}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 relative"
+          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 relative light:hover:bg-stone-300/50"
           title="Notifications"
         >
           <Bell
@@ -113,18 +111,20 @@ export default function TitleBar({
               color: unreadCount > 0
                 ? (isFocused ? '#fbbf24' : '#d97706')
                 : isFocused ? '#a1a1aa' : '#52525b',
+              light: unreadCount > 0 ? '#b45309' : '#57534e',
             }}
             strokeWidth={1.5}
           />
           {unreadCount > 0 && (
             <span
               className="absolute -top-1 -right-1 flex items-center justify-center
-                text-[10px] font-bold text-white"
+              text-[10px] font-bold text-white light:text-stone-900"
               style={{
                 width: 14,
                 height: 14,
                 borderRadius: '50%',
-                background: 'var(--accent, #6366f1)',
+                background: unreadCount > 0 ? '#fbbf24' : 'transparent',
+                border: '2px solid #121212',
                 boxShadow: '0 0 0 2px #121212',
               }}
             >
@@ -135,42 +135,36 @@ export default function TitleBar({
 
         <button
           onClick={handleMinimize}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5"
+          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
           title="Minimize"
         >
-          <Minus
-            className="w-3.5 h-3.5 transition-colors"
-            style={{ color: isFocused ? '#a1a1aa' : '#52525b' }}
-            strokeWidth={1.5}
-          />
+          <Minus className="w-3.5 h-3.5 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
         </button>
 
         <button
           onClick={handleMaximize}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5"
+          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
           title={isMaximized ? 'Restore' : 'Maximize'}
         >
           {isMaximized ? (
             <span className="relative" style={{ width: 14, height: 14 }}>
               <Square
-                className="absolute transition-colors"
+                className="absolute transition-colors text-zinc-400 light:text-stone-500"
                 style={{
                   top: 1,
                   left: 1,
                   width: 11,
                   height: 11,
-                  color: isFocused ? '#a1a1aa' : '#52525b',
                 }}
                 strokeWidth={1.5}
               />
               <Square
-                className="absolute transition-colors"
+                className="absolute transition-colors text-zinc-400 light:text-stone-500"
                 style={{
                   top: 4,
                   left: 4,
                   width: 11,
                   height: 11,
-                  color: isFocused ? '#a1a1aa' : '#52525b',
                   fill: 'currentColor',
                   fillOpacity: isFocused ? 0.15 : 0.1,
                 }}
@@ -179,8 +173,7 @@ export default function TitleBar({
             </span>
           ) : (
             <Square
-              className="w-3.5 h-3.5 transition-colors"
-              style={{ color: isFocused ? '#a1a1aa' : '#52525b' }}
+              className="w-3.5 h-3.5 transition-colors text-zinc-400 light:text-stone-500"
               strokeWidth={1.5}
               fill="none"
             />
@@ -189,12 +182,11 @@ export default function TitleBar({
 
         <button
           onClick={handleClose}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-red-500/10"
+          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-red-500/10 light:hover:bg-red-200/40"
           title="Close"
         >
           <X
-            className="w-3.5 h-3.5 transition-colors group-hover:text-red-400"
-            style={{ color: isFocused ? '#a1a1aa' : '#52525b' }}
+            className="w-3.5 h-3.5 transition-colors group-hover:text-red-400 text-zinc-400 light:text-stone-500"
             strokeWidth={1.5}
           />
         </button>

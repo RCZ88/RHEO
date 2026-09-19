@@ -25,7 +25,7 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["background.js"]
   },
   "host_permissions": [
     "http://localhost:54321/*",
@@ -36,6 +36,12 @@
       "matches": ["<all_urls>"],
       "js": ["focusOverlay.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["overlay.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
     },
     {
       "matches": [
@@ -56,25 +62,6 @@
       "js": ["ai-context-content.js"],
       "run_at": "document_start",
       "world": "MAIN"
-    },
-    {
-      "matches": [
-        "https://chatgpt.com/*",
-        "https://chat.openai.com/*",
-        "https://claude.ai/*",
-        "https://perplexity.ai/*",
-        "https://you.com/*",
-        "https://gemini.google.com/*",
-        "https://chat.qwen.ai/*",
-        "https://kimi.moonshot.cn/*",
-        "https://chatglm.cn/*",
-        "https://huggingface.co/*",
-        "https://poe.com/*",
-        "https://character.ai/*",
-        "https://deepseek.com/*"
-      ],
-      "js": ["overlay.js"],
-      "run_at": "document_idle"
     }
   ]
 }

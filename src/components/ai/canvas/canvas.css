@@ -1,3 +1,4 @@
+
 /* ═══════════════════════════════════════════════════════════════
    DEEP FIELD — Canvas Chrome
    The infinite work surface
@@ -66,7 +67,7 @@
 .dk-canvas-grid {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px);
   background-size: var(--dk-cell) var(--dk-cell);
   pointer-events: none;
   z-index: 0;
@@ -209,11 +210,11 @@
 
 /* ── 5. CARD MANAGER (right panel) ────────────────────────────── */
 
-.dk-manager {
+/* Replaces dead .dk-manager-* rules — TSX emits dk-canvas-manager-* */
+
+.dk-canvas-manager {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; right: 0; bottom: 0;
   width: 280px;
   background: rgba(11, 11, 13, 0.92);
   backdrop-filter: var(--dk-blur-lg);
@@ -226,30 +227,96 @@
   transform: translateX(0);
   transition: transform var(--dk-dur-slow) var(--dk-ease-out);
 }
-.dk-manager--closed { transform: translateX(100%); }
+.dk-canvas-manager--closed { transform: translateX(100%); }
 
-.dk-manager-header {
+.dk-canvas-manager-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
   border-bottom: 1px solid var(--dk-border-subtle);
 }
-
-.dk-manager-title {
+.dk-canvas-manager-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font: 600 var(--dk-text-sm)/1 var(--dk-sans);
   color: var(--dk-text-primary);
 }
+.dk-canvas-manager-close {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  color: var(--dk-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color var(--dk-dur-fast) var(--dk-ease-out), background var(--dk-dur-fast) var(--dk-ease-out);
+  padding: 0;
+}
+.dk-canvas-manager-close:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
 
-.dk-manager-list {
+.dk-canvas-manager-save-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--dk-border-subtle);
+}
+.dk-canvas-manager-input {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: var(--dk-radius-sm);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--dk-border-subtle);
+  font: 400 var(--dk-text-xs)/1 var(--dk-sans);
+  color: var(--dk-text-primary);
+  outline: none;
+  transition: border-color var(--dk-dur-fast) var(--dk-ease-out);
+}
+.dk-canvas-manager-input::placeholder { color: var(--dk-text-muted); }
+.dk-canvas-manager-input:focus { border-color: var(--dk-border-focus); }
+
+.dk-canvas-manager-save-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--dk-radius-sm);
+  font: 500 var(--dk-text-xs)/1 var(--dk-sans);
+  color: #0b0b0d;
+  background: var(--dk-accent);
+  border: none;
+  cursor: pointer;
+  transition: filter var(--dk-dur-fast) var(--dk-ease-out), opacity var(--dk-dur-fast) var(--dk-ease-out);
+  white-space: nowrap;
+}
+.dk-canvas-manager-save-btn:hover:not(:disabled) { filter: brightness(1.15); }
+.dk-canvas-manager-save-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.dk-canvas-manager-list {
   flex: 1;
   overflow-y: auto;
   padding: 6px;
 }
-.dk-manager-list::-webkit-scrollbar { width: 4px; }
-.dk-manager-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+.dk-canvas-manager-list::-webkit-scrollbar { width: 4px; }
+.dk-canvas-manager-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
 
-.dk-manager-item {
+.dk-canvas-manager-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  font: 400 var(--dk-text-xs)/1.6 var(--dk-sans);
+  color: var(--dk-text-muted);
+}
+
+.dk-canvas-manager-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -258,10 +325,23 @@
   cursor: pointer;
   transition: background var(--dk-dur-fast) var(--dk-ease-out);
 }
-.dk-manager-item:hover { background: rgba(255,255,255,0.04); }
-.dk-manager-item--active { background: rgba(255,255,255,0.07); }
+.dk-canvas-manager-item:hover { background: rgba(255,255,255,0.04); }
+.dk-canvas-manager-item--active { background: rgba(255,255,255,0.07); }
 
-.dk-manager-name {
+.dk-canvas-manager-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dk-canvas-manager-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dk-canvas-manager-name {
   flex: 1;
   font: 400 var(--dk-text-xs)/1.4 var(--dk-sans);
   color: var(--dk-text-secondary);
@@ -269,30 +349,114 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.dk-manager-meta {
+.dk-canvas-manager-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font: 400 10px/1 var(--dk-mono);
   color: var(--dk-text-muted);
 }
 
-.dk-manager-input {
-  padding: 8px 10px;
-  border-top: 1px solid var(--dk-border-subtle);
+.dk-canvas-manager-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
 }
 
-.dk-manager-footer {
-  padding: 8px 10px;
-  border-top: 1px solid var(--dk-border-subtle);
-}
-
-.dk-manager-empty {
-  padding: 24px 16px;
-  text-align: center;
-  font: 400 var(--dk-text-xs)/1.6 var(--dk-sans);
+.dk-canvas-manager-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
   color: var(--dk-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--dk-dur-fast) var(--dk-ease-out), background var(--dk-dur-fast) var(--dk-ease-out);
+  padding: 0;
+}
+.dk-canvas-manager-icon-btn:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
+.dk-canvas-manager-icon-btn.danger:hover { color: var(--dk-danger); background: rgba(239,68,68,0.12); }
+
+.dk-canvas-manager-edit-row .dk-canvas-manager-input {
+  padding: 4px 6px;
+  font-size: 11px;
 }
 
-/* ── 6. DRAWER (command palette) ──────────────────────────────── */
+/* ── 6. CardFrame chrome (shared card header/body/actions) ────── */
+
+.dk-canvas-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 28px;
+  border-bottom: 1px solid var(--dk-border-subtle);
+  user-select: none;
+}
+.dk-canvas-card-type {
+  flex: 1;
+  font: 600 10px/1 var(--dk-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dk-text-muted);
+  text-align: left;
+}
+.dk-canvas-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.dk-canvas-card-actions.floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dk-canvas-pin-btn {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  color: var(--dk-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--dk-dur-fast) var(--dk-ease-out), background var(--dk-dur-fast) var(--dk-ease-out);
+  padding: 0;
+}
+.dk-canvas-pin-btn:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
+.dk-canvas-pin-btn.pinned { color: var(--dk-accent); }
+.dk-canvas-pin-btn.pinned:hover { color: var(--dk-accent); background: rgba(255,255,255,0.06); }
+.dk-canvas-dismiss {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  color: var(--dk-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--dk-dur-fast) var(--dk-ease-out), background var(--dk-dur-fast) var(--dk-ease-out);
+  padding: 0;
+}
+.dk-canvas-dismiss:hover { color: var(--dk-danger); background: rgba(239,68,68,0.10); }
+
+.dk-canvas-card-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+}
+.dk-canvas-card-body::-webkit-scrollbar { width: 4px; }
+.dk-canvas-card-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+/* ── 7. DRAWER (command palette) ──────────────────────────────── */
 
 .dk-drawer {
   position: fixed;
@@ -405,7 +569,7 @@
   cursor: pointer;
 }
 
-/* ── 7. COMMAND PALETTE ───────────────────────────────────────── */
+/* ── 8. COMMAND PALETTE ───────────────────────────────────────── */
 
 .dk-palette {
   position: fixed;
@@ -507,7 +671,7 @@
   color: var(--dk-text-muted);
 }
 
-/* ── 8. INPUT BAR ─────────────────────────────────────────────── */
+/* ── 9. INPUT BAR ─────────────────────────────────────────────── */
 
 .dk-input-bar {
   position: absolute;
@@ -601,7 +765,7 @@
   cursor: pointer;
 }
 
-/* ── 9. SAVE INDICATOR ────────────────────────────────────────── */
+/* ── 10. SAVE INDICATOR ────────────────────────────────────────── */
 
 .dk-save-indicator {
   position: absolute;
@@ -632,7 +796,7 @@
 .dk-save-indicator--saved .dk-save-dot  { background: var(--dk-success); }
 .dk-save-indicator--error .dk-save-dot  { background: var(--dk-danger); }
 
-/* ── 10. FIND TARGET ──────────────────────────────────────────── */
+/* ── 11. FIND TARGET ──────────────────────────────────────────── */
 
 .dk-find-arrow {
   position: absolute;
@@ -651,7 +815,7 @@
   animation: dk-breathe 2s ease-in-out infinite;
 }
 
-/* ── 11. ZOOM CONTROLS ────────────────────────────────────────── */
+/* ── 12. ZOOM CONTROLS ────────────────────────────────────────── */
 
 .dk-zoom-controls {
   position: absolute;
@@ -678,7 +842,7 @@
   color: var(--dk-text-secondary);
 }
 
-/* ── 12. CANVAS HINT ──────────────────────────────────────────── */
+/* ── 13. CANVAS HINT ──────────────────────────────────────────── */
 
 .dk-canvas-hint {
   position: absolute;
@@ -720,7 +884,7 @@ html.light .dk-grain-top {
   background: linear-gradient(180deg, rgba(255,255,255,0.7) 0%, transparent 100%);
 }
 
-/* Manager list */
+/* Manager list (legacy dk-manager-* rules that still apply) */
 html.light .dk-manager-list::-webkit-scrollbar-thumb { background: rgba(28,25,23,0.18); }
 html.light .dk-manager-item:hover { background: rgba(28,25,23,0.04); }
 html.light .dk-manager-item--active { background: rgba(28,25,23,0.07); }
@@ -756,9 +920,8 @@ html.light .dk-zoom-controls { background: rgba(255, 255, 255, 0.92); }
 
 /* ═══════════════════════════════════════════════════════════════
    CANVAS MODE — classes emitted by CanvasContainer / CanvasInput /
-   CanvasCard / CanvasCardFallback that previously had NO CSS
-   (unstyled toolbar buttons, input bar, error fallback).
-   Added 2026-09-10. APPEND ONLY — do not touch sections above.
+   CanvasCard / CanvasCardFallback / CanvasManagerPanel / CardFrame.
+   APPEND ONLY — do not touch sections above.
    ═══════════════════════════════════════════════════════════════ */
 
 /* Container — fills the ai.canvas flex child in AiPage */
@@ -772,7 +935,7 @@ html.light .dk-zoom-controls { background: rgba(255, 255, 255, 0.92); }
   overflow: hidden;
   border-radius: 12px;
   background: var(--dk-bg-base);
-  border: 1px solid var(--dk-border-subtle);
+  border: 1px solid rgba(255,255,255,0.10);
 }
 .dk-canvas-container.fullscreen {
   position: fixed;
@@ -812,7 +975,14 @@ html.light .dk-zoom-controls { background: rgba(255, 255, 255, 0.92); }
   transition: color 120ms cubic-bezier(0.33, 1, 0.68, 1), background 120ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 .dk-canvas-toolbar button:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
-.dk-canvas-toolbar button:disabled { cursor: not-allowed; }
+.dk-canvas-toolbar button:focus-visible {
+  outline: 2px solid var(--dk-accent);
+  outline-offset: 2px;
+}
+.dk-canvas-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
 .dk-canvas-toolbar-separator {
   width: 1px;
   height: 16px;
@@ -919,24 +1089,480 @@ html.light .dk-zoom-controls { background: rgba(255, 255, 255, 0.92); }
 .dk-canvas-btn-dismiss { color: var(--dk-text-secondary); background: transparent; border: 1px solid var(--dk-border-default); }
 .dk-canvas-btn-dismiss:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
 
-/* Card interaction states emitted by CanvasCard.tsx (had no CSS) */
+/* Card interaction states emitted by CanvasCard.tsx */
+.dk-canvas-card {
+  border: 1px solid var(--dk-border-subtle);
+  border-radius: var(--dk-radius-lg);
+  background: rgba(18,18,18,0.98);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--dk-elev-1);
+  transition: border-color 120ms cubic-bezier(0.33, 1, 0.68, 1), box-shadow 120ms cubic-bezier(0.33, 1, 0.68, 1);
+}
 .dk-canvas-card.transient { opacity: 0.6; border-style: dashed; }
 .dk-canvas-card.drop-target {
   border-color: var(--card-accent);
   box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 2px var(--card-accent);
 }
 .dk-canvas-card.status-active { border-color: color-mix(in srgb, var(--card-accent) 24%, var(--dk-border-subtle)); }
+.dk-canvas-card.status-error { border-color: var(--dk-danger); }
+.dk-canvas-card.status-stale { border-color: var(--dk-warning); opacity: 0.85; }
+.dk-canvas-card.status-loading { border-color: var(--dk-accent); }
+.dk-canvas-card.focused {
+  border-color: var(--card-accent, var(--dk-accent));
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 2px color-mix(in srgb, var(--card-accent, var(--dk-accent)) 30%, transparent);
+}
+.dk-canvas-card.dragging {
+  box-shadow: 0 16px 48px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.10);
+  cursor: grabbing;
+  transition: box-shadow 120ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+.dk-canvas-card[data-new="true"] {
+  animation: dk-card-enter 350ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+@keyframes dk-card-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
+/* Light mode — canvas mode block */
 html.light .dk-canvas-container { background: #ffffff; }
-html.light .dk-canvas-toolbar { background: rgba(255, 255, 255, 0.92); }
+html.light .dk-canvas-container { border-color: var(--ws-border); }
+html.light .dk-canvas-toolbar { background: rgba(255, 255, 255, 0.92); border-color: var(--ws-border); }
+html.light .dk-canvas-toolbar button { color: var(--ws-muted-foreground); }
 html.light .dk-canvas-toolbar button:hover { background: rgba(28,25,23,0.06); }
-html.light .dk-canvas-input-inner { background: rgba(255, 255, 255, 0.94); }
+html.light .dk-canvas-toolbar button:focus-visible { outline-color: var(--ws-accent); }
+html.light .dk-canvas-toolbar-separator { background: var(--ws-border-subtle); }
+html.light .dk-canvas-zoom-label { color: var(--ws-muted-foreground); }
+
+html.light .dk-canvas-input-inner { background: rgba(255, 255, 255, 0.94); border-color: var(--ws-border); }
+html.light .dk-canvas-input-inner:focus-within {
+  border-color: var(--ws-accent);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10), 0 0 0 2px rgba(14,116,144,0.14);
+}
+html.light .dk-canvas-input { color: var(--ws-foreground); }
+html.light .dk-canvas-input-thinking { color: var(--ws-muted); }
 html.light .dk-canvas-input-btn.send { color: #ffffff; }
+html.light .dk-canvas-input-btn.stop { color: #fff; }
 html.light .dk-canvas-input-hints { color: rgba(28,25,23,0.40); }
+
+html.light .dk-canvas-card {
+  background: var(--ws-surface);
+  border-color: var(--ws-border-subtle);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+html.light .dk-canvas-card.transient { opacity: 0.6; }
+html.light .dk-canvas-card.drop-target {
+  border-color: var(--ws-accent);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 0 0 2px var(--ws-accent);
+}
+html.light .dk-canvas-card.status-active { border-color: color-mix(in srgb, var(--ws-accent) 24%, var(--ws-border-subtle)); }
+html.light .dk-canvas-card.status-error { border-color: #ef4444; }
+html.light .dk-canvas-card.status-stale { border-color: #f59e0b; opacity: 0.85; }
+html.light .dk-canvas-card.status-loading { border-color: var(--ws-accent); }
+html.light .dk-canvas-card.focused {
+  border-color: var(--ws-accent);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 0 0 2px color-mix(in srgb, var(--ws-accent) 24%, transparent);
+}
+html.light .dk-canvas-card.dragging {
+  box-shadow: 0 12px 32px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.12);
+  cursor: grabbing;
+}
+html.light .dk-canvas-card-header {
+  border-bottom-color: var(--ws-border-subtle);
+  background: rgba(28,25,23,0.02);
+}
+html.light .dk-canvas-card-type { color: var(--ws-muted-foreground); }
+html.light .dk-canvas-card-actions.floating { background: rgba(255,255,255,0.96); border-radius: 8px; padding: 2px; }
+html.light .dk-canvas-pin-btn { color: var(--ws-muted-foreground); }
+html.light .dk-canvas-pin-btn:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-canvas-pin-btn.pinned { color: var(--ws-accent); }
+html.light .dk-canvas-pin-btn.pinned:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-canvas-dismiss:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+
+html.light .dk-canvas-manager {
+  background: rgba(255, 255, 255, 0.96);
+  border-left-color: var(--ws-border-strong);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.10);
+}
+html.light .dk-canvas-manager-header { border-bottom-color: var(--ws-border); }
+html.light .dk-canvas-manager-title { color: var(--ws-foreground); }
+html.light .dk-canvas-manager-close { color: var(--ws-muted-foreground); }
+html.light .dk-canvas-manager-close:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-canvas-manager-save-row { border-bottom-color: var(--ws-border); }
+html.light .dk-canvas-manager-input {
+  background: var(--ws-surface-sunken);
+  border-color: var(--ws-border);
+  color: var(--ws-foreground);
+}
+html.light .dk-canvas-manager-input::placeholder { color: var(--ws-muted); }
+html.light .dk-canvas-manager-input:focus { border-color: var(--ws-border-strong); }
+html.light .dk-canvas-manager-save-btn { color: #fff; }
+html.light .dk-canvas-manager-list::-webkit-scrollbar-thumb { background: rgba(28,25,23,0.18); }
+html.light .dk-canvas-manager-item:hover { background: rgba(28,25,23,0.04); }
+html.light .dk-canvas-manager-item--active { background: rgba(28,25,23,0.07); }
+html.light .dk-canvas-manager-name { color: var(--ws-foreground); }
+html.light .dk-canvas-manager-meta { color: var(--ws-muted-foreground); }
+html.light .dk-canvas-manager-icon-btn { color: var(--ws-muted-foreground); }
+html.light .dk-canvas-manager-icon-btn:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-canvas-manager-icon-btn.danger:hover { color: #ef4444; background: rgba(239,68,68,0.10); }
+html.light .dk-canvas-manager-empty { color: var(--ws-muted-foreground); }
+
+html.light .dk-canvas-btn-retry { color: #fff; }
+html.light .dk-canvas-btn-dismiss { color: var(--ws-muted-foreground); border-color: var(--ws-border); }
+html.light .dk-canvas-btn-dismiss:hover { color: var(--ws-foreground); background: rgba(28,25,23,0.06); }
+
+html.light .dk-canvas-error-icon { color: #ef4444; }
+html.light .dk-canvas-error-type { color: var(--ws-foreground); }
+html.light .dk-canvas-error-msg { color: var(--ws-muted-foreground); }
+html.light .dk-canvas-card-error { background: var(--ws-surface-sunken); }
 
 @media (prefers-reduced-motion: reduce) {
   .dk-canvas-toolbar button,
   .dk-canvas-input-btn,
   .dk-canvas-btn-retry,
-  .dk-canvas-btn-dismiss { transition: none; }
+  .dk-canvas-btn-dismiss,
+  .dk-canvas-card { transition: none; }
+  .dk-canvas-card[data-new="true"] { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   COMMAND PALETTE — dk-cmd-* classes (CommandPalette.tsx)
+   ═══════════════════════════════════════════════════════════════ */
+
+.dk-cmd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.dk-cmd-palette-new {
+  width: 480px;
+  max-height: 420px;
+  border-radius: var(--dk-radius-xl);
+  background: rgba(11, 11, 13, 0.94);
+  backdrop-filter: var(--dk-blur-lg);
+  -webkit-backdrop-filter: var(--dk-blur-lg);
+  border: 1px solid var(--dk-border-default);
+  box-shadow: var(--dk-elev-4);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-cmd-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--dk-border-subtle);
+}
+
+.dk-cmd-input-icon { color: var(--dk-text-muted); flex-shrink: 0; }
+
+.dk-cmd-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font: 400 var(--dk-text-sm)/1 var(--dk-sans);
+  color: var(--dk-text-primary);
+}
+.dk-cmd-input::placeholder { color: var(--dk-text-placeholder); }
+
+.dk-cmd-clear {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  color: var(--dk-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color var(--dk-dur-fast) var(--dk-ease-out), background var(--dk-dur-fast) var(--dk-ease-out);
+}
+.dk-cmd-clear:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
+
+.dk-cmd-suggestions {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+.dk-cmd-suggestions::-webkit-scrollbar { width: 4px; }
+.dk-cmd-suggestions::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+.dk-cmd-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--dk-radius-sm);
+  cursor: pointer;
+  transition: background var(--dk-dur-fast) var(--dk-ease-out);
+}
+.dk-cmd-suggestion:hover,
+.dk-cmd-suggestion.active { background: rgba(255,255,255,0.06); }
+
+.dk-cmd-suggestion-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-cmd-suggestion-icon {
+  flex-shrink: 0;
+  color: var(--dk-text-muted);
+}
+
+.dk-cmd-suggestion-name {
+  font: 500 var(--dk-text-xs)/1.4 var(--dk-sans);
+  color: var(--dk-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-cmd-suggestion-desc {
+  font: 400 10px/1.4 var(--dk-sans);
+  color: var(--dk-text-muted);
+}
+
+.dk-cmd-hints {
+  display: flex;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--dk-border-subtle);
+  font: 400 10px/1 var(--dk-sans);
+  color: var(--dk-text-faint);
+}
+
+.dk-cmd-hint { flex: none; }
+
+/* ── Find cards arrow ── */
+.dk-find-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--dk-radius-pill);
+  font: 500 10px/1 var(--dk-sans);
+  color: var(--card-accent, var(--dk-accent));
+  background: rgba(11, 11, 13, 0.82);
+  backdrop-filter: var(--dk-blur-sm);
+  -webkit-backdrop-filter: var(--dk-blur-sm);
+  border: 1px solid var(--dk-border-default);
+  box-shadow: var(--dk-elev-1);
+  cursor: pointer;
+  transition: background var(--dk-dur-fast) var(--dk-ease-out), border-color var(--dk-dur-fast) var(--dk-ease-out);
+}
+.dk-find-arrow:hover { background: rgba(11, 11, 13, 0.94); border-color: var(--dk-border-strong); }
+
+.dk-find-arrow-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.dk-find-arrow-text {
+  color: var(--dk-text-secondary);
+}
+
+/* ── Save indicator spin ── */
+.dk-save-spin { animation: dk-spin 1s linear infinite; }
+@keyframes dk-spin { to { transform: rotate(360deg); } }
+
+/* ── Transcript rail (right-side message panel) ── */
+.dk-rail {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 320px;
+  background: rgba(11, 11, 13, 0.94);
+  backdrop-filter: var(--dk-blur-lg);
+  -webkit-backdrop-filter: var(--dk-blur-lg);
+  border-left: 1px solid var(--dk-border-default);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform var(--dk-dur-slow) var(--dk-ease-out);
+}
+.dk-rail.collapsed { transform: translateX(100%); }
+
+.dk-rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dk-border-subtle);
+}
+
+.dk-rail-title {
+  font: 600 var(--dk-text-sm)/1 var(--dk-sans);
+  color: var(--dk-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dk-rail-count {
+  font: 400 10px/1 var(--dk-mono);
+  color: var(--dk-text-muted);
+}
+
+.dk-rail-close {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  color: var(--dk-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color var(--dk-dur-fast) var(--dk-ease-out), background var(--dk-dur-fast) var(--dk-ease-out);
+  padding: 0;
+}
+.dk-rail-close:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.06); }
+
+.dk-rail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.dk-rail-body::-webkit-scrollbar { width: 4px; }
+.dk-rail-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+.dk-rail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  font: 400 var(--dk-text-xs)/1.6 var(--dk-sans);
+  color: var(--dk-text-faint);
+}
+
+.dk-rail-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--dk-border-subtle);
+}
+
+.dk-rail-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dk-rail-textarea {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--dk-border-subtle);
+  border-radius: var(--dk-radius-sm);
+  padding: 8px 10px;
+  font: 400 var(--dk-text-sm)/1.5 var(--dk-sans);
+  color: var(--dk-text-primary);
+  outline: none;
+  resize: none;
+  transition: border-color var(--dk-dur-fast) var(--dk-ease-out);
+  height: 32px;
+}
+.dk-rail-textarea::placeholder { color: var(--dk-text-muted); }
+.dk-rail-textarea:focus { border-color: var(--dk-border-focus); }
+
+.dk-rail-send {
+  display: grid;
+  place-items: center;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  color: #0b0b0d;
+  background: var(--card-accent, var(--dk-accent));
+  border: none;
+  cursor: pointer;
+  transition: filter var(--dk-dur-fast) var(--dk-ease-out), opacity var(--dk-dur-fast) var(--dk-ease-out);
+  flex: none;
+}
+.dk-rail-send:hover:not(:disabled) { filter: brightness(1.15); }
+.dk-rail-send:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Rail message bubbles */
+.dk-rail-msg-bubble {
+  padding: 8px 10px;
+  border-radius: var(--dk-radius-md);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--dk-border-subtle);
+  font: 400 var(--dk-text-xs)/1.5 var(--dk-sans);
+  color: var(--dk-text-secondary);
+  word-break: break-word;
+}
+
+.dk-rail-msg-tool {
+  border-style: dashed;
+  border-color: var(--dk-type-automation);
+}
+
+.dk-rail-msg-system {
+  font-style: italic;
+  color: var(--dk-text-muted);
+  text-align: center;
+  font-size: 10px;
+}
+
+.dk-rail-msg-meta {
+  font: 400 9px/1 var(--dk-mono);
+  color: var(--dk-text-faint);
+  margin-top: 4px;
+  display: block;
+}
+
+/* Light mode — command palette + find arrow + save spin + rail */
+html.light .dk-cmd-overlay { background: rgb(28 25 23 / 0.32); }
+html.light .dk-cmd-palette-new { background: rgba(255,255,255,0.96); border-color: var(--ws-border); }
+html.light .dk-cmd-input-row { border-bottom-color: var(--ws-border); }
+html.light .dk-cmd-input { color: var(--ws-foreground); }
+html.light .dk-cmd-input::placeholder { color: var(--ws-muted); }
+html.light .dk-cmd-clear { color: var(--ws-muted-foreground); }
+html.light .dk-cmd-clear:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-cmd-suggestions::-webkit-scrollbar-thumb { background: rgba(28,25,23,0.18); }
+html.light .dk-cmd-suggestion:hover,
+html.light .dk-cmd-suggestion.active { background: rgba(28,25,23,0.06); }
+html.light .dk-cmd-suggestion-name { color: var(--ws-foreground); }
+html.light .dk-cmd-suggestion-desc { color: var(--ws-muted-foreground); }
+html.light .dk-cmd-hints { color: rgba(28,25,23,0.40); border-top-color: var(--ws-border-subtle); }
+
+html.light .dk-find-arrow { background: rgba(255,255,255,0.92); border-color: var(--ws-border); }
+html.light .dk-find-arrow:hover { background: rgba(255,255,255,0.98); border-color: var(--ws-border-strong); }
+html.light .dk-find-arrow-text { color: var(--ws-muted-foreground); }
+
+html.light .dk-save-indicator { color: var(--ws-muted-foreground); }
+html.light .dk-save-indicator--saved { color: var(--ws-success); }
+
+html.light .dk-rail { background: rgba(255,255,255,0.96); border-left-color: var(--ws-border-strong); box-shadow: -8px 0 32px rgba(0,0,0,0.10); }
+html.light .dk-rail-header { border-bottom-color: var(--ws-border); }
+html.light .dk-rail-title { color: var(--ws-foreground); }
+html.light .dk-rail-close { color: var(--ws-muted-foreground); }
+html.light .dk-rail-close:hover { background: rgba(28,25,23,0.06); }
+html.light .dk-rail-body::-webkit-scrollbar-thumb { background: rgba(28,25,23,0.18); }
+html.light .dk-rail-empty { color: var(--ws-muted-foreground); }
+html.light .dk-rail-footer { border-top-color: var(--ws-border); }
+html.light .dk-rail-textarea { background: var(--ws-surface-sunken); border-color: var(--ws-border); color: var(--ws-foreground); }
+html.light .dk-rail-textarea::placeholder { color: var(--ws-muted); }
+html.light .dk-rail-textarea:focus { border-color: var(--ws-border-strong); }
+html.light .dk-rail-send { color: #fff; }
+html.light .dk-rail-msg-bubble { background: rgba(28,25,23,0.04); border-color: var(--ws-border-subtle); color: var(--ws-foreground); }
+html.light .dk-rail-msg-tool { border-color: var(--ws-accent); }
+html.light .dk-rail-msg-system { color: var(--ws-muted-foreground); }
+html.light .dk-rail-msg-meta { color: var(--ws-muted); }

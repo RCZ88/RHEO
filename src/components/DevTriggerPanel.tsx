@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Bug, Zap, Clock, Sparkles, PanelLeftOpen, PanelLeftClose, X,
+  Bug, Zap, Clock, Sparkles, PanelLeftOpen, PanelLeftClose, X, Bed, Plus, Trash2, Circle,
 } from 'lucide-react';
 
 console.log('%c[DevTriggerPanel] v1.0 dev surface loaded', 'color:#fbbf24; font-weight:bold');
@@ -26,6 +26,30 @@ interface DevTriggerPanelProps {
   onPrepAndFire: (id: string) => void;
   hasPrep: (id: string) => boolean;
   prepLabel: (id: string) => string;
+  devSleepInject: { bedtime: { hours: number; minutes: number }; waketime: { hours: number; minutes: number }; fellAsleepAt: { hours: number; minutes: number }; wakeUpAt: { hours: number; minutes: number }; date: string };
+  setDevSleepInject: React.Dispatch<React.SetStateAction<{ bedtime: { hours: number; minutes: number }; waketime: { hours: number; minutes: number }; fellAsleepAt: { hours: number; minutes: number }; wakeUpAt: { hours: number; minutes: number }; date: string }>>;
+  devSleepDetectionResult: { gapMinutes: number; suggestedBedtime: string; suggestedWakeTime: string; adjacentGaps?: any[] } | null;
+  devPreviewGaps: any[];
+  devDetectedGaps: any[];
+  devAfkInject: { idleMinutes: number; defaultNotAfk: boolean };
+  setDevAfkInject: React.Dispatch<React.SetStateAction<{ idleMinutes: number; defaultNotAfk: boolean }>>;
+  devGapsInject: { period: string; minGapMinutes: number };
+  setDevGapsInject: React.Dispatch<React.SetStateAction<{ period: string; minGapMinutes: number }>>;
+  devAfkQueueView: any[];
+  runSleepDetectionInject: () => void;
+  previewAdjacentGapsInject: () => void;
+  confirmSleepInject: () => void;
+  injectAfkEntry: () => void;
+  detectGapsInject: () => void;
+  fillSleepGapsInject: () => void;
+  fillAfkGapsInject: () => void;
+  dismissAllDev: () => void;
+}
+
+function fmt(h: number, m: number): string {
+  const ap = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${m.toString().padStart(2, '0')} ${ap}`;
 }
 
 export default function DevTriggerPanel({
@@ -38,6 +62,24 @@ export default function DevTriggerPanel({
   onPrepAndFire,
   hasPrep,
   prepLabel,
+  devSleepInject,
+  setDevSleepInject,
+  devSleepDetectionResult,
+  devPreviewGaps,
+  devDetectedGaps,
+  devAfkInject,
+  setDevAfkInject,
+  devGapsInject,
+  setDevGapsInject,
+  devAfkQueueView,
+  runSleepDetectionInject,
+  previewAdjacentGapsInject,
+  confirmSleepInject,
+  injectAfkEntry,
+  detectGapsInject,
+  fillSleepGapsInject,
+  fillAfkGapsInject,
+  dismissAllDev,
 }: DevTriggerPanelProps) {
   const [activeTab, setActiveTab] = useState<'fire' | 'inject' | 'schedule'>('fire');
 
@@ -154,12 +196,194 @@ export default function DevTriggerPanel({
               )}
 
               {activeTab === 'inject' && (
-                <div className="text-zinc-500 text-sm">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span className="font-medium text-zinc-300">Inject Tab — coming soon</span>
+                <div className="space-y-6">
+                  {/* Sleep Section */}
+                  <div className="bg-zinc-800/40 rounded-xl border border-zinc-700/30 p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Bed className="w-4 h-4 text-indigo-400" />
+                      <span className="font-medium text-white text-sm">Sleep Injector</span>
+                      <span className="text-[10px] text-zinc-500 ml-auto">pre-sleep / post-sleep gap fill</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Date</label>
+                        <input
+                          type="date"
+                          value={devSleepInject.date}
+                          onChange={e => setDevSleepInject(prev => ({ ...prev, date: e.target.value }))}
+                          className="w-full mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Bedtime</label>
+                        <div className="flex gap-1 mt-1">
+                          <input type="number" min="0" max="23" value={devSleepInject.bedtime.hours}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, bedtime: { ...prev.bedtime, hours: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                          <span className="text-zinc-500 text-xs mt-1.5">:</span>
+                          <input type="number" min="0" max="59" value={devSleepInject.bedtime.minutes}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, bedtime: { ...prev.bedtime, minutes: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Waketime</label>
+                        <div className="flex gap-1 mt-1">
+                          <input type="number" min="0" max="23" value={devSleepInject.waketime.hours}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, waketime: { ...prev.waketime, hours: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                          <span className="text-zinc-500 text-xs mt-1.5">:</span>
+                          <input type="number" min="0" max="59" value={devSleepInject.waketime.minutes}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, waketime: { ...prev.waketime, minutes: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Fell Asleep</label>
+                        <div className="flex gap-1 mt-1">
+                          <input type="number" min="0" max="23" value={devSleepInject.fellAsleepAt.hours}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, fellAsleepAt: { ...prev.fellAsleepAt, hours: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                          <span className="text-zinc-500 text-xs mt-1.5">:</span>
+                          <input type="number" min="0" max="59" value={devSleepInject.fellAsleepAt.minutes}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, fellAsleepAt: { ...prev.fellAsleepAt, minutes: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Wake Up</label>
+                        <div className="flex gap-1 mt-1">
+                          <input type="number" min="0" max="23" value={devSleepInject.wakeUpAt.hours}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, wakeUpAt: { ...prev.wakeUpAt, hours: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                          <span className="text-zinc-500 text-xs mt-1.5">:</span>
+                          <input type="number" min="0" max="59" value={devSleepInject.wakeUpAt.minutes}
+                            onChange={e => setDevSleepInject(prev => ({ ...prev, wakeUpAt: { ...prev.wakeUpAt, minutes: parseInt(e.target.value) || 0 } }))}
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 mb-3">
+                      <button onClick={runSleepDetectionInject} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition">
+                        Run Detection
+                      </button>
+                      <button onClick={previewAdjacentGapsInject} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 transition">
+                        Preview Adjacent Gaps
+                      </button>
+                      <button onClick={confirmSleepInject} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition">
+                        Confirm + Gaps Step
+                      </button>
+                    </div>
+
+                    {/* Preview gaps result */}
+                    {devPreviewGaps.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div className="text-[10px] text-zinc-500 uppercase font-medium">Adjacent Gaps ({devPreviewGaps.length})</div>
+                        {devPreviewGaps.map((g: any, i: number) => (
+                          <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/50 border border-zinc-700/30">
+                            <span className={`w-2 h-2 rounded-full ${g.relation === 'before' ? 'bg-amber-400' : 'bg-rose-400'}`} />
+                            <span className="text-xs text-white">{g.relation === 'before' ? 'Pre-sleep' : 'Post-sleep'}</span>
+                            <span className="text-xs text-zinc-400 ml-auto font-mono">{fmt(new Date(g.start).getHours(), new Date(g.start).getMinutes())} – {fmt(new Date(g.end).getHours(), new Date(g.end).getMinutes())}</span>
+                            <span className="text-xs text-zinc-500">{Math.round(g.durationSeconds / 60)}m</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {devSleepDetectionResult?.adjacentGaps && devSleepDetectionResult.adjacentGaps.length > 0 && (
+                      <div className="mt-2 text-[10px] text-zinc-500">
+                        Detection has {devSleepDetectionResult.adjacentGaps.length} gap(s) available for fill
+                      </div>
+                    )}
                   </div>
-                  <p className="text-zinc-600">Data injectors for sleep, AFK, and gaps will go here.</p>
+
+                  {/* AFK Section */}
+                  <div className="bg-zinc-800/40 rounded-xl border border-zinc-700/30 p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Clock className="w-4 h-4 text-orange-400" />
+                      <span className="font-medium text-white text-sm">AFK Injector</span>
+                    </div>
+                    <div className="flex gap-3 mb-3 items-end">
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Idle Minutes</label>
+                        <input type="number" value={devAfkInject.idleMinutes}
+                          onChange={e => setDevAfkInject(prev => ({ ...prev, idleMinutes: parseInt(e.target.value) || 5 }))}
+                          className="w-24 mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm" />
+                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <input type="checkbox" checked={devAfkInject.defaultNotAfk}
+                          onChange={e => setDevAfkInject(prev => ({ ...prev, defaultNotAfk: e.target.checked }))} />
+                        <span className="text-xs text-zinc-400">Not AFK</span>
+                      </div>
+                      <button onClick={injectAfkEntry} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/20 transition flex items-center gap-1">
+                        <Plus className="w-3 h-3" /> Inject AFK
+                      </button>
+                    </div>
+                    {devAfkQueueView.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-[10px] text-zinc-500 uppercase">Queue ({devAfkQueueView.length})</div>
+                        {devAfkQueueView.map((e: any, i: number) => (
+                          <div key={i} className="text-xs text-zinc-400 flex items-center gap-2">
+                            <Circle className="w-2 h-2 text-orange-400 fill-orange-400" />
+                            {e.duration} · idle {Math.round((e.idleStartMs || 0) / 60000)}m → {new Date(e.returnMs).toLocaleTimeString()}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Gaps Section */}
+                  <div className="bg-zinc-800/40 rounded-xl border border-zinc-700/30 p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Zap className="w-4 h-4 text-emerald-400" />
+                      <span className="font-medium text-white text-sm">Gaps Injector</span>
+                    </div>
+                    <div className="flex gap-3 mb-3 items-end">
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Period</label>
+                        <select value={devGapsInject.period} onChange={e => setDevGapsInject(prev => ({ ...prev, period: e.target.value }))}
+                          className="mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm">
+                          <option value="today">Today</option>
+                          <option value="week">Week</option>
+                          <option value="month">Month</option>
+                          <option value="all">All</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase">Min Gap</label>
+                        <input type="number" value={devGapsInject.minGapMinutes}
+                          onChange={e => setDevGapsInject(prev => ({ ...prev, minGapMinutes: parseInt(e.target.value) || 5 }))}
+                          className="w-20 mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm" />
+                      </div>
+                      <button onClick={detectGapsInject} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition">
+                        Detect Gaps
+                      </button>
+                      <button onClick={fillSleepGapsInject} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20 transition">
+                        Fill Sleep Gaps
+                      </button>
+                      <button onClick={fillAfkGapsInject} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition">
+                        Fill AFK Gaps
+                      </button>
+                    </div>
+                    {devDetectedGaps.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-[10px] text-zinc-500 uppercase">Detected ({devDetectedGaps.length})</div>
+                        {devDetectedGaps.map((g: any, i: number) => (
+                          <div key={i} className="text-xs text-zinc-400 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            {Math.round(g.duration_seconds / 60)}m gap · {new Date(g.start).toLocaleString()}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dismiss All */}
+                  <button onClick={dismissAllDev} className="w-full py-2 text-xs font-medium rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition flex items-center justify-center gap-2">
+                    <Trash2 className="w-3 h-3" /> Dismiss All / Reset
+                  </button>
                 </div>
               )}
 
@@ -179,4 +403,3 @@ export default function DevTriggerPanel({
     </AnimatePresence>
   );
 }
-

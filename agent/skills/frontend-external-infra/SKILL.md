@@ -21,7 +21,19 @@ components, blocks, icons, and animations.
 > to DeskFlow's design tokens. If a source isn't available, say so — do not invent
 > a substitute that looks generic.
 
-## Connected MCP Servers
+## Connected MCP Servers & Registries
+
+**Registries (via the single shadcn MCP server — configured in opencode.json `mcp.shadcn`):**
+`components.json` now exposes three registries the shadcn MCP browses:
+
+| Registry | URL | Scope |
+|----------|-----|-------|
+| `@react-bits` | `https://reactbits.dev/r/{name}.json` | animated React components |
+| `@kokonutui` | `https://kokonutui.com/r/{name}.json` | general app UI (cards, buttons, inputs, AI-style interfaces) |
+| `@bklit` | `https://ui.bklit.com/r/{name}.json` | charts & data-viz ONLY |
+
+**Install via CLI:** `npx shadcn@latest add @kokonutui/<name>` · `npx shadcn@latest add @bklit/<chart-name>`
+**Browse via MCP:** ask the shadcn MCP to list/search `@kokonutui` or `@bklit` components.
 
 | Server | What it gives you | When to use |
 |--------|------------------|-------------|
@@ -42,6 +54,8 @@ components, blocks, icons, and animations.
 
 | You need… | Use… |
 |-----------|------|
+| General app UI (card, button, input, nav, panel, AI-chat surface) | `@kokonutui` registry first (via shadcn MCP), then `shadcn` MCP core — search, read source, re-skin to DeskFlow tokens |
+| Charts / data-viz (area, bar, candlestick, heatmap, funnel, sankey) | `@bklit` registry ONLY — never hand-roll Recharts; KokonutUI has no charts |
 | Standard UI block (form, table, dialog, sidebar, card, nav, etc.) | `shadcn` MCP — search registries, read component source |
 | Landing section (hero, features, pricing, bento, testimonials) | `shadcn` MCP → `@aceternity` registry, or `magicui` MCP for animated variants |
 | Animated effect (beam, particles, grid, confetti, text animation) | `magicui` MCP — they specialize in this |

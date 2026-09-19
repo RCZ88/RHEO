@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Settings, BookOpen, Newspaper, Bell, History, Sparkles, ListTodo, Bug, MessageSquare, Eye } from 'lucide-react';
 import { useCanvasState } from '../hooks/useCanvasState';
-import { loadDefaultSetup } from '../services/canvasPersistence';
+import { loadDefaultSetup, BUILTIN_DEFAULT_SETUP } from '../services/canvasPersistence';
 import type { CardType } from '../types/canvas';
 import type { Intent } from '../services/intentParser';
 import { parseChecklist } from '../services/planningParser';
@@ -935,13 +935,15 @@ export function AiPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Ensure core cards exist on canvas (seed missing ones, update existing data)
-  // Skip if canvas was loaded from storage — the user's state (even empty) is intentional.
-  // canvasEpoch re-runs this after New Canvas (clearAll) so freshly seeded cards
-  // receive live data (wasLoaded is a ref and never re-triggers effects).
+  // Ensure core cards exist on canvas (seed missing ones, update existing data).
+  // Seeds from saved Default Canvas Setup or BUILTIN_DEFAULT_SETUP. Re-runs after
+  // New Canvas (clearAll bumps canvasEpoch) so freshly seeded cards get live data.
   useEffect(() => {
     if (canvasMode !== 'canvas') return
-    if (canvas.wasLoaded) return
+    // Bail out only when the canvas was loaded from storage AND actually has
+    // cards — an empty saved canvas still needs seeding. A fresh canvas (wasLoaded
+    // false) always seeds. Bump canvasEpoch via clearAll() to re-run after New Canvas.
+    if (canvas.wasLoaded && canvas.cards.length > 0) return
     const existing = canvas.cards
     const existingByType = new Map<string, any>()
     Object.values(existing).forEach((c: any) => {
@@ -964,18 +966,20 @@ export function AiPage() {
     // Seed from the user's saved Default Canvas Setup when one exists,
     // otherwise fall back to the built-in core card layout.
     const userSetup = loadDefaultSetup()
-    const seeds: Array<{ type: string; data: Record<string, any>; pos: { x: number; y: number }; size: { w: number; h: number }; pinned?: boolean }> = userSetup && userSetup.cards.length > 0
-      ? userSetup.cards.filter(c => c.enabled).map(entry => {
-          const liveData = liveDataForType(entry.type)
-          return {
-            type: entry.type,
-            data: liveData,
-            pos: entry.position,
-            size: entry.size,
-            pinned: entry.pinned !== false,
-          }
-        })
-      : []
+    const setupCards = (userSetup && userSetup.cards.length > 0)
+      ? userSetup.cards.filter(c => c.enabled)
+      : BUILTIN_DEFAULT_SETUP;
+
+    const seeds: Array<{ type: string; data: Record<string, any>; pos: { x: number; y: number }; size: { w: number; h: number }; pinned?: boolean }> = setupCards.map(entry => {
+      const liveData = liveDataForType(entry.type)
+      return {
+        type: entry.type,
+        data: liveData,
+        pos: entry.position,
+        size: entry.size,
+        pinned: entry.pinned !== false,
+      }
+    })
 
     seeds.forEach(({ type, data, pos, size, pinned }) => {
       const existingCard = existingByType.get(type)
@@ -1835,7 +1839,7 @@ export function AiPage() {
             />
           </div>
           ) : (
-          <div data-tutorial="ai.canvas" data-section="ai.canvas" style={{ flex: 1, minHeight: 0 }}>
+          <div data-tutorial="ai.canvas" data-section="ai.canvas" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <CanvasContainer
               cards={enrichedCards}
               onMoveCard={canvas.moveCard}

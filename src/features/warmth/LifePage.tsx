@@ -49,7 +49,7 @@ const toStr = (d: Date) =>
 const todayStr = () => toStr(new Date())
 
 type ViewMode = 'pages' | 'river'
-type PageTab = 'covenant' | 'memories' | 'gold' | 'notes' | 'schedule' | 'self'
+type PageTab = 'covenant' | 'memories' | 'gold' | 'notes' | 'schedule' | 'habits' | 'self'
 
 const PAGE_TABS: { key: PageTab; label: string; icon: typeof HeartHandshake; accent: string }[] = [
   { key: 'covenant', label: 'Covenant', icon: HeartHandshake, accent: '#e8866b' },
@@ -201,7 +201,7 @@ export default function LifePage() {
   }, [])
 
   const handleOpenPage = useCallback((page: string) => {
-    const tabMap: Record<string, PageTab> = { memories: 'memories', gold: 'gold', covenant: 'covenant', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule' }
+    const tabMap: Record<string, PageTab> = { memories: 'memories', gold: 'gold', covenant: 'covenant', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'habits' }
     if (tabMap[page]) {
       setPageTab(tabMap[page])
       setMode('pages')
@@ -248,7 +248,7 @@ export default function LifePage() {
   }, [])
 
   const redirectToPage = useCallback((lens: LensId) => {
-    const tabMap: Record<string, PageTab> = { covenant: 'covenant', gold: 'gold', memories: 'memories', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule' }
+    const tabMap: Record<string, PageTab> = { covenant: 'covenant', gold: 'gold', memories: 'memories', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'habits' }
     const tab = tabMap[lens]
     if (tab) {
       setPageTab(tab)
@@ -549,7 +549,7 @@ export default function LifePage() {
               </motion.div>
             )}
             {pageTab === 'gold' && (
-              <motion.div key="gold" {...crossfade} className="max-w-5xl mx-auto">
+              <motion.div key="gold" {...crossfade} className="w-full">
                 <GoldPage />
               </motion.div>
             )}
@@ -560,7 +560,12 @@ export default function LifePage() {
             )}
             {pageTab === 'schedule' && (
               <motion.div key="schedule" {...crossfade} className="max-w-5xl mx-auto">
-                <ScheduleTab />
+                <SchedulePage />
+              </motion.div>
+            )}
+            {pageTab === 'habits' && (
+              <motion.div key="habits" {...crossfade} className="max-w-5xl mx-auto">
+                <HabitsPage />
               </motion.div>
             )}
             {pageTab === 'self' && (

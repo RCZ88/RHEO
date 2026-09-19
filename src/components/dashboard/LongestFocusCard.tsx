@@ -58,7 +58,7 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
   const color = topSession ? getSessionColor(topSession.durationSeconds) : '#34d399';
 
   return (
-    <div className="relative rounded-xl h-full bg-[rgba(24,24,27,0.60)] light:bg-[var(--color-card)] light:border-[var(--ws-border)] backdrop-blur-xl border light:border-[var(--ws-border-strong)] overflow-hidden flex flex-col">
+    <div className="relative rounded-xl h-full overflow-hidden flex flex-col">
 
       <div className="p-4 sm:p-5 h-full flex flex-col relative z-10">
         {/* Header */}

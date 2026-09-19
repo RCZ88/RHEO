@@ -53,6 +53,8 @@ import PageContextPanel from '../components/PageContextPanel';
 import FeatureLogicPanel from '../components/workspace/FeatureLogicPanel';
 import ArchMapPage from '../features/arch-map/ArchMapPage';
 import { UserDictionaryPanel } from '../components/UserDictionaryPanel';
+import { HandbookWorkspace } from '../components/learn/HandbookWorkspace';
+import { HandbookReference } from '../components/learn/HandbookReference';
 import '@xterm/xterm/css/xterm.css';
 import { SelectionProvider, SelectionOverlay, SelectionToolbar, SelectionResultPanel, SelectionEngineActivator } from '../features/selection-engine';
 import { MousePointer2 } from 'lucide-react';
@@ -222,7 +224,7 @@ function ModelSwitcher({ terminalId, agent }: { terminalId: string; agent: strin
         <ChevronDown className="w-3 h-3 opacity-70" />
       </button>
       {open ? (
-        <div className="absolute right-0 mt-1 z-50 w-56 max-h-72 overflow-auto rounded-lg bg-zinc-900 ring-1 ring-inset ring-zinc-700 shadow-xl p-1">
+        <div className="absolute right-0 mt-1 z-50 w-56 max-h-72 overflow-auto rounded-xl bg-zinc-900 ring-1 ring-inset ring-zinc-700 shadow-none p-1">
           <div className="flex items-center justify-between px-2 py-1 text-[10px] text-zinc-500">
             <span>{loading ? 'Detecting...' : (meta ? (meta.source === 'detected' ? 'Detected' : 'Suggested') : 'Models')}</span>
             {meta && !meta.installed ? <span className="text-amber-400">CLI not found</span> : null}
@@ -291,7 +293,7 @@ function ConfigGenerator({ agent, baseDir }: { agent: string; baseDir: string })
         <span>Configs</span>
       </button>
       {open ? (
-        <div className="absolute bottom-full mb-1 right-0 z-50 w-64 rounded-lg ring-1 ring-inset ring-zinc-700 bg-zinc-900 p-3 shadow-xl">
+        <div className="absolute bottom-full mb-1 right-0 z-50 w-64 rounded-xl ring-1 ring-inset ring-zinc-700 bg-zinc-900 p-3 shadow-none">
           <div className="text-[11px] font-semibold text-zinc-200 mb-2">Generate CLI configs</div>
           <div className="flex flex-col gap-1 mb-2">
             {(['project', 'global', 'custom'] as const).map((s) => (
@@ -364,7 +366,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 			onClick={() => onChange(!checked)}
 			className={`relative inline-flex items-center w-9 h-5 rounded-full shrink-0 transition-colors duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--page-accent)]/40 ${checked ? 'bg-[color:var(--page-accent)]' : 'bg-zinc-700'}`}
 		>
-			<span className={`inline-block w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-150 ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+			<span className={`inline-block w-4 h-4 rounded-full bg-white shadow-none transition-transform duration-150 ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
 		</button>
 	);
 }
@@ -394,7 +396,7 @@ function ToolbarButton({ variant = 'secondary', icon: Icon, children, ...props }
 	return (
 		<button
 			{...props}
-			className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-medium transition-colors duration-150 active:scale-95 ${variant === 'primary' ? 'bg-[color:var(--page-accent)] text-zinc-950 font-semibold ring-1 ring-inset ring-white/15 shadow-sm shadow-black/40 hover:brightness-110' : 'bg-zinc-800/70 ring-1 ring-zinc-700/60 hover:bg-zinc-700/70 text-zinc-200 backdrop-blur-sm'}`}
+			className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-xl text-[11px] font-medium transition-colors duration-150 active:scale-95 ${variant === 'primary' ? 'bg-[color:var(--page-accent)] text-zinc-950 font-semibold ring-1 ring-inset ring-white/15 shadow-none shadow-black/40 hover:brightness-110' : 'bg-zinc-800/70 ring-1 ring-zinc-700/60 hover:bg-zinc-700/70 text-zinc-200 backdrop-blur-sm'}`}
 		>
 			{Icon && <Icon className="w-3.5 h-3.5" />}
 			{children}
@@ -411,7 +413,7 @@ function Modal({ open, onClose, title, children, footer, width = 'max-w-md' }: {
 					<h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
 					<button onClick={onClose} className={WS_ICON_BTN}><X className="w-4 h-4" /></button>
 				</header>
-				<div className="p-4 space-y-3 text-xs text-zinc-300">{children}</div>
+				<div className="p-5 space-y-3 text-xs text-zinc-300">{children}</div>
 				{footer && <footer className="flex items-center justify-end gap-2 px-4 py-3 border-t border-zinc-800/60">{footer}</footer>}
 			</div>
 		</div>
@@ -425,7 +427,7 @@ function SectionCard({ accent, title, children }: { accent: string; title: strin
 				<span className={`w-1.5 h-1.5 rounded-full ${ACCENT_STRIP[accent]}`} />
 				<span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{title}</span>
 			</header>
-			<div className="p-3 space-y-3">{children}</div>
+			<div className="p-5 space-y-3">{children}</div>
 		</section>
 	);
 }
@@ -606,7 +608,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     return saved ? parseInt(saved) : 400;
   });
   const [isResizing, setIsResizing] = useState(false);
-  type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'ai-gateway' | 'context';
+  type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'ai-gateway' | 'context' | 'handbook';
   const [activeGroup, setActiveGroup] = useState<GroupKey>(() => {
     const saved = localStorage.getItem('terminal-activeGroup');
     return (saved as GroupKey) || 'setup';
@@ -3025,20 +3027,20 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
         <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950 border-b border-zinc-800/40">
           <button
             onClick={() => { setShowInstructionInput(false); setShowInstructionPanel(true); }}
-            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-lg text-[10px] font-semibold text-zinc-950 bg-green-500 hover:bg-green-400 transition-all duration-150 active:scale-95"
+            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-xl text-[10px] font-semibold text-zinc-950 bg-green-500 hover:bg-green-400 transition-all duration-150 active:scale-95"
           >
             <Send className="w-3 h-3" />
             Compose
           </button>
           <button
             onClick={() => { setShowInstructionPanel(false); setShowInstructionInput(true); }}
-            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-lg text-[10px] font-medium text-zinc-300 bg-zinc-800 ring-1 ring-zinc-700/60 hover:bg-zinc-700/60 hover:text-zinc-100 transition-all duration-150 active:scale-95"
+            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-xl text-[10px] font-medium text-zinc-300 bg-zinc-800 ring-1 ring-zinc-700/60 hover:bg-zinc-700/60 hover:text-zinc-100 transition-all duration-150 active:scale-95"
           >
             Quick
           </button>
           <button
             onClick={async () => { await handleSaveWorkspace(); }}
-            className="inline-flex items-center gap-1.5 h-6 px-2 rounded-lg text-[10px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-all duration-150 active:scale-95 relative"
+            className="inline-flex items-center gap-1.5 h-6 px-2 rounded-xl text-[10px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-all duration-150 active:scale-95 relative"
           >
             <Save className="w-3 h-3" />
             {hasUnsavedChanges && (
@@ -3049,7 +3051,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('selection-engine:toggle'))}
             title="Select screen element for AI context (Ctrl+Shift+S)"
-            className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-amber-300 transition"
+            className="p-1.5 rounded-xl bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-amber-300 transition"
           >
             <MousePointer2 className="w-4 h-4" />
           </button>
@@ -3105,7 +3107,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
             </div>
           ))}
           {layoutLoading ? (
-            <div className="w-full h-full flex items-center justify-center bg-[#0d0d0d]">
+            <div className="w-full h-full flex items-center justify-center bg-zinc-950">
               <LoadingState variant="spinner" />
             </div>
           ) : (
@@ -3248,19 +3250,19 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                 </div>
               )}
               <div className="flex gap-2 items-center">
-                <select value={sendTargetSession} onChange={(e) => setSendTargetSession(e.target.value)} className="h-7 w-[120px] rounded-lg bg-zinc-800 border border-zinc-700 px-2 text-[10px] text-zinc-300" title="Select session">
+                <select value={sendTargetSession} onChange={(e) => setSendTargetSession(e.target.value)} className="h-7 w-[120px] rounded-xl bg-zinc-800 border border-zinc-700 px-2 text-[10px] text-zinc-300" title="Select session">
                   <option value="">Active Terminal</option>
                   {sessions.filter(s => s.terminal_id && terminalTabs[s.terminal_id]).map(s => (
                     <option key={s.id} value={s.id}>{s.topic || 'Unnamed'} ({terminalTabs[s.terminal_id!]?.name || '?'})</option>
                   ))}
                 </select>
                 <div className="flex-1 relative">
-                  <textarea ref={instructionTextareaRef} value={instructionText} onChange={(e) => setInstructionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendInstruction(); } }} rows={1} autoFocus placeholder="Type instruction... (Enter to send)" className="w-full px-3 py-1.5 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 resize-none overflow-hidden" />
+                  <textarea ref={instructionTextareaRef} value={instructionText} onChange={(e) => setInstructionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendInstruction(); } }} rows={1} autoFocus placeholder="Type instruction... (Enter to send)" className="w-full px-3 py-1.5 bg-zinc-900/80 border border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 resize-none overflow-hidden" />
                 </div>
-                <button onClick={sendInstruction} disabled={!instructionText.trim() || isSending} className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold text-zinc-950 bg-green-500 hover:bg-green-400 transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
+                <button onClick={sendInstruction} disabled={!instructionText.trim() || isSending} className="inline-flex items-center gap-1.5 h-7 px-3 rounded-xl text-[11px] font-semibold text-zinc-950 bg-green-500 hover:bg-green-400 transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
                   {isSending ? <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" /> : 'Send'}
                 </button>
-                <button onClick={() => { setShowInstructionInput(false); setInstructionText(''); }} className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors">
+                <button onClick={() => { setShowInstructionInput(false); setInstructionText(''); }} className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -3383,7 +3385,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                       />
 
                       {/* ── Live Context Viewer ── */}
-                      <div className="rounded-lg border border-zinc-800/60 bg-zinc-900 overflow-hidden mt-3">
+                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900 overflow-hidden mt-3">
                         <div className="flex items-center gap-1.5 mb-2 px-3 pt-3">
                           <span className={`w-1.5 h-1.5 rounded-full ${crossSessionSyncEnabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'}`} />
                           <h4 className="text-[11px] font-medium text-amber-300">Live Context</h4>
@@ -3441,7 +3443,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                       </div>
 
                       {/* ── Saved Workspaces ── */}
-                      <div className="rounded-lg border border-zinc-800/60 bg-zinc-900 overflow-hidden mt-3">
+                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900 overflow-hidden mt-3">
                         <div className="flex items-center justify-between px-3 pt-3 pb-2">
                           <h4 className="text-[11px] font-medium text-orange-300">Saved Workspaces</h4>
                           <div className="flex gap-1">
@@ -3574,7 +3576,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                 : null;
                               return (
                                   <div>
-                                     <div className="p-3 bg-zinc-800 rounded-lg mb-3">
+                                     <div className="p-3 bg-zinc-800 rounded-xl mb-3">
                                       <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2">
                                           <StatusDot status={session.status} size="md" />
@@ -3595,14 +3597,14 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                       </div>
                                       <div className="flex gap-2 mt-3">
                                         {terminalInfo ? (
-                                          <button onClick={() => { setActiveTerminalId(session.terminal_id!); window.dispatchEvent(new CustomEvent('focus-terminal', { detail: { terminalId: session.terminal_id } })); }} className="px-3 py-1.5 bg-green-600/80 hover:bg-green-500 text-green-50 text-xs font-medium rounded-lg transition-colors duration-150 hover:shadow-[0_0_8px_rgba(34,197,94,0.3)] active:scale-95">Focus Terminal</button>
+                                          <button onClick={() => { setActiveTerminalId(session.terminal_id!); window.dispatchEvent(new CustomEvent('focus-terminal', { detail: { terminalId: session.terminal_id } })); }} className="px-3 py-1.5 bg-green-600/80 hover:bg-green-500 text-green-50 text-xs font-medium rounded-xl transition-colors duration-150 hover:shadow-[0_0_8px_rgba(34,197,94,0.3)] active:scale-95">Focus Terminal</button>
                                         ) : (
-                                          <button onClick={() => handleResumeSession(session)} className="px-3 py-1.5 bg-green-600/80 hover:bg-green-500 text-green-50 text-xs font-medium rounded-lg transition-colors duration-150 hover:shadow-[0_0_8px_rgba(34,197,94,0.3)] active:scale-95">Open in Terminal</button>
+                                          <button onClick={() => handleResumeSession(session)} className="px-3 py-1.5 bg-green-600/80 hover:bg-green-500 text-green-50 text-xs font-medium rounded-xl transition-colors duration-150 hover:shadow-[0_0_8px_rgba(34,197,94,0.3)] active:scale-95">Open in Terminal</button>
                                         )}
-                                        <button onClick={() => setSessionToEdit(session)} className="px-3 py-1.5 bg-zinc-600/80 hover:bg-zinc-500 text-zinc-200 text-xs font-medium rounded-lg transition-colors duration-150 active:scale-95">Edit</button>
+                                        <button onClick={() => setSessionToEdit(session)} className="px-3 py-1.5 bg-zinc-600/80 hover:bg-zinc-500 text-zinc-200 text-xs font-medium rounded-xl transition-colors duration-150 active:scale-95">Edit</button>
                                       </div>
                                     </div>
-                                     <div className="p-3 bg-zinc-800 rounded-lg">
+                                     <div className="p-3 bg-zinc-800 rounded-xl">
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-[10px] text-zinc-500">Messages</span>
                                         <button
@@ -3644,7 +3646,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                      setNewSessionAgent('claude');
                                     setNewSessionName('');
                                     setShowNewSessionDialog(true);
-                                  }} className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-medium transition-colors duration-150 active:scale-95 bg-emerald-600 text-white hover:bg-emerald-500 ring-1 ring-inset ring-white/15 shadow-sm shadow-black/40">
+                                  }} className="inline-flex items-center gap-1.5 h-7 px-3 rounded-xl text-[11px] font-medium transition-colors duration-150 active:scale-95 bg-emerald-600 text-white hover:bg-emerald-500 ring-1 ring-inset ring-white/15 shadow-none shadow-black/40">
                                   <Plus className="w-3.5 h-3.5" />
                                   New Session
                                 </button>
@@ -3755,7 +3757,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                             return (
                                     <div key={session.id}
                                          onClick={async () => { setSelectedSessionDetail(session.id); setSessionMessages([]); try { const r = await window.deskflowAPI?.getSessionMessages?.(session.id, session.agent); if (r?.success) setSessionMessages(r.data || []); } catch {} }}
-                                         className="mb-2 p-2.5 bg-zinc-900/50 backdrop-blur-sm ring-1 ring-inset ring-zinc-800/70 rounded-lg group hover:ring-[color:var(--page-accent)]/35 hover:bg-zinc-900/70 transition-all duration-150 border-l-2 cursor-pointer"
+                                         className="mb-2 p-2.5 bg-zinc-900/50 backdrop-blur-sm ring-1 ring-inset ring-zinc-800/70 rounded-xl group hover:ring-[color:var(--page-accent)]/35 hover:bg-zinc-900/70 transition-all duration-150 border-l-2 cursor-pointer"
                                          style={{ borderLeftColor: terminalInfo ? 'rgb(34 197 94 / 0.4)' : 'rgb(113 113 122 / 0.2)' }}
                                     >
                                       <div className="flex items-start justify-between">
@@ -3884,7 +3886,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   case 'map': return (
                     <GroupPanel accent="green">
                       <div className="relative flex-1 min-h-0">
-                        <div className="p-3 space-y-3">
+                        <div className="p-5 space-y-3">
                         <p className="text-xs text-zinc-500">Drag panes to rearrange or split • Click to focus</p>
                         <div className="min-h-0 overflow-hidden" style={{ flex: mapListRatio }}>
                           {terminalLayout ? (
@@ -3940,7 +3942,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                 {(() => {
                                   const groups = extractGroups(terminalLayout);
                                   return groups.length > 0 ? groups.map((group, gi) => (
-                                    <div key={gi} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg overflow-hidden">
+                                    <div key={gi} className="bg-zinc-800/20 border border-zinc-700/30 rounded-xl overflow-hidden">
                                       <div className="px-2 py-1 bg-zinc-800/40 border-b border-zinc-700/20 flex items-center justify-between">
                                         <span className="text-[10px] font-medium text-zinc-500">Group {gi + 1}</span>
                                         <div className="flex items-center gap-2">
@@ -4225,6 +4227,33 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               }} />
             )}
 
+            {activeGroup === 'handbook' && (
+              <WorkspaceShell accent="emerald" tabs={[
+                { key: 'handbook-sections', icon: BookOpen, label: 'Sections' },
+                { key: 'handbook-reference', icon: FileText, label: 'Reference' },
+                { key: 'handbook-practice', icon: TerminalIcon, label: 'Practice' },
+              ]} storageKey="handbook" render={(sub) => {
+                switch (sub) {
+                  case 'handbook-sections': return (
+                    <GroupPanel accent="emerald">
+                      <HandbookWorkspace />
+                    </GroupPanel>
+                  );
+                  case 'handbook-reference': return (
+                    <GroupPanel accent="emerald">
+                      <HandbookReference />
+                    </GroupPanel>
+                  );
+                  case 'handbook-practice': return (
+                    <GroupPanel accent="emerald">
+                      <HandbookWorkspace />
+                    </GroupPanel>
+                  );
+                  default: return null;
+                }
+              }} />
+            )}
+
 
             <NewSessionDialog
               open={showNewSessionDialog}
@@ -4447,7 +4476,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
             )}
             {/* File conflict toasts */}
             {fileConflicts.map((conflict, idx) => (
-              <div key={idx} className="fixed bottom-20 right-4 z-50 max-w-sm bg-yellow-900/90 border border-yellow-600 rounded-lg p-3 shadow-lg animate-in slide-in-from-bottom-2">
+              <div key={idx} className="fixed bottom-20 right-4 z-50 max-w-sm bg-yellow-900/90 border border-yellow-600 rounded-xl p-3 shadow-lg animate-in slide-in-from-bottom-2">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -4536,7 +4565,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                       />
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                  <div className="flex-1 overflow-y-auto p-5 space-y-2">
                     {sessionMessages.length === 0 ? (
                       <EmptyState iconComponent={MessageSquare} title="No messages" hint="No messages recorded for this session." />
                     ) : (() => {
@@ -4625,7 +4654,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   await handleSaveWorkspace();
                   onCloseWorkspace?.();
                 }}
-                className="w-full px-4 py-2 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded text-sm font-medium"
+                className="w-full px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-sm font-medium transition-colors duration-150"
               >
                 Save & Close
               </button>
@@ -4664,7 +4693,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
         <>
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
           <div
-            className="fixed z-50 bg-zinc-900 border border-zinc-800/60 rounded-lg py-1 min-w-[180px]"
+            className="fixed z-50 bg-zinc-900 border border-zinc-800/60 rounded-xl py-1 min-w-[180px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <div className="px-2.5 py-1.5 text-[10px] text-zinc-500 border-b border-zinc-800/60">Open in Terminal</div>
@@ -4739,7 +4768,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   await handleLoadWorkspace(ws.name);
                   setShowWorkspaceLoadDialog(false);
                 }}
-                className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors ${ws.isActive ? 'bg-green-900/30 border border-green-700/50' : 'bg-zinc-900/50 border border-zinc-800/60 hover:bg-zinc-800/80'}`}
+                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-colors ${ws.isActive ? 'bg-green-900/30 border border-green-700/50' : 'bg-zinc-900/50 border border-zinc-800/60 hover:bg-zinc-800/80'}`}
               >
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${ws.isActive ? 'bg-green-400' : 'bg-zinc-600'}`} />
@@ -5133,7 +5162,7 @@ function FeaturesDialog({ onClose }: { onClose: () => void }) {
 
         <div className="grid grid-cols-2 gap-4">
           {FEATURES.map((group) => (
-            <div key={group.category} className={`bg-zinc-900/50 rounded-lg p-3 border-l-2 ${categoryColors[group.color]}`}>
+            <div key={group.category} className={`bg-zinc-900/50 rounded-xl p-3 border-l-2 ${categoryColors[group.color]}`}>
               <h3 className="text-sm font-semibold text-white mb-3">{group.category}</h3>
               <div className="space-y-2">
                 {group.items.map((item) => (

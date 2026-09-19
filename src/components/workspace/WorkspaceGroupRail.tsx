@@ -7,11 +7,11 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import {
   Settings, Monitor, PieChart, Sparkles, Bot, Settings2,
-  Shield, HelpCircle, Globe
+  Shield, HelpCircle, Globe, Terminal
 } from 'lucide-react';
 import { Tooltip } from '../ui/tooltip';
 
-type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'ai-gateway' | 'context';
+type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'ai-gateway' | 'context' | 'handbook';
 
 interface GroupDef {
   key: GroupKey;
@@ -29,6 +29,7 @@ const GROUPS: GroupDef[] = [
   { key: 'conductor', icon: Bot,        label: 'Conductor', accent: 'rose',    accentHex: '#fb7185' },
   { key: 'ai-gateway', icon: Globe,     label: 'AI Gateway', accent: 'cyan',   accentHex: '#22d3ee' },
   { key: 'context',   icon: Settings2,  label: 'Context',   accent: 'amber',   accentHex: '#fbbf24' },
+  { key: 'handbook',  icon: Terminal,   label: 'Handbook',  accent: 'emerald', accentHex: '#10b981' },
 ];
 
 const ACCENT_ACTIVE: Record<string, string> = {
@@ -39,6 +40,7 @@ const ACCENT_ACTIVE: Record<string, string> = {
   rose:    'text-rose-400',
   cyan:    'text-cyan-400',
   amber:   'text-amber-400',
+  emerald: 'text-emerald-400',
 };
 
 const ACCENT_BORDER: Record<string, string> = {
@@ -49,6 +51,7 @@ const ACCENT_BORDER: Record<string, string> = {
   rose:    'bg-rose-500',
   cyan:    'bg-cyan-500',
   amber:   'bg-amber-500',
+  emerald: 'bg-emerald-500',
 };
 
 const ACCENT_BG: Record<string, string> = {
@@ -59,6 +62,7 @@ const ACCENT_BG: Record<string, string> = {
   rose:    'bg-rose-500/10',
   cyan:    'bg-cyan-500/10',
   amber:   'bg-amber-500/10',
+  emerald: 'bg-emerald-500/10',
 };
 
 interface WorkspaceGroupRailProps {

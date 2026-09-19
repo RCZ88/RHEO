@@ -105,7 +105,7 @@ Any agent that violates this rule has failed at its most basic responsibility.
   report — do not attempt to launch and verify manually.
 
 ## 1. STARTUP RITUAL (do this before responding to ANYTHING)
-1. Read `MEMORY.md` (durable lessons — see Section 4).
+1. Read `MEMORY.md` (durable lessons — see Section 4). This is the **compiled** version (max 10 newest entries). For the full archive, see `MEMORY_FULL.md`.
 2. Read the state Hub `agent/state.md` (read-only global view — see Section 1b), then read
    YOUR OWN spoke `agent/state/{SESSION_ID}.md` (current cycle number + role + what's in
    flight). If you don't know your session ID yet, follow the Hub's PROTOCOL section to find it.
@@ -283,6 +283,15 @@ Do NOT store: one-off values, transient state (those go in state.md), or secrets
 Entry format: `- [YYYY-MM-DD] <one-line durable lesson>`
 Before acting, if MEMORY.md already says "don't do X", DO NOT do X. Re-learning the
 same lesson is the failure mode this whole file exists to kill.
+
+### MEMORY OVERFLOW RULE
+`MEMORY.md` is auto-loaded into every prompt and must stay small (max 10 entries, ~5-10KB).
+When adding a new lesson would exceed 10 entries:
+1. Find the OLDEST entry in `MEMORY.md` (by date).
+2. Move that entry to `MEMORY_FULL.md` (the archive, NOT auto-loaded).
+3. Append the new entry to `MEMORY.md`.
+`MEMORY_FULL.md` holds the full history but is never loaded into prompts — reference it
+manually when you need older context.
 
 ## 5b. UI GENERATION RULE — THIS IS THE #1 RULE. READ IT. FOLLOW IT. EVERY TIME.
 
@@ -567,3 +576,36 @@ These rules are mandatory after recovery from a broken state. Do not skip them.
 
 4. **dist artifacts are gitignored — verify + rebuild after history ops.**  
    `dist/`, `dist-electron/`, and `node_modules/.vite/` are gitignored build artifacts. After any git history operation, verify they exist with non-zero size, then rebuild with `node scripts/build.mjs` if empty.
+
+## 9. DESIGN STACK & REGISTRIES (read BEFORE any UI work)
+
+Authoritative docs: `design/design.md` (LAMINAR constitution — overrides every styling
+default), `agent/docs/stack-setup.md`, `agent/docs/stack-usage-guide.md`, and
+`agent/skills/frontend-external-infra/SKILL.md`.
+
+**What is configured (do not re-setup):**
+- shadcn MCP server in `opencode.json` (`mcp.shadcn`) browses ALL FOUR registries from
+  `components.json`: `@shadcn` (core), `@react-bits` (animated components),
+  `@kokonutui` (general app UI: cards, buttons, inputs, AI-style surfaces),
+  `@bklit` (charts/data-viz ONLY).
+- One shadcn MCP server covers all registries — never add a second one.
+- GSAP and Anime.js are NOT project dependencies and no MCP server exists for them.
+  Prefer `motion` (v12) and KokonutUI's built-in Motion animations; do not install
+  GSAP/Anime.js unless a task explicitly requires choreographed timelines, and then
+  never wire two animation engines to the same element.
+
+**Routing (find before you build — never hand-roll UI that a registry already has):**
+
+| Need | Source |
+|------|--------|
+| General app UI (cards, buttons, inputs, nav, panels, AI-chat surfaces) | `@kokonutui` via shadcn MCP, then `@shadcn` core |
+| Charts / data-viz | `@bklit` ONLY — never hand-rolled Recharts, never KokonutUI |
+| Animated text/particle/hover effects | `@react-bits` or `magicui` MCP |
+| Icons | lucide-react (already a dependency); never emoji |
+
+**Design precedence (highest wins):** `design/design.md` §1–§10 → registry component's
+own conventions → this file's §5b checklist. Every pulled component MUST be re-skinned
+to LAMINAR tokens: monochrome zinc surfaces, ONE signal hue per surface, radii 8/12/pill
+only, Inter + JetBrains Mono + Space Grotesk (max 2 per view), no glassmorphism on
+chrome, no decorative glow/gradients, no spring/bounce, `prefers-reduced-motion`
+honored, and the §7 grep gate must pass before finishing.

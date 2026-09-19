@@ -383,6 +383,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
     destroy: (id: string) => ipcRenderer.invoke('terminal:destroy', id),
+    exec: (command: string, cwd?: string) => ipcRenderer.invoke('terminal:exec', command, cwd),
     onData: (callback: (id: string, data: string) => void) => {
       ipcRenderer.on('terminal:data', (_event, id, data) => callback(id, data));
     },
@@ -972,15 +973,15 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     exportCSV: (tables: string[]) => ipcRenderer.invoke('backup:exportCSV', tables),
   },
 
-  // ========== Workspace close guard ==========
-  onWorkspaceRequestSave: (callback: () => void) => {
-    const handler = () => callback();
-    ipcRenderer.on('workspace-request-save', handler);
-    return () => { ipcRenderer.removeListener('workspace-request-save', handler); };
-  },
-  workspaceAllowClose: () => ipcRenderer.send('workspace-allow-close'),
+  // ========== Workspace close guard (removed - close always allowed) ==========
+    // onWorkspaceRequestSave: (callback: () => void) => {
+    //   const handler = () => callback();
+    //   ipcRenderer.on('workspace-request-save', handler);
+    //   return () => { ipcRenderer.removeListener('workspace-request-save', handler); };
+    // },
+    // workspaceAllowClose: () => ipcRenderer.send('workspace-allow-close'),
 
-  // ========== Feature #1: Resource Stats ==========
+    // ========== Feature #1: Resource Stats ==========
   getResourceStats: () => ipcRenderer.invoke('terminal:get-resource-stats'),
   onResourceStats: (callback: (stats: Record<string, any>) => void) => {
     const handler = (_event: any, terminalId: string, stats: any) => { callback({ [terminalId]: stats }); };

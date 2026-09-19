@@ -46,7 +46,7 @@ export interface DashboardLayoutConfig {
 
 /** Default layout — reproduces current dashboard 1:1 */
 export const DEFAULT_LAYOUT: DashboardLayoutConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   columns: 12,
   rows: 8,
   widgetOrder: [
@@ -81,7 +81,7 @@ export const DEFAULT_LAYOUT: DashboardLayoutConfig = {
     'mastery-ring': false,
     'app-ecosystem': false,
     'activity-feed': true,
-    'momentum-hero': false,
+    'momentum-hero': true,
     'follow-through': false,
     'vcalendar': false,
   },

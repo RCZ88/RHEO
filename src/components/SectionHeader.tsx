@@ -15,7 +15,7 @@ export function SectionHeader({ title, icon, action, className = '', titleClassN
             {icon}
           </div>
         )}
-        <h2 className="text-[15px] font-semibold text-zinc-100 light:text-stone-900 light:text-zinc-900 ${titleClassName}">{title}</h2>
+        <h2 className="text-[15px] font-semibold text-zinc-100 light:text-stone-900 ${titleClassName}">{title}</h2>
       </div>
       {action}
     </div>

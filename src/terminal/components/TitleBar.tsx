@@ -22,7 +22,7 @@ export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, 
           <AppWindow size={17} className="text-white" />
         </div>
         <div className="leading-none">
-          <div className="display font-bold text-[13.5px] tracking-tight" style={{ color: "var(--t-fg)" }}>Penguin Console</div>
+          <div className="font-semibold text-[13.5px] tracking-tight" style={{ color: "var(--t-fg)" }}>Penguin Console</div>
           <div className="flex items-center gap-1.5 mt-1">
             <span className="text-[9.5px] font-semibold px-1.5 py-px rounded-md mono" style={{ background: "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: "var(--t-accent)" }}>{electron ? "ELECTRON · NATIVE" : "ELECTRON 31"}</span>
             <span className="text-[9.5px] font-semibold px-1.5 py-px rounded-md mono flex items-center gap-1" style={{ background: "rgba(52,211,153,.12)", color: "#34d399" }}><Circle size={6} className="fill-current" />LINUX</span>
@@ -48,7 +48,7 @@ export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, 
         <div className="w-px h-5 mx-1" style={{ background: "var(--t-border)" }} />
         <button onClick={onPresets} title="Preset gallery" className="h-8 px-2.5 rounded-lg hidden sm:flex items-center gap-1.5 text-[12px] font-medium transition hover:bg-white/10" style={{ color: "var(--t-muted)" }}><Sparkles size={14} />Presets</button>
         <button onClick={onWorkspaces} title="Workspaces" className="h-8 px-2.5 rounded-lg hidden sm:flex items-center gap-1.5 text-[12px] font-medium transition hover:bg-white/10" style={{ color: "var(--t-muted)" }}><Boxes size={14} />{store.workspaces.length > 0 && <span className="text-[10px] mono px-1 rounded" style={{ background: "var(--t-accent)", color: "#fff" }}>{store.workspaces.length}</span>}</button>
-        <button onClick={onSaveWs} title="Save workspace (Ctrl+Shift+S)" className="h-8 px-3 rounded-lg hidden sm:flex items-center gap-1.5 text-[12px] font-semibold text-white transition hover:brightness-110" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Plus size={14} />Workspace</button>
+        <button onClick={onSaveWs} title="Save workspace (Ctrl+Shift+S)" className="h-8 px-3 rounded-xl hidden sm:flex items-center gap-1.5 text-[12px] font-semibold text-white transition hover:brightness-110" style={{ background: "var(--t-accent)" }}><Plus size={14} />Workspace</button>
         <button onClick={onNewTab} title="New tab (Ctrl+Shift+T)" className="w-8 h-8 rounded-lg grid place-items-center text-white transition hover:brightness-110" style={{ background: "color-mix(in srgb, var(--t-accent) 80%, #000)" }}><Plus size={16} /></button>
       </div>
     </div>

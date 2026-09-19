@@ -215,7 +215,7 @@ WidgetRegistry.register({
   minSize: { cols: 1, rows: 1 },
   maxSize: { cols: 2, rows: 1 },
   component: MomentumSummary,
-  defaultVisible: false,
+  defaultVisible: true,
   sourcePage: 'dashboard',
 });
 

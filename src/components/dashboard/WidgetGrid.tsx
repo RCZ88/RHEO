@@ -126,13 +126,14 @@ async function persistPresets(presets: LayoutPreset[]): Promise<void> {
 export interface WidgetGridProps {
   forceEditMode?: boolean;
   data: DashboardData;
+  onSaved?: () => void;
 }
 
 /**
  * Dynamic widget grid: status strip, edit mode with Save/Cancel,
  * named layout presets, drag-to-reorder, column control.
  */
-export function WidgetGrid({ forceEditMode = false, data }: WidgetGridProps) {
+export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridProps) {
   const [layout, setLayout] = useState<DashboardLayoutConfig>(DEFAULT_LAYOUT);
   const [savedLayout, setSavedLayout] = useState<DashboardLayoutConfig>(DEFAULT_LAYOUT);
   const [presets, setPresets] = useState<LayoutPreset[]>([BUILT_IN_PRESET]);
@@ -192,7 +193,8 @@ export function WidgetGrid({ forceEditMode = false, data }: WidgetGridProps) {
     setShowPresets(false);
     setEditMode(false);
     await persistLayout(layout);
-  }, [layout, presets]);
+    onSaved?.();
+  }, [layout, presets, onSaved]);
 
   // Esc cancels edit mode (forgiveness — humancentred-UIUX pillar 6)
   useEffect(() => {
@@ -581,39 +583,7 @@ export function WidgetGrid({ forceEditMode = false, data }: WidgetGridProps) {
         </div>
       </div>
 
-      {/* The library is part of the dashboard, not a separate view. */}
-      <section className="mb-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)]/90 p-4 light:bg-white/85 light:border-[var(--ws-border)]" aria-label="Dashboard card library">
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <div>
-            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--page-accent)]">Card library</div>
-            <h2 className="mt-1 text-[15px] font-semibold text-[var(--text-primary)]">Choose what belongs on your dashboard</h2>
-          </div>
-          <span className="font-mono text-[11px] text-[var(--text-muted)]">{visibleWidgets.length} selected</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
-          {WidgetRegistry.getAll().map(widget => {
-            const theme = getWidgetTheme(widget.id);
-            const WidgetIcon = getIcon(widget.icon);
-            const selected = layout.widgetVisibility[widget.id] !== false && layout.widgetOrder.includes(widget.id);
-            return (
-              <button
-                key={widget.id}
-                type="button"
-                onClick={() => void toggleLibraryWidget(widget.id)}
-                aria-pressed={selected}
-                className={`group min-h-[76px] rounded-lg border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${selected ? 'border-[var(--page-accent)]/50 bg-[var(--page-accent)]/10' : 'border-[var(--border-subtle)] bg-white/[0.02] hover:border-[var(--page-accent)]/30 hover:bg-white/[0.04]'}`}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: theme.tint, color: theme.accent }}><WidgetIcon size={14} /></span>
-                  <span className={`h-2 w-2 rounded-full ${selected ? 'bg-[var(--success)]' : 'bg-[var(--text-muted)]/40'}`} aria-hidden />
-                </span>
-                <span className="mt-2 block truncate text-[12px] font-medium text-[var(--text-primary)]">{widget.name}</span>
-                <span className="mt-0.5 block truncate font-mono text-[10px] text-[var(--text-muted)]">{selected ? 'On dashboard' : 'Add card'}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      {/* Selection lives in CardLibrary (mounted above this grid in the setup modal). */}
 
       {/* ── Edit controls (labeled groups) ── */}
       <AnimatePresence>

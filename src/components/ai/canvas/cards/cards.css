@@ -1,3 +1,4 @@
+
 /* ═══════════════════════════════════════════════════════════════
    DEEP FIELD — Card System
    Each card type gets its own accent light
@@ -86,15 +87,20 @@
   cursor: grabbing;
 }
 
-/* Status whispers — subtle border tint */
-.dk-canvas-card[data-status="active"],
-.dk-card[data-status="active"]   { border-color: color-mix(in srgb, var(--card-accent) 24%, var(--dk-border-subtle)); }
-.dk-canvas-card[data-status="stale"],
-.dk-card[data-status="stale"]    { opacity: 0.72; }
-.dk-canvas-card[data-status="error"],
-.dk-card[data-status="error"]    { border-color: color-mix(in srgb, var(--dk-danger) 35%, var(--dk-border-subtle)); }
-.dk-canvas-card[data-status="error"]::before,
-.dk-card[data-status="error"]::before { background: radial-gradient(ellipse 100% 100% at 50% 0%, color-mix(in srgb, var(--dk-danger) 8%, transparent), transparent 70%); }
+/* Status whispers — subtle border tint (TSX emits status-* classes, not data-status) */
+.dk-canvas-card.status-active,
+.dk-card.status-active   { border-color: color-mix(in srgb, var(--card-accent) 24%, var(--dk-border-subtle)); }
+.dk-canvas-card.status-stale,
+.dk-card.status-stale    { opacity: 0.72; }
+.dk-canvas-card.status-loading,
+.dk-card.status-loading  { border-color: color-mix(in srgb, var(--dk-accent) 40%, var(--dk-border-subtle)); }
+.dk-canvas-card.status-error,
+.dk-card.status-error    { border-color: color-mix(in srgb, var(--dk-danger) 35%, var(--dk-border-subtle)); }
+.dk-canvas-card.status-error::before,
+.dk-card.status-error::before { background: radial-gradient(ellipse 100% 100% at 50% 0%, color-mix(in srgb, var(--dk-danger) 8%, transparent), transparent 70%); }
+
+/* Transient AI cards — dashed border, reduced opacity */
+.dk-canvas-card.transient { border-style: dashed; opacity: 0.85; }
 
 /* Resize handle */
 .dk-canvas-resize-handle {
@@ -483,6 +489,23 @@
    6. PER-TYPE TREATMENTS
    ---------------------------------------------------------------------------- */
 
+/* -- Per-type accent overrides (set --card-accent on the outer card) -- */
+.dk-canvas-card[data-card-type="focus"]       { --card-accent: var(--dk-type-focus); }
+.dk-canvas-card[data-card-type="plan"]        { --card-accent: var(--dk-type-plan); }
+.dk-canvas-card[data-card-type="finance"]     { --card-accent: var(--dk-type-finance); }
+.dk-canvas-card[data-card-type="digest"]      { --card-accent: var(--dk-type-digest); }
+.dk-canvas-card[data-card-type="reflect"]     { --card-accent: var(--dk-type-reflect); }
+.dk-canvas-card[data-card-type="approval"]    { --card-accent: var(--dk-type-approval); }
+.dk-canvas-card[data-card-type="annotation"]  { --card-accent: var(--dk-type-annotation); }
+.dk-canvas-card[data-card-type="response"]    { --card-accent: var(--dk-type-response); }
+.dk-canvas-card[data-card-type="schedule"]    { --card-accent: var(--dk-type-schedule); }
+.dk-canvas-card[data-card-type="deadlines"]   { --card-accent: var(--dk-type-deadlines); }
+.dk-canvas-card[data-card-type="planner"]     { --card-accent: var(--dk-type-planner); }
+.dk-canvas-card[data-card-type="automation"]  { --card-accent: var(--dk-type-automation); }
+.dk-canvas-card[data-card-type="connectors"]  { --card-accent: var(--dk-type-connectors); }
+.dk-canvas-card[data-card-type="group"]       { --card-accent: var(--dk-type-group); }
+.dk-canvas-card[data-card-type="dynamic"]     { --card-accent: var(--dk-type-dynamic); }
+
 /* -- FOCUS · pink · the timer is the hero ---------------------------------- */
 .dk-focus-timer {
   font: 600 var(--dk-text-2xl)/1 var(--dk-display);
@@ -597,12 +620,12 @@
 .dk-approval-actions .dk-btn { flex: 1; }
 
 /* -- ANNOTATION · orange · warm paper ------------------------------------------------- */
-.dk-card[data-card-type="annotation"] {
+.dk-canvas-card[data-card-type="annotation"] {
   background:
     linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.03) 46%, transparent 52%),
     linear-gradient(170deg, rgba(44, 34, 26, 0.78) 0%, rgba(18, 14, 11, 0.62) 100%);
 }
-.dk-card[data-card-type="annotation"] mark {
+.dk-canvas-card[data-card-type="annotation"] mark {
   background: color-mix(in srgb, var(--card-accent) 30%, transparent);
   color: inherit;
   border-radius: 3px;
@@ -679,10 +702,10 @@
   color: var(--dk-text-primary);
 }
 .dk-dd-unit { font: 500 10px/1 var(--dk-mono); color: var(--dk-text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
-.dk-card[data-urgency="safe"]     { --card-accent: var(--dk-success); }
-.dk-card[data-urgency="soon"]     { --card-accent: var(--dk-type-deadlines); }
-.dk-card[data-urgency="critical"] { --card-accent: var(--dk-danger); }
-.dk-card[data-urgency="critical"]::before { opacity: 1; animation: dk-breathe 2.2s ease-in-out infinite; }
+.dk-canvas-card[data-urgency="safe"]     { --card-accent: var(--dk-success); }
+.dk-canvas-card[data-urgency="soon"]     { --card-accent: var(--dk-type-deadlines); }
+.dk-canvas-card[data-urgency="critical"] { --card-accent: var(--dk-danger); }
+.dk-canvas-card[data-urgency="critical"]::before { opacity: 1; animation: dk-breathe 2.2s ease-in-out infinite; }
 
 /* -- DAILY PLANNER · sky · the now-line -------------------------------------------- */
 .dk-planner { position: relative; }

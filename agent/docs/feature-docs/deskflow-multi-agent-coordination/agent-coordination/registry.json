@@ -1,14 +1,6 @@
 {
   "version": 1,
-  "agents": {
-    "codex-ambient-20260911": {
-      "id": "codex-ambient-20260911",
-      "startedAt": 1789064446191,
-      "task": "npm run build",
-      "pid": 2,
-      "lastHeartbeat": 1789064446645
-    }
-  },
+  "agents": {},
   "leases": {},
   "locks": {}
 }

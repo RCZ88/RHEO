@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, type ReactNode } from 'react';
 import { GlareHover } from '../components/ui/glare-hover';
 import { PageShell } from '../components/PageShell';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -23,20 +23,22 @@ import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
 
 
 import { VCalendar } from '../components/ui/v-calendar';
+import { CardLibrary, loadCardLayout } from '../components/dashboard/CardLibrary';
 import { WidgetGrid } from '../components/dashboard/WidgetGrid';
+import type { DashboardLayoutConfig } from '../components/dashboard/WidgetRegistry';
 
 import { SectionHeader } from '../components/SectionHeader';
 import { GlassCard } from '../components/GlassCard';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { DayDetailPopup } from '../components/DayDetailPopup';
+import { DeskFlowCardMotion } from '../components/dashboard/DeskFlowCard';
 import OrbitSystem from '../components/OrbitSystem';
 import { useHomeSummary } from '../hooks/useHomeSummary';
 import { useDeepFocus } from '../hooks/useDeepFocus';
 import { Bar, Line } from 'react-chartjs-2';
 import { motion, AnimatePresence } from 'motion/react';
-import { BlurFade } from '../components/ui/blur-fade';
-import { Particles } from '../components/ui/particles';
+
 
 import {
   BookOpen, Dumbbell, Activity,
@@ -45,7 +47,7 @@ import {
   Edit3, Check, Plus, Minus, TrendingUp,
   Target, ZapCircle, RefreshCw, Clock3,
   ChevronLeft, ChevronRight, Maximize2, Minimize2,
-  BarChart3, Bot, Sparkles, ArrowRight
+  BarChart3, Bot, Sparkles, ArrowRight, LayoutDashboard
 } from 'lucide-react';
 import { maxOf, maxBy } from '../utils/safeMath';
 import { getDateRange } from '../lib/dateRange';
@@ -337,6 +339,9 @@ export default function DashboardPage({
   const isCurrentlyProductive = lastTier === 'productive' && !isPaused;
   const isDistracting = lastTier === 'distracting' && !isPaused;
 
+  // Distraction log — records which app/site broke the stopwatch
+  const [distractions, setDistractions] = useState<Array<{ name: string; type: 'app' | 'website'; timestamp: number }>>([]);
+
   // Stopwatch refs - declared early to avoid TDZ issues
   const stopwatchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const stopwatchAccumulatedRef = useRef(0); // tracks accumulated productive ms
@@ -540,9 +545,10 @@ export default function DashboardPage({
       return { ms: externalElapsedMs, label: `External: ${selectedExternalActivity?.name || 'Running'}` };
     }
 
-    // Distracting app — show distracting timer
+    // Distracting app — show distracting timer with app name
     if (lastTier === 'distracting' && !isPaused) {
-      return { ms: currentDistractingMs, label: 'Distracting' };
+      const appName = currentApp?.app || currentWebsite?.title || currentWebsite?.domain || 'Unknown';
+      return { ms: currentDistractingMs, label: `Distracting: ${appName}` };
     }
 
     // Productive app — show productive timer
@@ -552,7 +558,7 @@ export default function DashboardPage({
 
     // Neutral/idle — show whichever timer was last active
     return { ms: currentProductiveMs, label: isPaused ? 'Paused' : 'Idle' };
-  }, [externalSessionRunning, externalElapsedMs, currentProductiveMs, currentDistractingMs, selectedExternalActivity, lastTier, isPaused]);
+  }, [externalSessionRunning, externalElapsedMs, currentProductiveMs, currentDistractingMs, selectedExternalActivity, lastTier, isPaused, currentApp, currentWebsite]);
 
   // ── Widget Data (collected for widget system) ──
   const widgetData = useMemo(() => ({
@@ -1160,10 +1166,11 @@ export default function DashboardPage({
       // Check if this is the tracking browser
       const isTrackingBrowser = !!tb && !!data.app && isAppMatchingBrowserDashboard(data.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
 
-      // Check if this is Tracker app (DeskFlow/Electron)
+      // Check if this is Tracker app (DeskFlow/Electron/RHEO)
       const isTrackerApp = data.app && (
         data.app.toLowerCase().includes('deskflow') ||
-        data.app.toLowerCase().includes('electron')
+        data.app.toLowerCase().includes('electron') ||
+        data.app.toLowerCase().includes('rheo')
       );
 
       if (isTrackingBrowser) {
@@ -1223,6 +1230,9 @@ export default function DashboardPage({
       };
       const tier = getTier(data.category);
       setLastTier(tier);
+      if (tier === 'distracting') {
+        setDistractions(prev => [...prev.slice(-49), { name: newAppName, type: 'app', timestamp: now }]);
+      }
       const now = Date.now();
 
       const newItem: ActivityFeedItem = {
@@ -1255,7 +1265,7 @@ export default function DashboardPage({
         const lnb = lastNonBrowserAppRef.current;
 
         const isTrackingBrowser = !!tb && !!(initialData.app) && isAppMatchingBrowserDashboard(initialData.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
-        const isTrackerApp = !!(initialData.app) && (initialData.app.toLowerCase().includes('deskflow') || initialData.app.toLowerCase().includes('electron'));
+        const isTrackerApp = !!(initialData.app) && (initialData.app.toLowerCase().includes('deskflow') || initialData.app.toLowerCase().includes('electron') || initialData.app.toLowerCase().includes('rheo'));
 
         if (isTrackingBrowser) { setIsInBrowser(true); setCurrentApp(lnb || null); return; }
 
@@ -1324,7 +1334,7 @@ export default function DashboardPage({
         if (!data?.app) return;
         const tb = trackingBrowserRef.current;
         const isTrackingBrowser = !!tb && isAppMatchingBrowserDashboard(data.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
-        const isTrackerApp = data.app.toLowerCase().includes('deskflow') || data.app.toLowerCase().includes('electron');
+        const isTrackerApp = data.app.toLowerCase().includes('deskflow') || data.app.toLowerCase().includes('electron') || data.app.toLowerCase().includes('rheo');
 
         if (isTrackerApp) return; // don't overwrite with tracker app
         if (isTrackingBrowser) {
@@ -1406,6 +1416,9 @@ export default function DashboardPage({
 
         const websiteTier = getTier(data.category || 'Uncategorized');
         setLastTier(websiteTier);
+        if (websiteTier === 'distracting') {
+          setDistractions(prev => [...prev.slice(-49), { name: data.domain || data.title || 'Unknown', type: 'website', timestamp: Date.now() }]);
+        }
 
         setCurrentWebsite({
           title: data.title,
@@ -1493,10 +1506,9 @@ export default function DashboardPage({
     // Only accumulate when there's a real app to track (or external session)
     const hasRealApp = !!currentApp?.app || (isInBrowser && !!currentWebsite?.domain);
 
-    // Productive and distracting always accumulate (timer never stuck at zero).
-    // Neutral pauses — no accumulation, no reset.
-    const shouldAccumulate = !isPaused && (hasRealApp || isExternal) &&
-      (tier === 'productive' || tier === 'distracting' || isExternal);
+    // Always accumulate when there's a real app — tier only affects labeling/color, not whether timer runs.
+    // Neutral apps no longer pause the stopwatch.
+    const shouldAccumulate = !isPaused && (hasRealApp || isExternal);
     const shouldPause = isPaused || (!shouldAccumulate && hasRealApp && !isExternal);
 
     // Handle pause
@@ -2536,6 +2548,38 @@ export default function DashboardPage({
   // ── Platform filter state ──
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
+  const [showCardLibrary, setShowCardLibrary] = useState(false);
+  const [cardLayout, setCardLayout] = useState<DashboardLayoutConfig | null>(null);
+  // Bumped after any save in the card library / widget grid so the live dashboard re-reads storage.
+  const [layoutSyncKey, setLayoutSyncKey] = useState(0);
+  const bumpLayoutSync = useCallback(() => setLayoutSyncKey(k => k + 1), []);
+
+  // Load card visibility (null = no custom layout yet → show the normal dashboard).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stored = await loadCardLayout();
+      if (!cancelled) setCardLayout(stored);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showCardLibrary, layoutSyncKey]);
+
+   // Esc closes card library modal
+   useEffect(() => {
+     if (!showCardLibrary) return;
+     const onKey = (e: KeyboardEvent) => {
+       if (e.key === 'Escape') setShowCardLibrary(false);
+     };
+     window.addEventListener('keydown', onKey);
+     return () => window.removeEventListener('keydown', onKey);
+   }, [showCardLibrary]);
+
+   const isCardVisible = (id: string): boolean => {
+    if (!cardLayout) return true;
+    return cardLayout.widgetVisibility[id] !== false && cardLayout.widgetOrder.includes(id);
+  };
 
   // Fetch available platforms on mount
   useEffect(() => {
@@ -2549,6 +2593,200 @@ export default function DashboardPage({
       } catch (_e) { /* platforms not available */ }
     })();
   }, []);
+
+  // ── Live card previews for the Card Library (same components + live props as the rows below) ──
+  const cardPreviews: Record<string, ReactNode> = {
+    'status-band': (
+      <StatusBand
+        displayTimeMs={displayTime.ms}
+        isCurrentlyProductive={isCurrentlyProductive}
+        isDistracting={isDistracting}
+        currentAppName={isInBrowser
+          ? (currentWebsite?.title || currentWebsite?.domain || 'Browsing...')
+          : (currentApp?.app || currentApp?.title || '')}
+        totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
+        browserName={isInBrowser ? currentWebsite?.browserName : undefined}
+        isInBrowser={isInBrowser}
+        websiteTitle={currentWebsite?.title}
+        websiteDomain={currentWebsite?.domain}
+        websiteCategory={currentWebsite?.category}
+      />
+    ),
+    'momentum-hero': (
+      <MomentumHero momentum={momentum} loading={dashLoading} />
+    ),
+    'tier-breakdown': (
+      <TierBreakdownStrip
+        productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
+        neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
+        distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
+        totalHours={dashboardData?.overview?.totalSeconds ? Math.round(dashboardData.overview.totalSeconds / 3600 * 10) / 10 : 0}
+      />
+    ),
+    'pinned-activities': (
+      <PinnedActivities
+        pinnedActivities={pinnedActivities}
+        setPinnedActivities={setPinnedActivities}
+        activities={activities}
+        selectedExternalActivity={selectedExternalActivity}
+        setSelectedExternalActivity={setSelectedExternalActivity}
+        handleSelectExternalActivity={handleSelectExternalActivity}
+        externalSessionRunning={externalSessionRunning}
+        formatDuration={formatDuration}
+        externalElapsedMs={externalElapsedMs}
+        handleStartExternalSession={handleStartExternalSession}
+        handleStopExternalSession={handleStopExternalSession}
+        collapsible
+      />
+    ),
+    'goals-card': (
+      <GoalsCard
+        goals={goals}
+        longTermGoals={longTermGoals}
+        suggestions={suggestions}
+        insights={dashboardInsights}
+        loading={dashLoading}
+        error={dashError}
+        onToggle={toggleGoal}
+        onAdd={addGoal}
+        onDelete={deleteGoal}
+        onUpdate={updateGoal}
+        onAcceptSuggestion={acceptSuggestion}
+        onDismissSuggestion={dismissSuggestion}
+        onGenerateSuggestions={generateSuggestions}
+      />
+    ),
+    'focus-card': (
+      <div className="flex flex-col gap-4">
+        <QuickFocusCard
+          state={deepFocus.state}
+          onStart={deepFocus.start}
+          onEnd={deepFocus.end}
+        />
+        <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
+      </div>
+    ),
+    'deadlines-card': (
+      <DeadlinesCard
+        deadlines={deadlines}
+        reminders={reminders}
+        loading={dashLoading}
+        error={dashError}
+        onAdd={addDeadline}
+        onDelete={deleteDeadline}
+        onUpdate={updateDeadline}
+        onComplete={completeDeadline}
+        onToggleReminder={async (id, done) => {
+          try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
+        }}
+        onDeleteReminder={async (id) => {
+          try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
+        }}
+      />
+    ),
+    'schedule-hero': (
+      <ScheduleCard
+        entries={schedule}
+        loading={dashLoading}
+        error={dashError}
+        onAdd={addScheduleEntry}
+        onUpdate={updateScheduleEntry}
+        onDelete={deleteScheduleEntry}
+      />
+    ),
+    'insight-strip': (
+      <InsightStrip insights={aiInsights} />
+    ),
+    'productivity-chart': (
+      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
+        <div>
+        <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
+        <div className="h-52 mt-2">
+          {chartBarsResult.chartBars.length === 0 ? (
+            <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No data yet" description="Start tracking to see productivity" />
+          ) : (
+            <Bar data={{
+              labels: chartBarsResult.chartBars.map(b => b.label),
+              datasets: [
+                {
+                  label: 'Productive',
+                  data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
+                  backgroundColor: '#34d399',
+                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                },
+                {
+                  label: 'Other',
+                  data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
+                  backgroundColor: '#fbbf24',
+                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                },
+                {
+                  label: 'External',
+                  data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
+                  backgroundColor: '#38bdf8',
+                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                },
+              ],
+            }} options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+              scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } }, y: { stacked: true, grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 11 } } } },
+            }} />
+          )}
+        </div>
+        <div className="flex items-center gap-4 mt-4 text-[11px] text-[var(--text-muted)]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--success)' }}></span> Productive
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--warning)' }}></span> Other
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--info)' }}></span> External
+          </div>
+        </div>
+        </div>
+      </div>
+    ),
+    'activity-feed': (
+      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
+        <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
+      <div className="space-y-0.5 mt-3">
+        {activityFeedWithElapsed.length === 0 ? (
+          <EmptyState icon={<Clock size={20} />} title="No sessions yet" description="Start an activity to see it here" />
+        ) : (
+          [...activityFeedWithElapsed].reverse().slice(0, 10).map((item) => {
+            const isActive = item.isActive;
+            const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
+            return (
+              <div key={item.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    item.tier === 'productive' ? 'bg-[var(--success)]' :
+                    item.tier === 'distracting' ? 'bg-[var(--error)]' :
+                    'bg-[var(--warning)]'
+                  }`} />
+                  <div className="min-w-0">
+                    <div className="text-[13px] text-[var(--text-primary)] truncate">{item.name}</div>
+                    <div className="text-[11px] text-[var(--text-muted)] truncate">{item.category} &bull; {item.timestamp.toLocaleTimeString()}</div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 ml-3">
+                <div className="text-[13px] font-mono text-[var(--text-muted)]">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+                    {item.tier}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      </div>
+    ),
+  };
 
   return (
     <PageShell page="dashboard" variant="dashboard" className="text-white">
@@ -2585,12 +2823,42 @@ export default function DashboardPage({
         </div>
       )}
 
-      <WidgetGrid data={widgetData} />
+      <div className="mb-4 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowCardLibrary(true)}
+          className="flex min-h-[36px] items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--page-accent)]/40 hover:text-[var(--text-primary)]"
+        >
+          <LayoutDashboard className="h-4 w-4 text-[var(--page-accent)]" />
+          Manage dashboard cards
+        </button>
+      </div>
+
+      {showCardLibrary && (
+        <div className="fixed inset-0 z-[var(--z-overlay)] flex items-start justify-center overflow-y-auto bg-black/70 p-5 backdrop-blur-sm" onMouseDown={() => setShowCardLibrary(false)}>
+          <div className="w-full max-w-[1400px] pt-5" onMouseDown={e => e.stopPropagation()}>
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCardLibrary(false)}
+                className="flex min-h-[32px] w-[32px] items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                aria-label="Close card library"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <CardLibrary onChanged={setCardLayout} onSaved={bumpLayoutSync} previews={cardPreviews} />
+          </div>
+        </div>
+      )}
 <div className="relative z-10">
         <div className="mx-auto px-5" style={{ maxWidth: '1400px' }}>
 
           {/* Row 1: Status Band + Momentum Hero */}
-          <div className="grid grid-cols-1 md:grid-cols-[5fr_3fr] gap-4 mb-4 items-stretch">
+          {(isCardVisible('status-band') || isCardVisible('momentum-hero')) && (
+          <DeskFlowCardMotion className="mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-[5fr_3fr] gap-0 items-stretch">
+            {isCardVisible('status-band') && (
             <StatusBand
               displayTimeMs={displayTime.ms}
               isCurrentlyProductive={isCurrentlyProductive}
@@ -2604,24 +2872,31 @@ export default function DashboardPage({
               websiteTitle={currentWebsite?.title}
               websiteDomain={currentWebsite?.domain}
               websiteCategory={currentWebsite?.category}
+              className="md:rounded-r-none"
             />
+            )}
+            {isCardVisible('momentum-hero') && (
             <MomentumHero momentum={momentum} loading={dashLoading} />
+            )}
           </div>
+          </DeskFlowCardMotion>
+          )}
 
-          {/* Row 2: Tier Breakdown Strip (Moved up for immediate context) */}
-          <BlurFade delay={0.05} duration={0.4}>
-            <div className="mb-4">
-              <TierBreakdownStrip
-                productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
-                neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
-                distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
-                totalHours={dashboardData?.overview?.totalSeconds ? Math.round(dashboardData.overview.totalSeconds / 3600 * 10) / 10 : 0}
-              />
-            </div>
-          </BlurFade>
+          {/* Row 2: Tier Breakdown Strip */}
+          {isCardVisible('tier-breakdown') && (
+          <DeskFlowCardMotion className="mb-4">
+           <TierBreakdownStrip
+             productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
+             neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
+             distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
+             totalHours={dashboardData?.overview?.totalSeconds ? Math.round(dashboardData.overview.totalSeconds / 3600 * 10) / 10 : 0}
+           />
+          </DeskFlowCardMotion>
+          )}
 
-          {/* Row 3: Pinned Activities (UI Clipping Fix) */}
-          <div className="mb-4 overflow-visible">
+          {/* Row 3: Pinned Activities */}
+          {isCardVisible('pinned-activities') && (
+          <DeskFlowCardMotion className="mb-4">
             <PinnedActivities
               pinnedActivities={pinnedActivities}
               setPinnedActivities={setPinnedActivities}
@@ -2636,198 +2911,190 @@ export default function DashboardPage({
               handleStopExternalSession={handleStopExternalSession}
               collapsible
             />
-          </div>
+          </DeskFlowCardMotion>
+          )}
 
-           {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
-           <BlurFade delay={0.14} duration={0.4}>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1 min-h-0 mb-4">
-                <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
-                  <GoalsCard
-                    goals={goals}
-                    longTermGoals={longTermGoals}
-                    suggestions={suggestions}
-                    insights={dashboardInsights}
-                    loading={dashLoading}
-                    error={dashError}
-                    onToggle={toggleGoal}
-                    onAdd={addGoal}
-                    onDelete={deleteGoal}
-                    onUpdate={updateGoal}
-                    onAcceptSuggestion={acceptSuggestion}
-                    onDismissSuggestion={dismissSuggestion}
-                    onGenerateSuggestions={generateSuggestions}
-                  />
-                </div>
-                <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
-                  <QuickFocusCard
-                    state={deepFocus.state}
-                    onStart={deepFocus.start}
-                    onEnd={deepFocus.end}
-                  />
-                </div>
-                <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
-                  <DeadlinesCard
-                    deadlines={deadlines}
-                    reminders={reminders}
-                    loading={dashLoading}
-                    error={dashError}
-                    onAdd={addDeadline}
-                    onDelete={deleteDeadline}
-                    onUpdate={updateDeadline}
-                    onComplete={completeDeadline}
-                    onToggleReminder={async (id, done) => {
-                      try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
-                    }}
-                    onDeleteReminder={async (id) => {
-                      try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
-                    }}
-                  />
-                </div>
-              <div className="rounded-xl flex flex-col h-full min-h-0 overflow-auto">
-                <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
+            {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
+            {(isCardVisible('goals-card') || isCardVisible('focus-card') || isCardVisible('deadlines-card')) && (
+            <DeskFlowCardMotion className="mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1 min-h-0">
+                 {isCardVisible('goals-card') && (
+                 <GoalsCard
+                   goals={goals}
+                   longTermGoals={longTermGoals}
+                   suggestions={suggestions}
+                   insights={dashboardInsights}
+                   loading={dashLoading}
+                   error={dashError}
+                   onToggle={toggleGoal}
+                   onAdd={addGoal}
+                   onDelete={deleteGoal}
+                   onUpdate={updateGoal}
+                   onAcceptSuggestion={acceptSuggestion}
+                   onDismissSuggestion={dismissSuggestion}
+                   onGenerateSuggestions={generateSuggestions}
+                 />
+                 )}
+                 {isCardVisible('focus-card') && (
+                 <QuickFocusCard
+                   state={deepFocus.state}
+                   onStart={deepFocus.start}
+                   onEnd={deepFocus.end}
+                 />
+                 )}
+                 {isCardVisible('deadlines-card') && (
+                 <DeadlinesCard
+                   deadlines={deadlines}
+                   reminders={reminders}
+                   loading={dashLoading}
+                   error={dashError}
+                   onAdd={addDeadline}
+                   onDelete={deleteDeadline}
+                   onUpdate={updateDeadline}
+                   onComplete={completeDeadline}
+                   onToggleReminder={async (id, done) => {
+                     try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
+                   }}
+                   onDeleteReminder={async (id) => {
+                     try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
+                   }}
+                 />
+                 )}
+               {isCardVisible('focus-card') && (
+               <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
+               )}
               </div>
-             </div>
-           </BlurFade>
+            </DeskFlowCardMotion>
+            )}
 
-           {/* Row 5: Schedule + Insight Strip */}
-           <BlurFade delay={0.1} duration={0.4}>
-             <div className="mb-4">
+            {/* Row 5: Schedule */}
+            {isCardVisible('schedule-hero') && (
+            <DeskFlowCardMotion className="mb-4">
                <ScheduleCard
-                 entries={schedule}
-                 loading={dashLoading}
-                 error={dashError}
-                 onAdd={addScheduleEntry}
-                 onUpdate={updateScheduleEntry}
-                 onDelete={deleteScheduleEntry}
-               />
+                  entries={schedule}
+                  loading={dashLoading}
+                  error={dashError}
+                  onAdd={addScheduleEntry}
+                  onUpdate={updateScheduleEntry}
+                  onDelete={deleteScheduleEntry}
+                />
+            </DeskFlowCardMotion>
+            )}
+
+             {/* AI Insights Strip */}
+            {isCardVisible('insight-strip') && (
+            <DeskFlowCardMotion className="mb-4">
+            <InsightStrip insights={aiInsights} />
+            </DeskFlowCardMotion>
+            )}
+
+           {/* Row 6: Productivity Chart */}
+           {isCardVisible('productivity-chart') && (
+             <DeskFlowCardMotion className="mb-4">
+             <div className="p-5">
+               <div>
+               <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
+               <div className="h-52 mt-2">
+                 {chartBarsResult.chartBars.length === 0 ? (
+                   <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No data yet" description="Start tracking to see productivity" />
+                 ) : (
+                   <Bar data={{
+                     labels: chartBarsResult.chartBars.map(b => b.label),
+                     datasets: [
+                       {
+                         label: 'Productive',
+                         data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
+                         backgroundColor: '#34d399',
+                         borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                       },
+                       {
+                         label: 'Other',
+                         data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
+                         backgroundColor: '#fbbf24',
+                         borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                       },
+                       {
+                         label: 'External',
+                         data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
+                         backgroundColor: '#38bdf8',
+                         borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                       },
+                     ],
+                   }} options={{
+                     responsive: true, maintainAspectRatio: false,
+                     plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+                     scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } }, y: { stacked: true, grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 11 } } } },
+                   }} />
+                 )}
+               </div>
+               {/* Custom Legend */}
+               <div className="flex items-center gap-4 mt-4 text-[11px] text-[var(--text-muted)]">
+                 <div className="flex items-center gap-1.5">
+                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--success)' }}></span> Productive
+                 </div>
+                 <div className="flex items-center gap-1.5">
+                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--warning)' }}></span> Other
+                 </div>
+                 <div className="flex items-center gap-1.5">
+                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--info)' }}></span> External
+                 </div>
+               </div>
+               <div className="flex gap-3 mt-4">
+                 <button onClick={() => setExpandedModal('heatmap')}
+                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-pink-500/50 hover:text-pink-400 transition-all duration-200">
+                   View Heatmap
+                 </button>
+                 <button onClick={() => setExpandedModal('solar')}
+                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-indigo-500/50 hover:text-indigo-400 transition-all duration-200">
+                   View Solar System
+                 </button>
+               </div>
+               </div>
              </div>
-            </BlurFade>
-
-            {/* AI Insights Strip */}
-           <InsightStrip insights={aiInsights} />
-
-          {/* Row 6: Productivity Chart */}
-          <BlurFade delay={0.2} duration={0.4}>
-            <div className="relative overflow-hidden bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5 mb-4 light:bg-white/85 light:border-[var(--ws-border)]">
-              <Particles className="absolute inset-0 pointer-events-none" quantity={30} color="#34d399" />
-              <div className="relative z-10">
-              <div className="border-t border-emerald-400/30 -mx-5 -mt-5 mb-4" />
-              <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
-              <div className="h-52 mt-2">
-                {chartBarsResult.chartBars.length === 0 ? (
-                  <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No data yet" description="Start tracking to see productivity" />
-                ) : (
-                  <Bar data={{
-                    labels: chartBarsResult.chartBars.map(b => b.label),
-                    datasets: [
-                      {
-                        label: 'Productive',
-                        data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
-                        backgroundColor: (context: any) => {
-                          const { ctx, chartArea } = context.chart;
-                          if (!chartArea) return '#34d399';
-                          const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-                          gradient.addColorStop(0, 'rgba(52, 211, 153, 0.3)');
-                          gradient.addColorStop(1, 'rgba(52, 211, 153, 1)');
-                          return gradient;
-                        },
-                        borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
-                      },
-                      {
-                        label: 'Other',
-                        data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
-                        backgroundColor: (context: any) => {
-                          const { ctx, chartArea } = context.chart;
-                          if (!chartArea) return '#fbbf24';
-                          const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-                          gradient.addColorStop(0, 'rgba(251, 191, 36, 0.3)');
-                          gradient.addColorStop(1, 'rgba(251, 191, 36, 1)');
-                          return gradient;
-                        },
-                        borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
-                      },
-                      {
-                        label: 'External',
-                        data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
-                        backgroundColor: (context: any) => {
-                          const { ctx, chartArea } = context.chart;
-                          if (!chartArea) return '#818cf8';
-                          const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-                          gradient.addColorStop(0, 'rgba(129, 140, 248, 0.3)');
-                          gradient.addColorStop(1, 'rgba(129, 140, 248, 1)');
-                          return gradient;
-                        },
-                        borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
-                      },
-                    ],
-                  }} options={{
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#09090b', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: '#27272a', borderWidth: 1, cornerRadius: 8, padding: 10 } },
-                    scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#52525b', font: { size: 11 } } }, y: { stacked: true, grid: { color: 'rgba(63,63,70,0.20)' }, ticks: { color: '#52525b', font: { size: 11 } } } },
-                  }} />
-                )}
-              </div>
-              {/* Custom Legend */}
-              <div className="flex items-center gap-4 mt-4 text-[11px] text-zinc-500 light:text-stone-500">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-sm bg-emerald-400"></span> Productive
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-sm bg-amber-400"></span> Other
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-sm bg-indigo-400"></span> External
-                </div>
-              </div>
-              <div className="flex gap-3 mt-4">
-                <button onClick={() => setExpandedModal('heatmap')}
-                  className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-pink-500/50 hover:text-pink-400 transition-all duration-200">
-                  View Heatmap
-                </button>
-                <button onClick={() => setExpandedModal('solar')}
-                  className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-indigo-500/50 hover:text-indigo-400 transition-all duration-200">
-                  View Solar System
-                </button>
-              </div>
-              </div>
-            </div>
-          </BlurFade>
+             </DeskFlowCardMotion>
+           )}
 
           {/* Row 7: Activity Feed */}
-          <BlurFade delay={0.35} duration={0.4}>
-            <div className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5 mb-4 light:bg-white/85 light:border-[var(--ws-border)]">
-              <div className="border-t border-zinc-500/30 -mx-5 -mt-5 mb-4 light:border-[var(--ws-border)]" />
-              <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
-            <div className="space-y-0.5 mt-3">
-              {activityFeedWithElapsed.length === 0 ? (
-                <EmptyState icon={<Clock size={20} className="light:text-stone-400" />} title="No sessions yet" description="Start an activity to see it here" />
-              ) : (
-                [...activityFeedWithElapsed].reverse().slice(0, 10).map((item) => {
-                  const isActive = item.isActive;
-                  const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
-                  return (
-                    <div key={item.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/30 border border-zinc-800/20 hover:bg-zinc-900/50 hover:border-zinc-700/30 transition-all duration-200 group cursor-pointer light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border)]">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${item.tier === 'productive' ? 'bg-emerald-400' : item.tier === 'distracting' ? 'bg-rose-400' : 'bg-amber-400'} ${isActive ? 'animate-pulse' : ''}`} />
-                        <div className="min-w-0">
-                          <div className="text-[13px] text-zinc-300 group-hover:text-white transition-colors truncate light:text-stone-900">{item.name}</div>
-                          <div className="text-[11px] light:text-stone-400 truncate light:text-stone-500">{item.category} &bull; {item.timestamp.toLocaleTimeString()}</div>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-3">
-                      <div className="text-[13px] font-mono text-zinc-400 light:text-stone-600">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${item.tier === 'productive' ? 'bg-emerald-500/10 text-emerald-400 light:bg-emerald-500/20 light:text-emerald-600' : item.tier === 'distracting' ? 'bg-rose-500/10 text-rose-400 light:bg-rose-500/20 light:text-rose-600' : 'bg-amber-500/10 text-amber-400 light:bg-amber-500/20 light:text-amber-600'}`}>
-                          {item.tier}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            </div>
-          </BlurFade>
+          {isCardVisible('activity-feed') && (
+          <DeskFlowCardMotion className="mb-4">
+             <div className="p-5">
+               <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
+             <div className="space-y-0.5 mt-3">
+               {activityFeedWithElapsed.length === 0 ? (
+                 <EmptyState icon={<Clock size={20} />} title="No sessions yet" description="Start an activity to see it here" />
+               ) : (
+                 [...activityFeedWithElapsed].reverse().slice(0, 10).map((item) => {
+                   const isActive = item.isActive;
+                   const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
+                   return (
+                     <div key={item.id}
+                       className="flex items-center justify-between p-3 rounded-lg border border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group cursor-pointer"
+                     >
+                       <div className="flex items-center gap-3 min-w-0">
+                         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                           item.tier === 'productive' ? 'bg-[var(--success)]' :
+                           item.tier === 'distracting' ? 'bg-[var(--error)]' :
+                           'bg-[var(--warning)]'
+                         }`} />
+                         <div className="min-w-0">
+                           <div className="text-[13px] text-[var(--text-primary)] truncate">{item.name}</div>
+                           <div className="text-[11px] text-[var(--text-muted)] truncate">{item.category} • {item.timestamp.toLocaleTimeString()}</div>
+                         </div>
+                       </div>
+                       <div className="text-right shrink-0 ml-3">
+                       <div className="text-[13px] font-mono text-[var(--text-muted)]">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
+                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border border-zinc-800/50 text-[var(--text-secondary)]">
+                           {item.tier}
+                         </span>
+                       </div>
+                     </div>
+                   );
+                 })
+               )}
+             </div>
+             </div>
+             </DeskFlowCardMotion>
+           )}
 
         </div>
       </div>

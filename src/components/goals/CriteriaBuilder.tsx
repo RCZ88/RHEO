@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Clock, CheckCircle2, Monitor, Search, Target, ArrowDownToLine, CalendarDays, AlertTriangle, Settings2, Zap } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Select, SelectItem } from '../ui/select';
+import { VoiceInputWrapper } from '../VoiceInputWrapper';
 import { FocusGroupSelect } from './FocusGroupSelect';
 import { ExternalActivityPicker } from './ExternalActivityPicker';
 import { CrossFeatureLinkPicker } from './CrossFeatureLinkPicker';
@@ -143,21 +144,25 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
 
   return (
     <div className="space-y-3">
-      <Input
-        value={value.title}
-        onChange={e => update({ title: e.target.value })}
-        onKeyDown={e => e.key === 'Enter' && value.title.trim() && onSave()}
-        placeholder="What do you want to achieve?"
-        autoFocus
-        className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
-      />
+      <VoiceInputWrapper className="w-full">
+        <Input
+          value={value.title}
+          onChange={e => update({ title: e.target.value })}
+          onKeyDown={e => e.key === 'Enter' && value.title.trim() && onSave()}
+          placeholder="What do you want to achieve?"
+          autoFocus
+          className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
+        />
+      </VoiceInputWrapper>
 
-      <Input
-        value={value.description}
-        onChange={e => update({ description: e.target.value })}
-        placeholder="Add details (optional)"
-        className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
-      />
+      <VoiceInputWrapper className="w-full">
+        <Input
+          value={value.description}
+          onChange={e => update({ description: e.target.value })}
+          placeholder="Add details (optional)"
+          className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
+        />
+      </VoiceInputWrapper>
 
       <div className="flex items-center gap-2 flex-wrap">
         <Select value={value.category} onValueChange={v => update({ category: v as GoalCategory })} className="w-[110px]">

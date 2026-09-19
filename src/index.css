@@ -442,6 +442,7 @@ html.light :focus-visible {
 [data-page="learn"] { --page-accent: #34d399; }
 [data-page="resume"] { --page-accent: #6366f1; }
 [data-page="ide"] { --page-accent: #06b6d4; }
+[data-page="stt"] { --page-accent: #8b5cf6; }
 [data-page="external"] { --page-accent: #fbbf24; }
 [data-page="insights"] { --page-accent: #ec4899; }
 [data-page="life"] { --page-accent: #e8866b; }

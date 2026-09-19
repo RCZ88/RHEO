@@ -15,6 +15,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import type { Reminder } from './types';
 import { Select, SelectItem } from '../ui/select';
+import { VoiceInputWrapper } from '../VoiceInputWrapper';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
 import { format } from 'date-fns';
@@ -270,7 +271,7 @@ export function DeadlinesCard({
   if (loading) {
     return (
       <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 h-full">
+        <div className="relative rounded-xl overflow-hidden  p-5 h-full">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
           <div className="animate-pulse space-y-4">
             <div className="h-5 light:bg-white light:border-[var(--ws-border-strong)] rounded w-1/3" />
@@ -287,7 +288,7 @@ export function DeadlinesCard({
   if (error) {
     return (
       <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 h-full flex flex-col items-center justify-center text-center">
+        <div className="relative rounded-xl overflow-hidden  p-5 h-full flex flex-col items-center justify-center text-center">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
           <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
             <AlertCircle size={24} className="light:text-stone-400" />
@@ -301,7 +302,7 @@ export function DeadlinesCard({
 
   return (
     <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-      <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 flex flex-col h-full">
+      <div className="relative rounded-xl overflow-hidden  p-5 flex flex-col h-full">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
 
         {/* Header */}
@@ -372,20 +373,24 @@ export function DeadlinesCard({
                   </button>
                 </div>
 
-                <Input
-                  value={newDl.title}
-                  onChange={e => setNewDl(p => ({ ...p, title: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && handleAdd()}
-                  placeholder={addType === 'deadline' ? "What's due?" : "What to remind about?"}
-                  autoFocus
-                  className="light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-rose-500/50 text-[13px] h-9"
-                />
-                <Input
-                  value={newDl.description}
-                  onChange={e => setNewDl(p => ({ ...p, description: e.target.value }))}
-                  placeholder="Description (optional)"
-                  className="light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-rose-500/50 text-[13px] h-9"
-                />
+                <VoiceInputWrapper className="w-full">
+                  <Input
+                    value={newDl.title}
+                    onChange={e => setNewDl(p => ({ ...p, title: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                    placeholder={addType === 'deadline' ? "What's due?" : "What to remind about?"}
+                    autoFocus
+                    className="light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-rose-500/50 text-[13px] h-9"
+                  />
+                </VoiceInputWrapper>
+                <VoiceInputWrapper className="w-full">
+                  <Input
+                    value={newDl.description}
+                    onChange={e => setNewDl(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Description (optional)"
+                    className="light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-rose-500/50 text-[13px] h-9"
+                  />
+                </VoiceInputWrapper>
 
                 {addType === 'deadline' ? (
                   <>

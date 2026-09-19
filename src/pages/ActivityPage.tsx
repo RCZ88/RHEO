@@ -150,27 +150,31 @@ export default function ActivityPage(props: ActivityPageProps) {
           <div className="flex-1" />
 
           {/* OS Filter Bar */}
-          {(props.availablePlatforms ?? []).length > 0 && (
+          {((props.availablePlatforms || []).length > 0) && (
             <div className="flex items-center gap-1.5 mr-2">
               <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
               <button
-                onClick={() => props.onPlatformFilterChange('all')}
-                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${
-                  props.platformFilter === 'all'
+                onClick={() => props.onPlatformFilterChange?.('all')}
+                disabled={!props.onPlatformFilterChange}
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${props.onPlatformFilterChange
+                  ? props.platformFilter === 'all'
                     ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
                     : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
                 }`}
               >
                 All
               </button>
-              {props.onPlatformFilterChange && props.availablePlatforms?.map(p => (
+              {(props.availablePlatforms || []).map(p => (
                 <button
                   key={p}
-                  onClick={() => props.onPlatformFilterChange(p)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${
-                    props.platformFilter === p
+                  onClick={() => props.onPlatformFilterChange?. (p)}
+                  disabled={!props.onPlatformFilterChange}
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${props.onPlatformFilterChange
+                    ? props.platformFilter === p
                       ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
                       : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
                   }`}
                 >
                   {platformLabel(p)}
@@ -180,7 +184,7 @@ export default function ActivityPage(props: ActivityPageProps) {
           )}
 
           {/* Compare Mode Toggle */}
-          {props.availablePlatforms?.length > 1 && (
+          {((props.availablePlatforms || []).length > 1) && (
             <button
               onClick={() => setCompareMode(!compareMode)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${

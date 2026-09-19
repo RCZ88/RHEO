@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import TerminalPage from './TerminalPage';
-// motion removed per LAMINAR constitution
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Monitor,
   Code2,
@@ -43,16 +43,17 @@ import {
   Archive,
   FileText,
   Play,
-  ArrowRight,
-  Sigma,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { NumberTicker } from '@/components/ui/number-ticker';
+import { Particles } from '@/components/ui/particles';
+import { BorderBeam } from '@/components/ui/border-beam';
+import { MagicCard } from '@/components/ui/magic-card';
+import { AmbientGlow } from '@/components/ui/ambient-patterns';
 import InitializeProgressModal from '../components/InitializeProgressModal';
 import {
   Chart as ChartJS,
@@ -79,15 +80,9 @@ import FeatureSpecPanel from '../components/FeatureSpecPanel';
 import { BackupTabPanel } from '../components/workspace/BackupTabPanel';
 import AIToolsTab from '../components/ai/AIToolsTab';
 import { VoiceInputWrapper } from '@/components/VoiceInputWrapper';
-import { StatsGrid } from '../components/ide/StatsGrid';
-import { LanguageChart } from '../components/ide/LanguageChart';
-import { AIUsageChart } from '../components/ide/AIUsageChart';
-import { CommitHeatmap } from '../components/ide/CommitHeatmap';
-import { ProjectHealthGrid } from '../components/ide/ProjectHealthGrid';
-import { QuickActions } from '../components/ide/QuickActions';
-import { ActivityFeed } from '../components/ide/ActivityFeed';
-import { CostTracker } from '../components/ide/CostTracker';
-import { PulseRing } from '../components/ide/PulseRing';
+import { CurrentCanvas } from '../components/CurrentCanvas';
+import { renderMechanical } from '../lib/renderers/mechanical';
+import { startPhaseClock } from '../lib/currentPhase';
 
 ChartJS.register(CategoryScale, LinearScale, LogarithmicScale, PointElement, BarElement, LineElement, ArcElement, Tooltip, Legend, Filler);
 
@@ -250,11 +245,11 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
   const month = calculateStats(30);
 
   const StatCard = ({ label, stats }: { label: string; stats: ReturnType<typeof calculateStats> }) => (
-    <div className="bg-[var(--color-card)] border-[var(--border-hairline)] rounded-[10px] p-3 flex flex-col text-center">
-      <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-2">{label}</div>
+    <div className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-3 flex flex-col text-center">
+      <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-2">{label}</div>
       
       {/* Usage bar */}
-      <div className="w-full h-1.5 bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-full mb-2 overflow-hidden">
+      <div className="w-full h-1.5 bg-zinc-800 light:bg-zinc-100 rounded-full mb-2 overflow-hidden">
         <div 
           className={`h-full rounded-full transition-all ${stats.overLimit ? 'bg-red-500' : stats.usagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
           style={{ width: `${Math.min(100, stats.usagePercent)}%` }}
@@ -262,16 +257,16 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
       </div>
 
       {/* Usage vs Limit */}
-      <div className="text-[10px] text-[var(--text-muted)] mb-1">
+      <div className="text-[10px] text-zinc-400 mb-1">
         <span className={stats.overLimit ? 'text-red-400 font-semibold' : 'text-emerald-400 font-semibold'}>
           {formatTokens(stats.estimatedTotal)}
         </span>
-        <span className="text-[var(--text-muted)]"> / {formatTokens(stats.totalLimit)}</span>
+        <span className="text-zinc-600"> / {formatTokens(stats.totalLimit)}</span>
       </div>
 
       {/* Average daily */}
-      <div className="text-[9px] text-[var(--text-muted)] mb-1.5">
-        Avg: <span className="text-[var(--text-muted)]">{formatTokens(stats.avgDaily)}</span>/day
+      <div className="text-[9px] text-zinc-500 mb-1.5">
+        Avg: <span className="text-zinc-400">{formatTokens(stats.avgDaily)}</span>/day
       </div>
 
       {/* Available or Over limit */}
@@ -282,7 +277,7 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
       ) : (
         <div className="text-sm font-bold text-emerald-400">
           {formatTokens(stats.available)}
-          <div className="text-[9px] text-[var(--text-muted)] font-normal mt-0.5">tokens left</div>
+          <div className="text-[9px] text-zinc-600 font-normal mt-0.5">tokens left</div>
         </div>
       )}
 
@@ -296,18 +291,18 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
   );
 
   return (
-    <div className="bg-[var(--color-card)] rounded-[10px] p-4 mb-6 border border-emerald-500/10">
+    <div className="bg-[var(--color-card)] rounded-lg p-4 mb-6 border border-emerald-500/10">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-[6px] bg-emerald-500/10 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-emerald-400" />
           </div>
           <div>
             <h4 className="text-sm font-semibold text-white">Usage vs Daily Limit</h4>
-            <p className="text-[10px] text-[var(--text-muted)]">Daily allowance: {formatTokens(limit)} tokens/day</p>
+            <p className="text-[10px] text-zinc-500">Daily allowance: {formatTokens(limit)} tokens/day</p>
           </div>
         </div>
-        <div className="text-[10px] text-[var(--text-muted)]">
+        <div className="text-[10px] text-zinc-500">
           {agent.name}
         </div>
       </div>
@@ -316,9 +311,9 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
         <StatCard label="This Week" stats={week} />
         <StatCard label="This Month" stats={month} />
       </div>
-      <div className="mt-4 flex items-start gap-2 p-2 rounded-[10px] bg-[var(--color-card)] border-[var(--border-hairline)]">
-        <div className="w-1 h-1 rounded-full bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] mt-1.5" />
-        <p className="text-[10px] text-[var(--text-muted)] leading-relaxed italic">
+      <div className="mt-4 flex items-start gap-2 p-2 rounded-lg bg-[var(--color-card)] border border-[rgba(255,255,255,0.06)]">
+        <div className="w-1 h-1 rounded-full bg-zinc-700 light:bg-zinc-200 mt-1.5" />
+        <p className="text-[10px] text-zinc-500 leading-relaxed italic">
           Based on your average daily usage of {formatTokens(week.avgDaily)} tokens. 
           Limits are estimated free tier allowances — actual limits may vary by provider.
         </p>
@@ -327,12 +322,13 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
   );
 }
 
-type TabKey = 'overview' | 'projects' | 'ai' | 'git' | 'environment' | 'analytics' | 'backup' | 'activity';
+type TabKey = 'overview' | 'projects' | 'ai' | 'git' | 'environment' | 'analytics' | 'backup';
 
-const TAB_KEYS: TabKey[] = ['overview', 'projects', 'ai', 'git', 'environment', 'analytics', 'backup', 'activity'];
+const TAB_KEYS: TabKey[] = ['overview', 'projects', 'ai', 'git', 'environment', 'analytics', 'backup'];
 
 const TAB_HOVER = { scale: 1.02 };
 const TAB_TAP = { scale: 0.98 };
+const TAB_LAYOUT = { type: "tween" as const, duration: 200, ease: "easeOutExpo" };
 
 const TABS: Array<{ key: TabKey; label: string; icon: any }> = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -342,7 +338,6 @@ const TABS: Array<{ key: TabKey; label: string; icon: any }> = [
   { key: 'environment', label: 'Environment', icon: Boxes },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'backup', label: 'Backup', icon: Archive },
-  { key: 'activity', label: 'Activity', icon: Activity },
 ];
 
 // Back-compat: retired keys map to their new home.
@@ -358,6 +353,7 @@ interface IDEProjectsPageProps {
 }
 
 export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 0 }: IDEProjectsPageProps) {
+  useEffect(() => { startPhaseClock(); }, []);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -435,9 +431,6 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   const [savedCustomDirs, setSavedCustomDirs] = useState<string[]>([]);
   const [customDirResults, setCustomDirResults] = useState<Record<string, { name: string; path: string; languages: string[]; fileCount: number }[]>>({});
   const [scanningDirs, setScanningDirs] = useState(false);
-  const [projectQuery, setProjectQuery] = useState('');
-  const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [detailsError, setDetailsError] = useState<Record<string, string>>({});
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('ide-projects-expandedProjects');
@@ -785,7 +778,6 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
   const loadOverview = async (period?: string, offset?: number) => {
     setLoading(true);
-    setOverviewError(null);
     try {
       const effectivePeriod = period ?? (activeTab === 'ai' ? effectiveAiPeriod : selectedPeriod);
       const effectiveOffset = offset ?? dateOffset;
@@ -805,7 +797,6 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       setLoading(false);
     } catch (err) {
       console.error('[IDEProjectsPage] Failed to load IDE projects overview:', err);
-      setOverviewError('The overview request failed.');
       setLoading(false);
     }
   };
@@ -1125,7 +1116,6 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           }));
         } catch (err) {
           console.error('Failed to load project details:', err);
-          setDetailsError(prev => ({ ...prev, [projectId]: 'Project details failed to load.' }));
         } finally {
           setLoadingProjectDetails(prev => {
             const newSet = new Set(prev);
@@ -1134,39 +1124,6 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           });
         }
       }
-    }
-  };
-
-  const reloadProjectDetails = async (projectId: string) => {
-    if (loadingProjectDetails.has(projectId)) return;
-    setDetailsError(prev => {
-      const next = { ...prev };
-      delete next[projectId];
-      return next;
-    });
-    setLoadingProjectDetails(prev => new Set(prev).add(projectId));
-    try {
-      const details = await window.deskflowAPI!.getProjectDetails(projectId);
-      setProjectDetailsCache(prev => ({
-        ...prev,
-        [projectId]: {
-          project: details.project,
-          tools: details.tools,
-          sessions: details.sessions,
-          health: details.health,
-          presets: details.presets,
-          aiUsage: details.aiUsage
-        }
-      }));
-    } catch (err) {
-      console.error('Failed to reload project details:', err);
-      setDetailsError(prev => ({ ...prev, [projectId]: 'Project details failed to load.' }));
-    } finally {
-      setLoadingProjectDetails(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(projectId);
-        return newSet;
-      });
     }
   };
 
@@ -1194,12 +1151,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
     return (
       <span className="inline-flex flex-col items-center leading-tight cursor-pointer" onClick={() => setShowFull(!showFull)} title={showFull ? 'Click for abbreviated' : 'Click for full number'}>
         {showFull ? (
-          <span className="text-[10px] text-[var(--text-muted)] font-normal">{value.toLocaleString()}</span>
+          <span className="text-[10px] text-zinc-400 font-normal">{value.toLocaleString()}</span>
         ) : (
           <span>{formatTokens(value)}</span>
         )}
         {value > 0 && (
-          <span className="text-[9px] text-[var(--text-muted)] font-normal opacity-50 hover:opacity-100 transition-opacity">
+          <span className="text-[9px] text-zinc-600 font-normal opacity-50 hover:opacity-100 transition-opacity">
             {showFull ? 'abbreviated' : 'full'}
           </span>
         )}
@@ -1212,12 +1169,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
     return (
       <span className="inline-flex flex-col items-center leading-tight cursor-pointer" onClick={() => setShowFull(!showFull)} title={showFull ? 'Click for abbreviated' : 'Click for full amount'}>
         {showFull ? (
-          <span className="text-[10px] text-[var(--text-muted)] font-normal">${value.toFixed(value >= 1 ? 2 : 4)}</span>
+          <span className="text-[10px] text-zinc-400 font-normal">${value.toFixed(value >= 1 ? 2 : 4)}</span>
         ) : (
           <span>{formatCurrency(value)}</span>
         )}
         {value > 0 && (
-          <span className="text-[9px] text-[var(--text-muted)] font-normal opacity-50 hover:opacity-100 transition-opacity">
+          <span className="text-[9px] text-zinc-600 font-normal opacity-50 hover:opacity-100 transition-opacity">
             {showFull ? 'abbreviated' : 'full'}
           </span>
         )}
@@ -1349,13 +1306,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
   return (
     <PageShell page="ide-projects" className="max-w-7xl mx-auto space-y-6 overflow-y-auto">
+      <CurrentCanvas accent="#06b6d4" render={renderMechanical} />
       <div className="relative z-10">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-white">IDE &amp; Projects</h1>
-          <PulseRing count={3} label="commits" />
-          <p className="text-[var(--text-muted)] mt-1">Track your development environment, AI tools, and project metrics</p>
+          <p className="text-zinc-500 mt-1">Track your development environment, AI tools, and project metrics</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Button
@@ -1371,21 +1327,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)} aria-label="IDE sections">
-        <TabsList className="flex gap-1 p-1 bg-[var(--color-card)] rounded-[6px] w-fit">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+        <TabsList className="flex gap-1 p-1 bg-[var(--color-card)] rounded-lg w-fit">
           {TABS.map(({ key, label, icon: Icon }) => {
             const isActive = activeTab === key;
             return (
               <TabsTrigger
                 key={key}
                 value={key}
-                className={`relative flex items-center gap-2 px-4 py-2 rounded-[6px] text-sm font-medium transition-colors duration-150 ${
-                  isActive ? 'text-white' : 'text-[var(--text-muted)] hover:text-white'
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                  isActive ? 'text-white' : 'text-zinc-400 hover:text-white'
                 }`}
               >
                 {isActive && (
-                  <span
-                    className="absolute inset-0 bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-[10px]"
+                  <motion.span
+                    layoutId="ide-tab-active"
+                    className="absolute inset-0 bg-zinc-800 light:bg-zinc-100 rounded-lg"
+                    transition={TAB_LAYOUT}
                   />
                 )}
                 <span className="relative z-10 flex items-center gap-2">
@@ -1400,210 +1358,784 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {overviewError && !overview ? (
-            <div className="border border-rose-500/25 bg-rose-500/[0.06] rounded-[12px] p-5 mb-6 flex flex-wrap items-center gap-3 justify-between" role="alert">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="w-9 h-9 rounded-[8px] bg-rose-500/10 border border-rose-500/20 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-4 h-4 text-rose-400" />
-                </span>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">Couldn&apos;t load the IDE overview</div>
-                  <div className="text-xs text-[var(--text-muted)]">{overviewError} Check the connection and try again.</div>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => loadOverview()} className="gap-2">
-                <RefreshCw className="w-3.5 h-3.5" /> Retry
-              </Button>
+        <div data-section="ide.overview" className="space-y-6 relative z-10">
+          {/* Live Pulse Grid - Replaces old navigate-away cards */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[0, 1, 2, 3].map(idx => (
+                <Skeleton key={idx} className="h-24 bg-[var(--color-card)] rounded-lg" />
+              ))}
             </div>
           ) : (
-            <>
-              {/* Stats Grid */}
-              {!loading && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4" tabIndex={0}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-emerald-500/10">
-                        <Code2 className="h-4 w-4 text-emerald-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs text-[var(--text-muted)]">Lines Added</div>
-                        <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{codeActivity?.totalLinesAdded != null ? codeActivity.totalLinesAdded.toLocaleString() : '—'}</div>
-                      </div>
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[
+                { label: 'Live Coding', value: codeActivity?.totalLinesAdded == null ? '—' : <NumberTicker value={codeActivity.totalLinesAdded} />, sub: codeActivity == null ? '—' : `-${fmtNum(codeActivity.totalLinesRemoved || 0)} lines · ${codeActivity.totalDurationMs == null ? '—' : fmtSec(codeActivity.totalDurationMs / 1000) + ' active'}`, icon: Code2, color: '#10b981', bg: 'bg-emerald-500/10' },
+                { label: 'AI Pulse', value: overview?.aiUsage?.totalTokens == null ? '—' : <NumberTicker value={overview.aiUsage.totalTokens} />, sub: overview?.aiUsage?.totalCost == null ? '—' : <CostValue value={overview.aiUsage.totalCost} />, icon: Sparkles, color: '#a855f7', bg: 'bg-violet-500/10' },
+                { label: 'Git Velocity', value: overview?.commits?.totalCommits == null ? '—' : <NumberTicker value={overview.commits.totalCommits} />, sub: 'commits this period', icon: GitCommit, color: '#f59e0b', bg: 'bg-amber-500/10' },
+                { label: 'Top Tool', value: topToolName || '—', icon: Cpu, color: '#3b82f6', bg: 'bg-blue-500/10' },
+              ].map((stat, idx) => (
+                <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}
+                  className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-4 flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center flex-shrink-0`}>
+                    <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
                   </div>
-                  <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4" tabIndex={0}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--page-accent)]/10">
-                        <Sparkles className="h-4 w-4 text-[var(--page-accent)]" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs text-[var(--text-muted)]">AI Tokens</div>
-                        <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{overview?.aiUsage?.totalTokens != null ? overview.aiUsage.totalTokens.toLocaleString() : '—'}</div>
-                      </div>
-                    </div>
+                  <div className="min-w-0">
+                    <div className="text-xl font-semibold tabular-nums tracking-tight text-white truncate">{stat.value}</div>
+                    <div className="text-xs text-zinc-400 truncate">{stat.label}</div>
+                    {stat.sub && <div className="text-[10px] text-zinc-500 truncate mt-0.5">{stat.sub}</div>}
                   </div>
-                  <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4" tabIndex={0}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-amber-500/10">
-                        <GitCommit className="h-4 w-4 text-amber-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs text-[var(--text-muted)]">Commits</div>
-                        <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{overview?.commits?.totalCommits ?? '—'}</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4" tabIndex={0}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-rose-500/10">
-                        <Cpu className="h-4 w-4 text-rose-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs text-[var(--text-muted)]">Cost</div>
-                        <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{overview?.aiUsage?.totalCost != null ? `$${overview.aiUsage.totalCost.toFixed(2)}` : '—'}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+                </motion.div>
+              ))}
+            </div>
+          )}
 
-              {/* Quick Actions */}
-              {loading ? (
-                <div className="h-10 rounded-[8px] bg-[var(--color-card)]" />
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
+          {/* AI & Projects Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* AI Usage Overview */}
+            <motion.div
+              data-tutorial="ide.usage"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-5"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Sparkles className="w-5 h-5 text-violet-400" />
+                  <div>
+                    <div className="text-xl font-semibold">AI Tool Usage</div>
+                    <div className="text-sm text-zinc-500">Last 30 days</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => setShowAddProject(true)}
-                    className="flex items-center gap-2 rounded-[8px] bg-[var(--page-accent)] px-3 py-2 text-sm font-medium text-[var(--bg-primary)] transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,255,255,0.2)]"
+                    onClick={() => setLogScale(!logScale)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${
+                      logScale ? 'bg-cyan-500/20 text-cyan-400' : 'text-zinc-400 hover:text-white'
+                    }`}
                   >
-                    <Plus className="h-4 w-4" /> New Project
+                    Log
                   </button>
                   <button
-                    onClick={() => setActiveTab('projects')}
-                    className="flex items-center gap-2 rounded-[8px] border border-[var(--border-hairline)] bg-transparent px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--color-card-sunken)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,255,255,0.2)]"
+                    onClick={() => setExcludeOutliers(!excludeOutliers)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${
+                      excludeOutliers ? 'bg-amber-500/20 text-amber-400' : 'text-zinc-400 hover:text-white'
+                    }`}
                   >
-                    <FolderGit2 className="h-4 w-4" /> View Projects
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('environment')}
-                    className="flex items-center gap-2 rounded-[8px] border border-[var(--border-hairline)] bg-transparent px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--color-card-sunken)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,255,255,0.2)]"
-                  >
-                    <Boxes className="h-4 w-4" /> Environment
+                    ♯ Out
                   </button>
                 </div>
-              )}
+              </div>
 
-              {/* Main Content Grid */}
-              {loading ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  <Skeleton className="h-64 bg-[var(--color-card)] rounded-[12px]" />
-                  <Skeleton className="h-64 bg-[var(--color-card)] rounded-[12px]" />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  {/* AI Usage Chart */}
-                  <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-[var(--text-primary)]">AI Usage</h3>
-                      <span className="text-xs text-[var(--text-muted)]">Last 30 days</span>
-                    </div>
-                    <div className="mt-4 h-48">
-                      {(() => {
-                        const activeAgents = aiAgents.filter(a => a.tokens > 0);
-                        if (activeAgents.length === 0) {
-                          return <EmptyState icon={<Sparkles className="w-8 h-8" />} title="No AI usage" description="Sync AI to start tracking" />;
-                        }
-                        const overviewDays = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() });
-                        const chartData = {
-                          labels: overviewDays.map(d => format(d, 'MMM dd')),
-                          datasets: activeAgents.map((agent) => ({
+              {aiAgents.filter(a => a.status !== 'inactive').length > 0 ? (
+                <>
+                  <div className="h-48 mb-6">
+                    {(() => {
+                      const activeAgents = aiAgents.filter(a => a.tokens > 0);
+                      const overviewDays = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() });
+                      const overviewChartData = {
+                        labels: overviewDays.map(d => format(d, 'MMM dd')),
+                        datasets: activeAgents.map((agent, idx) => {
+                          let data = overviewDays.map(d => {
+                            const dayStr = format(d, 'yyyy-MM-dd');
+                            return overview?.aiUsage?.byTool?.[agent.id]?.daily?.[dayStr]?.tokens || 0;
+                          });
+                          if (excludeOutliers) data = filterOutlierValues(data);
+                          if (logScale) data = data.map(v => v === 0 ? null : v) as number[];
+                          return {
                             label: agent.name,
-                            data: overviewDays.map(d => {
-                              const dayStr = format(d, 'yyyy-MM-dd');
-                              return overview?.aiUsage?.byTool?.[agent.id]?.daily?.[dayStr]?.tokens || 0;
-                            }),
+                            data,
                             backgroundColor: agent.color,
-                            stack: 'combined',
-                          }))
-                        };
-                        return (
-                          <Bar data={chartData} options={{
-                            responsive: true, maintainAspectRatio: false,
+                            ...(logScale ? {} : { stack: 'combined' }),
+                          };
+                        })
+                      };
+                      const isStacked = !logScale;
+                      return (
+                        <Bar
+                          data={overviewChartData}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
                             plugins: {
-                              legend: { display: true, position: 'bottom', labels: { color: 'var(--text-muted)', padding: 8, usePointStyle: true } },
-                              tooltip: { backgroundColor: 'rgba(24, 24, 27, 0.95)', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
-                                callbacks: { label: (ctx: any) => `${ctx.dataset.label || 'AI'}: ${formatTokens(ctx.parsed.y ?? 0)} tokens` }
+                              legend: { display: true, position: 'bottom', labels: { color: '#a1a1aa', padding: 8, usePointStyle: true } },
+                              tooltip: {
+                                backgroundColor: 'rgba(24, 24, 27, 0.95)',
+                                titleColor: '#fff',
+                                bodyColor: '#a1a1aa',
+                                borderColor: '#3f3f46',
+                                borderWidth: 1,
+                                callbacks: {
+                                  label: (ctx: any) => {
+                                    const val = ctx.parsed.y ?? 0;
+                                    return `${ctx.dataset.label || 'AI'}: ${formatTokens(val)} tokens`;
+                                  }
+                                }
                               }
                             },
                             scales: {
-                              x: { stacked: true, grid: { display: false }, ticks: { color: 'var(--text-muted)', maxTicksLimit: 7 } },
-                              y: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'var(--text-muted)', callback: (v: any) => formatTokens(v) }, beginAtZero: true }
+                              x: { stacked: isStacked, grid: { display: false }, ticks: { color: '#71717a', maxTicksLimit: 7 } },
+                              y: {
+                                type: logScale ? 'logarithmic' as const : 'linear' as const,
+                                stacked: isStacked,
+                                grid: { color: '#27272a' },
+                                ticks: {
+                                  color: '#71717a',
+                                  callback: (v: any) => {
+                                    if (v === null) return '';
+                                    return formatTokens(v);
+                                  },
+                                },
+                                ...(logScale ? {} : { beginAtZero: true }),
+                              }
                             },
-                          }} />
-                        );
-                      })()}
-                    </div>
+                          }}
+                        />
+                      );
+                    })()}
                   </div>
 
-                  {/* Recent Projects */}
-                  <div className="rounded-[12px] border-[var(--border-hairline)] bg-[var(--color-card)] p-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-[var(--text-primary)]">Recent Projects</h3>
-                      <button onClick={() => setActiveTab('projects')} className="text-xs text-[var(--page-accent)] hover:opacity-80">View all</button>
-                    </div>
-                    {overview?.projects && overview.projects.length > 0 ? (
-                      <div className="mt-4 space-y-2">
-                        {overview.projects.slice(0, 5).map((project: any) => (
-                          <button
-                            key={project.id}
-                            onClick={() => { setActiveTab('projects'); }}
-                            className="w-full flex items-center justify-between p-3 rounded-[8px] bg-[rgba(255,255,255,0.02)] hover:bg-[rgba(255,255,255,0.04)] border border-[var(--border-hairline)] transition-colors duration-150 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,255,255,0.2)]"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-[8px] bg-[var(--page-accent)]/10 flex items-center justify-center flex-shrink-0">
-                                <FolderGit2 className="w-4 h-4 text-[var(--page-accent)]" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-[var(--text-primary)] truncate">{project.name}</div>
-                                {project.path && <div className="text-xs text-[var(--text-muted)] truncate">{project.path}</div>}
-                              </div>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
-                          </button>
-                        ))}
+                  <div className="space-y-3">
+                    {aiAgents.filter(a => a.status !== 'inactive').map((agent) => (
+                      <div key={agent.id} className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: agent.color + '22' }}>
+                            <Code2 className="w-4 h-4" style={{ color: agent.color }} />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-white">{agent.name}</div>
+                            <div className="text-xs text-zinc-500">{agent.sessions} sessions &middot; {agent.messageCount} msgs</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={agent.status === 'active' ? 'default' : 'secondary'} className={agent.status === 'active' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-zinc-700 text-zinc-400 border-zinc-600'}>
+                            {agent.status}
+                          </Badge>
+                          <div className="text-right">
+                            <div className="text-sm font-medium text-emerald-400"><CostValue value={agent.cost} /></div>
+                            <div className="text-xs text-zinc-500"><TokenValue value={agent.tokens} /></div>
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      <p className="mt-4 text-sm text-[var(--text-muted)]">No projects yet. Click "New Project" to add one.</p>
-                    )}
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <EmptyState
+                  icon={<Sparkles className="w-12 h-12" />}
+                  title="No AI usage data yet"
+                  description="Sync AI to start tracking"
+                />
+              )}
+            </motion.div>
+
+            {/* Recent Projects */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-5"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Terminal className="w-5 h-5 text-emerald-400" />
+                  <div>
+                    <div className="text-xl font-semibold">Recent Projects</div>
+                    <div className="text-sm text-zinc-500">{overview?.projects?.length || 0} projects tracked</div>
                   </div>
                 </div>
+                <button
+                  onClick={() => setActiveTab('projects')}
+                  className="text-xs text-violet-400 hover:text-violet-300"
+                >
+                  View all →
+                </button>
+              </div>
+
+              {overview?.projects && overview.projects.length > 0 ? (
+                <div className="space-y-3">
+                  {overview.projects.slice(0, 5).map((project: any) => (
+                    <div
+                      key={project.id}
+                      className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-white">{project.name}</div>
+                        <div className="text-xs text-zinc-500 truncate max-w-[200px]">{project.path}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {project.vcs_type && (
+                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-md flex items-center gap-1">
+                            <GitBranch className="w-3 h-3" />
+                            {project.vcs_type}
+                          </span>
+                        )}
+                        {(() => {
+                          const langs = projectLanguages[project.path];
+                          const detected = langs?.[0]?.language || project.primary_language;
+                          const pct = langs?.[0]?.percentage;
+                          if (detected) {
+                            return (
+                              <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-md">
+                                {detected}{pct !== undefined ? ` ${pct}%` : ''}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<Terminal className="w-12 h-12" />}
+                  title="No projects tracked yet"
+                  description="Add a project to get started"
+                />
               )}
-            </>
-          )}
+            </motion.div>
+          </div>
         </div>
       )}
 
+      {/* Environment Tab (merges IDEs + Tools) */}
+      {activeTab === 'environment' && (
+        <motion.div
+          data-section="ide.environment"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Toolbar */}
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={async () => {
+                setScanning(true);
+                try {
+                  await window.deskflowAPI!.detectIDEs();
+                  await window.deskflowAPI!.scanTools();
+                  await loadOverview();
+                } catch (err) {
+                  console.error('Scan failed:', err);
+                }
+                setScanning(false);
+              }}
+              disabled={scanning}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
+              {scanning ? 'Scanning...' : 'Scan Environment'}
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!window.confirm('WARNING: This will permanently delete all detected tools and re-scan your system. Are you sure?')) return;
+                const result = await window.deskflowAPI!.resetTools();
+                if (result.success) await loadOverview();
+              }}
+              variant="ghost"
+              className="flex items-center gap-2 text-zinc-400 hover:text-white"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Reset Tools
+            </Button>
+          </div>
+
+          {/* IDEs section */}
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <Monitor className="w-5 h-5 text-blue-400" />
+              IDEs
+            </h3>
+            {overview?.ides && overview.ides.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {overview.ides.map((ide: any, idx: number) => (
+                  <MagicCard key={ide.id} className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                        <Monitor className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <div className="text-white font-medium">{ide.name}</div>
+                        {ide.version && <div className="text-xs text-zinc-500">v{ide.version}</div>}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Active</Badge>
+                  </MagicCard>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">No IDEs detected. Click "Scan Environment" above.</p>
+            )}
+          </div>
+
+          {/* Tools section (health-oriented) */}
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <Package className="w-5 h-5 text-emerald-400" />
+              Dev Tools
+            </h3>
+            {overview?.tools && overview.tools.length > 0 ? (
+              <div className="space-y-2">
+                <Separator className="my-4" />
+                {Object.entries(groupToolsByCategory()).map(([category, tools], idx) => {
+                  const Icon = CATEGORY_ICONS[category] || Package;
+                  const label = CATEGORY_LABELS[category] || category;
+                  const isExpanded = expandedCategories.has(category);
+                  return (
+                    <div key={category} className="glass rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => toggleCategory(category)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-5 h-5 text-zinc-400" />
+                          <span className="text-white font-medium">{label}</span>
+                          <Badge variant="secondary" className="bg-zinc-800 light:bg-zinc-100 text-zinc-400 text-xs">{(tools as any[]).length}</Badge>
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isExpanded && (
+                        <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {(tools as any[]).map((tool: any) => (
+                            <div key={tool.id} className="flex items-center justify-between p-2.5 bg-[rgba(255,255,255,0.04)] rounded-lg">
+                              <span className="text-sm text-zinc-300">{tool.name}</span>
+                              {tool.version && <span className="text-xs text-zinc-500 font-mono">v{tool.version}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">No tools detected. Click "Scan Environment" above.</p>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Projects Tab */}
       {activeTab === 'projects' && (
-        <div data-section="ide.projects" className="space-y-6">
-          <QuickActions />
-          <ProjectHealthGrid overview={overview} />
-        </div>
+        <motion.div
+          data-section="ide.projects"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-6 space-y-6"
+        >
+          <motion.button
+            onClick={async () => {
+              const next = !showAddProject;
+              setShowAddProject(next);
+              if (next) {
+                if (window.deskflowAPI?.scanIdeDefaultProjects) {
+                  setLoadingQuickAdd(true);
+                  try {
+                    const result = await window.deskflowAPI.scanIdeDefaultProjects();
+                    setQuickAddProjects(result);
+                  } catch {}
+                  setLoadingQuickAdd(false);
+                }
+                if (savedCustomDirs.length > 0 && window.deskflowAPI?.scanCustomDirectory) {
+                  setScanningDirs(true);
+                  const results: Record<string, any[]> = {};
+                  for (const dir of savedCustomDirs) {
+                    try {
+                      const r = await window.deskflowAPI.scanCustomDirectory(dir);
+                      if (r.success) results[dir] = r.projects;
+                    } catch {}
+                  }
+                  setCustomDirResults(results);
+                  setScanningDirs(false);
+                }
+              }
+            }}
+          
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--page-accent)] text-zinc-950 font-medium rounded-lg transition-all duration-150 hover:brightness-110 hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+            aria-label="Add new project"
+            whileTap={{ scale: 0.98 }}
+          >
+<Plus className="w-4 h-4" />
+            Add Project
+          </motion.button>
+
+          {overview?.projects && overview.projects.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4">
+              {overview.projects.map((project: any, idx: number) => {
+                const projectIde = overview?.ides?.find((ide: any) => ide.id === project.default_ide);
+                const isExpanded = expandedProjects.has(project.id);
+                const details = projectDetailsCache[project.id];
+                const isLoading = loadingProjectDetails.has(project.id);
+                
+                return (
+                <motion.div
+                  key={project.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg overflow-hidden"
+                >
+                  {/* Card Header - Always Visible */}
+                  <div className="p-5">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-white font-semibold truncate">{project.name}</h3>
+                          {project.default_ide && (
+                            <span className="px-2 py-0.5 bg-violet-500/20 text-violet-400 text-xs rounded-full">
+                              {projectIde?.name || project.default_ide}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-zinc-500 font-mono truncate mt-1">{project.path}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEditProjectClick(project)}
+                          aria-label={`Edit ${project.name}`}
+                          className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => toggleProjectExpand(project)}
+                          aria-label={isExpanded ? `Collapse ${project.name}` : `Expand ${project.name}`}
+                          className={`p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 light:bg-zinc-200 rounded-lg transition-colors duration-150 ${isExpanded ? 'rotate-180' : ''}`}
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(project)}
+                          aria-label={`Delete ${project.name}`}
+                          className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                  <div className="px-5 pb-5 space-y-4">
+                    {/* Quick Actions Row */}
+                    <div className="flex items-center gap-3 mt-4">
+                      {(() => {
+                        const isRunning = runningTerminals.has(project.id);
+                        return isRunning ? (
+                          <button
+                            onClick={() => handleStopProject(project.id)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg transition-colors duration-150"
+                          >
+                            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                            <span className="text-sm font-medium">Stop</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleRunProject(project)}
+                            disabled={runningProjectLoading === project.id}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg transition-colors duration-150 disabled:opacity-50"
+                          >
+                            {runningProjectLoading === project.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Play className="w-4 h-4" />
+                            )}
+                            <span className="text-sm font-medium">{runningProjectLoading === project.id ? 'Starting...' : 'Run'}</span>
+                          </button>
+                        );
+                      })()}
+                      <button
+                        onClick={() => {
+                          if (project.default_ide) {
+                            handleOpenProject(project.id);
+                          } else {
+                            handleEditProjectClick(project);
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 rounded-lg transition-colors duration-150"
+                      >
+                        <Monitor className="w-4 h-4" />
+                        <span className="text-sm font-medium">{project.default_ide ? 'Open in IDE' : 'Set IDE'}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedProject(project.id);
+                          setWorkspaceProject(project);
+                          setIsWorkspaceOpen(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 hover:bg-zinc-700 light:bg-zinc-200 border border-zinc-600 light:border-zinc-300/50 text-zinc-300 rounded-lg transition-colors duration-150"
+                      >
+                        <Terminal className="w-4 h-4" />
+                        <span className="text-sm font-medium">Open Workspace</span>
+                      </button>
+                    </div>
+
+                    {/* Tags Row */}
+                    <div className="flex items-center gap-2 mt-4 flex-wrap">
+                      {project.vcs_type && (
+                        <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-lg flex items-center gap-1">
+                          <GitBranch className="w-3 h-3" />
+                          {project.vcs_type}
+                        </span>
+                      )}
+                      {(() => {
+                        const langs = projectLanguages[project.path];
+                        const isLoading = projectLanguagesLoading;
+                        if (langs && langs.length > 0) {
+                          const top = langs.slice(0, 3);
+                          const extra = langs.length - 3;
+                          const maxPct = top[0]?.percentage || 0;
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                              {top.map((l, i) => (
+                                <div key={l.language} className="group relative">
+                                  <span className={`px-2 py-1 text-xs rounded-lg inline-flex items-center gap-1.5 ${
+                                    i === 0
+                                      ? 'bg-emerald-500/20 text-emerald-400'
+                                      : 'bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400'
+                                  }`}>
+                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
+                                      backgroundColor: i === 0 ? '#34d399' : i === 1 ? '#60a5fa' : '#a78bfa'
+                                    }} />
+                                    {l.language}
+                                    <span className="text-[10px] opacity-70">{l.percentage}%</span>
+                                  </span>
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10">
+                                    <div className="bg-zinc-800 light:bg-zinc-100 border border-zinc-700 light:border-zinc-300 rounded-lg p-2 shadow-xl whitespace-nowrap">
+                                      {langs.slice(0, 5).map(l => (
+                                        <div key={l.language} className="flex items-center justify-between gap-3 text-[11px]">
+                                          <span className="text-zinc-300">{l.language}</span>
+                                          <span className="text-zinc-500">{l.count} files ({l.percentage}%)</span>
+                                        </div>
+                                      ))}
+                                      {langs.length > 5 && (
+                                        <div className="text-[10px] text-zinc-600 text-center mt-1">
+                                          +{langs.length - 5} more
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              {extra > 0 && (
+                                <span className="text-[10px] text-zinc-600 px-1">
+                                  +{extra}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (project.primary_language) {
+                          return (
+                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded-lg">
+                              {project.primary_language}
+                            </span>
+                          );
+                        }
+                        if (isLoading) {
+                          return (
+                            <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/30 text-zinc-500 text-xs rounded-lg flex items-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Detecting...
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                      {details?.health?.healthScore !== undefined && (
+                        <span className={`px-2 py-1 text-xs rounded-lg flex items-center gap-1 ${
+                          details.health.healthScore >= 80 ? 'bg-green-500/20 text-green-400' :
+                          details.health.healthScore >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                          <Activity className="w-3 h-3" />
+                          {details.health.healthScore}%
+                        </span>
+                      )}
+                      {details?.tools?.length > 0 && (
+                        <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400 text-xs rounded-lg">
+                          {details.tools.length} tools
+                        </span>
+                      )}
+                      {details?.sessions?.length > 0 && (
+                        <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400 text-xs rounded-lg">
+                          {details.sessions.length} sessions
+                        </span>
+                      )}
+                      {project.repository_url && (
+                        <a
+                          href={project.repository_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1 text-zinc-500 hover:text-violet-400 transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Expanded Content */}
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="border-t border-zinc-800 light:border-zinc-200 bg-[rgba(255,255,255,0.04)]"
+                      >
+                        <div className="p-5 space-y-5">
+                          {isLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
+                              <span className="ml-2 text-zinc-400">Loading project details...</span>
+                            </div>
+                          ) : details ? (
+                            <>
+                              {/* Health & Sessions Row */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
+                                  <div className="text-xs text-zinc-500 mb-1">Health Score</div>
+                                  <div className="text-xl font-bold text-white">{details.health?.healthScore || 0}<span className="text-sm text-zinc-500">/100</span></div>
+                                  <div className="text-xs text-zinc-500 mt-1">{details.health?.activityLevel || 'unknown'}</div>
+                                </div>
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
+                                  <div className="text-xs text-zinc-500 mb-1">Terminal Sessions</div>
+                                  <div className="text-xl font-bold text-white">{details.sessions?.length || 0}</div>
+                                  <div className="text-xs text-zinc-500 mt-1">total</div>
+                                </div>
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
+                                  <div className="text-xs text-zinc-500 mb-1">Version Control</div>
+                                  <div className="text-sm font-medium text-white truncate">{project.vcs_type || 'None detected'}</div>
+                                  <div className="text-xs text-zinc-500 mt-1">{project.repository_url ? 'Connected' : 'No remote'}</div>
+                                </div>
+                                <div className="p-3 bg-[var(--color-card)] rounded-lg">
+                                  <div className="text-xs text-zinc-500 mb-1">Repository</div>
+                                  <div className="text-sm font-medium text-white truncate">{project.repository_url ? project.repository_url.split('/').slice(-2).join('/') : 'Not linked'}</div>
+                                  <div className="text-xs text-zinc-500 mt-1">{project.repository_url ? 'Connected' : 'None'}</div>
+                                </div>
+                              </div>
+
+                              {/* Recent Sessions */}
+                              {details.sessions && details.sessions.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-zinc-400 mb-3 flex items-center gap-2">
+                                    <Clock className="w-4 h-4" />
+                                    Recent Terminal Sessions
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {details.sessions.slice(0, 3).map((session: any) => (
+                                      <div key={session.id} className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <Terminal className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                          <span className="text-sm text-zinc-300 truncate">{session.topic || session.agent || 'Untitled'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                          <span className="text-xs text-zinc-500">{session.created_at ? formatDistanceToNow(new Date(session.created_at)) : 'Unknown'}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Presets */}
+                              {details.presets && details.presets.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-zinc-400 mb-3 flex items-center gap-2">
+                                    <Zap className="w-4 h-4" />
+                                    Quick Run Presets
+                                  </h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {details.presets.map((preset: any) => (
+                                      <button
+                                        key={preset.id}
+                                        className="px-3 py-1.5 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 text-xs rounded-lg transition-colors"
+                                      >
+                                        {preset.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Tools */}
+                              <div>
+                                <h4 className="text-sm font-medium text-zinc-400 mb-3 flex items-center gap-2">
+                                  <Package className="w-4 h-4" />
+                                  Detected Tools ({details.tools?.length || 0})
+                                </h4>
+                                {details.tools && details.tools.length > 0 ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    {details.tools.map((tool: any) => (
+                                      <span key={tool.id} className="px-2 py-1 bg-zinc-800 light:bg-zinc-100 text-zinc-300 text-xs rounded-lg">
+                                        {tool.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-zinc-500">No tools detected for this project</p>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-center py-4 text-zinc-500">
+                              Click expand to load details
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+              })}
+            </div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="glass rounded-lg"
+            >
+              <EmptyState
+                icon={<Terminal className="w-16 h-16" />}
+                title="No projects tracked yet"
+                description="Add a project to start tracking its metrics"
+              />
+            </motion.div>
+          )}
+        </motion.div>
       )}
 
       {/* AI Tools Tab */}
       {activeTab === 'ai' && (
-        <div data-section="ide.ai" className="space-y-6">
-          <StatsGrid overview={overview} />
-          <AIUsageChart />
-          <CostTracker />
-        </div>
+        <AIToolsTab
+          overview={overview}
+          workspaceAnalytics={workspaceAnalytics}
+          analyticsLoading={analyticsLoading}
+          analyticsError={analyticsError}
+          onRetryAnalytics={() => { analyticsCacheRef.current = null; fetchAnalytics(); }}
+          selectedPeriod={effectiveAiPeriod}
+          onDataRefresh={loadOverview}
+          timeLock={timeLock}
+          onToggleTimeLock={() => {
+            const next = !timeLock
+            setTimeLock(next)
+            try { localStorage.setItem('ide-projects-ai-lock', String(next)) } catch {}
+          }}
+        />
       )}
 
       {/* Git Tab */}
       {activeTab === 'git' && (
-        <div
+        <motion.div
           data-section="ide.git"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
           {/* Project Selector & Sync */}
@@ -1612,7 +2144,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <select
                 value={selectedProject || ''}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="px-4 py-2 bg-[var(--color-card)] text-white rounded-[6px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none"
+                className="px-4 py-2 bg-[var(--color-card)] text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
               >
                 {overview?.projects?.map((project: any) => (
                   <option key={project.id} value={project.id}>{project.name}</option>
@@ -1632,14 +2164,16 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
           {/* DORA Metrics */}
           {doraMetrics && (
-            <div
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] rounded-[10px] p-5"
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-lg p-5"
             >
               <div className="flex items-center gap-3 mb-6">
                 <Zap className="w-5 h-5 text-amber-400" />
                 <div>
                   <div className="text-xl font-semibold">DORA Metrics</div>
-                  <div className="text-sm text-[var(--text-muted)]">Monthly performance</div>
+                  <div className="text-sm text-zinc-500">Monthly performance</div>
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1649,21 +2183,21 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   { label: 'MTTR', value: doraMetrics.meanTimeToRecoveryHours, sub: '~1 day est.' },
                   { label: 'Change Failure', value: doraMetrics.changeFailureRate, sub: `${doraMetrics.changeFailureRate || 0}%` },
                 ].map((metric, idx) => (
-                  <div key={idx} className="bg-[var(--color-card)] rounded-[10px] p-4 text-center">
+                  <div key={idx} className="bg-[var(--color-card)] rounded-lg p-4 text-center">
                     <div className={`text-2xl font-bold mb-1 ${
                       metric.value === 'elite' ? 'text-emerald-400' :
                       metric.value === 'high' ? 'text-blue-400' :
                       metric.value === 'medium' ? 'text-amber-400' :
-                      metric.value === 'low' ? 'text-red-400' : 'text-[var(--text-muted)]'
+                      metric.value === 'low' ? 'text-red-400' : 'text-zinc-400'
                     }`}>
                       {metric.value || 'N/A'}
                     </div>
-                    <div className="text-sm text-[var(--text-muted)] mb-1">{metric.label}</div>
-                    <div className="text-xs text-[var(--text-muted)]">{metric.sub}</div>
+                    <div className="text-sm text-zinc-400 mb-1">{metric.label}</div>
+                    <div className="text-xs text-zinc-500">{metric.sub}</div>
                   </div>
                 ))}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Commit Activity Chart */}
@@ -1693,14 +2227,16 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
             return (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div
-                  className="bg-[var(--color-card)] border-[var(--border-hairline)] rounded-[10px] p-5"
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass rounded-lg p-5"
                 >
                   <div className="flex items-center gap-3 mb-4">
                     <GitCommit className="w-5 h-5 text-amber-400" />
                     <div>
                       <div className="text-sm font-semibold">Commits per Day</div>
-                      <div className="text-xs text-[var(--text-muted)]">Last 30 days</div>
+                      <div className="text-xs text-zinc-500">Last 30 days</div>
                     </div>
                   </div>
                   <div className="h-48">
@@ -1743,16 +2279,19 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       }}
                     />
                   </div>
-                </div>
+                </motion.div>
 
-                <div
-                  className="bg-[var(--color-card)] border-[var(--border-hairline)] rounded-[10px] p-5"
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 }}
+                  className="glass rounded-lg p-5"
                 >
                   <div className="flex items-center gap-3 mb-4">
                     <TrendingUp className="w-5 h-5 text-emerald-400" />
                     <div>
                       <div className="text-sm font-semibold">Lines Changed</div>
-                      <div className="text-xs text-[var(--text-muted)]">Additions vs Deletions</div>
+                      <div className="text-xs text-zinc-500">Additions vs Deletions</div>
                     </div>
                   </div>
                   <div className="h-48">
@@ -1807,7 +2346,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       }}
                     />
                   </div>
-                </div>
+                </motion.div>
               </div>
             );
           })()}
@@ -1815,41 +2354,46 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           {/* Commit Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { label: 'Total Commits', value: overview?.commits?.totalCommits || 0, icon: GitCommit, iconColor: 'text-amber-400', bg: 'bg-amber-500/10' },
-              { label: 'Lines Added', value: `+${overview?.commits?.totalAdditions || 0}`, icon: Plus, iconColor: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-              { label: 'Lines Removed', value: `-${overview?.commits?.totalDeletions || 0}`, icon: Trash2, iconColor: 'text-red-400', bg: 'bg-red-500/10' },
+              { label: 'Total Commits', value: overview?.commits?.totalCommits || 0, icon: GitCommit, color: '#f59e0b', bg: 'bg-amber-500/10' },
+              { label: 'Lines Added', value: `+${overview?.commits?.totalAdditions || 0}`, icon: Plus, color: '#10b981', bg: 'bg-emerald-500/10' },
+              { label: 'Lines Removed', value: `-${overview?.commits?.totalDeletions || 0}`, icon: Trash2, color: '#ef4444', bg: 'bg-red-500/10' },
             ].map((stat, idx) => (
-              <div
+              <motion.div
                 key={idx}
-                className="bg-[var(--color-card)] border-[var(--border-hairline)] rounded-[10px] p-5"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className="glass rounded-lg p-5"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-[6px] ${stat.bg} flex items-center justify-center`}>
-                    <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+                  <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center`}>
+                    <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
                   </div>
                 </div>
-                <div className={`text-3xl font-semibold tabular-nums tracking-tight ${stat.iconColor}`}>
+                <div className="text-3xl font-semibold tabular-nums tracking-tight" style={{ color: stat.color }}>
                   {stat.value}
                 </div>
-                <div className="text-sm text-[var(--text-muted)] mt-1">{stat.label}</div>
-              </div>
+                <div className="text-sm text-zinc-400 mt-1">{stat.label}</div>
+              </motion.div>
             ))}
           </div>
 
           {/* Commit History */}
-          <div
-            className="bg-[var(--color-card)] border-[var(--border-hairline)] rounded-[10px] p-5"
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-lg p-5"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <GitCommit className="w-5 h-5 text-amber-400" />
                 <div>
                   <div className="text-lg font-semibold">Recent Commits</div>
-                  <div className="text-sm text-[var(--text-muted)]">Last {commitHistory.length} commits</div>
+                  <div className="text-sm text-zinc-500">Last {commitHistory.length} commits</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <motion.button
                   onClick={async () => {
                     if (!selectedProject) return;
                     setLoadingDiff(true);
@@ -1859,15 +2403,17 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     } catch { setGitDiff('Failed to load diff'); }
                     setLoadingDiff(false);
                   }}
-                  className="px-3 py-1.5 text-xs bg-[var(--color-card)] light:bg-[var(--color-card)] hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-[var(--text-secondary)] rounded-[6px] transition-colors"
+                  
+                  whileTap={{ scale: 0.98 }}
+                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
                 >
                   {loadingDiff ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Show Diff'}
-                </button>
+                </motion.button>
               </div>
             </div>
 
             {commitHistory.length === 0 ? (
-              <div className="text-center py-8 text-[var(--text-muted)] text-sm">No commits yet. Sync to load commit history.</div>
+              <div className="text-center py-8 text-zinc-600 text-sm">No commits yet. Sync to load commit history.</div>
             ) : (
               <div className="space-y-1.5">
                 {commitHistory.map((commit: any) => {
@@ -1888,15 +2434,15 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
                   return (
                     <div key={commit.id} className="group">
-                      <div
+                      <motion.div
                         onClick={() => setExpandedCommit(isExpanded ? null : commit.id)}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] hover:bg-[var(--color-card)] light:bg-[var(--color-card)]/50 light:bg-[var(--color-card)]/50 cursor-pointer transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-zinc-800 light:bg-zinc-100/50 light:bg-zinc-100/50 cursor-pointer transition-colors"
                       >
                         <div className="w-2 h-2 rounded-full bg-amber-500/60 flex-shrink-0" />
-                        <span className="font-mono text-xs text-[var(--text-muted)] w-16 flex-shrink-0">
+                        <span className="font-mono text-xs text-zinc-500 w-16 flex-shrink-0">
                           {commit.sha?.substring(0, 7)}
                         </span>
-                        <span className="text-sm text-[var(--text-secondary)] truncate flex-1">
+                        <span className="text-sm text-zinc-300 truncate flex-1">
                           {commit.message?.split('\n')[0] || 'No message'}
                         </span>
                         <div className="flex items-center gap-2 text-xs">
@@ -1907,86 +2453,94 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             <span className="text-red-400">-{commit.deletions}</span>
                           )}
                           {commit.files_changed > 0 && (
-                            <span className="text-[var(--text-muted)]">{commit.files_changed} files</span>
+                            <span className="text-zinc-500">{commit.files_changed} files</span>
                           )}
                         </div>
-                        <span className="text-xs text-[var(--text-muted)] w-16 text-right flex-shrink-0">{relativeDate}</span>
-                        <ChevronDown className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                      </div>
-                      {isExpanded && (
-                          <div
+                        <span className="text-xs text-zinc-600 w-16 text-right flex-shrink-0">{relativeDate}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 text-zinc-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </motion.div>
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className="ml-8 pl-4 border-l border-[var(--border-hairline)] light:border-[var(--border-hairline)] py-3 space-y-2">
+                            <div className="ml-8 pl-4 border-l border-zinc-800 light:border-zinc-200 py-3 space-y-2">
                               <div className="flex items-center gap-4 text-xs">
-                                <span className="text-[var(--text-muted)]">
-                                  <span className="text-[var(--text-muted)]">Author:</span> {commit.author}
+                                <span className="text-zinc-500">
+                                  <span className="text-zinc-600">Author:</span> {commit.author}
                                 </span>
                                 {commit.author_email && (
-                                  <span className="text-[var(--text-muted)]">
-                                    <span className="text-[var(--text-muted)]">Email:</span> {commit.author_email}
+                                  <span className="text-zinc-500">
+                                    <span className="text-zinc-600">Email:</span> {commit.author_email}
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-[var(--text-muted)]">
-                                <span className="text-[var(--text-muted)]">Date:</span> {new Date(commit.date).toLocaleString()}
+                              <div className="text-xs text-zinc-500">
+                                <span className="text-zinc-600">Date:</span> {new Date(commit.date).toLocaleString()}
                               </div>
-                              <div className="text-xs text-[var(--text-muted)]">
-                                <span className="text-[var(--text-muted)]">SHA:</span> <span className="font-mono">{commit.sha}</span>
+                              <div className="text-xs text-zinc-500">
+                                <span className="text-zinc-600">SHA:</span> <span className="font-mono">{commit.sha}</span>
                               </div>
                               {commit.message?.includes('\n') && (
-                                <div className="text-xs text-[var(--text-muted)] bg-[var(--color-card)] rounded-[10px] p-3 mt-1 whitespace-pre-wrap">
+                                <div className="text-xs text-zinc-400 bg-[var(--color-card)] rounded-lg p-3 mt-1 whitespace-pre-wrap">
                                   {commit.message}
                                 </div>
                               )}
                             </div>
-                          </div>
+                          </motion.div>
                         )}
+                      </AnimatePresence>
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* Auto-Generate Commit Message */}
           {gitDiff !== null && (
-            <div
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] rounded-[10px] p-5"
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-lg p-5"
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <Sparkles className="w-5 h-5 text-violet-400" />
                   <div>
                     <div className="text-lg font-semibold">Generate Commit Message</div>
-                    <div className="text-sm text-[var(--text-muted)]">From working tree changes</div>
+                    <div className="text-sm text-zinc-500">From working tree changes</div>
                   </div>
                 </div>
-                <button
+                <motion.button
                   onClick={() => setGitDiff(null)}
                   
-                  className="p-1.5 rounded-[10px] hover:bg-[var(--color-card)] light:bg-[var(--color-card)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 light:bg-zinc-100 text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
                   <X className="w-4 h-4" />
-                </button>
+                </motion.button>
               </div>
 
               <textarea
                 value={gitDiff}
                 onChange={(e) => setGitDiff(e.target.value)}
-                className="w-full h-40 bg-[var(--color-card)] text-[var(--text-secondary)] text-xs font-mono rounded-[10px] p-3 border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none resize-y"
+                className="w-full h-40 bg-[var(--color-card)] text-zinc-300 text-xs font-mono rounded-lg p-3 border border-zinc-800 light:border-zinc-200 focus:border-violet-500 focus:outline-none resize-y"
                 placeholder="No changes detected..."
               />
 
               <div className="flex items-center justify-end gap-2 mt-3">
-                <button
+                <motion.button
                   onClick={() => navigator.clipboard.writeText(gitDiff)}
-                  className="px-3 py-1.5 text-xs bg-[var(--color-card)] light:bg-[var(--color-card)] hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-[var(--text-secondary)] rounded-[6px] transition-colors"
+                  
+                  whileTap={{ scale: 0.98 }}
+                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
                 >
                   Copy Diff
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   onClick={async () => {
                     if (!selectedProject) return;
                     setGeneratingMsg(true);
@@ -2018,67 +2572,100 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     setGeneratingMsg(false);
                   }}
                   disabled={generatingMsg}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-[6px] transition-colors disabled:opacity-50"
+                  
+                  whileTap={{ scale: 0.98 }}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
                   {generatingMsg ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                   {generatingMsg ? 'Generating...' : 'Generate with Agent'}
-                </button>
+                </motion.button>
               </div>
 
               {generatedCommitMsg && (
-                <div className="mt-3 p-3 bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[10px]">
-                  <div className="text-xs text-[var(--text-muted)] mb-1">Result:</div>
-                  <div className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap">{generatedCommitMsg}</div>
+                <div className="mt-3 p-3 bg-[var(--color-card)] border border-zinc-800 light:border-zinc-200 rounded-lg">
+                  <div className="text-xs text-zinc-600 mb-1">Result:</div>
+                  <div className="text-sm text-zinc-300 whitespace-pre-wrap">{generatedCommitMsg}</div>
                   {generatedCommitMsg.startsWith('Prompt sent') && (
-                    <button
+                    <motion.button
                       onClick={() => navigator.clipboard.writeText(generatedCommitMsg)}
                       
-                      className="mt-2 px-2 py-1 text-xs bg-[var(--color-card)] light:bg-[var(--color-card)] hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-[var(--text-muted)] rounded transition-colors"
+                      className="mt-2 px-2 py-1 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-400 rounded transition-colors"
                     >
                       Copy Note
-                    </button>
+                    </motion.button>
                   )}
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Analytics Tab */}
       {activeTab === 'analytics' && (
-        <div data-section="ide.analytics" className="space-y-6">
-          <LanguageChart />
-          <CommitHeatmap />
-          <ActivityFeed />
-        </div>
+        <motion.div
+          data-section="ide.analytics"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <BarChart3 className="w-5 h-5 text-violet-400" />
+            <div>
+              <h2 className="text-lg font-semibold text-white">Workspace Analytics</h2>
+              <p className="text-sm text-zinc-500">AI usage, problems, and requests across all projects</p>
+            </div>
+          </div>
+          {workspaceAnalytics ? (
+            <Suspense fallback={<div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-violet-400 animate-spin" /><span className="ml-3 text-zinc-400 text-sm">Loading analytics...</span></div>}>
+              <AnalyticsDashboard
+                aiUsage={workspaceAnalytics.aiUsage}
+                sessions={workspaceAnalytics.sessions}
+                problems={workspaceAnalytics.problems}
+                requests={workspaceAnalytics.requests}
+                promptHistory={workspaceAnalytics.promptHistory}
+                codeStats={workspaceAnalytics.codeStats}
+                codeActivity={workspaceAnalytics.codeActivity}
+                loading={analyticsLoading}
+                period={selectedPeriod}
+                variant="workspace"
+                projectLanguages={aggregatedProjectLanguages}
+              />
+            </Suspense>
+          ) : analyticsLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+              <span className="ml-3 text-zinc-400 text-sm">Loading analytics...</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-20 text-zinc-600 text-sm">No analytics data available</div>
+          )}
+        </motion.div>
       )}
 
       {/* Backup Tab (replaces Trash) */}
       {activeTab === 'backup' && (
-        <div
+        <motion.div
           data-section="ide.backup"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
           <BackupTabPanel
             projectId={selectedProject}
             projectPath={overview?.projects?.find((p: any) => p.id === selectedProject)?.path || null}
           />
-        </div>
-      )}
-
-      {/* Activity Feed Tab */}
-      {activeTab === 'activity' && (
-        <div data-section="ide.activity" className="space-y-6">
-          <ActivityFeed overview={overview} />
-        </div>
+        </motion.div>
       )}
 
       {/* Setup Guide Modal */}
-      {(showSetupModal || showOnboarding) && (
-          <div
+      <AnimatePresence>
+        {(showSetupModal || showOnboarding) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => {
               setShowSetupModal(false);
               if (showOnboarding) {
@@ -2087,21 +2674,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               }
             }}
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[var(--color-card)] rounded-[10px] w-full max-w-3xl max-h-[85vh] overflow-hidden border-[var(--border-hairline)] light:border-[var(--border-hairline)]"
+              className="bg-[var(--color-card)] rounded-lg w-full max-w-3xl max-h-[85vh] overflow-hidden border border-zinc-700 light:border-zinc-300"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-5 border-b border-[var(--border-hairline)] light:border-[var(--border-hairline)] flex items-center justify-between sticky top-0 bg-[var(--color-card)] z-10">
+              <div className="p-5 border-b border-zinc-700 light:border-zinc-300 flex items-center justify-between sticky top-0 bg-[var(--color-card)] z-10">
                 <h2 className="text-xl font-semibold text-white flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-[6px] bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
                     <HelpCircle className="w-5 h-5 text-white" />
                   </div>
                   Project Tracking Setup Guide
                 </h2>
                 <div className="flex items-center gap-3">
                   {!showOnboarding && (
-                    <label className="flex items-center gap-2 text-sm text-[var(--text-muted)] cursor-pointer">
+                    <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
                       <VoiceInputWrapper>
                         <input
                           type="checkbox"
@@ -2111,7 +2700,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               localStorage.setItem('ide-projects-onboarding-seen', 'true');
                             }
                           }}
-                          className="w-4 h-4 rounded border-[var(--border-hairline)] light:border-[var(--border-hairline)] bg-[var(--color-card)] light:bg-[var(--color-card)] text-blue-500 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-zinc-600 light:border-zinc-300 bg-zinc-800 light:bg-zinc-100 text-blue-500 focus:ring-blue-500"
                         />
                       </VoiceInputWrapper>
                       Don't show again
@@ -2125,7 +2714,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         setShowOnboarding(false);
                       }
                     }}
-                    className="w-8 h-8 flex items-center justify-center rounded-[10px] hover:bg-[var(--color-card)] light:bg-[var(--color-card)] text-[var(--text-muted)] hover:text-white transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 light:bg-zinc-100 text-zinc-400 hover:text-white transition-colors"
                   >
                     ×
                   </button>
@@ -2134,7 +2723,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
               <div className="p-5 overflow-y-auto max-h-[calc(85vh-88px)] space-y-6">
                 {showOnboarding && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-[10px] p-4 mb-4">
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
                     <p className="text-blue-300 text-sm"> Welcome! This guide will help you set up project tracking. Follow the steps below to get started.</p>
                   </div>
                 )}
@@ -2142,36 +2731,36 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 1: Add Project */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-[6px] bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-emerald-400">1</span>
                     </div>
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
                         Add Your First Project
                         {overview?.projects && overview.projects.length > 0 && (
-                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-[10px]">Done</span>
+                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-lg">Done</span>
                         )}
                       </h3>
-                      <div className="space-y-2 text-sm text-[var(--text-muted)]">
+                      <div className="space-y-2 text-sm text-zinc-400">
                         <p className="flex items-start gap-2">
-                          <ChevronRight className="w-4 h-4 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                           Click the <strong className="text-white">"Add Project"</strong> button
                         </p>
                         <p className="flex items-start gap-2">
-                          <ChevronRight className="w-4 h-4 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                           Click <strong className="text-white">"Browse"</strong> and select your project <strong className="text-amber-400">FOLDER</strong> (not the .exe file)
                         </p>
                         <p className="flex items-start gap-2">
-                          <ChevronRight className="w-4 h-4 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                           Enter a name for the project
                         </p>
                         <p className="flex items-start gap-2">
-                          <ChevronRight className="w-4 h-4 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                           (Optional) Add your GitHub repository URL
                         </p>
                       </div>
-                      <div className="mt-3 p-3 bg-[var(--color-card)] rounded-[10px]">
-                        <p className="text-xs text-[var(--text-muted)] mb-1">Example paths:</p>
+                      <div className="mt-3 p-3 bg-[var(--color-card)] rounded-lg">
+                        <p className="text-xs text-zinc-500 mb-1">Example paths:</p>
                         <p className="text-xs text-emerald-400 font-mono">✓ C:\Projects\MyApp</p>
                       <p className="text-xs text-red-400 font-mono">✗ C:\Projects\MyApp\myapp.exe</p>
                       </div>
@@ -2182,12 +2771,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 2: AI Usage Tracking */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-[6px] bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-violet-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-violet-400">2</span>
                     </div>
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-white mb-3">Track AI Coding Assistant Usage</h3>
-                      <p className="text-sm text-[var(--text-muted)] mb-4">We automatically detect these AI tools and import their usage data:</p>
+                      <p className="text-sm text-zinc-400 mb-4">We automatically detect these AI tools and import their usage data:</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {[
                           { name: 'Claude Code', path: '~/.claude/projects/<project>/*.jsonl', color: '#f97316' },
@@ -2197,23 +2786,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           { name: 'Cursor AI', path: '%APPDATA%\\Cursor\\', color: '#a855f7' },
                           { name: 'Codex CLI', path: '~/.codex/', color: '#10b981' },
                         ].map((agent) => (
-                          <div key={agent.name} className="flex items-center gap-3 p-3 bg-[var(--color-card)] rounded-[10px]">
-                            <div className="w-8 h-8 rounded-[6px] flex items-center justify-center" style={{ backgroundColor: `color-mix(in srgb, ${agent.color} 13%, transparent)` }}>
+                          <div key={agent.name} className="flex items-center gap-3 p-3 bg-[var(--color-card)] rounded-lg">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: agent.color + '22' }}>
                               <Sparkles className="w-4 h-4" style={{ color: agent.color }} />
                             </div>
                             <div>
                               <div className="text-sm font-medium text-white">{agent.name}</div>
-                              <div className="text-xs text-[var(--text-muted)] font-mono truncate max-w-[180px]">{agent.path}</div>
+                              <div className="text-xs text-zinc-500 font-mono truncate max-w-[180px]">{agent.path}</div>
                             </div>
                             {agentDebugInfo?.agents?.[agent.name.toLowerCase().replace(' ', '-')]?.detected ? (
                               <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />
                             ) : (
-                              <AlertCircle className="w-4 h-4 text-[var(--text-muted)] ml-auto" />
+                              <AlertCircle className="w-4 h-4 text-zinc-600 ml-auto" />
                             )}
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-[10px]">
+                      <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                         <p className="text-sm text-amber-300">Tip Click <strong>"Sync AI Usage"</strong> to import data from detected AI tools</p>
                       </div>
                     </div>
@@ -2223,25 +2812,25 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 3: Git Tracking */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-[6px] bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-amber-400">3</span>
                     </div>
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-white mb-3">Track Git Commits & Metrics</h3>
                       <div className="space-y-4">
-                        <div className="p-4 bg-[var(--color-card)] rounded-[10px]">
+                        <div className="p-4 bg-[var(--color-card)] rounded-lg">
                           <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
-                            <GitBranch className="w-4 h-4 text-[var(--text-muted)]" />
+                            <GitBranch className="w-4 h-4 text-zinc-400" />
                             Local Repositories
                           </h4>
-                          <p className="text-sm text-[var(--text-muted)]">Add your project (must contain .git folder), then click "Sync Commits" to import commit history, additions, and deletions.</p>
+                          <p className="text-sm text-zinc-400">Add your project (must contain .git folder), then click "Sync Commits" to import commit history, additions, and deletions.</p>
                         </div>
-                        <div className="p-4 bg-[var(--color-card)] rounded-[10px]">
+                        <div className="p-4 bg-[var(--color-card)] rounded-lg">
                           <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
-                            <ExternalLink className="w-4 h-4 text-[var(--text-muted)]" />
+                            <ExternalLink className="w-4 h-4 text-zinc-400" />
                             GitHub Repositories
                           </h4>
-                          <p className="text-sm text-[var(--text-muted)]">Click "Sync GitHub" and enter <span className="text-violet-400 font-mono">owner/repository</span> (e.g., "facebook/react"). For private repos, add your GitHub token.</p>
+                          <p className="text-sm text-zinc-400">Click "Sync GitHub" and enter <span className="text-violet-400 font-mono">owner/repository</span> (e.g., "facebook/react"). For private repos, add your GitHub token.</p>
                         </div>
                       </div>
                     </div>
@@ -2251,12 +2840,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Step 4: IDE Detection */}
                 <GlassCard>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-[6px] bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-blue-400">4</span>
                     </div>
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-white mb-3">Detect Your Development Environment</h3>
-                      <p className="text-sm text-[var(--text-muted)] mb-4">Click "Scan Environment" to automatically detect:</p>
+                      <p className="text-sm text-zinc-400 mb-4">Click "Scan Environment" to automatically detect:</p>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {[
                           { name: 'VS Code', detected: overview?.ides?.some((i: any) => i.name === 'VS Code') },
@@ -2266,19 +2855,19 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           { name: 'Cursor', detected: overview?.ides?.some((i: any) => i.name === 'Cursor') },
                           { name: 'Google Antigravity', detected: overview?.ides?.some((i: any) => i.name?.includes('Antigravity')) },
                         ].map((ide) => (
-                          <div key={ide.name} className="flex items-center gap-2 p-2 bg-[var(--color-card)] rounded-[10px]">
-                            <Monitor className="w-4 h-4 text-[var(--text-muted)]" />
-                            <span className="text-sm text-[var(--text-secondary)]">{ide.name}</span>
+                          <div key={ide.name} className="flex items-center gap-2 p-2 bg-[var(--color-card)] rounded-lg">
+                            <Monitor className="w-4 h-4 text-zinc-500" />
+                            <span className="text-sm text-zinc-300">{ide.name}</span>
                             {ide.detected ? (
                               <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />
                             ) : (
-                              <span className="w-4 h-4 rounded-full border-[var(--border-hairline)] light:border-[var(--border-hairline)] ml-auto" />
+                              <span className="w-4 h-4 rounded-full border border-zinc-600 light:border-zinc-300 ml-auto" />
                             )}
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4 p-3 bg-[var(--color-card)] rounded-[10px]">
-                        <p className="text-sm text-[var(--text-muted)]">Also detects: Git, Node.js, Python, Docker, npm, yarn, and more tools.</p>
+                      <div className="mt-4 p-3 bg-[var(--color-card)] rounded-lg">
+                        <p className="text-sm text-zinc-400">Also detects: Git, Node.js, Python, Docker, npm, yarn, and more tools.</p>
                       </div>
                     </div>
                   </div>
@@ -2297,88 +2886,103 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       { label: 'Click "Sync AI Usage" to import AI data', done: false },
                       { label: 'Click "Scan Environment" to detect your setup', done: overview?.ides && overview.ides.length > 0 },
                     ].map((item, idx) => (
-                      <label key={idx} className="flex items-center gap-3 p-3 hover:bg-[var(--color-card)] light:bg-[var(--color-card)]/30 rounded-[10px] cursor-pointer transition-colors">
+                      <label key={idx} className="flex items-center gap-3 p-3 hover:bg-zinc-800 light:bg-zinc-100/30 rounded-lg cursor-pointer transition-colors">
                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                          item.done ? 'bg-emerald-500 border-emerald-500' : 'border-[var(--border-hairline)] light:border-[var(--border-hairline)]'
+                          item.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 light:border-zinc-300'
                         }`}>
                           {item.done && <CheckCircle2 className="w-3 h-3 text-white" />}
                         </div>
-                        <span className={`text-sm ${item.done ? 'text-[var(--text-muted)] line-through' : 'text-white'}`}>{item.label}</span>
+                        <span className={`text-sm ${item.done ? 'text-zinc-400 line-through' : 'text-white'}`}>{item.label}</span>
                       </label>
                     ))}
                   </div>
-                  <div className="mt-4 p-3 bg-violet-500/10 border border-violet-500/30 rounded-[10px]">
+                  <div className="mt-4 p-3 bg-violet-500/10 border border-violet-500/30 rounded-lg">
                     <p className="text-sm text-violet-300">Tip Your data is stored locally and private. No data leaves your computer.</p>
                   </div>
                 </GlassCard>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* Scanning Loading Overlay */}
-      {scanning && (
-          <div
+      <AnimatePresence>
+        {scanning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-none z-[60] flex items-center justify-center"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center"
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[var(--color-card)] rounded-[10px] p-5 border-[var(--border-hairline)] light:border-[var(--border-hairline)] max-w-sm w-full mx-4"
+              className="bg-[var(--color-card)] rounded-lg p-5 border border-zinc-700 light:border-zinc-300 max-w-sm w-full mx-4"
             >
               <div className="flex flex-col items-center text-center">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
                   <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">Scanning Environment</h3>
-                <p className="text-[var(--text-muted)] text-sm mb-4">Detecting IDEs and development tools...</p>
-                <div className="w-full bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-full h-2 overflow-hidden">
-                  <div
+                <p className="text-zinc-400 text-sm mb-4">Detecting IDEs and development tools...</p>
+                <div className="w-full bg-zinc-800 light:bg-zinc-100 rounded-full h-2 overflow-hidden">
+                  <motion.div
                     className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+                    initial={{ width: '0%' }}
+                    animate={{ width: '100%' }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
                   />
                 </div>
-                <p className="text-[var(--text-muted)] text-xs mt-3">Please wait, this may take a moment</p>
+                <p className="text-zinc-500 text-xs mt-3">Please wait, this may take a moment</p>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* AI Agent Detail Modal */}
-      {selectedAgentDetail && (
-          <div
+      <AnimatePresence>
+        {selectedAgentDetail && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setSelectedAgentDetail(null)}
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[10px] p-5 max-w-4xl w-full max-h-[85vh] overflow-y-auto"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-4xl w-full max-h-[85vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-[6px] flex items-center justify-center" style={{ backgroundColor: selectedAgentDetail.color + '20' }}>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: selectedAgentDetail.color + '20' }}>
                     <Sparkles className="w-5 h-5" style={{ color: selectedAgentDetail.color }} />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-white">{selectedAgentDetail.name}</h3>
-                    <p className="text-sm text-[var(--text-muted)]">{selectedAgentDetail.status === 'active' ? 'Active' : 'Idle'}</p>
+                    <p className="text-sm text-zinc-500">{selectedAgentDetail.status === 'active' ? 'Active' : 'Idle'}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedAgentDetail(null)}
-                  className="p-2 hover:bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-[10px] transition"
+                  className="p-2 hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition"
                 >
-                  <X className="w-5 h-5 text-[var(--text-muted)]" />
+                  <X className="w-5 h-5 text-zinc-400" />
                 </button>
               </div>
 
               {/* Timeline Selector */}
               <div className="flex items-center justify-center mb-5">
-                <div className="flex bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-full p-1 text-xs">
+                <div className="flex bg-zinc-800 light:bg-zinc-100 rounded-full p-1 text-xs">
                   <button
                     onClick={() => { setModalExpandedPeriod(null); setModalPeriod('today'); }}
-                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'today' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'today' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                   >
                     Today
                   </button>
@@ -2387,13 +2991,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('week'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           Week
                         </button>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('7day'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '7day' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '7day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           7 Day
                         </button>
@@ -2401,7 +3005,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     ) : (
                       <button
                         onClick={() => setModalExpandedPeriod('week')}
-                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' || modalPeriod === '7day' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'week' || modalPeriod === '7day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                       >
                         {modalPeriod === '7day' ? '7 Day' : 'Week'}
                       </button>
@@ -2412,13 +3016,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('month'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           Month
                         </button>
                         <button
                           onClick={() => { setModalExpandedPeriod(null); setModalPeriod('30day'); }}
-                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '30day' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full transition ${modalPeriod === '30day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                         >
                           30d
                         </button>
@@ -2426,7 +3030,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     ) : (
                       <button
                         onClick={() => setModalExpandedPeriod('month')}
-                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' || modalPeriod === '30day' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                        className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'month' || modalPeriod === '30day' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                       >
                         {modalPeriod === '30day' ? '30d' : 'Month'}
                       </button>
@@ -2434,7 +3038,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </div>
                   <button
                     onClick={() => { setModalExpandedPeriod(null); setModalPeriod('all'); }}
-                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'all' ? 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}
+                    className={`px-3 py-1.5 rounded-full transition ${modalPeriod === 'all' ? 'bg-zinc-700 light:bg-zinc-200 text-white' : 'text-zinc-400 hover:text-white'}`}
                   >
                     All Time
                   </button>
@@ -2473,56 +3077,56 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 return (
                   <>
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs text-[var(--text-muted)] font-medium">{periodLabel}</span>
-                      <div className="h-px flex-1 bg-[var(--color-card)] light:bg-[var(--color-card)]" />
+                      <span className="text-xs text-zinc-400 font-medium">{periodLabel}</span>
+                      <div className="h-px flex-1 bg-zinc-800 light:bg-zinc-100" />
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-2">
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-3 text-center">
-                        <div className="text-xs text-[var(--text-muted)] mb-1">Total Tokens</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
+                        <div className="text-xs text-zinc-500 mb-1">Total Tokens</div>
                         <div className="text-base font-semibold text-white"><TokenValue value={periodTokens} /></div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-3 text-center">
-                        <div className="text-xs text-[var(--text-muted)] mb-1">Input (You)</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
+                        <div className="text-xs text-zinc-500 mb-1">Input (You)</div>
                         <div className="text-base font-semibold text-blue-400"><TokenValue value={periodTokensIn} /></div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-3 text-center">
-                        <div className="text-xs text-[var(--text-muted)] mb-1">Output (AI)</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
+                        <div className="text-xs text-zinc-500 mb-1">Output (AI)</div>
                         <div className="text-base font-semibold text-emerald-400"><TokenValue value={periodTokensOut} /></div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-3 text-center">
-                        <div className="text-xs text-[var(--text-muted)] mb-1">In:Out Ratio</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
+                        <div className="text-xs text-zinc-500 mb-1">In:Out Ratio</div>
                         <div className="text-base font-semibold text-amber-400 font-mono">
                           {periodTokensIn > 0 ? `1:${(periodTokensOut / periodTokensIn).toFixed(1)}` : '∞'}
                         </div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-3 text-center">
-                        <div className="text-xs text-[var(--text-muted)] mb-1">Input %</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
+                        <div className="text-xs text-zinc-500 mb-1">Input %</div>
                         <div className="text-base font-semibold text-blue-400">
                           {periodTokens > 0 ? `${((periodTokensIn / periodTokens) * 100).toFixed(1)}%` : 'N/A'}
                         </div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-3 text-center">
-                        <div className="text-xs text-[var(--text-muted)] mb-1">Output %</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
+                        <div className="text-xs text-zinc-500 mb-1">Output %</div>
                         <div className="text-base font-semibold text-emerald-400">
                           {periodTokens > 0 ? `${((periodTokensOut / periodTokens) * 100).toFixed(1)}%` : 'N/A'}
                         </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-4 gap-3 mb-6">
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-2.5 text-center">
-                        <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Messages</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
+                        <div className="text-[10px] text-zinc-500 mb-0.5">Messages</div>
                         <div className="text-sm font-semibold text-blue-400">{periodMessages.toLocaleString()}</div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-2.5 text-center">
-                        <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Cost</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
+                        <div className="text-[10px] text-zinc-500 mb-0.5">Cost</div>
                         <div className="text-sm font-semibold text-emerald-400"><CostValue value={periodCost} /></div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-2.5 text-center">
-                        <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Sessions</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
+                        <div className="text-[10px] text-zinc-500 mb-0.5">Sessions</div>
                         <div className="text-sm font-semibold text-violet-400">{periodSessions.toLocaleString()}</div>
                       </div>
-                      <div className="bg-[var(--color-card)] rounded-[10px] p-2.5 text-center">
-                        <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Tokens/Msg</div>
+                      <div className="bg-[var(--color-card)] rounded-lg p-2.5 text-center">
+                        <div className="text-[10px] text-zinc-500 mb-0.5">Tokens/Msg</div>
                         <div className="text-sm font-semibold text-amber-400">
                           {periodMessages > 0 ? <TokenValue value={Math.round(periodTokens / periodMessages)} /> : 'N/A'}
                         </div>
@@ -2540,10 +3144,10 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
                 {/* Timeline Chart */}
-                <div className="bg-[var(--color-card)] rounded-[10px] p-4 lg:col-span-2">
+                <div className="bg-[var(--color-card)] rounded-lg p-4 lg:col-span-2">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-medium text-[var(--text-muted)]">Daily Usage</h4>
-                    <div className="flex items-center gap-1 bg-[var(--color-card)] rounded-[10px] p-0.5">
+                    <h4 className="text-sm font-medium text-zinc-400">Daily Usage</h4>
+                    <div className="flex items-center gap-1 bg-[var(--color-card)] rounded-lg p-0.5">
                       {(['tokens', 'messages', 'sessions', 'cost'] as const).map(mode => (
                         <button
                           key={mode}
@@ -2551,13 +3155,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           className={`px-2 py-1 rounded text-[10px] font-medium transition ${
                             aiChartMode === mode
                               ? 'bg-violet-500/20 text-violet-400'
-                              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                              : 'text-zinc-500 hover:text-zinc-300'
                           }`}
                         >
                           {mode.charAt(0).toUpperCase() + mode.slice(1)}
                         </button>
                       ))}
-                      {aiChartMode === 'tokens' && <div className="w-px h-4 bg-[var(--color-card-sunken)] light:bg-[var(--color-card)]" />}
+                      {aiChartMode === 'tokens' && <div className="w-px h-4 bg-zinc-700 light:bg-zinc-200" />}
                       {aiChartMode === 'tokens' && (
                         <>
                           {(['combined', 'input', 'output'] as const).map(sub => (
@@ -2568,8 +3172,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 tokenDisplayMode === sub
                                   ? sub === 'input' ? 'bg-blue-500/20 text-blue-400'
                                     : sub === 'output' ? 'bg-emerald-500/20 text-emerald-400'
-                                    : 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)]/50 light:bg-[var(--color-card)]/50 text-[var(--text-secondary)]'
-                                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                                    : 'bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-300'
+                                  : 'text-zinc-500 hover:text-zinc-300'
                               }`}
                             >
                               {sub === 'combined' ? 'All' : sub === 'input' ? 'In' : 'Out'}
@@ -2814,8 +3418,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   };
 
                   return (
-                    <div className="bg-[var(--color-card)] rounded-[10px] p-4 lg:col-span-2">
-                      <h4 className="text-sm font-medium text-[var(--text-muted)] mb-3">Model Usage Timeline — {metricLabel}</h4>
+                    <div className="bg-[var(--color-card)] rounded-lg p-4 lg:col-span-2">
+                      <h4 className="text-sm font-medium text-zinc-400 mb-3">Model Usage Timeline — {metricLabel}</h4>
                       <div className="h-48">
                         <Bar
                           data={chartData}
@@ -2878,14 +3482,14 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   const projects = modalData?.aiUsage?.byTool?.[selectedAgentDetail.id]?.projects || [];
                   if (projects.length === 0) return null;
                   return (
-                    <div className="bg-[var(--color-card)] rounded-[10px] p-4">
-                      <h4 className="text-sm font-medium text-[var(--text-muted)] mb-3">Project Breakdown</h4>
+                    <div className="bg-[var(--color-card)] rounded-lg p-4">
+                      <h4 className="text-sm font-medium text-zinc-400 mb-3">Project Breakdown</h4>
                       <div className="space-y-2 max-h-48 overflow-y-auto">
                         {projects.slice(0, 10).map((proj: any, idx: number) => (
-                          <div key={proj.model} className="flex items-center justify-between p-2 bg-[rgba(255,255,255,0.04)] rounded-[10px]">
+                          <div key={proj.model} className="flex items-center justify-between p-2 bg-[rgba(255,255,255,0.04)] rounded-lg">
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs text-[var(--text-secondary)] truncate" title={proj.path}>{proj.path}</div>
-                              <div className="text-[10px] text-[var(--text-muted)]">{proj.sessions} sessions • {proj.messageCount} msgs</div>
+                              <div className="text-xs text-zinc-300 truncate" title={proj.path}>{proj.path}</div>
+                              <div className="text-[10px] text-zinc-500">{proj.sessions} sessions • {proj.messageCount} msgs</div>
                             </div>
                             <div className="text-xs text-violet-400 font-medium tabular-nums ml-2"><TokenValue value={proj.tokens} /></div>
                           </div>
@@ -2927,17 +3531,17 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   const periodLabel = modalPeriod === 'today' ? 'Today' : modalPeriod === 'week' ? 'This Week' : modalPeriod === '7day' ? '7 Days' : modalPeriod === 'month' ? 'This Month' : modalPeriod === '30day' ? '30 Days' : 'All Time';
 
                   return (
-                    <div className="bg-[var(--color-card)] rounded-[10px] p-4">
+                    <div className="bg-[var(--color-card)] rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-medium text-[var(--text-muted)]">Model Breakdown</h4>
-                        <span className="text-[10px] text-[var(--text-muted)] bg-[var(--color-card-sunken)] light:bg-[var(--color-card)]/50 light:bg-[var(--color-card)]/50 px-2 py-0.5 rounded">{periodLabel}</span>
+                        <h4 className="text-sm font-medium text-zinc-400">Model Breakdown</h4>
+                        <span className="text-[10px] text-zinc-500 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 px-2 py-0.5 rounded">{periodLabel}</span>
                       </div>
                       <div className="space-y-2 max-h-48 overflow-y-auto">
                         {models.slice(0, 10).map((m: any, idx: number) => (
-                          <div key={m.model} className="flex items-center justify-between p-2 bg-[rgba(255,255,255,0.04)] rounded-[10px]">
+                          <div key={m.model} className="flex items-center justify-between p-2 bg-[rgba(255,255,255,0.04)] rounded-lg">
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs text-[var(--text-secondary)] truncate" title={m.model}>{m.model}</div>
-                              <div className="text-[10px] text-[var(--text-muted)]">{m.sessions} sessions • {m.messageCount} msgs</div>
+                              <div className="text-xs text-zinc-300 truncate" title={m.model}>{m.model}</div>
+                              <div className="text-[10px] text-zinc-500">{m.sessions} sessions • {m.messageCount} msgs</div>
                             </div>
                             <div className="text-xs text-blue-400 font-medium tabular-nums ml-2"><TokenValue value={m.tokens} /></div>
                           </div>
@@ -2948,21 +3552,21 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 })()}
               </div>
 
-              <div className="text-xs text-[var(--text-muted)] mb-4">
+              <div className="text-xs text-zinc-500 mb-4">
                 Last used: {selectedAgentDetail.lastUsed ? format(selectedAgentDetail.lastUsed, 'MMM dd, yyyy HH:mm') : 'Never'}
               </div>
 
               {/* Agent-specific help info */}
-              <GlassCard className="p-4 bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)]/50">
-                <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-2">How This Is Calculated</h4>
-                <div className="space-y-1 text-xs text-[var(--text-muted)]">
-                  <p><span className="text-[var(--text-secondary)]">Sessions:</span> Number of chat/conversation files. One JSONL file = one session.</p>
-                  <p><span className="text-[var(--text-secondary)]">Messages:</span> Count of user + assistant exchanges in session files.</p>
-                  <p><span className="text-[var(--text-secondary)]">Tokens:</span> Sum of input (human prompts) + output (AI responses) tokens parsed from session files.</p>
-                  <p><span className="text-[var(--text-secondary)]">Input Tokens:</span> Tokens from user/human messages — what you wrote.</p>
-                  <p><span className="text-[var(--text-secondary)]">Output Tokens:</span> Tokens from AI/assistant responses — what the AI wrote.</p>
-                  <p><span className="text-[var(--text-secondary)]">In:Out Ratio:</span> Shows how many output tokens the AI generates per 1 input token you send. Higher = more verbose AI.</p>
-                  <p><span className="text-[var(--text-secondary)]">Cost:</span> Calculated from tokens using provider pricing.</p>
+              <GlassCard className="p-4 bg-[var(--color-card)] border-zinc-700 light:border-zinc-300/50">
+                <h4 className="text-sm font-medium text-zinc-300 mb-2">How This Is Calculated</h4>
+                <div className="space-y-1 text-xs text-zinc-500">
+                  <p><span className="text-zinc-300">Sessions:</span> Number of chat/conversation files. One JSONL file = one session.</p>
+                  <p><span className="text-zinc-300">Messages:</span> Count of user + assistant exchanges in session files.</p>
+                  <p><span className="text-zinc-300">Tokens:</span> Sum of input (human prompts) + output (AI responses) tokens parsed from session files.</p>
+                  <p><span className="text-zinc-300">Input Tokens:</span> Tokens from user/human messages — what you wrote.</p>
+                  <p><span className="text-zinc-300">Output Tokens:</span> Tokens from AI/assistant responses — what the AI wrote.</p>
+                  <p><span className="text-zinc-300">In:Out Ratio:</span> Shows how many output tokens the AI generates per 1 input token you send. Higher = more verbose AI.</p>
+                  <p><span className="text-zinc-300">Cost:</span> Calculated from tokens using provider pricing.</p>
                   {selectedAgentDetail.id === 'claude-code' && (
                     <p className="text-violet-400">Claude Code: Reads ~/.claude/projects/*/*.jsonl files (including subagents/)</p>
                   )}
@@ -2983,20 +3587,26 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   )}
                 </div>
               </GlassCard>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* Features Modal */}
-      {showHelpModal && (
-          <div
+      <AnimatePresence>
+        {showHelpModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowHelpModal(false)}
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[10px] p-5 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -3006,7 +3616,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </h3>
                 <button
                   onClick={() => setShowHelpModal(false)}
-                  className="px-3 py-1 text-xs text-[var(--text-muted)] hover:text-white bg-[var(--color-card)] light:bg-[var(--color-card)] hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] rounded-[10px] transition-colors"
+                  className="px-3 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 rounded-lg transition-colors"
                 >
                   Close
                 </button>
@@ -3015,7 +3625,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <div className="space-y-6">
                 <GlassCard className="p-4">
                   <h4 className="text-emerald-400 font-medium mb-3">IDE Detection</h4>
-                  <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
+                  <ul className="space-y-2 text-sm text-zinc-300">
                     <li>• IntelliJ IDEA (IntelliJ, Community)</li>
                     <li>• PyCharm (Professional, Community)</li>
                     <li>• WebStorm, GoLand, Rider, DataGrip</li>
@@ -3026,7 +3636,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
                 <GlassCard className="p-4">
                   <h4 className="text-violet-400 font-medium mb-3">AI Tool Integration</h4>
-                  <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
+                  <ul className="space-y-2 text-sm text-zinc-300">
                     <li>• Claude Code - parses .claude/projects/*.jsonl</li>
                     <li>• OpenCode - reads opencode.db</li>
                     <li>• Gemini CLI - parses tmp/*/chats</li>
@@ -3037,7 +3647,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
                 <GlassCard className="p-4">
                   <h4 className="text-blue-400 font-medium mb-3">Project Tracking</h4>
-                  <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
+                  <ul className="space-y-2 text-sm text-zinc-300">
                     <li>• Add projects with path & default IDE</li>
                     <li>• Open in detected IDE</li>
                     <li>• Track primary language</li>
@@ -3047,7 +3657,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
                 <GlassCard className="p-4">
                   <h4 className="text-amber-400 font-medium mb-3">Tools Detection</h4>
-                  <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
+                  <ul className="space-y-2 text-sm text-zinc-300">
                     <li>• Git - version control</li>
                     <li>• Node.js, npm, yarn, pnpm</li>
                     <li>• Python, pip, uv</li>
@@ -3056,20 +3666,26 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </ul>
                 </GlassCard>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* Add Project Modal - Accessible from any tab */}
-      {showAddProject && (
-          <div
+      <AnimatePresence>
+        {showAddProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => { setShowAddProject(false); setAddProjectError(null); setSelectedQuickProjects(new Set()); }}
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[10px] p-5 max-w-lg w-full"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-lg w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -3079,7 +3695,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </h3>
                 <button
                 onClick={() => { setShowAddProject(false); setAddProjectError(null); setCustomDirResults({}); setSelectedQuickProjects(new Set()); }}
-  className="p-1 text-[var(--text-muted)] hover:text-white transition"
+  className="p-1 text-zinc-400 hover:text-white transition"
 >
   <X className="w-5 h-5" />
                 </button>
@@ -3087,23 +3703,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
               <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1 ws-scroll">
                 {addProjectError && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-[10px] text-red-400 text-sm">
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
                     {addProjectError}
                   </div>
                 )}
 
                 {loadingQuickAdd ? (
-                  <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm">
+                  <div className="flex items-center gap-2 text-zinc-400 text-sm">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Scanning IDE default directories...
                   </div>
                 ) : quickAddProjects.length > 0 && (
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider">Quick Add from IDE Directories</label>
+                    <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wider">Quick Add from IDE Directories</label>
                     <div className="flex flex-col gap-2">
                       {quickAddProjects.map(group => (
                         <div key={group.ide}>
-                          <div className="text-xs text-[var(--text-muted)] mb-1 ml-1">{group.ide}</div>
+                          <div className="text-xs text-zinc-500 mb-1 ml-1">{group.ide}</div>
                           <div className="flex flex-wrap gap-1.5">
                             {group.projects.map(p => {
                               const isSel = selectedQuickProjects.has(p.path);
@@ -3118,10 +3734,10 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                   });
                                   setNewProject({ name: p.name, path: p.path, repositoryUrl: '', defaultIde: '' });
                                 }}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-[10px] border transition text-sm ${
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition text-sm ${
                                   isSel
                                     ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                    : 'bg-[var(--color-card)] light:bg-[var(--color-card)]/80 hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-[var(--text-secondary)] hover:text-white border-[var(--border-hairline)] light:border-[var(--border-hairline)] hover:border-indigo-500/50'
+                                    : 'bg-zinc-800 light:bg-zinc-100/80 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
                                 }`}
                               >
                                 <FolderOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -3137,13 +3753,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 )}
 
                 {selectedQuickProjects.size > 0 && (
-                  <div className="flex items-center justify-between px-3 py-2 bg-indigo-600/10 border border-indigo-500/30 rounded-[10px]">
+                  <div className="flex items-center justify-between px-3 py-2 bg-indigo-600/10 border border-indigo-500/30 rounded-lg">
                     <span className="text-sm text-indigo-300">
                       {selectedQuickProjects.size} project{selectedQuickProjects.size !== 1 ? 's' : ''} selected
                     </span>
                     <button
                       onClick={() => setSelectedQuickProjects(new Set())}
-                      className="text-xs text-[var(--text-muted)] hover:text-white transition"
+                      className="text-xs text-zinc-400 hover:text-white transition"
                     >
                       Clear selection
                     </button>
@@ -3153,21 +3769,21 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {/* Saved Custom Directories */}
                 {savedCustomDirs.length > 0 && (
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider">Saved Directories</label>
+                    <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wider">Saved Directories</label>
                     <div className="space-y-2">
                       {savedCustomDirs.map(dir => {
                         const dirResults = customDirResults[dir];
                         const isLoading = scanningDirs;
                         return (
-                          <div key={dir} className="bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[6px] p-2">
+                          <div key={dir} className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-2">
                             <div className="flex items-center justify-between gap-2 mb-1">
-                              <span className="text-xs text-[var(--text-muted)] truncate flex-1 font-mono">{dir}</span>
+                              <span className="text-xs text-zinc-400 truncate flex-1 font-mono">{dir}</span>
                               <div className="flex items-center gap-1 shrink-0">
                                 {isLoading && !dirResults && (
-                                  <Loader2 className="w-3 h-3 animate-spin text-[var(--text-muted)]" />
+                                  <Loader2 className="w-3 h-3 animate-spin text-zinc-500" />
                                 )}
                                 {dirResults && (
-                                  <span className="text-[10px] text-[var(--text-muted)]">{dirResults.length} project{dirResults.length !== 1 ? 's' : ''}</span>
+                                  <span className="text-[10px] text-zinc-500">{dirResults.length} project{dirResults.length !== 1 ? 's' : ''}</span>
                                 )}
                                 <button
                                   onClick={() => {
@@ -3178,7 +3794,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     delete r[dir];
                                     setCustomDirResults(r);
                                   }}
-                                  className="p-0.5 text-[var(--text-muted)] hover:text-red-400 transition"
+                                  className="p-0.5 text-zinc-500 hover:text-red-400 transition"
                                   title="Remove directory"
                                 >
                                   <X className="w-3.5 h-3.5" />
@@ -3186,7 +3802,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               </div>
                             </div>
                             {isLoading && !dirResults ? (
-                              <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-xs">
+                              <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 Scanning...
                               </div>
@@ -3205,25 +3821,25 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     });
                                     setNewProject({ name: p.name, path: p.path, repositoryUrl: '', defaultIde: '' });
                                   }}
-                                  className={`flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-[10px] border transition text-xs ${
+                                  className={`flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-lg border transition text-xs ${
                                     isSel
                                       ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                      : 'bg-[var(--color-card)] light:bg-[var(--color-card)] hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-[var(--text-secondary)] hover:text-white border-[var(--border-hairline)] light:border-[var(--border-hairline)] hover:border-indigo-500/50'
+                                      : 'bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
                                   }`}
                                 >
                                   <span className="truncate max-w-[180px]">{p.name}</span>
-                                  <span className="text-[10px] text-[var(--text-muted)] flex flex-wrap gap-1">
+                                  <span className="text-[10px] text-zinc-500 flex flex-wrap gap-1">
                                     {p.languages.slice(0, 3).map(lang => (
-                                      <span key={lang} className="px-1 py-0.5 bg-[var(--color-card)] rounded text-[var(--text-muted)] border-[var(--border-hairline)] light:border-[var(--border-hairline)]">{lang}</span>
+                                      <span key={lang} className="px-1 py-0.5 bg-[var(--color-card)] rounded text-zinc-400 border border-zinc-700 light:border-zinc-300">{lang}</span>
                                     ))}
-                                    {p.languages.length > 3 && <span className="text-[var(--text-muted)]">+{p.languages.length - 3}</span>}
+                                    {p.languages.length > 3 && <span className="text-zinc-600">+{p.languages.length - 3}</span>}
                                   </span>
                                 </button>
                               );
                             })}
                               </div>
                             ) : (
-                              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">No coding projects found</p>
+                              <p className="text-[10px] text-zinc-600 mt-0.5">No coding projects found</p>
                             )}
                           </div>
                         );
@@ -3251,7 +3867,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       setScanningDirs(false);
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-[var(--color-card)] light:bg-[var(--color-card)] hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] text-[var(--text-muted)] hover:text-white rounded-[10px] border border-dashed border-[var(--border-hairline)] light:border-[var(--border-hairline)] hover:border-indigo-500/50 transition text-sm w-full justify-center"
+                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-400 hover:text-white rounded-lg border border-dashed border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50 transition text-sm w-full justify-center"
                 >
                   <FolderOpen className="w-4 h-4" />
                   Add Directory
@@ -3259,26 +3875,26 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm text-[var(--text-muted)] mb-2">Project Name *</label>
+                    <label className="block text-sm text-zinc-400 mb-2">Project Name *</label>
                     <VoiceInputWrapper>
                       <input
                         type="text"
                         value={newProject.name}
                         onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
                         placeholder="My Project"
-                        className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                       />
                     </VoiceInputWrapper>
                   </div>
                   <div>
-                    <label className="block text-sm text-[var(--text-muted)] mb-2">Project Path *</label>
+                    <label className="block text-sm text-zinc-400 mb-2">Project Path *</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={newProject.path}
                         onChange={(e) => setNewProject({ ...newProject, path: e.target.value })}
                         placeholder="C:\Projects\my-project"
-                        className="flex-1 px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-indigo-500 focus:outline-none"
+                        className="flex-1 px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                       />
                       <button
                         onClick={async () => {
@@ -3287,7 +3903,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             setNewProject({ ...newProject, path: result.path });
                           }
                         }}
-                        className="px-4 py-3 bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] hover:bg-[var(--color-card)] text-[var(--text-secondary)] rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] transition"
+                        className="px-4 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition"
                         title="Browse for folder"
                       >
                         <FolderOpen className="w-5 h-5" />
@@ -3295,21 +3911,21 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm text-[var(--text-muted)] mb-2">Repository URL (optional)</label>
+                    <label className="block text-sm text-zinc-400 mb-2">Repository URL (optional)</label>
                     <input
                       type="text"
                       value={newProject.repositoryUrl}
                       onChange={(e) => setNewProject({ ...newProject, repositoryUrl: e.target.value })}
                       placeholder="https://github.com/user/repo"
-                      className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-indigo-500 focus:outline-none"
+                      className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-[var(--text-muted)] mb-2">Default IDE (optional)</label>
+                    <label className="block text-sm text-zinc-400 mb-2">Default IDE (optional)</label>
                     <select
                       value={newProject.defaultIde}
                       onChange={(e) => setNewProject({ ...newProject, defaultIde: e.target.value })}
-                      className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-indigo-500 focus:outline-none"
+                      className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                     >
                       <option value="">Select an IDE...</option>
                       {overview?.ides?.map((ide: any) => (
@@ -3320,35 +3936,41 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border-hairline)] light:border-[var(--border-hairline)]">
+              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 light:border-zinc-200">
                 <button
                   onClick={() => { setShowAddProject(false); setAddProjectError(null); setCustomDirResults({}); setSelectedQuickProjects(new Set()); }}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white transition"
+                  className="px-4 py-2 text-zinc-400 hover:text-white transition"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAddProject}
                   disabled={!newProject.name || !newProject.path || addingProject}
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[10px] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {addingProject ? 'Adding...' : 'Add Project'}
                 </button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* Edit Project Modal */}
-      {showEditProject && editingProject && (
-          <div
+      <AnimatePresence>
+        {showEditProject && editingProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => { setShowEditProject(false); setEditingProject(null); setAddProjectError(null); }}
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[10px] p-5 max-w-lg w-full"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-lg w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -3358,36 +3980,36 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </h3>
                 <button
                   onClick={() => { setShowEditProject(false); setEditingProject(null); setAddProjectError(null); }}
-                  className="p-1 text-[var(--text-muted)] hover:text-white transition"
+                  className="p-1 text-zinc-400 hover:text-white transition"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {addProjectError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-[10px] text-red-400 text-sm">
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
                   {addProjectError}
                 </div>
               )}
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] mb-2">Project Name *</label>
+                  <label className="block text-sm text-zinc-400 mb-2">Project Name *</label>
                   <input
                     type="text"
                     value={editProjectForm.name}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, name: e.target.value })}
-                    className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] mb-2">Project Path *</label>
+                  <label className="block text-sm text-zinc-400 mb-2">Project Path *</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={editProjectForm.path}
                       onChange={(e) => setEditProjectForm({ ...editProjectForm, path: e.target.value })}
-                      className="flex-1 px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none"
+                      className="flex-1 px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                     />
                     <button
                       onClick={async () => {
@@ -3396,7 +4018,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           setEditProjectForm({ ...editProjectForm, path: result.path });
                         }
                       }}
-                      className="px-4 py-3 bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] hover:bg-[var(--color-card)] text-[var(--text-secondary)] rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] transition"
+                      className="px-4 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition"
                       title="Browse for folder"
                     >
                       <FolderOpen className="w-5 h-5" />
@@ -3404,17 +4026,17 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] mb-2">Repository URL (optional)</label>
+                  <label className="block text-sm text-zinc-400 mb-2">Repository URL (optional)</label>
                   <input
                     type="text"
                     value={editProjectForm.repositoryUrl}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, repositoryUrl: e.target.value })}
                     placeholder="https://github.com/user/repo"
-                    className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   />
                 </div>
                 <div ref={languageDropdownRef}>
-                  <label className="block text-sm text-[var(--text-muted)] mb-2">Primary Language (optional)</label>
+                  <label className="block text-sm text-zinc-400 mb-2">Primary Language (optional)</label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <input
@@ -3426,19 +4048,19 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         }}
                         onFocus={() => setShowLanguageDropdown(true)}
                         placeholder="Search or type a language..."
-                        className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none pr-10"
+                        className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none pr-10"
                       />
                       <ChevronDown
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
                       />
                       {showLanguageDropdown && (
-                        <div className="absolute z-10 w-full mt-1 bg-[var(--color-card)] light:bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[10px] max-h-48 overflow-y-auto">
+                        <div className="absolute z-10 w-full mt-1 bg-zinc-800 light:bg-zinc-100 border border-zinc-700 light:border-zinc-300 rounded-lg max-h-48 overflow-y-auto">
                           {filteredLanguages.length > 0 ? (
                             filteredLanguages.map(lang => (
                               <button
                                 key={lang}
                                 onClick={() => handleLanguageSelect(lang)}
-                                className={`w-full text-left px-4 py-2 text-white hover:bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] transition ${
+                                className={`w-full text-left px-4 py-2 text-white hover:bg-zinc-700 light:bg-zinc-200 transition ${
                                   editProjectForm.primaryLanguage === lang ? 'bg-violet-500/20 text-violet-300' : ''
                                 }`}
                               >
@@ -3446,7 +4068,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               </button>
                             ))
                           ) : (
-                            <div className="px-4 py-2 text-[var(--text-muted)] text-sm">
+                            <div className="px-4 py-2 text-zinc-500 text-sm">
                               No match — using &ldquo;{editProjectForm.primaryLanguage}&rdquo;
                             </div>
                           )}
@@ -3456,7 +4078,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <button
                       onClick={handleDetectLanguage}
                       disabled={detectingLanguage || !editProjectForm.path}
-                      className="px-3 py-3 bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] hover:bg-[var(--color-card)] text-[var(--text-secondary)] rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Auto-detect language from project files"
                     >
                       {detectingLanguage ? (
@@ -3468,11 +4090,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] mb-2">VCS Type (optional)</label>
+                  <label className="block text-sm text-zinc-400 mb-2">VCS Type (optional)</label>
                   <select
                     value={editProjectForm.vcsType}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, vcsType: e.target.value })}
-                    className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   >
                     <option value="">Select VCS...</option>
                     <option value="git">Git</option>
@@ -3481,11 +4103,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] mb-2">Default IDE (optional)</label>
+                  <label className="block text-sm text-zinc-400 mb-2">Default IDE (optional)</label>
                   <select
                     value={editProjectForm.defaultIde}
                     onChange={(e) => setEditProjectForm({ ...editProjectForm, defaultIde: e.target.value })}
-                    className="w-full px-4 py-3 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-violet-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   >
                     <option value="">Select an IDE...</option>
                     {overview?.ides?.map((ide: any) => (
@@ -3495,35 +4117,41 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border-hairline)] light:border-[var(--border-hairline)]">
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800 light:border-zinc-200">
                 <button
                   onClick={() => { setShowEditProject(false); setEditingProject(null); setAddProjectError(null); }}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white transition"
+                  className="px-4 py-2 text-zinc-400 hover:text-white transition"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleUpdateProject}
                   disabled={!editProjectForm.name || !editProjectForm.path || updatingProject}
-                  className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-[10px] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {updatingProject ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-          <div
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-none z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => { setShowDeleteConfirm(false); setDeletingProjectId(null); setDeletingProjectName(''); }}
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-[10px] p-5 max-w-md w-full"
+              className="bg-[var(--color-card)] border border-zinc-700 light:border-zinc-300 rounded-lg p-5 max-w-md w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center gap-4 mb-4">
@@ -3532,11 +4160,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-white">Delete Project?</h3>
-                  <p className="text-sm text-[var(--text-muted)]">This action can be undone later</p>
+                  <p className="text-sm text-zinc-400">This action can be undone later</p>
                 </div>
               </div>
 
-              <p className="text-[var(--text-secondary)] mb-6">
+              <p className="text-zinc-300 mb-6">
                 Are you sure you want to delete <span className="text-white font-medium">"{deletingProjectName}"</span>? 
                 The project will be moved to trash and can be restored at any time.
               </p>
@@ -3544,45 +4172,51 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => { setShowDeleteConfirm(false); setDeletingProjectId(null); setDeletingProjectName(''); }}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white transition"
+                  className="px-4 py-2 text-zinc-400 hover:text-white transition"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmDelete}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-[10px] transition"
+                  className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition"
                 >
                   Delete Project
                 </button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* Run Project Configuration Modal */}
-      {showRunConfig && runConfigProject && (
-          <div
+      <AnimatePresence>
+        {showRunConfig && runConfigProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-none z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowRunConfig(false)}
           >
-            <div
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[var(--color-card)] border-[var(--border-hairline)] light:border-[var(--border-hairline)] rounded-2xl w-full max-w-lg p-6 shadow-2xl"
+              className="bg-[var(--color-card)] border border-zinc-800 light:border-zinc-200 rounded-2xl w-full max-w-lg p-6 shadow-2xl"
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-xl font-semibold text-white">Configure Run Commands</h2>
-                  <p className="text-sm text-[var(--text-muted)] mt-1">{runConfigProject.name}</p>
+                  <p className="text-sm text-zinc-500 mt-1">{runConfigProject.name}</p>
                 </div>
-                <button onClick={() => setShowRunConfig(false)} className="p-2 text-[var(--text-muted)] hover:text-white hover:bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-[10px] transition">
+                <button onClick={() => setShowRunConfig(false)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {detectedScripts?.framework && (
-                <div className="mb-4 px-3 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-[10px]">
+                <div className="mb-4 px-3 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
                   <span className="text-xs text-indigo-400">Detected framework:</span>
                   <span className="text-sm text-white ml-2 font-medium">{detectedScripts.framework}</span>
                 </div>
@@ -3591,71 +4225,71 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <div className="space-y-4">
                 {/* Single command mode */}
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] mb-1.5">Dev Command</label>
+                  <label className="block text-sm text-zinc-400 mb-1.5">Dev Command</label>
                   <input
                     type="text"
                     defaultValue={detectedScripts?.single?.command || runConfigData?.single?.command || ''}
                     id="run-cmd-single"
                     placeholder="e.g., npm run dev"
-                    className="w-full px-3 py-2.5 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-emerald-500 focus:outline-none text-sm font-mono"
+                    className="w-full px-3 py-2.5 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-emerald-500 focus:outline-none text-sm font-mono"
                   />
                   <div className="flex items-center gap-2 mt-1.5">
-                    <label className="text-xs text-[var(--text-muted)]">Port (optional):</label>
+                    <label className="text-xs text-zinc-500">Port (optional):</label>
                     <input
                       type="number"
                       defaultValue={detectedScripts?.single?.port || runConfigData?.single?.port || ''}
                       id="run-port-single"
                       placeholder="3000"
-                      className="w-24 px-2 py-1.5 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-emerald-500 focus:outline-none text-xs font-mono"
+                      className="w-24 px-2 py-1.5 bg-zinc-800 light:bg-zinc-100 text-white rounded border border-zinc-700 light:border-zinc-300 focus:border-emerald-500 focus:outline-none text-xs font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="border-t border-[var(--border-hairline)] light:border-[var(--border-hairline)] pt-4">
-                  <p className="text-xs text-[var(--text-muted)] mb-3">Or use separate frontend/backend commands:</p>
+                <div className="border-t border-zinc-800 light:border-zinc-200 pt-4">
+                  <p className="text-xs text-zinc-500 mb-3">Or use separate frontend/backend commands:</p>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs text-[var(--text-muted)] mb-1">Frontend Command</label>
+                      <label className="block text-xs text-zinc-400 mb-1">Frontend Command</label>
                       <input
                         type="text"
                         defaultValue={detectedScripts?.frontend?.command || runConfigData?.frontend?.command || ''}
                         id="run-cmd-frontend"
                         placeholder="e.g., npm run dev"
-                        className="w-full px-3 py-2 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-blue-500 focus:outline-none text-sm font-mono"
+                        className="w-full px-3 py-2 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-blue-500 focus:outline-none text-sm font-mono"
                       />
                       <input
                         type="number"
                         defaultValue={detectedScripts?.frontend?.port || runConfigData?.frontend?.port || ''}
                         id="run-port-frontend"
                         placeholder="Port (e.g., 5173)"
-                        className="w-full mt-1.5 px-2 py-1.5 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-blue-500 focus:outline-none text-xs font-mono"
+                        className="w-full mt-1.5 px-2 py-1.5 bg-zinc-800 light:bg-zinc-100 text-white rounded border border-zinc-700 light:border-zinc-300 focus:border-blue-500 focus:outline-none text-xs font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-[var(--text-muted)] mb-1">Backend Command</label>
+                      <label className="block text-xs text-zinc-400 mb-1">Backend Command</label>
                       <input
                         type="text"
                         defaultValue={detectedScripts?.backend?.command || runConfigData?.backend?.command || ''}
                         id="run-cmd-backend"
                         placeholder="e.g., python manage.py runserver"
-                        className="w-full px-3 py-2 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded-[10px] border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-orange-500 focus:outline-none text-sm font-mono"
+                        className="w-full px-3 py-2 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-orange-500 focus:outline-none text-sm font-mono"
                       />
                       <input
                         type="number"
                         defaultValue={detectedScripts?.backend?.port || runConfigData?.backend?.port || ''}
                         id="run-port-backend"
                         placeholder="Port (e.g., 8000)"
-                        className="w-full mt-1.5 px-2 py-1.5 bg-[var(--color-card)] light:bg-[var(--color-card)] text-white rounded border-[var(--border-hairline)] light:border-[var(--border-hairline)] focus:border-orange-500 focus:outline-none text-xs font-mono"
+                        className="w-full mt-1.5 px-2 py-1.5 bg-zinc-800 light:bg-zinc-100 text-white rounded border border-zinc-700 light:border-zinc-300 focus:border-orange-500 focus:outline-none text-xs font-mono"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border-hairline)] light:border-[var(--border-hairline)]">
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800 light:border-zinc-200">
                 <button
                   onClick={() => setShowRunConfig(false)}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white transition text-sm"
+                  className="px-4 py-2 text-zinc-400 hover:text-white transition text-sm"
                 >
                   Cancel
                 </button>
@@ -3680,42 +4314,47 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     }
                     handleSaveRunConfig(config);
                   }}
-                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[10px] transition text-sm font-medium"
+                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition text-sm font-medium"
                 >
                   Save & Run
                 </button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       {/* Terminal Workspace Modal — only in DOM when open to avoid blocking sidebar/nav */}
-      {workspaceProject && isWorkspaceOpen && (
-          <div
+      <AnimatePresence>
+        {workspaceProject && isWorkspaceOpen && (
+          <motion.div
             key="workspace-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black z-[200] flex flex-col"
           >
             {/* Workspace Header */}
-            <div className="flex items-center justify-between px-4 py-2 bg-[var(--color-card)] border-b border-[var(--border-hairline)] light:border-[var(--border-hairline)]">
+            <div className="flex items-center justify-between px-4 py-2 bg-[var(--color-card)] border-b border-zinc-800 light:border-zinc-200">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('open-close-workspace-dialog'))}
-                  className="p-1.5 text-[var(--text-muted)] hover:text-white hover:bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-[10px] transition-colors"
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors"
                   title="Close workspace"
                 >
                   <X className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setIsWorkspaceOpen(false)}
-                  className="p-1.5 text-[var(--text-muted)] hover:text-white hover:bg-[var(--color-card)] light:bg-[var(--color-card)] rounded-[10px] transition-colors"
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors"
                   title="Minimize workspace"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
-                <div className="w-px h-5 bg-[var(--color-card-sunken)] light:bg-[var(--color-card)] mx-1" />
+                <div className="w-px h-5 bg-zinc-700 light:bg-zinc-200 mx-1" />
                 <Terminal className="w-4 h-4 text-emerald-400" />
-                <span className="text-[11px] font-medium text-[var(--text-secondary)]">{workspaceProject.name}</span>
+                <span className="text-[11px] font-medium text-zinc-300">{workspaceProject.name}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -3726,7 +4365,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     setShowInitModal(true);
                   }}
                   disabled={provisionStatus === 'provisioning' || !selectedProject}
-                  className="px-2.5 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded-[10px] flex items-center gap-1.5 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-2.5 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Initialize workspace infrastructure"
                 >
                   <FolderTree className="w-3.5 h-3.5" />
@@ -3735,16 +4374,16 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('open-new-agent'))}
                   disabled={!selectedProject}
-                  className="px-2 py-1.5 bg-[var(--color-card-sunken)] light:bg-[var(--color-card)]/60 hover:bg-[var(--color-card)]/60 border-[var(--border-hairline)] light:border-[var(--border-hairline)]/50 text-[var(--text-secondary)] text-xs rounded-[6px] flex items-center gap-1.5 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-2 py-1.5 bg-zinc-700 light:bg-zinc-200/60 hover:bg-zinc-600/60 border border-zinc-600 light:border-zinc-300/50 text-zinc-300 text-xs rounded-lg flex items-center gap-1.5 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Start a new AI agent session"
                 >
                   <Bot className="w-3.5 h-3.5" />
                   New Agent
                 </button>
-                <div className="w-px h-5 bg-[var(--color-card-sunken)] light:bg-[var(--color-card)]" />
+                <div className="w-px h-5 bg-zinc-700 light:bg-zinc-200" />
                 <button
                   onClick={() => setShowSpecs(!showSpecs)}
-                  className={`px-2 py-1.5 text-xs rounded-[6px] flex items-center gap-1.5 transition-colors duration-150 ${showSpecs ? 'bg-cyan-700/50 text-cyan-200 border border-cyan-600/50' : 'bg-[var(--color-card-sunken)] light:bg-[var(--color-card)]/60 hover:bg-[var(--color-card)]/60 border-[var(--border-hairline)] light:border-[var(--border-hairline)]/50 text-[var(--text-secondary)]'}`}
+                  className={`px-2 py-1.5 text-xs rounded-lg flex items-center gap-1.5 transition-colors duration-150 ${showSpecs ? 'bg-cyan-700/50 text-cyan-200 border border-cyan-600/50' : 'bg-zinc-700 light:bg-zinc-200/60 hover:bg-zinc-600/60 border border-zinc-600 light:border-zinc-300/50 text-zinc-300'}`}
                   title="View feature specifications"
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -3755,11 +4394,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
             {/* Terminal Content */}
             <div className="flex-1 flex overflow-hidden">
-              <div className={`flex-1 min-w-0 ${showSpecs ? 'border-r border-[var(--border-hairline)] light:border-[var(--border-hairline)]' : ''}`}>
+              <div className={`flex-1 min-w-0 ${showSpecs ? 'border-r border-zinc-800 light:border-zinc-200' : ''}`}>
                 <TerminalPage projectId={workspaceProject.id} projectPath={workspaceProject.path} onCloseWorkspace={handleCloseWorkspace} />
               </div>
               {showSpecs && (
-                <div className="w-[45%] overflow-hidden border-l border-[var(--border-hairline)] light:border-[var(--border-hairline)]">
+                <div className="w-[45%] overflow-hidden border-l border-zinc-800 light:border-zinc-200">
                   <div className="h-full overflow-auto">
                     <FeatureSpecPanel projectPath={workspaceProject?.path} />
                   </div>
@@ -3780,8 +4419,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               isReinit={provisionStatus === 'provisioned'}
             />
 
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
       </div>
     </PageShell>
   );

@@ -558,7 +558,7 @@ export function LearnPage() {
   };
 
   return (
-    <div data-page="learn" className="h-full flex flex-col bg-[#0f0e0d] text-zinc-100 relative">
+    <div data-page="learn" className="h-full flex flex-col bg-[#0f0e0d] text-zinc-100 relative light:bg-stone-200/95 light:text-stone-900">
       <LearnNavBar
         breadcrumb={breadcrumb}
         onNavigate={navigate}
@@ -578,7 +578,7 @@ export function LearnPage() {
               animate="center"
               exit="exit"
               transition={viewTransition}
-              className="h-full overflow-y-auto"
+              className="h-full overflow-y-auto light:scrollbar-thin"
             >
               {renderView()}
             </motion.div>
@@ -600,24 +600,24 @@ export function LearnPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm light:bg-stone-900/60 light:backdrop-blur-sm"
             onClick={() => setShowShortcuts(false)}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-80 max-w-[90vw] shadow-lg"
+              className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-80 max-w-[90vw] shadow-lg light:bg-stone-100/95 light:border-stone-200/60 light:text-stone-900"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-sm font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-zinc-100 mb-4 flex items-center gap-2 light:text-stone-900">
                 <Keyboard className="w-4 h-4 text-clay-400" />
                 Keyboard Shortcuts
               </h3>
-              <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-zinc-800/50 border border-zinc-700/40 mb-3">
+              <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-zinc-800/50 border border-zinc-700/40 mb-3 light:bg-stone-200/60 light:border-stone-300/50">
                 <div>
-                  <p className="text-xs font-medium text-zinc-200">Enable shortcuts</p>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">Off: typing only — Esc &amp; ? stay active</p>
+                  <p className="text-xs font-medium text-zinc-200 light:text-stone-900">Enable shortcuts</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5 light:text-stone-500">Off: typing only — Esc &amp; ? stay active</p>
                 </div>
                 <Switch
                   checked={shortcutsEnabled}
@@ -640,8 +640,8 @@ export function LearnPage() {
                   ['Esc', 'Close / go home'],
                 ].map(([key, desc]) => (
                   <div key={key} className="flex items-center justify-between">
-                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700/50 text-zinc-300 font-mono text-[10px]">{key}</kbd>
-                    <span className="text-zinc-500">{desc}</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700/50 text-zinc-300 font-mono text-[10px] light:bg-stone-300/80 light:border-stone-400/50 light:text-stone-700">{key}</kbd>
+                    <span className="text-zinc-500 light:text-stone-500">{desc}</span>
                   </div>
                 ))}
               </div>

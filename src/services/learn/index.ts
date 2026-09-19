@@ -60,6 +60,20 @@ export function registerLearnHandlers(
   // Run migration
   runMigration(db);
 
+  // ── Command Usage Table ──
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS learn_command_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      command TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'general',
+      date TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 1,
+      last_used TEXT NOT NULL
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_cmd_usage_command_date ON learn_command_usage(command, date)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_cmd_usage_date ON learn_command_usage(date)`);
+  } catch { /* table may already exist */ }
+
   const content = new ContentService(db);
   const importer = new ImportService(db);
   const progress = new ProgressService(db);
@@ -83,6 +97,24 @@ export function registerLearnHandlers(
 
   // ── Import & Validate ──
   console.log('[learn] IPC handlers registered — lmd-import v2 (accepts { source })');
+
+  ipcMain.handle('learn:lesson-create', async (_event, lessonData: { title: string; content: string; status?: string }) => {
+    try {
+      repo.upsertLesson(db, {
+        id: 'lesson-stt-' + Date.now(),
+        title: lessonData.title,
+        part: 0,
+        version: '1.0',
+        doc_json: JSON.stringify({ content: lessonData.content }),
+        status: lessonData.status || 'draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err.message };
+    }
+  });
 
   ipcMain.handle('learn:importLdoc', (_event, payload: { source?: string; json?: unknown }) => {
     if (typeof payload.source === 'string') {
@@ -1435,6 +1467,53 @@ export function registerLearnHandlers(
       }};
     } catch (e: any) {
       return { ok: false, error: e.message };
+    }
+  });
+
+// ── Command Usage Tracking ──
+  ipcMain.handle('learn:trackCommandUsage', async (_event, args: { command: string; category: string }) => {
+    const { command, category } = args;
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const existing = db.prepare('SELECT * FROM learn_command_usage WHERE command = ? AND date = ?').get(command, today) as any;
+      if (existing) {
+        db.prepare('UPDATE learn_command_usage SET count = count + 1, last_used = ?, category = ? WHERE command = ? AND date = ?').run(new Date().toISOString(), category, command, today);
+      } else {
+        db.prepare('INSERT INTO learn_command_usage (command, category, date, count, last_used) VALUES (?, ?, ?, 1, ?)').run(command, category, today, new Date().toISOString());
+      }
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('learn:getCommandUsage', async (_event, args: { limit?: number; days?: number }) => {
+    const { limit = 50, days } = args || {};
+    try {
+      let query = 'SELECT command, category, SUM(count) as total, MAX(last_used) as last_used FROM learn_command_usage';
+      let params: any[] = [];
+      if (days) {
+        const since = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+        query += ' WHERE date >= ?';
+        params.push(since);
+      }
+      query += ' GROUP BY command ORDER BY total DESC LIMIT ?';
+      params.push(limit);
+      const rows = db.prepare(query).all(...params) as any[];
+      return { data: rows };
+    } catch (e: any) {
+      return { data: [], error: e.message };
+    }
+  });
+
+  ipcMain.handle('learn:getCommandUsageSummary', async (_event) => {
+    try {
+      const totalCommands = db.prepare('SELECT COUNT(DISTINCT command) as count FROM learn_command_usage').get() as any;
+      const totalRuns = db.prepare('SELECT SUM(count) as total FROM learn_command_usage').get() as any;
+      const topCommands = db.prepare('SELECT command, category, SUM(count) as total FROM learn_command_usage GROUP BY command ORDER BY total DESC LIMIT 10').all() as any[];
+      return { data: { totalCommands: totalCommands?.count || 0, totalRuns: totalRuns?.total || 0, topCommands } };
+    } catch (e: any) {
+      return { data: { totalCommands: 0, totalRuns: 0, topCommands: [] }, error: e.message };
     }
   });
 

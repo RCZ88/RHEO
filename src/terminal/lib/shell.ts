@@ -411,6 +411,73 @@ function runSingle(rawSeg: string, ctx: Ctx): Single {
   }
 }
 
+const SPECIAL_COMMANDS = new Set(["theme", "stats", "mcp", "workspace", "ws", "exit", "logout", "clear", "reset", "__CLEAR__", "__THEME__", "__STATS__", "__MCP__", "__WORKSPACE__", "__CLOSE_PANE__"]);
+
+const SYSTEM_COMMANDS = new Set(["help", "pwd", "whoami", "hostname", "id", "groups", "uname", "date", "uptime", "echo", "clear", "history", "ls", "cd", "tree", "neofetch", "df", "du", "free", "ps", "top", "htop", "sensors", "systemctl", "journalctl", "dmesg", "env", "export", "unset", "which", "man", "cowsay", "fortune", "yes"]);
+
+async function callTerminalExec(command: string, cwd: string): Promise<{ stdout: string; stderr: string; code: number; timedOut: boolean }> {
+  try {
+    const api = (window as any).deskflowAPI?.terminalAPI;
+    if (api?.exec) {
+      return await api.exec(command, cwd);
+    }
+  } catch { /* fallback */ }
+  return { stdout: '', stderr: 'terminal:exec not available', code: 1, timedOut: false };
+}
+
+function isSpecialCommand(raw: string): boolean {
+  const cmd = raw.trim().split(/\s*&&|\s*\|\|/)[0]?.trim().split('|')[0]?.trim().split(/\s+/)[0]?.toLowerCase();
+  if (!cmd) return false;
+  if (SPECIAL_COMMANDS.has(cmd)) return true;
+  if (cmd === 'sudo') {
+    const inner = raw.trim().slice(5).trim();
+    return inner ? isSpecialCommand(inner) : false;
+  }
+  return false;
+}
+
+export async function execShellReal(raw: string, cwd: string, env: Record<string, string> = {}): Promise<ExecResult> {
+  const t0 = performance.now();
+  const cmd = raw.trim();
+  const base: ExecResult = { lines: [], newCwd: cwd, exitCode: 0, durationMs: 4 };
+  if (!cmd) return base;
+
+  if (isSpecialCommand(cmd)) {
+    return { ...execShell(cmd, cwd, env), durationMs: Math.round(performance.now() - t0) };
+  }
+
+  const fullEnv = { HOME: "/home/user", USER: "user", SHELL: "/bin/zsh", TERM: "xterm-256color", PWD: cwd, ...env };
+  try {
+    const result = await callTerminalExec(cmd, cwd);
+    const stdout = result.stdout || '';
+    const stderr = result.stderr || '';
+    const exitCode = result.code ?? 0;
+    const durationMs = result.timedOut ? 30000 : Math.max(4, Math.round(performance.now() - t0));
+
+    const lines: ExecLine[] = [];
+    if (stdout) {
+      stdout.split('\n').forEach((text: string) => {
+        if (text) lines.push({ type: 'output', text });
+      });
+    }
+    if (stderr) {
+      stderr.split('\n').forEach((text: string) => {
+        if (text) lines.push({ type: 'error', text });
+      });
+    }
+    if (lines.length === 0 && exitCode === 0) {
+      lines.push({ type: 'success', text: `✓ executed · ${durationMs}ms` });
+    }
+    if (lines.length === 0 && exitCode !== 0) {
+      lines.push({ type: 'error', text: stderr || `exit ${exitCode}` });
+    }
+
+    return { lines, newCwd: cwd, exitCode, durationMs };
+  } catch (err: any) {
+    return { lines: [{ type: 'error', text: err?.message || 'terminal:exec failed' }], newCwd: cwd, exitCode: 1, durationMs: Math.round(performance.now() - t0) };
+  }
+}
+
 export function execShell(raw: string, cwd: string, env: Record<string, string> = {}, opts: ExecOpts = {}): ExecResult {
   const t0 = performance.now();
   const cmd = raw.trim();

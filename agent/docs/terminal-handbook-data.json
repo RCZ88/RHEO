@@ -1,0 +1,5467 @@
+{
+  "title": "~/handbook — the terminal, human-readable",
+  "subtitle": "a field guide, not a textbook",
+  "sections": [
+    {
+      "id": "start",
+      "number": "01",
+      "title": "Read the prompt",
+      "crumb": "01-prompt",
+      "why": "Before any command: understand what [cleme@fedora ~]$ is telling you.",
+      "commands": [
+        {
+          "section": "start",
+          "sectionTitle": "Read the prompt",
+          "sectionNum": "01",
+          "command": "man ls",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "The built-in manual. Every command has one.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "The built-in manual. Every command has one."
+            }
+          ],
+          "params": {
+            "base": "man",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "ls"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "start",
+          "sectionTitle": "Read the prompt",
+          "sectionNum": "01",
+          "command": "<command> --help",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "Short flag cheat-sheet for any command.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Short flag cheat-sheet for any command."
+            }
+          ],
+          "params": {
+            "base": "<command>",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "help",
+                "value": null
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "start",
+          "sectionTitle": "Read the prompt",
+          "sectionNum": "01",
+          "command": "Tab · ↑ · Ctrl+C",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "Tab",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "·"
+              },
+              {
+                "type": "literal",
+                "value": "↑"
+              },
+              {
+                "type": "literal",
+                "value": "·"
+              },
+              {
+                "type": "literal",
+                "value": "Ctrl+C"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "start",
+          "sectionTitle": "Read the prompt",
+          "sectionNum": "01",
+          "command": "history",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "Lists everything you've typed.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Lists everything you've typed."
+            }
+          ],
+          "params": {
+            "base": "history",
+            "subcommands": [],
+            "flags": [],
+            "args": [],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [
+        {
+          "headers": [
+            "Part",
+            "Meaning"
+          ],
+          "rows": [
+            [
+              "`cleme`",
+              "who you are"
+            ],
+            [
+              "`@fedora`",
+              "which machine"
+            ],
+            [
+              "`~`",
+              "where you are — `~` means your home folder"
+            ],
+            [
+              "`$`",
+              "normal user. A `#` means you are root — be careful"
+            ]
+          ]
+        }
+      ],
+      "preBlocks": []
+    },
+    {
+      "id": "move",
+      "number": "02",
+      "title": "Moving around",
+      "crumb": "02-navigation",
+      "why": "The terminal is always “standing” in exactly one folder. These commands move your feet.",
+      "commands": [
+        {
+          "section": "move",
+          "sectionTitle": "Moving around",
+          "sectionNum": "02",
+          "command": "pwd",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "Print where you are.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Print where you are."
+            }
+          ],
+          "params": {
+            "base": "pwd",
+            "subcommands": [],
+            "flags": [],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "move",
+          "sectionTitle": "Moving around",
+          "sectionNum": "02",
+          "command": "ls -lah",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "List files: all (including hidden), long format, human sizes (K/M/G).",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "List files: all (including hidden), long format, human sizes (K/M/G)."
+            }
+          ],
+          "params": {
+            "base": "ls",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "l",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "a",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "h",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "move",
+          "sectionTitle": "Moving around",
+          "sectionNum": "02",
+          "command": "cd Documents",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "Change folder. `..` = parent, `~` = home, `-` = where you just were.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Change folder. `..` = parent, `~` = home, `-` = where you just were."
+            }
+          ],
+          "params": {
+            "base": "cd",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "Documents"
+              }
+            ],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "rule of thumb",
+          "body": "Typing paths by hand invites typos. Type the first letters, hit Tab — the terminal fills the rest, including the trailing `/`."
+        }
+      ],
+      "tables": [
+        {
+          "headers": [
+            "Type",
+            "Example",
+            "Meaning"
+          ],
+          "rows": [
+            [
+              "Absolute",
+              "`/home/cleme/photos`",
+              "starts from `/` (the root). Works from anywhere."
+            ],
+            [
+              "Relative",
+              "`photos`",
+              "starts from where you're standing."
+            ]
+          ]
+        }
+      ],
+      "preBlocks": []
+    },
+    {
+      "id": "files",
+      "number": "03",
+      "title": "Files &amp; folders",
+      "crumb": "03-files",
+      "why": "Create, copy, move, delete. Copy and move are “safe-ish”; delete is forever.",
+      "commands": [
+        {
+          "section": "files",
+          "sectionTitle": "Files &amp; folders",
+          "sectionNum": "03",
+          "command": "mkdir -p projects/c/lesson1",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "mkdir",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "p",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "projects/c/lesson1"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "files",
+          "sectionTitle": "Files &amp; folders",
+          "sectionNum": "03",
+          "command": "touch notes.txt",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "touch",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "notes.txt"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "files",
+          "sectionTitle": "Files &amp; folders",
+          "sectionNum": "03",
+          "command": "cp -r folder/ backup/",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "Copy. `-r` = recursive, needed for folders. No undo, no trash — it overwrites silently.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Copy. `-r` = recursive, needed for folders. No undo, no trash — it overwrites silently."
+            }
+          ],
+          "params": {
+            "base": "cp",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "r",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "literal",
+                "value": "backup/"
+              },
+              {
+                "type": "path",
+                "value": "folder/"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "files",
+          "sectionTitle": "Files &amp; folders",
+          "sectionNum": "03",
+          "command": "mv old.txt new.txt",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "mv",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "old.txt"
+              },
+              {
+                "type": "path",
+                "value": "new.txt"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "files",
+          "sectionTitle": "Files &amp; folders",
+          "sectionNum": "03",
+          "command": "rm file.txt",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "Delete a file. `-r` deletes a folder and everything inside.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Delete a file. `-r` deletes a folder and everything inside."
+            }
+          ],
+          "params": {
+            "base": "rm",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "file.txt"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "files",
+          "sectionTitle": "Files &amp; folders",
+          "sectionNum": "03",
+          "command": "ln -s /real/path shortcut",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "ln",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "s",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "literal",
+                "value": "shortcut"
+              },
+              {
+                "type": "path",
+                "value": "/real/path"
+              }
+            ],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "safer habit",
+          "body": "`sudo dnf install trash-cli`, then use `trash-put file` — a real trash can with undo."
+        }
+      ],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "read",
+      "number": "04",
+      "title": "Reading &amp; finding",
+      "crumb": "04-reading",
+      "why": "Look inside files, and find the needle in a haystack of logs and code.",
+      "commands": [
+        {
+          "section": "read",
+          "sectionTitle": "Reading &amp; finding",
+          "sectionNum": "04",
+          "command": "cat file.txt",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "cat",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "file.txt"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "read",
+          "sectionTitle": "Reading &amp; finding",
+          "sectionNum": "04",
+          "command": "less bigfile.log",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "Read a big file page by page.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Read a big file page by page."
+            }
+          ],
+          "params": {
+            "base": "less",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "bigfile.log"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "read",
+          "sectionTitle": "Reading &amp; finding",
+          "sectionNum": "04",
+          "command": "head -n 20 file",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "head",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "n",
+                "value": "20",
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "literal",
+                "value": "file"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "read",
+          "sectionTitle": "Reading &amp; finding",
+          "sectionNum": "04",
+          "command": "grep -rni \"TODO\" ~/projects",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "Search text: recursive, case-insensitive, line numbers. The single most useful search tool that exists.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Search text: recursive, case-insensitive, line numbers. The single most useful search tool that exists."
+            }
+          ],
+          "params": {
+            "base": "grep",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "i",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "~/projects"
+              },
+              {
+                "type": "path",
+                "value": "\"TODO\""
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "read",
+          "sectionTitle": "Reading &amp; finding",
+          "sectionNum": "04",
+          "command": "find ~ -name \"*.c\" -mtime -7",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "Find files by name, type, date, size. `-mtime -7` = changed in the last 7 days.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Find files by name, type, date, size. `-mtime -7` = changed in the last 7 days."
+            }
+          ],
+          "params": {
+            "base": "find",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "e",
+                "value": "\"*.c\"",
+                "short": true
+              },
+              {
+                "flag": "m",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "t",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "i",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "m",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "e",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "7",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "special",
+                "value": "~"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "read",
+          "sectionTitle": "Reading &amp; finding",
+          "sectionNum": "04",
+          "command": "which gcc",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "Which program actually runs when you type a name.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Which program actually runs when you type a name."
+            }
+          ],
+          "params": {
+            "base": "which",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "gcc"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "read",
+          "sectionTitle": "Reading &amp; finding",
+          "sectionNum": "04",
+          "command": "wc -l file",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "wc",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "l",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "file"
+              }
+            ],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "grep vs find, one line",
+          "body": "`grep` searches inside files (by content). `find` searches for files (by name/properties)."
+        }
+      ],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "perm",
+      "number": "05",
+      "title": "Permissions &amp; sudo",
+      "crumb": "05-permissions",
+      "why": "Every file has an owner and three permission slots. “Permission denied” stops being scary once you can read this line:",
+      "commands": [
+        {
+          "section": "perm",
+          "sectionTitle": "Permissions &amp; sudo",
+          "sectionNum": "05",
+          "command": "chmod +x script.sh",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "chmod",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "+x"
+              },
+              {
+                "type": "path",
+                "value": "script.sh"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "perm",
+          "sectionTitle": "Permissions &amp; sudo",
+          "sectionNum": "05",
+          "command": "sudo <command>",
+          "isRoot": true,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "sudo",
+              "label": "sudo"
+            },
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "Run one command as admin. Asks for your password, remembers it for a few minutes.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Run one command as admin. Asks for your password, remembers it for a few minutes."
+            }
+          ],
+          "params": {
+            "base": "<command>",
+            "subcommands": [],
+            "flags": [],
+            "args": [],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        },
+        {
+          "section": "perm",
+          "sectionTitle": "Permissions &amp; sudo",
+          "sectionNum": "05",
+          "command": "whoami",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "whoami",
+            "subcommands": [],
+            "flags": [],
+            "args": [],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [
+        {
+          "headers": [
+            "Slot",
+            "Letters",
+            "Numbers",
+            "Means"
+          ],
+          "rows": [
+            [
+              "owner (you)",
+              "rwx",
+              "7",
+              "read, write, execute"
+            ],
+            [
+              "group",
+              "r-x",
+              "5",
+              "read + execute"
+            ],
+            [
+              "everyone",
+              "r--",
+              "4",
+              "read only"
+            ]
+          ]
+        }
+      ],
+      "preBlocks": [
+        "-rwxr-xr-- cleme cleme 4096 notes.txt"
+      ]
+    },
+    {
+      "id": "edit",
+      "number": "06",
+      "title": "Text editors — your terminal IDE",
+      "crumb": "06-editors",
+      "why": "Two editors matter. Nano is a car with training wheels. Vim is a jet — hostile for 2 days, fast forever. Learn nano today; learn vim when curious.",
+      "commands": [
+        {
+          "section": "edit",
+          "sectionTitle": "Text editors — your terminal IDE",
+          "sectionNum": "06",
+          "command": "nano file.txt",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "nano",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "file.txt"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "edit",
+          "sectionTitle": "Text editors — your terminal IDE",
+          "sectionNum": "06",
+          "command": "vimtutor",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "vimtutor",
+            "subcommands": [],
+            "flags": [],
+            "args": [],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "stuck in vim?",
+          "body": "Esc, then type `:q!`, Enter. The escape hatch — quits without saving."
+        }
+      ],
+      "tables": [
+        {
+          "headers": [
+            "Keys",
+            "Does"
+          ],
+          "rows": [
+            [
+              "`Ctrl+O` then `Enter`",
+              "save"
+            ],
+            [
+              "`Ctrl+X`",
+              "quit (asks to save if dirty)"
+            ],
+            [
+              "`Ctrl+W`",
+              "search"
+            ],
+            [
+              "`Ctrl+K` / `Ctrl+U`",
+              "cut line / paste"
+            ]
+          ]
+        },
+        {
+          "headers": [
+            "In Normal mode",
+            "Does"
+          ],
+          "rows": [
+            [
+              "`i` / `Esc`",
+              "insert text / back to command mode"
+            ],
+            [
+              "`:w` · `:q!` · `:wq`",
+              "save · quit without saving · save & quit"
+            ],
+            [
+              "`dd` / `yy` / `p`",
+              "delete line / copy line / paste"
+            ],
+            [
+              "`/word`",
+              "search"
+            ]
+          ]
+        }
+      ],
+      "preBlocks": []
+    },
+    {
+      "id": "open",
+      "number": "07",
+      "title": "Opening things",
+      "crumb": "07-open",
+      "why": "Sometimes the right tool for a file is a GUI app, launched from the terminal.",
+      "commands": [
+        {
+          "section": "open",
+          "sectionTitle": "Opening things",
+          "sectionNum": "07",
+          "command": "xdg-open report.pdf",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "xdg-open",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "report.pdf"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "open",
+          "sectionTitle": "Opening things",
+          "sectionNum": "07",
+          "command": "xdg-open .",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "xdg-open",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "."
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "open",
+          "sectionTitle": "Opening things",
+          "sectionNum": "07",
+          "command": "kate file.txt",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "kate",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "file.txt"
+              }
+            ],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "pkg",
+      "number": "08",
+      "title": "Installing software",
+      "crumb": "08-packages",
+      "why": "Fedora uses `dnf` for system packages. Flatpak and Snap are separate app stores on top.",
+      "commands": [
+        {
+          "section": "pkg",
+          "sectionTitle": "Installing software",
+          "sectionNum": "08",
+          "command": "dnf search htop",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "dnf",
+            "subcommands": [
+              "search"
+            ],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "htop"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "pkg",
+          "sectionTitle": "Installing software",
+          "sectionNum": "08",
+          "command": "sudo dnf install htop",
+          "isRoot": true,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "sudo",
+              "label": "sudo"
+            },
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "dnf",
+            "subcommands": [
+              "install"
+            ],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "htop"
+              }
+            ],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        },
+        {
+          "section": "pkg",
+          "sectionTitle": "Installing software",
+          "sectionNum": "08",
+          "command": "sudo dnf remove htop",
+          "isRoot": true,
+          "depth": "sudo",
+          "badges": [
+            {
+              "type": "sudo",
+              "label": "sudo"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "dnf",
+            "subcommands": [
+              "remove"
+            ],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "htop"
+              }
+            ],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        },
+        {
+          "section": "pkg",
+          "sectionTitle": "Installing software",
+          "sectionNum": "08",
+          "command": "rpm -q htop",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "rpm",
+            "subcommands": [
+              "-q"
+            ],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "htop"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "pkg",
+          "sectionTitle": "Installing software",
+          "sectionNum": "08",
+          "command": "flatpak install flathub com.spotify.Client",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "flatpak",
+            "subcommands": [
+              "install"
+            ],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "flathub"
+              },
+              {
+                "type": "path",
+                "value": "com.spotify.Client"
+              }
+            ],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "sys",
+      "number": "09",
+      "title": "System health",
+      "crumb": "09-health",
+      "why": "“Why is my laptop slow / full / hot?” Answer it in four commands.",
+      "commands": [
+        {
+          "section": "sys",
+          "sectionTitle": "System health",
+          "sectionNum": "09",
+          "command": "df -h",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "Free space per filesystem. `/` filling up = system problems.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Free space per filesystem. `/` filling up = system problems."
+            }
+          ],
+          "params": {
+            "base": "df",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "h",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "sys",
+          "sectionTitle": "System health",
+          "sectionNum": "09",
+          "command": "du -xhd1 ~/ 2>/dev/null | sort -h",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "Sizes of folders directly inside `~`, biggest last. Re-run inside any big folder to drill down. `2>/dev/null` hides “permission denied” noise.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Sizes of folders directly inside `~`, biggest last. Re-run inside any big folder to drill down. `2>/dev/null` hides “permission denied” noise."
+            }
+          ],
+          "params": {
+            "base": "du",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "1",
+                "value": "~/",
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": "sort -h"
+          }
+        },
+        {
+          "section": "sys",
+          "sectionTitle": "System health",
+          "sectionNum": "09",
+          "command": "free -h",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "free",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "h",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "sys",
+          "sectionTitle": "System health",
+          "sectionNum": "09",
+          "command": "pgrep -a firefox",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "pgrep",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "a",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "firefox"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "sys",
+          "sectionTitle": "System health",
+          "sectionNum": "09",
+          "command": "uname -r",
+          "isRoot": false,
+          "depth": "core",
+          "badges": [
+            {
+              "type": "core",
+              "label": "core"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "uname",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "r",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "net",
+      "number": "10",
+      "title": "Network quickies",
+      "crumb": "10-network",
+      "why": "",
+      "commands": [
+        {
+          "section": "net",
+          "sectionTitle": "Network quickies",
+          "sectionNum": "10",
+          "command": "ping -c 4 google.com",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "ping",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "c",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "google.com"
+              },
+              {
+                "type": "path",
+                "value": "4"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "net",
+          "sectionTitle": "Network quickies",
+          "sectionNum": "10",
+          "command": "ip a",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "ip",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "a"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "net",
+          "sectionTitle": "Network quickies",
+          "sectionNum": "10",
+          "command": "curl -I https://site.com",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "curl",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "I",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "https://site.com"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "net",
+          "sectionTitle": "Network quickies",
+          "sectionNum": "10",
+          "command": "ss -tulpn",
+          "isRoot": true,
+          "depth": "sudo",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            },
+            {
+              "type": "sudo",
+              "label": "sudo"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "ss",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "t",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "u",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "l",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "p",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "n",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "code",
+      "number": "11",
+      "title": "Coding in the terminal",
+      "crumb": "11-coding",
+      "why": "No IDE needed. Editor + compiler + runner, all text. Same pattern for every language: write → compile/build → run.",
+      "commands": [
+        {
+          "section": "code",
+          "sectionTitle": "Coding in the terminal",
+          "sectionNum": "11",
+          "command": "gcc main.c utils.c -o app",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "gcc",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "o",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "main.c"
+              },
+              {
+                "type": "path",
+                "value": "utils.c"
+              },
+              {
+                "type": "path",
+                "value": "app"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "code",
+          "sectionTitle": "Coding in the terminal",
+          "sectionNum": "11",
+          "command": "sudo dnf install gcc",
+          "isRoot": true,
+          "depth": "sudo",
+          "badges": [
+            {
+              "type": "sudo",
+              "label": "sudo"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "dnf",
+            "subcommands": [
+              "install"
+            ],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "gcc"
+              }
+            ],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        },
+        {
+          "section": "code",
+          "sectionTitle": "Coding in the terminal",
+          "sectionNum": "11",
+          "command": "gdb ./hello",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "gdb",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "./hello"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "code",
+          "sectionTitle": "Coding in the terminal",
+          "sectionNum": "11",
+          "command": "python3 -m venv .venv && source .venv/bin/activate",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "python3",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "m",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": ".venv"
+              },
+              {
+                "type": "literal",
+                "value": "source"
+              },
+              {
+                "type": "path",
+                "value": ".venv/bin/activate"
+              },
+              {
+                "type": "path",
+                "value": "venv"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "code",
+          "sectionTitle": "Coding in the terminal",
+          "sectionNum": "11",
+          "command": "npm ci",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "npm",
+            "subcommands": [
+              "ci"
+            ],
+            "flags": [],
+            "args": [],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "why ./hello and not just hello?",
+          "body": "The shell only searches the folders in your `PATH` (system bin folders) — for safety, your current folder is not in it. `./` says “the program right here”."
+        },
+        {
+          "type": "tip",
+          "title": "terminal editor as your C IDE",
+          "body": "Write in `vim` or `nano`, compile with `gcc`, split the screen with `tmux` (`sudo dnf install tmux`) to see code and output side by side. That's the whole “IDE”."
+        }
+      ],
+      "tables": [
+        {
+          "headers": [
+            "gcc flag",
+            "Why you'd want it"
+          ],
+          "rows": [
+            [
+              "`-Wall -Wextra`",
+              "all warnings on — meets the bugs before they bite"
+            ],
+            [
+              "`-g`",
+              "debug info, lets gdb show line numbers"
+            ],
+            [
+              "`-O2`",
+              "optimized build for release"
+            ],
+            [
+              "`-lm`",
+              "link the math library (`sqrt`, `pow`, …)"
+            ]
+          ]
+        },
+        {
+          "headers": [
+            "Language",
+            "Write",
+            "Run"
+          ],
+          "rows": [
+            [
+              "Python",
+              "`nano app.py`",
+              "`python3 app.py`"
+            ],
+            [
+              "JavaScript",
+              "`nano app.js`",
+              "`node app.js`"
+            ],
+            [
+              "Java",
+              "`nano App.java`",
+              "`javac App.java` → `java App`"
+            ],
+            [
+              "Rust",
+              "`nano main.rs`",
+              "`rustc main.rs` → `./main`"
+            ],
+            [
+              "C++",
+              "`nano app.cpp`",
+              "`g++ app.cpp -o app` → `./app`"
+            ]
+          ]
+        }
+      ],
+      "preBlocks": [
+        "# 1. write the code nano hello.c # 2. compile: source file -> executable named \"hello\" gcc hello.c -o hello # 3. run it. The ./ is required (see below) ./hello",
+        "# Makefile — note: tabs, not spaces, before gcc app: main.c utils.c gcc -Wall main.c utils.c -o app # then just: make ./app"
+      ]
+    },
+    {
+      "id": "systemd",
+      "number": "12",
+      "title": "Services &amp; logs",
+      "crumb": "12-systemd",
+      "why": "Modern Linux is run by systemd. Two tools run the show: `systemctl` controls services, `journalctl` reads their logs.",
+      "commands": [
+        {
+          "section": "systemd",
+          "sectionTitle": "Services &amp; logs",
+          "sectionNum": "12",
+          "command": "journalctl -b -1 | grep -Ei \"error|fail|suspend\"",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "journalctl",
+            "subcommands": [
+              "-b"
+            ],
+            "flags": [
+              {
+                "flag": "1",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": "suspend\""
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "the distinction that prevents disasters",
+          "body": "`systemctl` = system-wide services (network, display manager). `systemctl --user` = your session's services (KDE, apps). Desktop problems are usually user services — no sudo."
+        }
+      ],
+      "tables": [
+        {
+          "headers": [
+            "Command",
+            "Does"
+          ],
+          "rows": [
+            [
+              "`systemctl status <svc>`",
+              "is it running? recent errors? (no sudo needed)"
+            ],
+            [
+              "`sudo systemctl restart <svc>`",
+              "stop + start it"
+            ],
+            [
+              "`sudo systemctl enable <svc>`",
+              "start automatically at boot"
+            ],
+            [
+              "`systemctl --user status <svc>`",
+              "same, but for your session"
+            ]
+          ]
+        },
+        {
+          "headers": [
+            "journalctl",
+            "Reads"
+          ],
+          "rows": [
+            [
+              "`journalctl -b`",
+              "logs since this boot"
+            ],
+            [
+              "`journalctl -b -1`",
+              "previous boot — golden after a crash/forced shutdown"
+            ],
+            [
+              "`journalctl -b -1 -k`",
+              "previous boot, kernel messages only"
+            ],
+            [
+              "`journalctl --user -b -u <svc>`",
+              "one user service, current boot"
+            ],
+            [
+              "`journalctl -f`",
+              "follow live, like `tail -f`"
+            ]
+          ]
+        }
+      ],
+      "preBlocks": []
+    },
+    {
+      "id": "time",
+      "number": "13",
+      "title": "Clock &amp; time",
+      "crumb": "13-time",
+      "why": "A wrong clock breaks logins, TLS certificates and tokens while your timezone looks perfectly fine. One command diagnoses it.",
+      "commands": [
+        {
+          "section": "time",
+          "sectionTitle": "Clock &amp; time",
+          "sectionNum": "13",
+          "command": "timedatectl status",
+          "isRoot": false,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "Everything at once: system clock, RTC (motherboard clock), timezone, NTP state.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Everything at once: system clock, RTC (motherboard clock), timezone, NTP state."
+            }
+          ],
+          "params": {
+            "base": "timedatectl",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "status"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "time",
+          "sectionTitle": "Clock &amp; time",
+          "sectionNum": "13",
+          "command": "sudo timedatectl set-ntp true",
+          "isRoot": true,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "sudo",
+              "label": "sudo"
+            },
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "timedatectl",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "set-ntp"
+              },
+              {
+                "type": "literal",
+                "value": "true"
+              }
+            ],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        },
+        {
+          "section": "time",
+          "sectionTitle": "Clock &amp; time",
+          "sectionNum": "13",
+          "command": "date +%s",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "date",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "+%s"
+              }
+            ],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "gotcha",
+          "body": "`NTP service: active` only means the sync daemon runs — not that it succeeded. The line that matters is `System clock synchronized: yes`."
+        }
+      ],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "gui",
+      "number": "14",
+      "title": "When the GUI dies",
+      "crumb": "14-gui-rescue",
+      "why": "Black screen, dropped to a TTY (full-screen text login)? Don't reboot yet — the system is fine, the graphical layer just fell over.",
+      "commands": [
+        {
+          "section": "gui",
+          "sectionTitle": "When the GUI dies",
+          "sectionNum": "14",
+          "command": "Ctrl + Alt + F3",
+          "isRoot": false,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "Switches between virtual terminals. Your GUI sits on one TTY; F3 gives you a spare one to work from.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Switches between virtual terminals. Your GUI sits on one TTY; F3 gives you a spare one to work from."
+            }
+          ],
+          "params": {
+            "base": "Ctrl",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "+"
+              },
+              {
+                "type": "literal",
+                "value": "Alt"
+              },
+              {
+                "type": "literal",
+                "value": "+"
+              },
+              {
+                "type": "literal",
+                "value": "F3"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "gui",
+          "sectionTitle": "When the GUI dies",
+          "sectionNum": "14",
+          "command": "loginctl list-sessions",
+          "isRoot": false,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "loginctl",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "list-sessions"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "gui",
+          "sectionTitle": "When the GUI dies",
+          "sectionNum": "14",
+          "command": "systemctl status display-manager --no-pager",
+          "isRoot": false,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "systemctl",
+            "subcommands": [
+              "status"
+            ],
+            "flags": [
+              {
+                "flag": "no-pager",
+                "value": null
+              }
+            ],
+            "args": [
+              {
+                "type": "literal",
+                "value": "display-manager"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "gui",
+          "sectionTitle": "When the GUI dies",
+          "sectionNum": "14",
+          "command": "sudo systemctl restart display-manager",
+          "isRoot": true,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "sudo",
+              "label": "sudo"
+            },
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "systemctl",
+            "subcommands": [
+              "restart"
+            ],
+            "flags": [],
+            "args": [
+              {
+                "type": "literal",
+                "value": "display-manager"
+              }
+            ],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "snap",
+      "number": "15",
+      "title": "Snap apps &amp; KWallet",
+      "crumb": "15-kwallet",
+      "why": "Snap apps are sandboxed, so they ask KDE's KWallet for secrets — and KWallet asks you for its password. Repeatedly.",
+      "commands": [
+        {
+          "section": "snap",
+          "sectionTitle": "Snap apps &amp; KWallet",
+          "sectionNum": "15",
+          "command": "kwalletmanager",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "kwalletmanager",
+            "subcommands": [],
+            "flags": [],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "snap",
+          "sectionTitle": "Snap apps &amp; KWallet",
+          "sectionNum": "15",
+          "command": "busctl --user list",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "busctl",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "user",
+                "value": "list"
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "diagnose the layer, not the app",
+          "body": "The chain is `app → D-Bus → your session's credential service → KWallet → unlock prompt`. The prompt proves the chain reached KWallet — not that the app or Snap is broken."
+        },
+        {
+          "type": "danger",
+          "title": "no sudo here, ever",
+          "body": "KWallet and KDE session services belong to your user. `sudo`-ing them breaks things and fixes nothing."
+        }
+      ],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "suspend",
+      "number": "16",
+      "title": "Black screen after suspend",
+      "crumb": "16-suspend",
+      "why": "Suspend involves the kernel, GPU driver, firmware and the desktop. A machine can resume at kernel level while the screen stays black — so read the log before changing anything.",
+      "commands": [
+        {
+          "section": "suspend",
+          "sectionTitle": "Black screen after suspend",
+          "sectionNum": "16",
+          "command": "systemctl suspend",
+          "isRoot": false,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "systemctl",
+            "subcommands": [
+              "suspend"
+            ],
+            "flags": [],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "suspend",
+          "sectionTitle": "Black screen after suspend",
+          "sectionNum": "16",
+          "command": "journalctl -b -1 -k | grep -Ei \"PM:|i915|drm|ACPI|suspend|resume\"",
+          "isRoot": false,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "journalctl",
+            "subcommands": [
+              "-b"
+            ],
+            "flags": [
+              {
+                "flag": "1",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "k",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": "resume\""
+          }
+        },
+        {
+          "section": "suspend",
+          "sectionTitle": "Black screen after suspend",
+          "sectionNum": "16",
+          "command": "uname -r",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "uname",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "r",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "suspend",
+          "sectionTitle": "Black screen after suspend",
+          "sectionNum": "16",
+          "command": "cat /sys/power/mem_sleep",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "cat",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "/sys/power/mem_sleep"
+              }
+            ],
+            "pipe_to": null
+          }
+        }
+      ],
+      "callouts": [
+        {
+          "type": "tip",
+          "title": "gotchas that waste afternoons",
+          "body": "NVIDIA fixes don't apply if Intel drives your screen (check which GPU owns the display first). ACPI errors near suspend = firmware talking, not necessarily the cause. Don't touch GRUB or kernel parameters before the log names the guilty subsystem."
+        }
+      ],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "disks",
+      "number": "17",
+      "title": "NTFS cleanup &amp; disks",
+      "crumb": "17-disks",
+      "why": "Cleaning a Windows partition from Fedora, safely: look → identify → verify → delete the exact target → verify.",
+      "commands": [
+        {
+          "section": "disks",
+          "sectionTitle": "NTFS cleanup &amp; disks",
+          "sectionNum": "17",
+          "command": "lsblk -o NAME,SIZE,FSTYPE,FSAVAIL,FSUSE%,MOUNTPOINTS",
+          "isRoot": false,
+          "depth": "daily",
+          "badges": [
+            {
+              "type": "daily",
+              "label": "daily"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "lsblk",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "o",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "NAME,SIZE,FSTYPE,FSAVAIL,FSUSE%,MOUNTPOINTS"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "disks",
+          "sectionTitle": "NTFS cleanup &amp; disks",
+          "sectionNum": "17",
+          "command": "sudo parted /dev/nvme0n1 print free",
+          "isRoot": true,
+          "depth": "sudo",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            },
+            {
+              "type": "sudo",
+              "label": "sudo"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "parted",
+            "subcommands": [],
+            "flags": [],
+            "args": [
+              {
+                "type": "path",
+                "value": "/dev/nvme0n1"
+              },
+              {
+                "type": "literal",
+                "value": "print"
+              },
+              {
+                "type": "literal",
+                "value": "free"
+              }
+            ],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        },
+        {
+          "section": "disks",
+          "sectionTitle": "NTFS cleanup &amp; disks",
+          "sectionNum": "17",
+          "command": "find /run/media/cleme/WinSSD -maxdepth 2 -type d -iname \"*pycharm*\" -print",
+          "isRoot": false,
+          "depth": "power",
+          "badges": [
+            {
+              "type": "power",
+              "label": "power"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "find",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "h",
+                "value": "2",
+                "short": true
+              },
+              {
+                "flag": "e",
+                "value": "d",
+                "short": true
+              },
+              {
+                "flag": "e",
+                "value": "\"*pycharm*\"",
+                "short": true
+              },
+              {
+                "flag": "p",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "r",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "i",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "n",
+                "value": null,
+                "short": true
+              },
+              {
+                "flag": "t",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "/run/media/cleme/WinSSD"
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "disks",
+          "sectionTitle": "NTFS cleanup &amp; disks",
+          "sectionNum": "17",
+          "command": "ls -lah \"/path/you/found\"",
+          "isRoot": true,
+          "depth": "rescue",
+          "badges": [
+            {
+              "type": "sudo",
+              "label": "sudo"
+            },
+            {
+              "type": "rescue",
+              "label": "rescue"
+            }
+          ],
+          "description": "Look first, delete the exact directory second, verify with `ls`/`du` third.",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [
+            {
+              "tag": "does",
+              "value": "Look first, delete the exact directory second, verify with `ls`/`du` third."
+            }
+          ],
+          "params": {
+            "base": "ls",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "h",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "\"/path/you/found\""
+              }
+            ],
+            "pipe_to": null
+          }
+        },
+        {
+          "section": "disks",
+          "sectionTitle": "NTFS cleanup &amp; disks",
+          "sectionNum": "17",
+          "command": "sudo ntfsfix -n /dev/nvme0n1p3",
+          "isRoot": true,
+          "depth": "sudo",
+          "badges": [
+            {
+              "type": "rescue",
+              "label": "rescue"
+            },
+            {
+              "type": "sudo",
+              "label": "sudo"
+            }
+          ],
+          "description": "",
+          "whenToUse": "",
+          "gotchas": [],
+          "notes": [],
+          "rows": [],
+          "params": {
+            "base": "ntfsfix",
+            "subcommands": [],
+            "flags": [
+              {
+                "flag": "n",
+                "value": null,
+                "short": true
+              }
+            ],
+            "args": [
+              {
+                "type": "path",
+                "value": "/dev/nvme0n1p3"
+              }
+            ],
+            "pipe_to": null,
+            "is_sudo": true
+          }
+        }
+      ],
+      "callouts": [],
+      "tables": [],
+      "preBlocks": []
+    },
+    {
+      "id": "danger",
+      "number": "18",
+      "title": "Danger zone",
+      "crumb": "18-danger",
+      "why": "Commands that can wreck a system in one keystroke. Know them to avoid them — not to use them.",
+      "commands": [],
+      "callouts": [
+        {
+          "type": "danger",
+          "title": "sudo rm -rf /",
+          "body": "`rm -rf` is irreversible: no trash, no undo, no “are you sure”. A typo in the path has destroyed systems. Mitigation: type the path, Tab-complete it, `ls` it first — only then prefix with `rm -rf`."
+        },
+        {
+          "type": "danger",
+          "title": "dd if=... of=/dev/sdX",
+          "body": "Writes raw bytes straight to a disk, bypassing every safeguard. One wrong letter in `of=` = wiped drive. Triple-check with `lsblk` before even thinking about it."
+        },
+        {
+          "type": "danger",
+          "title": "curl ... | bash",
+          "body": "Runs whatever a website hands you, as you. Read the script first, or at least know the source."
+        },
+        {
+          "type": "tip",
+          "title": "the mindset that keeps systems alive",
+          "body": "Diagnose the layer before changing it → change one thing → verify → repeat. Read-only commands first (`status`, `ls`, `journalctl`), mutating commands last. sudo is the last resort, not the first tool."
+        }
+      ],
+      "tables": [],
+      "preBlocks": []
+    }
+  ],
+  "commands": [
+    {
+      "section": "start",
+      "sectionTitle": "Read the prompt",
+      "sectionNum": "01",
+      "command": "man ls",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "The built-in manual. Every command has one.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "The built-in manual. Every command has one."
+        }
+      ],
+      "params": {
+        "base": "man",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "ls"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "start",
+      "sectionTitle": "Read the prompt",
+      "sectionNum": "01",
+      "command": "<command> --help",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "Short flag cheat-sheet for any command.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Short flag cheat-sheet for any command."
+        }
+      ],
+      "params": {
+        "base": "<command>",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "help",
+            "value": null
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "start",
+      "sectionTitle": "Read the prompt",
+      "sectionNum": "01",
+      "command": "Tab · ↑ · Ctrl+C",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "Tab",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "·"
+          },
+          {
+            "type": "literal",
+            "value": "↑"
+          },
+          {
+            "type": "literal",
+            "value": "·"
+          },
+          {
+            "type": "literal",
+            "value": "Ctrl+C"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "start",
+      "sectionTitle": "Read the prompt",
+      "sectionNum": "01",
+      "command": "history",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "Lists everything you've typed.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Lists everything you've typed."
+        }
+      ],
+      "params": {
+        "base": "history",
+        "subcommands": [],
+        "flags": [],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "move",
+      "sectionTitle": "Moving around",
+      "sectionNum": "02",
+      "command": "pwd",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "Print where you are.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Print where you are."
+        }
+      ],
+      "params": {
+        "base": "pwd",
+        "subcommands": [],
+        "flags": [],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "move",
+      "sectionTitle": "Moving around",
+      "sectionNum": "02",
+      "command": "ls -lah",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "List files: all (including hidden), long format, human sizes (K/M/G).",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "List files: all (including hidden), long format, human sizes (K/M/G)."
+        }
+      ],
+      "params": {
+        "base": "ls",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "l",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "a",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "h",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "move",
+      "sectionTitle": "Moving around",
+      "sectionNum": "02",
+      "command": "cd Documents",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "Change folder. `..` = parent, `~` = home, `-` = where you just were.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Change folder. `..` = parent, `~` = home, `-` = where you just were."
+        }
+      ],
+      "params": {
+        "base": "cd",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "Documents"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "files",
+      "sectionTitle": "Files &amp; folders",
+      "sectionNum": "03",
+      "command": "mkdir -p projects/c/lesson1",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "mkdir",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "p",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "projects/c/lesson1"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "files",
+      "sectionTitle": "Files &amp; folders",
+      "sectionNum": "03",
+      "command": "touch notes.txt",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "touch",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "notes.txt"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "files",
+      "sectionTitle": "Files &amp; folders",
+      "sectionNum": "03",
+      "command": "cp -r folder/ backup/",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "Copy. `-r` = recursive, needed for folders. No undo, no trash — it overwrites silently.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Copy. `-r` = recursive, needed for folders. No undo, no trash — it overwrites silently."
+        }
+      ],
+      "params": {
+        "base": "cp",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "r",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "literal",
+            "value": "backup/"
+          },
+          {
+            "type": "path",
+            "value": "folder/"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "files",
+      "sectionTitle": "Files &amp; folders",
+      "sectionNum": "03",
+      "command": "mv old.txt new.txt",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "mv",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "old.txt"
+          },
+          {
+            "type": "path",
+            "value": "new.txt"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "files",
+      "sectionTitle": "Files &amp; folders",
+      "sectionNum": "03",
+      "command": "rm file.txt",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "Delete a file. `-r` deletes a folder and everything inside.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Delete a file. `-r` deletes a folder and everything inside."
+        }
+      ],
+      "params": {
+        "base": "rm",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "file.txt"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "files",
+      "sectionTitle": "Files &amp; folders",
+      "sectionNum": "03",
+      "command": "ln -s /real/path shortcut",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "ln",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "s",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "literal",
+            "value": "shortcut"
+          },
+          {
+            "type": "path",
+            "value": "/real/path"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "read",
+      "sectionTitle": "Reading &amp; finding",
+      "sectionNum": "04",
+      "command": "cat file.txt",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "cat",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "file.txt"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "read",
+      "sectionTitle": "Reading &amp; finding",
+      "sectionNum": "04",
+      "command": "less bigfile.log",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "Read a big file page by page.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Read a big file page by page."
+        }
+      ],
+      "params": {
+        "base": "less",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "bigfile.log"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "read",
+      "sectionTitle": "Reading &amp; finding",
+      "sectionNum": "04",
+      "command": "head -n 20 file",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "head",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "n",
+            "value": "20",
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "literal",
+            "value": "file"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "read",
+      "sectionTitle": "Reading &amp; finding",
+      "sectionNum": "04",
+      "command": "grep -rni \"TODO\" ~/projects",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "Search text: recursive, case-insensitive, line numbers. The single most useful search tool that exists.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Search text: recursive, case-insensitive, line numbers. The single most useful search tool that exists."
+        }
+      ],
+      "params": {
+        "base": "grep",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "i",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "~/projects"
+          },
+          {
+            "type": "path",
+            "value": "\"TODO\""
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "read",
+      "sectionTitle": "Reading &amp; finding",
+      "sectionNum": "04",
+      "command": "find ~ -name \"*.c\" -mtime -7",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "Find files by name, type, date, size. `-mtime -7` = changed in the last 7 days.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Find files by name, type, date, size. `-mtime -7` = changed in the last 7 days."
+        }
+      ],
+      "params": {
+        "base": "find",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "e",
+            "value": "\"*.c\"",
+            "short": true
+          },
+          {
+            "flag": "m",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "t",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "i",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "m",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "e",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "7",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "special",
+            "value": "~"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "read",
+      "sectionTitle": "Reading &amp; finding",
+      "sectionNum": "04",
+      "command": "which gcc",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "Which program actually runs when you type a name.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Which program actually runs when you type a name."
+        }
+      ],
+      "params": {
+        "base": "which",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "gcc"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "read",
+      "sectionTitle": "Reading &amp; finding",
+      "sectionNum": "04",
+      "command": "wc -l file",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "wc",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "l",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "file"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "perm",
+      "sectionTitle": "Permissions &amp; sudo",
+      "sectionNum": "05",
+      "command": "chmod +x script.sh",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "chmod",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "+x"
+          },
+          {
+            "type": "path",
+            "value": "script.sh"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "perm",
+      "sectionTitle": "Permissions &amp; sudo",
+      "sectionNum": "05",
+      "command": "sudo <command>",
+      "isRoot": true,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "sudo",
+          "label": "sudo"
+        },
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "Run one command as admin. Asks for your password, remembers it for a few minutes.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Run one command as admin. Asks for your password, remembers it for a few minutes."
+        }
+      ],
+      "params": {
+        "base": "<command>",
+        "subcommands": [],
+        "flags": [],
+        "args": [],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    },
+    {
+      "section": "perm",
+      "sectionTitle": "Permissions &amp; sudo",
+      "sectionNum": "05",
+      "command": "whoami",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "whoami",
+        "subcommands": [],
+        "flags": [],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "edit",
+      "sectionTitle": "Text editors — your terminal IDE",
+      "sectionNum": "06",
+      "command": "nano file.txt",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "nano",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "file.txt"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "edit",
+      "sectionTitle": "Text editors — your terminal IDE",
+      "sectionNum": "06",
+      "command": "vimtutor",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "vimtutor",
+        "subcommands": [],
+        "flags": [],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "open",
+      "sectionTitle": "Opening things",
+      "sectionNum": "07",
+      "command": "xdg-open report.pdf",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "xdg-open",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "report.pdf"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "open",
+      "sectionTitle": "Opening things",
+      "sectionNum": "07",
+      "command": "xdg-open .",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "xdg-open",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "."
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "open",
+      "sectionTitle": "Opening things",
+      "sectionNum": "07",
+      "command": "kate file.txt",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "kate",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "file.txt"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "pkg",
+      "sectionTitle": "Installing software",
+      "sectionNum": "08",
+      "command": "dnf search htop",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "dnf",
+        "subcommands": [
+          "search"
+        ],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "htop"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "pkg",
+      "sectionTitle": "Installing software",
+      "sectionNum": "08",
+      "command": "sudo dnf install htop",
+      "isRoot": true,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "sudo",
+          "label": "sudo"
+        },
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "dnf",
+        "subcommands": [
+          "install"
+        ],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "htop"
+          }
+        ],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    },
+    {
+      "section": "pkg",
+      "sectionTitle": "Installing software",
+      "sectionNum": "08",
+      "command": "sudo dnf remove htop",
+      "isRoot": true,
+      "depth": "sudo",
+      "badges": [
+        {
+          "type": "sudo",
+          "label": "sudo"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "dnf",
+        "subcommands": [
+          "remove"
+        ],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "htop"
+          }
+        ],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    },
+    {
+      "section": "pkg",
+      "sectionTitle": "Installing software",
+      "sectionNum": "08",
+      "command": "rpm -q htop",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "rpm",
+        "subcommands": [
+          "-q"
+        ],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "htop"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "pkg",
+      "sectionTitle": "Installing software",
+      "sectionNum": "08",
+      "command": "flatpak install flathub com.spotify.Client",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "flatpak",
+        "subcommands": [
+          "install"
+        ],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "flathub"
+          },
+          {
+            "type": "path",
+            "value": "com.spotify.Client"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "sys",
+      "sectionTitle": "System health",
+      "sectionNum": "09",
+      "command": "df -h",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "Free space per filesystem. `/` filling up = system problems.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Free space per filesystem. `/` filling up = system problems."
+        }
+      ],
+      "params": {
+        "base": "df",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "h",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "sys",
+      "sectionTitle": "System health",
+      "sectionNum": "09",
+      "command": "du -xhd1 ~/ 2>/dev/null | sort -h",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "Sizes of folders directly inside `~`, biggest last. Re-run inside any big folder to drill down. `2>/dev/null` hides “permission denied” noise.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Sizes of folders directly inside `~`, biggest last. Re-run inside any big folder to drill down. `2>/dev/null` hides “permission denied” noise."
+        }
+      ],
+      "params": {
+        "base": "du",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "1",
+            "value": "~/",
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": "sort -h"
+      }
+    },
+    {
+      "section": "sys",
+      "sectionTitle": "System health",
+      "sectionNum": "09",
+      "command": "free -h",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "free",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "h",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "sys",
+      "sectionTitle": "System health",
+      "sectionNum": "09",
+      "command": "pgrep -a firefox",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "pgrep",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "a",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "firefox"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "sys",
+      "sectionTitle": "System health",
+      "sectionNum": "09",
+      "command": "uname -r",
+      "isRoot": false,
+      "depth": "core",
+      "badges": [
+        {
+          "type": "core",
+          "label": "core"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "uname",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "r",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "net",
+      "sectionTitle": "Network quickies",
+      "sectionNum": "10",
+      "command": "ping -c 4 google.com",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "ping",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "c",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "google.com"
+          },
+          {
+            "type": "path",
+            "value": "4"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "net",
+      "sectionTitle": "Network quickies",
+      "sectionNum": "10",
+      "command": "ip a",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "ip",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "a"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "net",
+      "sectionTitle": "Network quickies",
+      "sectionNum": "10",
+      "command": "curl -I https://site.com",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "curl",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "I",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "https://site.com"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "net",
+      "sectionTitle": "Network quickies",
+      "sectionNum": "10",
+      "command": "ss -tulpn",
+      "isRoot": true,
+      "depth": "sudo",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        },
+        {
+          "type": "sudo",
+          "label": "sudo"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "ss",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "t",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "u",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "l",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "p",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "n",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "code",
+      "sectionTitle": "Coding in the terminal",
+      "sectionNum": "11",
+      "command": "gcc main.c utils.c -o app",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "gcc",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "o",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "main.c"
+          },
+          {
+            "type": "path",
+            "value": "utils.c"
+          },
+          {
+            "type": "path",
+            "value": "app"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "code",
+      "sectionTitle": "Coding in the terminal",
+      "sectionNum": "11",
+      "command": "sudo dnf install gcc",
+      "isRoot": true,
+      "depth": "sudo",
+      "badges": [
+        {
+          "type": "sudo",
+          "label": "sudo"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "dnf",
+        "subcommands": [
+          "install"
+        ],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "gcc"
+          }
+        ],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    },
+    {
+      "section": "code",
+      "sectionTitle": "Coding in the terminal",
+      "sectionNum": "11",
+      "command": "gdb ./hello",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "gdb",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "./hello"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "code",
+      "sectionTitle": "Coding in the terminal",
+      "sectionNum": "11",
+      "command": "python3 -m venv .venv && source .venv/bin/activate",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "python3",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "m",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": ".venv"
+          },
+          {
+            "type": "literal",
+            "value": "source"
+          },
+          {
+            "type": "path",
+            "value": ".venv/bin/activate"
+          },
+          {
+            "type": "path",
+            "value": "venv"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "code",
+      "sectionTitle": "Coding in the terminal",
+      "sectionNum": "11",
+      "command": "npm ci",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "npm",
+        "subcommands": [
+          "ci"
+        ],
+        "flags": [],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "systemd",
+      "sectionTitle": "Services &amp; logs",
+      "sectionNum": "12",
+      "command": "journalctl -b -1 | grep -Ei \"error|fail|suspend\"",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "journalctl",
+        "subcommands": [
+          "-b"
+        ],
+        "flags": [
+          {
+            "flag": "1",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": "suspend\""
+      }
+    },
+    {
+      "section": "time",
+      "sectionTitle": "Clock &amp; time",
+      "sectionNum": "13",
+      "command": "timedatectl status",
+      "isRoot": false,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "Everything at once: system clock, RTC (motherboard clock), timezone, NTP state.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Everything at once: system clock, RTC (motherboard clock), timezone, NTP state."
+        }
+      ],
+      "params": {
+        "base": "timedatectl",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "status"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "time",
+      "sectionTitle": "Clock &amp; time",
+      "sectionNum": "13",
+      "command": "sudo timedatectl set-ntp true",
+      "isRoot": true,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "sudo",
+          "label": "sudo"
+        },
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "timedatectl",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "set-ntp"
+          },
+          {
+            "type": "literal",
+            "value": "true"
+          }
+        ],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    },
+    {
+      "section": "time",
+      "sectionTitle": "Clock &amp; time",
+      "sectionNum": "13",
+      "command": "date +%s",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "date",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "+%s"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "gui",
+      "sectionTitle": "When the GUI dies",
+      "sectionNum": "14",
+      "command": "Ctrl + Alt + F3",
+      "isRoot": false,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "Switches between virtual terminals. Your GUI sits on one TTY; F3 gives you a spare one to work from.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Switches between virtual terminals. Your GUI sits on one TTY; F3 gives you a spare one to work from."
+        }
+      ],
+      "params": {
+        "base": "Ctrl",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "+"
+          },
+          {
+            "type": "literal",
+            "value": "Alt"
+          },
+          {
+            "type": "literal",
+            "value": "+"
+          },
+          {
+            "type": "literal",
+            "value": "F3"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "gui",
+      "sectionTitle": "When the GUI dies",
+      "sectionNum": "14",
+      "command": "loginctl list-sessions",
+      "isRoot": false,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "loginctl",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "list-sessions"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "gui",
+      "sectionTitle": "When the GUI dies",
+      "sectionNum": "14",
+      "command": "systemctl status display-manager --no-pager",
+      "isRoot": false,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "systemctl",
+        "subcommands": [
+          "status"
+        ],
+        "flags": [
+          {
+            "flag": "no-pager",
+            "value": null
+          }
+        ],
+        "args": [
+          {
+            "type": "literal",
+            "value": "display-manager"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "gui",
+      "sectionTitle": "When the GUI dies",
+      "sectionNum": "14",
+      "command": "sudo systemctl restart display-manager",
+      "isRoot": true,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "sudo",
+          "label": "sudo"
+        },
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "systemctl",
+        "subcommands": [
+          "restart"
+        ],
+        "flags": [],
+        "args": [
+          {
+            "type": "literal",
+            "value": "display-manager"
+          }
+        ],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    },
+    {
+      "section": "snap",
+      "sectionTitle": "Snap apps &amp; KWallet",
+      "sectionNum": "15",
+      "command": "kwalletmanager",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "kwalletmanager",
+        "subcommands": [],
+        "flags": [],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "snap",
+      "sectionTitle": "Snap apps &amp; KWallet",
+      "sectionNum": "15",
+      "command": "busctl --user list",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "busctl",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "user",
+            "value": "list"
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "suspend",
+      "sectionTitle": "Black screen after suspend",
+      "sectionNum": "16",
+      "command": "systemctl suspend",
+      "isRoot": false,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "systemctl",
+        "subcommands": [
+          "suspend"
+        ],
+        "flags": [],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "suspend",
+      "sectionTitle": "Black screen after suspend",
+      "sectionNum": "16",
+      "command": "journalctl -b -1 -k | grep -Ei \"PM:|i915|drm|ACPI|suspend|resume\"",
+      "isRoot": false,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "journalctl",
+        "subcommands": [
+          "-b"
+        ],
+        "flags": [
+          {
+            "flag": "1",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "k",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": "resume\""
+      }
+    },
+    {
+      "section": "suspend",
+      "sectionTitle": "Black screen after suspend",
+      "sectionNum": "16",
+      "command": "uname -r",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "uname",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "r",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "suspend",
+      "sectionTitle": "Black screen after suspend",
+      "sectionNum": "16",
+      "command": "cat /sys/power/mem_sleep",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "cat",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "/sys/power/mem_sleep"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "disks",
+      "sectionTitle": "NTFS cleanup &amp; disks",
+      "sectionNum": "17",
+      "command": "lsblk -o NAME,SIZE,FSTYPE,FSAVAIL,FSUSE%,MOUNTPOINTS",
+      "isRoot": false,
+      "depth": "daily",
+      "badges": [
+        {
+          "type": "daily",
+          "label": "daily"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "lsblk",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "o",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "NAME,SIZE,FSTYPE,FSAVAIL,FSUSE%,MOUNTPOINTS"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "disks",
+      "sectionTitle": "NTFS cleanup &amp; disks",
+      "sectionNum": "17",
+      "command": "sudo parted /dev/nvme0n1 print free",
+      "isRoot": true,
+      "depth": "sudo",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        },
+        {
+          "type": "sudo",
+          "label": "sudo"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "parted",
+        "subcommands": [],
+        "flags": [],
+        "args": [
+          {
+            "type": "path",
+            "value": "/dev/nvme0n1"
+          },
+          {
+            "type": "literal",
+            "value": "print"
+          },
+          {
+            "type": "literal",
+            "value": "free"
+          }
+        ],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    },
+    {
+      "section": "disks",
+      "sectionTitle": "NTFS cleanup &amp; disks",
+      "sectionNum": "17",
+      "command": "find /run/media/cleme/WinSSD -maxdepth 2 -type d -iname \"*pycharm*\" -print",
+      "isRoot": false,
+      "depth": "power",
+      "badges": [
+        {
+          "type": "power",
+          "label": "power"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "find",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "h",
+            "value": "2",
+            "short": true
+          },
+          {
+            "flag": "e",
+            "value": "d",
+            "short": true
+          },
+          {
+            "flag": "e",
+            "value": "\"*pycharm*\"",
+            "short": true
+          },
+          {
+            "flag": "p",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "r",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "i",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "n",
+            "value": null,
+            "short": true
+          },
+          {
+            "flag": "t",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "/run/media/cleme/WinSSD"
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "disks",
+      "sectionTitle": "NTFS cleanup &amp; disks",
+      "sectionNum": "17",
+      "command": "ls -lah \"/path/you/found\"",
+      "isRoot": true,
+      "depth": "rescue",
+      "badges": [
+        {
+          "type": "sudo",
+          "label": "sudo"
+        },
+        {
+          "type": "rescue",
+          "label": "rescue"
+        }
+      ],
+      "description": "Look first, delete the exact directory second, verify with `ls`/`du` third.",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [
+        {
+          "tag": "does",
+          "value": "Look first, delete the exact directory second, verify with `ls`/`du` third."
+        }
+      ],
+      "params": {
+        "base": "ls",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "h",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "\"/path/you/found\""
+          }
+        ],
+        "pipe_to": null
+      }
+    },
+    {
+      "section": "disks",
+      "sectionTitle": "NTFS cleanup &amp; disks",
+      "sectionNum": "17",
+      "command": "sudo ntfsfix -n /dev/nvme0n1p3",
+      "isRoot": true,
+      "depth": "sudo",
+      "badges": [
+        {
+          "type": "rescue",
+          "label": "rescue"
+        },
+        {
+          "type": "sudo",
+          "label": "sudo"
+        }
+      ],
+      "description": "",
+      "whenToUse": "",
+      "gotchas": [],
+      "notes": [],
+      "rows": [],
+      "params": {
+        "base": "ntfsfix",
+        "subcommands": [],
+        "flags": [
+          {
+            "flag": "n",
+            "value": null,
+            "short": true
+          }
+        ],
+        "args": [
+          {
+            "type": "path",
+            "value": "/dev/nvme0n1p3"
+          }
+        ],
+        "pipe_to": null,
+        "is_sudo": true
+      }
+    }
+  ],
+  "stats": {
+    "totalSections": 18,
+    "totalCommands": 66,
+    "depthCounts": {
+      "core": 18,
+      "daily": 18,
+      "power": 16,
+      "sudo": 5,
+      "rescue": 9
+    }
+  }
+}

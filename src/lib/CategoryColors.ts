@@ -3,17 +3,14 @@
 // stable accessor. New charts MUST pull category colors from here (LAMINAR §5).
 // Legacy chart.js / Tableau-10 palettes are frozen and must not be expanded.
 
-export type CategoryStyle = {
-  bg: string;
-  text: string;
-  border: string;
-};
-
-export { CATEGORY_COLORS, getCategoryStyle } from '../components/CategoryColors';
+import { getCategoryStyle as _getCategoryStyle } from '../components/CategoryColors';
+export type { CategoryStyle } from '../components/CategoryColors';
+export { CATEGORY_COLORS } from '../components/CategoryColors';
+export { getCategoryStyle } from '../components/CategoryColors';
 
 /** Resolve a category name to its style, falling back to "Other". */
 export function getCategoryColor(category: string): CategoryStyle {
-  return getCategoryStyle(category);
+  return _getCategoryStyle(category);
 }
 
 /** Semantic colors for cross-feature relationship chrome. Keep these as utility

@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>~/handbook — the terminal, human-readable</title>
+<style>
+  :root{
+    --bg:#0a0e14;
+    --bg2:#0d1219;
+    --panel:#11161f;
+    --panel2:#161d29;
+    --line:#1f2836;
+    --line2:#2a3547;
+    --txt:#dbe4ee;
+    --dim:#7d8aa0;
+    --faint:#54617a;
+    --grn:#7ee787;
+    --grn-dim:rgba(126,231,135,.12);
+    --blu:#79c0ff;
+    --amb:#ffa657;
+    --amb-dim:rgba(255,166,87,.12);
+    --red:#ff7b72;
+    --red-dim:rgba(255,123,114,.10);
+    --pur:#d2a8ff;
+    --pur-dim:rgba(210,168,255,.12);
+    --mono:"Cascadia Code","JetBrains Mono","SF Mono",Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.6;
+       background-image:radial-gradient(ellipse 800px 500px at 75% -10%,rgba(121,192,255,.05),transparent),
+                        radial-gradient(ellipse 600px 400px at 10% 30%,rgba(126,231,135,.04),transparent);}
+  code,pre,.mono{font-family:var(--mono);}
+  ::selection{background:rgba(126,231,135,.25);}
+
+  /* ============ progress bar ============ */
+  #progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:99;
+            background:linear-gradient(90deg,var(--grn),var(--blu));transition:width .1s linear;}
+
+  .layout{display:flex;min-height:100vh;}
+
+  /* ============ sidebar ============ */
+  nav{width:256px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;
+      background:linear-gradient(180deg,var(--bg2),var(--bg));border-right:1px solid var(--line);padding:26px 0 40px;}
+  .logo{padding:0 22px 22px;border-bottom:1px solid var(--line);margin-bottom:14px;}
+  .logo .mark{font-family:var(--mono);font-size:15px;color:var(--grn);}
+  .logo .mark b{color:var(--txt);font-weight:600;}
+  .logo .sub{font-size:11px;color:var(--faint);margin-top:5px;letter-spacing:.4px;}
+  nav a{display:flex;align-items:baseline;gap:10px;padding:6.5px 22px;color:var(--dim);text-decoration:none;
+        font-size:13px;border-left:2px solid transparent;transition:all .12s;}
+  nav a .n{font-family:var(--mono);font-size:10.5px;color:var(--faint);width:20px;flex-shrink:0;}
+  nav a:hover{color:var(--txt);background:rgba(255,255,255,.02);}
+  nav a.active{color:var(--grn);border-left-color:var(--grn);background:linear-gradient(90deg,var(--grn-dim),transparent);}
+  nav a.active .n{color:var(--grn);}
+  nav a.lvl2{padding-left:52px;font-size:12px;}
+
+  /* ============ main ============ */
+  main{flex:1;max-width:880px;padding:0 48px 140px;min-width:0;}
+
+  /* ============ hero ============ */
+  .hero{padding:64px 0 46px;}
+  .hero .kicker{font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;}
+  .hero h1{font-size:clamp(30px,4.5vw,44px);font-weight:700;letter-spacing:-.5px;line-height:1.15;margin-bottom:16px;}
+  .hero h1 em{font-style:normal;color:var(--grn);}
+  .hero .lede{color:var(--dim);max-width:600px;font-size:15.5px;margin-bottom:28px;}
+
+  /* faux terminal window */
+  .term{background:#0c1017;border:1px solid var(--line2);border-radius:12px;max-width:640px;
+        box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 1px rgba(126,231,135,.04);overflow:hidden;margin-bottom:30px;}
+  .term .titlebar{display:flex;align-items:center;gap:7px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);}
+  .term .dot{width:11px;height:11px;border-radius:50%;}
+  .term .dot.r{background:#ff5f57;}.term .dot.y{background:#febc2e;}.term .dot.g{background:#28c840;}
+  .term .title{margin-left:8px;font-family:var(--mono);font-size:11px;color:var(--faint);}
+  .term .body{padding:16px 18px;font-family:var(--mono);font-size:13.5px;min-height:88px;}
+  .term .line{margin-bottom:4px;white-space:pre-wrap;word-break:break-all;}
+  .term .p{color:var(--grn);user-select:none;}
+  .term .in{color:var(--txt);}
+  .term .out{color:var(--dim);}
+  .term .out.ok{color:var(--grn);}
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--grn);vertical-align:-2px;animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+
+  .legend{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .legend .lab{font-family:var(--mono);font-size:11px;color:var(--faint);margin-right:4px;}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;padding:4px 11px;
+        border-radius:20px;border:1px solid var(--line2);color:var(--dim);}
+  .chip i{width:7px;height:7px;border-radius:50%;display:inline-block;}
+
+  /* ============ badges ============ */
+  .badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9.5px;font-weight:600;
+         letter-spacing:1px;text-transform:uppercase;padding:2.5px 8px;border-radius:4px;border:1px solid;}
+  .badge i{width:5px;height:5px;border-radius:50%;display:inline-block;}
+  .b-core{color:var(--blu);border-color:rgba(121,192,255,.35);background:rgba(121,192,255,.08);}
+  .b-core i{background:var(--blu);}
+  .b-daily{color:var(--grn);border-color:rgba(126,231,135,.35);background:var(--grn-dim);}
+  .b-daily i{background:var(--grn);}
+  .b-power{color:var(--pur);border-color:rgba(210,168,255,.35);background:var(--pur-dim);}
+  .b-power i{background:var(--pur);}
+  .b-rescue{color:var(--red);border-color:rgba(255,123,114,.35);background:var(--red-dim);}
+  .b-rescue i{background:var(--red);}
+  .b-sudo{color:var(--amb);border-color:rgba(255,166,87,.35);background:var(--amb-dim);}
+  .b-sudo i{background:var(--amb);}
+
+  /* ============ search ============ */
+  .searchwrap{position:sticky;top:0;z-index:20;padding:14px 0 12px;margin-bottom:14px;
+              background:linear-gradient(180deg,var(--bg) 78%,transparent);}
+  .searchwrap .box{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line2);
+                   border-radius:10px;padding:11px 16px;transition:border-color .15s, box-shadow .15s;}
+  .searchwrap .box:focus-within{border-color:var(--grn);box-shadow:0 0 0 3px rgba(126,231,135,.08);}
+  .searchwrap .prompt{font-family:var(--mono);color:var(--grn);font-size:14px;user-select:none;}
+  #search{flex:1;background:none;border:none;outline:none;color:var(--txt);font-family:var(--mono);font-size:13.5px;}
+  #search::placeholder{color:var(--faint);}
+  .searchwrap kbd{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--line2);border-radius:4px;padding:2px 6px;}
+  #count{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:6px;padding-left:4px;}
+
+  /* ============ sections ============ */
+  section{margin-bottom:64px;scroll-margin-top:24px;}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:6px;padding-top:12px;}
+  .sec-head .num{font-family:var(--mono);font-size:13px;color:var(--faint);}
+  .sec-head h2{font-size:21px;font-weight:650;letter-spacing:-.3px;}
+  .crumb{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:14px;}
+  .crumb b{color:var(--grn);font-weight:400;}
+  .why{color:var(--dim);font-size:14px;margin-bottom:20px;max-width:620px;}
+  h3{font-size:14px;font-weight:600;color:var(--txt);margin:28px 0 10px;display:flex;align-items:center;gap:8px;}
+  h3::before{content:"";width:14px;height:2px;background:var(--grn);display:inline-block;border-radius:2px;}
+  p{margin-bottom:10px;max-width:660px;font-size:14.5px;}
+
+  /* ============ command cards ============ */
+  .cmd{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:10px 0;max-width:720px;
+       overflow:hidden;transition:border-color .15s, transform .15s, box-shadow .15s;}
+  .cmd:hover{border-color:var(--line2);transform:translateX(3px);box-shadow:-3px 0 0 0 var(--line2);}
+  .cmd.acc-grn:hover{box-shadow:-3px 0 0 0 rgba(126,231,135,.5);}
+  .cmd.acc-blu:hover{box-shadow:-3px 0 0 0 rgba(121,192,255,.5);}
+  .cmd.acc-pur:hover{box-shadow:-3px 0 0 0 rgba(210,168,255,.5);}
+  .cmd.acc-red{box-shadow:-3px 0 0 0 rgba(255,123,114,.35);}
+  .cmd.acc-red:hover{box-shadow:-3px 0 0 0 var(--red);}
+  .cmd.acc-amb{box-shadow:-3px 0 0 0 rgba(255,166,87,.35);}
+  .cmd.acc-amb:hover{box-shadow:-3px 0 0 0 var(--amb);}
+  .cmd .bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--panel2);
+            border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .cmd .bar .dollar{font-family:var(--mono);color:var(--grn);font-size:13px;user-select:none;}
+  .cmd .bar .dollar.root{color:var(--amb);}
+  .cmd .bar code{color:#e6edf3;font-size:13.5px;font-weight:500;}
+  .cmd .body{padding:10px 14px 12px;}
+  .row{display:flex;gap:10px;font-size:13.5px;margin-top:5px;}
+  .row:first-child{margin-top:0;}
+  .row .tag{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;
+            color:var(--faint);width:52px;flex-shrink:0;padding-top:3px;}
+  .row .val{color:var(--dim);}
+  .row .val b{color:var(--txt);font-weight:600;}
+  .row.warn .tag{color:var(--amb);}
+  .row.warn .val{color:var(--amb);}
+  .copy{margin-left:auto;background:var(--bg);border:1px solid var(--line2);color:var(--faint);
+        font-family:var(--mono);font-size:10.5px;padding:3px 9px;border-radius:5px;cursor:pointer;transition:all .12s;}
+  .copy:hover{color:var(--grn);border-color:rgba(126,231,135,.4);}
+  .copy.done{color:var(--grn);border-color:var(--grn);}
+
+  /* ============ callouts ============ */
+  .callout{border:1px solid var(--line);border-left:3px solid;border-radius:0 10px 10px 0;
+           padding:12px 16px;margin:16px 0;font-size:14px;max-width:680px;background:var(--panel);}
+  .callout .ttl{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;font-weight:600;}
+  .callout.tip{border-left-color:var(--amb);}
+  .callout.tip .ttl{color:var(--amb);}
+  .callout.danger{border-left-color:var(--red);background:linear-gradient(90deg,var(--red-dim),var(--panel) 40%);}
+  .callout.danger .ttl{color:var(--red);}
+  .callout.danger b{color:var(--red);}
+  .callout code{color:var(--grn);font-size:12.5px;}
+
+  /* ============ tables ============ */
+  .tblwrap{overflow-x:auto;max-width:720px;margin:12px 0;}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);
+     text-align:left;padding:8px 14px;border-bottom:1px solid var(--line2);font-weight:500;}
+  td{padding:8px 14px;border-bottom:1px solid var(--line);color:var(--dim);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td code{color:var(--grn);font-size:12.5px;}
+  td:first-child{color:var(--txt);white-space:nowrap;}
+  tbody tr{transition:background .12s;}
+  tbody tr:hover{background:rgba(255,255,255,.02);}
+
+  /* ============ code blocks ============ */
+  pre{background:#0c1017;border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;
+      margin:14px 0;font-size:13px;max-width:720px;line-height:1.7;position:relative;}
+  pre .cm{color:var(--faint);}
+  .kbd{display:inline-block;background:var(--panel2);border:1px solid var(--line2);border-bottom-width:2px;
+       border-radius:5px;padding:0 7px;font-size:11.5px;font-family:var(--mono);color:var(--txt);}
+  .path{font-family:var(--mono);color:var(--pur);}
+  .hidden{display:none!important;}
+  #top{position:fixed;right:22px;bottom:22px;z-index:30;background:var(--panel);border:1px solid var(--line2);
+       color:var(--dim);font-family:var(--mono);font-size:12px;padding:9px 13px;border-radius:9px;cursor:pointer;
+       opacity:0;pointer-events:none;transition:opacity .2s, color .12s;}
+  #top.show{opacity:1;pointer-events:auto;}
+  #top:hover{color:var(--grn);border-color:rgba(126,231,135,.4);}
+  @media(max-width:840px){
+    nav{display:none;}
+    main{padding:0 18px 120px;}
+    .hero{padding:40px 0 34px;}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="layout">
+<nav id="nav">
+  <div class="logo">
+    <div class="mark"><b>~/handbook</b> $</div>
+    <div class="sub">THE TERMINAL, HUMAN-READABLE</div>
+  </div>
+  <a href="#start"><span class="n">01</span>Read the prompt</a>
+  <a href="#move"><span class="n">02</span>Moving around</a>
+  <a href="#files"><span class="n">03</span>Files &amp; folders</a>
+  <a href="#read"><span class="n">04</span>Reading &amp; finding</a>
+  <a href="#perm"><span class="n">05</span>Permissions &amp; sudo</a>
+  <a href="#edit"><span class="n">06</span>Text editors</a>
+  <a href="#open"><span class="n">07</span>Opening things</a>
+  <a href="#pkg"><span class="n">08</span>Installing software</a>
+  <a href="#sys"><span class="n">09</span>System health</a>
+  <a href="#net"><span class="n">10</span>Network quickies</a>
+  <a href="#code"><span class="n">11</span>Coding in the terminal</a>
+  <a href="#c" class="lvl2"><span class="n">11a</span>The C toolchain</a>
+  <a href="#systemd"><span class="n">12</span>Services &amp; logs</a>
+  <a href="#time"><span class="n">13</span>Clock &amp; time</a>
+  <a href="#gui"><span class="n">14</span>When the GUI dies</a>
+  <a href="#snap"><span class="n">15</span>Snap apps &amp; KWallet</a>
+  <a href="#suspend"><span class="n">16</span>Black screen after suspend</a>
+  <a href="#disks"><span class="n">17</span>NTFS cleanup &amp; disks</a>
+  <a href="#danger"><span class="n">18</span>Danger zone</a>
+</nav>
+<main>
+  <div class="hero">
+    <div class="kicker">a field guide, not a textbook</div>
+    <h1>You don't need to <em>memorize</em> the terminal.<br>You need to <em>read</em> it.</h1>
+    <p class="lede">Every command below says what it does, when to reach for it, and the gotcha that bites beginners. Work top to bottom — it climbs from daily bread to "my desktop is dead" rescue mode.</p>
+    <div class="term">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">bash — cleme@fedora</span></div>
+      <div class="body" id="termbody"></div>
+    </div>
+    <div class="legend">
+      <span class="lab">depth&nbsp;→</span>
+      <span class="chip"><i style="background:var(--blu)"></i>core · day one</span>
+      <span class="chip"><i style="background:var(--grn)"></i>daily · constant use</span>
+      <span class="chip"><i style="background:var(--pur)"></i>power · when core fails</span>
+      <span class="chip"><i style="background:var(--red)"></i>rescue · broken system</span>
+      <span class="chip"><i style="background:var(--amb)"></i>sudo · admin rights</span>
+    </div>
+  </div>
+
+  <div class="searchwrap">
+    <div class="box"><span class="prompt">$</span><input id="search" type="text" placeholder="grep the handbook — try “compile”, “delete”, “log”…" autocomplete="off"><kbd>/</kbd></div>
+    <div id="count"></div>
+  </div>
+
+  <!-- ============ 01 ============ -->
+  <section id="start">
+    <div class="sec-head"><span class="num">01</span><h2>Read the prompt</h2></div>
+    <div class="crumb"><b>~/handbook</b>/01-prompt</div>
+    <p class="why">Before any command: understand what <span class="path">[cleme@fedora ~]$</span> is telling you.</p>
+    <div class="tblwrap"><table>
+      <tr><th>Part</th><th>Meaning</th></tr>
+      <tr><td><code>cleme</code></td><td>who you are</td></tr>
+      <tr><td><code>@fedora</code></td><td>which machine</td></tr>
+      <tr><td><code>~</code></td><td>where you are — <code>~</code> means your home folder</td></tr>
+      <tr><td><code>$</code></td><td>normal user. A <code>#</code> means you are root — be careful</td></tr>
+    </table></div>
+    <h3>The 4 survival skills</h3>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>man ls</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">The built-in manual. Every command has one.</span></div>
+      <div class="row"><span class="tag">when</span><span class="val">You forgot the flags. Scroll with arrows, quit with <span class="kbd">q</span>.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>&lt;command&gt; --help</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Short flag cheat-sheet for any command.</span></div>
+      <div class="row"><span class="tag">when</span><span class="val">Faster than <code>man</code> for a quick flag check.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>Tab · ↑ · Ctrl+C</code><span class="badge b-core"><i></i>core</span></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val"><b>Tab</b> autocompletes names (prevents typos — use it constantly). <b>↑</b> recalls previous commands. <b>Ctrl+C</b> kills whatever is running: the panic button for hung programs.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>history</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Lists everything you've typed.</span></div>
+      <div class="row"><span class="tag">when</span><span class="val"><code>!gcc</code> reruns the last command starting with “gcc”.</span></div></div></div>
+  </section>
+
+  <!-- ============ 02 ============ -->
+  <section id="move">
+    <div class="sec-head"><span class="num">02</span><h2>Moving around</h2></div>
+    <div class="crumb"><b>~/handbook</b>/02-navigation</div>
+    <p class="why">The terminal is always “standing” in exactly one folder. These commands move your feet.</p>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>pwd</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Print where you are.</span></div>
+      <div class="row"><span class="tag">when</span><span class="val">Whenever you're lost.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>ls -lah</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">List files: <b>a</b>ll (including hidden), <b>l</b>ong format, <b>h</b>uman sizes (K/M/G).</span></div>
+      <div class="row"><span class="tag">note</span><span class="val">Hidden files start with a dot — configs live there.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>cd Documents</code> · <code>cd ..</code> · <code>cd ~</code> · <code>cd -</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Change folder. <code>..</code> = parent, <code>~</code> = home, <code>-</code> = where you just were.</span></div>
+      <div class="row warn"><span class="tag">gotcha</span><span class="val"><code>cd</code> with no argument also goes home.</span></div></div></div>
+    <h3>Paths — the one concept everything builds on</h3>
+    <p>Two ways to point at the same folder:</p>
+    <div class="tblwrap"><table>
+      <tr><th>Type</th><th>Example</th><th>Meaning</th></tr>
+      <tr><td>Absolute</td><td><code>/home/cleme/photos</code></td><td>starts from <code>/</code> (the root). Works from anywhere.</td></tr>
+      <tr><td>Relative</td><td><code>photos</code></td><td>starts from where you're standing.</td></tr>
+    </table></div>
+    <p><code>/</code> is the top of the whole disk tree — there is no “Drive C:”. One tree, everything hangs off <code>/</code>.</p>
+    <div class="callout tip"><div class="ttl">rule of thumb</div>Typing paths by hand invites typos. Type the first letters, hit <span class="kbd">Tab</span> — the terminal fills the rest, including the trailing <code>/</code>.</div>
+  </section>
+
+  <!-- ============ 03 ============ -->
+  <section id="files">
+    <div class="sec-head"><span class="num">03</span><h2>Files &amp; folders</h2></div>
+    <div class="crumb"><b>~/handbook</b>/03-files</div>
+    <p class="why">Create, copy, move, delete. Copy and move are “safe-ish”; delete is forever.</p>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>mkdir -p projects/c/lesson1</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Make a folder. <code>-p</code> creates missing parents too — always use it.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>touch notes.txt</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Create an empty file, or update its timestamp if it already exists.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>cp -r folder/ backup/</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Copy. <code>-r</code> = recursive, needed for folders. No undo, no trash — it overwrites silently.</span></div>
+      <div class="row warn"><span class="tag">gotcha</span><span class="val">A trailing slash on the source (<code>folder/</code>) means <i>contents of</i> the folder; without it, the folder itself. When in doubt, Tab-complete.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>mv old.txt new.txt</code> · <code>mv file.txt ~/Documents/</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Move or rename — same command. Also has no undo.</span></div></div></div>
+    <div class="cmd acc-red"><div class="bar"><span class="dollar">$</span><code>rm file.txt</code> · <code>rm -r folder/</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Delete a file. <code>-r</code> deletes a folder and everything inside.</span></div>
+      <div class="row warn"><span class="tag">gotcha</span><span class="val">There is no Recycle Bin. <code>rm</code> is permanent the instant you hit Enter.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>ln -s /real/path shortcut</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Symlink — a signpost pointing at another file/folder. Deleting the signpost doesn't delete the target.</span></div></div></div>
+    <div class="callout tip"><div class="ttl">safer habit</div><code>sudo dnf install trash-cli</code>, then use <code>trash-put file</code> — a real trash can with undo.</div>
+  </section>
+
+  <!-- ============ 04 ============ -->
+  <section id="read">
+    <div class="sec-head"><span class="num">04</span><h2>Reading &amp; finding</h2></div>
+    <div class="crumb"><b>~/handbook</b>/04-reading</div>
+    <p class="why">Look inside files, and find the needle in a haystack of logs and code.</p>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>cat file.txt</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Dump a whole file to the screen. Fine for small files, floods your terminal on big ones.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>less bigfile.log</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Read a big file page by page.</span></div>
+      <div class="row"><span class="tag">keys</span><span class="val"><span class="kbd">Space</span> next page · <span class="kbd">/</span> search · <span class="kbd">q</span> quit. The pager for anything long.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>head -n 20 file</code> · <code>tail -n 20 file</code> · <code>tail -f file</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">First/last lines. <code>tail -f</code> follows the file live — watch a log update in real time. Ctrl+C to stop.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>grep -rni "TODO" ~/projects</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Search text: <b>r</b>ecursive, case-<b>i</b>nsensitive, li<b>n</b>e numbers. The single most useful search tool that exists.</span></div>
+      <div class="row"><span class="tag">when</span><span class="val">“Where did I write that?” → <code>grep -rn "int main" .</code></span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>find ~ -name "*.c" -mtime -7</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Find files by name, type, date, size. <code>-mtime -7</code> = changed in the last 7 days.</span></div>
+      <div class="row warn"><span class="tag">gotcha</span><span class="val">Unrestricted <code>find /</code> on huge disks spews forever. Always scope the path and add <code>-maxdepth 2</code> when you can.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>which gcc</code> · <code>whereis gcc</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Which program actually runs when you type a name.</span></div>
+      <div class="row"><span class="tag">when</span><span class="val">First check on “command not found” or “wrong version”.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>wc -l file</code> · <code>sort file | uniq -c</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Count lines. Sort + count duplicates — the classic log-analysis combo.</span></div></div></div>
+    <div class="callout tip"><div class="ttl">grep vs find, one line</div><code>grep</code> searches <i>inside</i> files (by content). <code>find</code> searches <i>for</i> files (by name/properties).</div>
+  </section>
+
+  <!-- ============ 05 ============ -->
+  <section id="perm">
+    <div class="sec-head"><span class="num">05</span><h2>Permissions &amp; sudo</h2></div>
+    <div class="crumb"><b>~/handbook</b>/05-permissions</div>
+    <p class="why">Every file has an owner and three permission slots. “Permission denied” stops being scary once you can read this line:</p>
+    <pre><span class="cm">-rwxr-xr--  cleme  cleme   4096  notes.txt</span></pre>
+    <div class="tblwrap"><table>
+      <tr><th>Slot</th><th>Letters</th><th>Numbers</th><th>Means</th></tr>
+      <tr><td>owner (you)</td><td>rwx</td><td>7</td><td>read, write, execute</td></tr>
+      <tr><td>group</td><td>r-x</td><td>5</td><td>read + execute</td></tr>
+      <tr><td>everyone</td><td>r--</td><td>4</td><td>read only</td></tr>
+    </table></div>
+    <p>Numbers: <b>r=4, w=2, x=1</b>, added per slot. <code>755</code> = you can do everything, others read+run.</p>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>chmod +x script.sh</code> · <code>chmod 755 script.sh</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Change permissions. <code>+x</code> = make executable — required before <code>./script.sh</code> will run.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo &lt;command&gt;</code><span class="badge b-sudo"><i></i>sudo</span><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Run one command as admin. Asks for your password, remembers it for a few minutes.</span></div>
+      <div class="row warn"><span class="tag">gotcha</span><span class="val">Only sudo for system-wide things — <code>/etc</code>, <code>/usr</code>, drivers, system services. Your own files and desktop settings never need it.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>whoami</code> · <code>id</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Confirm which user you are. Surprisingly useful when “permission denied” makes no sense.</span></div></div></div>
+  </section>
+
+  <!-- ============ 06 ============ -->
+  <section id="edit">
+    <div class="sec-head"><span class="num">06</span><h2>Text editors — your terminal IDE</h2></div>
+    <div class="crumb"><b>~/handbook</b>/06-editors</div>
+    <p class="why">Two editors matter. Nano is a car with training wheels. Vim is a jet — hostile for 2 days, fast forever. Learn nano today; learn vim when curious.</p>
+    <h3>nano — start here</h3>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>nano file.txt</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Opens the file. Shortcuts are printed at the bottom the whole time (<code>^X</code> = Ctrl+X).</span></div></div></div>
+    <div class="tblwrap"><table>
+      <tr><th>Keys</th><th>Does</th></tr>
+      <tr><td><code>Ctrl+O</code> then <code>Enter</code></td><td>save</td></tr>
+      <tr><td><code>Ctrl+X</code></td><td>quit (asks to save if dirty)</td></tr>
+      <tr><td><code>Ctrl+W</code></td><td>search</td></tr>
+      <tr><td><code>Ctrl+K</code> / <code>Ctrl+U</code></td><td>cut line / paste</td></tr>
+    </table></div>
+    <h3>vim — survival kit</h3>
+    <p>Vim has <b>modes</b>. You start in Normal mode (keys = commands, typing letters does nothing). Press <span class="kbd">i</span> for Insert mode (keys = text). <span class="kbd">Esc</span> goes back.</p>
+    <div class="tblwrap"><table>
+      <tr><th>In Normal mode</th><th>Does</th></tr>
+      <tr><td><code>i</code> / <code>Esc</code></td><td>insert text / back to command mode</td></tr>
+      <tr><td><code>:w</code> · <code>:q!</code> · <code>:wq</code></td><td>save · quit without saving · save &amp; quit</td></tr>
+      <tr><td><code>dd</code> / <code>yy</code> / <code>p</code></td><td>delete line / copy line / paste</td></tr>
+      <tr><td><code>/word</code></td><td>search</td></tr>
+    </table></div>
+    <div class="callout tip"><div class="ttl">stuck in vim?</div><span class="kbd">Esc</span>, then type <code>:q!</code>, Enter. The escape hatch — quits without saving.</div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>vimtutor</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">A 30-minute interactive vim lesson built into vim. The best way to actually learn it.</span></div></div></div>
+  </section>
+
+  <!-- ============ 07 ============ -->
+  <section id="open">
+    <div class="sec-head"><span class="num">07</span><h2>Opening things</h2></div>
+    <div class="crumb"><b>~/handbook</b>/07-open</div>
+    <p class="why">Sometimes the right tool for a file is a GUI app, launched from the terminal.</p>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>xdg-open report.pdf</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Opens any file with its default app — PDFs in the viewer, folders in the file manager, links in the browser. <b>The</b> “just open it” command on Linux.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>xdg-open .</code> · <code>xdg-open https://site.com</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Dot = current folder (opens the file manager here). URLs work too.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>kate file.txt</code> · <code>code .</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Open a specific GUI editor instead of the default. Append <code>&amp;</code> to keep the terminal free: <code>kate file.txt &amp;</code></span></div></div></div>
+  </section>
+
+  <!-- ============ 08 ============ -->
+  <section id="pkg">
+    <div class="sec-head"><span class="num">08</span><h2>Installing software</h2></div>
+    <div class="crumb"><b>~/handbook</b>/08-packages</div>
+    <p class="why">Fedora uses <code>dnf</code> for system packages. Flatpak and Snap are separate app stores on top.</p>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>dnf search htop</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Search for a package by name before installing.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo dnf install htop</code><span class="badge b-sudo"><i></i>sudo</span><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Installs a package plus its dependencies.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo dnf remove htop</code> · <code>sudo dnf upgrade --refresh</code><span class="badge b-sudo"><i></i>sudo</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Uninstall. <code>upgrade --refresh</code> updates everything — the “Update” button in text form.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>rpm -q htop</code> · <code>rpm -qf /usr/bin/htop</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Is this installed? Which package owns this file? dnf knows nothing about Windows apps or your code projects.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>flatpak install flathub com.spotify.Client</code> · <code>snap install spotify</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Flatpak and Snap are sandboxed app formats, independent of dnf. Snap apps sandbox harder — which is why they sometimes misbehave with desktop services (§15).</span></div></div></div>
+  </section>
+
+  <!-- ============ 09 ============ -->
+  <section id="sys">
+    <div class="sec-head"><span class="num">09</span><h2>System health</h2></div>
+    <div class="crumb"><b>~/handbook</b>/09-health</div>
+    <p class="why">“Why is my laptop slow / full / hot?” Answer it in four commands.</p>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>df -h</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Free space per filesystem. <code>/</code> filling up = system problems.</span></div>
+      <div class="row warn"><span class="tag">note</span><span class="val">Shows space <i>inside</i> partitions, not unallocated disk space (§17).</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>du -xhd1 ~/ 2>/dev/null | sort -h</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Sizes of folders directly inside <code>~</code>, biggest last. Re-run inside any big folder to drill down. <code>2>/dev/null</code> hides “permission denied” noise.</span></div>
+      <div class="row"><span class="tag">when</span><span class="val">“What's eating my disk?” — beats any GUI analyzer.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>free -h</code> · <code>top</code> (or <code>htop</code>)<span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Memory usage. top = live process table: CPU%, RAM%, who's hogging. <span class="kbd">q</span> quits; <code>htop</code> is the prettier version.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>pgrep -a firefox</code> · <code>kill 1234</code> · <code>kill -9 1234</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Find a process by name (with its command line). <code>kill</code> asks it to close — always try this first. <code>kill -9</code> destroys instantly; only for processes that ignore the polite kill.</span></div></div></div>
+    <div class="cmd acc-blu"><div class="bar"><span class="dollar">$</span><code>uname -r</code> · <code>uptime</code><span class="badge b-core"><i></i>core</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Which kernel is <i>running now</i>, and time since boot. (<code>rpm -q kernel-core</code> lists what's <i>installed</i> — a different thing. See §16.)</span></div></div></div>
+  </section>
+
+  <!-- ============ 10 ============ -->
+  <section id="net">
+    <div class="sec-head"><span class="num">10</span><h2>Network quickies</h2></div>
+    <div class="crumb"><b>~/handbook</b>/10-network</div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>ping -c 4 google.com</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Is the network alive? Replies = yes; “unknown host” = DNS; timeouts = connection dead.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>ip a</code> · <code>ip r</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Your IP addresses and the default route. The modern replacement for retired <code>ifconfig</code>.</span></div></div></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>curl -I https://site.com</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Fetch a URL or just its headers (<code>-I</code>). “Is the site up?” and API poking.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>ss -tulpn</code><span class="badge b-power"><i></i>power</span><span class="badge b-sudo"><i></i>sudo</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Which ports are open and which programs hold them. The “why is my dev server port already in use?” answer.</span></div></div></div>
+  </section>
+
+  <!-- ============ 11 ============ -->
+  <section id="code">
+    <div class="sec-head"><span class="num">11</span><h2>Coding in the terminal</h2></div>
+    <div class="crumb"><b>~/handbook</b>/11-coding</div>
+    <p class="why">No IDE needed. Editor + compiler + runner, all text. Same pattern for every language: <b>write → compile/build → run</b>.</p>
+    <h3 id="c">the C toolchain — the full workflow</h3>
+    <p>Every C program lives in <code>.c</code> files. The compiler translates them into an executable binary.</p>
+    <pre><span class="cm"># 1. write the code</span>
+nano hello.c
+
+<span class="cm"># 2. compile: source file -> executable named "hello"</span>
+gcc hello.c -o hello
+
+<span class="cm"># 3. run it. The ./ is required (see below)</span>
+./hello</pre>
+    <div class="callout tip"><div class="ttl">why ./hello and not just hello?</div>The shell only searches the folders in your <code>PATH</code> (system bin folders) — for safety, your current folder is <i>not</i> in it. <code>./</code> says “the program right here”.</div>
+    <div class="tblwrap"><table>
+      <tr><th>gcc flag</th><th>Why you'd want it</th></tr>
+      <tr><td><code>-Wall -Wextra</code></td><td>all warnings on — meets the bugs before they bite</td></tr>
+      <tr><td><code>-g</code></td><td>debug info, lets gdb show line numbers</td></tr>
+      <tr><td><code>-O2</code></td><td>optimized build for release</td></tr>
+      <tr><td><code>-lm</code></td><td>link the math library (<code>sqrt</code>, <code>pow</code>, …)</td></tr>
+    </table></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>gcc main.c utils.c -o app</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Multiple source files compile into one program. One <code>-o</code> output, many inputs.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo dnf install gcc</code><span class="badge b-sudo"><i></i>sudo</span></div>
+      <div class="body"><div class="row"><span class="tag">fixes</span><span class="val"><code>gcc: command not found</code>. Fedora ships without a compiler; one install fixes it. Verify with <code>gcc --version</code>.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>gdb ./hello</code> → <code>run</code> → <code>bt</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Debugger. Compile with <code>-g</code> first. <code>bt</code> (backtrace) shows exactly which line crashed. <span class="kbd">q</span> quits.</span></div></div></div>
+    <p>Once a project outgrows one or two files, typing gcc lines gets old. <code>make</code> reads a recipe (<code>Makefile</code>) and rebuilds only what changed:</p>
+    <pre><span class="cm"># Makefile — note: tabs, not spaces, before gcc</span>
+app: main.c utils.c
+	gcc -Wall main.c utils.c -o app
+
+<span class="cm"># then just:</span>
+make
+./app</pre>
+    <div class="callout tip"><div class="ttl">terminal editor as your C IDE</div>Write in <code>vim</code> or <code>nano</code>, compile with <code>gcc</code>, split the screen with <code>tmux</code> (<code>sudo dnf install tmux</code>) to see code and output side by side. That's the whole “IDE”.</div>
+    <h3>other languages, same pattern</h3>
+    <div class="tblwrap"><table>
+      <tr><th>Language</th><th>Write</th><th>Run</th></tr>
+      <tr><td>Python</td><td><code>nano app.py</code></td><td><code>python3 app.py</code></td></tr>
+      <tr><td>JavaScript</td><td><code>nano app.js</code></td><td><code>node app.js</code></td></tr>
+      <tr><td>Java</td><td><code>nano App.java</code></td><td><code>javac App.java</code> → <code>java App</code></td></tr>
+      <tr><td>Rust</td><td><code>nano main.rs</code></td><td><code>rustc main.rs</code> → <code>./main</code></td></tr>
+      <tr><td>C++</td><td><code>nano app.cpp</code></td><td><code>g++ app.cpp -o app</code> → <code>./app</code></td></tr>
+    </table></div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>python3 -m venv .venv && source .venv/bin/activate</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Python project environment — isolates each project's packages. <code>deactivate</code> to leave.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>npm ci</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Recreate Node dependencies exactly from the lockfile. Moving projects: copy the <i>source</i>, run <code>npm ci</code> — never copy <code>node_modules</code>.</span></div></div></div>
+  </section>
+
+  <!-- ============ 12 ============ -->
+  <section id="systemd">
+    <div class="sec-head"><span class="num">12</span><h2>Services &amp; logs</h2></div>
+    <div class="crumb"><b>~/handbook</b>/12-systemd</div>
+    <p class="why">Modern Linux is run by systemd. Two tools run the show: <code>systemctl</code> controls services, <code>journalctl</code> reads their logs.</p>
+    <div class="callout tip"><div class="ttl">the distinction that prevents disasters</div><code>systemctl</code> = system-wide services (network, display manager). <code>systemctl --user</code> = <i>your session's</i> services (KDE, apps). Desktop problems are usually <b>user</b> services — no sudo.</div>
+    <div class="tblwrap"><table>
+      <tr><th>Command</th><th>Does</th></tr>
+      <tr><td><code>systemctl status &lt;svc&gt;</code></td><td>is it running? recent errors? (no sudo needed)</td></tr>
+      <tr><td><code>sudo systemctl restart &lt;svc&gt;</code></td><td>stop + start it</td></tr>
+      <tr><td><code>sudo systemctl enable &lt;svc&gt;</code></td><td>start automatically at boot</td></tr>
+      <tr><td><code>systemctl --user status &lt;svc&gt;</code></td><td>same, but for your session</td></tr>
+    </table></div>
+    <div class="tblwrap"><table>
+      <tr><th>journalctl</th><th>Reads</th></tr>
+      <tr><td><code>journalctl -b</code></td><td>logs since this boot</td></tr>
+      <tr><td><code>journalctl -b -1</code></td><td><b>previous boot</b> — golden after a crash/forced shutdown</td></tr>
+      <tr><td><code>journalctl -b -1 -k</code></td><td>previous boot, kernel messages only</td></tr>
+      <tr><td><code>journalctl --user -b -u &lt;svc&gt;</code></td><td>one user service, current boot</td></tr>
+      <tr><td><code>journalctl -f</code></td><td>follow live, like <code>tail -f</code></td></tr>
+    </table></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>journalctl -b -1 | grep -Ei "error|fail|suspend"</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Logs are huge; grep cuts them to what matters. For graphics/power: <code>grep -Ei "PM:|i915|drm|ACPI"</code>.</span></div></div></div>
+  </section>
+
+  <!-- ============ 13 ============ -->
+  <section id="time">
+    <div class="sec-head"><span class="num">13</span><h2>Clock &amp; time</h2></div>
+    <div class="crumb"><b>~/handbook</b>/13-time</div>
+    <p class="why">A wrong clock breaks logins, TLS certificates and tokens while your timezone looks perfectly fine. One command diagnoses it.</p>
+    <div class="cmd acc-red"><div class="bar"><span class="dollar">$</span><code>timedatectl status</code><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Everything at once: system clock, RTC (motherboard clock), timezone, NTP state.</span></div>
+      <div class="row"><span class="tag">want</span><span class="val"><code>System clock synchronized: yes</code> and <code>RTC in local TZ: no</code>.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo timedatectl set-ntp true</code> · <code>sudo timedatectl set-local-rtc 0</code><span class="badge b-sudo"><i></i>sudo</span><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Turn on network time sync. Keep the hardware clock in UTC (the Linux standard — prevents dual-boot/timezone drift).</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>date +%s</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Unix timestamp — handy when debugging “token expired” errors.</span></div></div></div>
+    <div class="callout tip"><div class="ttl">gotcha</div><code>NTP service: active</code> only means the sync daemon runs — not that it succeeded. The line that matters is <code>System clock synchronized: yes</code>.</div>
+  </section>
+
+  <!-- ============ 14 ============ -->
+  <section id="gui">
+    <div class="sec-head"><span class="num">14</span><h2>When the GUI dies</h2></div>
+    <div class="crumb"><b>~/handbook</b>/14-gui-rescue</div>
+    <p class="why">Black screen, dropped to a TTY (full-screen text login)? Don't reboot yet — the system is fine, the graphical layer just fell over.</p>
+    <div class="cmd acc-red"><div class="bar"><span class="dollar">$</span><code>Ctrl + Alt + F3</code> … back with <code>Ctrl + Alt + F2</code><span class="badge b-rescue"><i></i>rescue</span></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Switches between virtual terminals. Your GUI sits on one TTY; F3 gives you a spare one to work from.</span></div>
+      <div class="row warn"><span class="tag">gotcha</span><span class="val">Typing <code>exit</code> in a TTY just logs out of it — it does not bring KDE back.</span></div></div></div>
+    <div class="cmd acc-red"><div class="bar"><span class="dollar">$</span><code>loginctl list-sessions</code><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">See your sessions: which TTY, which user, is one graphical?</span></div></div></div>
+    <div class="cmd acc-red"><div class="bar"><span class="dollar">$</span><code>systemctl status display-manager --no-pager</code><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Checks the login-screen service without assuming SDDM or GDM. <code>display-manager</code> always points at whichever your system uses.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo systemctl restart display-manager</code><span class="badge b-sudo"><i></i>sudo</span><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Restarts the graphical login screen. Kills your current session — save work first.</span></div></div></div>
+  </section>
+
+  <!-- ============ 15 ============ -->
+  <section id="snap">
+    <div class="sec-head"><span class="num">15</span><h2>Snap apps &amp; KWallet</h2></div>
+    <div class="crumb"><b>~/handbook</b>/15-kwallet</div>
+    <p class="why">Snap apps are sandboxed, so they ask KDE's KWallet for secrets — and KWallet asks <i>you</i> for its password. Repeatedly.</p>
+    <div class="callout tip"><div class="ttl">diagnose the layer, not the app</div>The chain is <code>app → D-Bus → your session's credential service → KWallet → unlock prompt</code>. The prompt proves the chain reached KWallet — not that the app or Snap is broken.</div>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>kwalletmanager</code> · <code>systemsettings</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">KDE Wallet Manager (change/remove wallet password) and KDE System Settings (can disable the Wallet subsystem). GUI apps launched from the terminal.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>busctl --user list</code> · <code>pgrep -a spotify</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">See which session services are running on D-Bus, and verify the app process is alive.</span></div></div></div>
+    <div class="callout danger"><div class="ttl">no sudo here, ever</div>KWallet and KDE session services belong to your user. <code>sudo</code>-ing them breaks things and fixes nothing.</div>
+  </section>
+
+  <!-- ============ 16 ============ -->
+  <section id="suspend">
+    <div class="sec-head"><span class="num">16</span><h2>Black screen after suspend</h2></div>
+    <div class="crumb"><b>~/handbook</b>/16-suspend</div>
+    <p class="why">Suspend involves the kernel, GPU driver, firmware <i>and</i> the desktop. A machine can resume at kernel level while the screen stays black — so read the log before changing anything.</p>
+    <div class="cmd acc-red"><div class="bar"><span class="dollar">$</span><code>systemctl suspend</code><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Controlled suspend test from the terminal. If this works, basic suspend is fine and the problem is intermittent.</span></div></div></div>
+    <div class="cmd acc-red"><div class="bar"><span class="dollar">$</span><code>journalctl -b -1 -k | grep -Ei "PM:|i915|drm|ACPI|suspend|resume"</code><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">The money command. <code>PM: suspend exit</code> = the kernel woke up; errors <i>after</i> that point = GPU/desktop problem, not suspend itself.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>uname -r</code> vs <code>rpm -q kernel-core</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">What kernel is <i>running</i> vs <i>installed</i>. Testing a regression: reboot, pick another kernel in GRUB, confirm with <code>uname -r</code>.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>cat /sys/power/mem_sleep</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Shows which suspend modes exist; <code>[brackets]</code> mark the active one. No <code>deep</code> listed = only s2idle; don't chase deep-sleep tweaks.</span></div></div></div>
+    <div class="callout tip"><div class="ttl">gotchas that waste afternoons</div>NVIDIA fixes don't apply if Intel drives your screen (check which GPU owns the display first). ACPI errors near suspend = firmware talking, not necessarily the cause. Don't touch GRUB or kernel parameters before the log names the guilty subsystem.</div>
+  </section>
+
+  <!-- ============ 17 ============ -->
+  <section id="disks">
+    <div class="sec-head"><span class="num">17</span><h2>NTFS cleanup &amp; disks</h2></div>
+    <div class="crumb"><b>~/handbook</b>/17-disks</div>
+    <p class="why">Cleaning a Windows partition from Fedora, safely: look → identify → verify → delete the exact target → verify.</p>
+    <div class="cmd acc-grn"><div class="bar"><span class="dollar">$</span><code>lsblk -o NAME,SIZE,FSTYPE,FSAVAIL,FSUSE%,MOUNTPOINTS</code><span class="badge b-daily"><i></i>daily</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Map of all disks and partitions: what's mounted where. Step one before touching any storage.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo parted /dev/nvme0n1 print free</code><span class="badge b-power"><i></i>power</span><span class="badge b-sudo"><i></i>sudo</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Shows <i>unallocated</i> space between partitions. <code>df</code> free space is inside a filesystem; unallocated space is outside partitions — different things.</span></div></div></div>
+    <div class="cmd acc-pur"><div class="bar"><span class="dollar">$</span><code>find /run/media/cleme/WinSSD -maxdepth 2 -type d -iname "*pycharm*" -print</code><span class="badge b-power"><i></i>power</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Bounded search for a known app on a huge partition. Always scope the path and cap <code>-maxdepth</code> — an unbounded find on a Windows drive floods your terminal.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>ls -lah "/path/you/found"</code> → <code>sudo rm -rf "/exact/dir"</code><span class="badge b-sudo"><i></i>sudo</span><span class="badge b-rescue"><i></i>rescue</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Look first, delete the exact directory second, verify with <code>ls</code>/<code>du</code> third.</span></div>
+      <div class="row warn"><span class="tag">never</span><span class="val">Bulk-delete <code>Users</code>, <code>Windows</code>, <code>ProgramData</code>, <code>WindowsApps</code>. IDE installs under <code>Program Files</code> are not your projects — projects live under <code>Users</code>. Search for them separately.</span></div></div></div>
+    <div class="cmd acc-amb"><div class="bar"><span class="dollar root">#</span><code>sudo ntfsfix -n /dev/nvme0n1p3</code><span class="badge b-rescue"><i></i>rescue</span><span class="badge b-sudo"><i></i>sudo</span><button class="copy">⧉ copy</button></div>
+      <div class="body"><div class="row"><span class="tag">does</span><span class="val">Read-only NTFS check (<code>-n</code> = no changes). Diagnosis only — not a repair tool. Never resize a mounted read-write filesystem: <code>sudo umount</code> first.</span></div></div></div>
+  </section>
+
+  <!-- ============ 18 ============ -->
+  <section id="danger">
+    <div class="sec-head"><span class="num">18</span><h2>Danger zone</h2></div>
+    <div class="crumb"><b>~/handbook</b>/18-danger</div>
+    <p class="why">Commands that can wreck a system in one keystroke. Know them to avoid them — not to use them.</p>
+    <div class="callout danger"><div class="ttl">sudo rm -rf /</div><code>rm -rf</code> is irreversible: no trash, no undo, no “are you sure”. A typo in the path has destroyed systems. Mitigation: type the path, <span class="kbd">Tab</span>-complete it, <code>ls</code> it first — only then prefix with <code>rm -rf</code>.</div>
+    <div class="callout danger"><div class="ttl">dd if=... of=/dev/sdX</div>Writes raw bytes straight to a disk, bypassing every safeguard. One wrong letter in <code>of=</code> = wiped drive. Triple-check with <code>lsblk</code> before even thinking about it.</div>
+    <div class="callout danger"><div class="ttl">curl ... | bash</div>Runs whatever a website hands you, as you. Read the script first, or at least know the source.</div>
+    <div class="callout tip"><div class="ttl">the mindset that keeps systems alive</div>Diagnose the layer before changing it → change one thing → verify → repeat. Read-only commands first (<code>status</code>, <code>ls</code>, <code>journalctl</code>), mutating commands last. sudo is the last resort, not the first tool.</div>
+  </section>
+
+  <p style="color:var(--faint);font-family:var(--mono);font-size:12px;margin-top:40px;">~/handbook $ <span style="color:var(--grn)">exit</span> <span style="color:var(--dim)"># now go break something fixable</span></p>
+</main>
+</div>
+<button id="top" title="back to top">↑ top</button>
+<script>
+// ---------- hero terminal typing ----------
+const script=[
+  {in:'man fear', out:['No manual entry for fear']},
+  {in:'grep -rn "answer" ~/life', out:['Binary file /dev/brain matches']},
+  {in:'sudo dnf install confidence', out:['Already installed.','Nothing to do.','Complete!']},
+  {in:'ls -lah ~/handbook', out:['drwxr-xr-x  cleme  18 sections  readable']},
+];
+const body=document.getElementById('termbody');
+let si=0;
+function typeLine(){
+  body.innerHTML='';
+  const s=script[si%script.length]; si++;
+  const line=document.createElement('div'); line.className='line';
+  line.innerHTML='<span class="p">$ </span><span class="in"></span><span class="cursor"></span>';
+  body.appendChild(line);
+  const inp=line.querySelector('.in');
+  let i=0;
+  const t=setInterval(()=>{
+    inp.textContent=s.in.slice(0,++i);
+    if(i>=s.in.length){
+      clearInterval(t);
+      line.querySelector('.cursor').remove();
+      setTimeout(()=>{
+        s.out.forEach((o,k)=>{
+          setTimeout(()=>{
+            const d=document.createElement('div'); d.className='line out'+(o.includes('Complete')?' ok':'');
+            d.textContent=o; body.appendChild(d);
+            if(k===s.out.length-1) setTimeout(typeLine,1600);
+          },250*(k+1));
+        });
+      },350);
+    }
+  },55);
+}
+typeLine();
+
+// ---------- scrollspy + progress ----------
+const links=[...document.querySelectorAll('nav a')];
+const secs=[...document.querySelectorAll('section')];
+const prog=document.getElementById('progress');
+const topBtn=document.getElementById('top');
+window.addEventListener('scroll',()=>{
+  let cur=secs[0].id;
+  for(const s of secs){ if(s.getBoundingClientRect().top<140) cur=s.id; }
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+cur));
+  const h=document.documentElement;
+  prog.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';
+  topBtn.classList.toggle('show',h.scrollTop>600);
+},{passive:true});
+topBtn.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+
+// ---------- copy buttons ----------
+document.querySelectorAll('.copy').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const code=b.parentElement.querySelector('code').innerText;
+    navigator.clipboard.writeText(code).then(()=>{
+      b.textContent='✓ copied'; b.classList.add('done');
+      setTimeout(()=>{b.textContent='⧉ copy'; b.classList.remove('done');},1300);
+    });
+  });
+});
+
+// ---------- search ----------
+const box=document.getElementById('search');
+const count=document.getElementById('count');
+let totalCmds=document.querySelectorAll('.cmd').length;
+count.textContent=totalCmds+' commands · press / to search';
+document.addEventListener('keydown',e=>{
+  if(e.key==='/' && document.activeElement!==box){ e.preventDefault(); box.focus(); }
+  if(e.key==='Escape' && document.activeElement===box){ box.value=''; box.dispatchEvent(new Event('input')); box.blur(); }
+});
+box.addEventListener('input',()=>{
+  const q=box.value.trim().toLowerCase();
+  let shown=0;
+  document.querySelectorAll('.cmd').forEach(c=>{
+    const hit=!q || c.innerText.toLowerCase().includes(q);
+    c.classList.toggle('hidden',!hit);
+    if(hit&&q) shown++;
+  });
+  document.querySelectorAll('section').forEach(s=>{
+    if(!q){s.classList.remove('hidden');return;}
+    const any=[...s.querySelectorAll('.cmd')].some(c=>!c.classList.contains('hidden'));
+    const head=(s.querySelector('h2').innerText+' '+s.querySelector('.crumb').innerText).toLowerCase().includes(q);
+    s.classList.toggle('hidden',!any && !head);
+  });
+  count.textContent = q ? shown+' matches' : totalCmds+' commands · press / to search';
+});
+</script>
+</body>
+</html>

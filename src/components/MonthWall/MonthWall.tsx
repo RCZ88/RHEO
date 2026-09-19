@@ -5,7 +5,7 @@
 // LAMINAR: depth-as-brightness, gloss-as-behavior (moving specular)
 // ============================================================
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, X, CalendarDays, Sun,
@@ -13,7 +13,6 @@ import {
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { CATEGORY_COLORS, getCategoryColor } from '../../lib/CategoryColors';
 import { Select, SelectItem } from '../ui/select';
-import { CATEGORY_COLORS, getCategoryColor } from '../../lib/CategoryColors';
 import type { Goal, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
 
 
@@ -119,6 +118,19 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const wallRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // 3D tilt — flat resting, drag-orbit earns tilt
+  // Write transforms directly to DOM via refs+rAF so Vite never bundles
+  // template literals as static strings.
+  const [tiltX, setTiltX] = useState(4);
+  const [tiltY, setTiltY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showFlat, setShowFlat] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const tiltRef = useRef({ x: 4, y: 0 });
+  const rafRef = useRef<number>(0);
 
   // reduced motion
   const reducedMotion = useRef(false);
@@ -199,6 +211,57 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
     const style = getCategoryColor(category);
     return style?.bg || style?.border || 'var(--color-muted-foreground)';
   }, []);
+
+  const applyTilt = useCallback((nx: number, ny: number) => {
+    tiltRef.current = { x: nx, y: ny };
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const { x, y } = tiltRef.current;
+      if (containerRef.current) {
+        containerRef.current.style.transform = showFlat ? 'none' : `rotateX(${x}deg) rotateY(${y}deg)`;
+      }
+      setTiltX(x);
+      setTiltY(y);
+    });
+  }, [showFlat]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (showFlat) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging || !dragStart.current) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    const ny = Math.max(-35, Math.min(35, tiltRef.current.y + dx * 0.1));
+    const nx = Math.max(0, Math.min(30, tiltRef.current.x - dy * 0.1));
+    applyTilt(nx, ny);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    setShowReset(Math.abs(nx) > 8 || Math.abs(ny) > 8);
+  }, [isDragging, applyTilt]);
+
+  const onPointerUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    dragStart.current = null;
+  };
+
+  const resetTilt = () => {
+    tiltRef.current = { x: 4, y: 0 };
+    applyTilt(4, 0);
+    setShowReset(false);
+    setShowFlat(false);
+  };
+
+  // Sync flat→perspective toggle and initial tilt to DOM on mount/toggle
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.style.transform = showFlat ? 'none' : `rotateX(${tiltRef.current.x}deg) rotateY(${tiltRef.current.y}deg)`;
+    }
+  }, [showFlat]);
 
 
 
@@ -303,15 +366,16 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
           <p className="text-[11px] text-zinc-600 mt-1 max-w-[240px]">{error}</p>
         </div>
       ) : (
-        <div ref={wallRef} className="relative" aria-label="Month calendar">
+        <div ref={wallRef} className="relative" aria-label="Month calendar"
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+        >
           <div
             ref={containerRef}
             className="relative"
             style={{ transformStyle: 'preserve-3d' }}
             onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
           >
             <div className="grid grid-cols-7 gap-[10px]" style={{ transformStyle: 'preserve-3d', padding: 10 }}>
               {grid.map((day, idx) => {

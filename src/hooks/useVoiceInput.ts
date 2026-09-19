@@ -501,7 +501,10 @@ export function useVoiceInput({
       }
 
       engineRef.current = 'browser';
-      if (!recognitionRef.current) { endSession(); return; }
+      // No web SpeechRecognition in this runtime (Electron/Linux has no speech
+      // service) and no API key configured — surface an error instead of dying
+      // silently so the user knows to add a key in Settings → Voice & Speech.
+      if (!recognitionRef.current) { handleEngineError('unknown'); return; }
       try {
         recognitionRef.current.lang = langRef.current;
         recognitionRef.current.start();

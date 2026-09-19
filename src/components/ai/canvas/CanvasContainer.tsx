@@ -96,6 +96,7 @@ export function CanvasContainer({
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
   const hasAutoCentered = useRef(false)
+  const lastCenteredViewport = useRef({ w: 0, h: 0 })
 
   // Save pan/zoom to localStorage and sync to canvas state on change
   useEffect(() => {
@@ -117,34 +118,54 @@ export function CanvasContainer({
     return () => obs.disconnect()
   }, [])
 
-  // Auto-center on populated area on mount (when cards loaded from storage)
+  // Auto-center on populated area on mount (when cards loaded from storage or
+  // freshly seeded). Seeding happens in AiPage's effect, which runs AFTER this
+  // child effect, so on the first frame cards may still be empty — wait for
+  // them instead of locking the camera to a far-off empty spot (which made a
+  // freshly seeded canvas appear blank forever).
+  //
+  // Viewport size itself can also arrive late: the canvas pane may briefly
+  // measure ~0 height while the layout settles, so the first ResizeObserver
+  // callback can fire with a collapsed viewport. Re-centering against that
+  // collapsed size locks the camera off-screen. So we track the viewport we
+  // centered against and re-center whenever it grows meaningfully.
   useEffect(() => {
-    if (hasAutoCentered.current) return
     if (viewportSize.w === 0 || viewportSize.h === 0) return
-    // If we loaded saved pan/zoom, skip auto-center
+    if (cards.length === 0) return
+
+    // Honor a saved pan/zoom only when it actually keeps at least one card on
+    // screen. A stale saved pan (e.g. saved while the canvas was empty, or from
+    // an earlier buggy session) falls through and re-centers onto the cards.
     const raw = localStorage.getItem(PAN_STORAGE_KEY)
     if (raw) {
       try {
         const parsed = JSON.parse(raw)
-        if (parsed && typeof parsed.x === 'number') {
-          hasAutoCentered.current = true
-          return
+        if (parsed && typeof parsed.x === 'number' && typeof parsed.y === 'number' && typeof parsed.zoom === 'number') {
+          const z = parsed.zoom
+          const anyVisible = cards.some(c => {
+            const l = c.position.x * z + parsed.x
+            const t = c.position.y * z + parsed.y
+            const r = l + c.size.w * 40 * z
+            const b = t + c.size.h * 40 * z
+            return r > 0 && l < viewportSize.w && b > 0 && t < viewportSize.h
+          })
+          if (anyVisible && (viewportSize.w <= lastCenteredViewport.current.w + 1 && viewportSize.h <= lastCenteredViewport.current.h + 1)) {
+            hasAutoCentered.current = true
+            return
+          }
         }
-      } catch {}
-    }
-    if (cards.length === 0) {
-      setPan({ x: viewportSize.w / 2 - 2000, y: viewportSize.h / 2 - 2000 })
-      hasAutoCentered.current = true
-      return
+      } catch { /* fall through to auto-center */ }
     }
 
     const bounds = computeCardBounds(cards)
     const centerX = (bounds.minX + bounds.maxX) / 2
     const centerY = (bounds.minY + bounds.maxY) / 2
+    const z = zoom
     setPan({
-      x: viewportSize.w / 2 - centerX,
-      y: viewportSize.h / 2 - centerY,
+      x: viewportSize.w / 2 - centerX * z,
+      y: viewportSize.h / 2 - centerY * z,
     })
+    lastCenteredViewport.current = { w: viewportSize.w, h: viewportSize.h }
     hasAutoCentered.current = true
   }, [cards, viewportSize])
 

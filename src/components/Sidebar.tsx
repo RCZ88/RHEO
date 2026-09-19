@@ -4,7 +4,7 @@ import { motion, LayoutGroup } from 'framer-motion';
 import {
   LayoutDashboard, Activity, Brain, Sparkles, GraduationCap,
   FileText, Code2, Wallet, HeartHandshake, Settings, BookOpen,
-  Smartphone, Shield as ShieldIcon, Terminal,
+  Smartphone, Shield as ShieldIcon, Terminal, Search,
 } from 'lucide-react';
 import { SidebarLogo } from './SidebarLogo';
 import { ThemeToggle } from './ThemeToggle';
@@ -492,6 +492,14 @@ export const Sidebar = memo(function SidebarComponent({
                     </span>
                   </div>
                 )}
+                        {/* Smart search */}
+                        <button
+                          onClick={() => window.dispatchEvent(new CustomEvent('smart-search:open'))}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                          title="Smart search"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                        </button>
                 <button
                   onClick={onToggleTracking}
                   className={cn(
@@ -521,7 +529,16 @@ export const Sidebar = memo(function SidebarComponent({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                   </svg>
                 </button>
-              </div>
+
+                {/* Smart search */}
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('smart-search:open'))}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Smart search (Ctrl+F)"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
+                </div>
             </div>
           ) : (
             /* Expanded: full instrument strip */
@@ -599,7 +616,7 @@ export const Sidebar = memo(function SidebarComponent({
                   )}
                 </div>
               </div>
-              {/* Row 3: Quick Log + ⌘K */}
+              {/* Row 3: Quick Log + ⌘K + Smart Search */}
               <div className="flex items-center justify-between gap-1">
                 <button
                   onClick={onQuickLog}
@@ -611,13 +628,23 @@ export const Sidebar = memo(function SidebarComponent({
                   </svg>
                   <span className="font-mono">Quick Log</span>
                 </button>
-                <button
-                  onClick={onOpenPalette}
-                  className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
-                  title="Command palette"
-                >
-                  <span className="font-mono text-[9px]">⌘K</span>
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('smart-search:open'))}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                    title="Smart search"
+                  >
+                    <Search className="w-3 h-3" />
+                    <span className="font-mono text-[9px]">⌘F</span>
+                  </button>
+                  <button
+                    onClick={onOpenPalette}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                    title="Command palette"
+                  >
+                    <span className="font-mono text-[9px]">⌘K</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -80,8 +80,8 @@ export function Palette({ store, onClose, onCmd, onNewCmd }: { store: Store; onC
         {items.map((it, i) => (
           <button key={`${it.kind}-${it.id}`} onMouseEnter={() => setIdx(i)} onClick={() => pick(i)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition" style={{ background: i === idx ? "color-mix(in srgb, var(--t-accent) 13%, transparent)" : "transparent" }}>
             <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0" style={{ background: `${it.kind === "act" || it.kind === "hist" ? "var(--t-accent)" : it.color}1c`, color: it.kind === "act" || it.kind === "hist" ? "var(--t-accent)" : it.color }}><TabIcon name={it.icon} size={15} /></span>
-            <span className="flex-1 min-w-0"><span className="block text-[13px] font-semibold truncate mono" style={{ color: "var(--t-fg)" }}>{it.title}</span><span className="block text-[10.5px] truncate" style={{ color: "var(--t-muted)" }}>{it.sub}</span></span>
-            <span className="text-[9px] mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>{it.kind}</span>
+            <span className="flex-1 min-w-0"><span className="block text-[13px] font-semibold truncate mono" style={{ color: "var(--t-fg)" }}>{it.title}</span><span className="block text-[11px] truncate" style={{ color: "var(--t-muted)" }}>{it.sub}</span></span>
+            <span className="text-[10px] mono font-semibold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>{it.kind}</span>
           </button>
         ))}
         {!items.length && <div className="text-center py-10 text-[13px]" style={{ color: "var(--t-muted)" }}>No matches for “{q}”.</div>}
@@ -102,7 +102,7 @@ export function PresetsModal({ store, onClose, notify }: { store: Store; onClose
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Blocks size={17} /></div>
-        <div className="flex-1 min-w-0"><div className="display font-bold text-[15px]" style={{ color: "var(--t-fg)" }}>Preset gallery</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>One-click tab layouts with bootstrap commands</div></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Preset gallery</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>One-click tab layouts with bootstrap commands</div></div>
         <div className="relative hidden sm:block w-44">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter presets…" className="w-full h-9 pl-8 pr-2 rounded-xl border text-[12px] outline-none mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }} />
@@ -136,8 +136,8 @@ export function WorkspacesModal({ store, onClose, onSave, notify }: { store: Sto
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, #a78bfa, #22d3ee)" }}><Boxes size={17} /></div>
-        <div className="flex-1 min-w-0"><div className="display font-bold text-[15px]" style={{ color: "var(--t-fg)" }}>Workspaces</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Snapshots of every open tab, split & pane — restore in one click</div></div>
-        <button onClick={onSave} className="h-9 px-3.5 rounded-xl text-white text-[12.5px] font-bold flex items-center gap-1.5 shrink-0" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Save size={14} />Save current</button>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Workspaces</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Snapshots of every open tab, split & pane — restore in one click</div></div>
+        <button onClick={onSave} className="h-9 px-3.5 rounded-xl text-white text-[12.5px] font-semibold flex items-center gap-1.5 shrink-0" style={{ background: "var(--t-accent)" }}><Save size={14} />Save current</button>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
       <div className="overflow-y-auto px-5 pb-5 space-y-2.5">
@@ -197,7 +197,7 @@ export function SaveWsModal({ store, onClose, notify }: { store: Store; onClose:
     <Shell onClose={onClose}>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: color }}><Save size={16} /></div>
-        <div className="flex-1 min-w-0"><div className="display font-bold text-[15px]" style={{ color: "var(--t-fg)" }}>Save workspace</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>{store.tabs.length} tabs · {store.tabs.reduce((a, t) => a + Object.keys(t.panes).length, 0)} panes will be snapshotted</div></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Save workspace</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>{store.tabs.length} tabs · {store.tabs.reduce((a, t) => a + Object.keys(t.panes).length, 0)} panes will be snapshotted</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
       <div className="px-5 pb-5 space-y-3">
@@ -229,7 +229,7 @@ export function NewTabModal({ store, onClose, notify }: { store: Store; onClose:
     <Shell onClose={onClose}>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: color }}><Terminal size={16} /></div>
-        <div className="flex-1 min-w-0"><div className="display font-bold text-[15px]" style={{ color: "var(--t-fg)" }}>New terminal tab</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Label, color-code, group, shell & split layout</div></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>New terminal tab</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Label, color-code, group, shell & split layout</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
       <div className="px-5 pb-5 space-y-3">
@@ -277,7 +277,7 @@ export function SaveCmdModal({ store, initial, onClose, notify }: { store: Store
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, #fbbf24, #f97316)" }}><Zap size={16} /></div>
-        <div className="flex-1 min-w-0"><div className="display font-bold text-[15px]" style={{ color: "var(--t-fg)" }}>Save command</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Use <span className="mono font-bold" style={{ color: "var(--t-accent)" }}>{`{{name}}`}</span>, <span className="mono font-bold" style={{ color: "var(--t-accent)" }}>{`{{name:default}}`}</span> or <span className="mono font-bold" style={{ color: "var(--t-accent)" }}>{`{{name|a|b}}`}</span> for dropdown inputs</div></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Save command</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Use <span className="mono font-semibold" style={{ color: "var(--t-accent)" }}>{`{{name}}`}</span>, <span className="mono font-semibold" style={{ color: "var(--t-accent)" }}>{`{{name:default}}`}</span> or <span className="mono font-semibold" style={{ color: "var(--t-accent)" }}>{`{{name|a|b}}`}</span> for dropdown inputs</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
       <div className="px-5 pb-5 grid sm:grid-cols-2 gap-3">
@@ -290,8 +290,8 @@ export function SaveCmdModal({ store, initial, onClose, notify }: { store: Store
           </div>
           <div className="flex gap-1.5">{TAB_COLORS.map((c) => <button key={c} aria-label={`color ${c}`} onClick={() => setColor(c)} className="w-7 h-7 rounded-lg" style={{ background: c, outline: color === c ? "2px solid #fff" : "2px solid transparent", outlineOffset: 2 }} />)}</div>
         </div>
-        <div className="rounded-2xl border p-3.5 flex flex-col" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)" }}>
-          <div className="text-[10.5px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--t-muted)" }}>Live preview · {dyn.length} input{dyn.length === 1 ? "" : "s"}</div>
+        <div className="rounded-xl border p-3 flex flex-col" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)" }}>
+          <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] mb-2" style={{ color: "var(--t-muted)" }}>Live preview · {dyn.length} input{dyn.length === 1 ? "" : "s"}</div>
           {dyn.length === 0 && <div className="text-[12px] mb-2" style={{ color: "var(--t-muted)" }}>No dynamic inputs — add <span className="mono" style={{ color: "var(--t-accent)" }}>{`{{port:3000}}`}</span> to prompt for values at run time.</div>}
           <div className="space-y-1 mb-1 max-h-32 overflow-y-auto">
             {dyn.map((d) => <div key={d.name} className="flex items-center gap-2 text-[11.5px] mono"><span className="px-1.5 py-0.5 rounded font-bold shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}>{`{{${d.name}}}`}</span><span className="truncate" style={{ color: "var(--t-muted)" }}>{d.options.length ? `options: ${d.options.join(", ")}` : `default: ${d.def || "—"}`}</span></div>)}
@@ -302,7 +302,7 @@ export function SaveCmdModal({ store, initial, onClose, notify }: { store: Store
             <button onClick={() => setCommand((c) => c ? `${c} {{env|dev|staging|prod}}` : "{{env|dev|staging|prod}}")} className="flex-1 h-7 rounded-lg border text-[10.5px] font-bold" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>+ dropdown</button>
           </div>
           <div className="flex-1" />
-          <button onClick={save} className="mt-3 w-full h-10 rounded-xl text-white text-[13px] font-bold flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Star size={14} />Save command</button>
+          <button onClick={save} className="mt-3 w-full h-10 rounded-xl text-white text-[12.5px] font-semibold flex items-center justify-center gap-2" style={{ background: "var(--t-accent)" }}><Star size={14} />Save command</button>
         </div>
       </div>
     </Shell>
@@ -328,14 +328,14 @@ export function RunCmdModal({ store, cmd, onClose, notify }: { store: Store; cmd
     <Shell onClose={onClose}>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: cmd.color }}><Zap size={16} /></div>
-        <div className="flex-1 min-w-0"><div className="display font-bold text-[15px]" style={{ color: "var(--t-fg)" }}>{cmd.name}</div><div className="text-[11.5px] truncate" style={{ color: "var(--t-muted)" }}>{cmd.description}</div></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>{cmd.name}</div><div className="text-[11.5px] truncate" style={{ color: "var(--t-muted)" }}>{cmd.description}</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
       <div className="px-5 pb-5 space-y-2.5">
         <div className="text-[11px] mono p-2.5 rounded-xl break-all" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>{cmd.command}</div>
         {params.map((p) => (
           <div key={p.name}>
-            <label className="text-[10.5px] font-bold uppercase tracking-wider mono" style={{ color: "var(--t-accent)" }}>{p.name}{!p.def && " *"}</label>
+            <label className="text-[10.5px] font-semibold uppercase tracking-[0.08em] mono" style={{ color: "var(--t-accent)" }}>{p.name}{!p.def && " *"}</label>
             {p.options.length ? (
               <select value={vals[p.name] ?? p.def} onChange={(e) => setVals((v) => ({ ...v, [p.name]: e.target.value }))} className="w-full h-10 px-3 rounded-xl border text-[13px] mt-1 outline-none mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}>
                 {p.options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -346,7 +346,7 @@ export function RunCmdModal({ store, cmd, onClose, notify }: { store: Store; cmd
           </div>
         ))}
         <div className="text-[12px] mono p-2.5 rounded-xl break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "#34d399" }}>$ {final}</div>
-        <button onClick={run} className="w-full h-10 rounded-xl text-white text-[13px] font-bold flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Play size={14} />Execute in active pane</button>
+        <button onClick={run} className="w-full h-10 rounded-xl text-white text-[12.5px] font-semibold flex items-center justify-center gap-2" style={{ background: "var(--t-accent)" }}><Play size={14} />Execute in active pane</button>
       </div>
     </Shell>
   );

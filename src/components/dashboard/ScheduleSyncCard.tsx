@@ -49,7 +49,7 @@ export function ScheduleSyncCard({ schedule, goals, loading = false }: ScheduleS
 
   if (loading) {
     return (
-      <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/50 p-5 min-h-[200px]">
+      <div className="relative rounded-xl overflow-hidden  p-5 min-h-[200px]">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-sky-500/30 via-sky-500/10 to-transparent" />
         <div className="animate-pulse space-y-2">
           <div className="h-4 bg-zinc-800 rounded w-1/3" />
@@ -60,7 +60,7 @@ export function ScheduleSyncCard({ schedule, goals, loading = false }: ScheduleS
   }
 
   return (
-    <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-zinc-800/50 p-5 min-h-[200px] flex flex-col">
+    <div className="relative rounded-xl overflow-hidden  p-5 min-h-[200px] flex flex-col">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-sky-500/30 via-sky-500/10 to-transparent" />
 
       <div className="flex items-center justify-between mb-3 shrink-0">

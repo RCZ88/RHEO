@@ -16,6 +16,8 @@ const CARD_TYPE_COLORS: Record<CardType, string> = {
   schedule: '#f87171',
   deadlines: '#f97316',
   planner: '#38bdf8',
+  generated: '#a78bfa',
+  automation: '#34d399',
 }
 
 const MAP_W = 160

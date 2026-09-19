@@ -200,7 +200,7 @@ export function GoalsCard({
   if (loading) {
     return (
       <SpotlightCard spotlightColor="rgba(139, 92, 246, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 h-full">
+        <div className="relative rounded-xl overflow-hidden p-5 h-full">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent" />
           <div className="animate-pulse space-y-4">
             <div className="h-5 light:bg-white light:border-[var(--ws-border-strong)] rounded w-1/3" />
@@ -218,7 +218,7 @@ export function GoalsCard({
   if (error) {
     return (
       <SpotlightCard spotlightColor="rgba(139, 92, 246, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 h-full flex flex-col items-center justify-center text-center">
+        <div className="relative rounded-xl overflow-hidden p-5 h-full flex flex-col items-center justify-center text-center">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent" />
           <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
             <AlertCircle size={24} className="light:text-stone-400" />
@@ -232,7 +232,7 @@ export function GoalsCard({
 
   return (
       <SpotlightCard spotlightColor="rgba(139, 92, 246, 0.08)" className="rounded-xl h-full">
-      <div className="relative rounded-xl overflow-hidden bg-[rgba(24,24,27,0.60)] light:bg-white backdrop-blur-xl border light:border-[var(--ws-border)] p-5 flex flex-col h-full">
+      <div className="relative rounded-xl overflow-hidden p-5 flex flex-col h-full">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent" />
 
         {/* Header */}

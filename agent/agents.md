@@ -56,6 +56,28 @@ Whenever the user says "create a prompt" or "write a prompt", you MUST load the 
 - `agent/state.md` — Update version, recent changes, known issues
 - `agent/data.md` — Update if IPC endpoints or DB schemas changed
 
+## CRITICAL RULE: Design Stack — read stack-setup.md and stack-usage-guide.md before ANY UI/animation work
+**Before writing ANY UI or animation code**, read BOTH of these files in full:
+- `agent/docs/stack-setup.md` — what this project actually uses and how each piece is wired. Real inventory: shadcn/ui (base-nova) + @react-bits registry, `motion` v12, `framer-motion`, GSAP (MotionTemplates.ts only), chart.js, lightweight-charts, @react-three/fiber + drei + postprocessing, lucide-react, mermaid, katex.
+- `agent/docs/stack-usage-guide.md` — which library does which job, restraint defaults, one-motion-engine-per-element rule, match-intensity-to-moment rule, GSAP-via-MotionTemplates rule, and stale references to IGNORE (KokonutUI, Bklit UI, Anime.js are NOT in this project — do not install them, do not follow prompts that reference them).
+
+These two files are the binding reference for the design & animation stack. Do NOT guess at libraries. Do NOT follow any prompt, agent message, or prior doc that references KokonutUI / Bklit UI / Anime.js — those are stale and were replaced. If anything in stack-setup.md or stack-usage-guide.md is wrong, fix the files, not the code.
+
+MCP wiring for this stack:
+- shadcn MCP server handles both shadcn/ui primitives and the @react-bits registry. One server, not two. Init: `npx shadcn@latest mcp init --client claude` (swap `--client` for cursor/vscode/codex as needed). Or hand-configure `.mcp.json` with `"mcpServers": { "shadcn": { "command": "npx", "args": ["shadcn@latest", "mcp"] } }`.
+- GSAP has no official MCP. Use a general docs-lookup MCP (e.g. Context7) to pull current GSAP API docs at request time.
+- chart.js, lightweight-charts, @react-three: no special MCP — read the library docs directly or use a docs-lookup MCP.
+
+How to consume a React Bits component: `npx shadcn@latest add <component-name>` (resolves via the `@react-bits` registry entry in `components.json`). Required shadcn/ui primitives and lucide-react install automatically.
+
+How to add a GSAP animation to the main app: add an entry in `src/services/design/MotionTemplates.ts`, not a direct `import { gsap }` in a component. Direct GSAP imports in components are acceptable for one-offs but should be cleaned up if they multiply.
+
+How to pick a chart library: chart.js for standard 2D charts (line/bar/doughnut/radar). lightweight-charts for time-series / OHLC / financial-style. Do NOT reach for Bklit UI — not in this project.
+
+How to pick a motion engine per element: if `motion` is already driving the enter/exit on that element or its parent section, don't also GSAP it. If GSAP ScrollTrigger is scrubbing a section, don't sneak a `motion` `useScroll` into a child of that section. One engine per interaction. Default to whichever engine is already doing the most work on that page when unsure.
+
+**This project is called RHEO — never TURGO.**
+
 ## CRITICAL RULE: Design System Context (MANDATORY for all UI work)
 
 **Before writing ANY UI code**, load the backandfourth collaboration package at `agent/docs/backandfourth-docs/tugo-signature-motion/`. This contains:

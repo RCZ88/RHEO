@@ -1,6 +1,5 @@
 import { BrowserWindow, ipcMain, screen } from 'electron';
 import path from 'path';
-import path from 'path';
 import type Database from 'better-sqlite3';
 import { ensureFocusSchema } from './focusSchema';
 
@@ -223,21 +222,32 @@ export class FocusManager {
 
   private showOverlay(payload: { type: 'app' | 'website'; name: string; tier: Tier }) {
     const display = screen.getPrimaryDisplay();
+    const isLinux = process.platform === 'linux';
     if (!this.overlay) {
       const overlayPreloadPath = path.join(__dirname, '..', '..', 'resources', 'focus', 'overlayPreload.cjs');
       const overlayHtmlPath = path.join(__dirname, '..', '..', 'resources', 'focus', 'overlay.html');
       this.overlay = new BrowserWindow({
-        ...display.bounds, frame: false, transparent: true, resizable: false,
+        ...display.bounds, frame: false, resizable: false,
+        // Linux/Wayland compositors often render transparent fullscreen windows as
+        // opaque black or refuse them outright — use opaque there, transparent elsewhere.
+        transparent: !isLinux,
         movable: false, skipTaskbar: true, alwaysOnTop: true,
         fullscreenable: false, focusable: true,
+        // 'screen-saver' level is macOS/Windows-only; on Linux use a normal
+        // always-on-top window so the compositor actually raises it.
         webPreferences: {
           preload: overlayPreloadPath,
           contextIsolation: true, nodeIntegration: false,
         },
       });
-      this.overlay.setAlwaysOnTop(true, 'screen-saver');
-      this.overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-      this.overlay.loadFile(overlayHtmlPath);
+      try {
+        this.overlay.setAlwaysOnTop(true, isLinux ? 'pop-up-menu' : 'screen-saver');
+      } catch { this.overlay.setAlwaysOnTop(true); }
+      try {
+        this.overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      } catch { /* not supported on this compositor — overlay stays on current workspace */ }
+      this.overlay.loadFile(overlayHtmlPath).catch((e) =>
+        console.error('[focus] overlay loadFile failed:', overlayHtmlPath, e?.message));
       this.overlay.on('closed', () => { this.overlay = null; });
     }
     const send = () => this.overlay?.webContents.send('focus:overlay-data', { ...payload, endsAt: this.state.endsAt });
@@ -245,7 +255,9 @@ export class FocusManager {
       this.overlay.webContents.once('did-finish-load', send);
     else send();
     this.overlay.show();
-    this.overlay.setAlwaysOnTop(true, 'screen-saver');
+    try {
+      this.overlay.setAlwaysOnTop(true, process.platform === 'linux' ? 'pop-up-menu' : 'screen-saver');
+    } catch { this.overlay.setAlwaysOnTop(true); }
     this.overlay.focus();
     emitCompositionEvent('focus.overlay.shown', payload);
   }

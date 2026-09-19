@@ -100,8 +100,8 @@ export function StopwatchTimer({
         />
 
         <div
-          className="rounded-xl p-5 sm:p-12 h-full relative overflow-hidden bg-[rgba(24,24,27,0.80)] backdrop-blur-xl border-2"
-          style={{ borderColor: `rgba(${rgb},${glowA * 0.4})` }}
+          className="rounded-xl p-5 sm:p-12 h-full relative overflow-hidden bg-[rgba(24,24,27,0.80)] backdrop-blur-xl"
+          style={{ boxShadow: `inset 0 0 20px 2px rgba(${rgb},${glowA * 0.3})` }}
         >
           {/* Full-card radial glow */}
           <div
@@ -167,7 +167,7 @@ export function StopwatchTimer({
                       >
                         <Ban className="w-3 h-3" />
                       </motion.span>
-                      Distracting
+                      Distracting — {currentApp?.app || currentApp?.title || currentWebsite?.title || currentWebsite?.domain || 'Unknown App'}
                     </motion.span>
                   ) : isCurrentlyProductive ? (
                     <motion.span

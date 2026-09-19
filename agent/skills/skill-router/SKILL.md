@@ -1,4 +1,4 @@
-# Skill Router — Universal Skill Dispatcher v1.3.1
+# Skill Router — Universal Skill Dispatcher v1.3.2
 
 > **PURPOSE:** This is the master routing table for ALL skills in `agent/skills/`. It maps every task/scenario to the correct skill(s), enforces load order, and ensures no skill is forgotten. Load this skill FIRST whenever you begin a task.
 >
@@ -101,10 +101,10 @@ User task enters
 | **MANDATORY** | `frontend-design` | DeskFlow design system — colors, spacing, typography, page patterns, component patterns |
 | **MANDATORY** | `Human-Centric UX` | Mandated by AGENTS.md §5b. Every UI must cover all 4 states (empty/loading/error/populated). 6 pillars: clarity, progressive disclosure, visual hierarchy, state coverage, feedback, forgiveness. |
 | **MANDATORY** | `Impeccable` | 7 domains (typography, color, spatial, motion, interaction, responsive, UX writing) + 23 commands + 27 anti-patterns. Catches the details other skills miss. |
-| **MANDATORY** | `Motion — Bring the UI Alive` | Pick a Liveliness Level (L1/L2/L3) first. Motion taxonomy: reactive, transitional, ambient, narrative. Reduced-motion fallback mandatory. |
-| **MANDATORY** | `Design Taste System` | Master dispatcher — knobs (variance/motion/density), aesthetic matrix, anti-repetition rules, decision tree. |
-| **MANDATORY** | `UI UX Pro Max` | Industry-specific rules (developer tools, finance, AI/ML, analytics), style library, color palettes, typography pairings. |
-| **MANDATORY** | `Taste Skill` | 3 tunable knobs (variance/motion/density), aesthetic variant matrix, anti-repetition rules. Prevents generic output. |
+| **MANDATORY** | `motion-alive` | Pick a Liveliness Level (L1/L2/L3) first. Motion taxonomy: reactive, transitional, ambient, narrative. Reduced-motion fallback mandatory. |
+| **MANDATORY** | `design-taste` | Master dispatcher — knobs (variance/motion/density), aesthetic matrix, anti-repetition rules, decision tree. |
+| **MANDATORY** | `ui-ux-pro-max` | Industry-specific rules (developer tools, finance, AI/ML, analytics), style library, color palettes, typography pairings. |
+| **MANDATORY** | `taste-skill` | 3 tunable knobs (variance/motion/density), aesthetic variant matrix, anti-repetition rules. Prevents generic output. |
 | RECOMMENDED | `signature-design` | Page-level redesign / hero work: ONE concept-true centerpiece per screen |
 | RECOMMENDED | `google-stitch` | When the user mentions "mockup", "Stitch", "vibe design", "DESIGN.md" |
 | RECOMMENDED | `font-selection` | When choosing/verifying fonts — never invent a font |

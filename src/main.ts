@@ -51,6 +51,8 @@ const CliWrapperModule = require("./services/design/CliWrapperService");
 const { installComponent } = CliWrapperModule;
 const ColorSyncModule = require("./services/design/ColorSyncService");
 const { syncTokens, generateCssVariables, generateRealtimeColorsUrl, parseRealtimeColorsUrl } = ColorSyncModule;
+const SearchIndexModule = require("./services/search/index");
+const { registerSearchIpc } = SearchIndexModule;
 // Desktop bridge: sync agent + terminal relay
 import { SyncAgent } from "./main/syncAgent";
 import { startTerminalRelay, issueRelayTicket } from "./main/terminalRelay";
@@ -74,6 +76,12 @@ let lastCloseTime: number | null = null;
 let lastCloseType: 'normal' | 'force' | null = null;
 let lastFocusTime: number | null = null;
 let appStartTime: number = Date.now();
+// Boot splash — hoisted to module scope so createWindow()'s did-finish-load
+// handler can close it. Created at the top of app.whenReady() so it's visible
+// while the rest of initialization runs.
+let splashWindow: Electron.BrowserWindow | null = null;
+let splashClosed = false;
+let closeSplash: (() => void) | null = null;
 // Start of the current system-idle window (for idle-based sleep detection).
 // Set when the OS reports >= SLEEP_DETECTION_MIN_GAP_MS of no input; cleared
 // when the user becomes active again and checkSleepGap() runs.
@@ -2067,6 +2075,10 @@ function initializeStorage() {
         catch { /* column exists */ }
         try {
             db.exec('ALTER TABLE logs ADD COLUMN browser_name TEXT DEFAULT NULL');
+        }
+        catch { /* column exists */ }
+        try {
+            db.exec('ALTER TABLE logs ADD COLUMN platform TEXT DEFAULT NULL');
         }
         catch { /* column exists */ }
         // Add productivity columns to daily_stats if they don't exist
@@ -4212,7 +4224,8 @@ function addLog(timestamp, app, category, duration_ms, title, project, url?, dom
             url,
             domain,
             tab_id,
-            is_browser_tracking
+            is_browser_tracking,
+            platform: process.platform,
         };
         jsonLogs.unshift(newLog);
         if (jsonLogs.length > 50000)
@@ -4224,10 +4237,10 @@ function addLog(timestamp, app, category, duration_ms, title, project, url?, dom
         try {
             ensureDb();
             const stmt = db.prepare(`
-        INSERT INTO logs (timestamp, app, category, duration_ms, title, project, url, domain, tab_id, is_browser_tracking)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO logs (timestamp, app, category, duration_ms, title, project, url, domain, tab_id, is_browser_tracking, platform)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-            stmt.run(timestamp, app, category, safeDuration, title, project, url || null, domain || null, tab_id || null, is_browser_tracking ? 1 : 0);
+            stmt.run(timestamp, app, category, safeDuration, title, project, url || null, domain || null, tab_id || null, is_browser_tracking ? 1 : 0, process.platform);
             console.log(`[DeskFlow] ✅ Logged: ${app} → ${Math.floor(safeDuration / 1000)}s`);
         }
         catch (err) {
@@ -4307,7 +4320,10 @@ function getLogs(limit?: number): any[] {
     if (DEBUG_TRACKING) console.log('[DeskFlow getLogs] Called with limit:', limit);
     if (useJson) {
         if (DEBUG_TRACKING) console.log('[DeskFlow getLogs] Returning jsonLogs:', jsonLogs.length);
-        return limit ? jsonLogs.slice(0, limit) : jsonLogs;
+        return limit ? jsonLogs.slice(0, limit) : jsonLogs.map(log => ({
+            ...log,
+            platform: log.platform || process.platform,
+        }));
     }
     try {
         if (limit) {
@@ -4817,26 +4833,31 @@ async function pollForeground() {
             gameModePollCount = 0;
         }
 
-        // --- Collect foreground from primary collector, then Linux fallback ---
+        // --- Collect foreground ---
+        // active-win's native addon throws "Assignment to constant variable"
+        // on some Electron/Node configs (Windows/Linux). Try it first; on
+        // failure fall back to linuxForeground (Linux) or log (Windows).
         let result = null;
         let collectorError = null;
         try {
             result = await (0, active_win_1.default)();
         } catch (e) {
             collectorError = e;
-            console.error('[DeskFlow] active-win error:', e.message);
-        }
-
-        // active-win's Linux backend is X11-only and returns undefined on
-        // several Linux desktops. The fallback also runs after a primary
-        // collector exception, so a transient active-win crash still gives
-        // X11 a chance to report the foreground window.
-        if ((!result || collectorError) && process.platform === 'linux') {
-            try {
-                const fallback = await linuxForeground_1.getLinuxForegroundWindow();
-                if (fallback) result = fallback;
-            } catch (e) {
-                if (!collectorError) console.error('[DeskFlow] linuxForeground error:', e.message);
+            if (e && e.message && e.message.includes('Assignment to constant variable')) {
+                // active-win native addon incompatible with this Electron/V8.
+                // On Linux use the xdotool/xprop fallback; on Windows log and
+                // rely on the next poll or the cached app state.
+                if (process.platform === 'linux') {
+                    try {
+                        const fallback = await linuxForeground_1.getLinuxForegroundWindow();
+                        if (fallback) result = fallback;
+                    } catch (lfErr) {
+                        console.error('[DeskFlow] linuxForeground error:', lfErr.message);
+                    }
+                }
+                // Windows: no reliable native fallback, skip this poll cycle.
+            } else {
+                console.error('[DeskFlow] active-win error:', e.message);
             }
         }
 
@@ -5196,65 +5217,6 @@ function createWindow() {
     console.log('[DeskFlow] Preload path:', preloadPath);
     console.log('[DeskFlow] __dirname:', __dirname);
 
-    // ── R-10 Boot Splash ──────────────────────────────────────────────
-    // Open splash BEFORE main window, per spec. Splash is a frameless 520×320
-    // overlay that closes on the MAIN window's did-finish-load signal.
-    let splashWindow = null;
-    try {
-        const prefService = require('./services/prefService');
-        const splashCfg = prefService.getBootAnimation();
-        if (splashCfg?.enabled && splashCfg.variant === 'meridian') {
-            let splashClosed = false;
-            const closeSplash = () => {
-                if (splashClosed) return;
-                splashClosed = true;
-                if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
-            };
-            splashWindow = new electron_1.BrowserWindow({
-                width: 520,
-                height: 320,
-                x: Math.round((electron_1.screen.getPrimaryDisplay().workArea.width - 520) / 2),
-                y: Math.round((electron_1.screen.getPrimaryDisplay().workArea.height - 320) / 2),
-                frame: false,
-                resizable: false,
-                skipTaskbar: true,
-                transparent: true,
-                backgroundColor: '#09090b',
-                hasShadow: false,
-                webPreferences: {
-                    preload: preloadPath,
-                    contextIsolation: true,
-                    nodeIntegration: false,
-                    webSecurity: true,
-                },
-            });
-            splashWindow.setIgnoreMouseEvents(false);
-            splashWindow.on('ready-to-show', () => {
-                if (!splashWindow || splashWindow.isDestroyed()) return;
-                splashWindow.show();
-            });
-            const splashHtmlPath = path_1.default.join(__dirname, '../dist/splash.html');
-            if (require('fs').existsSync(splashHtmlPath)) {
-                splashWindow.loadFile(splashHtmlPath);
-            } else {
-                splashWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL || 'http://localhost:38123'}/splash.html`);
-            }
-            const dismiss = () => { if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close(); };
-            splashWindow.on('closed', () => { splashWindow = null; });
-            splashWindow.webContents.on('did-fail-load', dismiss);
-            splashWindow.webContents.on('crashed', dismiss);
-            splashWindow.on('blur', () => { /* keep visible */ });
-            splashWindow.webContents.on('keydown', dismiss);
-            splashWindow.webContents.on('mouse-down', dismiss);
-            setTimeout(closeSplash, 4000); // hard cap
-            setTimeout(() => { if (!splashClosed) closeSplash(); }, 900); // min display
-            console.log('[DeskFlow] ✅ Splash window opened (Meridian wake)');
-        }
-    } catch (e) {
-        console.error('[DeskFlow] Splash init error:', e?.message || e);
-    }
-    // ── End splash block ───────────────────────────────────────────────
-
     const savedState = loadWindowState();
     const primaryDisplay = electron_1.screen.getPrimaryDisplay();
     const { x: workX, y: workY, width: workWidth, height: workHeight } = primaryDisplay.workArea;
@@ -5367,9 +5329,16 @@ function createWindow() {
     });
     mainWindow.webContents.on('did-finish-load', () => {
         console.log('[DeskFlow] Page loaded successfully');
-        // R-10: close splash on main window ready signal
-        if (splashWindow && !splashWindow.isDestroyed()) {
-            splashWindow.close();
+        // R-10: close splash on main window ready signal — only if splash is still
+        // playing (animation hasn't completed via sendComplete yet).
+        // Guard against bundler scope-splitting: splashWindow/closeSplash may be
+        // undefined if the splash try/catch block was inlined into a nested scope.
+        try {
+            if (typeof splashWindow !== 'undefined' && splashWindow && !splashWindow.isDestroyed() && !splashClosed) {
+                closeSplash();
+            }
+        } catch (e) {
+            // splashWindow may be undefined if splash init was skipped — safe to ignore
         }
     });
     // Renderer crash recovery — reload instead of dying silently
@@ -5393,17 +5362,12 @@ function createWindow() {
         }, 5000);
     });
     
-    // Handle window close — ask renderer if unsaved changes exist first
-    let pendingClose = false; // set when window:close IPC fires, bypasses workspace warning
+    // Handle window close — allow all close attempts directly
     mainWindow.on('close', (event) => {
-        if (pendingClose) { pendingClose = false; return; } // IPC-triggered close, allow
-        event.preventDefault();
-        mainWindow?.webContents.send('workspace-request-save');
-    });
-    // Listen for renderer saying "ok, close now"
-    electron_1.ipcMain.on('workspace-allow-close', () => {
-        pendingClose = true;
-        mainWindow?.close();
+        // Always allow the close; the workspace save prompt is
+        // handled by the renderer before calling window:close.
+        // This lets taskbar/icon close, window:X buttons, and
+        // IPC window:close all work without blocking.
     });
     
     // CRITICAL: Call pollForeground ONCE immediately on startup to detect current app
@@ -5770,6 +5734,10 @@ electron_1.ipcMain.handle('rescan-games', () => {
         return { success: false, error: err.message };
     }
 });
+
+// ── Smart Search IPC ──────────────────────────────────────────────────────────
+registerSearchIpc();
+
 electron_1.ipcMain.handle('delete-app-log', (_event, id) => {
     try {
         if (useJson) {
@@ -5832,6 +5800,10 @@ electron_1.ipcMain.handle('notification-click', () => {
 electron_1.ipcMain.handle('get-auto-start-status', () => {
     const settings = electron_1.app.getLoginItemSettings();
     return settings.openAtLogin;
+});
+electron_1.ipcMain.handle('set-auto-start', (_e, enabled: boolean) => {
+    electron_1.app.setLoginItemSettings({ openAtLogin: enabled });
+    return electron_1.app.getLoginItemSettings().openAtLogin;
 });
 // Migrate old logs to new schema (daily_aggregates)
 electron_1.ipcMain.handle('migrate-to-aggregates', () => {
@@ -6676,6 +6648,72 @@ electron_1.ipcMain.handle('backup:pickMirrorDir', async () => {
     return { canceled: false, mirrorDir, settings: getBackupSettings() };
 });
 
+// ── AI Gateway — browser-automation provider access (spec §2, §5) ──────────
+// Instantiated lazily: constructing AIGatewayService never launches browsers.
+// All IPC handlers return { success, ... } envelopes — never throw across boundary.
+let gatewayService = null;
+function getGateway() {
+    if (!gatewayService) {
+        const { AIGatewayService } = require('./services/ai-gateway/AIGatewayService');
+        const dataDir = require('path').join(userDataPath, 'ai-gateway');
+        gatewayService = new AIGatewayService({
+            dataDir,
+            db,
+            broadcast: (event, payload) => {
+                if (event === 'aigateway:provider-status') {
+                    electron_1.ipcMain.emit('aigateway:provider-status', null, payload);
+                } else if (event === 'aigateway:session-expired') {
+                    electron_1.ipcMain.emit('aigateway:session-expired', null, payload);
+                }
+            },
+            openExternal: (url) => { try { require('electron').shell.openExternal(url); } catch {} },
+        });
+    }
+    return gatewayService;
+}
+
+electron_1.ipcMain.handle('aigateway:list-providers', () => {
+    try { return getGateway().listProviders(); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:all-statuses', () => {
+    try { return { success: true, data: getGateway().allStatuses() }; } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:playwright-status', () => {
+    try { return getGateway().playwrightStatus(); } catch (e: any) { return { available: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:setup-provider', (_e, providerId: string) => {
+    try { return getGateway().setupProvider(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:verify-setup', (_e, providerId: string) => {
+    try { return getGateway().verifySetup(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:send-prompt', (_e, opts: any) => {
+    try { return getGateway().sendPrompt(opts); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:clear-conversation', (_e, providerId: string) => {
+    try { return getGateway().clearConversation(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:close-provider', (_e, providerId: string) => {
+    try { return getGateway().closeProvider(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:logout-provider', (_e, providerId: string) => {
+    try { return getGateway().logoutProvider(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:set-disabled', (_e, providerId: string, disabled: boolean) => {
+    try { return getGateway().setProviderDisabled(providerId, disabled); } catch (e: any) { return { success: false, error: e?.message }; }
+});
+electron_1.ipcMain.handle('aigateway:recent-runs', (_e, providerId: string, limit?: number) => {
+    try { return getGateway().recentRuns(providerId, limit); } catch (e: any) { return []; }
+});
+
+// Broadcast channels — forward service events to renderer listeners
+electron_1.ipcMain.on('aigateway:provider-status', (_event, data: any) => {
+    electron_1.ipcMain.emit('aigateway:provider-status', null, data);
+});
+electron_1.ipcMain.on('aigateway:session-expired', (_event, data: any) => {
+    electron_1.ipcMain.emit('aigateway:session-expired', null, data);
+});
+
 function snapshotForAgentSession(terminalId: string, cwd: string, agentType: string) {
     try {
         const { createBackup, getBackupSettings } = require('./main/backup/BackupService');
@@ -6724,7 +6762,8 @@ const BROWSER_PROCESS_NAMES: Record<string, string[]> = {
     'firefox': ['firefox'],
     'arc': ['arc'],
     'safari': ['safari'],
-};
+    'zen': ['zen', 'zen-browser', 'zenbrowser'],
+  };
 function getBrowserProcessNames(browserName: string): string[] {
     const key = browserName.toLowerCase();
     return BROWSER_PROCESS_NAMES[key] || [key];
@@ -6783,6 +6822,24 @@ electron_1.ipcMain.handle('get-preference', (_event, key) => {
     return userPreferences[key];
 });
 // R-10: boot animation config — preference store single source (ruling 2)
+electron_1.ipcMain.handle('get-keyboard-shortcuts', () => {
+    return userPreferences.keyboardShortcuts || DEFAULT_KEYBOARD_SHORTCUTS;
+});
+electron_1.ipcMain.handle('set-keyboard-shortcuts', (_event, shortcuts: Record<string, string>) => {
+    userPreferences.keyboardShortcuts = shortcuts;
+    savePreferences();
+    return true;
+});
+
+// Default keyboard shortcut mappings
+const DEFAULT_KEYBOARD_SHORTCUTS: Record<string, string> = {
+    voiceInput: 'Ctrl+Shift+V',
+    commandPalette: 'Ctrl+K',
+    aiChatVoice: 'Ctrl+Shift+M',
+    aiPageTranscript: 'Ctrl+Shift+L',
+    externalSelect: 'Enter',
+    externalDeselect: 'Escape',
+};
 electron_1.ipcMain.handle('boot-animation-config', () => {
     try {
         const raw = userPreferences['boot_animation'];
@@ -6989,6 +7046,12 @@ except Exception as e:
     }
 });
 electron_1.ipcMain.handle('stt:native-start', (event, lang) => {
+    // Native speech engine is Windows-only (System.Speech via powershell.exe).
+    // On Linux/macOS the renderer falls back to API (Groq whisper) or browser
+    // speech — never spawn powershell here (ENOENT + confusing error loop).
+    if (process.platform !== 'win32') {
+        return { ok: false, error: 'Native speech is Windows-only. On Linux use Settings → General → Voice & Speech → API key (Groq whisper, free tier) or browser speech.' };
+    }
     try {
         sttKillNative();
         const scriptPath = path_1.default.join(userDataPath, 'stt-native.ps1');
@@ -7034,6 +7097,141 @@ electron_1.ipcMain.handle('stt:native-start', (event, lang) => {
 electron_1.ipcMain.handle('stt:native-stop', () => {
     sttKillNative();
     return { ok: true };
+});
+
+// ── Speech-to-Text: transcript persistence (SQLite) ─────────────────
+electron_1.ipcMain.handle('stt:transcript-list', async () => {
+  if (!db) return [];
+  const rows = db.prepare('SELECT * FROM stt_transcripts ORDER BY created_at DESC').all();
+  return rows.map(r => ({
+    ...r,
+    tags: JSON.parse(r.tags || '[]'),
+    isFavorite: !!r.is_favorite,
+    title: r.title || '',
+    note: r.note || '',
+    prompt: r.prompt || '',
+    project: r.project || '',
+  }));
+});
+
+electron_1.ipcMain.handle('stt:transcript-save', async (_event, entry) => {
+  if (!db) return { ok: false, error: 'No database' };
+  const id = entry.id || `stt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tagsJson = JSON.stringify(entry.tags || []);
+  db.prepare(`
+    INSERT INTO stt_transcripts (id, text, created_at, duration_ms, category, tags, project_id, project_name, is_favorite, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET text=excluded.text, title=excluded.title, note=excluded.note, prompt=excluded.prompt, project=excluded.project, category=excluded.category, tags=excluded.tags, is_favorite=excluded.is_favorite, source=excluded.source
+  `).run(
+    id, entry.text, entry.createdAt || new Date().toISOString(),
+    entry.durationMs || 0, entry.category || 'other', tagsJson,
+    entry.projectId || null, entry.projectName || null,
+    entry.isFavorite ? 1 : 0, entry.source || null
+  );
+  return { ok: true, id };
+});
+
+electron_1.ipcMain.handle('stt:transcript-update', async (_event, id, changes) => {
+  if (!db || !id) return { ok: false };
+  const sets = [];
+  const vals = [];
+  if (changes.text !== undefined) { sets.push('text=?'); vals.push(changes.text); }
+  if (changes.title !== undefined) { sets.push('title=?'); vals.push(changes.title); }
+  if (changes.note !== undefined) { sets.push('note=?'); vals.push(changes.note); }
+  if (changes.prompt !== undefined) { sets.push('prompt=?'); vals.push(changes.prompt); }
+  if (changes.project !== undefined) { sets.push('project=?'); vals.push(changes.project); }
+  if (changes.category !== undefined) { sets.push('category=?'); vals.push(changes.category); }
+  if (changes.tags !== undefined) { sets.push('tags=?'); vals.push(JSON.stringify(changes.tags)); }
+  if (changes.isFavorite !== undefined) { sets.push('is_favorite=?'); vals.push(changes.isFavorite ? 1 : 0); }
+  if (changes.source !== undefined) { sets.push('source=?'); vals.push(changes.source); }
+  if (sets.length === 0) return { ok: true };
+  vals.push(id);
+  db.prepare(`UPDATE stt_transcripts SET ${sets.join(', ')} WHERE id=?`).run(...vals);
+  return { ok: true };
+});
+
+electron_1.ipcMain.handle('stt:transcript-remove', async (_event, id) => {
+  if (!db || !id) return { ok: false };
+  db.prepare('DELETE FROM stt_transcripts WHERE id=?').run(id);
+  return { ok: true };
+});
+
+electron_1.ipcMain.handle('stt:transcript-toggle-favorite', async (_event, id) => {
+  if (!db || !id) return { ok: false };
+  db.prepare('UPDATE stt_transcripts SET is_favorite = CASE WHEN is_favorite=1 THEN 0 ELSE 1 END WHERE id=?').run(id);
+  return { ok: true };
+});
+
+// ── Local STT overlay handlers (R-46/R-47/R-48) ─────────────────────────
+
+electron_1.ipcMain.handle('stt:local-status', () => {
+  return { ok: true, config: { model: 'base' } };
+});
+
+electron_1.ipcMain.handle('stt:local-start-recording', () => {
+  return { ok: true };
+});
+
+electron_1.ipcMain.handle('stt:local-stop-recording', async () => {
+  return { ok: true, text: '' };
+});
+
+electron_1.ipcMain.handle('stt:local-vocab-add', async (_event, entry) => {
+  if (!db) return { ok: false };
+  try {
+    const id = `vocab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    db.prepare('INSERT OR REPLACE INTO stt_vocabulary (id, canonical, aliases, priority) VALUES (?, ?, ?, ?)').run(
+      id, entry.canonical, JSON.stringify(entry.aliases || []), entry.priority ?? 5
+    );
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+electron_1.ipcMain.handle('stt:local-vocab-remove', async (_event, canonical) => {
+  if (!db || !canonical) return { ok: false };
+  db.prepare('DELETE FROM stt_vocabulary WHERE canonical=?').run(canonical);
+  return { ok: true };
+});
+
+electron_1.ipcMain.handle('stt:local-vocab-load', async (_event, filePath) => {
+  if (!db) return { ok: false };
+  try {
+    const vocabPath = filePath || path.join(userDataPath, 'vocab.json');
+    if (fs.existsSync(vocabPath)) {
+      const data = JSON.parse(fs.readFileSync(vocabPath, 'utf-8'));
+      const items = Array.isArray(data) ? data : (data.items || data.vocab || []);
+      const insert = db.prepare('INSERT OR REPLACE INTO stt_vocabulary (id, canonical, aliases, priority) VALUES (?, ?, ?, ?)');
+      for (const item of items) {
+        if (item.canonical) {
+          insert.run(`vocab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, item.canonical, JSON.stringify(item.aliases || []), item.priority ?? 5);
+        }
+      }
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+electron_1.ipcMain.handle('stt:get-registered-shortcut', () => {
+  return { shortcut: 'Ctrl+Shift+V' };
+});
+
+electron_1.ipcMain.handle('stt:register-shortcut', async (_event, shortcut) => {
+  if (!shortcut) return { ok: false, error: 'No shortcut provided' };
+  try {
+    // Unregister old, register new
+    globalShortcut.unregister('CommandOrControl+Shift+V');
+    globalShortcut.register(shortcut.replace('+', '+'), () => {
+      const win = BrowserWindow.getFocusedWindow();
+      if (win) win.webContents.send('stt:shortcut-triggered');
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
 });
 
 // Custom AI agent storage paths (overrides for plugins)
@@ -7240,43 +7438,46 @@ electron_1.ipcMain.handle('remove-keyword-domain', (event, domain) => {
 // ========== Word Tracker IPC Handlers ==========
 const wordTrackerModule = require('./main/wordTracker');
 electron_1.ipcMain.handle('wordTrackerGetWords', () => {
-    return wordTrackerModule.getWords();
+    return wordTrackerModule.wordTrackerGetWords();
 });
 electron_1.ipcMain.handle('wordTrackerAddWord', (event, word, label, color, tolerance) => {
-    return wordTrackerModule.addWord(word, label, color, tolerance);
+    return wordTrackerModule.wordTrackerAddWord(word, label, color, tolerance);
 });
 electron_1.ipcMain.handle('wordTrackerRemoveWord', (event, wordId) => {
-    return wordTrackerModule.removeWord(wordId);
+    return wordTrackerModule.wordTrackerRemoveWord(wordId);
 });
 electron_1.ipcMain.handle('wordTrackerToggleWord', (event, wordId, enabled) => {
-    return wordTrackerModule.toggleWord(wordId, enabled);
+    return wordTrackerModule.wordTrackerToggleWord(wordId, enabled);
 });
 electron_1.ipcMain.handle('wordTrackerSetTolerance', (event, wordId, tolerance) => {
-    return wordTrackerModule.setTolerance(wordId, tolerance);
+    return wordTrackerModule.wordTrackerSetTolerance(wordId, tolerance);
 });
 electron_1.ipcMain.handle('wordTrackerEditWord', (event, wordId, updates) => {
-    return wordTrackerModule.editWord(wordId, updates);
+    return wordTrackerModule.wordTrackerEditWord(wordId, updates);
 });
 electron_1.ipcMain.handle('wordTrackerGetCounts', (event, projectId) => {
-    return wordTrackerModule.getCounts(projectId);
+    return wordTrackerModule.wordTrackerGetCounts(projectId);
+});
+electron_1.ipcMain.handle('wordTrackerCounts', (event, projectId) => {
+    return wordTrackerModule.wordTrackerGetCounts(projectId);
 });
 electron_1.ipcMain.handle('wordTrackerCountsByProject', (event, wordId) => {
-    return wordTrackerModule.getCountsByProject(wordId);
+    return wordTrackerModule.wordTrackerGetCountsByProject(wordId);
 });
 electron_1.ipcMain.handle('wordTrackerGetConfig', (event, key) => {
-    return wordTrackerModule.getConfig(key);
+    return wordTrackerModule.wordTrackerGetConfig(key);
 });
 electron_1.ipcMain.handle('wordTrackerSetConfig', (event, key, value) => {
-    return wordTrackerModule.setConfig(key, value);
+    return wordTrackerModule.wordTrackerSetConfig(key, value);
 });
 electron_1.ipcMain.handle('wordTrackerResetCounts', () => {
-    return wordTrackerModule.resetCounts();
+    return wordTrackerModule.wordTrackerResetCounts();
 });
 electron_1.ipcMain.handle('wordTrackerScanJsonl', (event, projectId) => {
-    return wordTrackerModule.scanJsonl(projectId);
+    return wordTrackerModule.wordTrackerScanJsonl(projectId);
 });
 electron_1.ipcMain.handle('wordTrackerCountText', (event, text, projectId) => {
-    return wordTrackerModule.countText(text, projectId);
+    return wordTrackerModule.wordTrackerCountText(text, projectId);
 });
 
 // === LOCKED ITEMS & AI CHANGE HISTORY ===
@@ -8959,7 +9160,7 @@ electron_1.ipcMain.handle('get-available-browsers', async () => {
             }
         } else {
             // Linux
-            browsers.push('chrome', 'firefox', 'brave', 'edge', 'chromium', 'comet');
+            browsers.push('chrome', 'firefox', 'brave', 'edge', 'chromium', 'comet', 'zen');
         }
     } catch (err) {
         console.error('[DeskFlow] Error detecting browsers:', err);
@@ -8974,7 +9175,7 @@ electron_1.ipcMain.handle('get-available-browsers', async () => {
     return browsers;
 });
 
-const KNOWN_BROWSERS = ['chrome', 'firefox', 'safari', 'edge', 'brave', 'opera', 'vivaldi', 'arc', 'comet'];
+const KNOWN_BROWSERS = ['chrome', 'firefox', 'safari', 'edge', 'brave', 'opera', 'vivaldi', 'arc', 'comet', 'zen'];
 
 electron_1.ipcMain.handle('get-tracked-browsers', async () => {
     const browsers: string[] = [];
@@ -9381,6 +9582,12 @@ electron_1.ipcMain.handle("auth:logout", async () => {
   syncAgent = null;
   (getSyncTokenForRelay as any)?.__clearAll?.();
   return { success: true };
+});
+
+electron_1.ipcMain.handle("auth:update-sync-url", async (_event, url) => {
+  const newUrl = url || "http://127.0.0.1:8787";
+  syncUrl = newUrl;
+  return { success: true, syncUrl: newUrl };
 });
 
 // ── Device management (proxy to sync server) ────────────────────────
@@ -11686,7 +11893,7 @@ electron_1.ipcMain.handle('run-project', (_, projectId: string, config: { fronte
         if (existing) return { success: false, message: 'Project is already running', terminalId: existing.terminalId };
 
         const results: { frontend?: { terminalId: string }; backend?: { terminalId: string } } = {};
-        const shell = process.env.COMSPEC || 'powershell.exe';
+        const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'powershell.exe') : (process.env.SHELL || '/bin/bash');
 
         if (config.single) {
             const terminalId = `run-${projectId}-${Date.now()}`;
@@ -14716,6 +14923,32 @@ electron_1.ipcMain.handle('electron:execute-command', async (_event, command: st
             resolve({ stdout, stderr, error: error ? error.message : null, code: error?.code || 0 });
         });
     });
+});
+
+// ========== terminal:exec — Run a single command via PTY and return output ==========
+electron_1.ipcMain.handle('terminal:exec', async (_event, command: string, cwd?: string) => {
+    try {
+        const pty = require('node-pty');
+        const os = require('os');
+        const fs = require('fs');
+        const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'powershell.exe') : (process.env.SHELL || '/bin/bash');
+        let workingDir = cwd && cwd.length > 0 ? cwd : os.homedir();
+        try { if (!fs.existsSync(workingDir)) { workingDir = os.homedir(); } } catch {}
+        const proc = pty.spawn(shell, [], { name: 'xterm-256color', cols: 120, rows: 32, cwd: workingDir, env: { ...process.env, TERM: 'xterm-256color' } });
+        return new Promise((resolve) => {
+            let stdout = '';
+            let stderr = '';
+            const timeout = setTimeout(() => { proc.kill(); resolve({ stdout, stderr, code: 1, timedOut: true }); }, 30000);
+            proc.onData((data: string) => { stdout += data; });
+            proc.onExit((result: { exitCode: number; signal?: string }) => {
+                clearTimeout(timeout);
+                resolve({ stdout, stderr, code: result.exitCode, timedOut: false });
+            });
+            proc.write(command + '\n');
+        });
+    } catch (err: any) {
+        return { stdout: '', stderr: err.message, code: 1, timedOut: false };
+    }
 });
 
 electron_1.ipcMain.handle('terminal:resize-old-format', async (_event, terminalId: string, cols: number, rows: number) => {
@@ -21922,6 +22155,10 @@ function startBrowserTrackingServer() {
                         const reply = result.content?.toString() || '';
                         // Persist to extension_chat_sessions table
                         db.prepare('CREATE TABLE IF NOT EXISTS extension_chat_sessions (id TEXT PRIMARY KEY, messages JSON, created_at TEXT, updated_at TEXT)').run();
+                        // AI Gateway tables (browser-automation provider access)
+                        db.prepare('CREATE TABLE IF NOT EXISTS aigateway_providers (provider_id TEXT PRIMARY KEY, disabled INTEGER NOT NULL DEFAULT 0, updated_at TEXT)').run();
+                        db.prepare('CREATE TABLE IF NOT EXISTS aigateway_sessions (provider_id TEXT PRIMARY KEY, is_valid INTEGER NOT NULL DEFAULT 0, last_validated_at TEXT, updated_at TEXT)').run();
+                        db.prepare('CREATE TABLE IF NOT EXISTS aigateway_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, prompt_len INTEGER, response_len INTEGER, duration_ms INTEGER, detection_strategy TEXT, status TEXT NOT NULL, error TEXT, created_at TEXT DEFAULT (datetime(\'now\')))').run();
                         const sessionId = conversationId || `chat_${Date.now()}`;
                         const existing = db.prepare('SELECT messages FROM extension_chat_sessions WHERE id = ?').get(sessionId);
                         const messages = existing ? JSON.parse(existing.messages) : [];
@@ -22126,8 +22363,16 @@ function notifyRendererClearBrowser() {
 // null = indeterminate (no window / unknown), in which case we trust the cache.
 async function freshForegroundIsBrowser(browsersList: string[]): Promise<boolean | null> {
     try {
-        const raw = await (0, active_win_1.default)();
-        if (!raw) return null; // no active window (e.g. transition) � indeterminate
+        let raw = await (0, active_win_1.default)();
+        // active-win throws "Assignment to constant variable" on Linux with newer Node.
+        // Fall back to linuxForeground (xdotool/xprop) like pollForeground does.
+        if (!raw && process.platform === 'linux') {
+            try {
+                const fallback = await linuxForeground_1.getLinuxForegroundWindow();
+                if (fallback) raw = fallback;
+            } catch (_) {}
+        }
+        if (!raw) return null; // no active window (e.g. transition) — indeterminate
         const appName = (raw.owner?.name ?? raw.ownerName ?? '').replace(/\.exe$/i, '');
         if (!appName) return null;
         const lower = appName.toLowerCase();
@@ -22851,7 +23096,77 @@ electron_1.app.whenReady().then(() => {
         });
     });
 
+    // ── R-10 Boot Splash ──────────────────────────────────────────────
+    // Open splash BEFORE main window, per spec. Splash is a frameless 520×320
+    // overlay that closes on the MAIN window's did-finish-load signal.
+    try {
+        const prefService = require('./services/prefService');
+        const splashCfg = prefService.getBootAnimation();
+        if (splashCfg?.enabled && splashCfg.variant === 'meridian') {
+            splashClosed = false;
+            closeSplash = () => {
+                if (splashClosed) return;
+                splashClosed = true;
+                if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+            };
+            // Track when splash opened so we can gate dismiss/timeout on animation progress.
+            const splashStartTime = performance.now();
+            const splashPreloadPath = path_1.default.join(__dirname, 'preload.cjs');
+            splashWindow = new electron_1.BrowserWindow({
+                width: 520,
+                height: 320,
+                x: Math.round((electron_1.screen.getPrimaryDisplay().workArea.width - 520) / 2),
+                y: Math.round((electron_1.screen.getPrimaryDisplay().workArea.height - 320) / 2),
+                frame: false,
+                resizable: false,
+                skipTaskbar: true,
+                transparent: true,
+                backgroundColor: '#09090b',
+                hasShadow: false,
+                webPreferences: {
+                    preload: splashPreloadPath,
+                    contextIsolation: true,
+                    nodeIntegration: false,
+                    webSecurity: true,
+                },
+            });
+            splashWindow.setIgnoreMouseEvents(false);
+            splashWindow.on('ready-to-show', () => {
+                if (!splashWindow || splashWindow.isDestroyed()) return;
+                splashWindow.show();
+            });
+            const splashHtmlPath = path_1.default.join(__dirname, '../dist/splash.html');
+            if (require('fs').existsSync(splashHtmlPath)) {
+                splashWindow.loadFile(splashHtmlPath);
+            } else {
+                splashWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL || 'http://localhost:38123'}/splash.html`);
+            }
+            splashWindow.on('closed', () => { splashWindow = null; });
+            splashWindow.webContents.on('did-fail-load', closeSplash);
+            splashWindow.webContents.on('crashed', closeSplash);
+            splashWindow.on('blur', () => { /* keep visible */ });
+            splashWindow.on('keydown', () => {
+                if (performance.now() - splashStartTime >= 400) closeSplash();
+            });
+            splashWindow.webContents.on('mouse-down', () => {
+                if (performance.now() - splashStartTime >= 400) closeSplash();
+            });
+            setTimeout(closeSplash, 4000); // hard cap
+            setTimeout(() => { if (!splashClosed) closeSplash(); }, 1400); // min display — full anim completes at 1250ms
+            console.log('[DeskFlow] ✅ Splash window opened (Meridian wake)');
+        }
+    } catch (e) {
+        console.error('[DeskFlow] Splash init error:', e?.message || e);
+    }
+    // ── End splash block ───────────────────────────────────────────────
+
     initializeStorage();
+    // ── Global shortcuts ──────────────────────────────────────────────
+    // Ctrl+Shift+V toggles voice input on the focused window
+    electron_1.globalShortcut.register('CommandOrControl+Shift+V', () => {
+      const win = electron_1.BrowserWindow.getFocusedWindow();
+      if (win) win.webContents.send('stt:shortcut-triggered');
+    });
     initMemorySystem();
     initContextSystem();
     initContextBrain();
@@ -25237,6 +25552,11 @@ electron_1.app.on('before-quit', async () => {
     // Unregister global shortcuts
     globalShortcut.unregisterAll();
     console.log('[DeskFlow] ✅ Global shortcuts unregistered');
+    // Shutdown AI Gateway browser contexts
+    try {
+        if (gatewayService) gatewayService.shutdown();
+    } catch (e) { /* ignore */ }
+
     // Backup the current session before quitting
     if (db) {
         try {
