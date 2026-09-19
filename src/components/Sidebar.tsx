@@ -205,6 +205,7 @@ export const Sidebar = memo(function SidebarComponent({
   const [nowTick, setNowTick] = useState(getNowTickPercent);
   const [phoneConnected, setPhoneConnected] = useState(false);
   const [mouseY, setMouseY] = useState(0);
+  const [authenticated, setAuthenticated] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Track mouse Y globally so the expanded chip (at left:-28px) follows cursor
@@ -223,9 +224,19 @@ export const Sidebar = memo(function SidebarComponent({
     return () => clearInterval(id);
   }, []);
 
-  // Phone connection polling
+  // Phone connection polling + auth check
   useEffect(() => {
     let alive = true;
+
+    const checkAuth = async () => {
+      try {
+        const api = (window as any).deskflowAPI;
+        if (!api?.authGetState) return;
+        const state = await api.authGetState();
+        if (alive) setAuthenticated(!!state?.authenticated);
+      } catch { if (alive) setAuthenticated(false); }
+    };
+
     const poll = async () => {
       try {
         const api = (window as any).deskflowAPI;
@@ -234,8 +245,10 @@ export const Sidebar = memo(function SidebarComponent({
         if (alive) setPhoneConnected(r?.success && (r.devices?.length ?? 0) > 0);
       } catch { if (alive) setPhoneConnected(false); }
     };
+
+    checkAuth();
     poll();
-    const id = setInterval(poll, 30_000);
+    const id = setInterval(() => { if (alive) { checkAuth(); poll(); } }, 30_000);
     return () => { alive = false; clearInterval(id); };
   }, []);
 
@@ -555,23 +568,36 @@ export const Sidebar = memo(function SidebarComponent({
                   )}
                 </button>
               </div>
-              {/* Row 2: Theme toggle + phone QR */}
+              {/* Row 2: Theme toggle + phone status */}
               <div className="flex items-center justify-between gap-2">
                 <ThemeToggle size="sm" />
-                <button
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent('open-pair-modal', {
-                        detail: { terminalId: 'desktop', label: 'Desktop' },
-                      })
-                    );
-                  }}
-                  className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
-                  title="Connect phone"
-                >
-                  <Smartphone className="w-3 h-3" />
-                  <span className="font-mono">Pair Phone</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {authenticated ? (
+                    <button
+                      onClick={() => {
+                        window.dispatchEvent(
+                          new CustomEvent('open-pair-modal', {
+                            detail: { terminalId: 'desktop', label: 'Desktop' },
+                          })
+                        );
+                      }}
+                      className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                      title="Connect phone"
+                    >
+                      <Smartphone className="w-3 h-3" />
+                      <span className="font-mono">{phoneConnected ? 'SYNCED' : 'NO PHONE'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => window.dispatchEvent(new CustomEvent('settings:open-tab', { detail: 'auth' }))}
+                      className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+                      title="Not authenticated — go to Auth settings"
+                    >
+                      <Lock className="w-3 h-3" />
+                      <span className="font-mono">AUTH</span>
+                    </button>
+                  )}
+                </div>
               </div>
               {/* Row 3: Quick Log + ⌘K */}
               <div className="flex items-center justify-between gap-1">
