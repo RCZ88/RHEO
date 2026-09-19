@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, memo, useMemo } from 'react';
+import { useState, useEffect, useCallback, memo, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, LayoutGroup } from 'motion/react';
+import { motion, LayoutGroup } from 'framer-motion';
 import {
   LayoutDashboard, Activity, Brain, Sparkles, GraduationCap,
   FileText, Code2, Wallet, HeartHandshake, Settings, BookOpen,
@@ -27,7 +27,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { icon: Brain, label: 'AI Assistant', path: '/ai', group: 'INTELLIGENCE' },
   { icon: ShieldIcon, label: 'Insights', path: '/reports', group: 'INTELLIGENCE' },
   { icon: GraduationCap, label: 'Lyceum', path: '/learn', group: 'INTELLIGENCE' },
-  { icon: GraduationCap, label: 'Lecture', path: '/lecture', group: 'INTELLIGENCE' },
+  { icon: BookOpen, label: 'Lecture', path: '/lecture', group: 'INTELLIGENCE' },
   { icon: Sparkles, label: 'Content Engine', path: '/studio', group: 'CREATE' },
   { icon: FileText, label: 'Resume', path: '/resume', group: 'CREATE' },
   { icon: HeartHandshake, label: 'Life', path: '/life', group: 'LIFE' },
@@ -74,12 +74,13 @@ function getNowTickPercent(): number {
 
 // ── Node dot ───────────────────────────────────────────────────────────
 const NodeDot = memo(function NodeDot({
-  item, isActive, collapsed, onNavigate,
+  item, isActive, collapsed, onNavigate, mouseY,
 }: {
   item: SidebarItem;
   isActive: boolean;
   collapsed: boolean;
   onNavigate: (path: string) => void;
+  mouseY: number;
 }) {
   const Icon = item.icon;
   return (
@@ -124,7 +125,7 @@ const NodeDot = memo(function NodeDot({
             )}
             style={{
               left: '-28px',
-              top: '50%',
+              top: `${mouseY}px`,
               transform: 'translateY(-50%)',
               opacity: 1,
               scale: isActive ? 1 : 0.6,
@@ -205,6 +206,13 @@ export const Sidebar = memo(function SidebarComponent({
   const activePath = pathname ?? location.pathname;
   const [nowTick, setNowTick] = useState(getNowTickPercent);
   const [phoneConnected, setPhoneConnected] = useState(false);
+  const [mouseY, setMouseY] = useState(0);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const rect = sidebarRef.current?.getBoundingClientRect();
+    if (rect) setMouseY(e.clientY - rect.top);
+  }, []);
 
   // Live now-tick: update once per minute (state, not animation loop)
   useEffect(() => {
@@ -268,6 +276,7 @@ export const Sidebar = memo(function SidebarComponent({
 
   return (
     <div
+      ref={sidebarRef}
       className={cn(
         'flex h-full shrink-0 border-r border-zinc-800/60',
         'bg-[#0c0c0c]',
@@ -277,6 +286,7 @@ export const Sidebar = memo(function SidebarComponent({
         transition: 'width 250ms cubic-bezier(0.16,1,0.3,1)',
         WebkitAppRegion: 'no-drag' as any,
       }}
+      onMouseMove={handleMouseMove}
     >
       {/* ── Ruler strip (16px, left edge) ────────────────────────── */}
       <div className="relative w-4 shrink-0 flex flex-col items-center border-r border-zinc-800/40">
@@ -406,6 +416,7 @@ export const Sidebar = memo(function SidebarComponent({
                           isActive={isActive(item)}
                           collapsed={collapsed}
                           onNavigate={handleNavigate}
+                          mouseY={mouseY}
                         />
                       ))}
                     </div>
