@@ -1559,25 +1559,67 @@ const HermesPlugin: AIAgentPlugin = {
     color: '#8b5cf6',
 
     async detect(): Promise<boolean> {
-        const localAppData = process.env.LOCALAPPDATA || path_1.default.join(require('os').homedir(), 'AppData', 'Local');
-        const hermesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
-        return fs_1.default.existsSync(hermesDir);
+        const homedir = require('os').homedir();
+        // Primary Windows layout (LOCALAPPDATA\hermes\profiles\<profile>\sessions)
+        const localAppData = process.env.LOCALAPPDATA || path_1.default.join(homedir, 'AppData', 'Local');
+        const profilesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
+        if (fs_1.default.existsSync(profilesDir)) return true;
+        // Linux shell-agent store: ~/.hermes/sessions (Hermes/ln)
+        const linuxHerpesSessions = path_1.default.join(homedir, '.hermes', 'sessions');
+        if (fs_1.default.existsSync(linuxHerpesSessions)) return true;
+        const linuxHerpesProfiles = path_1.default.join(homedir, '.hermes', 'profiles');
+        if (fs_1.default.existsSync(linuxHerpesProfiles)) return true;
+        return false;
     },
 
     getStoragePaths(): string[] {
-        const localAppData = process.env.LOCALAPPDATA || path_1.default.join(require('os').homedir(), 'AppData', 'Local');
-        const profilesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
+        const homedir = require('os').homedir();
+        const localAppData = process.env.LOCALAPPDATA || path_1.default.join(homedir, 'AppData', 'Local');
         const paths: string[] = [];
-        try {
-            const profiles = fs_1.default.readdirSync(profilesDir);
-            for (const profile of profiles) {
-                const sessionsDir = path_1.default.join(profilesDir, profile, 'sessions');
-                if (fs_1.default.existsSync(sessionsDir)) {
-                    paths.push(sessionsDir);
+
+        // Windows: hermes\profiles\<profile>\sessions
+        const profilesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
+        if (fs_1.default.existsSync(profilesDir)) {
+            try {
+                const profiles = fs_1.default.readdirSync(profilesDir);
+                for (const profile of profiles) {
+                    const sessionsDir = path_1.default.join(profilesDir, profile, 'sessions');
+                    if (fs_1.default.isDirectorySync?.(sessionsDir) ?? fs_1.default.existsSync(sessionsDir)) {
+                        paths.push(sessionsDir);
+                    }
                 }
-            }
-        } catch {}
-        return paths;
+            } catch {}
+        }
+
+        // Windows: hermes\sessions (flat dump store)
+        const flatWindowsSessions = path_1.default.join(localAppData, 'hermes', 'sessions');
+        if (fs_1.default.existsSync(flatWindowsSessions)) {
+            paths.push(flatWindowsSessions);
+        }
+
+        // Linux store: ~/.hermes/sessions + ~/.hermes/profiles/<profile>/sessions + ~/.hermes/staging/sessions
+        const linuxBase = path_1.default.join(homedir, '.hermes');
+        const linuxSessions = path_1.default.join(linuxBase, 'sessions');
+        if (fs_1.default.existsSync(linuxSessions)) paths.push(linuxSessions);
+
+        const linuxProfiles = path_1.default.join(linuxBase, 'profiles');
+        if (fs_1.default.existsSync(linuxProfiles)) {
+            try {
+                const profiles = fs_1.default.readdirSync(linuxProfiles);
+                for (const profile of profiles) {
+                    const sessionsDir = path_1.default.join(linuxProfiles, profile, 'sessions');
+                    if (fs_1.default.isDirectorySync?.(sessionsDir) ?? fs_1.default.existsSync(sessionsDir)) {
+                        paths.push(sessionsDir);
+                    }
+                }
+            } catch {}
+        }
+
+        const stagingSessions = path_1.default.join(linuxBase, 'staging', 'sessions');
+        if (fs_1.default.existsSync(stagingSessions)) paths.push(stagingSessions);
+
+        // dedupe
+        return [...new Set(paths)];
     },
 
     async parse(filePath: string): Promise<ParsedSession[]> {
@@ -4419,20 +4461,21 @@ function checkSleepGap(gapStart: number, gapEnd: number, opts?: { skipActiveGuar
             }
         }
     } catch { /* ignore — proceed with detection */ }
-    // Guard: don't trigger if sleep was already confirmed for this gap period (bedtime date only)
+    // Guard: don't trigger if sleep was already confirmed for the same bedtime date
+    // (not the full range — the user may wake up on a different date).
+    // Only suppress when the exact same gapStart is already recorded as a confirmed sleep.
     try {
         const sleepActivity = db.prepare(`SELECT id FROM external_activities WHERE type = 'sleep' LIMIT 1`).get() as any;
         if (sleepActivity) {
-            const gapStartDate = new Date(gapStart).toISOString().split('T')[0];
-            const gapEndDate = new Date(gapEnd).toISOString().split('T')[0];
+            const gapStartStr = new Date(gapStart).toISOString();
             const existingSleep = db.prepare(`
                 SELECT id FROM external_sessions
                 WHERE activity_id = ? AND ended_at IS NOT NULL
-                  AND (date(started_at) = ? OR date(started_at) = ?)
+                  AND date(started_at) = date(?)
                 LIMIT 1
-            `).get(sleepActivity.id, gapStartDate, gapEndDate);
+            `).get(sleepActivity.id, gapStartStr);
             if (existingSleep) {
-                console.log(`[DeskFlow] Skipping sleep detection — sleep already confirmed for this period`);
+                console.log(`[DeskFlow] Skipping sleep detection — sleep already confirmed for this bedtime`);
                 return;
             }
         }
@@ -4843,20 +4886,19 @@ async function pollForeground() {
             result = await (0, active_win_1.default)();
         } catch (e) {
             collectorError = e;
-            if (e && e.message && e.message.includes('Assignment to constant variable')) {
-                // active-win native addon incompatible with this Electron/V8.
-                // On Linux use the xdotool/xprop fallback; on Windows log and
-                // rely on the next poll or the cached app state.
-                if (process.platform === 'linux') {
-                    try {
-                        const fallback = await linuxForeground_1.getLinuxForegroundWindow();
-                        if (fallback) result = fallback;
-                    } catch (lfErr) {
-                        console.error('[DeskFlow] linuxForeground error:', lfErr.message);
+            if (process.platform === 'linux') {
+                // On Linux, active-win's .default may not exist or may throw for any
+                // reason (missing native addon, ESM/CommonJS mismatch, etc.). Always
+                // fall through to the xdotool/xprop/qdbus fallback.
+                try {
+                    const fallback = await linuxForeground_1.getLinuxForegroundWindow();
+                    if (fallback && fallback.title) {
+                        result = { owner: { name: fallback.owner?.name || '', path: fallback.owner?.path || '' }, title: fallback.title };
                     }
+                } catch (lfErr) {
+                    console.error('[DeskFlow] linuxForeground error:', lfErr.message);
                 }
-                // Windows: no reliable native fallback, skip this poll cycle.
-            } else {
+            } else if (e && typeof e === 'object' && e.message) {
                 console.error('[DeskFlow] active-win error:', e.message);
             }
         }
@@ -5282,7 +5324,14 @@ function createWindow() {
                         return;
                     }
                     fs_1.default.readFile(path_1.default.join(dist, 'index.html'), (err2, data2) => {
-                        if (err2) { res.writeHead(500, corsHeaders); res.end('Internal Server Error'); return; }
+                        if (err2) {
+                            // dist/index.html itself is missing — serve a minimal inline
+                            // error page so the browser always gets valid HTML, never a
+                            // bare "Internal Server Error" string that leaves the window blank.
+                            res.writeHead(500, { 'Content-Type': 'text/html', ...corsHeaders, ...cacheHeaders });
+                            res.end('<!doctype html><html><head><meta charset="UTF-8"><title>RHEO</title></head><body style="margin:0;background:#121212;color:#a1a1aa;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;"><div style="text-align:center;padding:24px;"><div style="font-size:48px;margin-bottom:8px;">⚠</div><div style="font-size:18px;font-weight:600;color:#e4e4e7;">RHEO failed to start</div><div style="font-size:13px;color:#ef4444;max-width:500px;line-height:1.5;margin-top:8px;">The application files could not be found. Please rebuild: <code style="background:#27272a;padding:2px 6px;border-radius:4px;">node scripts/build.mjs</code></div></div></body></html>');
+                            return;
+                        }
                         res.writeHead(200, { 'Content-Type': 'text/html', ...corsHeaders, ...cacheHeaders });
                         res.end(data2);
                     });
@@ -6585,12 +6634,18 @@ electron_1.ipcMain.handle('clear-today', () => {
 electron_1.ipcMain.handle('get-db-path', () => dbPath);
 // Storage health check
 electron_1.ipcMain.handle('get-storage-status', () => {
+    let logCount = 0;
+    if (!useJson && db !== null) {
+        try { logCount = (db.prepare('SELECT COUNT(*) as count FROM logs').get() as any)?.count ?? 0; } catch { logCount = 0; }
+    } else if (useJson) {
+        logCount = jsonLogs.length;
+    }
     return {
         type: useJson ? 'json' : 'sqlite',
         working: db !== null || useJson,
         path: useJson ? jsonPath : dbPath,
         error: storageError,
-        logCount: useJson ? jsonLogs.length : (db ? db.prepare('SELECT COUNT(*) as count FROM logs').get().count : 0)
+        logCount,
     };
 });
 // ========== Backup & Restore IPC handlers ==========
@@ -6820,6 +6875,15 @@ electron_1.ipcMain.handle('set-preference', (event, key, value) => {
 // R-10: single preference getter
 electron_1.ipcMain.handle('get-preference', (_event, key) => {
     return userPreferences[key];
+});
+// Title bar auto-hide mode: 'always' | 'hover' | 'auto'
+electron_1.ipcMain.handle('get-title-bar-mode', () => {
+    return userPreferences.titleBarMode || 'always';
+});
+electron_1.ipcMain.handle('set-title-bar-mode', (_event, mode: 'always' | 'hover' | 'auto') => {
+    userPreferences.titleBarMode = mode;
+    savePreferences();
+    return true;
 });
 // R-10: boot animation config — preference store single source (ruling 2)
 electron_1.ipcMain.handle('get-keyboard-shortcuts', () => {
@@ -7462,7 +7526,7 @@ electron_1.ipcMain.handle('wordTrackerCounts', (event, projectId) => {
     return wordTrackerModule.wordTrackerGetCounts(projectId);
 });
 electron_1.ipcMain.handle('wordTrackerCountsByProject', (event, wordId) => {
-    return wordTrackerModule.wordTrackerGetCountsByProject(wordId);
+    return wordTrackerModule.wordTrackerCountsByProject(wordId);
 });
 electron_1.ipcMain.handle('wordTrackerGetConfig', (event, key) => {
     return wordTrackerModule.wordTrackerGetConfig(key);
@@ -11229,6 +11293,8 @@ electron_1.ipcMain.handle('update-project', (event, projectId: string, updates: 
 });
 
 // Detect primary language by scanning project file extensions
+// Uses coding-only filter (excludes JSON, Markdown, YAML, TOML, XML) to
+// return the dominant actual programming language, not doc/config files.
 electron_1.ipcMain.handle('detect-project-language', async (_, projectPath: string) => {
     const EXT_TO_LANG = {
         '.ts': 'TypeScript', '.tsx': 'TypeScript', '.js': 'JavaScript', '.jsx': 'JavaScript',
@@ -11248,6 +11314,9 @@ electron_1.ipcMain.handle('detect-project-language', async (_, projectPath: stri
         '.cr': 'Crystal', '.coffee': 'CoffeeScript', '.d': 'D',
         '.f': 'Fortran', '.f90': 'Fortran', '.v': 'V',
     };
+    // Match the batch endpoint: exclude non-coding languages so Markdown/etc
+    // don't win just because a project has lots of docs.
+    const CODING_EXCLUDE = new Set(['JSON', 'Markdown', 'YAML', 'TOML', 'XML']);
     const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', 'dist', 'build',
         '.next', '.nuxt', 'out', 'target', 'bin', 'obj', 'venv', '.venv',
         '__pycache__', '.cache', 'vendor', 'bower_components', 'tmp', 'coverage',
@@ -11291,9 +11360,19 @@ electron_1.ipcMain.handle('detect-project-language', async (_, projectPath: stri
         let topLang = '';
         let topCount = 0;
         for (const [lang, count] of extCounts) {
+            if (CODING_EXCLUDE.has(lang)) continue;
             if (count > topCount) {
                 topCount = count;
                 topLang = lang;
+            }
+        }
+        // If all files were non-coding (docs/config only), fall back to overall top
+        if (!topLang) {
+            for (const [lang, count] of extCounts) {
+                if (count > topCount) {
+                    topCount = count;
+                    topLang = lang;
+                }
             }
         }
         return { success: true, language: topLang, fileCount: topCount, totalFiles: scannedFiles };
@@ -14925,29 +15004,21 @@ electron_1.ipcMain.handle('electron:execute-command', async (_event, command: st
     });
 });
 
-// ========== terminal:exec — Run a single command via PTY and return output ==========
+// ========== terminal:exec — Run a single command via child_process and return output ==========
 electron_1.ipcMain.handle('terminal:exec', async (_event, command: string, cwd?: string) => {
     try {
-        const pty = require('node-pty');
+        const cp = require('child_process');
         const os = require('os');
         const fs = require('fs');
         const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'powershell.exe') : (process.env.SHELL || '/bin/bash');
         let workingDir = cwd && cwd.length > 0 ? cwd : os.homedir();
         try { if (!fs.existsSync(workingDir)) { workingDir = os.homedir(); } } catch {}
-        const proc = pty.spawn(shell, [], { name: 'xterm-256color', cols: 120, rows: 32, cwd: workingDir, env: { ...process.env, TERM: 'xterm-256color' } });
-        return new Promise((resolve) => {
-            let stdout = '';
-            let stderr = '';
-            const timeout = setTimeout(() => { proc.kill(); resolve({ stdout, stderr, code: 1, timedOut: true }); }, 30000);
-            proc.onData((data: string) => { stdout += data; });
-            proc.onExit((result: { exitCode: number; signal?: string }) => {
-                clearTimeout(timeout);
-                resolve({ stdout, stderr, code: result.exitCode, timedOut: false });
-            });
-            proc.write(command + '\n');
-        });
+        const result = cp.execSync(command, { cwd: workingDir, shell, env: { ...process.env, PWD: workingDir, TERM: 'xterm-256color' }, timeout: 30000, maxBuffer: 10 * 1024 * 1024 });
+        return { stdout: result.toString().trim(), stderr: '', code: 0, timedOut: false };
     } catch (err: any) {
-        return { stdout: '', stderr: err.message, code: 1, timedOut: false };
+        const stderr = err?.stderr?.toString?.() || err?.message || 'command failed';
+        const stdout = err?.stdout?.toString?.() || '';
+        return { stdout: stdout.trim(), stderr: stderr.trim(), code: 1, timedOut: false };
     }
 });
 
@@ -21698,7 +21769,28 @@ function startBrowserTrackingServer() {
                         browsersList.some((b: string) => isAppMatchingBrowser(currentApp, b)) : false;
                     
                     console.log(`[DeskFlow] /browser-data: domain=${data.domain} ext_focused=${data.is_browser_focused} browsers=${browsersList.join(',')} currentApp=${curApp} matches=${matchesAnyBrowser}`);
-                    
+
+                    // AUTO-IDENTIFY: If no browser prefs set yet but extension is sending data,
+                    // and currentApp is a known browser, auto-identify it.
+                    if (!hasAnyBrowser && currentApp && data.browser_name) {
+                        const knownBrowserNames = Object.keys(BROWSER_PROCESS_NAMES);
+                        const matched = knownBrowserNames.find(b => isAppMatchingBrowser(currentApp, b));
+                        if (matched) {
+                            console.log(`[DeskFlow] AUTO-IDENTIFY: extension sending data from unknown browser, currentApp='${currentApp}' matched '${matched}'`);
+                            userPreferences.browserWithExtension = matched;
+                            userPreferences.browserProcessNames = getBrowserProcessNames(matched);
+                            if (!userPreferences.browsersWithExtension) userPreferences.browsersWithExtension = [];
+                            if (!userPreferences.browsersWithExtension.includes(matched)) {
+                                userPreferences.browsersWithExtension.push(matched);
+                            }
+                            savePreferences();
+                            // Notify renderer immediately
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send('browser-identified', { browser: matched });
+                            }
+                        }
+                    }
+
                     // SIMPLE FOCUS CHECK: Trust the extension's is_browser_focused flag.
                     // Only block if extension explicitly says NOT focused.
                     // No bypass: website data is ONLY valid while the browser is focused.
@@ -22256,6 +22348,10 @@ function startBrowserTrackingServer() {
                         userPreferences.browserProcessNames = data.processNames || getBrowserProcessNames(data.browser);
                         savePreferences();
                         console.log(`[DeskFlow] Browser extension identified as: ${data.browser} (processes: ${userPreferences.browserProcessNames.join(', ')})`);
+                        // Notify renderer so browser selector updates immediately without page reload
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('browser-identified', { browser: data.browser });
+                        }
                     }
                     // Auto-create/update browser profile from extension data
                     if (data.browser && data.profileId && db) {
@@ -22272,6 +22368,10 @@ function startBrowserTrackingServer() {
                                     .run(data.browser, data.profileId, data.profileName || data.browser + ' Default', data.browserVersion || '', color);
                             }
                         } catch (e) { console.error('[DeskFlow] Profile upsert error:', e); }
+                    }
+                    // Notify renderer so browser selector updates immediately without page reload
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('browser-identified', { browser: data.browser });
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ status: 'ok', browser: data.browser }));
@@ -22362,18 +22462,19 @@ function notifyRendererClearBrowser() {
 // Returns true = browser confirmed foreground, false = confirmed non-browser foreground,
 // null = indeterminate (no window / unknown), in which case we trust the cache.
 async function freshForegroundIsBrowser(browsersList: string[]): Promise<boolean | null> {
+    let raw = null;
     try {
-        let raw = await (0, active_win_1.default)();
-        // active-win throws "Assignment to constant variable" on Linux with newer Node.
-        // Fall back to linuxForeground (xdotool/xprop) like pollForeground does.
-        if (!raw && process.platform === 'linux') {
+        raw = await (0, active_win_1.default)();
+    } catch (_) {
+        if (process.platform === 'linux') {
             try {
-                const fallback = await linuxForeground_1.getLinuxForegroundWindow();
-                if (fallback) raw = fallback;
+                const fb = await linuxForeground_1.getLinuxForegroundWindow();
+                if (fb && fb.title) raw = { owner: { name: fb.owner?.name || '', path: fb.owner?.path || '' }, title: fb.title };
             } catch (_) {}
         }
-        if (!raw) return null; // no active window (e.g. transition) — indeterminate
-        const appName = (raw.owner?.name ?? raw.ownerName ?? '').replace(/\.exe$/i, '');
+    }
+    if (!raw) return null; // no active window (e.g. transition) — indeterminate
+    const appName = (raw.owner?.name ?? raw.ownerName ?? '').replace(/\.exe$/i, '');
         if (!appName) return null;
         const lower = appName.toLowerCase();
         // If the OS foreground is DeskFlow itself, it means the user is back in the app
@@ -22386,9 +22487,6 @@ async function freshForegroundIsBrowser(browsersList: string[]): Promise<boolean
         }
         // Otherwise a real non-browser app is foreground ? reject website data
         return false;
-    } catch (_err) {
-        return null;
-    }
 }
 // Handle incoming browser tracking data from extension
 // FIX 1 + FIX 4: Use Map<string, LogEntry> keyed by domain, track time deltas properly
@@ -23216,7 +23314,10 @@ electron_1.app.whenReady().then(() => {
     // ── Deadline notifications (check every 5 minutes) ──
     try {
       const { checkDeadlinesAndNotify: checkDeadlines } = require('./main/notifications');
-      setInterval(() => { if (db) checkDeadlines(db); }, 5 * 60 * 1000);
+      setInterval(() => {
+      try { if (db) checkDeadlines(db); }
+      catch (e) { console.error('[DeskFlow] checkDeadlinesAndNotify interval error:', e); }
+    }, 5 * 60 * 1000);
     } catch {}
 
     // ── Monthly recaps (auto-generate at startup + every 6 hours) ──
@@ -23402,6 +23503,21 @@ electron_1.ipcMain.handle('get-known-apps', () => {
     }
 });
 
+electron_1.ipcMain.handle('get-known-browser-apps', () => {
+    if (useJson) return [];
+    try {
+        return db.prepare(`
+            SELECT DISTINCT l.app, l.category, MAX(l.timestamp) as last_used,
+                MAX(l.is_browser_tracking) as is_browser_tracking
+            FROM logs l WHERE l.duration_ms > 0 AND LOWER(l.category) = 'browser'
+            GROUP BY l.app ORDER BY last_used DESC
+        `).all();
+    } catch (err) {
+        console.error('[DeskFlow] Failed to get known browser apps:', err);
+        return [];
+    }
+});
+
 electron_1.ipcMain.handle('get-known-sites', () => {
     if (useJson) return [];
     try {
@@ -23545,6 +23661,7 @@ electron_1.ipcMain.handle('get-typical-activity-at-time', (event, timestamp) => 
 // Detect gaps in device/app usage where no activity was tracked, for filling in external activities
 electron_1.ipcMain.handle('detect-usage-gaps', (event, { period = 'week', minGapMinutes = 5 } = {}) => {
     if (useJson) return [];
+    if (!db) return [];  // DB closed (shutdown or restore in progress)
     try {
         const now = new Date();
         let periodStart;
@@ -24068,7 +24185,10 @@ electron_1.ipcMain.handle('dismiss-morning-prompt', (event) => {
 // so the sleep popup can offer to fill them as external activities.
 // Reuses the same interval-merging logic as detect-usage-gaps (logs + external_sessions).
 function detectAdjacentSleepGaps(gapStartIso, gapEndIso) {
-    const MIN_GAP_MS = 5 * 60 * 1000;
+    // Sleep-adjacent gaps: the sleep window is user-confirmed, so show all
+    // untracked time on both sides. 1-minute floor only — a sub-minute sliver
+    // between a tracked session and the sleep window is still real untracked time.
+    const MIN_GAP_MS = 60 * 1000;
     try {
         const sleepStart = new Date(gapStartIso).getTime();
         const sleepEnd = new Date(gapEndIso).getTime();
@@ -24540,23 +24660,22 @@ electron_1.ipcMain.handle('get-activity-stats', (event, activityId: string) => {
     }
 });
 
-// Get current foreground app (for Dashboard mount — foreground-changed only fires on change)
-electron_1.ipcMain.handle('get-current-foreground', () => {
-    if (useJson) return null;
-    try {
-        if (!currentApp) return null;
-        const category = categorizeApp(currentApp);
-        return {
-            app: currentApp,
-            category,
-            title: '',
-            timestamp: new Date().toISOString(),
-            isReal: true
-        };
-    } catch {
-        return null;
-    }
-});
+ // Get current foreground app (for Dashboard mount — foreground-changed only fires on change)
+ electron_1.ipcMain.handle('get-current-foreground', () => {
+     try {
+         if (!currentApp) return { app: '', category: '', title: '', timestamp: new Date().toISOString(), isReal: false };
+         const category = categorizeApp(currentApp);
+         return {
+             app: currentApp,
+             category,
+             title: '',
+             timestamp: new Date().toISOString(),
+             isReal: true
+         };
+     } catch {
+         return { app: '', category: '', title: '', timestamp: new Date().toISOString(), isReal: false };
+     }
+ });
 
 // ========== Productivity Sessions IPC Handlers ==========
 

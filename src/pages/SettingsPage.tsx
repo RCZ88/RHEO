@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -6,7 +6,7 @@ import {
   ChevronRight, X, Plus, GripVertical, Palette, Check, ChevronDown, Globe,
   ChevronLeft, Search, AlertTriangle, Sparkles, ChevronUp, Loader2,
   Eye, EyeOff, DollarSign, Shield, Key, Save, Lock, LockOpen, History, Undo2, Pencil,
-  Upload, FileText, SearchX, Inbox, Keyboard
+  Upload, FileText, SearchX, Inbox, Keyboard, Monitor
 } from 'lucide-react';
 import { lazy } from 'react';
 
@@ -372,7 +372,7 @@ export default function SettingsPage({
   externalActivityTiers: externalActivityTiersProp = {},
   onExternalActivityTiersChange,
 }: Partial<SettingsPageProps> & { onRegisterSave: (fn: () => void) => void; onReloadData?: () => void }) {
-  type TabId = 'category' | 'colors' | 'general' | 'tracking' | 'prompts' | 'finance' | 'ai' | 'devices' | 'database' | 'auth' | 'shortcuts';
+  type TabId = 'category' | 'colors' | 'general' | 'tracking' | 'prompts' | 'finance' | 'ai' | 'devices' | 'database' | 'auth' | 'shortcuts' | 'appearance';
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const saved = localStorage.getItem('settings-activeTab');
     return (saved as any) || 'category';
@@ -470,23 +470,143 @@ export default function SettingsPage({
   const [shortcuts, setShortcuts] = useState<Record<string, string>>({});
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
 
+  const DEFAULT_SHORTCUTS: Record<string, string> = {
+    // Global shortcuts
+    voiceInput: 'Ctrl+Shift+V',
+    commandPalette: 'Ctrl+K',
+    aiChatVoice: 'Ctrl+Shift+M',
+    aiPageTranscript: 'Ctrl+Shift+L',
+    aiPagePalette: 'Ctrl+K',
+    designWorkspacePalette: 'Cmd+K',
+    externalSelect: 'Enter',
+    externalDeselect: 'Escape',
+    // App shortcuts
+    canvasUndo: 'Ctrl+Z',
+    canvasRedo: 'Ctrl+Shift+Z',
+    financeNewTx: 'Ctrl+N',
+    chatSend: 'Ctrl+Enter',
+    pageContextSearch: 'Ctrl+F',
+    ideAddProject: 'Ctrl+A',
+    ideRefresh: 'Ctrl+R',
+    resumeSubmit: 'Ctrl+Enter',
+    // Terminal shortcuts
+    terminalNewTab: 'Ctrl+Shift+T',
+    terminalCloseTab: 'Ctrl+Shift+W',
+    terminalRename: 'Ctrl+Shift+R',
+    terminalPin: 'Ctrl+Shift+P',
+    terminalNextTab: 'Ctrl+Tab',
+    terminalPrevTab: 'Ctrl+Shift+Tab',
+    terminalSplitH: 'Ctrl+Shift+H',
+    terminalSplitV: 'Ctrl+Shift+V',
+    terminalNextPane: 'Ctrl+Shift+ArrowRight',
+    terminalPrevPane: 'Ctrl+Shift+ArrowLeft',
+    terminalZoom: 'Ctrl+Shift+Z',
+    terminalBroadcast: 'Ctrl+Shift+B',
+    terminalPalette: 'Ctrl+K',
+    terminalClear: 'Ctrl+L',
+    terminalWorkspace: 'Ctrl+Shift+S',
+    terminalFind: 'Ctrl+Shift+F',
+    terminalSaveCmd: 'Ctrl+Shift+D',
+    terminalCycleTheme: 'Ctrl+Shift+Y',
+    terminalFindInPanes: 'Ctrl+Shift+T',
+    terminalBalance: 'Ctrl+Shift+Space',
+    terminalExport: 'Ctrl+Shift+E',
+    terminalSplitFind: 'Ctrl+Shift+J',
+    terminalSplitFindHist: 'Ctrl+Shift+K',
+    terminalEnter: 'Enter',
+    // Lyceum shortcuts
+    lyceumHome: 'g h',
+    lyceumLibrary: 'g l',
+    lyceumStudy: 'g s',
+    lyceumNext: 'j / ↓',
+    lyceumPrev: 'k / ↑',
+    lyceumTutor: 'a',
+    lyceumGraph: 'g',
+    lyceumCompose: 'c',
+    lyceumImport: 'i',
+    lyceumShortcuts: '?',
+    lyceumClose: 'Esc',
+  };
+
   const SHORTCUT_CONFIG: Record<string, { label: string; description: string }> = {
+    // Global
     voiceInput: { label: 'Voice Input (STT)', description: 'Toggle speech-to-text voice input' },
     commandPalette: { label: 'Command Palette', description: 'Open command palette search' },
     aiChatVoice: { label: 'AI Chat Voice Toggle', description: 'Toggle voice mode in AI chat (Ctrl+Shift+M)' },
     aiPageTranscript: { label: 'AI Page Transcript Rail', description: 'Toggle transcript rail on AI page (Ctrl+Shift+L)' },
+    aiPagePalette: { label: 'AI Page Command Palette', description: 'Open command palette from AI page' },
+    designWorkspacePalette: { label: 'Design Workspace Palette', description: 'Open design workspace command palette' },
     externalSelect: { label: 'External Activity Select', description: 'Select highlighted external activity (Enter)' },
     externalDeselect: { label: 'External Activity Deselect', description: 'Deselect external activity (Escape)' },
+    // App
+    canvasUndo: { label: 'Canvas Undo', description: 'Undo last canvas mutation (Ctrl+Z)' },
+    canvasRedo: { label: 'Canvas Redo', description: 'Redo canvas mutation (Ctrl+Shift+Z / Ctrl+Y)' },
+    financeNewTx: { label: 'New Transaction', description: 'Open new transaction dialog (Ctrl+N)' },
+    chatSend: { label: 'Send Chat Prompt', description: 'Send the current prompt in chat (Ctrl+Enter)' },
+    pageContextSearch: { label: 'Page Context Search', description: 'Search pages in the context panel (Ctrl+F)' },
+    ideAddProject: { label: 'Add Project', description: 'Add a new project in IDE help (Ctrl+A)' },
+    ideRefresh: { label: 'Refresh IDE Data', description: 'Refresh IDE help data (Ctrl+R)' },
+    resumeSubmit: { label: 'Submit Answer', description: 'Submit the current answer field (Ctrl+Enter)' },
+    // Terminal
+    terminalNewTab: { label: 'New Terminal Tab', description: 'Open a fresh terminal tab (Ctrl+Shift+T)' },
+    terminalCloseTab: { label: 'Close Terminal Tab', description: 'Close the active terminal tab (Ctrl+Shift+W)' },
+    terminalRename: { label: 'Rename Tab', description: 'Rename active tab inline (Ctrl+Shift+R)' },
+    terminalPin: { label: 'Pin Tab', description: 'Pin tab to the front (Ctrl+Shift+P)' },
+    terminalNextTab: { label: 'Next Tab', description: 'Cycle to next tab (Ctrl+Tab)' },
+    terminalPrevTab: { label: 'Previous Tab', description: 'Cycle to previous tab (Ctrl+Shift+Tab)' },
+    terminalSplitH: { label: 'Split Horizontal', description: 'Split active pane side-by-side (Ctrl+Shift+H)' },
+    terminalSplitV: { label: 'Split Vertical', description: 'Split active pane stacked (Ctrl+Shift+V)' },
+    terminalNextPane: { label: 'Next Pane', description: 'Focus next pane (Ctrl+Shift+ArrowRight)' },
+    terminalPrevPane: { label: 'Previous Pane', description: 'Focus previous pane (Ctrl+Shift+ArrowLeft)' },
+    terminalZoom: { label: 'Zoom Pane', description: 'Maximize focused pane (Ctrl+Shift+Z)' },
+    terminalBroadcast: { label: 'Broadcast Toggle', description: 'Send input to every pane (Ctrl+Shift+B)' },
+    terminalPalette: { label: 'Terminal Command Palette', description: 'Fuzzy search actions & commands (Ctrl+K)' },
+    terminalClear: { label: 'Clear Pane', description: 'Clear active pane output (Ctrl+L)' },
+    terminalWorkspace: { label: 'Save Workspace', description: 'Snapshot tabs as workspace (Ctrl+Shift+S)' },
+    terminalFind: { label: 'Find in Terminal', description: 'Search terminal output across all panes (Ctrl+Shift+F)' },
+    terminalSaveCmd: { label: 'Save Command', description: 'Save input as command (Ctrl+Shift+D)' },
+    terminalCycleTheme: { label: 'Cycle Theme', description: 'Rotate terminal themes (Ctrl+Shift+Y)' },
+    terminalFindInPanes: { label: 'Find in Panes', description: 'Search in terminal find mode (Ctrl+Shift+T)' },
+    terminalBalance: { label: 'Balance Panes', description: 'Balance active pane sizes (Ctrl+Shift+Space)' },
+    terminalExport: { label: 'Export Transcript', description: 'Export terminal transcript (Ctrl+Shift+E)' },
+    terminalSplitFind: { label: 'Split Find', description: 'Split find mode (Ctrl+Shift+J)' },
+    terminalSplitFindHist: { label: 'Split Find History', description: 'Split find history (Ctrl+Shift+K)' },
+    terminalEnter: { label: 'Terminal Enter', description: 'Confirm in terminal (Enter)' },
+    // Lyceum
+    lyceumHome: { label: 'Lyceum - Go to Home', description: 'Navigate to home node (g h)' },
+    lyceumLibrary: { label: 'Lyceum - Go to Library', description: 'Navigate to library node (g l)' },
+    lyceumStudy: { label: 'Lyceum - Go to Study', description: 'Navigate to study node (g s)' },
+    lyceumNext: { label: 'Lyceum - Next Node', description: 'Next node (j / ↓)' },
+    lyceumPrev: { label: 'Lyceum - Previous Node', description: 'Previous node (k / ↑)' },
+    lyceumTutor: { label: 'Lyceum - Open Tutor', description: 'Open tutor panel (a)' },
+    lyceumGraph: { label: 'Lyceum - Toggle Graph', description: 'Toggle graph view (g)' },
+    lyceumCompose: { label: 'Lyceum - Compose', description: 'Compose lesson (c)' },
+    lyceumImport: { label: 'Lyceum - Import', description: 'Import lesson (i)' },
+    lyceumShortcuts: { label: 'Lyceum - Toggle Shortcuts', description: 'Toggle shortcuts overlay (?)' },
+    lyceumClose: { label: 'Lyceum - Close', description: 'Close / go home (Esc)' },
   };
 
-  // Load shortcuts on mount
+  // Load shortcuts on mount - merge defaults with backend
   useEffect(() => {
     if (window.deskflowAPI?.getKeyboardShortcuts) {
       window.deskflowAPI.getKeyboardShortcuts().then(sc => {
-        if (sc && typeof sc === 'object') setShortcuts(sc);
-      }).catch(() => {});
+        if (sc && typeof sc === 'object') {
+          setShortcuts({ ...DEFAULT_SHORTCUTS, ...sc });
+        } else {
+          setShortcuts({ ...DEFAULT_SHORTCUTS });
+        }
+      }).catch(() => {
+        setShortcuts({ ...DEFAULT_SHORTCUTS });
+      });
+    } else {
+      setShortcuts({ ...DEFAULT_SHORTCUTS });
     }
   }, []);
+
+  // Restore defaults
+  const restoreDefaults = () => {
+    setShortcuts({ ...DEFAULT_SHORTCUTS });
+  };
 
   // Start recording a new keybinding
   const startRecording = (key: string) => {
@@ -509,14 +629,10 @@ export default function SettingsPage({
       const shortcut = parts.join('+');
       setShortcuts(prev => ({ ...prev, [recordingKey]: shortcut }));
       setRecordingKey(null);
-      // Persist
-      if (window.deskflowAPI?.setKeyboardShortcuts) {
-        window.deskflowAPI.setKeyboardShortcuts({ ...shortcuts, [recordingKey]: shortcut }).catch(() => {});
-      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [recordingKey, shortcuts]);
+  }, [recordingKey]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -636,6 +752,19 @@ export default function SettingsPage({
         }
       } catch { /* keep defaults */ }
       setBootAnimLoading(false);
+    })();
+  }, []);
+
+  // Title bar auto-hide mode
+  const [tbModeState, setTbModeState] = useState<'always' | 'hover' | 'auto'>('always');
+  useEffect(() => {
+    (async () => {
+      try {
+        if ((window as any)?.deskflowAPI?.getTitleBarMode) {
+          const mode = await (window as any).deskflowAPI.getTitleBarMode();
+          if (mode && typeof mode === 'string') setTbModeState(mode as 'always' | 'hover' | 'auto');
+        }
+      } catch {}
     })();
   }, []);
 
@@ -1376,6 +1505,7 @@ export default function SettingsPage({
 
   const tabs = [
     { id: 'category', label: 'Category' },
+    { id: 'appearance', label: 'Appearance' },
     { id: 'colors', label: 'Colors' },
     { id: 'ai', label: 'AI Assistant' },
     { id: 'general', label: 'General' },
@@ -1616,6 +1746,20 @@ export default function SettingsPage({
       }
     };
     loadTrackingSettings();
+  }, []);
+
+  // Listen for browser extension identification (extension calls /browser-identify)
+  useEffect(() => {
+    if (!window.deskflowAPI?.onBrowserIdentified) return;
+    const unsub = window.deskflowAPI.onBrowserIdentified((data: { browser: string }) => {
+      console.log('[Settings] Extension identified browser:', data.browser);
+      setAvailableBrowsers(prev => {
+        const lower = data.browser.toLowerCase();
+        if (prev.some(b => b.toLowerCase() === lower)) return prev;
+        return [...prev, data.browser];
+      });
+    });
+    return () => { unsub && unsub(); };
   }, []);
 
   // Load locked items and change history
@@ -1891,6 +2035,53 @@ export default function SettingsPage({
                   </button>
                 )}
               </div>
+            </div>
+            </GlassCard>
+
+          {/* Window title bar auto-hide mode */}
+          <GlassCard className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Monitor className="w-4 h-4 text-zinc-500" />
+                  Window Title Bar
+                </h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Control when the title bar shows or hides</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {(['always', 'hover', 'auto'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    const a = (window as any)?.deskflowAPI;
+                    if (a?.setTitleBarMode) a.setTitleBarMode(mode).catch(() => {});
+                    setTbModeState(mode);
+                    setHasChanges(true);
+                    onHasChangesChange(true);
+                  }}
+                  className={`relative flex flex-col items-center gap-2 p-5 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                    tbModeState === mode
+                      ? 'border-emerald-500/60 bg-emerald-500/8 shadow-[0_0_24px_rgba(50,205,50,0.12)]'
+                      : 'border-zinc-700/40 hover:border-zinc-600/60 hover:bg-zinc-800/40 light:hover:bg-zinc-100/40 light:border-zinc-500/50'
+                  }`}
+                >
+                  <Monitor className="w-5 h-5" style={{ color: tbModeState === mode ? undefined : undefined }} />
+                  <span className="text-xs font-semibold capitalize">
+                    {mode === 'always' ? 'Always show' : mode === 'hover' ? 'Hide + hover' : 'Auto-hide 3s'}
+                  </span>
+                  {tbModeState === mode && (
+                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-emerald-500/50 text-emerald-400 bg-emerald-500/10">
+                      on
+                    </span>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-1 justify-center">
+                    {mode === 'always' && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-700/50 text-zinc-400">title bar always visible</span>}
+                    {mode === 'hover' && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-700/50 text-zinc-400">hide on leave, show on hover</span>}
+                    {mode === 'auto' && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-700/50 text-zinc-400">hide after 3s inactivity</span>}
+                  </div>
+                </button>
+              ))}
             </div>
           </GlassCard>
 
@@ -5668,7 +5859,7 @@ export default function SettingsPage({
                         </>
                       ) : (
                         <>
-                          <Keyboard className="w-3.5 h-3.5" />
+                          <Key className="w-3.5 h-3.5" />
                           <span className="text-xs">{shortcut}</span>
                         </>
                       )}
@@ -5683,6 +5874,19 @@ export default function SettingsPage({
                 Failed to load shortcuts. Using defaults.
               </div>
             ) : null}
+
+            <div className="pt-4 border-t border-zinc-700/30">
+              <button
+                onClick={restoreDefaults}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors text-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <path d="M3 3v5h5"/>
+                </svg>
+                Restore Defaults
+              </button>
+            </div>
           </GlassCard>
           </SearchableSection>
         </div>

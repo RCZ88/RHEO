@@ -297,7 +297,8 @@ const TIERS = [
 ]
 
 export function checkDeadlinesAndNotify(db: Db): void {
-  const now = Date.now()
+  if (!db) return;
+  try {
   const rows = db.prepare(`
     SELECT * FROM deadlines
     WHERE status != 'done'
@@ -345,4 +346,5 @@ export function checkDeadlinesAndNotify(db: Db): void {
       }
     }
   }
+  } catch { }
 }

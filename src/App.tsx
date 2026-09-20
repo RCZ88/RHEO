@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo, lazy, Suspense
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ServerErrorBanner } from './components/ServerErrorBanner';
 import { PageTitle } from './components/PageTitle';
 import confetti from 'canvas-confetti';
 import { navigateTo, scrollToSection } from './lib/deepNav';
@@ -308,7 +309,12 @@ function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Smart Search overlay — Ctrl+F / Ctrl+K content search
+  // Current page id derived from route — used by smart search scoping
+  const currentPageId = location.pathname === '/' ? 'dashboard'
+    : location.pathname.replace('/', '') || 'dashboard';
+
+  // Smart Search — Ctrl+F: find-in-page bar (no blur, page visible).
+  // Ctrl+K is handled separately by GlobalSearchCommandPalette.
   const [smartSearchOpen, setSmartSearchOpen] = useState(false);
 
   const handleSmartSearchClose = useCallback(() => {
@@ -317,35 +323,50 @@ function App() {
 
   const handleSmartSearchSelect = useCallback((hit: SearchHit) => {
     console.debug('[SmartSearch] selected:', hit);
-    const route = resolvePageRoute(hit.pageId);
-    if (route) {
-      navigateTo({ route: route.route, tab: hit.section ? route.tab : undefined });
-      // Try to scroll to the section if one was specified
-      if (hit.section) {
-        setTimeout(() => {
-          scrollToSection(hit.section);
-        }, 300);
+    // If the hit is on a different page, navigate there and scroll to section
+    if (hit.pageId !== currentPageId) {
+      console.debug('[SmartSearch] navigating to different page:', hit.pageId);
+      const route = resolvePageRoute(hit.pageId);
+      console.debug('[SmartSearch] resolved route:', route);
+      if (route) {
+        console.debug('[SmartSearch] navigating to:', route.route);
+        navigateTo({ route: route.route, tab: hit.section ? route.tab : undefined }, navigate);
+        if (hit.section) {
+          console.debug('[SmartSearch] will scroll to section:', hit.section);
+          setTimeout(() => {
+            const ok = scrollToSection(hit.section);
+            console.debug('[SmartSearch] scrollToSection result:', ok, 'section:', hit.section);
+          }, 300);
+        }
       }
     } else {
-      // Fallback: dispatch event for pages that want custom handling
-      window.dispatchEvent(new CustomEvent('smart-search:select', { detail: hit }));
+      console.debug('[SmartSearch] same page, scrolling to section:', hit.section);
+      // Same page — just scroll to the section without navigating away
+      if (hit.section) {
+        const ok = scrollToSection(hit.section);
+        console.debug('[SmartSearch] scrollToSection result:', ok, 'section:', hit.section);
+      } else {
+        // No section specified; try scrolling to the title element
+        const el = document.getElementById(hit.id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
-  }, []);
+  }, [currentPageId, navigate]);
 
-  // Keyboard shortcut: Ctrl+F / Ctrl+K — open smart search overlay
+  // Keyboard shortcut: Ctrl+F — open find-in-page bar (page stays visible).
+  // Ctrl+K opens the command palette separately.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const key = e.key.toLowerCase();
-      if (key === 'f' || key === 'k') {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-          if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
-        }
-        e.preventDefault();
-        setSmartSearchOpen(true);
+      if (key !== 'f') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
       }
+      e.preventDefault();
+      setSmartSearchOpen(true);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -977,25 +998,30 @@ function App() {
   useEffect(() => {
     if (window.deskflowAPI?.onSleepDetection) {
       window.deskflowAPI.onSleepDetection(async (data: any) => {
+        // data comes directly from the 'sleep-detection' IPC event sent by checkSleepGap.
+        // It carries { gapStart, gapEnd, gapMinutes } — use it directly instead of
+        // re-reading the JSON file via checkSleepDetection() (which adds latency and a
+        // second failure point if the file was already cleared by a stale-file guard).
         if (data?.gapMinutes >= 45) {
           sleepActiveRef.current = true;
-          // Keep existing AFK prompts � sleep and AFK can coexist
+          // Keep existing AFK prompts — sleep and AFK can coexist
           // AFK duration will be reduced by sleep period automatically
-          const detResult = await window.deskflowAPI?.checkSleepDetection?.();
-          if (detResult?.detected) {
-            setSleepDetectionData(detResult);
-            const bed = new Date(detResult.suggestedBedtime);
-            const wake = new Date(detResult.suggestedWakeTime);
-            setSleepDetectCustomBedtime({ hours: bed.getHours(), minutes: bed.getMinutes() });
-            setSleepDetectCustomWaketime({ hours: wake.getHours(), minutes: wake.getMinutes() });
-            setSleepDetectFellAsleepAt({ hours: bed.getHours(), minutes: (bed.getMinutes() + 15) % 60 });
-            setSleepDetectWakeUpAt({ hours: wake.getHours(), minutes: Math.max(0, wake.getMinutes() - 5) });
-            const bd = new Date(bed);
-            if (bd.getHours() < 12) bd.setDate(bd.getDate() - 1);
-            setSleepDetectDate(`${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(bd.getDate()).padStart(2, '0')}`);
-            setSleepModalStep('sleep');
-            setShowSleepDetection(true);
-          }
+          setSleepDetectionData({
+            gapMinutes: data.gapMinutes,
+            suggestedBedtime: new Date(data.gapStart).toISOString(),
+            suggestedWakeTime: new Date(data.gapEnd).toISOString(),
+          });
+          const bed = new Date(data.gapStart);
+          const wake = new Date(data.gapEnd);
+          setSleepDetectCustomBedtime({ hours: bed.getHours(), minutes: bed.getMinutes() });
+          setSleepDetectCustomWaketime({ hours: wake.getHours(), minutes: wake.getMinutes() });
+          setSleepDetectFellAsleepAt({ hours: bed.getHours(), minutes: (bed.getMinutes() + 15) % 60 });
+          setSleepDetectWakeUpAt({ hours: wake.getHours(), minutes: Math.max(0, wake.getMinutes() - 5) });
+          const bd = new Date(bed);
+          if (bd.getHours() < 12) bd.setDate(bd.getDate() - 1);
+          setSleepDetectDate(`${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(bd.getDate()).padStart(2, '0')}`);
+          setSleepModalStep('sleep');
+          setShowSleepDetection(true);
         }
       });
     }
@@ -1039,7 +1065,7 @@ function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
-  }, [showSleepDetection]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dismissSleepDetection = async () => {
     sleepActiveRef.current = false;
@@ -1123,7 +1149,11 @@ function App() {
         if (result?.success) {
           window.dispatchEvent(new CustomEvent('sleep-confirmed'));
           window.dispatchEvent(new CustomEvent('external-data-changed'));
-          // Recompute adjacent gaps using USER-ADJUSTED times
+          // Recompute adjacent gaps using USER-ADJUSTED times.
+          // Do NOT fall back to sleepDetectionData.adjacentGaps — those were computed
+          // from the initial auto-detected times, not the user's manual 4-value selection.
+          // The user confirmed Device Off / Fell Asleep / Woke Up / Device On; the result
+          // from computeAdjacentGaps is the authoritative gap list for those times.
           let gaps: any[] = [];
           try {
             const gapResult = await (window as any).deskflowAPI?.computeAdjacentGaps?.({
@@ -1132,8 +1162,7 @@ function App() {
             });
             gaps = gapResult?.gaps || [];
             console.log(`[App] Recomputed adjacent gaps: ${gaps.length} gap(s)`);
-          } catch { /* fall back to original detection data */ }
-          if (gaps.length === 0) gaps = sleepDetectionData.adjacentGaps || [];
+          } catch { /* leave gaps empty — no backend = no gaps to offer */ }
           sleepActiveRef.current = false;
           if (gaps.length > 0) {
             // Load activities/sessions, then transition to gaps step INSIDE the popup
@@ -2625,6 +2654,24 @@ Trend: +14% vs. yesterday. Keep it up!`;
           if (bd.getHours() < 12) bd.setDate(bd.getDate() - 1);
           setSleepDetectDate(`${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(bd.getDate()).padStart(2, '0')}`);
           setSleepModalStep('sleep');
+        } else {
+          // No real detection — create synthetic data so the modal opens for dev testing
+          const now = new Date();
+          const bedOff = new Date(now.getTime() - 8 * 3600000);
+          const wokeUp = new Date(now.getTime() - 7 * 3600000);
+          setSleepDetectionData({
+            gapMinutes: 60,
+            suggestedBedtime: bedOff.toISOString(),
+            suggestedWakeTime: wokeUp.toISOString(),
+          });
+          setSleepDetectCustomBedtime({ hours: bedOff.getHours(), minutes: bedOff.getMinutes() });
+          setSleepDetectCustomWaketime({ hours: wokeUp.getHours(), minutes: wokeUp.getMinutes() });
+          setSleepDetectFellAsleepAt({ hours: bedOff.getHours(), minutes: (bedOff.getMinutes() + 15) % 60 });
+          setSleepDetectWakeUpAt({ hours: wokeUp.getHours(), minutes: Math.max(0, wokeUp.getMinutes() - 5) });
+          const bd = new Date(bedOff);
+          if (bd.getHours() < 12) bd.setDate(bd.getDate() - 1);
+          setSleepDetectDate(`${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(bd.getDate()).padStart(2, '0')}`);
+          setSleepModalStep('sleep');
         }
       } catch { /* ignore */ }
     }
@@ -2882,6 +2929,7 @@ const devFireSmartFill = async () => {
     <div className="flex flex-col h-screen overflow-hidden bg-[#121212] text-white">
       <TitleBar />
       <AppBackground />
+      <ServerErrorBanner />
       <div className="flex flex-1 min-h-0 relative">
       {/* Sidebar hidden on workspace (/terminal) and during solar overlay */}
       {location.pathname !== '/terminal' && !solarOverlayActive && (
@@ -3693,6 +3741,11 @@ const devFireSmartFill = async () => {
             onClose={() => setPaletteOpen(false)}
             onNavigate={(item) => {
               setPaletteOpen(false);
+              // Title bar settings — fire a custom event for the TitleBar component to pick up
+              if (item.id === 'titlebar-settings') {
+                window.dispatchEvent(new CustomEvent('open-titlebar-settings'));
+                return;
+              }
               // Use deepNav so sub-tabs switch and the page scrolls to the exact section.
               navigateTo(
                 { route: item.route, tab: item.tab, section: item.section },
@@ -3711,11 +3764,12 @@ const devFireSmartFill = async () => {
             }}
           />
 
-          {/* Smart Search Overlay — Ctrl+F / ⌘F content search within current page */}
+          {/* Smart Search Bar — Ctrl+F / ⌘F find-in-page with scope toggle */}
           <SmartSearchOverlay
             open={smartSearchOpen}
             onClose={handleSmartSearchClose}
             onSelect={handleSmartSearchSelect}
+            currentPageId={currentPageId}
             shortcutHint="⌘F"
           />
           {DEV_TRIGGER_ENABLED && (

@@ -28,6 +28,13 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     return () => { ipcRenderer.removeListener('browser-tracking-event', handler); };
   },
 
+  // Listen for browser extension identification (fires when extension calls /browser-identify)
+  onBrowserIdentified: (callback: (data: { browser: string }) => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('browser-identified', handler);
+    return () => { ipcRenderer.removeListener('browser-identified', handler); };
+  },
+
   // Listen for sleep detection events
   onSleepDetection: (callback: (data: any) => void) => {
     ipcRenderer.on('sleep-detection', (_event, data) => callback(data));
@@ -250,6 +257,9 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     ipcRenderer.on('window:focus-change', handler);
     return () => ipcRenderer.removeListener('window:focus-change', handler);
   },
+  // Title bar auto-hide mode
+  getTitleBarMode: () => ipcRenderer.invoke('get-title-bar-mode'),
+  setTitleBarMode: (mode: 'always' | 'hover' | 'auto') => ipcRenderer.invoke('set-title-bar-mode', mode),
   notifyClick: () => ipcRenderer.invoke('notification-click'),
   getAutoStartStatus: () => ipcRenderer.invoke('get-auto-start-status'),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('set-auto-start', enabled),
@@ -1594,6 +1604,7 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
 
   // ========== Smart Gap Fill ==========
   getKnownApps: () => ipcRenderer.invoke('get-known-apps'),
+  getKnownBrowserApps: () => ipcRenderer.invoke('get-known-browser-apps'),
   getKnownSites: () => ipcRenderer.invoke('get-known-sites'),
   predictGapFill: (start: string, end: string, mode?: 'combined' | 'separate') =>
     ipcRenderer.invoke('predict-gap-fill', { start, end, mode: mode || 'combined' }),

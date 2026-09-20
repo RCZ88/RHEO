@@ -41,6 +41,7 @@ const ITEMS: PaletteItem[] = [
   { id: 'nav-guide', label: 'Guide & Tutorials', route: '/guide', keywords: ['guide', 'help', 'tutorial', 'specs'], group: 'Navigation', icon: 'BookOpen' },
   { id: 'nav-agentic', label: 'Agentic System', route: '/agentic', keywords: ['agentic', 'agents', 'system', 'comms'], group: 'Navigation', icon: 'Network' },
   { id: 'nav-settings', label: 'Settings', route: '/settings', keywords: ['settings', 'preferences', 'config'], group: 'Navigation', icon: 'Settings' },
+  { id: 'titlebar-settings', label: 'Title bar settings', route: '', keywords: ['title bar', 'titlebar', 'hide', 'auto-hide', 'window title'], group: 'Appearance', icon: 'Monitor' },
 
   // ── Dashboard sections ──
   { id: 'dash-summary', label: 'Dashboard — Summary', route: '/', section: 'dash.summary', keywords: ['dashboard', 'summary', 'overview', 'total'], group: 'Dashboard', icon: 'Layers' },
