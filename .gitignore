@@ -58,6 +58,7 @@ credentials.json
 *.crt
 secrets.json
 config.secrets.json
+**/vercel.json
 
 # IDE & Editor
 .vscode/*
