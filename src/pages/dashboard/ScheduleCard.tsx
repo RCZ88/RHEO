@@ -5,7 +5,7 @@
 // ============================================================
 
 import { useState, useMemo, useEffect } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence } from "motion/react";
 import {
   Calendar, Clock, MapPin, Plus, X, Edit3, Trash2,
   BookOpen, FlaskConical, Brain, FileText, Users, MoreHorizontal
@@ -71,11 +71,12 @@ interface ScheduleCardProps {
   onUpdate: (id: string, patch: Partial<ScheduleEntry>) => void;
   onDelete: (id: string) => void;
   linkedGoals?: { id: string; title: string; category: string }[];
-  showAll?: boolean;
+  showAll?: false;
+  onDayChange?: (day: number) => void;
 }
 
 export function ScheduleCard({
-  entries, selectedDate, selectedDay: selectedDayProp, loading = false, error = null, onAdd, onUpdate, onDelete, linkedGoals, showAll = false,
+  entries, selectedDate, selectedDay: selectedDayProp, loading = false, error = null, onAdd, onUpdate, onDelete, linkedGoals, showAll = false, onDayChange,
 }: ScheduleCardProps) {
   const theme = getWidgetTheme('schedule-hero');
   const selectedDay = selectedDayProp ?? new Date().getDay();
@@ -88,6 +89,10 @@ export function ScheduleCard({
     const interval = setInterval(() => setNowMinutes(new Date().getHours() * 60 + new Date().getMinutes()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleDayClick = (i: number) => {
+    if (onDayChange) onDayChange(i);
+  };
 
   const [form, setForm] = useState({
     title: '', location: '', day: selectedDay.toString(), start: '09:00', end: '10:00',
@@ -175,10 +180,11 @@ export function ScheduleCard({
             {DAY_LETTER.map((letter, i) => (
               <span
                 key={i}
-                className={`flex-1 h-8 rounded-md text-[11px] font-medium flex items-center justify-center transition-colors ${
+                onClick={() => handleDayClick(i)}
+                className={`flex-1 h-8 rounded-md text-[11px] font-medium flex items-center justify-center transition-colors cursor-pointer ${
                   i === selectedDay
                     ? 'border border-[var(--border-subtle)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)] border border-transparent'
+                    : 'text-[var(--text-muted)] border border-transparent hover:border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {letter}

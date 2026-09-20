@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { BarChart3, Orbit } from 'lucide-react';
 
 interface DrillDownCardProps {

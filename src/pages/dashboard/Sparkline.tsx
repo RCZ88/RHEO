@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from 'motion/react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useId } from 'react'
 import { maxOf, minOf } from '../../utils/safeMath'
 

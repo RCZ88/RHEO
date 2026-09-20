@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Flame, TrendingUp, Calendar, Trophy, Zap } from 'lucide-react';
 import { NumberTicker } from '../ui/number-ticker';
 import { BorderBeam } from '../ui/border-beam';

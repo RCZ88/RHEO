@@ -104,15 +104,17 @@ User task enters
 | **MANDATORY** | `motion-alive` | Pick a Liveliness Level (L1/L2/L3) first. Motion taxonomy: reactive, transitional, ambient, narrative. Reduced-motion fallback mandatory. |
 | **MANDATORY** | `design-taste` | Master dispatcher — knobs (variance/motion/density), aesthetic matrix, anti-repetition rules, decision tree. |
 | **MANDATORY** | `ui-ux-pro-max` | Industry-specific rules (developer tools, finance, AI/ML, analytics), style library, color palettes, typography pairings. |
+| **MANDATORY** | `ui-and-charts` | KokonutUI + Bklit UI component registries. Search registry BEFORE writing custom markup. `npx shadcn@latest add @kokonutui/<name>`, `npx shadcn@latest add @bklit/<name>`. Covers charts, dashboards, data viz. |
 | **MANDATORY** | `taste-skill` | 3 tunable knobs (variance/motion/density), aesthetic variant matrix, anti-repetition rules. Prevents generic output. |
+| RECOMMENDED | `animation-stack` | Animation engine selection: GSAP for choreography, Anime.js for small self-contained animations, KokonutUI built-in Motion. One engine per element. Covers `npm install gsap`, `npm install animejs`. |
+| RECOMMENDED | `beautiful-charts` | When the work includes charts, graphs, data visualization |
 | RECOMMENDED | `signature-design` | Page-level redesign / hero work: ONE concept-true centerpiece per screen |
 | RECOMMENDED | `google-stitch` | When the user mentions "mockup", "Stitch", "vibe design", "DESIGN.md" |
 | RECOMMENDED | `font-selection` | When choosing/verifying fonts — never invent a font |
-| RECOMMENDED | `beautiful-charts` | When the work includes charts, graphs, data visualization |
 
-**Load order:** ALL 8 MANDATORY skills first (frontend-external-infra → frontend-design → Human-Centric UX → Impeccable → Motion → Design Taste System → UI UX Pro Max → Taste Skill), then RECOMMENDED as needed.
+**Load order:** ALL 9 MANDATORY skills first (frontend-external-infra → frontend-design → Human-Centric UX → Impeccable → Motion → Design Taste System → ui-ux-pro-max → ui-and-charts → Taste Skill), then RECOMMENDED as needed: animation-stack → beautiful-charts → signature-design → google-stitch → font-selection.
 
-**NEVER load only 2 skills. The user has raged about this repeatedly. ALL 8 MANDATORY skills must be loaded for ANY UI work.**
+**NEVER load only 2 skills. The user has raged about this repeatedly. ALL 9 MANDATORY skills must be loaded for ANY UI work.**
 
 **If this is a page-level redesign** that also changes how data flows, also load `max-security` to review backend changes.
 

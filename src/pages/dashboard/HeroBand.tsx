@@ -26,7 +26,6 @@ interface HeroBandProps {
   currentWebsite: { title?: string; url?: string; category?: string; domain?: string; browserName?: string; profileName?: string; profileId?: string } | null;
   isInBrowser: boolean;
   lastTier: string | null;
-  borderColor: string;
   goalCurrent: number;
   goalMax?: number;
   /** Deep Focus session active -> the GoalRing ember roars. */
@@ -45,7 +44,6 @@ export function HeroBand({
   currentWebsite,
   isInBrowser,
   lastTier,
-  borderColor,
   goalCurrent,
   goalMax = 120,
   focusActive = false,
@@ -55,7 +53,7 @@ export function HeroBand({
       {/* Daily insight — full width, above stopwatch */}
       <FunFactHero />
       {/* Stopwatch */}
-      <div className="flex w-full">
+      <div className="flex flex-1 min-h-0 w-full">
         <StopwatchTimer
           displayTime={displayTime}
           isPaused={isPaused}

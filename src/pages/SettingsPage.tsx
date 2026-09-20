@@ -528,62 +528,62 @@ export default function SettingsPage({
     lyceumClose: 'Esc',
   };
 
-  const SHORTCUT_CONFIG: Record<string, { label: string; description: string }> = {
+  const SHORTCUT_CONFIG: Record<string, { label: string; description: string; group: string }> = {
     // Global
-    voiceInput: { label: 'Voice Input (STT)', description: 'Toggle speech-to-text voice input' },
-    commandPalette: { label: 'Command Palette', description: 'Open command palette search' },
-    aiChatVoice: { label: 'AI Chat Voice Toggle', description: 'Toggle voice mode in AI chat (Ctrl+Shift+M)' },
-    aiPageTranscript: { label: 'AI Page Transcript Rail', description: 'Toggle transcript rail on AI page (Ctrl+Shift+L)' },
-    aiPagePalette: { label: 'AI Page Command Palette', description: 'Open command palette from AI page' },
-    designWorkspacePalette: { label: 'Design Workspace Palette', description: 'Open design workspace command palette' },
-    externalSelect: { label: 'External Activity Select', description: 'Select highlighted external activity (Enter)' },
-    externalDeselect: { label: 'External Activity Deselect', description: 'Deselect external activity (Escape)' },
+    voiceInput: { label: 'Voice Input (STT)', description: 'Toggle speech-to-text voice input', group: 'Global' },
+    commandPalette: { label: 'Command Palette', description: 'Open command palette search', group: 'Global' },
+    aiChatVoice: { label: 'AI Chat Voice Toggle', description: 'Toggle voice mode in AI chat (Ctrl+Shift+M)', group: 'Global' },
+    aiPageTranscript: { label: 'AI Page Transcript Rail', description: 'Toggle transcript rail on AI page (Ctrl+Shift+L)', group: 'Global' },
+    aiPagePalette: { label: 'AI Page Command Palette', description: 'Open command palette from AI page', group: 'Global' },
+    designWorkspacePalette: { label: 'Design Workspace Palette', description: 'Open design workspace command palette', group: 'Global' },
+    externalSelect: { label: 'External Activity Select', description: 'Select highlighted external activity (Enter)', group: 'Global' },
+    externalDeselect: { label: 'External Activity Deselect', description: 'Deselect external activity (Escape)', group: 'Global' },
     // App
-    canvasUndo: { label: 'Canvas Undo', description: 'Undo last canvas mutation (Ctrl+Z)' },
-    canvasRedo: { label: 'Canvas Redo', description: 'Redo canvas mutation (Ctrl+Shift+Z / Ctrl+Y)' },
-    financeNewTx: { label: 'New Transaction', description: 'Open new transaction dialog (Ctrl+N)' },
-    chatSend: { label: 'Send Chat Prompt', description: 'Send the current prompt in chat (Ctrl+Enter)' },
-    pageContextSearch: { label: 'Page Context Search', description: 'Search pages in the context panel (Ctrl+F)' },
-    ideAddProject: { label: 'Add Project', description: 'Add a new project in IDE help (Ctrl+A)' },
-    ideRefresh: { label: 'Refresh IDE Data', description: 'Refresh IDE help data (Ctrl+R)' },
-    resumeSubmit: { label: 'Submit Answer', description: 'Submit the current answer field (Ctrl+Enter)' },
+    canvasUndo: { label: 'Canvas Undo', description: 'Undo last canvas mutation (Ctrl+Z)', group: 'App' },
+    canvasRedo: { label: 'Canvas Redo', description: 'Redo canvas mutation (Ctrl+Shift+Z / Ctrl+Y)', group: 'App' },
+    financeNewTx: { label: 'New Transaction', description: 'Open new transaction dialog (Ctrl+N)', group: 'App' },
+    chatSend: { label: 'Send Chat Prompt', description: 'Send the current prompt in chat (Ctrl+Enter)', group: 'App' },
+    pageContextSearch: { label: 'Page Context Search', description: 'Search pages in the context panel (Ctrl+F)', group: 'App' },
+    ideAddProject: { label: 'Add Project', description: 'Add a new project in IDE help (Ctrl+A)', group: 'App' },
+    ideRefresh: { label: 'Refresh IDE Data', description: 'Refresh IDE help data (Ctrl+R)', group: 'App' },
+    resumeSubmit: { label: 'Submit Answer', description: 'Submit the current answer field (Ctrl+Enter)', group: 'App' },
     // Terminal
-    terminalNewTab: { label: 'New Terminal Tab', description: 'Open a fresh terminal tab (Ctrl+Shift+T)' },
-    terminalCloseTab: { label: 'Close Terminal Tab', description: 'Close the active terminal tab (Ctrl+Shift+W)' },
-    terminalRename: { label: 'Rename Tab', description: 'Rename active tab inline (Ctrl+Shift+R)' },
-    terminalPin: { label: 'Pin Tab', description: 'Pin tab to the front (Ctrl+Shift+P)' },
-    terminalNextTab: { label: 'Next Tab', description: 'Cycle to next tab (Ctrl+Tab)' },
-    terminalPrevTab: { label: 'Previous Tab', description: 'Cycle to previous tab (Ctrl+Shift+Tab)' },
-    terminalSplitH: { label: 'Split Horizontal', description: 'Split active pane side-by-side (Ctrl+Shift+H)' },
-    terminalSplitV: { label: 'Split Vertical', description: 'Split active pane stacked (Ctrl+Shift+V)' },
-    terminalNextPane: { label: 'Next Pane', description: 'Focus next pane (Ctrl+Shift+ArrowRight)' },
-    terminalPrevPane: { label: 'Previous Pane', description: 'Focus previous pane (Ctrl+Shift+ArrowLeft)' },
-    terminalZoom: { label: 'Zoom Pane', description: 'Maximize focused pane (Ctrl+Shift+Z)' },
-    terminalBroadcast: { label: 'Broadcast Toggle', description: 'Send input to every pane (Ctrl+Shift+B)' },
-    terminalPalette: { label: 'Terminal Command Palette', description: 'Fuzzy search actions & commands (Ctrl+K)' },
-    terminalClear: { label: 'Clear Pane', description: 'Clear active pane output (Ctrl+L)' },
-    terminalWorkspace: { label: 'Save Workspace', description: 'Snapshot tabs as workspace (Ctrl+Shift+S)' },
-    terminalFind: { label: 'Find in Terminal', description: 'Search terminal output across all panes (Ctrl+Shift+F)' },
-    terminalSaveCmd: { label: 'Save Command', description: 'Save input as command (Ctrl+Shift+D)' },
-    terminalCycleTheme: { label: 'Cycle Theme', description: 'Rotate terminal themes (Ctrl+Shift+Y)' },
-    terminalFindInPanes: { label: 'Find in Panes', description: 'Search in terminal find mode (Ctrl+Shift+T)' },
-    terminalBalance: { label: 'Balance Panes', description: 'Balance active pane sizes (Ctrl+Shift+Space)' },
-    terminalExport: { label: 'Export Transcript', description: 'Export terminal transcript (Ctrl+Shift+E)' },
-    terminalSplitFind: { label: 'Split Find', description: 'Split find mode (Ctrl+Shift+J)' },
-    terminalSplitFindHist: { label: 'Split Find History', description: 'Split find history (Ctrl+Shift+K)' },
-    terminalEnter: { label: 'Terminal Enter', description: 'Confirm in terminal (Enter)' },
+    terminalNewTab: { label: 'New Terminal Tab', description: 'Open a fresh terminal tab (Ctrl+Shift+T)', group: 'Terminal' },
+    terminalCloseTab: { label: 'Close Terminal Tab', description: 'Close the active terminal tab (Ctrl+Shift+W)', group: 'Terminal' },
+    terminalRename: { label: 'Rename Tab', description: 'Rename active tab inline (Ctrl+Shift+R)', group: 'Terminal' },
+    terminalPin: { label: 'Pin Tab', description: 'Pin tab to the front (Ctrl+Shift+P)', group: 'Terminal' },
+    terminalNextTab: { label: 'Next Tab', description: 'Cycle to next tab (Ctrl+Tab)', group: 'Terminal' },
+    terminalPrevTab: { label: 'Previous Tab', description: 'Cycle to previous tab (Ctrl+Shift+Tab)', group: 'Terminal' },
+    terminalSplitH: { label: 'Split Horizontal', description: 'Split active pane side-by-side (Ctrl+Shift+H)', group: 'Terminal' },
+    terminalSplitV: { label: 'Split Vertical', description: 'Split active pane stacked (Ctrl+Shift+V)', group: 'Terminal' },
+    terminalNextPane: { label: 'Next Pane', description: 'Focus next pane (Ctrl+Shift+ArrowRight)', group: 'Terminal' },
+    terminalPrevPane: { label: 'Previous Pane', description: 'Focus previous pane (Ctrl+Shift+ArrowLeft)', group: 'Terminal' },
+    terminalZoom: { label: 'Zoom Pane', description: 'Maximize focused pane (Ctrl+Shift+Z)', group: 'Terminal' },
+    terminalBroadcast: { label: 'Broadcast Toggle', description: 'Send input to every pane (Ctrl+Shift+B)', group: 'Terminal' },
+    terminalPalette: { label: 'Terminal Command Palette', description: 'Fuzzy search actions & commands (Ctrl+K)', group: 'Terminal' },
+    terminalClear: { label: 'Clear Pane', description: 'Clear active pane output (Ctrl+L)', group: 'Terminal' },
+    terminalWorkspace: { label: 'Save Workspace', description: 'Snapshot tabs as workspace (Ctrl+Shift+S)', group: 'Terminal' },
+    terminalFind: { label: 'Find in Terminal', description: 'Search terminal output across all panes (Ctrl+Shift+F)', group: 'Terminal' },
+    terminalSaveCmd: { label: 'Save Command', description: 'Save input as command (Ctrl+Shift+D)', group: 'Terminal' },
+    terminalCycleTheme: { label: 'Cycle Theme', description: 'Rotate terminal themes (Ctrl+Shift+Y)', group: 'Terminal' },
+    terminalFindInPanes: { label: 'Find in Panes', description: 'Search in terminal find mode (Ctrl+Shift+T)', group: 'Terminal' },
+    terminalBalance: { label: 'Balance Panes', description: 'Balance active pane sizes (Ctrl+Shift+Space)', group: 'Terminal' },
+    terminalExport: { label: 'Export Transcript', description: 'Export terminal transcript (Ctrl+Shift+E)', group: 'Terminal' },
+    terminalSplitFind: { label: 'Split Find', description: 'Split find mode (Ctrl+Shift+J)', group: 'Terminal' },
+    terminalSplitFindHist: { label: 'Split Find History', description: 'Split find history (Ctrl+Shift+K)', group: 'Terminal' },
+    terminalEnter: { label: 'Terminal Enter', description: 'Confirm in terminal (Enter)', group: 'Terminal' },
     // Lyceum
-    lyceumHome: { label: 'Lyceum - Go to Home', description: 'Navigate to home node (g h)' },
-    lyceumLibrary: { label: 'Lyceum - Go to Library', description: 'Navigate to library node (g l)' },
-    lyceumStudy: { label: 'Lyceum - Go to Study', description: 'Navigate to study node (g s)' },
-    lyceumNext: { label: 'Lyceum - Next Node', description: 'Next node (j / ↓)' },
-    lyceumPrev: { label: 'Lyceum - Previous Node', description: 'Previous node (k / ↑)' },
-    lyceumTutor: { label: 'Lyceum - Open Tutor', description: 'Open tutor panel (a)' },
-    lyceumGraph: { label: 'Lyceum - Toggle Graph', description: 'Toggle graph view (g)' },
-    lyceumCompose: { label: 'Lyceum - Compose', description: 'Compose lesson (c)' },
-    lyceumImport: { label: 'Lyceum - Import', description: 'Import lesson (i)' },
-    lyceumShortcuts: { label: 'Lyceum - Toggle Shortcuts', description: 'Toggle shortcuts overlay (?)' },
-    lyceumClose: { label: 'Lyceum - Close', description: 'Close / go home (Esc)' },
+    lyceumHome: { label: 'Lyceum - Go to Home', description: 'Navigate to home node (g h)', group: 'Lyceum' },
+    lyceumLibrary: { label: 'Lyceum - Go to Library', description: 'Navigate to library node (g l)', group: 'Lyceum' },
+    lyceumStudy: { label: 'Lyceum - Go to Study', description: 'Navigate to study node (g s)', group: 'Lyceum' },
+    lyceumNext: { label: 'Lyceum - Next Node', description: 'Next node (j / ↓)', group: 'Lyceum' },
+    lyceumPrev: { label: 'Lyceum - Previous Node', description: 'Previous node (k / ↑)', group: 'Lyceum' },
+    lyceumTutor: { label: 'Lyceum - Open Tutor', description: 'Open tutor panel (a)', group: 'Lyceum' },
+    lyceumGraph: { label: 'Lyceum - Toggle Graph', description: 'Toggle graph view (g)', group: 'Lyceum' },
+    lyceumCompose: { label: 'Lyceum - Compose', description: 'Compose lesson (c)', group: 'Lyceum' },
+    lyceumImport: { label: 'Lyceum - Import', description: 'Import lesson (i)', group: 'Lyceum' },
+    lyceumShortcuts: { label: 'Lyceum - Toggle Shortcuts', description: 'Toggle shortcuts overlay (?)', group: 'Lyceum' },
+    lyceumClose: { label: 'Lyceum - Close', description: 'Close / go home (Esc)', group: 'Lyceum' },
   };
 
   // Load shortcuts on mount - merge defaults with backend
@@ -5836,38 +5836,46 @@ export default function SettingsPage({
               <p className="text-xs text-zinc-500">Customize keyboard shortcuts for app actions</p>
             </div>
 
-            <div className="space-y-3">
-              {Object.entries(shortcuts).map(([key, shortcut]) => {
+            {/* Grouped shortcuts */}
+            {(() => {
+              const groups: Record<string, [string, { label: string; description: string; group: string }][]> = {};
+              Object.entries(shortcuts).forEach(([key, shortcut]) => {
                 const config = SHORTCUT_CONFIG[key];
-                if (!config) return null;
-                return (
-                  <div key={key} className="flex items-center justify-between py-3 border-b border-zinc-700/30 last:border-0">
-                    <div className="flex-1 min-w-0 pr-4">
-                      <div className="text-sm font-medium text-zinc-200">{config.label}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">{config.description}</div>
-                    </div>
-                    <button
-                      onClick={() => startRecording(key)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-mono transition-colors duration-150 ${recordingKey === key
-                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                        : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:text-zinc-200'
-                        }`}
-                    >
-                      {recordingKey === key ? (
-                        <>
+                if (!config) return;
+                const g = config.group || 'Other';
+                if (!groups[g]) groups[g] = [];
+                groups[g].push([key, config]);
+              });
+              return Object.entries(groups).map(([groupName, items]) => (
+                <div key={groupName} className="space-y-2">
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mt-3 mb-1">{groupName}</h3>
+                  {items.map(([key, config]) => (
+                    <div key={key} className="flex items-center justify-between py-2 border-b border-zinc-700/20 last:border-0">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <div className="text-sm font-medium text-zinc-200">{config.label}</div>
+                        <div className="text-xs text-zinc-500 mt-0.5">{config.description}</div>
+                      </div>
+                      <button
+                        onClick={() => startRecording(key)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-mono transition-colors duration-150 ${recordingKey === key
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                          : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                      >
+                        {recordingKey === key ? (
                           <span className="animate-pulse text-xs">Recording...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Key className="w-3.5 h-3.5" />
-                          <span className="text-xs">{shortcut}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                        ) : (
+                          <>
+                            <Key className="w-3.5 h-3.5" />
+                            <span className="text-xs">{shortcut}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()}
 
             {typeof shortcuts !== 'object' || !Object.keys(shortcuts).length ? (
               <div className="py-8 text-center text-sm text-zinc-500">

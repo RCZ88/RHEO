@@ -132,7 +132,7 @@ export function collectSplits(n: PaneNode, depth = 0): { id: string; direction: 
 interface Persist {
   tabs: TerminalTab[]; activeTabId: string; groups: TermGroup[]; workspaces: Workspace[];
   commands: SavedCommand[]; history: HistoryEntry[]; shortcuts: Shortcut[]; appearance: Appearance;
-  distro: string; shell: string;
+  distro: string; shell: string; demoMode: boolean; sidebarWidth: number; rightPanelWidth: number;
 }
 
 function load(): Persist | null {
@@ -175,20 +175,15 @@ export function useConsoleStore() {
   const [distro, setDistro] = useState(s?.distro ?? "Ubuntu 24.04 LTS");
   const [shell, setShell] = useState(s?.shell ?? "zsh");
   const [paneEnv, setPaneEnv] = useState<Record<string, Record<string, string>>>({});
-  const [showDemoOnly, setShowDemoOnly] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState<"all" | "demo" | "real">("all");
+  const [demoMode, setDemoMode] = useState(s?.demoMode ?? true);
+  const [sidebarWidth, setSidebarWidth] = useState(264);
+  const [rightPanelWidth, setRightPanelWidth] = useState(330);
 
   useEffect(() => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell } satisfies Persist));
+      localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth } satisfies Persist));
     } catch { /* quota */ }
-  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell } satisfies Persist));
-    } catch { /* quota */ }
-  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell]);
+  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth]);
 
   const sortedTabs = useMemo(() => [...tabs].sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false)), [tabs]);
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
@@ -229,7 +224,7 @@ export function useConsoleStore() {
         },
       },
     }));
-    const res = await execShellReal(cmd, pane.cwd, env);
+    const res = await (demoMode ? execShell(cmd, pane.cwd, env) : execShellReal(cmd, pane.cwd, env));
     if (res.envDelta) {
       setPaneEnv((prev) => {
         const key = `${tabId}:${paneId}`;
@@ -277,7 +272,7 @@ export function useConsoleStore() {
       mutateTab(tabId, (t) => ({ ...t, panes: { ...t.panes, [paneId]: { ...t.panes[paneId], cwd: res.newCwd, lastExit: res.exitCode } } }));
     }
     setHistory((h) => [{ id: uid("h"), command: cmd, preview: res.exitCode === 0 ? `✓ exit 0 · ${res.durationMs}ms` : `✗ exit ${res.exitCode}`, tabId, tabLabel: tab.label, paneId, cwd: pane.cwd, timestamp: ts, exitCode: res.exitCode, durationMs: res.durationMs }, ...h].slice(0, 500));
-  }, [distro, shell, paneEnv, mutateTab, pushLines, tabs, workspaces.length, logMcp]);
+  }, [distro, shell, paneEnv, mutateTab, pushLines, tabs, workspaces.length, logMcp, demoMode]);
 
   const closePaneRef = useRef<((tabId: string, paneId: string) => void) | null>(null);
 
@@ -495,9 +490,7 @@ export function useConsoleStore() {
     navigator.clipboard?.writeText(text).catch(() => {});
   }, [tabs]);
 
-  const filteredHistory = useMemo(() => {
-    return history;
-  }, [history]);
+  
 
   return {
     tabs, sortedTabs, setTabs, activeTab, activeTabId, setActiveTabId, groups, setGroups, workspaces, setWorkspaces,
@@ -519,7 +512,8 @@ export function useConsoleStore() {
       if (keep) merged[firstId] = { ...keep, id: firstId };
       return { ...t, layout, panes: merged, activePaneId: active, focusedPaneId: active };
     }),
-    showDemoOnly, setShowDemoOnly, historyFilter, setHistoryFilter, filteredHistory, copyAllContent,
+    demoMode, setDemoMode, sidebarWidth, setSidebarWidth, rightPanelWidth, setRightPanelWidth,
+    copyAllContent,
   };
 }
 

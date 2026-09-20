@@ -72,7 +72,46 @@ export function TermPane({ store, tab, pane, focused, findQ, onBell }: { store: 
   };
 
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") { submit((e.target as HTMLInputElement).value); }
+    const el = e.target as HTMLInputElement;
+    // Ctrl+Shift combos: custom terminal behavior
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+      if (e.key === "c") {
+        e.preventDefault();
+        const txt = el.selectionStart !== el.selectionEnd ? el.value.slice(el.selectionStart, el.selectionEnd) : el.value;
+        navigator.clipboard?.writeText(txt).catch(() => {});
+        flash("copied");
+        return;
+      }
+      if (e.key === "v") {
+        e.preventDefault();
+        navigator.clipboard?.readText().then((t) => { if (t) setDraft((d) => d + t); }).catch(() => {});
+        return;
+      }
+      if (e.key === "a") {
+        e.preventDefault();
+        el.select();
+        return;
+      }
+      if (e.key === "x") {
+        e.preventDefault();
+        const txt = el.selectionStart !== el.selectionEnd ? el.value.slice(el.selectionStart, el.selectionEnd) : el.value;
+        navigator.clipboard?.writeText(txt).catch(() => {});
+        setDraft((d) => d.slice(0, el.selectionStart) + d.slice(el.selectionEnd));
+        flash("cut");
+        return;
+      }
+    }
+    // Ctrl / Cmd without shift: let browser handle natively (copy/paste/cut/select-all/undo/save)
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === "l") {
+        e.preventDefault();
+        store.mutateTab(tab.id, (t) => ({ ...t, panes: { ...t.panes, [pane.id]: { ...t.panes[pane.id], lines: [] } } }));
+        return;
+      }
+      // Ctrl+C / Ctrl+V / Ctrl+A / Ctrl+X / Ctrl+Z / Ctrl+S — native browser behavior, no preventDefault
+      return;
+    }
+    if (e.key === "Enter") { submit(el.value); }
     else if (e.key === "ArrowUp") {
       e.preventDefault();
       const h = pane.cmdHistory;
@@ -85,13 +124,10 @@ export function TermPane({ store, tab, pane, focused, findQ, onBell }: { store: 
       const h = pane.cmdHistory;
       const n = localHist - 1;
       if (n < 0) { setLocalHist(-1); setDraft(""); } else { setLocalHist(n); setDraft(h[n]); }
-    } else if (e.key === "l" && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      store.mutateTab(tab.id, (t) => ({ ...t, panes: { ...t.panes, [pane.id]: { ...t.panes[pane.id], lines: [] } } }));
-    } else if (e.key === "c" && (e.ctrlKey || e.metaKey)) { setDraft(""); }
+    }
     else if (e.key === "Tab") {
       e.preventDefault();
-      const parts = draft.split(/\s+/);
+      const parts = el.value.split(/\s+/);
       const last = parts[parts.length - 1] ?? "";
       if (!last) return;
       const cands = ["git", "docker", "kubectl", "npm", "ls", "cd", "cat", "htop", "ssh", "systemctl", "journalctl", "neofetch", "sensors", "ffmpeg", "python3", "tail", "grep", "find"].filter((c) => c.startsWith(last) && c !== last);
@@ -184,20 +220,21 @@ export function BellHint() {
 }
 
 export function SplitView({ store, tab, node, findQ, onFind }: { store: Store; tab: TerminalTab; node: PaneNode; findQ?: string; onFind?: () => void }) {
-  const [dragId, setDragId] = useState<string | null>(null);
+  
+  const dragIdRef = useRef<string | null>(null);
 
   const onDown = (e: React.MouseEvent, n: Extract<PaneNode, { kind: "split" }>) => {
     e.preventDefault(); e.stopPropagation();
+    dragIdRef.current = n.id;
     const parent = (e.currentTarget.parentElement as HTMLElement);
     const rect = parent.getBoundingClientRect();
-    setDragId(n.id);
     const startX = e.clientX, startY = e.clientY, base = n.ratio;
     const move = (ev: MouseEvent) => {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       const delta = n.direction === "row" ? dx / Math.max(80, rect.width) : dy / Math.max(80, rect.height);
       store.setSplitRatio(tab.id, n.id, base + delta);
     };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); setDragId(null); };
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); dragIdRef.current = null; };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
   };
@@ -234,7 +271,7 @@ export function SplitView({ store, tab, node, findQ, onFind }: { store: Store; t
         }}
         onDoubleClick={() => store.setSplitRatio(tab.id, node.id, 0.5)}
         onMouseDown={(e) => onDown(e, node)}
-        className={cx("split-divider shrink-0 rounded-full relative z-10 group/div", dragId === node.id && "dragging")}
+        className="split-divider shrink-0 rounded-full relative z-10 group/div"
         style={{
           background: "var(--t-border)",
           cursor: row ? "col-resize" : "row-resize",

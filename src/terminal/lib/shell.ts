@@ -446,7 +446,7 @@ export async function execShellReal(raw: string, cwd: string, env: Record<string
     return { ...execShell(cmd, cwd, env), durationMs: Math.round(performance.now() - t0) };
   }
 
-  const fullEnv = { HOME: "/home/user", USER: "user", SHELL: "/bin/zsh", TERM: "xterm-256color", PWD: cwd, ...env };
+  const fullEnv = { HOME: "/home/user", USER: "user", SHELL: "/bin/bash", TERM: "xterm-256color", PWD: cwd, ...env };
   try {
     const result = await callTerminalExec(cmd, cwd);
     const stdout = result.stdout || '';
@@ -472,7 +472,26 @@ export async function execShellReal(raw: string, cwd: string, env: Record<string
       lines.push({ type: 'error', text: stderr || `exit ${exitCode}` });
     }
 
-    return { lines, newCwd: cwd, exitCode, durationMs };
+    let newCwd = cwd;
+    const cdMatch = cmd.match(/^cd\s+(.+)$/);
+    if (cdMatch) {
+      const target = cdMatch[1].replace(/^["']|["']$/g, '');
+      if (target === '~' || target === '$HOME' || target === '') {
+        newCwd = '/home/user';
+      } else if (target === '..') {
+        const parts = cwd.split('/').filter(Boolean);
+        parts.pop();
+        newCwd = '/' + parts.join('/');
+      } else if (target.startsWith('/')) {
+        newCwd = target;
+      } else if (target.startsWith('~/')) {
+        newCwd = '/home/user/' + target.slice(2);
+      } else {
+        newCwd = cwd.endsWith('/') ? cwd + target : cwd + '/' + target;
+      }
+    }
+
+    return { lines, newCwd, exitCode, durationMs };
   } catch (err: any) {
     return { lines: [{ type: 'error', text: err?.message || 'terminal:exec failed' }], newCwd: cwd, exitCode: 1, durationMs: Math.round(performance.now() - t0) };
   }

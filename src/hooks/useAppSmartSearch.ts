@@ -46,20 +46,20 @@ export function useAppSmartSearch() {
     setOpen(false);
   }, []);
 
-  // Keyboard shortcut: Ctrl+F / Ctrl+K — open overlay
+  // Keyboard shortcut: Ctrl+F only — find-in-page bar (page stays visible).
+  // Ctrl+K opens the command palette separately (GlobalSearchCommandPalette).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const key = e.key.toLowerCase();
-      if (key === 'f' || key === 'k') {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-          if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
-        }
-        e.preventDefault();
-        setOpen(true);
+      if (key !== 'f') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
       }
+      e.preventDefault();
+      setOpen(true);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);

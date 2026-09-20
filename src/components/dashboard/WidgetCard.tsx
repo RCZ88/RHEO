@@ -7,14 +7,17 @@
 import { useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GripVertical, EyeOff, X, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '../ui/skeleton';
+
+const MotionBtn = motion(Button);
 
 // ── shadcn-style Card primitives (re-skin to RHEO tokens) ──
 const Card = ({ className = '', children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={`rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] text-[var(--text-primary)] ${className}`}
-    {...props}
-  >
+    <div
+      className={`rounded-[10px] bg-[var(--color-card)] text-[var(--text-primary)] ${className}`}
+      {...props}
+    >
     {children}
   </div>
 );
@@ -185,12 +188,7 @@ export function WidgetCard({
       data-widget-id={widgetId}
       data-state="populated"
     >
-      <Card className="h-full flex flex-col">
-        {/* Hairline accent at top */}
-        <div
-          className="h-px"
-          style={{ background: `linear-gradient(to right, transparent, ${accent}, transparent)` }}
-        />
+      <Card className="h-full flex flex-col border-t border-[var(--ws-border)]">
 
         <CardHeader className="pb-2">
           {kicker && !collapsed && (
@@ -215,7 +213,7 @@ export function WidgetCard({
             {/* Edit mode controls */}
             <AnimatePresence>
               {hidden && (
-                <motion.button
+                <MotionBtn
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
@@ -224,7 +222,7 @@ export function WidgetCard({
                   aria-label="Show widget"
                 >
                   <EyeOff size={14} />
-                </motion.button>
+                </MotionBtn>
               )}
             </AnimatePresence>
             {collapsible && (

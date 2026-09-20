@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from 'motion/react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { SummaryCard } from '../../components/insights/SummaryCard'
 import { Sparkline } from './Sparkline'

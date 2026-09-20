@@ -9,6 +9,7 @@ declare global {
       onForegroundChange: (cb: (data: any) => void) => () => void;
       onTrackingHeartbeat: (cb: (data: any) => void) => () => void;
       onBrowserTrackingEvent: (cb: (data: any) => void) => () => void;
+      onBrowserIdentified: (cb: (data: { browser: string }) => void) => () => void;
       onSleepDetection: (cb: (data: any) => void) => void;
       getLogs: () => Promise<any>;
       updateAppLog: (id: number, data: any) => Promise<any>;

@@ -139,7 +139,7 @@ class SearchIndex {
         title: seg.title,
         section: seg.section ?? '',
         snippet,
-        score,
+        score: scores.get(id) ?? 0,
       };
     });
   }

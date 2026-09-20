@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useCallback, useEffect, useRef, useState } from "react"
-import { motion, useMotionTemplate, useMotionValue, useSpring } from "motion/react"
+import { motion, useMotionTemplate, useMotionValue, useSpring } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 interface MagicCardProps {
@@ -42,8 +42,8 @@ export function MagicCard({
 
   return (
     <motion.div
-      className={cn(
-        "group relative isolate overflow-hidden rounded-[inherit] border border-transparent mcp-surface",
+        className={cn(
+        "group relative isolate overflow-hidden rounded-[inherit] mcp-surface",
         className
       )}
       onPointerMove={handlePointerMove}

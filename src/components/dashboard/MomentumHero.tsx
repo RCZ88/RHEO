@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Flame, TrendingUp, Activity, ArrowUp, ArrowDown, Minus, Target, Clock, Zap } from 'lucide-react';
 import { NumberTicker } from '../ui/number-ticker';
 import type { MomentumScore } from './types';

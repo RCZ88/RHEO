@@ -80,6 +80,14 @@ const routeToBoundary = (err: unknown) => {
   const key = err instanceof Error ? err.message : String(err);
   if (key === lastError) return; // deduplicate
   lastError = key;
+  
+  // Check if this is an IPC/500 error - log it prominently
+  const msg = key.toLowerCase();
+  if (msg.includes('500') || msg.includes('internal server error') || 
+      msg.includes('ipc') || msg.includes('invoke')) {
+    console.error('[Main] IPC/Server Error detected:', err);
+  }
+  
   if (err instanceof Error) triggerGlobalError(err);
   else triggerGlobalError(new Error(String(err)));
 };

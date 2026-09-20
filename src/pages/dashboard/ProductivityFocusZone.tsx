@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { DeepFocusPanel } from '../../components/focus/DeepFocusPanel';
 import { FocusRankingsCard } from '../../components/focus/FocusRankingsCard';
 import { DrillDownCard } from '../../components/dashboard/DrillDownCard';

@@ -1,6 +1,5 @@
-/**
- * ActivityFeed — the suprathreshold readout complementing NeuralFlow's subthreshold hum.
- *
+/** ActivityFeed — the suprathreshold readout complementing NeuralFlow's subthreshold hum.
+
  * Per spec §1: this is the "avalanche" window onto the same generative system.
  * It displays:
  *  - Cascade health (how many nodes are currently active, aggregate glow)
@@ -13,7 +12,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Zap, TrendingUp, Activity } from 'lucide-react'
+import { Zap, Activity } from 'lucide-react'
 import type { GraphNode } from '../context-graph/types'
 import { getNodeGlow } from './physics/avalanche'
 import { ACCENTS } from '../ContextGraphView'
@@ -82,24 +81,16 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
     }
   }, [activity, reducedMotion]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Active glow computation
-  const totalGlow = useMemo(() => {
-    const now = Date.now()
-    let glow = 0
-    for (const node of nodes) {
-      glow += getNodeGlow(node, now)
-    }
-    return glow
-  }, [nodes]) // recompute each tick below
-
-  // Tick glow periodically
+  // Tick glow periodically — drives re-renders so glow stays live
   const [, setTick] = useState(0)
   useEffect(() => {
-    tickRef.current = window.setInterval(() => setTick(t => t + 1), 250)
+    tickRef.current = window.setInterval(() => {
+      setTick(t => t + 1)
+    }, 250)
     return () => clearInterval(tickRef.current)
   }, [])
 
-  // Recalculate glow on each tick
+  // Aggregate glow — recomputed every render (cheap, ~nodes.length operations)
   const glow = useMemo(() => {
     const now = Date.now()
     let total = 0
@@ -107,7 +98,7 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
       total += getNodeGlow(node, now)
     }
     return total
-  }, [nodes, tick]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nodes])
 
   // Cascade size history (last AVATAR_COLS events)
   const cascadeHistory = useMemo(() => {

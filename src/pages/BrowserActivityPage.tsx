@@ -196,42 +196,79 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
         } else {
           console.log('[BrowserActivity] No getPreferences API');
         }
-        
-        // Load available browsers from DB only - ONLY show browsers user actually has
+
+        // Load tracked browsers from DB (apps already logged as Browser category)
+        let dbBrowsers: string[] = [];
         if (window.deskflowAPI?.getTrackedBrowsers) {
           const tracked = await window.deskflowAPI.getTrackedBrowsers();
-          console.log('[BrowserActivity] Tracked browsers from DB (user has these):', tracked);
-          
+          console.log('[BrowserActivity] Tracked browsers from DB:', tracked);
           if (tracked && tracked.length > 0) {
-            // Remove duplicates (case-insensitive)
             const seen = new Set<string>();
-            const uniqueBrowsers = tracked.filter(b => {
+            dbBrowsers = tracked.filter(b => {
               const key = b.toLowerCase();
               if (seen.has(key)) return false;
               seen.add(key);
               return true;
             });
-            
-            console.log('[BrowserActivity] User browser apps:', uniqueBrowsers);
-            setAvailableBrowsers(uniqueBrowsers);
-            
-            // If no extension browser set, use first browser from user's list
-            if (!extBrowser && uniqueBrowsers.length > 0) {
-              setMainBrowser(uniqueBrowsers[0]);
-              console.log('[BrowserActivity] Set main browser to:', uniqueBrowsers[0]);
-            }
-          } else {
-            console.log('[BrowserActivity] No browser apps found in DB');
-            setAvailableBrowsers([]);
           }
-        } else {
-          console.log('[BrowserActivity] No getTrackedBrowsers API');
+        }
+
+        // Load browsers detected by file path (installed browsers)
+        let installedBrowsers: string[] = [];
+        if (window.deskflowAPI?.getAvailableBrowsers) {
+          const available = await window.deskflowAPI.getAvailableBrowsers();
+          console.log('[BrowserActivity] Installed browsers (file path detection):', available);
+          if (available && available.length > 0) {
+            const seen = new Set<string>();
+            installedBrowsers = available.filter(b => {
+              const key = b.toLowerCase();
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+          }
+        }
+
+        // Merge: extension browser first (if set), then DB browsers, then installed browsers
+        const merged = new Map<string, string>(); // lowercase -> original case
+        if (extBrowser) merged.set(extBrowser.toLowerCase(), extBrowser);
+        dbBrowsers.forEach(b => merged.set(b.toLowerCase(), b));
+        installedBrowsers.forEach(b => {
+          if (!merged.has(b.toLowerCase())) merged.set(b.toLowerCase(), b);
+        });
+        const uniqueBrowsers = Array.from(merged.values());
+
+        console.log('[BrowserActivity] Merged browser list:', uniqueBrowsers);
+        setAvailableBrowsers(uniqueBrowsers);
+
+        // If no extension browser set, use first browser from merged list
+        if (!extBrowser && uniqueBrowsers.length > 0) {
+          setMainBrowser(uniqueBrowsers[0]);
+          console.log('[BrowserActivity] Set main browser to:', uniqueBrowsers[0]);
         }
       } catch (err) {
         console.error('[BrowserActivity] Error initializing browser tracking:', err);
       }
     };
     init();
+  }, []);
+
+  // Listen for browser extension identification from the extension (/browser-identify)
+  useEffect(() => {
+    if (!window.deskflowAPI?.onBrowserIdentified) return;
+    const unsub = window.deskflowAPI.onBrowserIdentified((data: { browser: string }) => {
+      console.log('[BrowserActivity] Extension identified browser:', data.browser);
+      // Add/reposition the identified browser in the list
+      setAvailableBrowsers(prev => {
+        const lower = data.browser.toLowerCase();
+        const filtered = prev.filter(b => b.toLowerCase() !== lower);
+        return [data.browser, ...filtered];
+      });
+      // Update extension browser state and set as main
+      setExtensionBrowser(data.browser);
+      setMainBrowser(data.browser);
+    });
+    return () => { unsub && unsub(); };
   }, []);
   
   // Set page visibility for on-view recording mode
@@ -1077,8 +1114,8 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                         autoFocus
                       >
                         <option value="">Link to app...</option>
-                        {knownApps.map((ka, i) => (
-                          <option key={i} value={ka.app}>{ka.app}</option>
+                        {availableBrowsers.map((browser, i) => (
+                          <option key={i} value={browser}>{browser}</option>
                         ))}
                       </select>
                     </div>
@@ -1137,19 +1174,21 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowAddProfile(false)}>
             <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
               <h3 className="text-sm font-semibold text-zinc-200 mb-3">Add Browser Profile</h3>
-              <p className="text-xs text-zinc-500 mb-3">Select a tracked app to create a profile for it</p>
+              <p className="text-xs text-zinc-500 mb-3">Select a detected browser to create a profile for it</p>
               <div className="space-y-2 max-h-48 overflow-y-auto mb-3">
-                {knownApps.length === 0 ? (
-                  <p className="text-xs text-zinc-600 italic">No tracked apps detected yet. Use some apps first.</p>
+                {availableBrowsers.length === 0 ? (
+                  <p className="text-xs text-zinc-600 italic">No browsers detected on this system. Install a browser first.</p>
                 ) : (
-                  knownApps.map((ka, i) => (
+                  availableBrowsers.map((browser, i) => (
                     <button
                       key={i}
-                      onClick={() => handleAddProfile(ka.app)}
+                      onClick={() => handleAddProfile(browser)}
                       className="w-full text-left px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
                     >
-                      {ka.app}
-                      <span className="text-xs text-zinc-600 ml-2">{ka.category}</span>
+                      {browser.charAt(0).toUpperCase() + browser.slice(1)}
+                      {extensionBrowser && browser.toLowerCase() === extensionBrowser.toLowerCase() ? (
+                        <span className="ml-2 text-[10px] text-emerald-400">★ extension active</span>
+                      ) : null}
                     </button>
                   ))
                 )}

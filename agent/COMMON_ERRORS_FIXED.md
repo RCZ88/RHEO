@@ -175,17 +175,24 @@ Avoid barrel files (`export * from`) for components; import by direct path. Don'
 
 `TypeError: Illegal constructor`, often near icon/UI code, app crashes on render.
 
-**Root cause**
+**Root cause** (two known patterns)
 
-A lucide-react icon import resolved to a **browser DOM global** instead of the icon — e.g. `import { Lock } from 'lucide-react'` but `Lock` collided with `window.Lock` (Web Locks API). TypeScript doesn't catch it because the DOM global exists ambiently.
+1. **DOM global collision.** A lucide-react icon import resolved to a **browser DOM global** instead of the icon — e.g. `import { Lock } from 'lucide-react'` but `Lock` collided with `window.Lock` (Web Locks API). TypeScript doesn't catch it because the DOM global exists ambiently.
+
+2. **Missing import (patch silently failed).** A JSX element (often a lucide icon) is rendered but **never imported** — because a patch to add the import **silently did nothing** (the `old_string` didn't match the file's actual content, so the tool reported success but changed nothing). The element resolves to `undefined`, React treats it as a class component, calls `new undefined()`, and throws `Illegal constructor` at `renderWithHooks`. This is the #1 cause in our codebase. The fix is always "check the import line of the file that renders the element" — not "rebuild" or "restart."
 
 **Fast fix**
 
-Alias the import: `import { Lock as LockIcon } from 'lucide-react'` and render `<LockIcon />`.
+**If the element is a lucide icon:** alias the import: `import { Lock as LockIcon } from 'lucide-react'` and render `<LockIcon />`. Alias any icon whose name collides with a DOM/Web global: `Lock`, `Notification`, `Image`, `Range`, `History`, `Worker`, `Event`, `Selection`, `Text`, etc.
+
+**If the element was just added in a recent edit (most common):** the import is missing. Open the file that renders the element, find its lucide-react import line, and add the missing icon name. **Verify the import line actually changed** — re-read it. A patch can report success while changing nothing. Also fix the patch match string so future attempts work.
 
 **Prevention**
 
-Alias any icon whose name collides with a DOM/Web global: `Lock`, `Notification`, `Image`, `Range`, `History`, `Worker`, `Event`, `Selection`, `Text`, etc. Also explicitly `ChartJS.register(...)` before rendering charts.
+- Alias any icon whose name collides with a DOM/Web global: `Lock`, `Notification`, `Image`, `Range`, `History`, `Worker`, `Event`, `Selection`, `Text`, etc. Also explicitly `ChartJS.register(...)` before rendering charts.
+- **After any patch: always re-read the exact lines changed to confirm they landed.** Patch success ≠ change correctness. A mismatch on `old_string` silently does nothing.
+- **After adding any JSX element (component, icon, etc.): verify its import exists in that file.** Run `rg -n 'from lucide-react' <file>` and confirm every icon used in JSX appears in the import line.
+- When `Illegal constructor` appears after a recent edit, the first check is always "does the file that renders this element import it?" — not "rebuild" or "restart."
 
 ---
 

@@ -4,7 +4,7 @@
 // Sources: Trophy UI streak-badge + ReactBits CountUp pattern
 // ============================================================
 
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Flame, Zap } from 'lucide-react';
 
 interface StreakBadgeProps {

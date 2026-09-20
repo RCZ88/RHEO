@@ -9,7 +9,7 @@
 
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Target, Check, Plus, X, Edit3, Trash2,
   ChevronDown, ChevronUp, RefreshCw, Zap,

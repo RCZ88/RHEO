@@ -1,16 +1,9 @@
 import type { NavigateFunction } from 'react-router-dom'
 
-export interface DeepNavTarget {
-  route: string
-  section?: string
-  tab?: string
-  subpage?: string
-  state?: Record<string, any>
-}
-
+const NAVIGATE_KEY = 'deepNav:navigate'
 const SECTION_STORAGE_KEY = 'deepNav:section'
 
-export function navigateTo(target: DeepNavTarget, navigate: NavigateFunction) {
+export function navigateTo(target: DeepNavTarget, navigate?: NavigateFunction) {
   const { route, section, tab, subpage, state } = target
 
   // Persist section for pages that need to scroll on mount
@@ -33,10 +26,20 @@ export function navigateTo(target: DeepNavTarget, navigate: NavigateFunction) {
     try { sessionStorage.setItem('deepNav:subpage', subpage) } catch {}
   }
 
-  navigate(route, {
-    state: { section, tab, subpage, ...state },
-    replace: false,
-  })
+  if (navigate) {
+    navigate(route, {
+      state: { section, tab, subpage, ...state },
+      replace: false,
+    })
+  } else {
+    // Fallback: store route for pages that read on mount
+    try {
+      sessionStorage.setItem(NAVIGATE_KEY, route)
+      sessionStorage.setItem(`${NAVIGATE_KEY}:tab`, tab ?? '')
+      sessionStorage.setItem(`${NAVIGATE_KEY}:section`, section ?? '')
+      sessionStorage.setItem(`${NAVIGATE_KEY}:subpage`, subpage ?? '')
+    } catch {}
+  }
 }
 
 export function consumeSectionHint(): string | undefined {
@@ -56,12 +59,17 @@ export function consumeSubpageHint(): string | undefined {
 }
 
 export function scrollToSection(sectionId: string, smooth = true) {
-  const el = document.querySelector(`[data-section="${sectionId}"]`)
+  if (!sectionId || !document) return false;
+  const sel = `[data-section="${CSS.escape(sectionId)}"]`;
+  console.debug('[scrollToSection] querying:', sel);
+  const el = document.querySelector<HTMLElement>(sel);
   if (el) {
-    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'center' })
-    return true
+    console.debug('[scrollToSection] found element:', el);
+    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'center' });
+    return true;
   }
-  return false
+  console.debug('[scrollToSection] no element found for:', sectionId);
+  return false;
 }
 
 export function useScrollToSection(sectionHint?: string) {

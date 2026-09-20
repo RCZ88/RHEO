@@ -5,7 +5,7 @@
 // ============================================================
 
 import { useRef, useState, type ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 
 interface SpotlightCardProps {
   children: ReactNode;

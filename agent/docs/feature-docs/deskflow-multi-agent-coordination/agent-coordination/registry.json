@@ -1,6 +1,17 @@
 {
   "version": 1,
-  "agents": {},
+  "agents": {
+    "[object Object]": {
+      "id": {
+        "AGENT_ID": "opencode-dash-fix-20260920",
+        "task": "fix borders + restore HeroBand"
+      },
+      "startedAt": 1789888554994,
+      "task": "",
+      "pid": 89373,
+      "lastHeartbeat": 1789888554994
+    }
+  },
   "leases": {},
   "locks": {}
 }

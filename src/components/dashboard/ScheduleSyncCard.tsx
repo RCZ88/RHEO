@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Clock, Link2, Unlink } from 'lucide-react';
 import { AnimatedShinyText } from '../ui/animated-shiny-text';
 import type { ScheduleEntry, Goal } from './types';

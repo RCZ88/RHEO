@@ -28,6 +28,13 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     return () => { ipcRenderer.removeListener('browser-tracking-event', handler); };
   },
 
+  // Listen for browser extension identification (fires when extension calls /browser-identify)
+  onBrowserIdentified: (callback: (data: { browser: string }) => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('browser-identified', handler);
+    return () => { ipcRenderer.removeListener('browser-identified', handler); };
+  },
+
   // Listen for sleep detection events
   onSleepDetection: (callback: (data: any) => void) => {
     ipcRenderer.on('sleep-detection', (_event, data) => callback(data));
@@ -957,6 +964,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // ========== Smart Gap Fill ==========
   getKnownApps: () => ipcRenderer.invoke('get-known-apps'),
+  getKnownBrowserApps: () => ipcRenderer.invoke('get-known-browser-apps'),
   predictGapFill: (start: string, end: string, mode?: 'combined' | 'separate') =>
     ipcRenderer.invoke('predict-gap-fill', { start, end, mode: mode || 'combined' }),
    confirmGapFill: (fills: Array<{ slotStart: string; slotEnd: string; app: string; category: string; activityId?: string }>) =>

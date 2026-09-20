@@ -445,6 +445,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   const [showSpecs, setShowSpecs] = useState(false);
   const [projectLanguages, setProjectLanguages] = useState<Record<string, LanguageBreakdownItem[]>>({});
   const [projectLanguagesLoading, setProjectLanguagesLoading] = useState(false);
+  const [showLanguageStats, setShowLanguageStats] = useState(true);
   const scannedPathsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -1305,7 +1306,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   }
 
   return (
-    <PageShell page="ide-projects" className="max-w-7xl mx-auto space-y-6 overflow-y-auto">
+    <PageShell page="ide-projects" className="max-w-7xl mx-auto space-y-6 overflow-y-auto pt-6">
       <CurrentCanvas accent="#06b6d4" render={renderMechanical} />
       <div className="relative z-10">
       {/* Header */}
@@ -1762,6 +1763,36 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           </motion.button>
 
           {overview?.projects && overview.projects.length > 0 ? (
+            <div>
+            {/* Expand / Collapse All + Language Stats Toggle */}
+            <div className="flex items-center gap-2 mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (expandedProjects.size === overview.projects.length) {
+                    setExpandedProjects(new Set());
+                  } else {
+                    const all = new Set(overview.projects.map((p: any) => p.id));
+                    setExpandedProjects(all);
+                  }
+                }}
+                className="flex items-center gap-1.5"
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${expandedProjects.size === overview.projects.length ? 'rotate-180' : ''}`} />
+                {expandedProjects.size === overview.projects.length ? 'Collapse All' : 'Expand All'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLanguageStats(prev => !prev)}
+                className="flex items-center gap-1.5"
+              >
+                <Code2 className="w-4 h-4" />
+                {showLanguageStats ? 'Hide' : 'Show'} Languages
+              </Button>
+            </div>
+
             <div className="grid grid-cols-1 gap-4">
               {overview.projects.map((project: any, idx: number) => {
                 const projectIde = overview?.ides?.find((ide: any) => ide.id === project.default_ide);
@@ -1790,8 +1821,40 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           )}
                         </div>
                         <p className="text-sm text-zinc-500 font-mono truncate mt-1">{project.path}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
+                        </div>
+                        {/* Language Stats - always visible when enabled */}
+                        {showLanguageStats && (() => {
+                        const langs = projectLanguages[project.path];
+                        if (langs && langs.length > 0) {
+                         const top = langs.slice(0, 2);
+                         const extra = langs.length - 2;
+                         return (
+                           <div className="flex items-center gap-1 flex-wrap justify-end">
+                             {top.map((l, i) => (
+                               <span key={l.language} className={`px-1.5 py-0.5 text-[10px] rounded-md font-medium ${
+                                 i === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-700 light:bg-zinc-200/50 text-zinc-400'
+                               }`}>
+                                 {l.language} {l.percentage}%
+                               </span>
+                             ))}
+                             {extra > 0 && (
+                               <span className="px-1.5 py-0.5 text-[10px] rounded-md bg-zinc-800 light:bg-zinc-200 text-zinc-500">
+                                 +{extra}
+                               </span>
+                             )}
+                           </div>
+                         );
+                        }
+                        if (project.primary_language) {
+                         return (
+                           <span className="px-1.5 py-0.5 text-[10px] rounded-md bg-emerald-500/20 text-emerald-400 font-medium">
+                             {project.primary_language}
+                           </span>
+                         );
+                        }
+                        return null;
+                        })()}
+                        <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEditProjectClick(project)}
                           aria-label={`Edit ${project.name}`}
@@ -2095,6 +2158,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               );
               })}
             </div>
+          </div>
           ) : (
             <motion.div
               initial={{ opacity: 0 }}

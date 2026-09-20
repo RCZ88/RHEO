@@ -1,6 +1,6 @@
 // src/features/warmth/gold/GoldPage.tsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Target, Flame, Plus, Bell, Trash2, CheckCircle2, ChevronDown, ChevronUp,
   CalendarDays, Calendar, NotebookPen, TrendingUp, ChevronLeft, ChevronRight,
@@ -19,6 +19,7 @@ import { WeeklyGoalsView } from '../../../components/goals/WeeklyGoalsView';
 import { useFocusGoals } from '../../../hooks/useFocusGoals';
 import { NumberTicker } from '../../../components/ui/number-ticker';
 import { BorderBeam } from '../../../components/ui/border-beam';
+import { AnimatedCircularProgressBar } from '../../../components/ui/animated-circular-progress-bar';
 import { VoiceInputWrapper } from '../../../components/VoiceInputWrapper';
 import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
 import { loadCompletions } from '../../covenant/storage';

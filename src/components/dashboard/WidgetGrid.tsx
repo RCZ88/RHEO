@@ -7,12 +7,13 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence, LayoutGroup, MotionConfig } from 'motion/react';
+import { motion, AnimatePresence, LayoutGroup, MotionConfig } from 'framer-motion';
 import {
   Columns3, Rows3, Plus, Settings2, Box, Check, X, Save,
   LayoutDashboard, ChevronDown, Trash2, RotateCcw, Eye, ArrowUpRight,
   Activity, Calendar, Sparkles, Target, AlertCircle, Zap, BarChart3,
   Pin, Moon, Brain, Orbit, Clock, Flame, ArrowRight, CalendarDays,
+  Split,
 } from 'lucide-react';
 import {
   WidgetRegistry,
@@ -24,6 +25,9 @@ import { DashboardDataProvider } from './DashboardContext';
 import type { DashboardData } from './DashboardContext';
 import { getWidgetTheme } from './widgetTheme';
 import './registerWidgets';
+import './layout-editor.css';
+
+const RATIO_PRESETS = ['1:1', '2:1', '1:2', '2:3', '3:2', '1:3', '3:1'];
 
 /** Map lucide icon names to components */
 const ICON_MAP: Record<string, any> = {
@@ -140,13 +144,15 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
   const [activePresetId, setActivePresetId] = useState<string>('default');
   const [editMode, setEditMode] = useState(forceEditMode);
   const [showAddPanel, setShowAddPanel] = useState(false);
-  const [showPresets, setShowPresets] = useState(false);
-  const [presetName, setPresetName] = useState('');
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [resizing, setResizing] = useState<{ id: string; startX: number; startY: number; colSpan: number; rowSpan: number } | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
-  const editSnapshot = useRef<DashboardLayoutConfig>(DEFAULT_LAYOUT);
+   const [previewMode, setPreviewMode] = useState(false);
+   const [showPresets, setShowPresets] = useState(false);
+   const [presetName, setPresetName] = useState('');
+   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+   const [draggedId, setDraggedId] = useState<string | null>(null);
+   const [resizing, setResizing] = useState<{ id: string; edge: string; startX: number; startY: number; colSpan: number; rowSpan: number; col: number; row: number } | null>(null);
+   const [splitWidget, setSplitWidget] = useState<string | null>(null);
+   const gridRef = useRef<HTMLDivElement>(null);
+   const editSnapshot = useRef<DashboardLayoutConfig>(DEFAULT_LAYOUT);
 
   // Load persisted layout + presets once
   useEffect(() => {
@@ -198,13 +204,31 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
 
   // Esc cancels edit mode (forgiveness — humancentred-UIUX pillar 6)
   useEffect(() => {
-    if (!editMode) return;
+    if (!editMode && !splitWidget) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cancelEdit();
+      if (e.key === 'Escape') {
+        if (splitWidget) setSplitWidget(null);
+        else cancelEdit();
+      }
+      if (!editMode) return;
+      const focused = document.activeElement;
+      if (!focused?.closest?.('.layout-widget')) return;
+      const widgetId = focused.closest('.layout-widget')?.getAttribute('data-widget-id');
+      if (!widgetId) return;
+      const step = e.shiftKey ? 2 : 1;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setLayout(prev => {
+          const pos = prev.gridPositions[widgetId] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
+          const delta = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+          const rowDelta = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+          return { ...prev, gridPositions: { ...prev.gridPositions, [widgetId]: { ...pos, col: Math.max(0, pos.col + delta), row: Math.max(0, pos.row + rowDelta) } } };
+        });
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editMode, cancelEdit]);
+  }, [editMode, splitWidget, cancelEdit]);
 
   // ── Widget ops (staged until Save) ──
 
@@ -253,35 +277,6 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
       };
     });
   }, [markCustom]);
-
-  const toggleLibraryWidget = useCallback(async (widgetId: string) => {
-    const selected = layout.widgetVisibility[widgetId] !== false && layout.widgetOrder.includes(widgetId);
-    const config = WidgetRegistry.get(widgetId);
-    const next: DashboardLayoutConfig = selected
-      ? {
-          ...layout,
-          widgetOrder: layout.widgetOrder.filter(id => id !== widgetId),
-          widgetVisibility: { ...layout.widgetVisibility, [widgetId]: false },
-        }
-      : {
-          ...layout,
-          widgetOrder: [...layout.widgetOrder, widgetId],
-          widgetVisibility: { ...layout.widgetVisibility, [widgetId]: true },
-          gridPositions: {
-            ...layout.gridPositions,
-            [widgetId]: layout.gridPositions[widgetId] || {
-              col: 0,
-              row: layout.rows + layout.widgetOrder.length,
-              colSpan: Math.min(layout.columns, config?.defaultSize?.cols || 3),
-              rowSpan: config?.defaultSize?.rows || 1,
-            },
-          },
-        };
-    markCustom();
-    setLayout(next);
-    setSavedLayout(next);
-    await persistLayout(next);
-  }, [layout, markCustom]);
 
   const setColumns = useCallback((columns: number) => {
     markCustom();
@@ -360,46 +355,82 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
     });
   }, [markCustom]);
 
-  const beginResize = useCallback((e: React.MouseEvent, widgetId: string, position: { colSpan: number; rowSpan: number }) => {
+   const beginResize = useCallback((e: React.MouseEvent, widgetId: string, edge: string, position: { col: number; row: number; colSpan: number; rowSpan: number }) => {
     e.preventDefault();
     e.stopPropagation();
-    setResizing({ id: widgetId, startX: e.clientX, startY: e.clientY, colSpan: position.colSpan, rowSpan: position.rowSpan });
+    setResizing({ id: widgetId, edge, startX: e.clientX, startY: e.clientY, colSpan: position.colSpan, rowSpan: position.rowSpan, col: position.col, row: position.row });
   }, []);
 
   useEffect(() => {
-    if (!resizing) return;
+    if (!resizing || !gridRef.current) return;
     const onMove = (e: MouseEvent) => {
       const width = gridRef.current?.getBoundingClientRect().width || 1;
       const colWidth = width / Math.max(layout.columns, 1);
-      const nextCols = resizing.colSpan + Math.round((e.clientX - resizing.startX) / colWidth);
-      const nextRows = resizing.rowSpan + Math.round((e.clientY - resizing.startY) / 180);
+      const rowHeight = 180;
+      const dx = e.clientX - resizing.startX;
+      const dy = e.clientY - resizing.startY;
+      const colDelta = Math.round(dx / colWidth);
+      const rowDelta = Math.round(dy / rowHeight);
       setLayout(prev => {
         const current = prev.gridPositions[resizing.id] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
         const widget = WidgetRegistry.get(resizing.id);
         const minCols = Math.max(1, widget?.minSize?.cols || 1);
+        const minRows = Math.max(1, widget?.minSize?.rows || 1);
         const maxCols = prev.columns;
-        return {
-          ...prev,
-          gridPositions: {
-            ...prev.gridPositions,
-            [resizing.id]: {
-              ...current,
-              colSpan: Math.max(minCols, Math.min(maxCols, nextCols)),
-              rowSpan: Math.max(widget?.minSize?.rows || 1, Math.min(6, nextRows)),
-            },
-          },
-        };
+        let newColSpan = current.colSpan;
+        let newRowSpan = current.rowSpan;
+        let newCol = current.col;
+        let newRow = current.row;
+        if (resizing.edge.includes('right') || resizing.edge === 'br' || resizing.edge === 'tr') {
+          newColSpan = Math.max(minCols, Math.min(maxCols, current.colSpan + colDelta));
+        }
+        if (resizing.edge.includes('left')) {
+          const newCS = Math.max(minCols, Math.min(maxCols, current.colSpan - colDelta));
+          newColSpan = newCS;
+          newCol = Math.max(0, Math.min(maxCols - newCS, current.col + colDelta));
+        }
+        if (resizing.edge.includes('bottom') || resizing.edge === 'br' || resizing.edge === 'bl') {
+          newRowSpan = Math.max(minRows, Math.min(6, current.rowSpan + rowDelta));
+        }
+        if (resizing.edge.includes('top')) {
+          const newRS = Math.max(minRows, Math.min(6, current.rowSpan - rowDelta));
+          newRowSpan = newRS;
+          newRow = Math.max(0, Math.min(6 - newRS, current.row + rowDelta));
+        }
+        return { ...prev, gridPositions: { ...prev.gridPositions, [resizing.id]: { col: newCol, row: newRow, colSpan: newColSpan, rowSpan: newRowSpan } } };
       });
       setActivePresetId('custom');
     };
     const onUp = () => setResizing(null);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [layout.columns, resizing]);
+
+  // Split widget handler
+  const handleSplit = useCallback((widgetId: string) => {
+    if (splitWidget === widgetId) {
+      setSplitWidget(null);
+      return;
+    }
+    setSplitWidget(widgetId);
+  }, [splitWidget]);
+
+  const applySplit = useCallback((widgetId: string, ratio: string) => {
+    const [cols, rows] = ratio.split(':').map(Number);
+    const current = layout.gridPositions[widgetId] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
+    const totalCols = Math.max(current.colSpan, 1);
+    const leftCols = Math.max(1, Math.round(totalCols * cols / (cols + rows)));
+    setLayout(prev => ({
+      ...prev,
+      gridPositions: {
+        ...prev.gridPositions,
+        [widgetId]: { ...current, colSpan: leftCols },
+      },
+    }));
+    markCustom();
+    setSplitWidget(null);
+  }, [layout.gridPositions, markCustom]);
 
   // ── Presets ──
 
@@ -583,7 +614,63 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
         </div>
       </div>
 
-      {/* Selection lives in CardLibrary (mounted above this grid in the setup modal). */}
+      {/* ── Preview toggle button ── */}
+      {!editMode && (
+        <button onClick={() => setPreviewMode(true)}
+          className="fixed bottom-6 right-[88px] z-50 flex min-h-[48px] min-w-[48px] items-center justify-center rounded-full border border-[var(--ws-border)] bg-[var(--ws-surface-raised)] text-[var(--text-secondary)] shadow-lg transition-all hover:border-[var(--page-accent)] hover:text-[var(--page-accent)]"
+          aria-label="Preview dashboard"
+        >
+          <Eye size={20} />
+        </button>
+      )}
+
+      {/* ── Edit toggle button (always visible) ── */}
+      {!editMode && !previewMode && (
+        <button onClick={enterEditMode}
+          className="fixed bottom-6 right-6 z-50 flex min-h-[48px] min-w-[48px] items-center justify-center rounded-full border border-[var(--ws-border)] bg-[var(--ws-surface-raised)] text-[var(--text-secondary)] shadow-lg transition-all hover:border-[var(--page-accent)] hover:text-[var(--page-accent)]"
+          aria-label="Edit layout"
+        >
+          <Settings2 size={20} />
+        </button>
+      )}
+
+      {/* ── Preview overlay ── */}
+      {previewMode && (
+        <div className="fixed inset-0 z-[100] bg-[var(--ws-surface)] overflow-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-between bg-[rgba(9,9,11,0.9)] backdrop-blur-xl border-b border-[var(--ws-border)] p-4">
+            <span className="font-display text-lg font-semibold text-[var(--text-primary)]">Dashboard Preview</span>
+            <button onClick={() => setPreviewMode(false)}
+              className="flex items-center gap-2 rounded-lg border border-[var(--ws-border)] px-4 py-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]">
+              <X size={16} /> Close Preview
+            </button>
+          </div>
+          <div className="p-6" style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
+            gap: '16px',
+            minHeight: '100vh',
+          }}>
+            {visibleWidgets.map(widget => {
+              const position = layout.gridPositions[widget.id] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
+              const theme = getWidgetTheme(widget.id);
+              const WidgetComponent = widget.component;
+              if (!WidgetComponent) return null;
+              return (
+                <div key={widget.id} style={{
+                  gridColumn: `${position.col + 1} / span ${Math.min(position.colSpan, layout.columns)}`,
+                  gridRow: `${position.row + 1} / span ${Math.min(position.rowSpan, 6)}`,
+                }}>
+                  <DashboardDataProvider value={data}>
+                    <WidgetCard widgetId={widget.id} title={widget.name} icon={null} accent={theme.accent} kicker={theme.kicker}>
+                      <WidgetComponent />
+                    </WidgetCard>
+                  </DashboardDataProvider>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Edit controls (labeled groups) ── */}
       <AnimatePresence>
@@ -704,11 +791,12 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
               <motion.div
                 ref={gridRef}
                 layout
-                className="grid auto-rows-[180px] gap-4"
+                className="grid auto-rows-[180px] gap-4 overflow-auto layout-grid-scroll"
                 style={{
                   gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-          }}
-        >
+                  maxHeight: 'calc(100vh - 280px)',
+           }}
+         >
           <AnimatePresence mode="popLayout">
             {visibleWidgets.map(widget => {
               const position = layout.gridPositions[widget.id] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
@@ -768,21 +856,57 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                     </DashboardDataProvider>
                   </WidgetCard>
                   {editMode && (
-                    <button
-                      type="button"
-                      onMouseDown={(e) => beginResize(e, widget.id, position)}
-                      className="absolute bottom-1.5 right-1.5 z-10 h-7 w-7 cursor-se-resize rounded-md border border-[var(--page-accent)]/40 bg-[var(--color-card)]/90 text-[var(--page-accent)] opacity-80 transition-opacity hover:opacity-100"
-                      aria-label={`Resize ${widget.name} card`}
-                      title="Drag to resize card"
-                    >
-                      <span aria-hidden className="mx-auto block h-3 w-3 border-b-2 border-r-2 border-current" />
-                    </button>
+                    <>
+                      {/* Edge resize handles */}
+                      <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'top', position)}
+                        className="absolute left-2 right-2 -top-1 z-10 h-2 cursor-ns-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        aria-label={`Resize ${widget.name} top edge`} title="Drag to resize top" />
+                      <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'bottom', position)}
+                        className="absolute left-2 right-2 -bottom-1 z-10 h-2 cursor-ns-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        aria-label={`Resize ${widget.name} bottom edge`} title="Drag to resize bottom" />
+                      <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'left', position)}
+                        className="absolute top-2 bottom-2 -left-1 z-10 w-2 cursor-ew-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        aria-label={`Resize ${widget.name} left edge`} title="Drag to resize left" />
+                      <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'right', position)}
+                        className="absolute top-2 bottom-2 -right-1 z-10 w-2 cursor-ew-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        aria-label={`Resize ${widget.name} right edge`} title="Drag to resize right" />
+                      {/* Corner resize handles */}
+                      <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'br', position)}
+                        className="absolute bottom-1.5 right-1.5 z-10 h-4 w-4 cursor-nwse-resize rounded bg-[var(--page-accent)]/40 border border-[var(--page-accent)]/50 text-[var(--page-accent)] opacity-80 transition-opacity hover:opacity-100"
+                        aria-label={`Resize ${widget.name} corner`} title="Drag to resize corner">
+                        <span aria-hidden className="mx-auto block h-3 w-3 border-b-2 border-r-2 border-current" />
+                      </button>
+                      {/* Split button */}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); handleSplit(widget.id); }}
+                        className="absolute bottom-1.5 left-1.5 z-10 h-7 w-7 cursor-pointer rounded-md border border-[var(--page-accent)]/40 bg-[var(--color-card)]/90 text-[var(--page-accent)] opacity-80 transition-opacity hover:opacity-100"
+                        aria-label={`Split ${widget.name}`} title="Split widget">
+                        <Split size={12} />
+                      </button>
+                    </>
                   )}
                 </motion.div>
               );
             })}
           </AnimatePresence>
-        </motion.div>
+  {/* Split overlay for the currently splitting widget */}
+        {splitWidget && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 rounded-xl">
+            <div className="layout-split-overlay rounded-xl bg-[var(--ws-surface-raised)] border border-[var(--ws-border)] p-6">
+              <div className="mb-4 font-mono text-sm text-[var(--page-accent)]">Split {splitWidget}</div>
+              <div className="grid grid-cols-2 gap-2">
+                {RATIO_PRESETS.map(ratio => (
+                  <button key={ratio} onClick={() => { applySplit(splitWidget, ratio); }}
+                    className="layout-ratio-btn">{ratio}</button>
+                ))}
+              </div>
+              <button onClick={() => setSplitWidget(null)}
+                className="mt-4 flex h-8 w-8 items-center justify-center rounded-md border border-[var(--ws-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+      </motion.div>
       </LayoutGroup>
 
       {/* ── Edit-mode widget list (visibility toggles with labels) ── */}

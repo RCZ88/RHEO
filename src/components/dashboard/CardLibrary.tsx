@@ -6,7 +6,7 @@
 // LAMINAR: tween easing, token colors, no spring physics, no glass on chrome.
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, Calendar, Sparkles, Target, AlertCircle, Zap, BarChart3,
   Pin, Moon, Brain, Orbit, Clock, Flame, ArrowRight, CalendarDays, Box,

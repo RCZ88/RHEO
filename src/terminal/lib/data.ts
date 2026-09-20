@@ -14,6 +14,7 @@ export const THEMES: ThemeDef[] = [
   { id: "matrix", name: "Matrix Console", bg: "#030a05", panel: "#071009", panel2: "#0a1510", fg: "#c8ffd4", muted: "#4d7a5c", accent: "#00ff88", accent2: "#aaff00", border: "#0f2a1c", promptUser: "#00ff88", promptPath: "#aaff00", selection: "#0d3b22" },
   { id: "rosepine", name: "Rosé Pine", bg: "#0f0d13", panel: "#161320", panel2: "#1e1a2c", fg: "#e0def4", muted: "#908caa", accent: "#ebbcba", accent2: "#c4a7e7", border: "#2a2438", promptUser: "#9ccfd8", promptPath: "#ebbcba", selection: "#403d52" },
   { id: "solar-light", name: "Solar Paper", bg: "#f6f1e7", panel: "#fffdf7", panel2: "#efe8d8", fg: "#3d3529", muted: "#8a7f6a", accent: "#b45309", accent2: "#0d9488", border: "#ddd2bd", promptUser: "#0d9488", promptPath: "#b45309", selection: "#f5e3b3", isLight: true },
+  { id: "rheo", name: "RHEO", bg: "#0a0b10", panel: "#11131c", panel2: "#171a28", fg: "#c9d1d9", muted: "#6e7681", accent: "#61afef", accent2: "#9d7ec3", border: "#2d3349", promptUser: "#61afef", promptPath: "#9d7ec3", selection: "#29334c", promptPrefix: "#61afef" },
 ];
 
 export const DEFAULT_APPEARANCE: Appearance = {

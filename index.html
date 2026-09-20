@@ -34,30 +34,31 @@
     </div>
     <div id="root"></div>
 
-    <!-- FALLBACK OVERLAY: visible when JS fails to load or crashes before mount -->
+    <!-- FALLBACK OVERLAY: visible when JS fails to load or crashes before mount.
+         Auto-reloads the page up to 3 times with escalating delays, then gives up
+         and shows a static message so the user is never stuck on a blank/error screen. -->
     <div id="df-fallback" style="display:none;align-items:center;justify-content:center;min-height:100vh;background:#121212;color:#a1a1aa;font-family:Inter,sans-serif;padding:24px;box-sizing:border-box;text-align:center;flex-direction:column;gap:12px;position:fixed;inset:0;z-index:99999;">
       <div style="font-size:48px;margin-bottom:8px;">⚠</div>
-      <div style="font-size:18px;font-weight:600;color:#e4e4e7;">DeskFlow failed to load</div>
-      <div id="df-error-msg" style="font-size:13px;color:#ef4444;max-width:500px;line-height:1.5;font-family:monospace;word-break:break-all;">The application could not start. This may be a build issue or a missing file.</div>
+      <div style="font-size:18px;font-weight:600;color:#e4e4e7;">RHEO failed to load</div>
+      <div id="df-error-msg" style="font-size:13px;color:#ef4444;max-width:500px;line-height:1.5;font-family:monospace;word-break:break-all;">The application could not start. Reloading…</div>
       <pre id="df-error-stack" style="display:none;font-size:11px;color:#71717a;max-width:500px;line-height:1.4;text-align:left;background:#1a1a1a;padding:12px;border-radius:8px;overflow:auto;max-height:200px;font-family:monospace;white-space:pre-wrap;word-break:break-all;"></pre>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px;">
         <button onclick="copyError()" id="df-copy-btn" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#27272a;color:#e4e4e7;font-size:13px;cursor:pointer;">Copy Error</button>
-        <button onclick="location.reload()" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#27272a;color:#e4e4e7;font-size:13px;cursor:pointer;">Reload</button>
-        <button onclick="navigateTo('/')" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#18181b;color:#a1a1aa;font-size:13px;cursor:pointer;">Dashboard</button>
-        <button onclick="navigateTo('/activity')" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#18181b;color:#a1a1aa;font-size:13px;cursor:pointer;">Activity</button>
-        <button onclick="navigateTo('/terminal')" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#18181b;color:#a1a1aa;font-size:13px;cursor:pointer;">Terminal</button>
-        <button onclick="navigateTo('/ide')" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#18181b;color:#a1a1aa;font-size:13px;cursor:pointer;">IDE</button>
-        <button onclick="navigateTo('/settings')" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#18181b;color:#a1a1aa;font-size:13px;cursor:pointer;">Settings</button>
+        <button onclick="location.reload()" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#27272a;color:#e4e4e7;font-size:13px;cursor:pointer;">Reload Now</button>
       </div>
       <div style="font-size:11px;color:#52525b;margin-top:4px;">If this persists, rebuild the app: <code style="background:#27272a;padding:2px 6px;border-radius:4px;">node scripts/build.mjs</code></div>
     </div>
 
     <script>
       // SAFETY NET: catches JS load failures and early crashes that prevent React from mounting.
+      // Auto-reloads the page up to 3 times with escalating delays so the user is never stuck.
       window.__RHEO_LOADED = false;
       window.__DESKFLOW_LOADED = false;
       window.__RHEO_LAST_ERROR = null;
       window.__DESKFLOW_LAST_ERROR = null;
+      window.__DF_RELOAD_COUNT = 0;
+      window.__DF_MAX_RELOADS = 3;
+      window.__DF_RELOAD_TIMER = null;
       window.addEventListener('rheo:boot-ready', function() {
         document.documentElement.dataset.bootReady = 'true';
       });
@@ -87,6 +88,29 @@
           es.style.display = 'block';
         }
         if (cb) cb.textContent = 'Copy Error';
+        // Trigger auto-reload on first failure — give the app a chance to recover.
+        attemptReload();
+      }
+
+      function attemptReload() {
+        if (window.__DF_RELOAD_TIMER) {
+          clearTimeout(window.__DF_RELOAD_TIMER);
+          window.__DF_RELOAD_TIMER = null;
+        }
+        window.__DF_RELOAD_COUNT++;
+        if (window.__DF_RELOAD_COUNT > window.__DF_MAX_RELOADS) {
+          // All retries exhausted — show a static message, don't loop forever.
+          var em = document.getElementById('df-error-msg');
+          if (em) em.textContent = 'The application failed to load after multiple attempts. Please rebuild or restart.';
+          return;
+        }
+        // Escalating delays: 4s, 8s, 16s — gives the system time to recover between attempts.
+        var delay = Math.min(4000 * Math.pow(2, window.__DF_RELOAD_COUNT - 1), 20000);
+        var em = document.getElementById('df-error-msg');
+        if (em) em.textContent = 'The application could not start. Reloading in ' + (delay / 1000).toFixed(1) + 's… (attempt ' + window.__DF_RELOAD_COUNT + '/' + window.__DF_MAX_RELOADS + ')';
+        window.__DF_RELOAD_TIMER = setTimeout(function() {
+          location.reload();
+        }, delay);
       }
 
       window.copyError = function() {
@@ -111,7 +135,12 @@
         location.hash = '#' + path;
         location.reload();
       };
-
+      window.addEventListener('beforeunload', function() {
+        if (window.__DF_RELOAD_TIMER) {
+          clearTimeout(window.__DF_RELOAD_TIMER);
+          window.__DF_RELOAD_TIMER = null;
+        }
+      });
       window.onerror = function(msg, src, line, col, err) {
         showFallback(msg, err || new Error(String(msg)));
         return true;
@@ -126,6 +155,6 @@
       }, 10000);
     </script>
 
-    <script type="module" src="/src/main.tsx" onerror="var fb=document.getElementById('df-fallback');if(fb)fb.style.display='flex';"></script>
+    <script type="module" src="/src/main.tsx" onerror="var fb=document.getElementById('df-fallback');if(fb)fb.style.display='flex';var em=document.getElementById('df-error-msg');if(em)em.textContent='Failed to load application bundle. Reloading…';if(window.showFallback)window.showFallback('Failed to load application bundle');else if(window.attemptReload)window.attemptReload();"></script>
   </body>
 </html>

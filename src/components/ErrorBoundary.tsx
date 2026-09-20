@@ -142,12 +142,28 @@ export class ErrorBoundary extends Component<Props, State> {
 
     const { error, showAlternative, copied } = this.state;
     const reloadCount = getPersistedErrorCount();
+    
+    // Check if this is an IPC/500 error
+    const isIpcError = error?.message?.toLowerCase().includes('500') || 
+                       error?.message?.toLowerCase().includes('internal server error') ||
+                       error?.message?.toLowerCase().includes('ipc') ||
+                       error?.message?.toLowerCase().includes('invoke');
 
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a] text-white p-8 overflow-auto light:bg-[var(--ws-surface)] light:text-stone-900">
         <div className="max-w-md text-center">
           <div className="text-red-400 text-6xl mb-6">!</div>
-          <h1 className="text-2xl font-bold mb-4 light:text-stone-900">Something went wrong</h1>
+          <h1 className="text-2xl font-bold mb-4 light:text-stone-900">
+            {isIpcError ? 'Server Error' : 'Something went wrong'}
+          </h1>
+
+          {isIpcError && (
+            <div className="bg-red-900/40 border border-red-700/50 rounded-lg p-4 mb-6 text-sm text-red-200">
+              The application encountered a server error (500). 
+              This usually means the Electron backend is temporarily unavailable. 
+              Click "Reload Page" to refresh the interface.
+            </div>
+          )}
 
           {showAlternative && (
               <div className="bg-amber-900/40 border border-amber-700/50 rounded-lg p-4 mb-6 text-sm text-amber-200 light:bg-amber-50 light:text-amber-900 light:border-amber-200">

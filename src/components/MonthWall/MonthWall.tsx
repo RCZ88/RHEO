@@ -6,7 +6,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, X, CalendarDays, Sun,
 } from 'lucide-react';

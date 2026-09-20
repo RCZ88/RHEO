@@ -1,20 +1,22 @@
-import { AppWindow, Boxes, Circle, Command, Minus, PanelLeft, PanelRight, Plus, Search, Sparkles, Square, X } from "lucide-react";
+import { AppWindow, Boxes, Circle, Command, Minus, PanelLeft, PanelRight, Plus, Save, Search, Sparkles, Square, X, Pencil } from "lucide-react";
 import type { Store } from "../hooks/useConsoleStore";
 import { isElectron } from "../lib/electron";
 import { timeAgo } from "../lib/utils";
 
-export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, onNewTab, leftOpen, setLeftOpen, rightOpen, setRightOpen }: {
+export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, onNewTab, leftOpen, setLeftOpen, rightOpen, setRightOpen, demoMode, setDemoMode, sidebarWidth, setSidebarWidth, rightPanelWidth, setRightPanelWidth, onRename }: {
   store: Store; onPalette: () => void; onSaveWs: () => void; onWorkspaces: () => void; onPresets: () => void; onNewTab: () => void;
   leftOpen: boolean; setLeftOpen: (v: boolean) => void; rightOpen: boolean; setRightOpen: (v: boolean) => void;
+  demoMode: boolean; setDemoMode: (v: boolean) => void; sidebarWidth: number; setSidebarWidth: (v: number) => void; rightPanelWidth: number; setRightPanelWidth: (v: number) => void;
+  onRename: () => void;
 }) {
   const lastCmd = store.history[0];
   const electron = isElectron();
   return (
     <div className="h-12 shrink-0 flex items-center gap-3 px-3 border-b relative z-30" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
       <div className="flex items-center gap-1.5 pr-1" role="group" aria-label="window controls">
-        <button title="Minimize" aria-label="minimize" className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10 text-[var(--t-muted)] hover:text-[var(--t-fg)] transition"><Minus size={14} /></button>
-        <button title="Maximize" aria-label="maximize" className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10 text-[var(--t-muted)] hover:text-[var(--t-fg)] transition"><Square size={12} /></button>
-        <button title="Close" aria-label="close" className="w-7 h-7 rounded-lg grid place-items-center hover:bg-red-500/90 hover:text-white text-[var(--t-muted)] transition"><X size={14} /></button>
+        <button title="Minimize" aria-label="minimize" onClick={() => window.deskflowAPI?.windowMinimize?.()} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10 text-[var(--t-muted)] hover:text-[var(--t-fg)] transition"><Minus size={14} /></button>
+        <button title="Maximize" aria-label="maximize" onClick={() => window.deskflowAPI?.windowMaximize?.()} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10 text-[var(--t-muted)] hover:text-[var(--t-fg)] transition"><Square size={12} /></button>
+        <button title="Close" aria-label="close" onClick={() => window.deskflowAPI?.windowClose?.()} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-red-500/90 hover:text-white text-[var(--t-muted)] transition"><X size={14} /></button>
       </div>
       <div className="w-px h-6" style={{ background: "var(--t-border)" }} />
       <div className="flex items-center gap-2.5 select-none">
@@ -43,12 +45,28 @@ export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, 
         </div>
       )}
       <div className="flex items-center gap-1">
-        <button onClick={() => setLeftOpen(!leftOpen)} title="Toggle sidebar" aria-pressed={leftOpen} className="w-8 h-8 rounded-lg grid place-items-center transition" style={{ color: leftOpen ? "var(--t-accent)" : "var(--t-muted)", background: leftOpen ? "color-mix(in srgb, var(--t-accent) 14%, transparent)" : "transparent" }}><PanelLeft size={16} /></button>
-        <button onClick={() => setRightOpen(!rightOpen)} title="Toggle inspector" aria-pressed={rightOpen} className="w-8 h-8 rounded-lg grid place-items-center transition" style={{ color: rightOpen ? "var(--t-accent)" : "var(--t-muted)", background: rightOpen ? "color-mix(in srgb, var(--t-accent) 14%, transparent)" : "transparent" }}><PanelRight size={16} /></button>
+        {/* DEMO/REAL mode toggle */}
+        <button onClick={() => setDemoMode(!demoMode)} title={demoMode ? "Switch to real mode" : "Switch to demo mode"} className={`h-8 px-2.5 rounded-lg text-[11px] font-semibold transition ${demoMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>{demoMode ? "DEMO" : "REAL"}</button>
+        {/* Sidebar width adjust — distinct from toggle: arrow indicator + width readout */}
+        <div className="flex items-center gap-1 rounded-lg border text-[11px] mono transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)", background: "var(--t-bg)" }}>
+          <button onClick={() => setSidebarWidth(Math.max(120, sidebarWidth - 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Narrow sidebar"><Minus size={10} /></button>
+          <span className="w-8 text-center font-semibold select-none" style={{ color: "var(--t-fg)" }}>{sidebarWidth}</span>
+          <button onClick={() => setSidebarWidth(Math.min(600, sidebarWidth + 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Widen sidebar"><Plus size={10} /></button>
+        </div>
+        {/* Inspector width adjust — same treatment */}
+        <div className="flex items-center gap-1 rounded-lg border text-[11px] mono transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)", background: "var(--t-bg)" }}>
+          <button onClick={() => setRightPanelWidth(Math.max(120, rightPanelWidth - 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Narrow inspector"><Minus size={10} /></button>
+          <span className="w-8 text-center font-semibold select-none" style={{ color: "var(--t-fg)" }}>{rightPanelWidth}</span>
+          <button onClick={() => setRightPanelWidth(Math.min(600, rightPanelWidth + 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Widen inspector"><Plus size={10} /></button>
+        </div>
+        {/* Toggle sidebar — filled accent when ON */}
+        <button onClick={() => setLeftOpen(!leftOpen)} title={leftOpen ? "Hide sidebar" : "Show sidebar"} aria-pressed={leftOpen} className={`w-8 h-8 rounded-lg grid place-items-center transition ${leftOpen ? "bg-[var(--t-accent)] text-white hover:brightness-110" : "text-[var(--t-muted)] hover:bg-white/10 hover:text-[var(--t-fg)]"}`}><PanelLeft size={16} /></button>
+        {/* Toggle inspector — filled accent when ON */}
+        <button onClick={() => setRightOpen(!rightOpen)} title={rightOpen ? "Hide inspector" : "Show inspector"} aria-pressed={rightOpen} className={`w-8 h-8 rounded-lg grid place-items-center transition ${rightOpen ? "bg-[var(--t-accent)] text-white hover:brightness-110" : "text-[var(--t-muted)] hover:bg-white/10 hover:text-[var(--t-fg)]"}`}><PanelRight size={16} /></button>
         <div className="w-px h-5 mx-1" style={{ background: "var(--t-border)" }} />
-        <button onClick={onPresets} title="Preset gallery" className="h-8 px-2.5 rounded-lg hidden sm:flex items-center gap-1.5 text-[12px] font-medium transition hover:bg-white/10" style={{ color: "var(--t-muted)" }}><Sparkles size={14} />Presets</button>
+        <button onClick={onSaveWs} title="Save workspace (Ctrl+Shift+S)" className="h-8 px-3 rounded-xl hidden sm:flex items-center gap-1.5 text-[12px] font-semibold text-white transition hover:brightness-110" style={{ background: "var(--t-accent)" }}><Save size={14} />Save</button>
+        <button onClick={onRename} title="Rename tab" className="h-8 px-3 rounded-xl hidden sm:flex items-center gap-1.5 text-[12px] font-semibold transition hover:bg-white/10" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Pencil size={14} />Rename</button>
         <button onClick={onWorkspaces} title="Workspaces" className="h-8 px-2.5 rounded-lg hidden sm:flex items-center gap-1.5 text-[12px] font-medium transition hover:bg-white/10" style={{ color: "var(--t-muted)" }}><Boxes size={14} />{store.workspaces.length > 0 && <span className="text-[10px] mono px-1 rounded" style={{ background: "var(--t-accent)", color: "#fff" }}>{store.workspaces.length}</span>}</button>
-        <button onClick={onSaveWs} title="Save workspace (Ctrl+Shift+S)" className="h-8 px-3 rounded-xl hidden sm:flex items-center gap-1.5 text-[12px] font-semibold text-white transition hover:brightness-110" style={{ background: "var(--t-accent)" }}><Plus size={14} />Workspace</button>
         <button onClick={onNewTab} title="New tab (Ctrl+Shift+T)" className="w-8 h-8 rounded-lg grid place-items-center text-white transition hover:brightness-110" style={{ background: "color-mix(in srgb, var(--t-accent) 80%, #000)" }}><Plus size={16} /></button>
       </div>
     </div>

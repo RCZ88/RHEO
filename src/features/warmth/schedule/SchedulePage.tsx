@@ -1,9 +1,9 @@
 // src/features/warmth/schedule/SchedulePage.tsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Bell, Trash2, CheckCircle2, ChevronDown, ChevronUp,
-  CalendarDays, Calendar, Clock, Target, Flame,
+  Plus, Bell, Trash2, CheckCircle2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  CalendarDays, Calendar, Clock, Target, Flame, X,
 } from 'lucide-react';
 import { WarmCard } from '../WarmCard';
 import { ScheduleCard } from '../../../pages/dashboard/ScheduleCard';
@@ -14,26 +14,10 @@ import { DeadlinesCard } from '../../../components/dashboard/DeadlinesCard';
 import { useFocusGoals } from '../../../hooks/useFocusGoals';
 import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
 
-type CalendarSide = 'left' | 'right';
-
-function useCalendarSide(): [CalendarSide, () => void] {
-  const [side, setSide] = useState<CalendarSide>('right');
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try { const api = (window as any).deskflowAPI; if (!api?.getPreferences) return; const prefs = await api.getPreferences(); const stored = prefs?.['gold_calendar_side']; if (alive && stored?.schemaVersion === 1) { const v = stored.side; if (v === 'left' || v === 'right') setSide(v); } } catch { /* keep default */ }
-    })();
-    return () => { alive = false; };
-  }, []);
-  const toggle = useCallback(() => setSide(s => { const next = s === 'left' ? 'right' : 'left'; try { (window as any).deskflowAPI?.setPreference?.('gold_calendar_side', { schemaVersion: 1, side: next }); } catch { /* ignore */ } return next; }), []);
-  return [side, toggle];
-}
-
-/* ═══════════════════ helpers ═══════════════════ */
-
+/* ── daily reflection (hard stats) ── */
 const toStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const todayStr = () => toStr(new Date());
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const todayStr = () => toStr(new Date())
 
 function addDaysStr(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -63,32 +47,6 @@ function prettyDate(dateStr: string): string {
 }
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-type CalendarSide = 'left' | 'right';
-
-function useCalendarSide(): [CalendarSide, () => void] {
-  const [side, setSide] = useState<CalendarSide>('right');
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const api = (window as any).deskflowAPI;
-        if (!api?.getPreferences) return;
-        const prefs = await api.getPreferences();
-        const stored = prefs?.['gold_calendar_side'];
-        if (alive && stored?.schemaVersion === 1) { const v = stored.side; if (v === 'left' || v === 'right') setSide(v); }
-      } catch { /* keep default */ }
-    })();
-    return () => { alive = false; };
-  }, []);
-  const toggle = useCallback(() => setSide(s => {
-    const next = s === 'left' ? 'right' : 'left';
-    try { (window as any).deskflowAPI?.setPreference?.('gold_calendar_side', { schemaVersion: 1, side: next }); } catch { /* ignore */ }
-    return next;
-  }), []);
-  return [side, toggle];
-}
-
-/* ── daily reflection (hard stats) ── */
 interface DailyReflection {
   productiveSec: number; codingSec: number;
   goals: { total: number; completed: number };
@@ -299,6 +257,32 @@ function BellBoard({ reminders, onCreate, onToggle, onDelete, selectedDate }: {
 /* ── loadCompletions helper ── */
 function loadCompletions(): any[] {
   try { return (window as any).deskflowAPI?.getCompletions?.() || []; } catch { return []; }
+}
+
+/* ── calendar side toggle ── */
+type CalendarSide = 'left' | 'right';
+
+function useCalendarSide(): [CalendarSide, () => void] {
+  const [side, setSide] = useState<CalendarSide>('right');
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const api = (window as any).deskflowAPI;
+        if (!api?.getPreferences) return;
+        const prefs = await api.getPreferences();
+        const stored = prefs?.['gold_calendar_side'];
+        if (alive && stored?.schemaVersion === 1) { const v = stored.side; if (v === 'left' || v === 'right') setSide(v); }
+      } catch { /* keep default */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+  const toggle = useCallback(() => setSide(s => {
+    const next = s === 'left' ? 'right' : 'left';
+    try { (window as any).deskflowAPI?.setPreference?.('gold_calendar_side', { schemaVersion: 1, side: next }); } catch { /* ignore */ }
+    return next;
+  }), []);
+  return [side, toggle];
 }
 
 /* ═══════════════════ main component ═══════════════════ */

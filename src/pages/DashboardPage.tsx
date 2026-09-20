@@ -3,10 +3,11 @@ import { GlareHover } from '../components/ui/glare-hover';
 import { PageShell } from '../components/PageShell';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useNavigate } from 'react-router-dom';
+import { useScrollToSection } from '../lib/deepNav';
 import { CurrentCanvas } from '../components/CurrentCanvas';
 import { renderStream } from '../lib/renderers/stream';
 import { startPhaseClock } from '../lib/currentPhase';
-import { HeroBand } from './dashboard/HeroBand';
+
 import { SummaryStrip } from './dashboard/SummaryStrip';
 import { PinnedActivities } from './dashboard/PinnedActivities';
 import { QuickFocusCard } from '../components/focus/QuickFocusCard';
@@ -26,7 +27,6 @@ import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
 
 import { VCalendar } from '../components/ui/v-calendar';
 import { CardLibrary, loadCardLayout } from '../components/dashboard/CardLibrary';
-import { WidgetGrid } from '../components/dashboard/WidgetGrid';
 import type { DashboardLayoutConfig } from '../components/dashboard/WidgetRegistry';
 
 import { SectionHeader } from '../components/SectionHeader';
@@ -39,7 +39,7 @@ import OrbitSystem from '../components/OrbitSystem';
 import { useHomeSummary } from '../hooks/useHomeSummary';
 import { useDeepFocus } from '../hooks/useDeepFocus';
 import { Bar, Line } from 'react-chartjs-2';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from "motion/react";
 
 
 import {
@@ -390,19 +390,16 @@ export default function DashboardPage({
 
   // ── Smart search: register dashboard sections as searchable content ──────────
   const _smartSearchRegistered = useSmartSearch('dashboard', [
-    { id: 'hero', pageId: 'dashboard', title: 'Welcome back', section: 'Hero', text: 'Your focus dashboard — see today\'s productivity at a glance, pick a task, and start focusing.', rank: 2.0 },
-    { id: 'summary', pageId: 'dashboard', title: 'Today\'s Summary', section: 'Summary Strip', text: 'Quick overview of your focus sessions, productive time, and distractions so far today.', rank: 1.5 },
-    { id: 'pinned', pageId: 'dashboard', title: 'Pinned Activities', section: 'Pinned', text: 'Activities you\'ve pinned to the dashboard for quick access. Pin any activity from the activity list.', rank: 1.2 },
+    { id: 'hero', pageId: 'dashboard', title: 'Welcome back', section: 'Hero', text: 'Your focus dashboard \u2014 see today\u2019s productivity at a glance, pick a task, and start focusing.', rank: 2.0 },
+    { id: 'pinned', pageId: 'dashboard', title: 'Pinned Activities', section: 'Pinned', text: 'Activities you\u2019ve pinned to the dashboard for quick access. Pin any activity from the activity list.', rank: 1.2 },
     { id: 'quick-focus', pageId: 'dashboard', title: 'Quick Focus', section: 'Focus Start', text: 'Start a focused work session on a task. Track productive time and build streaks.', rank: 1.5 },
-    { id: 'schedule', pageId: 'dashboard', title: 'Today\'s Schedule', section: 'Schedule', text: 'Your planned schedule for today — focus sessions, meetings, and planned work blocks.', rank: 1.2 },
-    { id: 'status', pageId: 'dashboard', title: 'Status', section: 'Status Band', text: 'Current tracking status, active sessions, and system state for the RHEO desktop tracker.', rank: 1.0 },
+    { id: 'schedule', pageId: 'dashboard', title: 'Today\u2019s Schedule', section: 'Schedule', text: 'Your planned schedule for today \u2014 focus sessions, meetings, and planned work blocks.', rank: 1.2 },
     { id: 'goals', pageId: 'dashboard', title: 'Goals', section: 'Goals Card', text: 'Your active goals and progress toward each one. Set and track long-term objectives.', rank: 1.2 },
     { id: 'deadlines', pageId: 'dashboard', title: 'Deadlines', section: 'Deadlines Card', text: 'Upcoming deadlines from your tracked activities. Stay on top of due dates.', rank: 1.2 },
-    { id: 'longest-focus', pageId: 'dashboard', title: 'Longest Focus Session', section: 'Longest Focus', text: 'Your longest uninterrupted focus session — track and beat your personal best.', rank: 1.0 },
+    { id: 'longest-focus', pageId: 'dashboard', title: 'Longest Focus Session', section: 'Longest Focus', text: 'Your longest uninterrupted focus session \u2014 track and beat your personal best.', rank: 1.0 },
     { id: 'insights', pageId: 'dashboard', title: 'Insights', section: 'Insight Strip', text: 'AI-powered insights and recommendations based on your focus patterns and productivity data.', rank: 1.0 },
-    { id: 'momentum', pageId: 'dashboard', title: 'Momentum', section: 'Momentum Hero', text: 'Your momentum score — how consistently you\'re building productive habits over time.', rank: 0.8 },
+    { id: 'momentum', pageId: 'dashboard', title: 'Momentum', section: 'Momentum Hero', text: 'Your momentum score \u2014 how consistently you\u2019re building productive habits over time.', rank: 0.8 },
     { id: 'tier-breakdown', pageId: 'dashboard', title: 'Tier Breakdown', section: 'Tier Breakdown', text: 'Breakdown of your time across productive, neutral, and distracting app categories.', rank: 0.8 },
-    { id: 'widget-grid', pageId: 'dashboard', title: 'Widget Grid', section: 'Dashboard Widgets', text: 'Customizable widget grid — rearrange, add, or remove dashboard widgets to fit your workflow.', rank: 0.5 },
   ]);
 
   // Persist external stopwatch too
@@ -411,6 +408,7 @@ export default function DashboardPage({
 
   // Home summary for cross-module strip
   const navigate = useNavigate();
+  useScrollToSection(); // Read deepNav sessionStorage hint and scroll on mount
   const homeSummary = useHomeSummary();
   const [externalSessionStart, setExternalSessionStart] = useState<Date | null>(null); // Will be set in useEffect
   const [externalElapsedMs, setExternalElapsedMs] = useState(0); // Will be calculated in useEffect
@@ -871,6 +869,9 @@ export default function DashboardPage({
   const [externalHourlyData, setExternalHourlyData] = useState<Map<string, { externalSeconds: number; breakdown: Record<string, { seconds: number; color: string; icon: string }> }>>(new Map());
   const [externalSessions, setExternalSessions] = useState<any[]>([]);
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  const handleScheduleDayChange = useCallback((day: number) => {
+    const d = new Date(); d.setDate(d.getDate() - d.getDay() + day); setCalendarDate(d);
+  }, []);
   const [expandedModal, setExpandedModalRaw] = useState<'heatmap' | 'solar' | null>(null);
   const setExpandedModal = useCallback((val: 'heatmap' | 'solar' | null) => {
     setExpandedModalRaw(val);
@@ -1097,11 +1098,11 @@ export default function DashboardPage({
   }, [chartBars]);
 
   const DEFAULT_ACTIVITIES: ExternalActivity[] = [
-    { id: 1, name: 'Study', type: 'stopwatch', color: '#10b981', icon: 'BookOpen', is_productive: true },
-    { id: 2, name: 'Exercise', type: 'stopwatch', color: '#10b981', icon: 'Dumbbell', is_productive: true },
-    { id: 3, name: 'Gym', type: 'stopwatch', color: '#10b981', icon: 'Activity', is_productive: true },
-    { id: 4, name: 'Reading', type: 'stopwatch', color: '#10b981', icon: 'Book', is_productive: true },
-    { id: 5, name: 'Eating', type: 'checkin', color: '#6366f1', icon: 'Utensils', is_productive: false },
+    { id: 1, name: 'Study', type: 'stopwatch', color: 'var(--success)', icon: 'BookOpen', is_productive: true },
+    { id: 2, name: 'Exercise', type: 'stopwatch', color: 'var(--success)', icon: 'Dumbbell', is_productive: true },
+    { id: 3, name: 'Gym', type: 'stopwatch', color: 'var(--success)', icon: 'Activity', is_productive: true },
+    { id: 4, name: 'Reading', type: 'stopwatch', color: 'var(--success)', icon: 'Book', is_productive: true },
+    { id: 5, name: 'Eating', type: 'checkin', color: 'var(--page-accent)', icon: 'Utensils', is_productive: false },
   ];
 
   const activities = useMemo(() => externalActivities.length > 0 ? externalActivities : DEFAULT_ACTIVITIES, [externalActivities]);
@@ -1278,7 +1279,7 @@ export default function DashboardPage({
     // Fetch current foreground app on mount (foreground-changed only fires on change)
     if (window.deskflowAPI?.getCurrentForeground) {
       window.deskflowAPI.getCurrentForeground().then((initialData: any) => {
-        if (!initialData?.app) return;
+    if (!initialData || !initialData.isReal) return;
         const tb = trackingBrowserRef.current;
         const tam = trackerAppModeRef.current;
         const lnb = lastNonBrowserAppRef.current;
@@ -1349,8 +1350,8 @@ export default function DashboardPage({
   useEffect(() => {
     const refreshInterval = setInterval(() => {
       if (!window.deskflowAPI?.getCurrentForeground) return;
-      window.deskflowAPI.getCurrentForeground().then((data: any) => {
-        if (!data?.app) return;
+       window.deskflowAPI.getCurrentForeground().then((data: any) => {
+         if (!data || !data.isReal) return;
         const tb = trackingBrowserRef.current;
         const isTrackingBrowser = !!tb && isAppMatchingBrowserDashboard(data.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
         const isTrackerApp = data.app.toLowerCase().includes('deskflow') || data.app.toLowerCase().includes('electron') || data.app.toLowerCase().includes('rheo');
@@ -1724,7 +1725,7 @@ export default function DashboardPage({
 
                 const activityName = session.activity_name || 'Unknown';
                 if (!existing.breakdown[activityName]) {
-                  existing.breakdown[activityName] = { seconds: 0, color: session.color || '#8b5cf6', icon: session.icon || '?' };
+                  existing.breakdown[activityName] = { seconds: 0, color: session.color || 'var(--page-accent)', icon: session.icon || '?' };
                 }
                 existing.breakdown[activityName].seconds += segmentSeconds;
 
@@ -2024,7 +2025,7 @@ export default function DashboardPage({
     const currentDay = new Date().getDay();
 
     const getHeatColor = (cell: HeatmapCell | undefined) => {
-      if (!cell) return 'rgba(55, 65, 81, 1)';
+      if (!cell) return 'var(--border)';
 
       let valueToUse = 0;
       let productivityToUse = 0;
@@ -2059,7 +2060,7 @@ export default function DashboardPage({
         }
       }
 
-      if (valueToUse === 0) return 'rgba(55, 65, 81, 1)';
+      if (valueToUse === 0) return 'var(--border)';
 
       // Intensity based on usage: max 1 hour = full opacity, more = saturated
       const maxSeconds = heatmapMode === 'external' ? 3600 : 7200; // External max 1h, device max 2h
@@ -2139,7 +2140,7 @@ export default function DashboardPage({
               endHour: Math.min(endHour, 24),
               label,
               category: isBrowser ? 'browser' : 'app',
-              color: isBrowser ? '#10b981' : '#3b82f6',
+              color: isBrowser ? 'var(--success)' : 'var(--info)',
               duration: Math.round(durationSec),
               details: log.title
             });
@@ -2158,7 +2159,7 @@ export default function DashboardPage({
               endHour: Math.min(endHour, 24),
               label: session.activity_name || 'External',
               category: 'external',
-              color: session.color || '#8b5cf6',
+              color: session.color || 'var(--page-accent)',
               duration: Math.round(durationSec)
             });
           });
@@ -2355,7 +2356,7 @@ export default function DashboardPage({
                               {apps.map(([app, data]) => (
                                 <div key={app} className="flex items-baseline justify-between text-xs">
                                   <span className="text-zinc-400 truncate flex items-center gap-1 light:text-stone-500">
-                                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: appColors[app] || '#6b7280' }} />
+                                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: appColors[app] || 'var(--muted-foreground)' }} />
                                     {app}:
                                   </span>
                                   <span className="font-mono text-emerald-400 ml-2 flex-shrink-0">{formatDuration(data.seconds * 1000)}</span>
@@ -2449,12 +2450,12 @@ export default function DashboardPage({
 
   // Border colors for different states
   const borderColor = externalSessionRunning
-    ? 'rgba(139, 92, 246, 0.3)'  // Purple for external
+    ? 'var(--page-accent)'  // Purple for external
     : isDistracting
-      ? 'rgba(239, 68, 68, 0.3)'  // Red for distracting
+      ? 'var(--error)'  // Red for distracting
       : isCurrentlyProductive
-        ? 'rgba(16, 185, 129, 0.3)'  // Green for productive
-        : 'rgba(107, 114, 128, 0.3)';  // Gray for idle
+        ? 'var(--success)'  // Green for productive
+        : 'var(--muted-foreground)';  // Gray for idle
 
   // Need state for live tick
   const [tick, setTick] = useState(0);
@@ -2617,15 +2618,17 @@ export default function DashboardPage({
   const cardPreviews: Record<string, ReactNode> = {
     'status-band': (
       <StatusBand
-        displayTimeMs={displayTime.ms}
+        displayTimeMs={displayTime?.ms || 0}
         isCurrentlyProductive={isCurrentlyProductive}
         isDistracting={isDistracting}
         currentAppName={isInBrowser
-          ? (currentWebsite?.title || currentWebsite?.domain || 'Browsing...')
+          ? (currentWebsite?.title || currentWebsite?.domain || '')
           : (currentApp?.app || currentApp?.title || '')}
+        isReal={currentApp?.app ? true : false}
         totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
-        browserName={isInBrowser ? currentWebsite?.browserName : undefined}
+        browserName={currentWebsite?.browserName}
         isInBrowser={isInBrowser}
+        isPaused={isPaused}
         websiteTitle={currentWebsite?.title}
         websiteDomain={currentWebsite?.domain}
         websiteCategory={currentWebsite?.category}
@@ -2706,6 +2709,8 @@ export default function DashboardPage({
     'schedule-hero': (
       <ScheduleCard
         entries={schedule}
+        selectedDay={calendarDate.getDay()}
+        onDayChange={(day) => { const d = new Date(); d.setDate(d.getDate() - d.getDay() + day); setCalendarDate(d); }}
         loading={dashLoading}
         error={dashError}
         onAdd={addScheduleEntry}
@@ -2717,7 +2722,7 @@ export default function DashboardPage({
       <InsightStrip insights={aiInsights} />
     ),
     'productivity-chart': (
-      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
+      <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
         <div>
         <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
         <div className="h-52 mt-2">
@@ -2768,7 +2773,7 @@ export default function DashboardPage({
       </div>
     ),
     'activity-feed': (
-      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
+      <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
         <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
       <div className="space-y-0.5 mt-3">
         {activityFeedWithElapsed.length === 0 ? (
@@ -2809,7 +2814,7 @@ export default function DashboardPage({
 
   return (
     <PageShell page="dashboard" variant="dashboard" className="text-white">
-      <CurrentCanvas accent="#10b981" render={renderStream} />
+      <CurrentCanvas accent="var(--success)" render={renderStream} />
       <TimerResetOverlay trigger={resetTrigger} />
 
       {/* Platform Filter Toggle */}
@@ -2873,49 +2878,57 @@ export default function DashboardPage({
 <div className="relative z-10">
         <div className="mx-auto px-5" style={{ maxWidth: '1400px' }}>
 
-          {/* Row 1: Status Band + Momentum Hero */}
-          {(isCardVisible('status-band') || isCardVisible('momentum-hero')) && (
-          <DeskFlowCardMotion className="mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-[5fr_3fr] gap-0 items-stretch">
-            {isCardVisible('status-band') && (
-            <StatusBand
-              displayTimeMs={displayTime.ms}
-              isCurrentlyProductive={isCurrentlyProductive}
-              isDistracting={isDistracting}
-              currentAppName={isInBrowser
-                ? (currentWebsite?.title || currentWebsite?.domain || 'Browsing...')
-                : (currentApp?.app || currentApp?.title || '')}
-              totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
-              browserName={isInBrowser ? currentWebsite?.browserName : undefined}
-              isInBrowser={isInBrowser}
-              websiteTitle={currentWebsite?.title}
-              websiteDomain={currentWebsite?.domain}
-              websiteCategory={currentWebsite?.category}
-              className="md:rounded-r-none"
-            />
-            )}
-            {isCardVisible('momentum-hero') && (
-            <MomentumHero momentum={momentum} loading={dashLoading} />
-            )}
-          </div>
-          </DeskFlowCardMotion>
-          )}
+          {/* Row 1: HeroBand (Stopwatch) + Momentum Hero */}
+           {(isCardVisible('status-band') || isCardVisible('momentum-hero')) && (
+           <DeskFlowCardMotion className="mb-4">
+           <div className="grid grid-cols-1 md:grid-cols-[5fr_3fr] gap-0 items-stretch">
+              {isCardVisible('status-band') && (
+              <div data-section="Hero">
+              <StatusBand
+                displayTimeMs={displayTime?.ms || 0}
+                isCurrentlyProductive={isCurrentlyProductive}
+                isDistracting={isDistracting}
+                currentAppName={isInBrowser
+                  ? (currentWebsite?.title || currentWebsite?.domain || '')
+                  : (currentApp?.app || currentApp?.title || '')}
+                isReal={currentApp?.isReal}
+                totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
+                browserName={currentWebsite?.browserName}
+                isInBrowser={isInBrowser}
+                isPaused={isPaused}
+                websiteTitle={currentWebsite?.title}
+                websiteDomain={currentWebsite?.domain}
+                websiteCategory={currentWebsite?.category}
+              />
+              </div>
+              )}
+             {isCardVisible('momentum-hero') && (
+             <div data-section="Momentum Hero">
+             <MomentumHero momentum={momentum} loading={dashLoading} />
+             </div>
+             )}
+           </div>
+           </DeskFlowCardMotion>
+           )}
 
           {/* Row 2: Tier Breakdown Strip */}
           {isCardVisible('tier-breakdown') && (
           <DeskFlowCardMotion className="mb-4">
+           <div data-section="Tier Breakdown">
            <TierBreakdownStrip
              productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
              neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
              distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
              totalHours={dashboardData?.overview?.totalSeconds ? Math.round(dashboardData.overview.totalSeconds / 3600 * 10) / 10 : 0}
            />
+           </div>
           </DeskFlowCardMotion>
           )}
 
           {/* Row 3: Pinned Activities */}
           {isCardVisible('pinned-activities') && (
           <DeskFlowCardMotion className="mb-4">
+            <div data-section="Pinned">
             <PinnedActivities
               pinnedActivities={pinnedActivities}
               setPinnedActivities={setPinnedActivities}
@@ -2930,6 +2943,7 @@ export default function DashboardPage({
               handleStopExternalSession={handleStopExternalSession}
               collapsible
             />
+           </div>
           </DeskFlowCardMotion>
           )}
 
@@ -2938,6 +2952,7 @@ export default function DashboardPage({
             <DeskFlowCardMotion className="mb-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1 min-h-0">
                  {isCardVisible('goals-card') && (
+                 <div data-section="Goals Card">
                  <GoalsCard
                    goals={goals}
                    longTermGoals={longTermGoals}
@@ -2953,15 +2968,19 @@ export default function DashboardPage({
                    onDismissSuggestion={dismissSuggestion}
                    onGenerateSuggestions={generateSuggestions}
                  />
+                 </div>
                  )}
                  {isCardVisible('focus-card') && (
+                 <div data-section="Focus Start">
                  <QuickFocusCard
                    state={deepFocus.state}
                    onStart={deepFocus.start}
                    onEnd={deepFocus.end}
                  />
+                 </div>
                  )}
                  {isCardVisible('deadlines-card') && (
+                 <div data-section="Deadlines Card">
                  <DeadlinesCard
                    deadlines={deadlines}
                    reminders={reminders}
@@ -2978,10 +2997,13 @@ export default function DashboardPage({
                      try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
                    }}
                  />
+                 </div>
                  )}
-               {isCardVisible('focus-card') && (
+              {isCardVisible('focus-card') && (
+              <div data-section="Longest Focus">
                <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
-               )}
+              </div>
+              )}
               </div>
             </DeskFlowCardMotion>
             )}
@@ -2989,21 +3011,26 @@ export default function DashboardPage({
             {/* Row 5: Schedule */}
             {isCardVisible('schedule-hero') && (
             <DeskFlowCardMotion className="mb-4">
-               <ScheduleCard
-                  entries={schedule}
-                  loading={dashLoading}
-                  error={dashError}
-                  onAdd={addScheduleEntry}
-                  onUpdate={updateScheduleEntry}
-                  onDelete={deleteScheduleEntry}
-                />
+               <div data-section="Schedule">
+                <ScheduleCard
+                   entries={schedule}
+                   loading={dashLoading}
+                   error={dashError}
+                   onAdd={addScheduleEntry}
+                   onUpdate={updateScheduleEntry}
+                   onDelete={deleteScheduleEntry}
+                   onDayChange={handleScheduleDayChange}
+                 />
+               </div>
             </DeskFlowCardMotion>
             )}
 
              {/* AI Insights Strip */}
             {isCardVisible('insight-strip') && (
             <DeskFlowCardMotion className="mb-4">
+            <div data-section="Insight Strip">
             <InsightStrip insights={aiInsights} />
+            </div>
             </DeskFlowCardMotion>
             )}
 
@@ -3174,7 +3201,7 @@ export default function DashboardPage({
                     const endHour = startHour + durationSec / 3600;
                     const isBrowser = log.is_browser_tracking;
                     const label = isBrowser ? (log.domain || log.app) : log.app;
-                    newItems.push({ id: `log-${log.id}`, startHour, endHour: Math.min(endHour, 24), label, category: isBrowser ? 'browser' : 'app', color: isBrowser ? '#10b981' : '#3b82f6', duration: Math.round(durationSec), details: log.title });
+                    newItems.push({ id: `log-${log.id}`, startHour, endHour: Math.min(endHour, 24), label, category: isBrowser ? 'browser' : 'app', color: isBrowser ? 'var(--success)' : 'var(--info)', duration: Math.round(durationSec), details: log.title });
                   });
                   (detail.externalSessions || []).forEach((session: any) => {
                     const startDate = new Date(session.started_at);
@@ -3182,7 +3209,7 @@ export default function DashboardPage({
                     const sHour = startDate.getHours() + startDate.getMinutes() / 60;
                     const durSec = (endDate.getTime() - startDate.getTime()) / 1000;
                     const eHour = sHour + durSec / 3600;
-                    newItems.push({ id: `ext-${session.id}`, startHour: sHour, endHour: Math.min(eHour, 24), label: session.activity_name || 'External', category: 'external', color: session.color || '#8b5cf6', duration: Math.round(durSec) });
+                    newItems.push({ id: `ext-${session.id}`, startHour: sHour, endHour: Math.min(eHour, 24), label: session.activity_name || 'External', category: 'external', color: session.color || 'var(--page-accent)', duration: Math.round(durSec) });
                   });
                   newItems.sort((a, b) => a.startHour - b.startHour);
                   setDayDetailItems(newItems);

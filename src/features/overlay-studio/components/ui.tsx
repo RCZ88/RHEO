@@ -2,7 +2,7 @@
 // Stripped of hues, driven by tokens.css
 
 import { useRef } from 'react'
-import { motion, AnimatePresence, useInView, type Variants } from 'motion/react'
+import { motion, AnimatePresence, useInView, type Variants } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 // ── BlurFade — entrance animation ──

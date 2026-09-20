@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, TrendingDown, ArrowUpRight, BarChart3 } from 'lucide-react';
 import { GlassCard } from '../GlassCard';
 import { SectionHeader } from '../SectionHeader';

@@ -6,7 +6,7 @@
 // ============================================================
 
 import { useRef, useEffect, useCallback } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 
 interface Particle {
   x: number;

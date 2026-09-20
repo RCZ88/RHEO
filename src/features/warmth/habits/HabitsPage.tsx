@@ -1,6 +1,6 @@
 // src/features/warmth/habits/HabitsPage.tsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Target, Flame, Plus, Bell, Trash2, CheckCircle2, ChevronDown, ChevronUp,
   CalendarDays, Calendar, NotebookPen, TrendingUp, ChevronLeft, ChevronRight,

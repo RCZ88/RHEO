@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Plus, Sparkles, Loader2, Clock, Link2, X, Trash2 } from 'lucide-react';
 import { AnimatedShinyText } from '../ui/animated-shiny-text';
 import { NumberTicker } from '../ui/number-ticker';

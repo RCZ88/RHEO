@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Trophy, Medal, Award, Target, Clock, TrendingUp, Flame, Zap, Brain,
   Moon, Search, BarChart3, Minus, Shield, Dumbbell, AlertCircle,

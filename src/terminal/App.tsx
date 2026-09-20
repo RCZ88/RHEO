@@ -197,18 +197,45 @@ export default function App() {
           onPresets={() => setModal("presets")}
           onNewTab={() => setModal("newtab")}
           leftOpen={leftOpen} setLeftOpen={setLeftOpen} rightOpen={rightOpen} setRightOpen={setRightOpen}
+          demoMode={store.demoMode} setDemoMode={store.setDemoMode} sidebarWidth={store.sidebarWidth} setSidebarWidth={store.setSidebarWidth} rightPanelWidth={store.rightPanelWidth} setRightPanelWidth={store.setRightPanelWidth}
+          onSidebarToggle={() => setLeftOpen((v) => !v)}
+          onInspectorToggle={() => setRightOpen((v) => !v)}
+          onSidebarWidthUp={() => store.setSidebarWidth(Math.min(600, store.sidebarWidth + 20))}
+          onSidebarWidthDown={() => store.setSidebarWidth(Math.max(120, store.sidebarWidth - 20))}
+          onInspectorWidthUp={() => store.setRightPanelWidth(Math.min(600, store.rightPanelWidth + 20))}
+          onInspectorWidthDown={() => store.setRightPanelWidth(Math.max(120, store.rightPanelWidth - 20))}
+          onRename={() => doAction("rename")}
         />
         <TabStrip store={store} onNewTab={() => setModal("newtab")} />
         <div className="flex-1 flex min-h-0 gap-2 px-3 pb-1">
           <AnimatePresence initial={false}>
             {leftOpen && (
-              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: 264, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden lg:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
-                <div className="w-[264px] h-full">
+              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: store.sidebarWidth, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden lg:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+                <div className={`${store.sidebarWidth}px h-full`}>
                   <LeftSidebar store={store} onPresets={() => setModal("presets")} onWorkspaces={() => setModal("workspaces")} onNewTab={() => setModal("newtab")} />
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
+          {/* Sidebar drag handle */}
+          {leftOpen && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault(); e.stopPropagation();
+                const startX = e.clientX;
+                const startW = store.sidebarWidth;
+                const move = (ev: MouseEvent) => {
+                  const w = Math.max(120, Math.min(600, startW + (ev.clientX - startX)));
+                  store.setSidebarWidth(w);
+                };
+                const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+                window.addEventListener("mousemove", move);
+                window.addEventListener("mouseup", up);
+              }}
+              className="shrink-0 w-1.5 cursor-col-resize hover:bg-[var(--t-accent)] transition-colors rounded-full"
+              style={{ background: "var(--t-border)", height: "calc(100vh - 49px)" }}
+            />
+          )}
           <div className="flex-1 flex flex-col min-h-0 min-w-0 rounded-xl border p-2" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-panel) 55%, transparent)" }}>
             <div className="flex items-center gap-1.5 px-1 pb-2 shrink-0 flex-wrap">
               <span className="flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: `${t?.color ?? theme.accent}15`, color: t?.color ?? theme.fg }}>
@@ -239,10 +266,29 @@ export default function App() {
               {t && <SplitView store={store} tab={t} node={t.layout} findQ={findQ} onFind={() => setFindOpen(true)} />}
             </div>
           </div>
+          {/* Right panel drag handle */}
+          {rightOpen && (
+                  <div
+               onMouseDown={(e) => {
+                 e.preventDefault(); e.stopPropagation();
+                 const startX = e.clientX;
+                 const startW = store.rightPanelWidth;
+                 const move = (ev: MouseEvent) => {
+                   const w = Math.max(120, Math.min(600, startW + (ev.clientX - startX)));
+                   store.setRightPanelWidth(w);
+                 };
+                 const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+                 window.addEventListener("mousemove", move);
+                 window.addEventListener("mouseup", up);
+               }}
+               className="shrink-0 w-1.5 cursor-col-resize hover:bg-[var(--t-accent)] transition-colors rounded-full"
+               style={{ background: "var(--t-border)", height: "calc(100vh - 49px)" }}
+             />
+          )}
           <AnimatePresence initial={false}>
             {rightOpen && (
-              <motion.div key="right" initial={{ width: 0, opacity: 0 }} animate={{ width: 330, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden md:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
-                <div className="w-[330px] h-full">
+              <motion.div key="right" initial={{ width: 0, opacity: 0 }} animate={{ width: store.rightPanelWidth, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden md:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+                <div className={`${store.rightPanelWidth}px h-full`}>
                   <RightPanel store={store} notify={notify} groupCtl={{ renameG, setRenameG, gDraft, setGDraft }} notes={notes} activeNoteId={activeNoteId} setActiveNoteId={setActiveNoteId} notesSaving={notesSaving} notesSavingLabel={notesSavingLabel} onOpenNotesModal={() => { setSelectedCmd(null); setNotesModal(true); }} selectedCmd={selectedCmd} />
                 </div>
               </motion.div>

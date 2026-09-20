@@ -5,7 +5,8 @@
 // ============================================================
 
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion } from "motion/react";
+import { Bar } from 'react-chartjs-2';
 import {
   AlertCircle, Clock, Target, Zap, BarChart3, Moon, Brain,
   Flame, TrendingUp, Calendar, Sparkles, ArrowRight, Check,
@@ -361,25 +362,34 @@ export function ProductivityChartSummary() {
   const ctx = useDashboardDataContext();
   const navigate = useNavigate();
   const data = ctx.weeklyHeatmap || [];
-  const maxVal = Math.max(...data.map((d: any) => d.productiveHours || 0), 1);
+  const chartData = data.slice(-7);
 
   return (
     <div className="cursor-pointer space-y-3" onClick={() => navigate('/stats')}>
       <StatValue value={`${data.length}d`} label="weekly trend" icon={TrendingUp} />
-      <div className="flex items-end gap-1 h-14">
-        {data.slice(-7).map((day: any, i: number) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-            <motion.div
-              className="w-full rounded-t-sm bg-[var(--page-accent)]/70"
-              initial={{ height: 0 }}
-              animate={{ height: `${((day.productiveHours || 0) / maxVal) * 100}%` }}
-              transition={{ duration: 0.4, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
-            />
-            <span className="text-[9px] text-[var(--text-muted)]">
-              {day.date ? new Date(day.date).toLocaleDateString('en', { weekday: 'narrow' }) : ''}
-            </span>
-          </div>
-        ))}
+      <div className="h-36 w-full">
+        <Bar
+          data={{
+            labels: chartData.map((d: any) => d.date ? new Date(d.date).toLocaleDateString('en', { weekday: 'narrow' }) : ''),
+            datasets: [{
+              label: 'Productive Hours',
+              data: chartData.map((d: any) => d.productiveHours || 0),
+              backgroundColor: 'rgba(139, 92, 246, 0.6)',
+              borderColor: '#8b5cf6',
+              borderWidth: 1,
+              borderRadius: 4,
+            }],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { display: true, grid: { color: '#374151' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
+              y: { display: true, grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+            },
+          }}
+        />
       </div>
     </div>
   );

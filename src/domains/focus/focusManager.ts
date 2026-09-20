@@ -275,35 +275,47 @@ export class FocusManager {
   private pushState() { this.getMainWindow()?.webContents.send('focus:state', this.getPublicState()); }
 
   getGoalConfig() {
-    const row = this.db.prepare('SELECT * FROM focus_goal_config WHERE id = 1').get() as
-      | { lenient_goal_sec: number; strict_goal_sec: number; updated_at: string | null }
-      | undefined;
-    return {
-      lenient_goal_sec: row?.lenient_goal_sec ?? 0,
-      strict_goal_sec: row?.strict_goal_sec ?? 0,
-      updated_at: row?.updated_at ?? null,
-    };
+    try {
+      const row = this.db.prepare('SELECT * FROM focus_goal_config WHERE id = 1').get() as
+        | { lenient_goal_sec: number; strict_goal_sec: number; updated_at: string | null }
+        | undefined;
+      return {
+        lenient_goal_sec: row?.lenient_goal_sec ?? 0,
+        strict_goal_sec: row?.strict_goal_sec ?? 0,
+        updated_at: row?.updated_at ?? null,
+      };
+    } catch {
+      return { lenient_goal_sec: 0, strict_goal_sec: 0, updated_at: null };
+    }
   }
 
   saveGoalConfig(cfg: { lenient_goal_sec?: number; strict_goal_sec?: number }) {
-    const current = this.getGoalConfig();
-    const lenient = Math.max(0, Math.round(Number(cfg?.lenient_goal_sec ?? current.lenient_goal_sec) || 0));
-    const strict = Math.max(0, Math.round(Number(cfg?.strict_goal_sec ?? current.strict_goal_sec) || 0));
-    this.db.prepare(
-      `INSERT INTO focus_goal_config (id, lenient_goal_sec, strict_goal_sec, updated_at)
-       VALUES (1, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET lenient_goal_sec = excluded.lenient_goal_sec,
-         strict_goal_sec = excluded.strict_goal_sec, updated_at = excluded.updated_at`
-    ).run(lenient, strict, new Date().toISOString());
-    return this.getGoalConfig();
+    try {
+      const current = this.getGoalConfig();
+      const lenient = Math.max(0, Math.round(Number(cfg?.lenient_goal_sec ?? current.lenient_goal_sec) || 0));
+      const strict = Math.max(0, Math.round(Number(cfg?.strict_goal_sec ?? current.strict_goal_sec) || 0));
+      this.db.prepare(
+        `INSERT INTO focus_goal_config (id, lenient_goal_sec, strict_goal_sec, updated_at)
+         VALUES (1, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET lenient_goal_sec = excluded.lenient_goal_sec,
+           strict_goal_sec = excluded.strict_goal_sec, updated_at = excluded.updated_at`
+      ).run(lenient, strict, new Date().toISOString());
+      return this.getGoalConfig();
+    } catch {
+      return { lenient_goal_sec: 0, strict_goal_sec: 0, updated_at: null };
+    }
   }
 
   private registerIpc() {
-    ipcMain.handle('focus:start', (_e, cfg: FocusConfig) => this.start(cfg));
+    ipcMain.handle('focus:start', (_e, cfg: FocusConfig) => {
+      try { return this.start(cfg); } catch (err) { console.error('[focus:start] error:', err); return null; }
+    });
     ipcMain.handle('focus:end', (_e, outcome?: 'aborted') => { this.end(outcome ?? 'aborted', 'user'); });
     ipcMain.handle('focus:get-state', () => this.getPublicState());
-    ipcMain.handle('focus:history', (_e, opts?: { limit?: number }) =>
-      this.db.prepare(`SELECT * FROM deep_focus_sessions ORDER BY started_at DESC LIMIT ?`).all(opts?.limit ?? 50));
+    ipcMain.handle('focus:history', (_e, opts?: { limit?: number }) => {
+      try { return this.db.prepare(`SELECT * FROM deep_focus_sessions ORDER BY started_at DESC LIMIT ?`).all(opts?.limit ?? 50); }
+      catch { return []; }
+    });
     ipcMain.handle('focusGoal:get', () => this.getGoalConfig());
     ipcMain.handle('focusGoal:save', (_e, cfg: { lenient_goal_sec?: number; strict_goal_sec?: number }) =>
       this.saveGoalConfig(cfg));

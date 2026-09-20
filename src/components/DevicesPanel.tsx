@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Smartphone, Trash2, RefreshCw, Shield, ShieldOff, AlertTriangle, Monitor, Loader2, Link, Lock } from 'lucide-react';
+import { Smartphone, Trash2, RefreshCw, Shield, ShieldOff, AlertTriangle, Monitor, Loader2, Link } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import SyncPairModal from './SyncPairModal';
 
@@ -20,23 +20,6 @@ export function DevicesPanel() {
   const [revokingAll, setRevokingAll] = useState(false);
   const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authenticated, setAuthenticated] = useState(false);
-
-  const checkAuth = useCallback(async () => {
-    const api = (window as any).deskflowAPI;
-    if (!api?.authGetState) { setAuthChecked(true); return; }
-    try {
-      const state = await api.authGetState();
-      setAuthenticated(!!state?.authenticated);
-    } catch {
-      setAuthenticated(false);
-    } finally {
-      setAuthChecked(true);
-    }
-  }, []);
-
-  useEffect(() => { checkAuth(); }, [checkAuth]);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -208,31 +191,11 @@ export function DevicesPanel() {
       {/* Empty state */}
       {!loading && devices.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center py-8 text-center">
-          {authChecked && !authenticated ? (
-            <>
-              <div className="w-10 h-10 rounded-full bg-zinc-800/60 flex items-center justify-center mb-3">
-                <Lock className="w-5 h-5 text-zinc-500" />
-              </div>
-              <p className="text-sm text-zinc-400">Authentication required</p>
-              <p className="text-xs text-zinc-600 mt-1">
-                Log in to pair and manage devices
-              </p>
-              <button
-                onClick={() => window.dispatchEvent(new CustomEvent('settings:open-tab', { detail: 'auth' }))}
-                className="mt-3 px-4 py-2 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors border border-zinc-700/50"
-              >
-                Go to Auth Settings
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="w-10 h-10 rounded-full bg-zinc-800/60 flex items-center justify-center mb-3">
-                <Smartphone className="w-5 h-5 text-zinc-500" />
-              </div>
-              <p className="text-sm text-zinc-400">No devices paired</p>
-              <p className="text-xs text-zinc-600 mt-1">Scan a QR code from the terminal to pair your phone</p>
-            </>
-          )}
+          <div className="w-10 h-10 rounded-full bg-zinc-800/60 flex items-center justify-center mb-3">
+            <Smartphone className="w-5 h-5 text-zinc-500" />
+          </div>
+          <p className="text-sm text-zinc-400">No devices paired</p>
+          <p className="text-xs text-zinc-600 mt-1">Tap "Pair" in the sidebar to scan a QR code</p>
         </div>
       )}
 

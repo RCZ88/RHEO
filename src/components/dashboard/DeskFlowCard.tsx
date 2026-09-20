@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, type HTMLMotionProps } from "motion/react"
+import { motion, type HTMLMotionProps } from "framer-motion"
 import { cn } from "@/lib/utils"
 import {
   Card,
@@ -111,7 +111,7 @@ export function DeskFlowCardMotion({
       whileHover={{ y: -2, scale: 1.005, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
       whileTap={{ scale: 0.98 }}
       className={cn(
-        "rounded-xl border border-zinc-800/60 bg-zinc-900/80 backdrop-blur-xl overflow-hidden transition-colors duration-200 hover:border-pink-500/30 hover:shadow-[0_0_20px_rgba(244,63,94,0.12)]",
+        "rounded-xl bg-zinc-900/80 backdrop-blur-xl overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(244,63,94,0.12)]",
         className,
       )}
       {...props}

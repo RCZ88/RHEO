@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Blocks, Boxes, Clock, Download, FolderInput, History, Layers, Play, Plus, RotateCcw, Save, Search,
+  Blocks, Boxes, Clock, Copy, Download, FolderInput, History, Layers, Play, Plus, RotateCcw, Save, Search,
   Settings2, Star, Terminal, Trash2, Upload, X, Zap,
 } from "lucide-react";
 import type { Preset, SavedCommand, Workspace } from "../lib/types";
@@ -132,6 +132,36 @@ export function PresetsModal({ store, onClose, notify }: { store: Store; onClose
 /* ---------- workspaces ---------- */
 export function WorkspacesModal({ store, onClose, onSave, notify }: { store: Store; onClose: () => void; onSave: () => void; notify: (m: string) => void }) {
   const exportWs = (w: Workspace) => download(`${w.name.replace(/\s+/g, "-").toLowerCase()}.penguin.json`, JSON.stringify(w, null, 2));
+
+  // Ctrl+C / Ctrl+V clipboard shortcuts while modal is open
+  useEffect(() => {
+    if (!store.workspaces.length) return;
+    const fn = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === "c" && mod) {
+        e.preventDefault();
+        // Copy the most recent workspace (or first) to clipboard
+        const target = store.workspaces[0];
+        navigator.clipboard?.writeText(JSON.stringify(target, null, 2)).catch(() => {});
+        notify(`Copied “${target.name}” to clipboard`);
+      } else if (e.key === "v" && mod) {
+        e.preventDefault();
+        navigator.clipboard?.readText().then((text) => {
+          if (!text) return;
+          try {
+            const w = JSON.parse(text) as Workspace;
+            if (!w.tabs?.length || !w.name) throw new Error("bad");
+            w.id = uid("ws");
+            store.setWorkspaces((ws) => [w, ...ws]);
+            notify(`Pasted “${w.name}” from clipboard`);
+          } catch { notify("Invalid workspace JSON on clipboard"); }
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [store.workspaces, notify]);
   return (
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
@@ -157,6 +187,7 @@ export function WorkspacesModal({ store, onClose, onSave, notify }: { store: Sto
             <div className="flex gap-1.5 mt-3">
               <button onClick={() => { store.restoreWorkspace(w.id); notify(`Restored “${w.name}”`); onClose(); }} className="flex-1 h-8 rounded-xl text-white text-[12px] font-bold flex items-center justify-center gap-1.5" style={{ background: w.color }}><RotateCcw size={13} />Restore</button>
               <button onClick={() => exportWs(w)} title="Export JSON" className="w-8 h-8 rounded-xl border grid place-items-center" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}><Download size={13} /></button>
+              <button onClick={() => { navigator.clipboard?.writeText(JSON.stringify(w, null, 2)); notify(`Copied “${w.name}” to clipboard`); }} title="Copy to clipboard (Ctrl+C)" className="w-8 h-8 rounded-xl border grid place-items-center" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}><Copy size={13} /></button>
               <button onClick={() => store.setWorkspaces((ws) => ws.filter((x) => x.id !== w.id))} title="Delete workspace" className="w-8 h-8 rounded-xl border grid place-items-center hover:bg-red-500/80 hover:text-white hover:border-transparent" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}><Trash2 size={13} /></button>
             </div>
           </div>

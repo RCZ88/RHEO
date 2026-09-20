@@ -1380,6 +1380,13 @@ Restructured from 12 flat tabs into 5 group buttons with browser-tab-style nav (
 
 ## Recent Feature Additions
 
+### 2026-09-20: IDE Projects Page — Language Detection Fix + Stats Bar + Expand/Collapse All
+- Fixed `detect-project-language` (single) in main.ts: added `CODING_EXCLUDE` set (JSON, Markdown, YAML, TOML, XML) so Markdown/docs don't win over actual coding languages. Falls back to overall top if only non-coding files exist.
+- Added `showLanguageStats` state (default true) + toggle button in Projects tab toolbar.
+- Language stats now render on card headers by default: top 2 languages with percentages, `+N` for remaining. Falls back to `primary_language` if no scan data.
+- Added Expand All / Collapse All button pair in Projects tab toolbar.
+- Fixed topbar overlap: added `pt-6` to PageShell container.
+
 ### 2026-08-07:
 - Life Interconnected River round-03 close-out (back-and-forth collaboration, specialist answers): (1) TodayTributary creation UI — Plus button per column: Covenant â NewCommitmentModal (covenant.addCommitment), Gold â inline CriteriaBuilder reusing GoldPage's exported defaultCriteria/criteriaToGoal, Vault & Memories â inline LTG form (title/category/priority/deadline/description) via onAddLTG + Upload for memory files; LifePage owns persistence (handleAddGoal â api.saveGoal(today); handleAddLTG â api.saveGoalsBatch with period:'longterm', date:'2000-01-01', id:ltg_<ts>_<rand>). GoldPage now exports CAT_META/catDot/defaultCriteria/criteriaToGoal/LTGForm/emptyLTGForm/PRIORITY_OPTIONS. (2) Dead code deleted: river.tsx (LifeRiver) + phase-drawer.tsx (zero importers). (3) MemoryCard idPrefix prop â layoutId per-grid (`tributary`/`phase-${id}`, bare `memory-${id}` default).
 - Finance Monthly Recap typography (user: "recap has ridiculously ugly fonts"): font-selection skill round — USER-PICKED classic-authority pairing = Libre Caslon Text 700 headings + Source Serif 4 narrative body + JetBrains Mono numbers, applied to RecapPanel (hero + empty-state AnimatedGradientText titles `font-caslon`, "Follow Through" / "The Month's Story" h3s `font-caslon`, narrative paragraphs `font-serif`, NumberTicker stat values `font-mono`). New `--font-caslon` token in index.css @theme; Libre Caslon Text added to Google Fonts in index.html. GOTCHA: AnimatedGradientText doesn't forward `style` â font via className utility.
