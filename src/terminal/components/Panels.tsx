@@ -12,6 +12,7 @@ import type { Store } from "../hooks/useConsoleStore";
 import { collectSplits, countLeaves, listPaneIds } from "../hooks/useConsoleStore";
 import { ICON_CHOICES, TabIcon } from "./TabIcon";
 import { CommandNotesPanel } from "./CommandNotesPanel";
+import { commandNotes } from "./CommandNotesStore";
 
 function Section({ title, icon, right, children }: { title: string; icon?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -812,7 +813,7 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
         {store.rightTab === "mcp" && <McpPanel store={store} notify={notify} />}
         {store.rightTab === "theme" && <ThemePanel store={store} notify={notify} />}
         {store.rightTab === "sys" && <SysPanel store={store} notify={notify} />}
-        {store.rightTab === "handbook" && <CommandNotesPanel store={store} />}
+        {store.rightTab === "handbook" && <CommandNotesPanel store={store} notes={commandNotes.list()} />}
       </div>
     </div>
   );

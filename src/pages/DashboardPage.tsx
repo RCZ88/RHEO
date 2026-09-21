@@ -2566,3 +2566,695 @@ export default function DashboardPage({
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   // Bumped after any save in the card library / widget grid so the live dashboard re-reads storage.
+  const bumpLayoutSync = useCallback(() => setLayoutSyncKey(k => k + 1), []);
+
+  // Load card visibility (null = no custom layout yet → show the normal dashboard).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stored = await loadCardLayout();
+      if (!cancelled) setCardLayout(stored);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showCardLibrary, layoutSyncKey]);
+
+   // Esc closes card library modal
+   useEffect(() => {
+     if (!showCardLibrary) return;
+     const onKey = (e: KeyboardEvent) => {
+       if (e.key === 'Escape') setShowCardLibrary(false);
+     };
+     window.addEventListener('keydown', onKey);
+     return () => window.removeEventListener('keydown', onKey);
+   }, [showCardLibrary]);
+
+   const isCardVisible = (id: string): boolean => {
+    if (!cardLayout) return true;
+    return cardLayout.widgetVisibility[id] !== false && cardLayout.widgetOrder.includes(id);
+  };
+
+  // Fetch available platforms on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const api = await awaitApi();
+        const platforms = await api.getPlatforms?.();
+        if (platforms && platforms.length > 0) {
+          setAvailablePlatforms(platforms);
+        }
+      } catch (_e) { /* platforms not available */ }
+    })();
+  }, []);
+
+  // ── Live card previews for the Card Library (same components + live props as the rows below) ──
+  const cardPreviews: Record<string, ReactNode> = {
+    'status-band': (
+      <StatusBand
+        displayTimeMs={displayTime?.ms || 0}
+        isCurrentlyProductive={isCurrentlyProductive}
+        isDistracting={isDistracting}
+        currentAppName={isInBrowser
+          ? (currentWebsite?.title || currentWebsite?.domain || '')
+          : (currentApp?.app || currentApp?.title || '')}
+        isReal={currentApp?.app ? true : false}
+        totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
+        browserName={currentWebsite?.browserName}
+        isInBrowser={isInBrowser}
+        isPaused={isPaused}
+        websiteTitle={currentWebsite?.title}
+        websiteDomain={currentWebsite?.domain}
+        websiteCategory={currentWebsite?.category}
+      />
+    ),
+    'momentum-hero': (
+      <MomentumHero momentum={momentum} loading={dashLoading} />
+    ),
+    'tier-breakdown': (
+      <TierBreakdownStrip
+        productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
+        neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
+        distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
+        totalHours={dashboardData?.overview?.totalSeconds ? Math.round(dashboardData.overview.totalSeconds / 3600 * 10) / 10 : 0}
+      />
+    ),
+    'pinned-activities': (
+      <PinnedActivities
+        pinnedActivities={pinnedActivities}
+        setPinnedActivities={setPinnedActivities}
+        activities={activities}
+        selectedExternalActivity={selectedExternalActivity}
+        setSelectedExternalActivity={setSelectedExternalActivity}
+        handleSelectExternalActivity={handleSelectExternalActivity}
+        externalSessionRunning={externalSessionRunning}
+        formatDuration={formatDuration}
+        externalElapsedMs={externalElapsedMs}
+        handleStartExternalSession={handleStartExternalSession}
+        handleStopExternalSession={handleStopExternalSession}
+        collapsible
+      />
+    ),
+    'goals-card': (
+      <GoalsCard
+        goals={goals}
+        longTermGoals={longTermGoals}
+        suggestions={suggestions}
+        insights={dashboardInsights}
+        loading={dashLoading}
+        error={dashError}
+        onToggle={toggleGoal}
+        onAdd={addGoal}
+        onDelete={deleteGoal}
+        onUpdate={updateGoal}
+        onAcceptSuggestion={acceptSuggestion}
+        onDismissSuggestion={dismissSuggestion}
+        onGenerateSuggestions={generateSuggestions}
+      />
+    ),
+    'focus-card': (
+      <div className="flex flex-col gap-4">
+        <QuickFocusCard
+          state={deepFocus.state}
+          onStart={deepFocus.start}
+          onEnd={deepFocus.end}
+        />
+        <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
+      </div>
+    ),
+    'deadlines-card': (
+      <DeadlinesCard
+        deadlines={deadlines}
+        reminders={reminders}
+        loading={dashLoading}
+        error={dashError}
+        onAdd={addDeadline}
+        onDelete={deleteDeadline}
+        onUpdate={updateDeadline}
+        onComplete={completeDeadline}
+        onToggleReminder={async (id, done) => {
+          try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
+        }}
+        onDeleteReminder={async (id) => {
+          try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
+        }}
+      />
+    ),
+    'schedule-hero': (
+      <ScheduleCard
+        entries={schedule}
+        selectedDay={calendarDate.getDay()}
+        onDayChange={(day) => { const d = new Date(); d.setDate(d.getDate() - d.getDay() + day); setCalendarDate(d); }}
+        loading={dashLoading}
+        error={dashError}
+        onAdd={addScheduleEntry}
+        onUpdate={updateScheduleEntry}
+        onDelete={deleteScheduleEntry}
+      />
+    ),
+    'insight-strip': (
+      <InsightStrip insights={aiInsights} />
+    ),
+    'productivity-chart': (
+      <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
+        <div>
+        <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
+        <div className="h-52 mt-2">
+          {chartBarsResult.chartBars.length === 0 ? (
+            <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No data yet" description="Start tracking to see productivity" />
+          ) : (
+            <Bar data={{
+              labels: chartBarsResult.chartBars.map(b => b.label),
+              datasets: [
+                {
+                  label: 'Productive',
+                  data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
+                  backgroundColor: '#34d399',
+                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                },
+                {
+                  label: 'Other',
+                  data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
+                  backgroundColor: '#fbbf24',
+                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                },
+                {
+                  label: 'External',
+                  data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
+                  backgroundColor: '#38bdf8',
+                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                },
+              ],
+            }} options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+              scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } }, y: { stacked: true, grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 11 } } } },
+            }} />
+          )}
+        </div>
+        <div className="flex items-center gap-4 mt-4 text-[11px] text-[var(--text-muted)]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--success)' }}></span> Productive
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--warning)' }}></span> Other
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--info)' }}></span> External
+          </div>
+        </div>
+        </div>
+      </div>
+    ),
+    'activity-feed': (
+      <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
+        <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
+      <div className="space-y-0.5 mt-3">
+        {activityFeedWithElapsed.length === 0 ? (
+          <EmptyState icon={<Clock size={20} />} title="No sessions yet" description="Start an activity to see it here" />
+        ) : (
+          [...activityFeedWithElapsed].reverse().slice(0, 10).map((item) => {
+            const isActive = item.isActive;
+            const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
+            return (
+              <div key={item.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    item.tier === 'productive' ? 'bg-[var(--success)]' :
+                    item.tier === 'distracting' ? 'bg-[var(--error)]' :
+                    'bg-[var(--warning)]'
+                  }`} />
+                  <div className="min-w-0">
+                    <div className="text-[13px] text-[var(--text-primary)] truncate">{item.name}</div>
+                    <div className="text-[11px] text-[var(--text-muted)] truncate">{item.category} &bull; {item.timestamp.toLocaleTimeString()}</div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 ml-3">
+                <div className="text-[13px] font-mono text-[var(--text-muted)]">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+                    {item.tier}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      </div>
+    ),
+  };
+
+  return (
+    <PageShell page="dashboard" variant="dashboard" className="text-white">
+      <CurrentCanvas accent="#34d399" render={renderStream} />
+      <TimerResetOverlay trigger={resetTrigger} />
+
+      {/* Platform Filter Toggle */}
+      {availablePlatforms.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
+          <button
+            onClick={() => setPlatformFilter('all')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+              platformFilter === 'all'
+                ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            All
+          </button>
+          {availablePlatforms.map(p => (
+            <button
+              key={p}
+              onClick={() => setPlatformFilter(p)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                platformFilter === p
+                  ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {p === 'win32' ? 'Windows' : p === 'darwin' ? 'macOS' : p}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-4 flex justify-end items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowCardLibrary(true)}
+          className="flex min-h-[36px] items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--page-accent)]/40 hover:text-[var(--text-primary)]"
+        >
+          <LayoutDashboard className="h-4 w-4 text-[var(--page-accent)]" />
+          Manage dashboard cards
+        </button>
+              </div>
+
+              {showCardLibrary && (
+        <div className="fixed inset-0 z-[var(--z-overlay)] flex items-start justify-center overflow-y-auto bg-black/70 p-5 backdrop-blur-sm" onMouseDown={() => setShowCardLibrary(false)}>
+          <div className="w-full max-w-[1400px] pt-5" onMouseDown={e => e.stopPropagation()}>
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCardLibrary(false)}
+                className="flex min-h-[32px] w-[32px] items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                aria-label="Close card library"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <CardLibrary onChanged={setCardLayout} onSaved={bumpLayoutSync} previews={cardPreviews} />
+          </div>
+        </div>
+      )}
+<div className="relative z-10">
+        <div className="mx-auto px-5" style={{ maxWidth: '1400px' }}>
+
+          {/* Row 1: HeroBand (Stopwatch) + Momentum Hero */}
+           {(isCardVisible('status-band') || isCardVisible('momentum-hero')) && (
+           <DeskFlowCardMotion className="mb-4">
+           <div className="grid grid-cols-1 md:grid-cols-[5fr_3fr] gap-0 items-stretch">
+              {isCardVisible('status-band') && (
+              <div data-section="Hero">
+              <StatusBand
+                displayTimeMs={displayTime?.ms || 0}
+                isCurrentlyProductive={isCurrentlyProductive}
+                isDistracting={isDistracting}
+                currentAppName={isInBrowser
+                  ? (currentWebsite?.title || currentWebsite?.domain || '')
+                  : (currentApp?.app || currentApp?.title || '')}
+                isReal={currentApp?.isReal}
+                totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
+                browserName={currentWebsite?.browserName}
+                isInBrowser={isInBrowser}
+                isPaused={isPaused}
+                websiteTitle={currentWebsite?.title}
+                websiteDomain={currentWebsite?.domain}
+                websiteCategory={currentWebsite?.category}
+              />
+              </div>
+              )}
+             {isCardVisible('momentum-hero') && (
+             <div data-section="Momentum Hero">
+             <MomentumHero momentum={momentum} loading={dashLoading} />
+             </div>
+             )}
+           </div>
+           </DeskFlowCardMotion>
+           )}
+
+          {/* Row 2: Tier Breakdown Strip */}
+          {isCardVisible('tier-breakdown') && (
+          <DeskFlowCardMotion className="mb-4">
+           <div data-section="Tier Breakdown">
+           <TierBreakdownStrip
+             productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
+             neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
+             distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
+             totalHours={dashboardData?.overview?.totalSeconds ? Math.round(dashboardData.overview.totalSeconds / 3600 * 10) / 10 : 0}
+           />
+           </div>
+          </DeskFlowCardMotion>
+          )}
+
+          {/* Row 3: Pinned Activities */}
+          {isCardVisible('pinned-activities') && (
+          <DeskFlowCardMotion className="mb-4">
+            <div data-section="Pinned">
+            <PinnedActivities
+              pinnedActivities={pinnedActivities}
+              setPinnedActivities={setPinnedActivities}
+              activities={activities}
+              selectedExternalActivity={selectedExternalActivity}
+              setSelectedExternalActivity={setSelectedExternalActivity}
+              handleSelectExternalActivity={handleSelectExternalActivity}
+              externalSessionRunning={externalSessionRunning}
+              formatDuration={formatDuration}
+              externalElapsedMs={externalElapsedMs}
+              handleStartExternalSession={handleStartExternalSession}
+              handleStopExternalSession={handleStopExternalSession}
+              collapsible
+            />
+           </div>
+          </DeskFlowCardMotion>
+          )}
+
+            {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
+            {(isCardVisible('goals-card') || isCardVisible('focus-card') || isCardVisible('deadlines-card')) && (
+            <DeskFlowCardMotion className="mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1 min-h-0">
+                 {isCardVisible('goals-card') && (
+                 <div data-section="Goals Card">
+                 <GoalsCard
+                   goals={goals}
+                   longTermGoals={longTermGoals}
+                   suggestions={suggestions}
+                   insights={dashboardInsights}
+                   loading={dashLoading}
+                   error={dashError}
+                   onToggle={toggleGoal}
+                   onAdd={addGoal}
+                   onDelete={deleteGoal}
+                   onUpdate={updateGoal}
+                   onAcceptSuggestion={acceptSuggestion}
+                   onDismissSuggestion={dismissSuggestion}
+                   onGenerateSuggestions={generateSuggestions}
+                 />
+                 </div>
+                 )}
+                 {isCardVisible('focus-card') && (
+                 <div data-section="Focus Start">
+                 <QuickFocusCard
+                   state={deepFocus.state}
+                   onStart={deepFocus.start}
+                   onEnd={deepFocus.end}
+                 />
+                 </div>
+                 )}
+                 {isCardVisible('deadlines-card') && (
+                 <div data-section="Deadlines Card">
+                 <DeadlinesCard
+                   deadlines={deadlines}
+                   reminders={reminders}
+                   loading={dashLoading}
+                   error={dashError}
+                   onAdd={addDeadline}
+                   onDelete={deleteDeadline}
+                   onUpdate={updateDeadline}
+                   onComplete={completeDeadline}
+                   onToggleReminder={async (id, done) => {
+                     try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
+                   }}
+                   onDeleteReminder={async (id) => {
+                     try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
+                   }}
+                 />
+                 </div>
+                 )}
+              {isCardVisible('focus-card') && (
+              <div data-section="Longest Focus">
+               <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
+              </div>
+              )}
+              </div>
+            </DeskFlowCardMotion>
+            )}
+
+            {/* Row 5: Schedule */}
+            {isCardVisible('schedule-hero') && (
+            <DeskFlowCardMotion className="mb-4">
+               <div data-section="Schedule">
+                <ScheduleCard
+                   entries={schedule}
+                   loading={dashLoading}
+                   error={dashError}
+                   onAdd={addScheduleEntry}
+                   onUpdate={updateScheduleEntry}
+                   onDelete={deleteScheduleEntry}
+                   onDayChange={handleScheduleDayChange}
+                 />
+               </div>
+            </DeskFlowCardMotion>
+            )}
+
+             {/* AI Insights Strip */}
+            {isCardVisible('insight-strip') && (
+            <DeskFlowCardMotion className="mb-4">
+            <div data-section="Insight Strip">
+            <InsightStrip insights={aiInsights} />
+            </div>
+            </DeskFlowCardMotion>
+            )}
+
+           {/* Row 6: Productivity Chart */}
+           {isCardVisible('productivity-chart') && (
+             <DeskFlowCardMotion className="mb-4">
+             <div className="p-5">
+               <div>
+               <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
+               <div className="h-52 mt-2">
+                 {chartBarsResult.chartBars.length === 0 ? (
+                   <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No data yet" description="Start tracking to see productivity" />
+                 ) : (
+                   <Bar data={{
+                     labels: chartBarsResult.chartBars.map(b => b.label),
+                     datasets: [
+                       {
+                         label: 'Productive',
+                         data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
+                         backgroundColor: '#34d399',
+                         borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                       },
+                       {
+                         label: 'Other',
+                         data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
+                         backgroundColor: '#fbbf24',
+                         borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                       },
+                       {
+                         label: 'External',
+                         data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
+                         backgroundColor: '#38bdf8',
+                         borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
+                       },
+                     ],
+                   }} options={{
+                     responsive: true, maintainAspectRatio: false,
+                     plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+                     scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } }, y: { stacked: true, grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 11 } } } },
+                   }} />
+                 )}
+               </div>
+               {/* Custom Legend */}
+               <div className="flex items-center gap-4 mt-4 text-[11px] text-[var(--text-muted)]">
+                 <div className="flex items-center gap-1.5">
+                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--success)' }}></span> Productive
+                 </div>
+                 <div className="flex items-center gap-1.5">
+                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--warning)' }}></span> Other
+                 </div>
+                 <div className="flex items-center gap-1.5">
+                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--info)' }}></span> External
+                 </div>
+               </div>
+               <div className="flex gap-3 mt-4">
+                 <button onClick={() => setExpandedModal('heatmap')}
+                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-pink-500/50 hover:text-pink-400 transition-all duration-200">
+                   View Heatmap
+                 </button>
+                 <button onClick={() => setExpandedModal('solar')}
+                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-indigo-500/50 hover:text-indigo-400 transition-all duration-200">
+                   View Solar System
+                 </button>
+               </div>
+               </div>
+             </div>
+             </DeskFlowCardMotion>
+           )}
+
+          {/* Row 7: Activity Feed */}
+          {isCardVisible('activity-feed') && (
+          <DeskFlowCardMotion className="mb-4">
+             <div className="p-5">
+               <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
+             <div className="space-y-0.5 mt-3">
+               {activityFeedWithElapsed.length === 0 ? (
+                 <EmptyState icon={<Clock size={20} />} title="No sessions yet" description="Start an activity to see it here" />
+               ) : (
+                 [...activityFeedWithElapsed].reverse().slice(0, 10).map((item) => {
+                   const isActive = item.isActive;
+                   const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
+                   return (
+                     <div key={item.id}
+                       className="flex items-center justify-between p-3 rounded-lg border border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group cursor-pointer"
+                     >
+                       <div className="flex items-center gap-3 min-w-0">
+                         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                           item.tier === 'productive' ? 'bg-[var(--success)]' :
+                           item.tier === 'distracting' ? 'bg-[var(--error)]' :
+                           'bg-[var(--warning)]'
+                         }`} />
+                         <div className="min-w-0">
+                           <div className="text-[13px] text-[var(--text-primary)] truncate">{item.name}</div>
+                           <div className="text-[11px] text-[var(--text-muted)] truncate">{item.category} • {item.timestamp.toLocaleTimeString()}</div>
+                         </div>
+                       </div>
+                       <div className="text-right shrink-0 ml-3">
+                       <div className="text-[13px] font-mono text-[var(--text-muted)]">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
+                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border border-zinc-800/50 text-[var(--text-secondary)]">
+                           {item.tier}
+                         </span>
+                       </div>
+                     </div>
+                   );
+                 })
+               )}
+             </div>
+             </div>
+             </DeskFlowCardMotion>
+           )}
+
+        </div>
+      </div>
+      {/* Modals — UNCHANGED */}
+      <AnimatePresence>
+        {expandedModal === 'heatmap' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setExpandedModal(null)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-auto bg-zinc-900/95 backdrop-blur-xl border-zinc-800/60 light:bg-white light:border-[var(--ws-border-strong)]"
+              onClick={(e) => e.stopPropagation()}>
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-pink-500/30 via-pink-500/10 to-transparent" />
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center">
+                    <BarChart3 className="w-4 h-4 text-pink-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-zinc-100 light:text-stone-900">Activity Heatmap</h2>
+                    <p className="text-[11px] text-zinc-500 light:text-stone-500">{heatmapWeekLabel}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60 light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]" title="Previous week">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setWeekOffset(0)} className="px-2 py-1 text-xs text-zinc-400 hover:text-white transition-all duration-150 rounded hover:bg-zinc-800/40 light:text-stone-900 light:hover:bg-stone-100">Today</button>
+                  <button onClick={() => setWeekOffset(w => Math.min(w + 1, 0))} disabled={weekOffset >= 0}
+                    className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60 disabled:opacity-30 disabled:cursor-not-allowed light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)] light:disabled:opacity-30 light:disabled:cursor-not-allowed" title="Next week">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setExpandedModal(null)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50 ml-2 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]">
+                    <X className="w-5 h-5 text-zinc-400" />
+                  </button>
+                </div>
+              </div>
+              {renderHeatmap()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Suspense fallback={null}>
+        {dayDetailDate && (
+          <DayDetailPopup date={dayDetailDate} items={dayDetailItems}
+            onClose={() => { setDayDetailDate(null); setDayDetailItems([]); }}
+            onDateChange={(newDate) => {
+              setDayDetailDate(newDate);
+              if (window.deskflowAPI?.getDayDetail) {
+                window.deskflowAPI.getDayDetail(newDate).then(detail => {
+                  if (!detail) return;
+                  const newItems: TimelineItem[] = [];
+                  (detail.logs || []).forEach((log: any) => {
+                    const logDate = new Date(log.timestamp);
+                    const startHour = logDate.getHours() + logDate.getMinutes() / 60;
+                    const durationSec = (log.duration_ms || 0) / 1000;
+                    const endHour = startHour + durationSec / 3600;
+                    const isBrowser = log.is_browser_tracking;
+                    const label = isBrowser ? (log.domain || log.app) : log.app;
+                    newItems.push({ id: `log-${log.id}`, startHour, endHour: Math.min(endHour, 24), label, category: isBrowser ? 'browser' : 'app', color: isBrowser ? 'var(--success)' : 'var(--info)', duration: Math.round(durationSec), details: log.title });
+                  });
+                  (detail.externalSessions || []).forEach((session: any) => {
+                    const startDate = new Date(session.started_at);
+                    const endDate = session.ended_at ? new Date(session.ended_at) : new Date();
+                    const sHour = startDate.getHours() + startDate.getMinutes() / 60;
+                    const durSec = (endDate.getTime() - startDate.getTime()) / 1000;
+                    const eHour = sHour + durSec / 3600;
+                    newItems.push({ id: `ext-${session.id}`, startHour: sHour, endHour: Math.min(eHour, 24), label: session.activity_name || 'External', category: 'external', color: session.color || 'var(--page-accent)', duration: Math.round(durSec) });
+                  });
+                  newItems.sort((a, b) => a.startHour - b.startHour);
+                  setDayDetailItems(newItems);
+                });
+              }
+            }} />
+        )}
+      </Suspense>
+
+      <AnimatePresence>
+        {expandedModal === 'solar' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setExpandedModal(null)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className={solarFullscreen ? "fixed inset-0 z-50 bg-black flex flex-col" : "relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-hidden light:bg-white light:border-[var(--ws-border-strong)]"}
+              onClick={(e) => e.stopPropagation()}>
+              {!solarFullscreen && <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/30 via-indigo-500/10 to-transparent" />}
+              <div className={`flex items-center justify-between px-4 pt-4 ${solarFullscreen ? '' : 'mb-4'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                    <Sun className="w-4 h-4 text-indigo-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-semibold light:text-stone-900">App Ecosystem</h2>
+                    <p className="text-[11px] light:text-stone-500">Your top tools in orbit</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setSolarFullscreenWithEvent(!solarFullscreen)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]"
+                    title={solarFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+                    {solarFullscreen ? <Minimize2 className="w-5 h-5 light:text-stone-500" /> : <Maximize2 className="w-5 h-5 text-zinc-400" />}
+                  </button>
+                  <button onClick={() => { setExpandedModal(null); setSolarFullscreenWithEvent(false); }} className="p-2 hover:bg-red-900/50 rounded-lg transition-all duration-150 border border-transparent hover:border-red-500/30" title="Close">
+                    <X className="w-5 h-5 light:text-stone-500" />
+                  </button>
+                </div>
+              </div>
+              <ErrorBoundary>
+              <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><LoadingState variant="spinner" /></div>}>
+                <div className={solarFullscreen ? 'w-full h-screen' : 'h-[500px] w-full'}>
+                  <OrbitSystem logs={orbitLogs} websiteLogs={orbitWebsiteLogs} appColors={appColors} categoryOverrides={categoryOverrides} selectedPeriod={selectedPeriod}
+                    onPeriodChange={(p) => { onSelectedPeriodChange?.(p as any); onDateOffsetChange?.(0); }} />
+                </div>
+              </Suspense>
+              </ErrorBoundary>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </PageShell>
+  );
+}
