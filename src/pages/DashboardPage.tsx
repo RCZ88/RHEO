@@ -40,7 +40,7 @@ import { useHomeSummary } from '../hooks/useHomeSummary';
 import { useDeepFocus } from '../hooks/useDeepFocus';
 import { Bar, Line } from 'react-chartjs-2';
 import { motion, AnimatePresence } from "motion/react";
-import { FeatureCard } from '../components/dashboard/FeatureCard';
+import { FeatureCard, type FeatureCardType } from '../components/dashboard/FeatureCard';
 import { useHubState } from '../contexts/HubContext';
 
 import {
@@ -407,6 +407,9 @@ export default function DashboardPage({
       case 'activity': return spokes.tracking?.data;
       case 'goal': return spokes.goals?.data;
       case 'schedule': return spokes.schedule?.data;
+      case 'stats': return spokes.stats?.data;
+      case 'tasks': return spokes.tasks?.data;
+      case 'timer': return spokes.timer?.data;
       default: return null;
     }
   };
