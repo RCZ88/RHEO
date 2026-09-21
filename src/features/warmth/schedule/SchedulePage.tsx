@@ -304,6 +304,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
   const [error, setError] = useState<string | null>(null);
   const [showWeekSchedule, setShowWeekSchedule] = useState(false);
 
+  const [weekGoals, setWeekGoals] = useState<Record<string, Goal[]>>({});
   const { focusState, activeGoalIds, getAccumulatedSeconds } = useFocusGoals(goals);
 
   /* ── load ── */
@@ -324,6 +325,8 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
     (async () => { try { const res = await api.getReminders(); setReminders(res.reminders || []); } catch {} })();
     (async () => { try { const res = await api.todoList?.(); if (res?.success) setTodos(res.todos || []); } catch {} })();
     (async () => { try { const res = await api.getLongtermGoals(); setLongTermGoals(res.goals || []); } catch {} })();
+    // Fetch week goals for CalendarStrip
+    (async () => { try { const mon = mondayOf(selectedDate); const res = await api.getGoalsBatch(mon, addDaysStr(mon, 6)); setWeekGoals(res.days || {}); } catch { /* non-critical */ } })();
   }, [selectedDate, loadGoals, api]);
 
   /* ── schedule CRUD ── */

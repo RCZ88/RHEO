@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlignHorizontalDistributeCenter, ArrowDown, ArrowRight, Award, BarChart3, Check, ChevronDown, Clock, Copy, Cpu, Download,
   Equal, Flame, FlipHorizontal2, FolderGit2, History, Keyboard, Layers, ListOrdered, Monitor, Pencil, Pin, PinOff, Play, Plus, Plug, Search,
-  Settings2, Star, Terminal, Trash2, Type, X, Zap, ZoomIn,
+  Settings2, Star, Terminal, Trash2, Type, X, Zap, ZoomIn, BookOpen,
 } from "lucide-react";
 import type { MCPServer, PaneNode, SavedCommand, Shortcut, TerminalTab, ThemeDef } from "../lib/types";
 import { DEFAULT_SHORTCUTS, FONT_OPTIONS, TAB_COLORS, THEMES } from "../lib/data";
@@ -11,6 +11,7 @@ import { cx, download, fillDynamic, fmtClock, fmtDate, fmtTime, formatDuration, 
 import type { Store } from "../hooks/useConsoleStore";
 import { collectSplits, countLeaves, listPaneIds } from "../hooks/useConsoleStore";
 import { ICON_CHOICES, TabIcon } from "./TabIcon";
+import { CommandNotesPanel } from "./CommandNotesPanel";
 
 function Section({ title, icon, right, children }: { title: string; icon?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -786,6 +787,7 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
     { id: "mcp", label: "MCP", icon: <Plug size={13} /> },
     { id: "theme", label: "Theme", icon: <Type size={13} /> },
     { id: "sys", label: "System", icon: <Monitor size={13} /> },
+    { id: "handbook", label: "Handbook", icon: <BookOpen size={13} /> },
   ] as const;
   return (
     <div className="h-full flex flex-col min-h-0" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
@@ -810,6 +812,7 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
         {store.rightTab === "mcp" && <McpPanel store={store} notify={notify} />}
         {store.rightTab === "theme" && <ThemePanel store={store} notify={notify} />}
         {store.rightTab === "sys" && <SysPanel store={store} notify={notify} />}
+        {store.rightTab === "handbook" && <CommandNotesPanel store={store} />}
       </div>
     </div>
   );
