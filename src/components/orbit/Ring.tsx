@@ -110,17 +110,6 @@ export function AtmosphericScattering({ color }: { color: string }) {
       side: THREE.BackSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-    });
+  });
   return null;
 }
-
-// ── Compass / Planet Detail Panel ──
-
-export function PlanetDetailPanel({ planet, onClose }: { planet: PlanetData | null; onClose: () => void }) { if (!planet) return null; const hours = Math.floor(planet.time / 3600); const mins = Math.floor((planet.time % 3600) / 60); return null; }
-
-import { useRef, useState, useMemo, useEffect } from 'react';
-import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
-import { PlanetData } from './PlanetUtils';
-
-function seededRandom(seed: number): number { const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
