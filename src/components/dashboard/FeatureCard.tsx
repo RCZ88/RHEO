@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from "motion/react";
 import {
   PieChart, Code, BookOpen, Clock, Calendar, Target,
   Terminal as TerminalIcon, TrendingUp, Plus, Play, CheckCircle,
@@ -44,6 +44,7 @@ const configMap: Record<FeatureCardType, { icon: any; color: string; bg: string;
   ai:         { icon: Sparkles,      color: 'text-cyan-300',    bg: 'bg-cyan-300/10',     route: '/ai',               label: 'AI Assistant' },
 };
 
+export function FeatureCard({ id, type, title, data, onQuickAction }: FeatureCardProps) {
   const { icon: Icon, color, bg, route, label } = configMap[type] || configMap.ai;
 
   return (

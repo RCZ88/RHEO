@@ -58,6 +58,7 @@ import DashboardPage from './pages/DashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 import FeatureSpecViewer from './components/FeatureSpecViewer';
 import AfkPromptModal from './components/AfkPromptModal';
+import NativeFindOverlay from './components/NativeFindOverlay';
 import SmartSearchOverlay from './components/SmartSearch/SmartSearchOverlay';
 import MissedTimePanel from './components/MissedTimePanel';
 import { PairPhoneModal } from './components/PairPhoneModal';
@@ -315,7 +316,15 @@ function App() {
 
   // Smart Search — Ctrl+F: find-in-page bar (no blur, page visible).
   // Ctrl+K is handled separately by GlobalSearchCommandPalette.
+  const [nativeFindOpen, setNativeFindOpen] = useState(false);
   const [smartSearchOpen, setSmartSearchOpen] = useState(false);
+
+  // Listen for native find open event from useAppSmartSearch hook
+  useEffect(() => {
+    const handler = () => setNativeFindOpen(true);
+    window.addEventListener('native-find:open', handler);
+    return () => window.removeEventListener('native-find:open', handler);
+  }, []);
 
   const handleSmartSearchClose = useCallback(() => {
     setSmartSearchOpen(false);
@@ -3767,6 +3776,10 @@ const devFireSmartFill = async () => {
           />
 
           {/* Smart Search Bar — Ctrl+F / ⌘F find-in-page with scope toggle */}
+          <NativeFindOverlay
+            open={nativeFindOpen}
+            onClose={() => setNativeFindOpen(false)}
+          />
           <SmartSearchOverlay
             open={smartSearchOpen}
             onClose={handleSmartSearchClose}

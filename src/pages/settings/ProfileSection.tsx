@@ -1,11 +1,17 @@
 import { motion } from 'framer-motion';
-import { Settings, User, Mail, Shield, Bell, Globe, Image, Edit3 } from 'lucide-react';
+import { User, Shield } from 'lucide-react';
 import { GlassCard } from '../../components/GlassCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { Button } from '../../components/ui/button';
 import { AuthSettings } from '../../components/AuthSettings';
 
-export function ProfileSection() {
+interface ProfileSectionProps {
+  activeTab: string;
+  settingsSearch: string;
+  hasChanges: boolean;
+  onHasChangesChange: (v: boolean) => void;
+}
+
+export function ProfileSection({ activeTab, settingsSearch, hasChanges, onHasChangesChange }: ProfileSectionProps) {
   return (
     <div data-section="settings.profile" className="space-y-6">
       <GlassCard className="space-y-6">

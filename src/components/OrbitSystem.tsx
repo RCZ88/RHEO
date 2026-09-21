@@ -7,6 +7,14 @@ import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, RotateCcw, X, RefreshCw, Globe, ChevronDown, ChevronUp, Clock, Settings, Activity, Gauge, SatelliteDish } from 'lucide-react';
 import { maxOf, maxBy } from '../utils/safeMath';
+// ── Sub-components (extracted from this file) ──
+import { OrbitSystem as OrbitScene } from './orbit/OrbitScene';
+import { GalaxyDustCloud, WebsiteGalaxyDustCloud } from './orbit/GalaxyDust';
+import { FPSCounter, FPSLineGraph } from './orbit/OrbitControls';
+import { GLCleanup } from './orbit/Planet';
+import { PlanetRings, Moon } from './orbit/Ring';
+import { getDistinctColor, getCategoryColor, hashString, getPlanetColor, calculateOrbitRadius } from './orbit/PlanetUtils';
+
 
 // Cleanup component to properly dispose of WebGL resources
 function GLCleanup() {

@@ -58,6 +58,12 @@ import { HandbookReference } from '../components/learn/HandbookReference';
 import '@xterm/xterm/css/xterm.css';
 import { SelectionProvider, SelectionOverlay, SelectionToolbar, SelectionResultPanel, SelectionEngineActivator } from '../features/selection-engine';
 import { MousePointer2 } from 'lucide-react';
+// ── Sub-components (extracted from this file) ──
+import { CategoryBadge, ModelSwitcher, ConfigGenerator, StatusDot, Toggle, Pill, Badge, ToolbarButton, Modal, SectionCard, TabPanel, SessionResourceStats, GroupPanel } from './terminal/TerminalToolbar';
+import { Modal as Modal2, SectionCard as SectionCard2, TabPanel as TabPanel2 } from './terminal/TerminalModal';
+import { SessionResourceStats as SessionResourceStats2 } from './terminal/TerminalSession';
+import { GroupPanel as GroupPanel2 } from './terminal/TerminalGrid';
+
 
 function generateTerminalId(): string {
   return `term-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

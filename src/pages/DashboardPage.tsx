@@ -426,7 +426,7 @@ export default function DashboardPage({
     };
     const handleNavigate = (e: Event) => {
       const route = (e as CustomEvent).detail?.route;
-      if (route) navigate(route);
+      if (route && typeof navigate === 'function') navigate(route);
     };
     const handleToolResult = (e: Event) => {
       const detail = (e as CustomEvent).detail;

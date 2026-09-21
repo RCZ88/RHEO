@@ -1,31 +1,35 @@
 import { motion } from 'framer-motion';
-import { Bell, AlertTriangle, Volume2, Mic, Mail, Push, MessageSquare } from 'lucide-react';
+import { Bell, AlertTriangle, Volume2, Mic } from 'lucide-react';
 import { GlassCard } from '../../components/GlassCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { Button } from '../../components/ui/button';
 
-export function NotificationSection() {
+interface NotificationSectionProps {
+  filterTransientApps: boolean;
+  setFilterTransientApps: (v: boolean) => void;
+  browserRecordingMode: string;
+  setBrowserRecordingMode: (v: string) => void;
+  appRecordingMode: string;
+  setAppRecordingMode: (v: string) => void;
+  sleepGapMs: number;
+  setSleepGapMs: (v: number) => void;
+  maxSessionMs: number;
+  setMaxSessionMs: (v: number) => void;
+  trackingPollInterval: number;
+  setTrackingPollInterval: (v: number) => void;
+  availableBrowsers: string[];
+  selectedBrowsers: string[];
+  setSelectedBrowsers: (v: string[]) => void;
+  serverStatus: any;
+  settingsSearch: string;
+}
+
+export function NotificationSection({ filterTransientApps, setFilterTransientApps, browserRecordingMode, setBrowserRecordingMode, appRecordingMode, setAppRecordingMode, sleepGapMs, setSleepGapMs, maxSessionMs, setMaxSessionMs, trackingPollInterval, setTrackingPollInterval, availableBrowsers, selectedBrowsers, setSelectedBrowsers, serverStatus, settingsSearch }: NotificationSectionProps) {
   return (
-    <div data-section="settings.notifications" className="space-y-6">
+    <div className="space-y-6">
       <GlassCard className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold mb-1">Notifications</h2>
-          <p className="text-sm text-zinc-400 mb-4">Control how and when you receive alerts</p>
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-zinc-400" /><span className="text-sm text-zinc-300">Push Notifications</span></div>
-            <button className="w-10 h-5 rounded-full bg-emerald-500"><span className="block w-3.5 h-3.5 rounded-full bg-white translate-x-5" /></button>
-          </div>
-          <div className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-2"><Volume2 className="w-4 h-4 text-zinc-400" /><span className="text-sm text-zinc-300">Sound Alerts</span></div>
-            <button className="w-10 h-5 rounded-full bg-zinc-700"><span className="block w-3.5 h-3.5 rounded-full bg-white translate-x-0" /></button>
-          </div>
-          <div className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-2"><Mic className="w-4 h-4 text-zinc-400" /><span className="text-sm text-zinc-300">Voice Alerts</span></div>
-            <button className="w-10 h-5 rounded-full bg-zinc-700"><span className="block w-3.5 h-3.5 rounded-full bg-white translate-x-0" /></button>
-          </div>
-        </div>
+        <SectionHeader title="Tracking" icon={<Bell className="w-5 h-5" />} />
+        <div className="pt-2 border-t border-zinc-700/50" />
+        <div className="text-sm text-zinc-400">Notification and tracking settings content</div>
       </GlassCard>
     </div>
   );

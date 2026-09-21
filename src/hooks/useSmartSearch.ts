@@ -39,7 +39,7 @@ export function useSmartSearch(pageId: string, segments: SearchableSegment[]) {
   }, [pageId]);
 }
 
-// ── Hook: keyboard shortcut (Ctrl+F / Ctrl+K) ───────────────────────────────
+// ── Hook: keyboard shortcut (Ctrl+F / Ctrl+K) ───────────────────────
 
 export function useSmartSearchShortcut(open: () => void) {
   useEffect(() => {
@@ -52,6 +52,11 @@ export function useSmartSearchShortcut(open: () => void) {
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         // But DO hijack if the input is part of a search bar we own (data-smart-search-input)
         if (tag === 'INPUT' && (e.target as HTMLElement).dataset?.smartSearchInput) return;
+        if (e.key.toLowerCase() === 'f') {
+          // Let the browser handle Ctrl+F natively — just log it
+          console.log('Native Find triggered');
+          return;
+        }
         e.preventDefault();
         open();
       }

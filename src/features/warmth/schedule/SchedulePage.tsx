@@ -368,11 +368,11 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
 
   /* ── render ── */
   return (
-    <div className="w-full max-w-[1600px] mx-auto" style={{ background: '#09090b' }}>
+    <div className="w-full max-w-[1600px] mx-auto px-4 py-6">
       {/* Page Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="warmth-serif text-[22px] text-zinc-200 leading-tight">Schedule</h1>
+          <h1 className="text-[22px] text-zinc-200 font-semibold leading-tight">Schedule</h1>
           <p className="text-[12px] text-zinc-500 mt-0.5">{prettyDate(selectedDate)} · manage blocks, deadlines & reminders</p>
         </div>
         <div className="flex items-center gap-2">
@@ -386,7 +386,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
       </div>
 
       {/* Calendar Strip */}
-      <CalendarStrip selectedDate={selectedDate} onDateChange={setSelectedDate} goalDates={new Set(Object.keys(weekDates))} marks={radarMarks} weekGoals={{}} />
+      <CalendarStrip selectedDate={selectedDate} onDateChange={setSelectedDate} goalDates={new Set(Object.keys(weekGoals))} marks={radarMarks} weekGoals={weekGoals} />
 
       {/* Focus indicator */}
       <AnimatePresence>
