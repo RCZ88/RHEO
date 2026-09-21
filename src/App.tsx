@@ -353,8 +353,9 @@ function App() {
     }
   }, [currentPageId, navigate]);
 
-  // Keyboard shortcut: Ctrl+F — open find-in-page bar (page stays visible).
+  // Keyboard shortcut: Ctrl+F — native find-in-page bar.
   // Ctrl+K opens the command palette separately.
+  // In smart-search inputs, Ctrl+F opens the smart search overlay instead.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -364,9 +365,10 @@ function App() {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
         if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
+        // Native find in smart-search inputs: let browser handle it, don't open overlay
+        return;
       }
-      e.preventDefault();
-      setSmartSearchOpen(true);
+      // Allow native Ctrl+F find bar — do NOT call preventDefault()
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
