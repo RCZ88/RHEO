@@ -1,6 +1,8 @@
 import { SearchX, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { PRESET_COLORS } from './constants';
+export { SortableChip } from './SortableChip';
+export { TierContainer } from './TierContainer';
 
 interface SearchableSectionProps {
   terms: string[];

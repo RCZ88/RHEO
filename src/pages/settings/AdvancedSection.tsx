@@ -13,7 +13,7 @@ import { Badge } from '../../components/ui/badge';
 import { Skeleton } from '../../components/ui/skeleton';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { SearchableSection, ColorPicker, SortableChip, TierContainer } from './shared';
+import { SearchableSection } from './shared';
 import { DEFAULT_CATEGORIES, CATEGORY_COLORS, DEFAULT_TIER_ASSIGNMENTS, PRESET_COLORS } from './constants';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from '@dnd-kit/core';

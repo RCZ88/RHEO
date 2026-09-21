@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import {
   PieChart, Code, BookOpen, Clock, Calendar, Target,
   Terminal as TerminalIcon, TrendingUp, Plus, Play, CheckCircle,
-  ClipboardList, NoteText, Bell, LayoutGrid, Activity,
+  ClipboardList, FileText, Bell, LayoutGrid, Activity,
   Zap, GitBranch, Shield, MessageSquare, Brain,
   Database, Cpu, Wrench, Settings, FlaskConical,
   ArrowUpRight, Sparkles, Layers, Gauge, ZapIcon
@@ -32,7 +32,7 @@ const configMap: Record<FeatureCardType, { icon: any; color: string; bg: string;
   goal:       { icon: Target,        color: 'text-cyan-400',    bg: 'bg-cyan-400/10',     route: '/life?tab=goals',   label: 'Goals' },
   terminal:   { icon: TerminalIcon,  color: 'text-green-400',   bg: 'bg-green-400/10',    route: '/workspace',        label: 'Terminal' },
   tasks:      { icon: ClipboardList, color: 'text-red-400',     bg: 'bg-red-400/10',      route: '/tasks',            label: 'Tasks' },
-  notes:      { icon: NoteText,      color: 'text-yellow-400',  bg: 'bg-yellow-400/10',   route: '/notes',            label: 'Notes' },
+  notes:      { icon: FileText,      color: 'text-yellow-400',  bg: 'bg-yellow-400/10',   route: '/notes',            label: 'Notes' },
   reminders:  { icon: Bell,          color: 'text-orange-400',  bg: 'bg-orange-400/10',   route: '/reminders',        label: 'Reminders' },
   calendar:   { icon: LayoutGrid,    color: 'text-teal-400',    bg: 'bg-teal-400/10',     route: '/calendar',         label: 'Calendar' },
   stats:      { icon: Gauge,         color: 'text-indigo-400',  bg: 'bg-indigo-400/10',   route: '/stats',            label: 'Stats' },
