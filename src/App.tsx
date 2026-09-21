@@ -13,9 +13,8 @@ import {
   Download, Trash2, Zap, Database, AlertTriangle,
   Shield,
   ChevronLeft, ChevronRight, Save,
-  Moon, FileText, BookOpen,
   Wallet, GraduationCap, Activity, Smartphone, Brain, HeartHandshake, Sparkles, Trophy,
-  Bed, UserCheck, Bell, Command, LayoutDashboard, AlertCircle, RotateCcw, Bug,
+  Bed, UserCheck, Bell, Command, LayoutDashboard, AlertCircle, RotateCcw, Bug, Folder,
 } from 'lucide-react';
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
 import DevTriggerPanel from './components/DevTriggerPanel';
