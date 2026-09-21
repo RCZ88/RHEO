@@ -123,3 +123,5 @@ export function NativeFindOverlay({ open, onClose }: NativeFindOverlayProps) {
     </div>
   );
 }
+
+export default NativeFindOverlay;
