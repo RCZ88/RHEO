@@ -110,6 +110,6 @@ export function AtmosphericScattering({ color }: { color: string }) {
       side: THREE.BackSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-  });
+  }));
   return null;
 }
