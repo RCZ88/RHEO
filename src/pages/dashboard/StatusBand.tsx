@@ -153,12 +153,12 @@ export function StatusBand({
           <div className="flex items-center justify-center py-1">
             <AnimatedCircularProgressBar
               value={focusPercent}
-              size={130}
+              size={120}
               strokeWidth={5}
               gaugePrimaryColor={accent.arc}
               gaugeSecondaryColor="var(--border)"
             >
-              <div className="font-mono text-[28px] font-bold leading-none tracking-tight text-zinc-100 light:text-stone-900 tabular-nums">
+              <div className="font-mono text-[22px] font-bold leading-none tracking-tight text-zinc-100 light:text-stone-900 tabular-nums">
                 {timeStr}
               </div>
             </AnimatedCircularProgressBar>

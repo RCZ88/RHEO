@@ -149,7 +149,16 @@ async function fromKWin(): Promise<LinuxForegroundWindow | undefined> {
 export async function getLinuxForegroundWindow(): Promise<LinuxForegroundWindow | undefined> {
   if (process.platform !== 'linux') return undefined;
   if (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) {
-    return /kde/i.test(process.env.XDG_CURRENT_DESKTOP || '') ? fromKWin() : undefined;
+    // Try KDE/KWin first
+    if (/kde/i.test(process.env.XDG_CURRENT_DESKTOP || '')) {
+      const kwinResult = await fromKWin();
+      if (kwinResult && kwinResult.title) return kwinResult;
+    }
+    // Fall back to xdotool (works via XWayland on most Wayland compositors)
+    const xdotoolResult = await fromXdotool();
+    if (xdotoolResult && xdotoolResult.title) return xdotoolResult;
+    // Last resort: try xprop even if xdotool can't give us details
+    return fromX11();
   }
   return (await fromX11()) || (await fromXdotool());
 }
