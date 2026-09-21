@@ -1,3 +1,4 @@
+import * as React from "react";
 // ============================================================
 // RHEO Dashboard — Widget Summary Components
 // Rich, compact card views using real shadcn Progress/Badge

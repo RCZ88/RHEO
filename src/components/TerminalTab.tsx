@@ -1,3 +1,4 @@
+import * as React from "react";
 interface TerminalTabProps {
   label: string;
   icon?: React.ReactNode;

@@ -1,3 +1,4 @@
+import * as React from "react";
 interface SectionHeaderProps {
   title: React.ReactNode;
   icon?: React.ReactNode;

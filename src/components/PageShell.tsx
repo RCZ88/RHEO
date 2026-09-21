@@ -1,3 +1,4 @@
+import * as React from "react";
 interface PageShellProps {
   variant?: 'default' | 'sticky-header' | 'dashboard';
   page: string;

@@ -1,3 +1,4 @@
+import * as React from "react";
 interface EmptyStateProps {
   icon?: React.ReactNode;
   iconComponent?: React.ComponentType<any>;

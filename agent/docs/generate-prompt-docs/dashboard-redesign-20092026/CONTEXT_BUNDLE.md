@@ -11,25 +11,25 @@
 
 | Component | Source | Use for |
 |-----------|--------|---------|
-| `card` | `npx shadcn@latest view @shadcn/card` | Standard UI cards; has `rounded-xl`, `ring-1 ring-foreground/10`, `bg-card`, `CardHeader`, `CardContent`, `CardFooter`, `CardTitle`, `CardDescription`, `CardAction` sub-components |
-| `button` | `npx shadcn@latest view @shadcn/button` | Buttons; `cva` variants: `default`, `destructive`, `outline`, `secondary`, `ghost`, `link`; sizes: `default`, `sm`, `lg`, `xs`, `icon`; supports `asChild` and `whileTap` from motion |
+| `card` | `npx shadcn@latest view @shadcn/card` | Standard UI cards; re-skinned to LAMINAR: `rounded-[10px]`, `bg-[var(--bg-elevated)]`, `border-t border-[var(--ws-border)]`, NO `backdrop-blur`, NO `shadow`, NO `rounded-xl` |
+| `button` | `npx shadcn@latest view @shadcn/button` | Buttons; `cva` variants: `default`, `destructive`, `outline`, `secondary`, `ghost`, `link`; sizes: `default`, `sm`, `lg`, `xs`, `icon` |
 | `badge` | `npx shadcn@latest view @shadcn/badge` | Status badges; `variant='default'|'secondary'` |
 
-### kokonutui (`@kokonutui`) — verified via `npx shadcn@latest view @kokonutui/<name>`
+### REJECTED — kokonutui (`@kokonutui`) (R-17/R-18)
 
-| Component | Source | Use for |
-|-----------|--------|---------|
-| `apple-activity-card` | `npx shadcn@latest view @kokonutui/apple-activity-card` | Activity rings card; uses `motion/react`, SVG gradients, `rounded-3xl`, dark mode; has `title` prop |
-| `bento-grid` | `npx shadcn@latest view @kokonutui/bento-grid` | Responsive bento grid with animated charts, counters, timelines; uses `motion/react` |
+| Component | Verdict | Reason |
+|-----------|---------|--------|
+| `apple-activity-card` | **REJECTED** | SVG gradient rings (decorative-gradient ban), `rounded-3xl` 24px (radius violation), glass chrome, no data source |
+| `bento-grid` | **REJECTED** | Ships AI-brand cards (anthropic/gemini/open-ai/mistral/deepseek) — literal slop. Dashboard grid = WS-1 territory |
 
 ### Magic UI MCP — via `magicui_searchRegistryItems`
 
 | Component | Use for |
 |-----------|---------|
-| `BorderBeam` | Animated border glow effects |
-| `MagicCard` | Glass card with hover effects |
-| `ShineBorder` | Shimmer border animation |
-| `NumberTicker` | Animated number counting |
+| `BorderBeam` | Animated border glow effects — NOT used in dashboard (LAMINAR violation) |
+| `MagicCard` | Glass card with hover effects — NOT used in dashboard (LAMINAR violation) |
+| `ShineBorder` | Shimmer border animation — NOT used |
+| `NumberTicker` | Animated number counting — used in StatusBand |
 
 ### Lucide MCP — icons used in project
 

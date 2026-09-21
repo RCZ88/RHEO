@@ -1,3 +1,4 @@
+import * as React from "react";
 // Shared LAMINAR components for Content Engine
 // BlurFade + NumberTicker already exist in overlay-studio/components/ui.tsx
 

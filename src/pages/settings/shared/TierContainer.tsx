@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useDroppable } from '@dnd-kit/core';
 
 export function TierContainer({ tier, color, label, description, creditLabel, children }: {

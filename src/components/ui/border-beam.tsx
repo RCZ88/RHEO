@@ -1,3 +1,4 @@
+import * as React from "react";
 /**
  * BorderBeam — Animated light traveling along container border
  * Adapted from Magic UI, inlined to avoid registry dependency.

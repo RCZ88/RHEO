@@ -25,17 +25,22 @@ export function NativeFindOverlay({ open, onClose }: NativeFindOverlayProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        // Let native Ctrl+F work — close overlay
+        e.preventDefault();
+        onClose();
+        return;
+      }
       if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        // Navigate to first result or just close
         if (results[selectedIndex]) {
           console.log('[NativeFind] Select:', results[selectedIndex].text);
         }
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev, results.length - 1));
+        setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();

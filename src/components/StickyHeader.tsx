@@ -1,3 +1,4 @@
+import * as React from "react";
 interface StickyHeaderProps {
   title: string;
   icon?: React.ReactNode;

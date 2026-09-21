@@ -58,10 +58,7 @@ export function useAppSmartSearch() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
         if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
       }
-      // Let the browser handle Ctrl+F natively — dispatch event for native find widget
-      console.log('Native Find triggered');
-      window.dispatchEvent(new CustomEvent('native-find:open'));
-      return;
+      // Let the browser handle Ctrl+F natively — do NOT dispatch custom overlay event
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);

@@ -1,3 +1,4 @@
+import * as React from "react";
 // ============================================================
 // DeskFlow Dashboard — InsightsCard (Revamped v2)
 // Skills: Signature Design (MomentumOrb hero),

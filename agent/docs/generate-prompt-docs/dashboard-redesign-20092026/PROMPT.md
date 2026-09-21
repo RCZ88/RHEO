@@ -200,27 +200,32 @@ Design a comprehensive solution for the DeskFlow dashboard card system that:
 
 ## Design Tokens (from `src/index.css` and `design/design.md`)
 
-- Colors: zinc-950 base, zinc-900/80 elevated, zinc-800/40 muted, pink-500 accent
+- Colors: zinc-950 base, zinc-900/80 elevated, zinc-800/40 muted, **green `#22c55e` (light) / amber `#fbbf24` (dark) as `--color-primary`** — pink-500 claim is FABRICATED (token dump proved it)
 - Fonts: Inter (body), JetBrains Mono (console), Space Grotesk (headings)
 - Spacing: 8px controls, 12px cards/dialogs
-- Radii: 8/12/pill only, `rounded-xl` maximum
+- Radii: **cards = `rounded-[10px]`**, NOT `rounded-xl`/12, NOT `rounded-3xl`
 - No decorative gradients, neon glow, glass chrome, spring/bounce
 - `prefers-reduced-motion` honored
-- Glass layer: `bg-zinc-900/80 backdrop-blur-xl`
+- **NO `backdrop-blur` glass layer** — cards use solid `bg-[var(--bg-elevated)]` + `border-t border-[var(--ws-border)]` hairline
+- CSS tokens: `--bg-elevated`, `--ws-border`, `--ws-surface`, `--ws-radius-card`, `--page-accent`
+
+⚠️ **TOKEN QUARANTINE (STEP-0, blocking)**: Before any edit, dump `src/index.css` and grep the font stack. The source package asserts pink-500 as the signal hue and an Inter/Space Grotesk stack; the bundle token conflict means at least one bundle fabricated values. **Code wins.** The dump determines the real accent token and font roles.
 
 ---
 
 ## Anti-Slop Checklist (MUST follow after using MCP components)
 
 1. Re-skin to DeskFlow tokens (colors → `--bg-primary`, `--accent-primary`, etc.)
-2. Max `rounded-xl`, `p-5` padding
+2. Cards use `rounded-[10px]`, NOT `rounded-xl`/12/3xl
 3. Dark mode only
 4. Geist + JetBrains Mono fonts
-5. Glass layer (`bg-zinc-900/80 backdrop-blur-xl`)
+5. **NO `backdrop-blur` glass layer** — cards use `bg-[var(--bg-elevated)]` + `border-t border-[var(--ws-border)]` hairline
 6. No decorative gradients, neon glow, glass chrome
 7. No spring/bounce animations
 8. `prefers-reduced-motion` honored
 9. One motion engine per element (`motion/react` only)
 10. Use `cn()` utility for class composition
 11. **Query MCP before choosing** — never assume a component exists without verifying via MCP tools
+12. **kokonutui REJECTED** (R-17/R-18) — do not use `@kokonutui` components. Use `@shadcn` only
+13. **Do not invent signal hue** — verify from token dump; pink-500 is fabricated (real: green `#22c55e` light / amber `#fbbf24` dark)
 12. **Read component source before adding** — use `shadcn-ui-mcp_get_component` to read full source, dependencies, examples

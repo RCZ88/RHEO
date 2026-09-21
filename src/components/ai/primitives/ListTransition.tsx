@@ -1,3 +1,4 @@
+import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { listItemAddVariants, listItemRemoveVariants } from '../lib/motion'
 import { cn } from '../lib/cn'

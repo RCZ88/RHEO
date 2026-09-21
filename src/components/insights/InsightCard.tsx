@@ -1,3 +1,4 @@
+import * as React from "react";
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Award, BarChart3, Zap, Flame, Target, Moon, Timer, Activity } from 'lucide-react';
 import type { InsightAtom } from '../../shared/insights';

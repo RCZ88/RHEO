@@ -1,3 +1,4 @@
+import * as React from "react";
 interface ChartsSectionProps {
   children: React.ReactNode;
   className?: string;

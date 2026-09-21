@@ -1,3 +1,4 @@
+import * as React from "react";
 type Accent = 'pink' | 'amber' | 'emerald' | 'none';
 
 const accentConfig: Record<string, { rail: string; border: string; bg: string; edge: string, railLight: string; borderLight: string; bgLight: string }> = {
