@@ -46,7 +46,7 @@ import {
   Edit3, Check, Plus, Minus, TrendingUp,
   Target, ZapCircle, RefreshCw, Clock3,
   ChevronLeft, ChevronRight, Maximize2, Minimize2,
-  BarChart3, Bot, Sparkles, ArrowRight, LayoutDashboard, GripVertical, MousePointer2, Zap as ZapIcon2
+  BarChart3, Bot, Sparkles, ArrowRight, GripVertical, MousePointer2, Zap as ZapIcon2
 } from 'lucide-react';
 import { maxOf, maxBy } from '../utils/safeMath';
 import { getDateRange } from '../lib/dateRange';
@@ -2565,35 +2565,6 @@ export default function DashboardPage({
   // ── Platform filter state ──
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
-  // Bumped after any save in the card library / widget grid so the live dashboard re-reads storage.
-  const bumpLayoutSync = useCallback(() => setLayoutSyncKey(k => k + 1), []);
-
-  // Load card visibility (null = no custom layout yet → show the normal dashboard).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const stored = await loadCardLayout();
-      if (!cancelled) setCardLayout(stored);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [showCardLibrary, layoutSyncKey]);
-
-   // Esc closes card library modal
-   useEffect(() => {
-     if (!showCardLibrary) return;
-     const onKey = (e: KeyboardEvent) => {
-       if (e.key === 'Escape') setShowCardLibrary(false);
-     };
-     window.addEventListener('keydown', onKey);
-     return () => window.removeEventListener('keydown', onKey);
-   }, [showCardLibrary]);
-
-   const isCardVisible = (id: string): boolean => {
-    if (!cardLayout) return true;
-    return cardLayout.widgetVisibility[id] !== false && cardLayout.widgetOrder.includes(id);
-  };
 
   // Fetch available platforms on mount
   useEffect(() => {
@@ -2608,203 +2579,6 @@ export default function DashboardPage({
     })();
   }, []);
 
-  // ── Live card previews for the Card Library (same components + live props as the rows below) ──
-  const cardPreviews: Record<string, ReactNode> = {
-    'status-band': (
-      <StatusBand
-        displayTimeMs={displayTime?.ms || 0}
-        isCurrentlyProductive={isCurrentlyProductive}
-        isDistracting={isDistracting}
-        currentAppName={isInBrowser
-          ? (currentWebsite?.title || currentWebsite?.domain || '')
-          : (currentApp?.app || currentApp?.title || '')}
-        isReal={currentApp?.app ? true : false}
-        totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
-        browserName={currentWebsite?.browserName}
-        isInBrowser={isInBrowser}
-        isPaused={isPaused}
-        websiteTitle={currentWebsite?.title}
-        websiteDomain={currentWebsite?.domain}
-        websiteCategory={currentWebsite?.category}
-      />
-    ),
-    'momentum-hero': (
-      <MomentumHero momentum={momentum} loading={dashLoading} />
-    ),
-    'tier-breakdown': (
-      <TierBreakdownStrip
-        productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
-        neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
-        distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
-        totalHours={dashboardData?.overview?.totalSeconds ? Math.round(dashboardData.overview.totalSeconds / 3600 * 10) / 10 : 0}
-      />
-    ),
-    'pinned-activities': (
-      <PinnedActivities
-        pinnedActivities={pinnedActivities}
-        setPinnedActivities={setPinnedActivities}
-        activities={activities}
-        selectedExternalActivity={selectedExternalActivity}
-        setSelectedExternalActivity={setSelectedExternalActivity}
-        handleSelectExternalActivity={handleSelectExternalActivity}
-        externalSessionRunning={externalSessionRunning}
-        formatDuration={formatDuration}
-        externalElapsedMs={externalElapsedMs}
-        handleStartExternalSession={handleStartExternalSession}
-        handleStopExternalSession={handleStopExternalSession}
-        collapsible
-      />
-    ),
-    'goals-card': (
-      <GoalsCard
-        goals={goals}
-        longTermGoals={longTermGoals}
-        suggestions={suggestions}
-        insights={dashboardInsights}
-        loading={dashLoading}
-        error={dashError}
-        onToggle={toggleGoal}
-        onAdd={addGoal}
-        onDelete={deleteGoal}
-        onUpdate={updateGoal}
-        onAcceptSuggestion={acceptSuggestion}
-        onDismissSuggestion={dismissSuggestion}
-        onGenerateSuggestions={generateSuggestions}
-      />
-    ),
-    'focus-card': (
-      <div className="flex flex-col gap-4">
-        <QuickFocusCard
-          state={deepFocus.state}
-          onStart={deepFocus.start}
-          onEnd={deepFocus.end}
-        />
-        <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
-      </div>
-    ),
-    'deadlines-card': (
-      <DeadlinesCard
-        deadlines={deadlines}
-        reminders={reminders}
-        loading={dashLoading}
-        error={dashError}
-        onAdd={addDeadline}
-        onDelete={deleteDeadline}
-        onUpdate={updateDeadline}
-        onComplete={completeDeadline}
-        onToggleReminder={async (id, done) => {
-          try { await (window as any).deskflowAPI.toggleReminder(id, done); refreshDashboard(); } catch {}
-        }}
-        onDeleteReminder={async (id) => {
-          try { await (window as any).deskflowAPI.deleteReminder(id); refreshDashboard(); } catch {}
-        }}
-      />
-    ),
-    'schedule-hero': (
-      <ScheduleCard
-        entries={schedule}
-        selectedDay={calendarDate.getDay()}
-        onDayChange={(day) => { const d = new Date(); d.setDate(d.getDate() - d.getDay() + day); setCalendarDate(d); }}
-        loading={dashLoading}
-        error={dashError}
-        onAdd={addScheduleEntry}
-        onUpdate={updateScheduleEntry}
-        onDelete={deleteScheduleEntry}
-      />
-    ),
-    'insight-strip': (
-      <InsightStrip insights={aiInsights} />
-    ),
-    'productivity-chart': (
-      <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
-        <div>
-        <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
-        <div className="h-52 mt-2">
-          {chartBarsResult.chartBars.length === 0 ? (
-            <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No data yet" description="Start tracking to see productivity" />
-          ) : (
-            <Bar data={{
-              labels: chartBarsResult.chartBars.map(b => b.label),
-              datasets: [
-                {
-                  label: 'Productive',
-                  data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
-                  backgroundColor: '#34d399',
-                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
-                },
-                {
-                  label: 'Other',
-                  data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
-                  backgroundColor: '#fbbf24',
-                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
-                },
-                {
-                  label: 'External',
-                  data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
-                  backgroundColor: '#38bdf8',
-                  borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
-                },
-              ],
-            }} options={{
-              responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
-              scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } }, y: { stacked: true, grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 11 } } } },
-            }} />
-          )}
-        </div>
-        <div className="flex items-center gap-4 mt-4 text-[11px] text-[var(--text-muted)]">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--success)' }}></span> Productive
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--warning)' }}></span> Other
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--info)' }}></span> External
-          </div>
-        </div>
-        </div>
-      </div>
-    ),
-    'activity-feed': (
-      <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--color-card)] p-5">
-        <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
-      <div className="space-y-0.5 mt-3">
-        {activityFeedWithElapsed.length === 0 ? (
-          <EmptyState icon={<Clock size={20} />} title="No sessions yet" description="Start an activity to see it here" />
-        ) : (
-          [...activityFeedWithElapsed].reverse().slice(0, 10).map((item) => {
-            const isActive = item.isActive;
-            const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
-            return (
-              <div key={item.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20 transition-colors group cursor-pointer"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    item.tier === 'productive' ? 'bg-[var(--success)]' :
-                    item.tier === 'distracting' ? 'bg-[var(--error)]' :
-                    'bg-[var(--warning)]'
-                  }`} />
-                  <div className="min-w-0">
-                    <div className="text-[13px] text-[var(--text-primary)] truncate">{item.name}</div>
-                    <div className="text-[11px] text-[var(--text-muted)] truncate">{item.category} &bull; {item.timestamp.toLocaleTimeString()}</div>
-                  </div>
-                </div>
-                <div className="text-right shrink-0 ml-3">
-                <div className="text-[13px] font-mono text-[var(--text-muted)]">{isActive && durationStr ? durationStr : item.elapsedStr}</div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-                    {item.tier}
-                  </span>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-      </div>
-    ),
-  };
 
   return (
     <PageShell page="dashboard" variant="dashboard" className="text-white">
@@ -2838,35 +2612,6 @@ export default function DashboardPage({
               {p === 'win32' ? 'Windows' : p === 'darwin' ? 'macOS' : p}
             </button>
           ))}
-        </div>
-      )}
-
-      <div className="mb-4 flex justify-end items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setShowCardLibrary(true)}
-          className="flex min-h-[36px] items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--page-accent)]/40 hover:text-[var(--text-primary)]"
-        >
-          <LayoutDashboard className="h-4 w-4 text-[var(--page-accent)]" />
-          Manage dashboard cards
-        </button>
-              </div>
-
-              {showCardLibrary && (
-        <div className="fixed inset-0 z-[var(--z-overlay)] flex items-start justify-center overflow-y-auto bg-black/70 p-5 backdrop-blur-sm" onMouseDown={() => setShowCardLibrary(false)}>
-          <div className="w-full max-w-[1400px] pt-5" onMouseDown={e => e.stopPropagation()}>
-            <div className="mb-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowCardLibrary(false)}
-                className="flex min-h-[32px] w-[32px] items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                aria-label="Close card library"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <CardLibrary onChanged={setCardLayout} onSaved={bumpLayoutSync} previews={cardPreviews} />
-          </div>
         </div>
       )}
 <div className="relative z-10">
