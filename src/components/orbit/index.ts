@@ -1,4 +1,5 @@
-export { OrbitSystem } from './OrbitScene';
+// ── Barrel exports for ./orbit sub-components ──
+export { OrbitScene, OrbitSystem, GalaxyView, CategorySidebar, CategoryDropdown, PlanetLegend, PlanetDetailPanel, CameraTracker, PlanetTracker, SolarSystemScene, SystemTrail } from './OrbitScene';
 export { GalaxyDustCloud, WebsiteGalaxyDustCloud } from './GalaxyDust';
 export { FPSCounter, FPSLineGraph } from './OrbitControls';
 export { GLCleanup, makeGlowTexture, acquirePlanetTextures, releasePlanetTextures, disposeAllPlanetTextures } from './Planet';

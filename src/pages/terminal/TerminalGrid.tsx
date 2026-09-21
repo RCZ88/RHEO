@@ -74,7 +74,7 @@ export function addLeafToGroup(tree: PaneNode, targetId: string, leaf: PaneNode,
 
 // ── Session Categorization Config ──
 
-export const SESSION_CATEGORIES: Record<string, { label: string; icon: any; bg: string; text: string; border: string; color: string }> = {
+const SESSION_CATEGORIES: Record<string, { label: string; icon: any; bg: string; text: string; border: string; color: string }> = {
   'bug-fix': { label: 'Bug Fix', icon: Bug, bg: 'bg-red-500/15', text: 'text-red-300', border: 'border-red-500/30', color: 'red' },
   'feature': { label: 'Feature', icon: Sparkles, bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/30', color: 'blue' },
   'refactor': { label: 'Refactor', icon: RefreshCw, bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/30', color: 'purple' },
@@ -83,7 +83,7 @@ export const SESSION_CATEGORIES: Record<string, { label: string; icon: any; bg: 
   'other': { label: 'Other', icon: MoreHorizontal, bg: 'bg-zinc-500/15', text: 'text-zinc-400', border: 'border-zinc-500/30', color: 'zinc' },
 };
 
-export const SESSION_STATUS_STYLES: Record<string, { dot: string; label: string }> = {
+const SESSION_STATUS_STYLES: Record<string, { dot: string; label: string }> = {
   active: { dot: 'bg-green-500 animate-pulse', label: 'Active' },
   paused: { dot: 'bg-yellow-500', label: 'Paused' },
   completed: { dot: 'bg-gray-500', label: 'Completed' },
@@ -93,7 +93,7 @@ export const SESSION_STATUS_STYLES: Record<string, { dot: string; label: string 
   ready: { dot: 'bg-cyan-500', label: 'Ready' },
 };
 
-export const SUBPAGE_LABELS: Record<string, string> = {
+const SUBPAGE_LABELS: Record<string, string> = {
   'setup/presets': 'Setup / Presets',
   'setup/configs': 'Setup / Configs',
   'setup/fortress': 'Setup / Fortress',
@@ -126,13 +126,13 @@ export const SUBPAGE_LABELS: Record<string, string> = {
 
 // ── Workspace UI Primitives ──
 
-export const GROUP_ACCENT_HEX: Record<string, string> = {
+const GROUP_ACCENT_HEX: Record<string, string> = {
   green: '#34d399', emerald: '#34d399', teal: '#2dd4bf', cyan: '#22d3ee', blue: '#3b82f6',
   indigo: '#818cf8', violet: '#a78bfa', purple: '#c084fc', pink: '#f472b6', rose: '#fb7185',
   amber: '#fbbf24', yellow: '#facc15', orange: '#fb923c',
 };
 
-export const accentStyle = (accent: string): React.CSSProperties => ({ ['--page-accent' as string]: GROUP_ACCENT_HEX[accent] || '#22d3ee' } as React.CSSProperties);
+const accentStyle = (accent: string): React.CSSProperties => ({ ['--page-accent' as string]: GROUP_ACCENT_HEX[accent] || '#22d3ee' } as React.CSSProperties);
 
 export const WS_ICON_BTN = 'p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/80 transition-colors duration-150 active:scale-95';
 
@@ -217,6 +217,6 @@ export function logOnce(key: string, message: string, ...args: any[]) {
     loggedErrors.add(key);
     console.warn(message, ...args);
   }
+
 }
 
-export { formatDate, SESSION_CATEGORIES, SESSION_STATUS_STYLES, SUBPAGE_LABELS, GROUP_ACCENT_HEX, accentStyle, WS_ICON_BTN, WS_SELECT, TAB_ACTIVE, ACCENT_STRIP, ACCENT_TEXT, ACCENT_BORDER, Preset, Session, CategoryBadge, GroupPanel };

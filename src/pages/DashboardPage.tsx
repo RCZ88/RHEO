@@ -355,7 +355,9 @@ export default function DashboardPage({
   const prevTierRef = useRef<'productive' | 'neutral' | 'distracting' | null>(null);
 
   // Dashboard custom cards state
+  const navigateRef = useRef<any>(null);
   const navigate = useNavigate();
+  navigateRef.current = navigate;
   const [customCards, setCustomCards] = useState<Array<{
     id: string; title: string; type: 'shortcut' | 'stats' | 'widget';
     targetRoute?: string; icon?: string; description?: string;
@@ -426,7 +428,7 @@ export default function DashboardPage({
     };
     const handleNavigate = (e: Event) => {
       const route = (e as CustomEvent).detail?.route;
-      if (route && typeof navigate === 'function') navigate(route);
+      if (route && navigateRef.current) navigateRef.current(route);
     };
     const handleToolResult = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -453,7 +455,7 @@ export default function DashboardPage({
       window.removeEventListener('rheo:navigate', handleNavigate as EventListener);
       window.removeEventListener('rheo:tool-result', handleToolResult as EventListener);
     };
-  }, [navigate]);
+  }, [navigateRef]);
 
   // Track productivity sessions for saving to database
   const productivitySessionStartRef = useRef<number | null>(null);
