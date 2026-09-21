@@ -2579,9 +2579,6 @@ export default function DashboardPage({
     })();
   }, []);
 
-  // Card visibility — all cards visible by default (CardLibrary removed)
-  const isCardVisible = (_id: string): boolean => true;
-
 
   return (
     <PageShell page="dashboard" variant="dashboard" className="text-white">
