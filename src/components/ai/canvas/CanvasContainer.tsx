@@ -17,7 +17,7 @@ import type { CanvasSnapshot } from '../../../services/canvasPersistence'
 
 const PAN_STORAGE_KEY = 'rheo-canvas-pan-zoom'
 
-function getSpawnPosition(): { x: number; y: number } {
+export function getSpawnPosition(): { x: number; y: number } {
   const container = document.querySelector('.dk-canvas-container')
   if (!container) return { x: 100, y: 100 }
 

@@ -612,6 +612,27 @@ function registerAll() {
       message: `Navigated to ${params.route}`
     };
   })
-}
 
-registerAll()
+  r('create_feature_card', 'Add a feature card to the user dashboard', {
+    id: p('string', 'Unique ID for the card', { required: true }),
+    type: p('string', 'Card type', { enum: ['finance', 'ide', 'learn', 'activity', 'schedule', 'goal', 'terminal'], required: true }),
+    title: p('string', 'Display title for the card', { required: true }),
+  }, 'confirm', 'dashboard', async (params) => {
+    const gate = await checkAccess('dashboard');
+    if (!gate.allowed) return { _privacy: true, message: gate.message };
+
+    window.dispatchEvent(new CustomEvent('rheo:hub-update', {
+      detail: {
+        type: 'ADD_DASHBOARD_CARD',
+        card: { id: params.id, type: params.type, title: params.title }
+      }
+    }));
+
+    return {
+      success: true,
+      data: { message: `Added ${params.type} card to dashboard`, cardId: params.id }
+    };
+  })
+  }
+
+  registerAll()

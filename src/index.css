@@ -745,12 +745,12 @@ input[type="radio"]:focus-visible, [tabindex]:focus-visible {
 	outline-offset: 2px;
 }
 
-/* Remove pink focus rings on text inputs only — let buttons keep their own */
-input:not([type="checkbox"]):not([type="radio"]):focus,
-textarea:focus, select:focus, [contenteditable]:focus {
-	outline: none !important;
-	box-shadow: none !important;
-	ring: none !important;
+/* Visible focus for all interactive elements */
+button:focus-visible, [role="button"]:focus-visible,
+a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
+[contenteditable]:focus-visible, [tabindex]:focus-visible {
+	outline: 2px solid var(--page-accent);
+	outline-offset: 2px;
 }
 
 /* Gap visualization styles */
@@ -836,12 +836,13 @@ textarea:focus, select:focus, [contenteditable]:focus {
 /* ===== MCP Ambient Pattern CSS Classes ===== */
 @layer utilities {
   .ambient-glow {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--page-accent) 15%, transparent), transparent 70%);
-    transition: opacity 1000ms ease;
-  }
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--page-accent) 15%, transparent), transparent 70%);
+      transition: opacity 1000ms ease;
+      opacity: 0.5;
+    }
 
   .ambient-dot-pattern {
     position: absolute;
@@ -915,11 +916,11 @@ textarea:focus, select:focus, [contenteditable]:focus {
 
 /* ===== MCP Component Dark Theme Support ===== */
 .magic-card-surface {
-  background: rgba(24, 24, 27, 0.80);
+  background: rgba(24, 24, 27, 0.90);
 }
 
 .light .magic-card-surface {
-  background: rgba(255, 255, 255, 0.80);
+  background: rgba(255, 255, 255, 0.90);
 }
 
 /* MagicCard dark theme overrides using CSS variables */
@@ -969,11 +970,11 @@ textarea:focus, select:focus, [contenteditable]:focus {
 
 /* ===== MCP Component Surface Dark Theme ===== */
 .mcp-surface {
-  background: rgba(13, 13, 13, 0.85);
+  background: rgba(13, 13, 13, 0.90);
   border: 1px solid rgba(63, 63, 70, 0.5);
 }
 
 .light .mcp-surface {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.90);
   border: 1px solid rgba(228, 228, 231, 0.5);
 }

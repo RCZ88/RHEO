@@ -27,7 +27,7 @@ function Select({
         <SelectPrimitive.Positioner className="z-50">
           <SelectPrimitive.Popup
             data-slot="select-popup"
-            className="min-w-[180px] rounded-lg border border-zinc-700 bg-zinc-900 p-1 text-sm shadow-xl shadow-black/50 backdrop-blur-xl light:border-zinc-200 light:bg-white light:text-zinc-900"
+            className="min-w-[180px] rounded-lg border border-zinc-700 bg-zinc-900 p-1 text-sm shadow-xl shadow-black/50 light:border-zinc-200 light:bg-white light:text-zinc-900"
           >
             {children}
           </SelectPrimitive.Popup>

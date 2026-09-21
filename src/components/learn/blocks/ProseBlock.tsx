@@ -13,11 +13,11 @@ export const ProseBlock = React.memo(function ProseBlock({ block, onAsk }: Props
 
   return (
     <div
-      className="my-4 group relative text-[1.0625rem] leading-[1.7] text-zinc-200 max-w-[68ch] font-serif select-text prose-block"
-      data-block-id={block.id}
+    className="my-4 group relative text-[1.0625rem] leading-[1.7] text-zinc-200 max-w-[68ch] font-serif select-text prose prose-invert prose-p:text-zinc-300 prose-headings:text-white prose-a:text-pink-400 prose-block"
+    data-block-id={block.id}
     >
-      <div dangerouslySetInnerHTML={{ __html: rendered }} />
-      {onAsk && (
+    <div dangerouslySetInnerHTML={{ __html: rendered }} />
+    {onAsk && (
         <button
           onClick={() => {
             const sel = window.getSelection()?.toString().trim();

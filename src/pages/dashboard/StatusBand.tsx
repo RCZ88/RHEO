@@ -121,15 +121,15 @@ export function StatusBand({
   }, [transitions, now]);
 
   const isTracking = isReal === true;
-  const isWaylandDegraded = !isTracking && currentAppName === '' && process.env.XDG_SESSION_TYPE === 'wayland';
+  const isWaylandDegraded = process.env.XDG_SESSION_TYPE === 'wayland';
 
   return (
-    <BlurFade delay={0} duration={0.3}>
+    <BlurFade delay={0} duration={0.15}>
       <div className="w-full h-full">
       <div className="relative overflow-hidden">
         <div className="relative z-10 flex flex-col gap-3 p-4" style={{ minHeight: '220px' }}>
 
-          <div className="flex items-center justify-between bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg px-3 py-2">
+          <div className="flex items-center justify-between bg-zinc-900/80 light:bg-white rounded-lg px-3 py-2 border border-zinc-700/50 light:border-zinc-200/50">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: accent.dot }} />
               <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-400 light:text-stone-600">
@@ -167,22 +167,22 @@ export function StatusBand({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               {isTracking ? (
-                <div className="flex items-center gap-2 bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg px-3 py-1.5 min-w-0">
+                <div className="flex items-center gap-2 bg-zinc-900/80 light:bg-white rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50 light:border-zinc-200/50">
                   {isInBrowser ? <Globe size={12} className="text-zinc-500 shrink-0" /> : <Monitor size={12} className="text-zinc-500 shrink-0" />}
                   <span className="text-[12px] font-medium text-zinc-300 light:text-stone-800 truncate font-sans">
                     {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
                   </span>
                   {isInBrowser && websiteCategory && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 light:bg-zinc-100/50 text-zinc-500 border border-zinc-700 light:border-zinc-300/20 font-sans hidden sm:inline">{websiteCategory}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 light:bg-zinc-100 text-zinc-500 light:text-stone-600 font-sans hidden sm:inline">{websiteCategory}</span>
                   )}
                 </div>
               ) : isWaylandDegraded ? (
-                <div className="flex items-center gap-2 bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg px-3 py-1.5 min-w-0">
+                <div className="flex items-center gap-2 bg-zinc-900/80 light:bg-white rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50 light:border-zinc-200/50">
                   <Clock size={11} className="text-zinc-600 light:text-stone-400" />
-                  <span className="text-[11px] text-zinc-500 light:text-stone-500 font-sans">Tracking degraded — browser-only mode on Wayland</span>
+                  <span className="text-[11px] text-zinc-500 light:text-stone-500 font-sans">Tracking active on Wayland</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg px-3 py-1.5">
+                <div className="flex items-center gap-2 bg-zinc-900/80 light:bg-white rounded-lg px-3 py-1.5 border border-zinc-700/50 light:border-zinc-200/50">
                   <Clock size={11} className="text-zinc-600 light:text-stone-400" />
                   <span className="text-[11px] text-zinc-500 light:text-stone-500 font-sans">No foreground data</span>
                 </div>
@@ -192,7 +192,7 @@ export function StatusBand({
             {onStartFocus && !isPaused && (
               <Button
                 onClick={onStartFocus}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 light:bg-white text-zinc-400 light:text-stone-600 border border-zinc-700 light:border-[var(--ws-border)] hover:bg-zinc-700 hover:light:bg-stone-100 hover:text-zinc-200 hover:light:text-stone-900 transition-colors text-[11px] font-medium font-sans"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 light:bg-white text-zinc-400 light:text-stone-600 border border-zinc-700 light:border-zinc-200 hover:bg-zinc-700 hover:light:bg-zinc-50 hover:text-zinc-200 hover:light:text-stone-900 transition-colors text-[11px] font-medium font-sans focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:outline-none"
               >
                 <Play size={9} />
                 Focus
@@ -208,10 +208,10 @@ export function StatusBand({
                 initial={{ opacity: 0, y: -10, scaleY: 0.97 }}
                 animate={{ opacity: 1, y: 0, scaleY: 1 }}
                 exit={{ opacity: 0, y: -6, scaleY: 0.98 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                 className="origin-top"
               >
-                <div className="bg-black/20 light:bg-stone-100 border border-white/[0.03] light:border-[var(--ws-border)] rounded-lg p-3">
+                <div className="bg-zinc-900/80 light:bg-white rounded-lg p-3 border border-zinc-700/50 light:border-zinc-200/50">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Activity size={10} className="text-zinc-500" />
                     <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-zinc-500 light:text-stone-500">Since Last Visit</span>
@@ -225,8 +225,8 @@ export function StatusBand({
                           initial={{ opacity: 0, scale: 0.85, y: -6 }}
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.9, y: -3 }}
-                          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 light:bg-white border border-zinc-700 light:border-[var(--ws-border)] text-[10px]"
+                          transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 light:bg-zinc-100 border border-zinc-700/50 light:border-zinc-200/50 text-[10px]"
                         >
                           <ArrowUp size={8} className="text-zinc-500" />
                           <span className="text-zinc-400 light:text-stone-600 font-mono">{line.text}</span>

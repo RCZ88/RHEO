@@ -249,7 +249,7 @@ export function BugReportPanel({ projectId }: Props) {
                         Agent Responses ({report.agentResponses.length})
                       </div>
                       {report.agentResponses.map((resp, i) => (
-                        <div key={i} className="bg-black/20 rounded-md p-2 flex flex-col gap-1">
+                        <div key={i} className="bg-zinc-900/80 rounded-md">
                           <div className="flex items-center gap-2">
                             <span className={`text-xs ${resp.response === 'yes' ? 'text-emerald-300' : 'text-red-300'}`}>
                               {resp.response === 'yes' ? 'Yes' : 'No'}

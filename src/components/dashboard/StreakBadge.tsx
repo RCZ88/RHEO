@@ -4,7 +4,6 @@
 // Sources: Trophy UI streak-badge + ReactBits CountUp pattern
 // ============================================================
 
-import { motion } from 'framer-motion';
 import { Flame, Zap } from 'lucide-react';
 
 interface StreakBadgeProps {
@@ -40,32 +39,22 @@ export function StreakBadge({
     <motion.div
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
       className={`inline-flex flex-col items-center ${s.container} rounded-xl bg-amber-500/[0.08] border border-amber-500/20`}
     >
       <div className="flex items-center gap-1.5">
-        <motion.div
-          animate={isOnFire ? { scale: [1, 1.15, 1], rotate: [0, -5, 5, 0] } : {}}
-          transition={isOnFire ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
-        >
           <Flame
             size={s.icon}
             className={isHot ? 'text-amber-400' : 'text-amber-500/60'}
             strokeWidth={isOnFire ? 2.5 : 2}
           />
-        </motion.div>
+        </div>
         <span className={`${s.text} font-bold text-amber-400 font-mono tabular-nums`}>
           {streak}
         </span>
         <span className={`${s.text} text-amber-500/60`}>day streak</span>
         {isHot && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 15 }}
-          >
-            <Zap size={s.icon - 2} className="text-amber-300" fill="currentColor" />
-          </motion.div>
+          <Zap size={s.icon - 2} className="text-amber-300" fill="currentColor" />
         )}
       </div>
 

@@ -38,7 +38,7 @@ export function MemoryCard({ memory, onOpen, span = 'sm', idPrefix }: MemoryCard
       {memory.meta.kind === 'video' ? (
         <>
           {poster && <img src={poster} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80">
             <PlayCircle className="w-8 h-8 text-white/90 drop-shadow" />
           </div>
         </>

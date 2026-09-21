@@ -40,7 +40,7 @@ export const ShinyButton = React.forwardRef<
     <motion.button
       ref={ref}
       className={cn(
-        `relative cursor-pointer rounded-xl border ${borderClass} px-6 py-3 font-semibold text-sm text-zinc-50 backdrop-blur-xl transition-shadow duration-300 ease-in-out`,
+        `relative cursor-pointer rounded-xl border ${borderClass} px-6 py-3 font-semibold text-sm text-zinc-50 transition-shadow duration-300 ease-in-out`,
         `hover:shadow-[0_0_20px_rgba(${accent},0.25)]`,
         className
       )}

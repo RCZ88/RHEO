@@ -243,13 +243,26 @@ export function AiPage() {
   }
   const LANE_X = [40, 540, 1040, 1540, 2040, 2540, 3040]
   function getCardPosition(type: CardType): { x: number; y: number } {
-    const lane = LANE_OF[type] ?? 6
-    const laneCards = Object.values(canvas.allCards).filter((c: any) => (LANE_OF[c.type] ?? 6) === lane)
-    const idx = laneCards.length
-    const x = LANE_X[lane] ?? 40 + lane * 500
-    const y = 40 + idx * 260
-    return { x, y }
-  }
+      // Centered spawn positioning to avoid off-screen cards
+      const container = document.querySelector('.dk-canvas-container')
+      if (container) {
+        const { width, height } = container.getBoundingClientRect()
+        const centerX = width / 2 - 160
+        const centerY = height / 2 - 100
+        const offsetX = (Math.random() - 0.5) * 100
+        const offsetY = (Math.random() - 0.5) * 100
+        return {
+          x: Math.max(0, Math.min(width - 320, centerX + offsetX)),
+          y: Math.max(0, Math.min(height - 200, centerY + offsetY))
+        }
+      }
+      const lane = LANE_OF[type] ?? 6
+      const laneCards = Object.values(canvas.allCards).filter((c: any) => (LANE_OF[c.type] ?? 6) === lane)
+      const idx = laneCards.length
+      const x = LANE_X[lane] ?? 40 + lane * 500
+      const y = 40 + idx * 260
+      return { x, y }
+    }
 
   // Canvas-mode automation cards: sync automations into the canvas store as first-class cards
   const { toggleAutomation, deleteAutomation, testRun } = automationActions;

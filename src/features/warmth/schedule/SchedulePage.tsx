@@ -16,7 +16,7 @@ import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntr
 
 /* ── daily reflection (hard stats) ── */
 const toStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const todayStr = () => toStr(new Date())
 
 function addDaysStr(dateStr: string, n: number): string {
@@ -138,10 +138,10 @@ function StatPill({ icon, label, value, accent }: { icon: React.ReactNode; label
 function DeadlineRadar({ marks, selectedDate, onPick }: { marks: Map<string, { color: string; label: string }[]>; selectedDate: string; onPick: (d: string) => void }) {
   const [viewMonth, setViewMonth] = useState(selectedDate.slice(0, 7));
   useEffect(() => setViewMonth(selectedDate.slice(0, 7)), [selectedDate]);
-  const { lead, dim, y, m } = useMemo(() => { const [yy, mm] = viewMonth.split('-').map(Number); const first = new Date(yy, mm - 1, 1); return { lead: (first.getDay() + 6) % 7, dim: new Date(yy, mm, 0).getDate(), y: yy, m: mm }; }, [viewMonth]);
-  const shiftMonth = (n: number) => { const d = new Date(y, m - 1 + n, 1); setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`); };
+  const { lead, dim, year, month } = useMemo(() => { const [yy, mm] = viewMonth.split('-').map(Number); const first = new Date(yy, mm - 1, 1); return { lead: (first.getDay() + 6) % 7, dim: new Date(yy, mm, 0).getDate(), year: yy, month: mm }; }, [viewMonth]);
+  const shiftMonth = (n: number) => { const d = new Date(year, month - 1 + n, 1); setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`); };
   const upcoming = useMemo(() => { const all: { date: string; mark: { color: string; label: string } }[] = []; marks.forEach((list, date) => list.forEach(mark => all.push({ date, mark }))); return all.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5); }, [marks]);
-  const monthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const today = todayStr();
 
   return (
@@ -402,7 +402,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
       <div className={`flex flex-col lg:flex-row gap-4 ${side === 'left' ? 'lg:flex-row-reverse' : ''}`}>
 
         {/* LEFT (2/3): ScheduleCard week view + TodoList + ScheduleSyncCard */}
-        <div className="lg:flex-2 min-w-0 space-y-4">
+        <div className="flex-2 min-w-0 space-y-4">
 
           {/* ScheduleCard — Week View */}
           <WarmCard ambient>

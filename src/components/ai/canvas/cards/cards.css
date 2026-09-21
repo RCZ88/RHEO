@@ -11,6 +11,17 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
 }
 
+.dk-canvas-card {
+  opacity: 1 !important;
+  visibility: visible !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dk-canvas-card:hover {
+  box-shadow: 0 12px 48px rgba(236, 72, 153, 0.15) !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    DEEP FIELD — Card System
    Each card type gets its own accent light
@@ -35,8 +46,6 @@
     rgba(24, 24, 27, 0.72) 0%,
     rgba(11, 11, 13, 0.56) 100%
   );
-  backdrop-filter: var(--dk-blur-md) saturate(1.8);
-  -webkit-backdrop-filter: var(--dk-blur-md) saturate(1.8);
   border: 1px solid var(--dk-border-subtle);
   box-shadow: var(--dk-elev-2), var(--dk-sheen);
   overflow: hidden;
@@ -840,8 +849,6 @@
   color: color-mix(in srgb, var(--gc) 65%, #fafafa);
   background: color-mix(in srgb, var(--gc) 14%, rgba(10, 10, 12, 0.6));
   border: 1px solid color-mix(in srgb, var(--gc) 30%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
 }
 .dk-group-label::before {
   content: "";

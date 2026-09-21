@@ -68,7 +68,7 @@ export function FinanceOverviewSection() {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2, duration: 0.4 }}
+      transition={{ delay: 0.2, duration: 0.15 }}
     >
       <GlassCard data-section="dash.finance">
         <div className="flex items-center justify-between mb-4">

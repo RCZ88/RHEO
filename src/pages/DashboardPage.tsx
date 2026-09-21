@@ -40,7 +40,8 @@ import { useHomeSummary } from '../hooks/useHomeSummary';
 import { useDeepFocus } from '../hooks/useDeepFocus';
 import { Bar, Line } from 'react-chartjs-2';
 import { motion, AnimatePresence } from "motion/react";
-
+import { FeatureCard } from '../components/dashboard/FeatureCard';
+import { useHubState } from '../contexts/HubContext';
 
 import {
   BookOpen, Dumbbell, Activity,
@@ -49,7 +50,7 @@ import {
   Edit3, Check, Plus, Minus, TrendingUp,
   Target, ZapCircle, RefreshCw, Clock3,
   ChevronLeft, ChevronRight, Maximize2, Minimize2,
-  BarChart3, Bot, Sparkles, ArrowRight, LayoutDashboard
+  BarChart3, Bot, Sparkles, ArrowRight, LayoutDashboard, GripVertical, MousePointer2, Zap as ZapIcon2
 } from 'lucide-react';
 import { maxOf, maxBy } from '../utils/safeMath';
 import { getDateRange } from '../lib/dateRange';
@@ -354,10 +355,66 @@ export default function DashboardPage({
   const prevTierRef = useRef<'productive' | 'neutral' | 'distracting' | null>(null);
 
   // Dashboard custom cards state
+  const navigate = useNavigate();
   const [customCards, setCustomCards] = useState<Array<{
     id: string; title: string; type: 'shortcut' | 'stats' | 'widget';
     targetRoute?: string; icon?: string; description?: string;
   }>>([]);
+
+  // Edit mode for dashboard layout customization
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  // Feature cards state with Hub State
+  const { spokes, broadcast } = useHubState();
+  const [featureCards, setFeatureCards] = useState([
+    { id: 'finance', type: 'finance' as FeatureCardType, title: 'Finance Overview' },
+    { id: 'ide', type: 'ide' as FeatureCardType, title: 'IDE Projects' },
+    { id: 'learn', type: 'learn' as FeatureCardType, title: 'Learning Path' },
+    { id: 'activity', type: 'activity' as FeatureCardType, title: 'Activity Tracking' },
+    { id: 'schedule', type: 'schedule' as FeatureCardType, title: 'Schedule' },
+    { id: 'goals', type: 'goal' as FeatureCardType, title: 'Life Goals' },
+    { id: 'terminal', type: 'terminal' as FeatureCardType, title: 'Terminal Workspace' },
+    { id: 'tasks', type: 'tasks' as FeatureCardType, title: 'Task Manager' },
+    { id: 'notes', type: 'notes' as FeatureCardType, title: 'Quick Notes' },
+    { id: 'reminders', type: 'reminders' as FeatureCardType, title: 'Reminders' },
+    { id: 'calendar', type: 'calendar' as FeatureCardType, title: 'Calendar' },
+    { id: 'stats', type: 'stats' as FeatureCardType, title: 'Productivity Stats' },
+    { id: 'timer', type: 'timer' as FeatureCardType, title: 'Focus Timer' },
+    { id: 'workflow', type: 'workflow' as FeatureCardType, title: 'Workflow Builder' },
+    { id: 'insights', type: 'insights' as FeatureCardType, title: 'AI Insights' },
+    { id: 'automation', type: 'automation' as FeatureCardType, title: 'Automations' },
+    { id: 'database', type: 'database' as FeatureCardType, title: 'Data Manager' },
+    { id: 'ai', type: 'ai' as FeatureCardType, title: 'AI Assistant' },
+  ]);
+
+  useEffect(() => {
+    const handleCardUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail.type === 'ADD_DASHBOARD_CARD') {
+        setFeatureCards(prev => {
+          if (prev.some(c => c.id === detail.card.id)) return prev;
+          return [...prev, detail.card];
+        });
+      }
+    };
+    window.addEventListener('rheo:hub-update', handleCardUpdate as EventListener);
+    return () => window.removeEventListener('rheo:hub-update', handleCardUpdate as EventListener);
+  }, []);
+
+  const getLiveData = (type: string) => {
+    switch (type) {
+      case 'finance': return spokes.finance?.data;
+      case 'activity': return spokes.tracking?.data;
+      case 'goal': return spokes.goals?.data;
+      case 'schedule': return spokes.schedule?.data;
+      default: return null;
+    }
+  };
+
+  const handleQuickAction = (type: string) => {
+    if (type === 'finance') broadcast({ type: 'OPEN_MODAL', payload: 'add_transaction' });
+    if (type === 'terminal') broadcast({ type: 'NEW_SESSION' });
+  };
 
   useEffect(() => {
     const handleAddCard = (e: Event) => {
@@ -368,11 +425,30 @@ export default function DashboardPage({
       const route = (e as CustomEvent).detail?.route;
       if (route) navigate(route);
     };
+    const handleToolResult = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      // Auto-add dashboard card from AI tool execution
+      if (detail?.toolName === 'createDashboardCard' && detail?.result?.success) {
+        const result = detail.result;
+        if (result.cardId && result.message) {
+          setCustomCards(prev => [...prev, {
+            id: result.cardId,
+            title: result.title || 'New Card',
+            type: result.cardType || 'shortcut',
+            targetRoute: result.targetRoute,
+            icon: result.icon || '📄',
+            description: result.description || '',
+          }]);
+        }
+      }
+    };
     window.addEventListener('rheo:add-dashboard-card', handleAddCard as EventListener);
     window.addEventListener('rheo:navigate', handleNavigate as EventListener);
+    window.addEventListener('rheo:tool-result', handleToolResult as EventListener);
     return () => {
       window.removeEventListener('rheo:add-dashboard-card', handleAddCard as EventListener);
       window.removeEventListener('rheo:navigate', handleNavigate as EventListener);
+      window.removeEventListener('rheo:tool-result', handleToolResult as EventListener);
     };
   }, [navigate]);
 
@@ -430,7 +506,6 @@ export default function DashboardPage({
   const [externalSessionRunning, setExternalSessionRunning] = useState(persistedTimer.externalRunning);
 
   // Home summary for cross-module strip
-  const navigate = useNavigate();
   useScrollToSection(); // Read deepNav sessionStorage hint and scroll on mount
   const homeSummary = useHomeSummary();
   const [externalSessionStart, setExternalSessionStart] = useState<Date | null>(null); // Will be set in useEffect
@@ -2870,7 +2945,7 @@ export default function DashboardPage({
         </div>
       )}
 
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex justify-end items-center gap-2">
         <button
           type="button"
           onClick={() => setShowCardLibrary(true)}
@@ -2879,6 +2954,110 @@ export default function DashboardPage({
           <LayoutDashboard className="h-4 w-4 text-[var(--page-accent)]" />
           Manage dashboard cards
         </button>
+        <button
+          type="button"
+          onClick={() => setIsEditMode(!isEditMode)}
+          className={`flex min-h-[36px] items-center gap-2 rounded-lg border px-3 text-[12px] font-medium transition-colors ${
+            isEditMode
+              ? 'border-pink-500/40 bg-pink-500/10 text-pink-400'
+              : 'border-[var(--border-subtle)] bg-[var(--color-card)] text-[var(--text-secondary)] hover:border-[var(--page-accent)]/40 hover:text-[var(--text-primary)]'
+          }`}
+        >
+          <GripVertical className="h-4 w-4" />
+          {isEditMode ? 'Exit Edit Mode' : 'Edit Layout'}
+        </button>
+      </div>
+
+      {/* Quick Actions — visible in edit mode */}
+      {isEditMode && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('rheo:add-dashboard-card', {
+                detail: {
+                  id: `dash_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                  title: 'Focus Session',
+                  targetRoute: '/workspace',
+                  type: 'shortcut',
+                  icon: '⚡',
+                  description: 'Start a focused work session',
+                }
+              }));
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900/50 text-sm text-zinc-300 hover:border-pink-500/50 hover:text-white transition-all"
+          >
+            <Zap className="h-4 w-4" /> Add Focus Session
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('rheo:add-dashboard-card', {
+                detail: {
+                  id: `dash_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                  title: 'Finance Overview',
+                  targetRoute: '/finance',
+                  type: 'shortcut',
+                  icon: '💰',
+                  description: 'View income, expenses, and budgets',
+                }
+              }));
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900/50 text-sm text-zinc-300 hover:border-pink-500/50 hover:text-white transition-all"
+          >
+            <Plus className="h-4 w-4" /> Add Finance Card
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('rheo:add-dashboard-card', {
+                detail: {
+                  id: `dash_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                  title: 'Learning Path',
+                  targetRoute: '/learn',
+                  type: 'shortcut',
+                  icon: '📚',
+                  description: 'Continue your learning journey',
+                }
+              }));
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900/50 text-sm text-zinc-300 hover:border-pink-500/50 hover:text-white transition-all"
+          >
+            <BookOpen className="h-4 w-4" /> Add Learning Card
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('rheo:add-dashboard-card', {
+                detail: {
+                  id: `dash_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                  title: 'Goals Tracker',
+                  targetRoute: '/goals',
+                  type: 'shortcut',
+                  icon: '🎯',
+                  description: 'Track daily and long-term goals',
+                }
+              }));
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900/50 text-sm text-zinc-300 hover:border-pink-500/50 hover:text-white transition-all"
+          >
+            <Target className="h-4 w-4" /> Add Goals Card
+          </button>
+        </div>
+      )}
+
+      {/* Feature Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+        {featureCards.map((card) => (
+          <FeatureCard
+            key={card.id}
+            id={card.id}
+            type={card.type}
+            title={card.title}
+            data={getLiveData(card.type)}
+            onQuickAction={() => handleQuickAction(card.type)}
+          />
+        ))}
       </div>
 
       {showCardLibrary && (
@@ -3292,16 +3471,27 @@ export default function DashboardPage({
             {customCards.map((card) => (
               <motion.div
                 key={card.id}
-                whileHover={{ scale: 1.02, y: -4 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => card.targetRoute && navigate(card.targetRoute)}
+                layout
+                whileHover={!isEditMode ? { scale: 1.02, y: -4 } : {}}
+                whileTap={!isEditMode ? { scale: 0.98 } : {}}
+                onClick={() => !isEditMode && card.targetRoute && navigate(card.targetRoute)}
+                drag={isEditMode ? "x" : false}
+                dragMomentum={false}
+                dragElastic={0.2}
                 className={`
-                  p-6 rounded-xl border cursor-pointer transition-colors
-                  ${card.type === 'shortcut'
-                    ? 'bg-zinc-900 border-zinc-800 hover:border-pink-500/50'
-                    : 'bg-zinc-900/50 border-zinc-800'}
+                  p-6 rounded-xl border cursor-pointer transition-colors relative group
+                  ${isEditMode
+                    ? 'border-zinc-700 bg-zinc-900/70 cursor-grab active:cursor-grabbing'
+                    : card.type === 'shortcut'
+                      ? 'bg-zinc-900 border-zinc-800 hover:border-pink-500/50'
+                      : 'bg-zinc-900/50 border-zinc-800'}
                 `}
               >
+                {isEditMode && (
+                  <div className="absolute top-2 left-2 text-zinc-600 cursor-grab select-none">
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                )}
                 <div className="flex items-start justify-between mb-4">
                   <span className="text-2xl">{card.icon || '📄'}</span>
                   <span className="text-xs uppercase tracking-wider text-zinc-500">{card.type}</span>
@@ -3310,7 +3500,7 @@ export default function DashboardPage({
                 {card.description && (
                   <p className="text-sm text-zinc-400 line-clamp-2">{card.description}</p>
                 )}
-                {card.targetRoute && (
+                {!isEditMode && card.targetRoute && (
                   <div className="mt-4 text-xs text-pink-500 font-medium">
                     Navigate to {card.targetRoute} →
                   </div>

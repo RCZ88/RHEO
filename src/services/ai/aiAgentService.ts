@@ -219,12 +219,16 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
             result = await this.executeAction(result)
             console.log(`[AiAgent] Tool ${toolName}: action result, _executed=${result._executed}`)
           }
-          console.log(`[AiAgent] Tool ${toolName}: completed, result type=${typeof result}`)
-          if (result && result.success && toolName === 'createDashboardCard') {
+            console.log(`[AiAgent] Tool ${toolName}: completed, result type=${typeof result}`)
+            if (result && result.success && toolName === 'createDashboardCard') {
             console.log('[AiAgent] Dashboard card created:', result.cardId)
-          }
-          results.push({ toolCallId: tc.id, toolName, result })
-          this.progressCallback?.({ round, totalRounds: this.config.maxRounds, toolName, toolArgs: args, status: 'completed', message: `Tool completed: ${toolName}` })
+            }
+            // Dispatch tool-result event for dashboard/listeners
+            window.dispatchEvent(new CustomEvent('rheo:tool-result', {
+            detail: { toolName, result, toolCallId: tc.id }
+            }))
+            results.push({ toolCallId: tc.id, toolName, result })
+            this.progressCallback?.({ round, totalRounds: this.config.maxRounds, toolName, toolArgs: args, status: 'completed', message: `Tool completed: ${toolName}` })
         } catch (err: any) {
           console.log(`[AiAgent] Tool ${toolName}: ERROR ${err.message}`)
           results.push({ toolCallId: tc.id, toolName, result: null, error: err.message })

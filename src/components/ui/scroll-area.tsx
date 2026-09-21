@@ -35,7 +35,7 @@ export function ScrollArea({ children, className = '', contentClassName = '', on
       {!pinned && (
         <button
           onClick={() => ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: 'smooth' })}
-          className="absolute bottom-4 right-5 rounded-full bg-zinc-800/90 border border-zinc-700/50 px-3 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-700 transition-all z-10 backdrop-blur-sm"
+          className="absolute bottom-4 right-5 rounded-full bg-zinc-800/90 border border-zinc-700/50 px-3 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-700 transition-all z-10"
         >
           <ChevronDown className="w-3 h-3 inline mr-1" />
           Jump to latest
