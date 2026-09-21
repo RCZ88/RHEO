@@ -99,7 +99,8 @@ const configMap: Record<FeatureCardType, { icon: any; color: string; bg: string;
               <p className="text-sm text-zinc-500 mt-2">No live data</p>
             ) : null}
             </div>
-      </div>
+          ) : null}
+        </div>
 
       <div className="absolute inset-x-0 bottom-0 p-3 bg-zinc-950/90 border-t border-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between backdrop-blur-sm">
         <span className="text-xs text-zinc-500">Click to open</span>
