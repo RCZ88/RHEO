@@ -7,13 +7,11 @@ import { PageTitle } from './components/PageTitle';
 import confetti from 'canvas-confetti';
 import { navigateTo, scrollToSection } from './lib/deepNav';
 import { resolvePageRoute } from './lib/smartSearchPages';
-import { SidebarLogo } from './components/SidebarLogo';
 import Sidebar, { SIDEBAR_ITEMS } from './components/Sidebar';
-import { openSmartSearch, type SearchHit } from './hooks/useAppSmartSearch';
 import {
-  Home, Monitor, Globe, Code2, BarChart3, Settings, Play, Pause, Clock,
-  Download, Trash2, Award, Zap, Users, Info, Database, CheckCircle, XCircle, AlertTriangle,
-  Shield, ShieldAlert, ToggleLeft, ToggleRight, PieChart, CreditCard,
+  Code2, BarChart3, Settings, Play, Pause, Clock,
+  Download, Trash2, Zap, Database, AlertTriangle,
+  Shield, CreditCard,
   ChevronLeft, ChevronRight, Calendar, Terminal, Save, Clock4,
   X, FolderTree, Bot, Minus, HelpCircle, Settings2, Moon, FileText, BookOpen,
   Wallet, GraduationCap, Activity, Smartphone, Brain, HeartHandshake, Sparkles, Trophy,
@@ -424,7 +422,7 @@ function App() {
     logCount: number;
   }>({ type: 'none', working: false, path: '', logCount: 0 });
   const [showStorageDetails, setShowStorageDetails] = useState(false);
-  const [terminalProjectInfo, setTerminalProjectInfo] = useState<{ name: string; path: string }>({ name: '', path: '' });
+  const [terminalProjectsetTerminalProjectInfo] = useState<{ name: string; path: string }>({ name: '', path: '' });
   const [provisionStatus, setProvisionStatus] = useState<'idle' | 'provisioning' | 'provisioned'>('idle');
 
   // Gap Indicator Banner State
