@@ -5739,11 +5739,11 @@ function createWindow() {
         } catch (err) { /* ignore */ }
     }
 
-    // Toggle DevTools with Ctrl+Shift+I
+    // Toggle DevTools with Ctrl+Shift+I (native + app)
     mainWindow.webContents.on('before-input-event', (event, input) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             if (input.key === 'I' && input.control && input.shift) {
-                event.preventDefault();
+                // Don't preventDefault — let native DevTools open too
                 if (mainWindow.webContents.isDevToolsOpened()) {
                     mainWindow.webContents.closeDevTools();
                 } else {
