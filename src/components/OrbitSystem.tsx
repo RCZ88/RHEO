@@ -1,8 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  OrbitScene, OrbitSystem, GalaxyView, CategorySidebar, CategoryDropdown,
-  PlanetLegend, PlanetDetailPanel, CameraTracker, PlanetTracker,
-  SolarSystemScene, GLCleanup, FPSCounter, FPSLineGraph, Stars
+  OrbitScene
 } from './orbit';
 import {
   computeSolarSystems, computeWebsiteSolarSystems, computePlanets, computeWebsitePlanets,
@@ -186,7 +184,7 @@ export default function OrbitSystem({ logs, appColors, categoryOverrides, websit
   const handlePlanetPositionUpdate = (name: string, position: THREE.Vector3) => { if (!isMountedRef.current) return; planetPositionsRef.current.set(name, position.clone()); };
 
   // Delegate all rendering to OrbitScene sub-component
-  return <OrbitSceneView
+  return <OrbitScene
     isPaused={isPaused} setIsPaused={setIsPaused} speed={speed} setSpeed={setSpeed}
     speedOptions={[0.25, 0.5, 1, 2, 4]} selectedPlanet={selectedPlanet} setSelectedPlanet={setSelectedPlanet}
     textureRefreshKey={textureRefreshKey} setTextureRefreshKey={setTextureRefreshKey}
@@ -196,9 +194,8 @@ export default function OrbitSystem({ logs, appColors, categoryOverrides, websit
     currentCategory={currentCategory} setCurrentCategory={setCurrentCategory}
     selectedPeriod={selectedPeriod} setSelectedPeriod={setSelectedPeriod} activePeriod={activePeriod}
     selectedSystem={selectedSystem} setSelectedSystem={setSelectedSystem}
-    categoryDropdownOpen={categoryDropdownOpen} setCategoryDropdownOpen={setCategoryDropdownOpen}
     legendExpanded={legendExpanded} setLegendExpanded={setLegendExpanded}
-    showPerf={showPerf} setShowPerf={setShowPerf} perfExpanded={perfExpanded} setPerfExpanded={setPerfExpanded}
+    showPerf={showPerf} setShowPerf={setShowPerf}
     showInfo={showInfo} setShowInfo={setShowInfo} minTimeFilter={minTimeFilter} setMinTimeFilter={setMinTimeFilter}
     searchQuery={searchQuery} setSearchQuery={setSearchQuery} animationSpeed={animationSpeed}
     controlsRef={controlsRef} trackedPlanetRef={trackedPlanetRef} isAnimatingRef={isAnimatingRef}
@@ -215,9 +212,4 @@ export default function OrbitSystem({ logs, appColors, categoryOverrides, websit
     onPeriodChange={onPeriodChange} animateCamera={animateCamera}
     handlePlanetPositionUpdate={handlePlanetPositionUpdate}
   />;
-}
-
-// ── Thin render wrapper ──
-function OrbitSceneView(props: any) {
-  return <>{props.viewMode === 'galaxy' ? <GalaxyView {...props} /> : <SolarSystemScene {...props} />}</>;
 }
