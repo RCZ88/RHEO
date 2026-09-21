@@ -11,11 +11,11 @@ import Sidebar, { SIDEBAR_ITEMS } from './components/Sidebar';
 import {
   Code2, BarChart3, Settings, Play, Pause, Clock,
   Download, Trash2, Zap, Database, AlertTriangle,
-  Shield, CreditCard,
-  ChevronLeft, ChevronRight, Calendar, Terminal, Save, Clock4,
-  X, FolderTree, Bot, Minus, HelpCircle, Settings2, Moon, FileText, BookOpen,
+  Shield,
+  ChevronLeft, ChevronRight, Save,
+  Moon, FileText, BookOpen,
   Wallet, GraduationCap, Activity, Smartphone, Brain, HeartHandshake, Sparkles, Trophy,
-  Bed, UserCheck, Bell, Command, Folder, LayoutDashboard, AlertCircle, RotateCcw, Bug,
+  Bed, UserCheck, Bell, Command, LayoutDashboard, AlertCircle, RotateCcw, Bug,
 } from 'lucide-react';
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
 import DevTriggerPanel from './components/DevTriggerPanel';
@@ -282,7 +282,9 @@ import { TodoMiniPage } from './features/todo/TodoMiniPage';
 import { GapFillModal } from './components/external/GapFillModal';
 import { ManualAssignModal } from './components/external/ManualAssignModal';
 import { fillGapWithSegments } from './lib/external/gaps';
-import { TutorialProvider } from './contexts/TutorialContext';
+import {
+  TutorialProvider,
+} from "lucide-react"; from './contexts/TutorialContext';
 import TutorialOverlay from './components/TutorialOverlay';
 
 // DEBUG: Global hashchange listener
