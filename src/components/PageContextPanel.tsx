@@ -366,16 +366,6 @@ export default function PageContextPanel({ projectPath }: { projectPath?: string
     load();
   }, [load]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
-
   const allEntries = useMemo(() => {
     if (!markdown) return [];
     return parsePageContext(markdown);
