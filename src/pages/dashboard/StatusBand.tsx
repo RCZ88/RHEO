@@ -121,7 +121,7 @@ export function StatusBand({
   }, [transitions, now]);
 
   const isTracking = isReal === true;
-  const isWaylandDegraded = !isTracking && currentAppName === '';
+  const isWaylandDegraded = !isTracking && currentAppName === '' && process.env.XDG_SESSION_TYPE === 'wayland';
 
   return (
     <BlurFade delay={0} duration={0.3}>
