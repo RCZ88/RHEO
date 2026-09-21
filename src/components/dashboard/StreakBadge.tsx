@@ -4,6 +4,7 @@
 // Sources: Trophy UI streak-badge + ReactBits CountUp pattern
 // ============================================================
 
+import { motion } from 'framer-motion';
 import { Flame, Zap } from 'lucide-react';
 
 interface StreakBadgeProps {
@@ -43,12 +44,11 @@ export function StreakBadge({
       className={`inline-flex flex-col items-center ${s.container} rounded-xl bg-amber-500/[0.08] border border-amber-500/20`}
     >
       <div className="flex items-center gap-1.5">
-          <Flame
-            size={s.icon}
-            className={isHot ? 'text-amber-400' : 'text-amber-500/60'}
-            strokeWidth={isOnFire ? 2.5 : 2}
-          />
-        </div>
+        <Flame
+          size={s.icon}
+          className={isHot ? 'text-amber-400' : 'text-amber-500/60'}
+          strokeWidth={isOnFire ? 2.5 : 2}
+        />
         <span className={`${s.text} font-bold text-amber-400 font-mono tabular-nums`}>
           {streak}
         </span>

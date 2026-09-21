@@ -98,6 +98,7 @@ const configMap: Record<FeatureCardType, { icon: any; color: string; bg: string;
             {!(data.balance || data.hours || data.progress || data.nextEvent || data.count || data.value || data.seconds) ? (
               <p className="text-sm text-zinc-500 mt-2">No live data</p>
             ) : null}
+            </div>
       </div>
 
       <div className="absolute inset-x-0 bottom-0 p-3 bg-zinc-950/90 border-t border-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between backdrop-blur-sm">
