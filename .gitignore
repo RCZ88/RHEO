@@ -188,3 +188,13 @@ public/cyber_assets.zip
 # nested backup dirs & incoming dumps � backups live outside git
 landing/prev-ver-backup/
 _incoming/
+
+# Backup/corrupt files from agent work
+*.broken
+*.corrupted
+*.orig
+*.bak
+*.backup
+*.bak.*
+src.old/
+.next.bak
