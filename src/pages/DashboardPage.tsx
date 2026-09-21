@@ -26,8 +26,6 @@ import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
 
 
 import { VCalendar } from '../components/ui/v-calendar';
-import { CardLibrary, loadCardLayout } from '../components/dashboard/CardLibrary';
-import type { DashboardLayoutConfig } from '../components/dashboard/WidgetRegistry';
 
 import { SectionHeader } from '../components/SectionHeader';
 import { GlassCard } from '../components/GlassCard';
@@ -2567,10 +2565,7 @@ export default function DashboardPage({
   // ── Platform filter state ──
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
-  const [showCardLibrary, setShowCardLibrary] = useState(false);
-  const [cardLayout, setCardLayout] = useState<DashboardLayoutConfig | null>(null);
   // Bumped after any save in the card library / widget grid so the live dashboard re-reads storage.
-  const [layoutSyncKey, setLayoutSyncKey] = useState(0);
   const bumpLayoutSync = useCallback(() => setLayoutSyncKey(k => k + 1), []);
 
   // Load card visibility (null = no custom layout yet → show the normal dashboard).
@@ -2813,7 +2808,7 @@ export default function DashboardPage({
 
   return (
     <PageShell page="dashboard" variant="dashboard" className="text-white">
-      <CurrentCanvas accent="var(--success)" render={renderStream} />
+      <CurrentCanvas accent="#34d399" render={renderStream} />
       <TimerResetOverlay trigger={resetTrigger} />
 
       {/* Platform Filter Toggle */}
