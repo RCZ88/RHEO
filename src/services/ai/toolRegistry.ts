@@ -571,6 +571,47 @@ function registerAll() {
       category: 'email',
     };
   })
+
+  // ========== Dashboard Cards ==========
+  r('createDashboardCard', 'Create an interactive shortcut card on the dashboard for quick access to features', {
+    title: p('string', 'Card title (e.g., "Focus Session", "Finance Overview")', { required: true }),
+    targetRoute: p('string', 'Route to navigate to when clicked (e.g., "/workspace", "/finance")', { required: true }),
+    cardType: p('string', 'Type of card: shortcut, stats, or widget', { enum: ['shortcut', 'stats', 'widget'], required: true }),
+    icon: p('string', 'Emoji or icon identifier (optional)', {}),
+    description: p('string', 'Brief description of what this card does (optional)', {}),
+  }, 'confirm', 'dashboard', async (params) => {
+    const gate = await checkAccess('dashboard');
+    if (!gate.allowed) return { _privacy: true, message: gate.message };
+
+    const cardData = {
+      id: `dash_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      title: params.title,
+      targetRoute: params.targetRoute,
+      type: params.cardType,
+      icon: params.icon || '📄',
+      description: params.description || '',
+      createdAt: new Date().toISOString(),
+    };
+
+    window.dispatchEvent(new CustomEvent('rheo:add-dashboard-card', { detail: cardData }));
+
+    return {
+      success: true,
+      cardId: cardData.id,
+      message: `Created dashboard card "${params.title}" linking to ${params.targetRoute}`
+    };
+  })
+
+  r('navigateToPage', 'Navigate the user to a specific page/route in the application', {
+    route: p('string', 'The route path (e.g., /finance, /learn, /workspace, /goals)', { required: true }),
+  }, 'read', 'navigation', async (params) => {
+    window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { route: params.route } }));
+    return {
+      success: true,
+      navigatedTo: params.route,
+      message: `Navigated to ${params.route}`
+    };
+  })
 }
 
 registerAll()

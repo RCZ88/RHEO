@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import "./index.css";
 import { AnimatePresence, motion } from "framer-motion";
 import { useConsoleStore } from "./hooks/useConsoleStore";
 import { THEMES, uid } from "./lib/data";
@@ -10,10 +9,7 @@ import { BottomBar, LeftSidebar, TabStrip } from "./components/Chrome";
 import { SplitView, TermPane } from "./components/Terminal";
 import { RightPanel } from "./components/Panels";
 import { NewTabModal, Palette, PresetsModal, RunCmdModal, SaveCmdModal, SaveWsModal, Toasts, WorkspacesModal } from "./components/Modals";
-import { AddPromptModal } from "./components/AddPromptModal";
 import { Check, Download, Maximize2, Pencil, Radio, Search, X } from "lucide-react";
-import type { CommandNote } from "./components/CommandNotesStore";
-import { commandNotes } from "./components/CommandNotesStore";
 
 type Modal = "palette" | "presets" | "workspaces" | "savews" | "newtab" | "savecmd" | "rename" | "find" | null;
 
@@ -25,12 +21,6 @@ export default function App() {
   const [rightOpen, setRightOpen] = useState(true);
   const [modal, setModal] = useState<Modal>(null);
   const [runCmd, setRunCmd] = useState<SavedCommand | null>(null);
-  const [notesModal, setNotesModal] = useState(false);
-  const [notes, setNotes] = useState<CommandNote[]>(() => commandNotes.list());
-  const [activeNoteId, setActiveNoteId] = useState<string>();
-  const [notesSaving, setNotesSaving] = useState(false);
-  const [notesSavingLabel, setNotesSavingLabel] = useState("");
-  const [selectedCmd, setSelectedCmd] = useState<{ command: string; section: string; sectionTitle: string } | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [saveCmdInitial, setSaveCmdInitial] = useState("");
   const [renameG, setRenameG] = useState<string | null>(null);
@@ -69,7 +59,7 @@ export default function App() {
     const t = store.activeTab;
     switch (action) {
       case "new-tab": setModal("newtab"); break;
-      case "close-tab": if (t) { store.closeTab(t.id); notify(`Closed "${t.label}"`); } break;
+      case "close-tab": if (t) { store.closeTab(t.id); notify(`Closed “${t.label}”`); } break;
       case "rename": if (t) { setRenameDraft(t.label); setModal("rename"); } break;
       case "pin-tab": if (t) { store.togglePin(t.id); notify(t.pinned ? "Unpinned" : "Pinned to front"); } break;
       case "next-tab": store.cycleTab(1); break;
@@ -91,6 +81,9 @@ export default function App() {
       case "save-workspace": setModal("savews"); break;
       case "save-cmd": setSaveCmdInitial(""); setModal("savecmd"); break;
       case "find-history": store.setRightTab("history"); setRightOpen(true); notify("History search focused"); break;
+      case "find": if (t) { setFindOpen(true); setFindQ(""); notify("Find mode active"); } break;
+      case "balance": if (t) store.balanceAction(t.id); notify("Panes balanced"); break;
+      case "export-transcript": exportTranscript(); break;
       case "cycle-theme": {
         const i = THEMES.findIndex((x) => x.id === store.appearance.themeId);
         const n = THEMES[(i + 1) % THEMES.length];
@@ -112,7 +105,6 @@ export default function App() {
       if (e.key === "Escape") {
         if (store.zoom) { store.setZoom(null); return; }
         if (findOpen) { setFindOpen(false); setFindQ(""); return; }
-        if (notesModal) { setNotesModal(false); return; }
         return;
       }
       if (inField && !inTerm) return;
@@ -129,7 +121,7 @@ export default function App() {
     };
     window.addEventListener("keydown", fn, true);
     return () => window.removeEventListener("keydown", fn, true);
-  }, [store.shortcuts, doAction, store.zoom, findOpen, store.setZoom, notesModal]);
+  }, [store.shortcuts, doAction, store.zoom, findOpen, store.setZoom]);
 
   const t = store.activeTab;
   const zoomedPane = store.zoom && t?.id === store.zoom.tabId ? t.panes[store.zoom.paneId] : null;
@@ -153,40 +145,11 @@ export default function App() {
     notify("Transcript exported (.md)");
   };
 
-  const saveNoteFn = useCallback((note: CommandNote) => {
-    setNotesSaving(true);
-    setNotesSavingLabel("Saving note...");
-    setTimeout(() => {
-      const saved = commandNotes.add({
-        command: note.command,
-        section: note.section,
-        sectionTitle: note.sectionTitle,
-        title: note.title,
-        summary: note.summary,
-        what: note.what,
-        when: note.when,
-        gotcha: note.gotcha,
-        params: note.params,
-        safety: note.safety,
-        related: note.related,
-      }, note.aiRaw);
-      setNotes((ns) => {
-        const i = ns.findIndex((n) => n.id === saved.id);
-        if (i >= 0) { const c = [...ns]; c[i] = saved; return c; }
-        return [saved, ...ns];
-      });
-      setActiveNoteId(saved.id);
-      setNotesSaving(false);
-      setNotesSavingLabel("");
-      notify(`Saved note "${saved.title}"`);
-    }, 600);
-  }, []);
-
   const matchCount = findQ && t ? Object.values(t.panes).reduce((a, p) => a + p.lines.filter((l) => l.text.toLowerCase().includes(findQ.toLowerCase())).length, 0) : 0;
 
   return (
     <div className={store.appearance.glow ? "term-glow h-full flex flex-col" : "h-full flex flex-col"} style={{ background: theme.bg, ...cssVars } as React.CSSProperties}>
-      <div className="pointer-events-none fixed inset-0 z-0" style={{ background: `radial-gradient(900px 400px at 15% -5%, ${theme.accent}14, transparent 60%)` }} />
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ background: `radial-gradient(900px 400px at 15% -5%, ${theme.accent}14, transparent 60%), radial-gradient(800px 380px at 95% 0%, ${theme.accent2}12, transparent 60%)` }} />
       <a href="#terminal-main" className="sr-only focus:not-sr-only focus:absolute focus:z-[70] focus:px-3 focus:py-2 focus:rounded-lg" style={{ background: "var(--t-accent)", color: "#fff" }}>Skip to terminal</a>
       <div className="relative z-10 flex flex-col h-full min-h-0">
         <TitleBar
@@ -197,46 +160,19 @@ export default function App() {
           onPresets={() => setModal("presets")}
           onNewTab={() => setModal("newtab")}
           leftOpen={leftOpen} setLeftOpen={setLeftOpen} rightOpen={rightOpen} setRightOpen={setRightOpen}
-          demoMode={store.demoMode} setDemoMode={store.setDemoMode} sidebarWidth={store.sidebarWidth} setSidebarWidth={store.setSidebarWidth} rightPanelWidth={store.rightPanelWidth} setRightPanelWidth={store.setRightPanelWidth}
-          onSidebarToggle={() => setLeftOpen((v) => !v)}
-          onInspectorToggle={() => setRightOpen((v) => !v)}
-          onSidebarWidthUp={() => store.setSidebarWidth(Math.min(600, store.sidebarWidth + 20))}
-          onSidebarWidthDown={() => store.setSidebarWidth(Math.max(120, store.sidebarWidth - 20))}
-          onInspectorWidthUp={() => store.setRightPanelWidth(Math.min(600, store.rightPanelWidth + 20))}
-          onInspectorWidthDown={() => store.setRightPanelWidth(Math.max(120, store.rightPanelWidth - 20))}
-          onRename={() => doAction("rename")}
         />
         <TabStrip store={store} onNewTab={() => setModal("newtab")} />
         <div className="flex-1 flex min-h-0 gap-2 px-3 pb-1">
           <AnimatePresence initial={false}>
             {leftOpen && (
-              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: store.sidebarWidth, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden lg:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
-                <div className={`${store.sidebarWidth}px h-full`}>
+              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: 264, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden lg:block shrink-0 rounded-2xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+                <div className="w-[264px] h-full">
                   <LeftSidebar store={store} onPresets={() => setModal("presets")} onWorkspaces={() => setModal("workspaces")} onNewTab={() => setModal("newtab")} />
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Sidebar drag handle */}
-          {leftOpen && (
-            <div
-              onMouseDown={(e) => {
-                e.preventDefault(); e.stopPropagation();
-                const startX = e.clientX;
-                const startW = store.sidebarWidth;
-                const move = (ev: MouseEvent) => {
-                  const w = Math.max(120, Math.min(600, startW + (ev.clientX - startX)));
-                  store.setSidebarWidth(w);
-                };
-                const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
-                window.addEventListener("mousemove", move);
-                window.addEventListener("mouseup", up);
-              }}
-              className="shrink-0 w-1.5 cursor-col-resize hover:bg-[var(--t-accent)] transition-colors rounded-full"
-              style={{ background: "var(--t-border)", height: "calc(100vh - 49px)" }}
-            />
-          )}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 rounded-xl border p-2" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-panel) 55%, transparent)" }}>
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 rounded-2xl border p-2" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-panel) 55%, transparent)" }}>
             <div className="flex items-center gap-1.5 px-1 pb-2 shrink-0 flex-wrap">
               <span className="flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: `${t?.color ?? theme.accent}15`, color: t?.color ?? theme.fg }}>
                 <span className="w-1.5 h-1.5 rounded-full anim-pulse-dot" style={{ background: t?.color }} />{t?.label}
@@ -256,7 +192,7 @@ export default function App() {
               <div className="flex items-center gap-2 px-1 pb-2 shrink-0 anim-fadeUp">
                 <div className="relative flex-1 max-w-xs">
                   <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
-                  <input autoFocus value={findQ} onChange={(e) => setFindQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { setFindOpen(false); setFindQ(""); } }} placeholder="Find in all panes..." aria-label="find in panes" className="w-full h-8 pl-8 pr-3 rounded-lg border text-[12px] outline-none mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-accent)", color: "var(--t-fg)" }} />
+                  <input autoFocus value={findQ} onChange={(e) => setFindQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { setFindOpen(false); setFindQ(""); } }} placeholder="Find in all panes…" aria-label="find in panes" className="w-full h-8 pl-8 pr-3 rounded-lg border text-[12px] outline-none mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-accent)", color: "var(--t-fg)" }} />
                 </div>
                 <span className="text-[11px] mono" style={{ color: "var(--t-muted)" }}>{findQ ? `${matchCount} match${matchCount === 1 ? "" : "es"}` : "type to highlight"}</span>
                 <button onClick={() => { setFindOpen(false); setFindQ(""); }} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10" style={{ color: "var(--t-muted)" }} aria-label="close find"><X size={13} /></button>
@@ -266,30 +202,11 @@ export default function App() {
               {t && <SplitView store={store} tab={t} node={t.layout} findQ={findQ} onFind={() => setFindOpen(true)} />}
             </div>
           </div>
-          {/* Right panel drag handle */}
-          {rightOpen && (
-                  <div
-               onMouseDown={(e) => {
-                 e.preventDefault(); e.stopPropagation();
-                 const startX = e.clientX;
-                 const startW = store.rightPanelWidth;
-                 const move = (ev: MouseEvent) => {
-                   const w = Math.max(120, Math.min(600, startW + (ev.clientX - startX)));
-                   store.setRightPanelWidth(w);
-                 };
-                 const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
-                 window.addEventListener("mousemove", move);
-                 window.addEventListener("mouseup", up);
-               }}
-               className="shrink-0 w-1.5 cursor-col-resize hover:bg-[var(--t-accent)] transition-colors rounded-full"
-               style={{ background: "var(--t-border)", height: "calc(100vh - 49px)" }}
-             />
-          )}
           <AnimatePresence initial={false}>
             {rightOpen && (
-              <motion.div key="right" initial={{ width: 0, opacity: 0 }} animate={{ width: store.rightPanelWidth, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden md:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
-                <div className={`${store.rightPanelWidth}px h-full`}>
-                  <RightPanel store={store} notify={notify} groupCtl={{ renameG, setRenameG, gDraft, setGDraft }} notes={notes} activeNoteId={activeNoteId} setActiveNoteId={setActiveNoteId} notesSaving={notesSaving} notesSavingLabel={notesSavingLabel} onOpenNotesModal={() => { setSelectedCmd(null); setNotesModal(true); }} selectedCmd={selectedCmd} />
+              <motion.div key="right" initial={{ width: 0, opacity: 0 }} animate={{ width: 330, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden md:block shrink-0 rounded-2xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+                <div className="w-[330px] h-full">
+                  <RightPanel store={store} notify={notify} groupCtl={{ renameG, setRenameG, gDraft, setGDraft }} />
                 </div>
               </motion.div>
             )}
@@ -311,14 +228,14 @@ export default function App() {
       </div>
       <div className="md:hidden">
         {!rightOpen && t && (
-          <button onClick={() => setRightOpen(true)} className="fixed bottom-12 right-3 z-40 h-10 px-3.5 rounded-xl text-white text-[12px] font-bold flex items-center gap-1.5" style={{ background: "color-mix(in srgb, var(--t-accent) 82%, black)" }}><Maximize2 size={13} />Inspector</button>
+          <button onClick={() => setRightOpen(true)} className="fixed bottom-12 right-3 z-40 h-10 px-3.5 rounded-xl text-white text-[12px] font-bold shadow-2xl flex items-center gap-1.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Maximize2 size={13} />Inspector</button>
         )}
         {rightOpen && (
           <>
             <div className="fixed inset-0 z-30 bg-black/50" onClick={() => setRightOpen(false)} />
             <motion.div initial={{ x: 340 }} animate={{ x: 0 }} exit={{ x: 340 }} className="fixed inset-y-0 right-0 w-[330px] max-w-[92vw] z-40 border-l overflow-hidden" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
               <div className="flex justify-end p-2"><button onClick={() => setRightOpen(false)} className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10" style={{ color: "var(--t-muted)" }} aria-label="close inspector"><X size={15} /></button></div>
-              <div className="h-[calc(100%-48px)]"><RightPanel store={store} notify={notify} groupCtl={{ renameG, setRenameG, gDraft, setGDraft }} notes={notes} activeNoteId={activeNoteId} setActiveNoteId={setActiveNoteId} notesSaving={notesSaving} notesSavingLabel={notesSavingLabel} onOpenNotesModal={() => { setSelectedCmd(null); setNotesModal(true); }} selectedCmd={selectedCmd} /></div>
+              <div className="h-[calc(100%-48px)]"><RightPanel store={store} notify={notify} groupCtl={{ renameG, setRenameG, gDraft, setGDraft }} /></div>
             </motion.div>
           </>
         )}
@@ -348,24 +265,13 @@ export default function App() {
         {modal === "savecmd" && <SaveCmdModal store={store} initial={saveCmdInitial} onClose={() => setModal(null)} notify={notify} />}
         {modal === "rename" && t && (
           <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: "rgba(3,5,10,.6)" }} onClick={() => setModal(null)} role="dialog" aria-modal="true" aria-label="rename tab">
-            <div className="w-full max-w-sm rounded-xl border p-5 anim-pop" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm rounded-2xl border p-5 anim-pop" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }} onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-2 mb-3"><Pencil size={15} style={{ color: "var(--t-accent)" }} /><span className="display font-bold text-[14px]" style={{ color: "var(--t-fg)" }}>Rename tab</span></div>
               <input autoFocus value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && renameDraft.trim()) { store.mutateTab(t.id, (x) => ({ ...x, label: renameDraft.trim().slice(0, 40) })); setModal(null); notify("Tab renamed"); } }} className="w-full h-10 px-3.5 rounded-xl border text-[13.5px] font-semibold outline-none mono" style={{ background: "var(--t-bg)", borderColor: t.color, color: "var(--t-fg)" }} />
               <button onClick={() => { if (renameDraft.trim()) { store.mutateTab(t.id, (x) => ({ ...x, label: renameDraft.trim().slice(0, 40) })); notify("Tab renamed"); } setModal(null); }} className="mt-3 w-full h-10 rounded-xl text-white text-[13px] font-bold flex items-center justify-center gap-2" style={{ background: t.color }}><Check size={15} />Rename</button>
               <div className="text-[10.5px] mono mt-2 text-center" style={{ color: "var(--t-muted)" }}>shortcut: {store.shortcuts.find((s) => s.action === "rename")?.keys}</div>
             </div>
           </div>
-        )}
-        {notesModal && (
-          <AddPromptModal
-            initialCommand={selectedCmd?.command ?? ""}
-            initialSection={selectedCmd?.section ?? ""}
-            initialSectionTitle={selectedCmd?.sectionTitle ?? ""}
-            onClose={() => setNotesModal(false)}
-            onSave={(note) => { saveNoteFn(note); setNotesModal(false); setSelectedCmd(null); }}
-            saving={notesSaving}
-            savingLabel={notesSavingLabel}
-          />
         )}
       </AnimatePresence>
       <AnimatePresence>

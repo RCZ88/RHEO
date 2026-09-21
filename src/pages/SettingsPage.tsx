@@ -566,12 +566,9 @@ export default function SettingsPage({
     terminalFind: { label: 'Find in Terminal', description: 'Search terminal output across all panes (Ctrl+Shift+F)', group: 'Terminal' },
     terminalSaveCmd: { label: 'Save Command', description: 'Save input as command (Ctrl+Shift+D)', group: 'Terminal' },
     terminalCycleTheme: { label: 'Cycle Theme', description: 'Rotate terminal themes (Ctrl+Shift+Y)', group: 'Terminal' },
-    terminalFindInPanes: { label: 'Find in Panes', description: 'Search in terminal find mode (Ctrl+Shift+T)', group: 'Terminal' },
+    terminalFindInPanes: { label: 'Find in Panes', description: 'Search in terminal find mode (Ctrl+Shift+J)', group: 'Terminal' },
     terminalBalance: { label: 'Balance Panes', description: 'Balance active pane sizes (Ctrl+Shift+Space)', group: 'Terminal' },
     terminalExport: { label: 'Export Transcript', description: 'Export terminal transcript (Ctrl+Shift+E)', group: 'Terminal' },
-    terminalSplitFind: { label: 'Split Find', description: 'Split find mode (Ctrl+Shift+J)', group: 'Terminal' },
-    terminalSplitFindHist: { label: 'Split Find History', description: 'Split find history (Ctrl+Shift+K)', group: 'Terminal' },
-    terminalEnter: { label: 'Terminal Enter', description: 'Confirm in terminal (Enter)', group: 'Terminal' },
     // Lyceum
     lyceumHome: { label: 'Lyceum - Go to Home', description: 'Navigate to home node (g h)', group: 'Lyceum' },
     lyceumLibrary: { label: 'Lyceum - Go to Library', description: 'Navigate to library node (g l)', group: 'Lyceum' },

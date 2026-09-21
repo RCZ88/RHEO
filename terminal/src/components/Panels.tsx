@@ -562,7 +562,7 @@ export function KeysPanel({ store, notify }: { store: Store; notify: (m: string)
         </Section>
       ))}
       <div className="flex gap-1.5">
-        <button onClick={() => { store.setShortcuts(DEFAULT_SHORTCUTS); notify("Keymap reset to defaults"); }} className="flex-1 h-8 rounded-xl border text-[11.5px] font-semibold" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>Reset defaults</button>
+        <button onClick={() => { store.setShortcuts(DEFAULT_SHORTCUTS); notify("Keymap reset to defaults"); }} className="flex-1 h-8 rounded-xl border text-[11.5px] font-semibold" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>Restore defaults</button>
         <button onClick={() => download("penguin-keymap.json", JSON.stringify(store.shortcuts, null, 2))} className="flex-1 h-8 rounded-xl border text-[11.5px] font-semibold flex items-center justify-center gap-1.5" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}><Download size={12} />Export keymap</button>
       </div>
     </div>

@@ -353,6 +353,29 @@ export default function DashboardPage({
   const stopwatchPausedRef = useRef(false); // is timer paused
   const prevTierRef = useRef<'productive' | 'neutral' | 'distracting' | null>(null);
 
+  // Dashboard custom cards state
+  const [customCards, setCustomCards] = useState<Array<{
+    id: string; title: string; type: 'shortcut' | 'stats' | 'widget';
+    targetRoute?: string; icon?: string; description?: string;
+  }>>([]);
+
+  useEffect(() => {
+    const handleAddCard = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) setCustomCards(prev => [...prev, detail]);
+    };
+    const handleNavigate = (e: Event) => {
+      const route = (e as CustomEvent).detail?.route;
+      if (route) navigate(route);
+    };
+    window.addEventListener('rheo:add-dashboard-card', handleAddCard as EventListener);
+    window.addEventListener('rheo:navigate', handleNavigate as EventListener);
+    return () => {
+      window.removeEventListener('rheo:add-dashboard-card', handleAddCard as EventListener);
+      window.removeEventListener('rheo:navigate', handleNavigate as EventListener);
+    };
+  }, [navigate]);
+
   // Track productivity sessions for saving to database
   const productivitySessionStartRef = useRef<number | null>(null);
   const productivitySessionAppRef = useRef<string | null>(null);
@@ -3260,6 +3283,43 @@ export default function DashboardPage({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Quick Access Cards — AI-created shortcuts */}
+      {customCards.length > 0 && (
+        <div className="mb-4">
+          <SectionHeader title="Quick Access" icon={<Sparkles size={14} />} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-3">
+            {customCards.map((card) => (
+              <motion.div
+                key={card.id}
+                whileHover={{ scale: 1.02, y: -4 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => card.targetRoute && navigate(card.targetRoute)}
+                className={`
+                  p-6 rounded-xl border cursor-pointer transition-colors
+                  ${card.type === 'shortcut'
+                    ? 'bg-zinc-900 border-zinc-800 hover:border-pink-500/50'
+                    : 'bg-zinc-900/50 border-zinc-800'}
+                `}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <span className="text-2xl">{card.icon || '📄'}</span>
+                  <span className="text-xs uppercase tracking-wider text-zinc-500">{card.type}</span>
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">{card.title}</h3>
+                {card.description && (
+                  <p className="text-sm text-zinc-400 line-clamp-2">{card.description}</p>
+                )}
+                {card.targetRoute && (
+                  <div className="mt-4 text-xs text-pink-500 font-medium">
+                    Navigate to {card.targetRoute} →
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

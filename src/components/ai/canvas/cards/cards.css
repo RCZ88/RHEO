@@ -1,5 +1,17 @@
 
 /* ═══════════════════════════════════════════════════════════════
+   AI CANVAS CARD VISIBILITY FIX
+   Ensures AI-generated cards are always visible with proper z-index
+   ═══════════════════════════════════════════════════════════════ */
+
+.canvas-card {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 50 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    DEEP FIELD — Card System
    Each card type gets its own accent light
    ═══════════════════════════════════════════════════════════════ */

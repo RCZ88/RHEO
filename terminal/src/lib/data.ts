@@ -58,6 +58,9 @@ export const DEFAULT_SHORTCUTS: Shortcut[] = [
   { id: "s-clear", action: "clear", label: "Clear pane", keys: "Ctrl+L", description: "Clear active pane output", category: "General" },
   { id: "s-workspace", action: "save-workspace", label: "Save workspace", keys: "Ctrl+Shift+S", description: "Snapshot tabs as workspace", category: "Workspace" },
   { id: "s-find", action: "find-history", label: "Search history", keys: "Ctrl+Shift+F", description: "Search every command run", category: "General" },
+  { id: "s-find-in-panes", action: "find", label: "Find in panes", keys: "Ctrl+Shift+J", description: "Search terminal output", category: "General" },
+  { id: "s-balance", action: "balance", label: "Balance panes", keys: "Ctrl+Shift+Space", description: "Balance active pane sizes", category: "Splits" },
+  { id: "s-export", action: "export-transcript", label: "Export transcript", keys: "Ctrl+Shift+E", description: "Export terminal transcript", category: "General" },
   { id: "s-save-cmd", action: "save-cmd", label: "Save command", keys: "Ctrl+Shift+D", description: "Save input as command", category: "General" },
   { id: "s-cycle-theme", action: "cycle-theme", label: "Cycle theme", keys: "Ctrl+Shift+Y", description: "Rotate terminal themes", category: "Appearance" },
 ];

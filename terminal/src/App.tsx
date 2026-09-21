@@ -81,6 +81,9 @@ export default function App() {
       case "save-workspace": setModal("savews"); break;
       case "save-cmd": setSaveCmdInitial(""); setModal("savecmd"); break;
       case "find-history": store.setRightTab("history"); setRightOpen(true); notify("History search focused"); break;
+      case "find": if (t) { setFindOpen(true); setFindQ(""); notify("Find mode active"); } break;
+      case "balance": if (t) store.balanceAction(t.id); notify("Panes balanced"); break;
+      case "export-transcript": exportTranscript(); break;
       case "cycle-theme": {
         const i = THEMES.findIndex((x) => x.id === store.appearance.themeId);
         const n = THEMES[(i + 1) % THEMES.length];

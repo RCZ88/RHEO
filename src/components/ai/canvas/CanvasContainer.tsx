@@ -17,6 +17,23 @@ import type { CanvasSnapshot } from '../../../services/canvasPersistence'
 
 const PAN_STORAGE_KEY = 'rheo-canvas-pan-zoom'
 
+function getSpawnPosition(): { x: number; y: number } {
+  const container = document.querySelector('.dk-canvas-container')
+  if (!container) return { x: 100, y: 100 }
+
+  const { width, height } = container.getBoundingClientRect()
+  const centerX = width / 2 - 160
+  const centerY = height / 2 - 100
+
+  const offsetX = (Math.random() - 0.5) * 100
+  const offsetY = (Math.random() - 0.5) * 100
+
+  return {
+    x: Math.max(0, Math.min(width - 320, centerX + offsetX)),
+    y: Math.max(0, Math.min(height - 200, centerY + offsetY))
+  }
+}
+
 interface CanvasContainerProps {
   cards: CanvasCard[]
   onMoveCard: (id: string, pos: { x: number; y: number }) => void

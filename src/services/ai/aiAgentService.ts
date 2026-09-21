@@ -220,6 +220,9 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
             console.log(`[AiAgent] Tool ${toolName}: action result, _executed=${result._executed}`)
           }
           console.log(`[AiAgent] Tool ${toolName}: completed, result type=${typeof result}`)
+          if (result && result.success && toolName === 'createDashboardCard') {
+            console.log('[AiAgent] Dashboard card created:', result.cardId)
+          }
           results.push({ toolCallId: tc.id, toolName, result })
           this.progressCallback?.({ round, totalRounds: this.config.maxRounds, toolName, toolArgs: args, status: 'completed', message: `Tool completed: ${toolName}` })
         } catch (err: any) {
