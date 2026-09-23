@@ -156,6 +156,7 @@
   z-index: 2;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 10px 12px 6px;
   min-height: 32px;
@@ -190,12 +191,12 @@
 }
 
 .dk-card-title {
-  flex: 1;
   font: 600 var(--dk-text-xs)/1.3 var(--dk-sans);
   color: var(--dk-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .dk-card-meta {
@@ -211,6 +212,9 @@
   gap: 2px;
   opacity: 0;
   transition: opacity var(--dk-dur-fast) var(--dk-ease-out);
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 .dk-canvas-card:hover .dk-canvas-card-actions,
 .dk-card:hover .dk-card-actions { opacity: 1; }
@@ -218,8 +222,8 @@
 /* Floating actions (response cards with hidden header) */
 .dk-canvas-card-actions.floating {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   z-index: 10;
   opacity: 0;
 }

@@ -50,28 +50,28 @@
 }
 
 /* Dot grid — painted on the GRID LAYER (not a separate element: no
-   .dk-canvas-grid node exists in CanvasGrid.tsx), so dots pan + zoom
-   with the cards for free via the layer transform. */
-.dk-canvas-world,
-.dk-canvas-grid-layer {
-  position: absolute;
-  inset: 0;
-  transform-origin: 0 0;
-  will-change: transform;
-  z-index: 1;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1.5px);
-  background-size: var(--dk-cell) var(--dk-cell);
-}
+    .dk-canvas-grid node exists in CanvasGrid.tsx), so dots pan + zoom
+    with the cards for free via the layer transform. */
+  .dk-canvas-world,
+  .dk-canvas-grid-layer {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+    z-index: 1;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1.5px);
+    background-size: var(--dk-cell) var(--dk-cell);
+  }
 
-/* Dot grid — subtle spatial reference */
-.dk-canvas-grid {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px);
-  background-size: var(--dk-cell) var(--dk-cell);
-  pointer-events: none;
-  z-index: 0;
-}
+  /* Dot grid — subtle spatial reference */
+  .dk-canvas-grid {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.10) 1px, transparent 1px);
+    background-size: var(--dk-cell) var(--dk-cell);
+    pointer-events: none;
+    z-index: 0;
+  }
 
 /* ── Empty states ─────────────────────────────────────────────── */
 
@@ -389,30 +389,34 @@
 .dk-canvas-card-header {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 0 8px;
   height: 28px;
   border-bottom: 1px solid var(--dk-border-subtle);
   user-select: none;
+  position: relative;
 }
 .dk-canvas-card-type {
-  flex: 1;
   font: 600 10px/1 var(--dk-sans);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--dk-text-muted);
-  text-align: left;
+  text-align: center;
 }
 .dk-canvas-card-actions {
   display: flex;
   align-items: center;
   gap: 2px;
   flex: none;
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 .dk-canvas-card-actions.floating {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 4px;
+  right: 4px;
   z-index: 5;
   display: flex;
   align-items: center;
@@ -864,8 +868,14 @@
 
 /* Dot grid — dark dots on paper */
 html.light .dk-canvas-grid {
-  background-image: radial-gradient(circle, rgba(28,25,23,0.10) 1px, transparent 1px);
-}
+   background-image: radial-gradient(circle, rgba(28,25,23,0.10) 1px, transparent 1px);
+ }
+
+ /* Light mode — grid-layer dots on paper */
+ html.light .dk-canvas-world,
+ html.light .dk-canvas-grid-layer {
+   background-image: radial-gradient(circle, rgba(28,25,23,0.10) 1px, transparent 1.5px);
+ }
 
 /* Film grain — lighten blend on paper */
 html.light .dk-canvas::after,
@@ -941,6 +951,14 @@ html.light .dk-zoom-controls { background: rgba(255, 255, 255, 0.92); }
   position: fixed;
   inset: 12px;
   z-index: 30;
+}
+
+/* Dotted background layer — sits behind all content */
+.dk-canvas-dot-pattern {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* Toolbar — top-center pill (mirrors .dk-marquee chrome) */

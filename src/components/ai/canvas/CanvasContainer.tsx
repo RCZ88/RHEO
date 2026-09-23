@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { DotPattern } from '../../ui/dot-pattern'
 import { CanvasGrid } from './CanvasGrid'
 import { CanvasInput } from './CanvasInput'
 import { SaveIndicator } from './SaveIndicator'
@@ -341,6 +342,7 @@ export function CanvasContainer({
 
   return (
     <div ref={containerRef} className={`dk-canvas-container ${isFullscreen ? 'fullscreen' : ''}`}>
+      <DotPattern className="dk-canvas-dot-pattern" opacity={0.08} radius={1.5} gap={24} />
       <SaveIndicator status={saveStatus} />
 
       {showManager && onLoadCanvas && (
