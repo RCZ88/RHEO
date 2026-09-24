@@ -46,9 +46,9 @@ export interface DashboardLayoutConfig {
 
 /** Default layout — reproduces current dashboard 1:1 */
 export const DEFAULT_LAYOUT: DashboardLayoutConfig = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   columns: 12,
-  rows: 8,
+  rows: 24,
   widgetOrder: [
     'status-band',
     'schedule-hero',
@@ -66,6 +66,14 @@ export const DEFAULT_LAYOUT: DashboardLayoutConfig = {
     'momentum-hero',
     'follow-through',
     'vcalendar',
+    'ai-usage',
+    'console-widget',
+    'finance-widget',
+    'learn-widget',
+    'browser-widget',
+    'brain-widget',
+    'covenant-widget',
+    'health-widget',
   ],
   widgetVisibility: {
     'status-band': true,
@@ -84,6 +92,14 @@ export const DEFAULT_LAYOUT: DashboardLayoutConfig = {
     'momentum-hero': true,
     'follow-through': false,
     'vcalendar': false,
+    'ai-usage': true,
+    'console-widget': true,
+    'finance-widget': true,
+    'learn-widget': true,
+    'browser-widget': true,
+    'brain-widget': true,
+    'covenant-widget': true,
+    'health-widget': true,
   },
   gridPositions: {
     'status-band': { col: 0, row: 0, colSpan: 8, rowSpan: 2 },
@@ -102,6 +118,14 @@ export const DEFAULT_LAYOUT: DashboardLayoutConfig = {
     'momentum-hero': { col: 0, row: 14, colSpan: 6, rowSpan: 2 },
     'follow-through': { col: 6, row: 14, colSpan: 6, rowSpan: 2 },
     'vcalendar': { col: 0, row: 16, colSpan: 4, rowSpan: 3 },
+    'ai-usage': { col: 0, row: 20, colSpan: 4, rowSpan: 2 },
+    'console-widget': { col: 4, row: 20, colSpan: 4, rowSpan: 2 },
+    'finance-widget': { col: 8, row: 20, colSpan: 4, rowSpan: 2 },
+    'learn-widget': { col: 0, row: 22, colSpan: 3, rowSpan: 2 },
+    'browser-widget': { col: 3, row: 22, colSpan: 3, rowSpan: 2 },
+    'brain-widget': { col: 6, row: 22, colSpan: 3, rowSpan: 2 },
+    'covenant-widget': { col: 9, row: 22, colSpan: 3, rowSpan: 2 },
+    'health-widget': { col: 0, row: 24, colSpan: 6, rowSpan: 2 },
   },
 };
 

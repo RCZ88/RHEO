@@ -13,7 +13,7 @@ import {
   LayoutDashboard, ChevronDown, Trash2, RotateCcw, Eye, ArrowUpRight,
   Activity, Calendar, Sparkles, Target, AlertCircle, Zap, BarChart3,
   Pin, Moon, Brain, Orbit, Clock, Flame, ArrowRight, CalendarDays,
-  Split,
+  Split, ChevronUp, Grid3X3,
 } from 'lucide-react';
 import {
   WidgetRegistry,
@@ -614,26 +614,6 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
         </div>
       </div>
 
-      {/* ── Preview toggle button ── */}
-      {!editMode && (
-        <button onClick={() => setPreviewMode(true)}
-          className="fixed bottom-6 right-[88px] z-50 flex min-h-[48px] min-w-[48px] items-center justify-center rounded-full border border-[var(--ws-border)] bg-[var(--ws-surface-raised)] text-[var(--text-secondary)] shadow-lg transition-all hover:border-[var(--page-accent)] hover:text-[var(--page-accent)]"
-          aria-label="Preview dashboard"
-        >
-          <Eye size={20} />
-        </button>
-      )}
-
-      {/* ── Edit toggle button (always visible) ── */}
-      {!editMode && !previewMode && (
-        <button onClick={enterEditMode}
-          className="fixed bottom-6 right-6 z-50 flex min-h-[48px] min-w-[48px] items-center justify-center rounded-full border border-[var(--ws-border)] bg-[var(--ws-surface-raised)] text-[var(--text-secondary)] shadow-lg transition-all hover:border-[var(--page-accent)] hover:text-[var(--page-accent)]"
-          aria-label="Edit layout"
-        >
-          <Settings2 size={20} />
-        </button>
-      )}
-
       {/* ── Preview overlay ── */}
       {previewMode && (
         <div className="fixed inset-0 z-[100] bg-[var(--ws-surface)] overflow-auto">
@@ -687,14 +667,16 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
               <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Columns
               </span>
-              <div className="flex items-center gap-1" role="group" aria-label="Column count">
-                    {[4, 6, 8, 12].map(n => (
+              <div className="flex items-center gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] p-0.5">
+                {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
                   <button
                     key={n}
                     onClick={() => setColumns(n)}
                     aria-pressed={layout.columns === n}
                     aria-label={`${n} columns`}
-                    className={`flex min-h-[32px] min-w-[32px] items-center justify-center rounded-md font-mono text-[12px] font-medium transition-colors light:bg-white light:border-[var(--ws-border-strong)] light:text-stone-900 ${layout.columns === n ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[12px] font-mono font-medium transition-colors ${
+                      layout.columns === n ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                    }`}
                   >
                     {n}
                   </button>
@@ -791,10 +773,10 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
               <motion.div
                 ref={gridRef}
                 layout
-                className="grid auto-rows-[180px] gap-4 overflow-auto layout-grid-scroll"
+                className="grid gap-4 overflow-auto layout-grid-scroll"
                 style={{
                   gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-                  maxHeight: 'calc(100vh - 280px)',
+                  maxHeight: 'calc(100vh - 260px)',
            }}
          >
           <AnimatePresence mode="popLayout">

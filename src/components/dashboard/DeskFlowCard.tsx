@@ -1,10 +1,9 @@
 import * as React from "react";
 "use client"
 
-import { motion, type HTMLMotionProps } from "framer-motion"
+import { motion, type HTMLMotionProps } from "motion/react"
 import { cn } from "@/lib/utils"
 import {
-  Card,
   CardHeader,
   CardTitle,
   CardDescription,
@@ -20,7 +19,6 @@ const accentColors = {
   none:   null,
 }
 
-// ── L2 Responsive motion ──
 const hoverLift = {
   whileHover: { y: -2, scale: 1.005, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } },
   whileTap: { scale: 0.98 },
@@ -60,7 +58,7 @@ export function DeskFlowCard({
   ...props
 }: DeskFlowCardProps) {
   const ac = accent !== 'none' ? accentColors[accent] : null
-  const Comp = noMotion ? 'div' : motion.div
+  const Comp = noMotion ? 'div' : motion.div as any
 
   return (
     <Comp
@@ -112,7 +110,7 @@ export function DeskFlowCardMotion({
       whileHover={{ y: -2, scale: 1.005, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
       whileTap={{ scale: 0.98 }}
       className={cn(
-        "rounded-xl bg-zinc-900/80 backdrop-blur-xl overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(244,63,94,0.12)]",
+        "rounded-xl bg-zinc-900/80 overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(244,63,94,0.12)] flex-1 min-h-0",
         className,
       )}
       {...props}

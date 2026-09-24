@@ -91,25 +91,3 @@ export interface DashboardState {
   error: string | null;
   lastUpdated: Date | null;
 }
-
-// IPC API shape (augmented in global scope)
-declare global {
-  interface Window {
-    deskflowAPI?: {
-      getGoals: (date: string) => Promise<{ goals: Goal[] }>;
-      saveGoal: (date: string, goal: Goal) => Promise<{ success: boolean; id?: string }>;
-      deleteGoal: (goalId: string) => Promise<{ success: boolean }>;
-      getLongtermGoals: () => Promise<{ goals: LongTermGoal[] }>;
-      suggestGoals: (date: string, ctx: unknown) => Promise<{ suggestions: Goal[] }>;
-      getDeadlines: (params: { days?: number }) => Promise<{ deadlines: Deadline[] }>;
-      addDeadline: (dl: Omit<Deadline, 'id'>) => Promise<{ success: boolean; id: string }>;
-      updateDeadline: (id: string, patch: Partial<Deadline>) => Promise<{ success: boolean }>;
-      deleteDeadline: (id: string) => Promise<{ success: boolean }>;
-      getSchedule: () => Promise<{ entries: ScheduleEntry[] }>;
-      addScheduleEntry: (entry: Omit<ScheduleEntry, 'id'>) => Promise<{ success: boolean; id: string }>;
-      updateScheduleEntry: (id: string, patch: Partial<ScheduleEntry>) => Promise<{ success: boolean }>;
-      deleteScheduleEntry: (id: string) => Promise<{ success: boolean }>;
-      getMomentumScore: (date?: string) => Promise<MomentumScore>;
-    };
-  }
-}

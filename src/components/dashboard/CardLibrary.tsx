@@ -6,7 +6,7 @@
 // LAMINAR: tween easing, token colors, no spring physics, no glass on chrome.
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Activity, Calendar, Sparkles, Target, AlertCircle, Zap, BarChart3,
   Pin, Moon, Brain, Orbit, Clock, Flame, ArrowRight, CalendarDays, Box,
@@ -177,17 +177,36 @@ function getAvailableSizes(widget: WidgetConfig): WidgetSize[] {
 }
 
 function sizeLabel(size: WidgetSize): string {
-  if (size.cols === 1 && size.rows === 1) return '1×1';
-  if (size.cols === 2 && size.rows === 1) return '2×1';
-  if (size.cols === 3 && size.rows === 1) return '3×1';
-  if (size.cols === 4 && size.rows === 1) return '4×1';
-  if (size.cols === 6 && size.rows === 1) return '6×1';
-  if (size.cols === 1 && size.rows === 2) return '1×2';
-  if (size.cols === 2 && size.rows === 2) return '2×2';
-  if (size.cols === 3 && size.rows === 2) return '3×2';
-  if (size.cols === 1 && size.rows === 3) return '1×3';
-  if (size.cols === 2 && size.rows === 3) return '2×3';
   return `${size.cols}×${size.rows}`;
+}
+
+// ── Visual column picker ─────────────────────────────────────────────────────
+
+function ColumnPicker({ columns, onChange }: { columns: number; onChange: (n: number) => void }) {
+  const vals = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  return (
+    <div className="flex items-center gap-2">
+      <LayoutDashboard size={13} className="text-[var(--text-muted)] shrink-0" />
+      <span className="text-[11px] text-[var(--text-muted)]">Columns</span>
+      <div className="flex items-center gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] p-0.5">
+        {vals.map(v => (
+          <button
+            key={v}
+            onClick={() => onChange(v)}
+            aria-label={`${v} columns`}
+            aria-pressed={columns === v}
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[12px] font-mono font-medium transition-colors ${
+              columns === v
+                ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+            }`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -199,11 +218,12 @@ interface CardLibraryProps {
   onChanged?: (layout: DashboardLayoutConfig) => void;
   onSaved?: () => void;
   previews?: Record<string, ReactNode>;
+  onClose?: () => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) {
+export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibraryProps) {
   // ── State ────────────────────────────────────────────────────────────────
 
   const [layout, setLayout] = useState<DashboardLayoutConfig>(DEFAULT_LAYOUT);
@@ -474,33 +494,40 @@ export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) 
   // ── Render: Header ────────────────────────────────────────────────────────
 
   const renderHeader = () => (
-    <div className="flex items-center justify-between mb-6">
+    <div className="flex items-center justify-between mb-4">
       <div className="min-w-0">
         <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--page-accent)]">
           Dashboard Cards
         </div>
-        <h1 className="text-[20px] font-semibold text-[var(--text-primary)] mt-0.5">
+        <h1 className="text-[18px] font-semibold text-[var(--text-primary)] mt-0.5">
           Customize your dashboard
         </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-          Click a card to add it to your dashboard. Hover a card on the right to remove or resize it.
+        <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+          Add cards from the library on the left. Drag to reorder on the right.
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={resetToDefault}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 py-2 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={13} />
           Reset
         </button>
         <button
           onClick={() => { persistLayout(layout); onChanged?.(layout); onSaved?.(); }}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/15 px-3 py-2 text-[12px] font-medium text-[var(--page-accent)] hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/15 px-3 py-1.5 text-[12px] font-medium text-[var(--page-accent)] hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
           disabled={!dirty}
         >
-          <Save size={14} />
+          <Save size={13} />
           Save
+        </button>
+        <button
+          onClick={() => onClose?.()}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
+          aria-label="Close"
+        >
+          <X size={15} />
         </button>
       </div>
     </div>
@@ -573,23 +600,9 @@ export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) 
           </button>
         </div>
 
-        {/* Column count */}
+        {/* Column picker */}
         <div className="flex items-center gap-2 border-l border-[var(--border-subtle)] pl-3 ml-1">
-          <LayoutDashboard size={13} className="text-[var(--text-muted)]" />
-          <span className="text-[11px] text-[var(--text-muted)]">Columns</span>
-          {[4, 6, 8, 12].map(n => (
-            <button
-              key={n}
-              onClick={() => setColumns(n)}
-              className={`rounded-md px-2 py-1 text-[11px] font-mono font-medium transition-colors ${
-                layout.columns === n
-                  ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              {n}
-            </button>
-          ))}
+          <ColumnPicker columns={layout.columns} onChange={setColumns} />
         </div>
 
         {/* Active preset */}
@@ -616,7 +629,7 @@ export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) 
   // ── Render: Available Widgets Panel ───────────────────────────────────────
 
   const renderAvailableWidgets = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
           Available Cards
@@ -713,20 +726,22 @@ export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) 
                 )}
 
                 {/* Add button */}
-                <div className="flex items-center gap-1">
-                  <Plus size={12} className="text-[var(--page-accent)]" />
-                  <span className="text-[11px] font-medium text-[var(--page-accent)]">
-                    Add to dashboard
-                  </span>
-                </div>
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); addWidget(widget.id); }}
+                  className="mt-1 w-full flex items-center justify-center gap-1 rounded-md border border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--page-accent)] hover:bg-[var(--page-accent)]/20 transition-colors"
+                >
+                  <Plus size={10} />
+                  Add to dashboard
+                </button>
 
                 {/* Preview button */}
                 <button
                   type="button"
                   onClick={e => { e.stopPropagation(); setPreviewId(widget.id); }}
-                  className="mt-1.5 w-full flex items-center justify-center gap-1 rounded-md border border-[var(--border-subtle)] px-2 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
+                  className="mt-0.5 w-full flex items-center justify-center gap-1 rounded-md border border-[var(--border-subtle)] px-2 py-0.5 text-[9px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
                 >
-                  <Eye size={10} />
+                  <Eye size={9} />
                   Preview
                 </button>
               </motion.div>
@@ -789,18 +804,18 @@ export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) 
 
                 <div className="flex items-center gap-1 shrink-0">
                   <button
-                    onClick={e => { e.stopPropagation(); setPreviewId(widget.id); }}
-                    className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
-                    aria-label="Preview"
-                  >
-                    <Eye size={12} />
-                  </button>
-                  <button
                     onClick={e => { e.stopPropagation(); addWidget(widget.id); }}
                     className="p-1.5 rounded-md bg-[var(--page-accent)]/15 text-[var(--page-accent)] hover:opacity-90 transition-opacity"
                     aria-label="Add to dashboard"
                   >
-                    <Plus size={12} />
+                    <Plus size={11} />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); setPreviewId(widget.id); }}
+                    className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
+                    aria-label="Preview"
+                  >
+                    <Eye size={11} />
                   </button>
                 </div>
               </motion.div>
@@ -814,7 +829,7 @@ export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) 
   // ── Render: Dashboard Preview Panel ───────────────────────────────────────
 
   const renderDashboardPreview = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
           Your Dashboard
@@ -1225,67 +1240,78 @@ export function CardLibrary({ onChanged, onSaved, previews }: CardLibraryProps) 
 
   // ── Main Render ───────────────────────────────────────────────────────────
 
+  const innerContent = (
+    <div
+      className="relative w-full max-w-5xl max-h-[88vh] rounded-2xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex-shrink-0 px-4 py-2.5 border-b border-[var(--border-subtle)]">
+        {renderHeader()}
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex-shrink-0 px-4 py-2">
+        {renderToolbar()}
+      </div>
+
+      {/* Main content — two columns */}
+      <div className="flex-1 min-h-[360px] overflow-hidden">
+        <div className="flex h-full">
+          {/* Available widgets — left panel */}
+          <div className="w-[320px] flex-shrink-0 border-r border-[var(--border-subtle)] min-h-0">
+            <div className="h-full min-h-0 overflow-hidden">
+              {renderAvailableWidgets()}
+            </div>
+          </div>
+
+          {/* Dashboard preview — right panel */}
+          <div className="flex-1 min-w-0">
+            <div className="h-full min-h-0 overflow-hidden">
+              {renderDashboardPreview()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Presets panel */}
+      <div className="flex-shrink-0 px-4 py-2 border-t border-[var(--border-subtle)]">
+        {renderPresetsPanel()}
+      </div>
+
+      {/* Save error */}
+      {saveError && (
+        <div className="flex-shrink-0 px-4 py-1.5">
+          <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-[11px] text-rose-300">
+            {saveError}
+          </div>
+        </div>
+      )}
+
+      {/* Preview modal */}
+      {previewId && renderPreviewModal()}
+    </div>
+  );
+
   return (
     <AnimatePresence>
-      <motion.div
-        key="card-library-overlay"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
-        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
-      >
-        <div
-          className="relative w-full max-w-6xl max-h-[90vh] rounded-2xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col"
-          onClick={e => e.stopPropagation()}
+      {onClose ? (
+        // When wrapped by parent modal, render just the content (no overlay)
+        innerContent
+      ) : (
+        // Standalone: render full overlay
+        <motion.div
+          key="card-library-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.12 }}
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => onClose?.()}
         >
-          {/* Header */}
-          <div className="flex-shrink-0 px-5 py-4 border-b border-[var(--border-subtle)]">
-            {renderHeader()}
-          </div>
-
-          {/* Toolbar */}
-          <div className="flex-shrink-0 px-5 py-3 border-b border-[var(--border-subtle)]">
-            {renderToolbar()}
-          </div>
-
-          {/* Main content — two columns */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <div className="flex h-full min-h-0">
-              {/* Available widgets — left panel */}
-              <div className="w-[360px] flex-shrink-0 border-r border-[var(--border-subtle)] min-h-0">
-                <div className="h-full min-h-0 overflow-hidden">
-                  {renderAvailableWidgets()}
-                </div>
-              </div>
-
-              {/* Dashboard preview — right panel */}
-              <div className="flex-1 min-w-0">
-                <div className="h-full min-h-0 overflow-hidden">
-                  {renderDashboardPreview()}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Presets panel */}
-          <div className="flex-shrink-0 px-5 py-3 border-t border-[var(--border-subtle)]">
-            {renderPresetsPanel()}
-          </div>
-
-          {/* Save error */}
-          {saveError && (
-            <div className="flex-shrink-0 px-5 py-2">
-              <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-300">
-                {saveError}
-              </div>
-            </div>
-          )}
-
-          {/* Preview modal */}
-          {previewId && renderPreviewModal()}
-        </div>
-      </motion.div>
+          {innerContent}
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 }

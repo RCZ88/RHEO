@@ -1,14 +1,12 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, type ReactNode } from 'react';
-import { GlareHover } from '../components/ui/glare-hover';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { PageShell } from '../components/PageShell';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { useNavigate } from 'react-router-dom';
 import { useScrollToSection } from '../lib/deepNav';
 import { CurrentCanvas } from '../components/CurrentCanvas';
 import { renderStream } from '../lib/renderers/stream';
 import { startPhaseClock } from '../lib/currentPhase';
 
-import { SummaryStrip } from './dashboard/SummaryStrip';
+import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
 import { PinnedActivities } from './dashboard/PinnedActivities';
 import { QuickFocusCard } from '../components/focus/QuickFocusCard';
 import { ScheduleCard } from './dashboard/ScheduleCard';
@@ -19,16 +17,11 @@ import { LongestFocusCard } from '../components/dashboard/LongestFocusCard';
 import { useDashboardData } from '../components/dashboard/useDashboardData';
 import { InsightStrip } from './dashboard/InsightStrip';
 import { useSmartSearch } from '../hooks/useSmartSearch';
-import type { SearchableSegment } from '../services/search/index';
 import { MomentumHero } from '../components/dashboard/MomentumHero';
-import { TierBreakdownStrip } from './dashboard/TierBreakdownStrip';
-
-
 
 import { VCalendar } from '../components/ui/v-calendar';
 
 import { SectionHeader } from '../components/SectionHeader';
-import { GlassCard } from '../components/GlassCard';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { DayDetailPopup } from '../components/DayDetailPopup';
@@ -36,23 +29,25 @@ import { DeskFlowCardMotion } from '../components/dashboard/DeskFlowCard';
 import OrbitSystem from '../components/OrbitSystem';
 import { useHomeSummary } from '../hooks/useHomeSummary';
 import { useDeepFocus } from '../hooks/useDeepFocus';
-import { Bar, Line } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import { motion, AnimatePresence } from "motion/react";
 
-import {
-  BookOpen, Dumbbell, Activity,
-  Utensils, Coffee, Bus, Book, Timer, Zap,
-  Sun, Zap as ZapIcon, Focus, Clock, X,
-  Edit3, Check, Plus, Minus, TrendingUp,
-  Target, ZapCircle, RefreshCw, Clock3,
-  ChevronLeft, ChevronRight, Maximize2, Minimize2,
-  BarChart3, Bot, Sparkles, ArrowRight, GripVertical, MousePointer2, Zap as ZapIcon2
-} from 'lucide-react';
-import { maxOf, maxBy } from '../utils/safeMath';
 import { getDateRange } from '../lib/dateRange';
 import type { Period } from '../lib/dateRange';
 import { awaitApi } from '../lib/awaitApi';
 import { TimerResetOverlay } from '../components/dashboard/TimerResetOverlay';
+import { CardLibrary } from '../components/dashboard/CardLibrary';
+import { LayoutGrid, Grid3X3, X, BarChart3, Clock } from 'lucide-react';
+import { maxBy } from '../utils/safeMath';
+
+import { AiUsageWidget } from '../components/dashboard/AiUsageWidget';
+import { ConsoleWidget } from '../components/dashboard/ConsoleWidget';
+import { FinanceWidget } from '../components/dashboard/FinanceWidget';
+import { LearnWidget } from '../components/dashboard/LearnWidget';
+import { BrowserWidget } from '../components/dashboard/BrowserWidget';
+import { BrainWidget } from '../components/dashboard/BrainWidget';
+import { CovenantWidget } from '../components/dashboard/CovenantWidget';
+import { HealthWidget } from '../components/dashboard/HealthWidget';
 
 interface ActivityFeedItem {
   id: string;
@@ -101,6 +96,8 @@ interface DashboardPageProps {
   // Activity feed from parent (use different name to avoid conflict)
   activityFeed?: any[];
   onActivityFeedChange?: (items: any[]) => void;
+  externalActivities?: any[];
+  externalWeeklyStats?: any;
 }
 
 
@@ -250,6 +247,8 @@ interface DashboardPageProps {
   // Activity feed from parent (use different name to avoid conflict)
   activityFeed?: any[];
   onActivityFeedChange?: (items: any[]) => void;
+  externalActivities?: any[];
+  externalWeeklyStats?: any;
 }
 
 // Map browser brand names to OS process names (what active-win returns)
@@ -281,9 +280,6 @@ function isAppMatchingBrowserDashboard(appName: string, browserName: string | st
 
 export default function DashboardPage({
   externalActivities = [],
-  hourlyHeatmap = [],
-  solarSystemData = [],
-  productiveTimeMs = 0,
   appColors = {},
   categoryOverrides = {},
   timerBehavior = { neutralAction: 'ignore', distractingAction: 'ignore' },
@@ -300,6 +296,8 @@ export default function DashboardPage({
   activityFeed: feedFromParent = [],
   onActivityFeedChange
 }: DashboardPageProps) {
+  const isCardVisible = (_id: string): boolean => true;
+
   const getPersistedTimerState = () => {
     // Try parent state first - only if it has meaningful data
     if (timerState && typeof timerState === 'object' && (timerState as any).externalRunning === true) {
@@ -1185,9 +1183,9 @@ export default function DashboardPage({
 
       // Check if this is Tracker app (DeskFlow/Electron/RHEO)
       const isTrackerApp = data.app && (
-        data.app.toLowerCase().includes('deskflow') ||
-        data.app.toLowerCase().includes('electron') ||
-        data.app.toLowerCase().includes('rheo')
+        data.app.toLowerCase() === 'deskflow' ||
+        data.app.toLowerCase() === 'electron' ||
+        data.app.toLowerCase() === 'rheo'
       );
 
       if (isTrackingBrowser) {
@@ -1282,7 +1280,7 @@ export default function DashboardPage({
         const lnb = lastNonBrowserAppRef.current;
 
         const isTrackingBrowser = !!tb && !!(initialData.app) && isAppMatchingBrowserDashboard(initialData.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
-        const isTrackerApp = !!(initialData.app) && (initialData.app.toLowerCase().includes('deskflow') || initialData.app.toLowerCase().includes('electron') || initialData.app.toLowerCase().includes('rheo'));
+        const isTrackerApp = !!(initialData.app) && (initialData.app.toLowerCase() === 'deskflow' || initialData.app.toLowerCase() === 'electron' || initialData.app.toLowerCase() === 'rheo');
 
         if (isTrackingBrowser) { setIsInBrowser(true); setCurrentApp(lnb || null); return; }
 
@@ -1351,7 +1349,7 @@ export default function DashboardPage({
          if (!data || !data.isReal) return;
         const tb = trackingBrowserRef.current;
         const isTrackingBrowser = !!tb && isAppMatchingBrowserDashboard(data.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
-        const isTrackerApp = data.app.toLowerCase().includes('deskflow') || data.app.toLowerCase().includes('electron') || data.app.toLowerCase().includes('rheo');
+        const isTrackerApp = data.app.toLowerCase() === 'deskflow' || data.app.toLowerCase() === 'electron' || data.app.toLowerCase() === 'rheo';
 
         if (isTrackerApp) return; // don't overwrite with tracker app
         if (isTrackingBrowser) {
@@ -2565,6 +2563,7 @@ export default function DashboardPage({
   // ── Platform filter state ──
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
+  const [showCardLibrary, setShowCardLibrary] = useState(false);
 
   // Fetch available platforms on mount
   useEffect(() => {
@@ -2584,6 +2583,58 @@ export default function DashboardPage({
     <PageShell page="dashboard" variant="dashboard" className="text-white">
       <CurrentCanvas accent="#34d399" render={renderStream} />
       <TimerResetOverlay trigger={resetTrigger} />
+
+      {/* Card Library */}
+      <AnimatePresence>
+        {showCardLibrary && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+            onClick={() => setShowCardLibrary(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/95 max-w-4xl w-full max-h-[88vh] overflow-auto p-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/15 border border-[var(--page-accent)]/20 flex items-center justify-center">
+                    <Grid3X3 className="w-4 h-4 text-[var(--page-accent)]" />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-zinc-100">Widget Library</h2>
+                    <p className="text-[11px] text-zinc-500">Select which cards appear on your dashboard</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCardLibrary(false)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800/50 text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <CardLibrary
+                onChanged={(layout) => {
+                  console.log('[Dashboard] Layout updated:', layout);
+                  setShowCardLibrary(false);
+                }}
+                onSaved={() => {
+                  console.log('[Dashboard] Layout saved');
+                  setShowCardLibrary(false);
+                }}
+                onClose={() => setShowCardLibrary(false)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Platform Filter Toggle */}
       {availablePlatforms.length > 0 && (
@@ -2614,47 +2665,58 @@ export default function DashboardPage({
           ))}
         </div>
       )}
-<div className="relative z-10">
-        <div className="mx-auto px-5" style={{ maxWidth: '1400px' }}>
 
-          {/* Row 1: HeroBand (Stopwatch) + Momentum Hero */}
-           {(isCardVisible('status-band') || isCardVisible('momentum-hero')) && (
-           <DeskFlowCardMotion className="mb-4">
-           <div className="grid grid-cols-1 md:grid-cols-[5fr_3fr] gap-0 items-stretch">
-              {isCardVisible('status-band') && (
-              <div data-section="Hero">
-              <StatusBand
-                displayTimeMs={displayTime?.ms || 0}
-                isCurrentlyProductive={isCurrentlyProductive}
-                isDistracting={isDistracting}
-                currentAppName={isInBrowser
-                  ? (currentWebsite?.title || currentWebsite?.domain || '')
-                  : (currentApp?.app || currentApp?.title || '')}
-                isReal={currentApp?.isReal}
-                totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
-                browserName={currentWebsite?.browserName}
-                isInBrowser={isInBrowser}
-                isPaused={isPaused}
-                websiteTitle={currentWebsite?.title}
-                websiteDomain={currentWebsite?.domain}
-                websiteCategory={currentWebsite?.category}
-              />
-              </div>
-              )}
-             {isCardVisible('momentum-hero') && (
-             <div data-section="Momentum Hero">
-             <MomentumHero momentum={momentum} loading={dashLoading} />
+      {/* Widget Library Toggle — inside dashboard content, part of page flow */}
+      <div className="flex items-center justify-end mb-3">
+        <button
+          onClick={() => setShowCardLibrary(v => !v)}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--ws-border)] hover:border-[var(--page-accent)]/50 transition-all duration-200 text-[12px] font-medium text-zinc-300 hover:text-[var(--page-accent)] shadow-lg"
+          title="Customize Dashboard Widgets"
+        >
+          {showCardLibrary ? <X size={14} /> : <LayoutGrid size={14} />}
+          {showCardLibrary ? 'Close' : 'Widgets'}
+        </button>
+      </div>
+
+ <div className="relative z-10 flex flex-col flex-1 min-h-0 w-full">
+          <div className="mx-auto px-5 flex flex-col flex-1 min-h-0 w-full">
+
+{/* Row 1: HeroBand (Stopwatch) + Momentum Hero */}
+            {(isCardVisible('status-band') || isCardVisible('momentum-hero')) && (
+<DeskFlowCardMotion className="mb-2">
+              <div className="grid grid-cols-1 md:grid-cols-[9fr_3fr] gap-6 items-stretch w-full">
+               {isCardVisible('status-band') && (
+               <div data-section="Hero" className="min-w-0 flex-1">
+               <StatusBand
+                 displayTimeMs={displayTime?.ms || 0}
+                 isCurrentlyProductive={isCurrentlyProductive}
+                 isDistracting={isDistracting}
+                 currentAppName={isInBrowser
+                   ? (currentWebsite?.title || currentWebsite?.domain || '')
+                   : (currentApp?.app || currentApp?.title || '')}
+                 isReal={currentApp?.isReal}
+                                 totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
+                                 isInBrowser={isInBrowser}
+                 isPaused={isPaused}
+                 websiteTitle={currentWebsite?.title}
+                 websiteCategory={currentWebsite?.category}
+               />
+               </div>
+               )}
+{isCardVisible('momentum-hero') && (
+                <div data-section="Momentum Hero" className="min-w-0 flex-1 border-l border-[var(--ws-border)] pl-4">
+                <MomentumHero momentum={momentum} loading={dashLoading} isCurrentlyProductive={isCurrentlyProductive} isDistracting={isDistracting} />
+                </div>
+                )}
              </div>
-             )}
-           </div>
-           </DeskFlowCardMotion>
-           )}
+             </DeskFlowCardMotion>
+            )}
 
-          {/* Row 2: Tier Breakdown Strip */}
-          {isCardVisible('tier-breakdown') && (
-          <DeskFlowCardMotion className="mb-4">
-           <div data-section="Tier Breakdown">
-           <TierBreakdownStrip
+           {/* Row 2: Tier Breakdown Strip */}
+           {isCardVisible('tier-breakdown') && (
+<DeskFlowCardMotion className="mb-2">
+             <div data-section="Tier Breakdown" className="w-full">
+             <TierBreakdownStrip
              productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
              neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
              distractingHours={dashboardData?.overview?.distractingSeconds ? Math.round(dashboardData.overview.distractingSeconds / 3600 * 10) / 10 : 0}
@@ -2666,8 +2728,8 @@ export default function DashboardPage({
 
           {/* Row 3: Pinned Activities */}
           {isCardVisible('pinned-activities') && (
-          <DeskFlowCardMotion className="mb-4">
-            <div data-section="Pinned">
+          <DeskFlowCardMotion className="mb-2">
+            <div data-section="Pinned" className="w-full">
             <PinnedActivities
               pinnedActivities={pinnedActivities}
               setPinnedActivities={setPinnedActivities}
@@ -2688,10 +2750,10 @@ export default function DashboardPage({
 
             {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
             {(isCardVisible('goals-card') || isCardVisible('focus-card') || isCardVisible('deadlines-card')) && (
-            <DeskFlowCardMotion className="mb-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1 min-h-0">
+            <DeskFlowCardMotion className="mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
                  {isCardVisible('goals-card') && (
-                 <div data-section="Goals Card">
+                 <div data-section="Goals Card" className="w-full">
                  <GoalsCard
                    goals={goals}
                    longTermGoals={longTermGoals}
@@ -2710,7 +2772,7 @@ export default function DashboardPage({
                  </div>
                  )}
                  {isCardVisible('focus-card') && (
-                 <div data-section="Focus Start">
+                 <div data-section="Focus Start" className="w-full">
                  <QuickFocusCard
                    state={deepFocus.state}
                    onStart={deepFocus.start}
@@ -2719,7 +2781,7 @@ export default function DashboardPage({
                  </div>
                  )}
                  {isCardVisible('deadlines-card') && (
-                 <div data-section="Deadlines Card">
+                 <div data-section="Deadlines Card" className="w-full">
                  <DeadlinesCard
                    deadlines={deadlines}
                    reminders={reminders}
@@ -2739,7 +2801,7 @@ export default function DashboardPage({
                  </div>
                  )}
               {isCardVisible('focus-card') && (
-              <div data-section="Longest Focus">
+              <div data-section="Longest Focus" className="w-full">
                <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
               </div>
               )}
@@ -2749,8 +2811,8 @@ export default function DashboardPage({
 
             {/* Row 5: Schedule */}
             {isCardVisible('schedule-hero') && (
-            <DeskFlowCardMotion className="mb-4">
-               <div data-section="Schedule">
+            <DeskFlowCardMotion className="mb-2">
+               <div data-section="Schedule" className="w-full">
                 <ScheduleCard
                    entries={schedule}
                    loading={dashLoading}
@@ -2766,8 +2828,8 @@ export default function DashboardPage({
 
              {/* AI Insights Strip */}
             {isCardVisible('insight-strip') && (
-            <DeskFlowCardMotion className="mb-4">
-            <div data-section="Insight Strip">
+            <DeskFlowCardMotion className="mb-2">
+            <div data-section="Insight Strip" className="w-full">
             <InsightStrip insights={aiInsights} />
             </div>
             </DeskFlowCardMotion>
@@ -2775,7 +2837,7 @@ export default function DashboardPage({
 
            {/* Row 6: Productivity Chart */}
            {isCardVisible('productivity-chart') && (
-             <DeskFlowCardMotion className="mb-4">
+             <DeskFlowCardMotion className="mb-2">
              <div className="p-5">
                <div>
                <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
@@ -2841,7 +2903,7 @@ export default function DashboardPage({
 
           {/* Row 7: Activity Feed */}
           {isCardVisible('activity-feed') && (
-          <DeskFlowCardMotion className="mb-4">
+          <DeskFlowCardMotion className="mb-2">
              <div className="p-5">
                <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
              <div className="space-y-0.5 mt-3">
@@ -2883,6 +2945,61 @@ export default function DashboardPage({
 
         </div>
       </div>
+
+      {/* Row: 8 New Widgets from Kimi Spec */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {isCardVisible('ai-usage') && (
+          <AiUsageWidget
+            usage={widgetData?.aiUsage}
+            onSelect={() => navigate('/ai')}
+          />
+        )}
+        {isCardVisible('console-widget') && (
+          <ConsoleWidget
+            stats={widgetData?.consoleStats}
+            onSelect={() => navigate('/terminal/tabs/console')}
+          />
+        )}
+        {isCardVisible('finance-widget') && (
+          <FinanceWidget
+            summary={widgetData?.financeSummary}
+            onSelect={() => navigate('/finance')}
+          />
+        )}
+        {isCardVisible('learn-widget') && (
+          <LearnWidget
+            stats={widgetData?.learnStats}
+            onSelect={() => navigate('/lyceum')}
+          />
+        )}
+        {isCardVisible('browser-widget') && (
+          <BrowserWidget
+            stats={widgetData?.browserStats}
+            onSelect={() => navigate('/browser-history')}
+          />
+        )}
+        {isCardVisible('brain-widget') && (
+          <BrainWidget
+            stats={widgetData?.brainStats}
+            onSelect={() => navigate('/context-brain')}
+          />
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {isCardVisible('covenant-widget') && (
+          <CovenantWidget
+            stats={widgetData?.covenantStats}
+            onSelect={() => navigate('/covenant')}
+          />
+        )}
+        {isCardVisible('health-widget') && (
+          <HealthWidget
+            sleep={widgetData?.sleepStats}
+            onSelect={() => navigate('/external')}
+          />
+        )}
+      </div>
+
       {/* Modals — UNCHANGED */}
       <AnimatePresence>
         {expandedModal === 'heatmap' && (

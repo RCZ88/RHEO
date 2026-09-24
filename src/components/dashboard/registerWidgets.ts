@@ -21,6 +21,14 @@ import {
   FollowThroughSummary,
   CalendarSummary,
 } from './WidgetSummaries';
+import { AiUsageWidget } from './AiUsageWidget';
+import { ConsoleWidget } from './ConsoleWidget';
+import { FinanceWidget } from './FinanceWidget';
+import { LearnWidget } from './LearnWidget';
+import { BrowserWidget } from './BrowserWidget';
+import { BrainWidget } from './BrainWidget';
+import { CovenantWidget } from './CovenantWidget';
+import { HealthWidget } from './HealthWidget';
 
 // ── Dashboard Widgets ──
 WidgetRegistry.register({
@@ -245,4 +253,54 @@ WidgetRegistry.register({
   component: CalendarSummary,
   defaultVisible: false,
   sourcePage: 'dashboard',
+});
+
+// ── New Widgets (8) ──
+WidgetRegistry.register({
+  id: 'ai-usage', name: 'AI Usage', description: 'Model usage stats and token consumption',
+  icon: 'Bot', category: 'system',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: AiUsageWidget, defaultVisible: true, sourcePage: 'ai',
+});
+WidgetRegistry.register({
+  id: 'console-widget', name: 'Console', description: 'Terminal command usage and handbook progress',
+  icon: 'Terminal', category: 'system',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: ConsoleWidget, defaultVisible: true, sourcePage: 'terminal',
+});
+WidgetRegistry.register({
+  id: 'finance-widget', name: 'Finance', description: 'Wallet balances and transaction overview',
+  icon: 'Wallet', category: 'finance',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: FinanceWidget, defaultVisible: true, sourcePage: 'finance',
+});
+WidgetRegistry.register({
+  id: 'learn-widget', name: 'Learn', description: 'Lyceum lesson progress and mastery',
+  icon: 'BookOpen', category: 'learn',
+  defaultSize: { cols: 3, rows: 2 }, minSize: { cols: 2, rows: 1 }, maxSize: { cols: 4, rows: 2 },
+  component: LearnWidget, defaultVisible: true, sourcePage: 'lyceum',
+});
+WidgetRegistry.register({
+  id: 'browser-widget', name: 'Browser', description: 'Website categories and tracking',
+  icon: 'Globe', category: 'system',
+  defaultSize: { cols: 3, rows: 2 }, minSize: { cols: 2, rows: 1 }, maxSize: { cols: 4, rows: 2 },
+  component: BrowserWidget, defaultVisible: true, sourcePage: 'browser',
+});
+WidgetRegistry.register({
+  id: 'brain-widget', name: 'Brain', description: 'Context Brain knowledge graph stats',
+  icon: 'Brain', category: 'system',
+  defaultSize: { cols: 3, rows: 2 }, minSize: { cols: 2, rows: 1 }, maxSize: { cols: 4, rows: 2 },
+  component: BrainWidget, defaultVisible: true, sourcePage: 'ai',
+});
+WidgetRegistry.register({
+  id: 'covenant-widget', name: 'Covenant', description: 'Commitments and completion',
+  icon: 'Shield', category: 'system',
+  defaultSize: { cols: 3, rows: 2 }, minSize: { cols: 2, rows: 1 }, maxSize: { cols: 4, rows: 2 },
+  component: CovenantWidget, defaultVisible: true, sourcePage: 'covenant',
+});
+WidgetRegistry.register({
+  id: 'health-widget', name: 'Health', description: 'Sleep hours and consistency',
+  icon: 'Moon', category: 'health',
+  defaultSize: { cols: 6, rows: 2 }, minSize: { cols: 4, rows: 1 }, maxSize: { cols: 8, rows: 3 },
+  component: HealthWidget, defaultVisible: true, sourcePage: 'external',
 });

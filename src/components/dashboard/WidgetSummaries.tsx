@@ -5,14 +5,17 @@ import * as React from "react";
 // LAMINAR: design.md wins over all skill defaults
 // ============================================================
 
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from "motion/react";
 import { Bar } from 'react-chartjs-2';
 import {
   AlertCircle, Clock, Target, Zap, BarChart3, Moon, Brain,
   Flame, TrendingUp, Calendar, Sparkles, ArrowRight, Check,
+  Bot, Wallet, BookOpen, Activity, Lock,
 } from 'lucide-react';
 import { useDashboardDataContext } from './DashboardContext';
+import { CATEGORY_COLORS } from '../CategoryColors';
 
 // ── Progress bar (shadcn-style) ──
 function ProgressBar({ value, color = 'var(--page-accent)', height = 6 }: { value: number; color?: string; height?: number }) {
@@ -490,6 +493,289 @@ export function PinnedActivitiesSummary() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── AI Usage Summary ──
+export function AiUsageSummary() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const api = (window as any).deskflowAPI;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await api?.aiContextStats?.();
+        setStats(s || null);
+      } catch { setError(true); }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  return (
+    <div className="space-y-3">
+      {loading && <AiUsageSkeleton />}
+      {error && (
+        <div className="flex items-center gap-2 text-[var(--error)] text-[13px]">
+          <AlertCircle size={14} /><span>AI stats unavailable</span>
+        </div>
+      )}
+      {stats && (
+        <div className="grid grid-cols-2 gap-3">
+          <StatValue value={stats.sessionCount ?? '—'} label="Sessions" icon={Bot} accent="var(--accent-primary)" />
+          <StatValue value={stats.totalTokens ? (stats.totalTokens / 1e6).toFixed(1) + 'M' : '—'} label="Tokens" icon={Activity} accent="var(--accent-primary)" />
+          <div className="col-span-2 mt-1">
+            <div className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-semibold mb-1.5">Top Models</div>
+            {(stats.models || []).slice(0, 5).map((m: any, i: number) => (
+              <div key={i} className="flex items-center justify-between py-0.5">
+                <span className="text-[12px] text-[var(--text-secondary)]">{m.name}</span>
+                <span className="text-[12px] font-mono text-[var(--text-muted)]">{(m.tokens / 1e6).toFixed(1)}M</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AiUsageSkeleton() {
+  return <div className="space-y-2"><div className="h-8 w-full rounded bg-[var(--border-subtle)]" /><div className="h-8 w-3/4 rounded bg-[var(--border-subtle)]" /></div>;
+}
+
+// ── Console Summary ──
+export function ConsoleSummary() {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-[var(--error)] text-[13px]">
+        <Lock size={14} /><span>Terminal stats not yet connected</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg bg-[var(--border-subtle)] p-3 text-center">
+          <div className="font-display text-[22px] font-bold text-[var(--text-muted)]">—</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-1">Commands</div>
+        </div>
+        <div className="rounded-lg bg-[var(--border-subtle)] p-3 text-center">
+          <div className="font-display text-[22px] font-bold text-[var(--text-muted)]">—</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-1">Sessions</div>
+        </div>
+      </div>
+      <div className="text-[11px] text-[var(--text-muted)]">Connect via terminal IPC to enable</div>
+    </div>
+  );
+}
+
+// ── Finance Summary ──
+export function FinanceSummary() {
+  const { ftData } = useDashboardDataContext();
+  const api = (window as any).deskflowAPI;
+  const [homeData, setHomeData] = useState<any>(null);
+
+  useEffect(() => {
+    api?.getHomeSummary?.().then((r: any) => r?.success && setHomeData(r.data)).catch(() => {});
+  }, []);
+
+  const balance = homeData?.totalBalance ?? ftData?.totalExpense ?? null;
+  const txnCount = homeData?.walletCount ?? 0;
+
+  return (
+    <div className="space-y-3">
+      <StatValue value={balance != null ? `$${balance.toLocaleString()}` : '—'} label="Total Balance" icon={Wallet} accent="var(--resume-success)" />
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-[var(--text-muted)]">Transactions</span>
+        <span className="text-[22px] font-bold font-display text-[var(--text-primary)]">{txnCount}</span>
+      </div>
+      {homeData?.trends?.focus && (
+        <div className="flex items-end gap-1 mt-1">
+          {homeData.trends.focus.slice(-7).map((v: number, i: number) => (
+            <div key={i} className="flex-1 bg-[var(--page-accent)]/20 rounded-t" style={{ height: Math.max(4, v * 2) }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Learn Summary ──
+export function LearnSummary() {
+  const { masteryMastered, masteryTotal } = useDashboardDataContext();
+  const api = (window as any).deskflowAPI;
+  const [homeData, setHomeData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api?.getHomeSummary?.().then((r: any) => r?.success && setHomeData(r.data)).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const dueCount = homeData?.dueReviews ?? 0;
+  const masteryPct = masteryTotal > 0 ? Math.round((masteryMastered / masteryTotal) * 100) : 0;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <StatValue value={dueCount} label="Due Reviews" icon={BookOpen} accent="var(--color-primary)" />
+        <StatValue value={`${masteryPct}%`} label="Mastery" icon={Brain} accent="var(--color-primary)" />
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-[var(--text-muted)]">Streak</span>
+        <span className="flex items-center gap-1 text-[13px] font-semibold text-[var(--text-primary)]">
+          <Flame size={14} className="text-amber-400" /> Active
+        </span>
+      </div>
+      {loading && <div className="h-2 rounded bg-[var(--border-subtle)]" />}
+    </div>
+  );
+}
+
+// ── Browser Summary ──
+export function BrowserSummary() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const api = (window as any).deskflowAPI;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await api?.getBrowserCategoryStats?.('week');
+        setStats(s || null);
+      } catch { setError(true); }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  if (loading) return <div className="space-y-2"><div className="h-8 w-full rounded bg-[var(--border-subtle)]" /><div className="h-8 w-3/4 rounded bg-[var(--border-subtle)]" /></div>;
+  if (error || !stats) return (
+    <div className="flex items-center gap-2 text-[var(--error)] text-[13px]">
+      <AlertCircle size={14} /><span>Browser stats unavailable</span>
+    </div>
+  );
+
+  const topSites = (stats.topSites || stats.topDomains || []).slice(0, 3);
+  const categories = Object.entries(stats.categories || {}).slice(0, 4);
+
+  return (
+    <div className="space-y-3">
+      <div className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-semibold mb-1">Top Sites</div>
+      {topSites.map((s: any, i: number) => (
+        <div key={i} className="flex items-center justify-between py-0.5">
+          <span className="text-[12px] text-[var(--text-secondary)] truncate mr-2">{s.name || s.domain}</span>
+          <span className="text-[12px] font-mono text-[var(--text-muted)] shrink-0">{s.minutes ?? s.time ?? '—'}m</span>
+        </div>
+      ))}
+      <div className="mt-1 space-y-1">
+        {categories.map(([cat, val]: [string, any], i: number) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="text-[10px] text-[var(--text-muted)] w-16 truncate">{cat}</span>
+            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, backgroundColor: 'var(--border-subtle)' }}>
+              <motion.div className="h-full rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat]?.text || 'var(--page-accent)' }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, (val?.percent ?? 0) * 100)}%` }} transition={{ duration: 0.3 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Brain Summary ──
+export function BrainSummary() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const api = (window as any).deskflowAPI;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await api?.aiContextStats?.();
+        setStats(s || null);
+      } catch { /* ignore */ }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  if (loading) return <div className="space-y-2"><div className="h-8 w-full rounded bg-[var(--border-subtle)]" /><div className="h-8 w-3/4 rounded bg-[var(--border-subtle)]" /></div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <StatValue value={stats?.nodeCount ?? stats?.nodes?.length ?? '—'} label="Nodes" icon={Brain} accent="var(--resume-info)" />
+        <StatValue value={stats?.retrievalsToday ?? '—'} label="Retrievals" icon={Activity} accent="var(--resume-info)" />
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-[var(--text-muted)]">Connections</span>
+        <span className="text-[13px] font-mono font-bold text-[var(--text-primary)]">{stats?.connectionDensity ?? '—'}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Covenant Summary ──
+export function CovenantSummary() {
+  const [active, setActive] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const api = (window as any).deskflowAPI;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api?.getCovenantStats?.();
+        setActive(r?.active ?? 0);
+      } catch { /* ignore */ }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  return (
+    <div className="space-y-3">
+      {loading && <div className="h-8 w-full rounded bg-[var(--border-subtle)]" />}
+      {!loading && (
+        <>
+          <StatValue value={active} label="Active" icon={Target} accent="var(--resume-warning)" />
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[var(--text-muted)]">Completion</span>
+            <span className="text-[13px] font-mono font-bold text-[var(--text-primary)]">{active > 0 ? 'In Progress' : 'None'}</span>
+          </div>
+          <div className="text-[11px] text-[var(--text-muted)]">Connect via covenant IPC to enable</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Health Summary ──
+export function HealthSummary() {
+  const { sleepData, avgSleep } = useDashboardDataContext();
+  const api = (window as any).deskflowAPI;
+  const [homeData, setHomeData] = useState<any>(null);
+
+  useEffect(() => {
+    api?.getHomeSummary?.().then((r: any) => r?.success && setHomeData(r.data)).catch(() => {});
+  }, []);
+
+  const lastNightHours = sleepData?.[0]?.hours ?? homeData?.sleepSeconds ? Math.round(homeData.sleepSeconds / 3600) : null;
+  const consistency = avgSleep ? Math.round((1 - Math.abs(avgSleep - 8) / 8) * 100) : 0;
+  const gapCount = (sleepData?.[0]?.hours ? 0 : 1);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <StatValue value={lastNightHours ?? '—'} label="Last Night" icon={Moon} accent="var(--resume-success)" />
+        <StatValue value={`${consistency}%`} label="Consistency" icon={Check} accent="var(--resume-success)" />
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-[var(--text-muted)]">Sleep Gaps</span>
+        <span className="text-[13px] font-bold font-display text-[var(--text-primary)]">{gapCount}</span>
+      </div>
+      {homeData?.trends?.focus && (
+        <div className="flex items-end gap-0.5 mt-1">
+          {[6, 5, 4, 3, 2, 1, 0].map((_, i) => {
+            const day = sleepData?.[i]?.hours ?? 0;
+            return <div key={i} className="flex-1 rounded-t" style={{ height: Math.max(2, (day ?? 0) * 3), backgroundColor: day > 0 ? 'var(--resume-success)' : 'var(--border-subtle)', opacity: 0.7 }} />;
+          })}
+        </div>
+      )}
     </div>
   );
 }
