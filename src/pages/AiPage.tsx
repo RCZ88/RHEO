@@ -1566,40 +1566,37 @@ export function AiPage() {
                 <Sparkles size={11} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Features</span>
               </button>
-<button
-                 onClick={() => {
-                   try {
-                     const json = JSON.stringify(chat.messages, null, 2);
-                     const blob = new Blob([json], { type: 'application/json' });
-                     const url = URL.createObjectURL(blob);
-                     const a = document.createElement('a'); a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.json`; a.click();
-                     URL.revokeObjectURL(url);
-                   } catch (e) { console.error('[AiPage] export JSON:', e); }
-                 }}
-                 title="Export Chat (JSON)"
-                 className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--green"
-               >
-                 <Download size={11} />
-                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Export</span>
-               </button>
-               {aiSubPage === 'vault' ? (
-               <button
-                 onClick={() => setAiSubPage(p => (p === 'vault' ? 'assistant' : 'vault'))}
-                 title="AI Debug Vault"
-                 className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
-               >
-                 <Bug size={11} />
-                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vault</span>
-               </button>
-               ) : null}
-               {aiSubPage === 'context' ? (
-               <button
-                 onClick={() => setAiSubPage(p => (p === 'context' ? 'assistant' : 'context'))}
-                 title="AI Context Captures"
-                 className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--cyan"
-               >
-                 <MessageSquare size={11} />
-                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Context</span>
+              <button
+                onClick={() => {
+                  try {
+                    const json = JSON.stringify(chat.messages, null, 2);
+                    const blob = new Blob([json], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.json`; a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (e) { console.error('[AiPage] export JSON:', e); }
+                }}
+                title="Export Chat (JSON)"
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--green"
+              >
+                <Download size={11} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Export</span>
+              </button>
+              <button
+                onClick={() => setAiSubPage(p => (p === 'vault' ? 'assistant' : 'vault'))}
+                title="AI Debug Vault"
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
+              >
+                <Bug size={11} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vault</span>
+              </button>
+              <button
+                onClick={() => setAiSubPage(p => (p === 'context' ? 'assistant' : 'context'))}
+                title="AI Context Captures"
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--cyan"
+              >
+                <MessageSquare size={11} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Context</span>
               </button>
               <button
                 onClick={() => setConfiguringFeature('vision')}

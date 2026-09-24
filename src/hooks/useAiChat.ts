@@ -3,7 +3,7 @@ import { generateUUID } from '../lib/uuid'
 import type { DeskflowAPI } from '../types/deskflow-api'
 import { aiAgentService } from '../services/ai'
 import { toolRegistry } from '../services/ai'
-import '../../services/ai/canvasTools'
+import '../services/ai/canvasTools'
 import {
   parseAssistantContent,
   serializeParsed,
