@@ -161,6 +161,9 @@ src/backups/
 # AI CLI / script output directories (bug: writes to --help/ and --vault/)
 --help/
 --vault/
+dist-test.js
+src/preload.ts.orig
+src/preload2.ts
 
 # Session dump files at repo root
 session-ses_*

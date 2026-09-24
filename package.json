@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build:renderer": "vite build",
-    "build": "node scripts/build.mjs",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build && node scripts/build.mjs",
     "start": "electron .",
     "lint": "eslint .",
     "preview": "vite preview",

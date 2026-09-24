@@ -57,7 +57,10 @@ function findAllTs(dir) {
     try { entries = readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const p = resolve(d, e.name);
-      if (e.isDirectory()) walk(p);
+      if (e.isDirectory()) {
+        if (/\[1\]/.test(e.name) || e.name.startsWith('--')) continue;
+        walk(p);
+      }
       else if (e.name.endsWith('.ts') && !e.name.endsWith('.d.ts') && !e.name.endsWith('.test.ts') && !e.name.endsWith('.spec.ts')) result.push(p);
     }
   }
