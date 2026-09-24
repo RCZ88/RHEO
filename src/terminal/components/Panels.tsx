@@ -4,7 +4,7 @@ import {
   Equal, Flame, FlipHorizontal2, FolderGit2, History, Keyboard, Layers, ListOrdered, Monitor, Pencil, Pin, PinOff, Play, Plus, Plug, Search,
   Settings2, Star, Terminal, Trash2, Type, X, Zap, ZoomIn, BookOpen,
 } from "lucide-react";
-import type { MCPServer, PaneNode, SavedCommand, Shortcut, TerminalTab, ThemeDef } from "../lib/types";
+import type { MCPServer, PaneNode, RightPanelTab, SavedCommand, Shortcut, TerminalTab, ThemeDef } from "../lib/types";
 import { DEFAULT_SHORTCUTS, FONT_OPTIONS, TAB_COLORS, THEMES } from "../lib/data";
 import { DISTROS, LINUX_TIPS, MAIN_SNIPPET, PRELOAD_SNIPPET, SHELLS, isElectron } from "../lib/electron";
 import { cx, download, fillDynamic, fmtClock, fmtDate, fmtTime, formatDuration, keysToLabel, normalizeCombo, parseDynamicParams, timeAgo } from "../lib/utils";
@@ -13,6 +13,8 @@ import { collectSplits, countLeaves, listPaneIds } from "../hooks/useConsoleStor
 import { ICON_CHOICES, TabIcon } from "./TabIcon";
 import { CommandNotesPanel } from "./CommandNotesPanel";
 import { commandNotes } from "./CommandNotesStore";
+import { AddPromptModal } from "./AddPromptModal";
+import type { CommandNote } from "./CommandNotesPanel";
 
 function Section({ title, icon, right, children }: { title: string; icon?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -778,6 +780,10 @@ export function SysPanel({ store, notify }: { store: Store; notify: (m: string) 
 }
 
 export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: (m: string) => void; groupCtl: { renameG: string | null; setRenameG: (v: string | null) => void; gDraft: string; setGDraft: (v: string) => void } }) {
+  const [modalNote, setModalNote] = useState<{ command: string; section: string; sectionTitle: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savingLabel, setSavingLabel] = useState("");
+  const [activeNoteId, setActiveNoteId] = useState<string | undefined>(undefined);
   const tabs = [
     { id: "inspect", label: "Inspect", icon: <Settings2 size={13} /> },
     { id: "layout", label: "Layout", icon: <Layers size={13} /> },
@@ -785,7 +791,7 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
     { id: "history", label: "Hist", icon: <History size={13} /> },
     { id: "stats", label: "Stats", icon: <BarChart3 size={13} /> },
     { id: "keys", label: "Keys", icon: <Keyboard size={13} /> },
-    { id: "mcp", label: "MCP", icon: <Plug size={13} /> },
+    { id: "mcp", label: "Mcp", icon: <Plug size={13} /> },
     { id: "theme", label: "Theme", icon: <Type size={13} /> },
     { id: "sys", label: "System", icon: <Monitor size={13} /> },
     { id: "handbook", label: "Handbook", icon: <BookOpen size={13} /> },
@@ -794,7 +800,7 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
     <div className="h-full flex flex-col min-h-0" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
       <div className="grid grid-cols-3 gap-1 p-2.5 pb-1.5" role="tablist" aria-label="inspector tabs">
         {tabs.map((tb) => (
-          <button key={tb.id} role="tab" aria-selected={store.rightTab === tb.id} onClick={() => store.setRightTab(tb.id as Store["rightTab"])} className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-[9.5px] font-bold uppercase tracking-wider transition" style={{
+          <button key={tb.id} role="tab" aria-selected={store.rightTab === tb.id}           onClick={() => store.setRightTab(tb.id as RightPanelTab)} className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-[9.5px] font-bold uppercase tracking-wider transition" style={{
             background: store.rightTab === tb.id ? "color-mix(in srgb, var(--t-accent) 16%, transparent)" : "transparent",
             color: store.rightTab === tb.id ? "var(--t-accent)" : "var(--t-muted)",
           }}>
@@ -813,8 +819,30 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
         {store.rightTab === "mcp" && <McpPanel store={store} notify={notify} />}
         {store.rightTab === "theme" && <ThemePanel store={store} notify={notify} />}
         {store.rightTab === "sys" && <SysPanel store={store} notify={notify} />}
-        {store.rightTab === "handbook" && <CommandNotesPanel store={store} notes={commandNotes.list()} />}
+        {store.rightTab === "handbook" && <CommandNotesPanel store={store} onOpenModal={(cmd) => setModalNote(cmd ?? { command: "", section: "", sectionTitle: "" })} activeNoteId={activeNoteId} onSelectNote={setActiveNoteId} notes={commandNotes.list()} saving={saving} savingLabel={savingLabel} />}
+        {store.rightTab === "notes" && <CommandNotesPanel store={store} onOpenModal={(cmd) => setModalNote(cmd ?? { command: "", section: "", sectionTitle: "" })} activeNoteId={activeNoteId} onSelectNote={setActiveNoteId} notes={commandNotes.list()} saving={saving} savingLabel={savingLabel} />}
       </div>
+      {modalNote && (
+        <AddPromptModal
+          initialCommand={modalNote.command}
+          initialSection={modalNote.section}
+          initialSectionTitle={modalNote.sectionTitle}
+          onClose={() => setModalNote(null)}
+          onSave={(note) => {
+            setSaving(true);
+            setSavingLabel("Saving...");
+            commandNotes.add({
+              id: note.id, command: note.command, section: note.section, sectionTitle: note.sectionTitle,
+              title: note.title, summary: note.summary, what: note.what, when: note.when,
+              gotcha: note.gotcha, params: note.params, safety: note.safety, related: note.related,
+              savedAt: Date.now(), savedBy: 'ai',
+            });
+            setTimeout(() => { setSaving(false); setSavingLabel(""); setModalNote(null); notify("Note saved"); }, 400);
+          }}
+          saving={saving}
+          savingLabel={savingLabel}
+        />
+      )}
     </div>
   );
 }

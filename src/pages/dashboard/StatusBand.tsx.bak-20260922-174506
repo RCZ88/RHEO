@@ -1,0 +1,249 @@
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { GlassCard } from '../../components/GlassCard';
+import { Button } from '../../components/ui/button';
+import { NumberTicker } from '../../components/ui/number-ticker';
+import { AnimatedCircularProgressBar } from '../../components/ui/animated-circular-progress-bar';
+import { Zap, Play, Globe, Monitor, Clock, ArrowUp, Activity } from 'lucide-react';
+
+function formatTime(ms: number): string {
+  if (!ms || !isFinite(ms)) return '00:00:00';
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatDate(): string {
+  const now = new Date();
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${dayNames[now.getDay()]} ${monthNames[now.getMonth()]} ${now.getDate()}`;
+}
+
+interface StatusBandProps {
+  displayTimeMs: number;
+  isCurrentlyProductive: boolean;
+  isDistracting: boolean;
+  currentAppName: string;
+  isReal?: boolean;
+  totalFocusedMs: number;
+  browserName?: string;
+  isInBrowser?: boolean;
+  onStartFocus?: () => void;
+  isPaused?: boolean;
+  websiteTitle?: string;
+  websiteDomain?: string;
+  websiteCategory?: string;
+}
+
+function getAccentColor(state: 'productive' | 'neutral' | 'distracting') {
+  switch (state) {
+    case 'productive': return { dot: 'var(--success)', arc: 'var(--success)', dotBg: 'bg-emerald-500/15 text-emerald-400' };
+    case 'distracting': return { dot: 'var(--warning)', arc: 'var(--warning)', dotBg: 'bg-amber-500/15 text-amber-400' };
+    default: return { dot: 'var(--muted-foreground)', arc: 'var(--muted-foreground)', dotBg: 'bg-zinc-500/15 text-zinc-400' };
+  }
+}
+
+type TierTransition = {
+  id: number;
+  from: string | null;
+  to: string;
+  timestamp: number;
+};
+
+export function StatusBand({
+  displayTimeMs,
+  isCurrentlyProductive,
+  isDistracting,
+  currentAppName,
+  isReal,
+  totalFocusedMs,
+  browserName,
+  isInBrowser,
+  onStartFocus,
+  isPaused,
+  websiteTitle,
+  websiteDomain,
+  websiteCategory,
+}: StatusBandProps) {
+  const totalMinutes = Math.floor(totalFocusedMs / 1000 / 60);
+  const stateKey = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
+  const accent = getAccentColor(stateKey);
+  const isActive = !isPaused && (isCurrentlyProductive || isDistracting);
+  const timeStr = useMemo(() => formatTime(displayTimeMs), [displayTimeMs]);
+
+  const dailyFocusTarget = 240;
+  const focusPercent = Math.min(100, Math.round((totalMinutes / dailyFocusTarget) * 100));
+  const currentTier = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
+
+  const prevTierRef = useRef<string | null>(null);
+  const [transitions, setTransitions] = useState<TierTransition[]>([]);
+  const transitionIdRef = useRef(0);
+  const [showRecap, setShowRecap] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const prev = prevTierRef.current;
+    if (prev !== null && prev !== currentTier) {
+      const id = transitionIdRef.current++;
+      const newT: TierTransition = { id, from: prev, to: currentTier, timestamp: Date.now() };
+      setTransitions(prev => [newT, ...prev].slice(0, 5));
+      setShowRecap(true);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = setTimeout(() => setShowRecap(false), 5000);
+    }
+    prevTierRef.current = currentTier;
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [currentTier]);
+
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const tierLabel = (t: string | null) => {
+    if (!t) return 'Idle';
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+
+  const recapLines = useMemo(() => {
+    if (transitions.length === 0) return [];
+    return transitions.slice(0, 3).map(t => ({
+      id: t.id,
+      text: `${tierLabel(t.from)} → ${tierLabel(t.to)}`,
+      ago: Math.floor((now - t.timestamp) / 1000),
+    }));
+  }, [transitions, now]);
+
+  const isTracking = isReal === true;
+  const isWaylandDegraded = process.env.XDG_SESSION_TYPE === 'wayland';
+
+  return (
+    <GlassCard variant="elevated" className="h-full flex flex-col overflow-hidden p-5">
+      {/* Status header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <motion.div
+            animate={{ opacity: isActive ? [0.4, 1, 0.4] : 1 }}
+            transition={{ duration: 1.5, repeat: isActive ? Infinity : 0 }}
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: accent.dot }}
+          />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-400 light:text-stone-600">
+            {isPaused ? 'Paused' : isActive ? (isDistracting ? 'Distracting' : 'Locked In') : 'Idle'}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <Zap size={11} className="text-amber-500/60" />
+            <span className="text-[11px] text-zinc-500 light:text-stone-500 font-sans">
+              <span className="font-mono font-semibold text-zinc-300 light:text-stone-700 tabular-nums">
+                <NumberTicker value={totalMinutes} suffix="m" delay={300} duration={1200} />
+              </span>
+              {' '}focused
+            </span>
+          </div>
+          <span className="text-[10px] text-zinc-600 light:text-stone-400 font-mono tabular-nums">{formatDate()}</span>
+        </div>
+      </div>
+
+      {/* Timer hero */}
+      <div className="flex items-center justify-center py-2 flex-1">
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className="relative"
+        >
+          <AnimatedCircularProgressBar
+            value={focusPercent}
+            size={140}
+            strokeWidth={4}
+            gaugePrimaryColor={accent.arc}
+            gaugeSecondaryColor="var(--border)"
+          >
+            <motion.div
+              key={timeStr}
+              initial={{ y: -8, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="font-mono text-[32px] font-bold leading-none tracking-tight text-zinc-100 light:text-stone-900 tabular-nums"
+              style={{ color: accent.arc }}
+            >
+              {timeStr}
+            </motion.div>
+          </AnimatedCircularProgressBar>
+        </motion.div>
+      </div>
+
+      {/* Tracking info */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {isTracking ? (
+            <div className="flex items-center gap-2 bg-zinc-900/80 light:bg-white rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50 light:border-zinc-200/50">
+              {isInBrowser ? <Globe size={12} className="text-zinc-500 shrink-0" /> : <Monitor size={12} className="text-zinc-500 shrink-0" />}
+              <span className="text-[12px] font-medium text-zinc-300 light:text-stone-800 truncate font-sans">
+                {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
+              </span>
+              {isInBrowser && websiteCategory && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 light:bg-zinc-100 text-zinc-500 light:text-stone-600 font-sans hidden sm:inline">{websiteCategory}</span>
+              )}
+            </div>
+          ) : isWaylandDegraded ? (
+            <div className="flex items-center gap-2 bg-zinc-900/80 light:bg-white rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50 light:border-zinc-200/50">
+              <Clock size={11} className="text-zinc-600 light:text-stone-400" />
+              <span className="text-[11px] text-zinc-500 light:text-stone-500 font-sans">Tracking active on Wayland</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 bg-zinc-900/80 light:bg-white rounded-lg px-3 py-1.5 border border-zinc-700/50 light:border-zinc-200/50">
+              <Clock size={11} className="text-zinc-600 light:text-stone-400" />
+              <span className="text-[11px] text-zinc-500 light:text-stone-500 font-sans">No foreground data</span>
+            </div>
+          )}
+        </div>
+
+        {onStartFocus && !isPaused && (
+          <Button
+            onClick={onStartFocus}
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--page-accent)]/15 text-[var(--page-accent)] border border-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/25 hover:border-[var(--page-accent)]/50 transition-all duration-200 text-[12px] font-medium font-sans focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+          >
+            <Play size={10} />
+            Focus
+          </Button>
+        )}
+      </div>
+
+      {/* Tier recap */}
+      {showRecap && recapLines.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-2 bg-zinc-900/80 light:bg-white rounded-lg p-3 border border-zinc-700/50 light:border-zinc-200/50"
+        >
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Activity size={10} className="text-zinc-500" />
+            <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-zinc-500 light:text-stone-500">Since Last Visit</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {recapLines.map((line) => (
+              <span key={line.id} className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 light:bg-zinc-100 border border-zinc-700/50 light:border-zinc-200/50 text-[10px]">
+                <ArrowUp size={8} className="text-zinc-500" />
+                <span className="text-zinc-400 light:text-stone-600 font-mono">{line.text}</span>
+                <span className="text-zinc-600 light:text-stone-400">{line.ago}s ago</span>
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </GlassCard>
+  );
+}

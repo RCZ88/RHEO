@@ -322,6 +322,12 @@ export default function AIToolsTab({
   // ── Popup-internal model filter ──
   const [modalSelectedModels, setModalSelectedModels] = useState<string[]>([])
 
+  // ── Hermes Setup ──
+  const [showHermesSetup, setShowHermesSetup] = useState(false)
+  const [hermesDetectedPaths, setHermesDetectedPaths] = useState<string[]>([])
+  const [hermesLoading, setHermesLoading] = useState(false)
+  const [hermesCustomPath, setHermesCustomPath] = useState('')
+
   // ── Session history tool selection ──
   const [sessionTool, setSessionTool] = useState<string | null>(null)
 
@@ -364,6 +370,18 @@ export default function AIToolsTab({
     }
     fetchDetails()
   }, [effectiveAiPeriod])
+
+  // ── Auto-detect all AI tool paths on mount ──
+  useEffect(() => {
+    const detectAgents = async () => {
+      try {
+        const info = (await window.deskflowAPI!.debugAIAgents()) as any
+        setAgentDebugInfo(info)
+        setShowAgentDebug(true)
+      } catch {}
+    }
+    detectAgents()
+  }, [])
 
   // ── AI agents computation ──
   const aiAgentsRef = useRef<AIAgent[]>([])
@@ -929,6 +947,44 @@ export default function AIToolsTab({
     }
   }
 
+  const handleHermesSetup = async () => {
+    setHermesLoading(true)
+    try {
+      const info = (await window.deskflowAPI!.debugAIAgents()) as any
+      const hermesInfo = info?.hermes || info?.agents?.find((a: any) => a.id === 'hermes') || null
+      const paths: string[] = []
+      if (hermesInfo?.paths) {
+        paths.push(...hermesInfo.paths)
+      }
+      if (hermesInfo?.detected) {
+        paths.push('Detected: hermes-agent at %LOCALAPPDATA%/hermes-agent')
+      }
+      setHermesDetectedPaths(paths.length > 0 ? paths : ['%LOCALAPPDATA%/hermes-agent', '~/.hermes/sessions', '~/.hermes/profiles'])
+    } catch (err) {
+      console.error('Hermes setup failed:', err)
+      setHermesDetectedPaths(['%LOCALAPPDATA%/hermes-agent', '~/.hermes/sessions', '~/.hermes/profiles'])
+    } finally {
+      setHermesLoading(false)
+      setShowHermesSetup(true)
+    }
+  }
+
+  const handleHermesPathSelect = async () => {
+    try {
+      const result = await window.deskflowAPI!.showOpenDialog({
+        title: 'Select Hermes Sessions Directory',
+        properties: ['openDirectory'],
+      })
+      if (result && result.filePaths && result.filePaths.length > 0) {
+        setHermesCustomPath(result.filePaths[0])
+        await window.deskflowAPI!.setHermesSessionsPath(result.filePaths[0])
+        setHermesDetectedPaths([result.filePaths[0]])
+      }
+    } catch (err) {
+      console.error('Hermes path selection failed:', err)
+    }
+  }
+
   const activeCount = aiAgents.filter((a) => a.status !== 'inactive').length
 
   return (
@@ -1013,11 +1069,19 @@ export default function AIToolsTab({
             >
               {showAgentDebug ? 'Hide Details' : 'Details'}
             </button>
-            <button
-              onClick={() => {
-                const rows: string[] = [
-                  'Tool,Tokens,Messages,Sessions,Cost,Tokens/Msg,Cost/Session',
-                ]
+             <button
+               onClick={handleHermesSetup}
+               disabled={hermesLoading}
+               className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-violet-400 hover:text-violet-300 bg-violet-950/30 hover:bg-violet-900/40 rounded-lg ring-1 ring-violet-500/20 disabled:opacity-50 transition-colors duration-150"
+             >
+               {hermesLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderOpen className="w-3 h-3" />}
+               Hermes Setup
+             </button>
+             <button
+               onClick={() => {
+                 const rows: string[] = [
+                   'Tool,Tokens,Messages,Sessions,Cost,Tokens/Msg,Cost/Session',
+                 ]
                 aiAgents
                   .filter((a) => a.status !== 'inactive')
                   .forEach((a) => {
@@ -1276,6 +1340,63 @@ export default function AIToolsTab({
                     </div>
                   )
                 )}
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Hermes Setup Modal ── */}
+      <AnimatePresence>
+        {showHermesSetup && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+          >
+            <GlassCard>
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader title="Hermes Sessions Setup" icon={<FolderOpen />} />
+                <button
+                  onClick={() => setShowHermesSetup(false)}
+                  className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-[11px] text-zinc-500 light:text-stone-500">
+                  Hermes agent sessions are automatically detected from the following directories. You can change the path to the JSON session files.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {hermesDetectedPaths.map((path, i) => (
+                    <div key={i} className="p-3 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 flex items-center gap-3">
+                      <FolderOpen className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] text-zinc-400 light:text-stone-500 font-mono truncate">{path}</div>
+                        <div className="text-[10px] text-emerald-400/70">Detected</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleHermesPathSelect}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 rounded-lg text-xs ring-1 ring-violet-500/20 transition-colors duration-150"
+                  >
+                    <FolderOpen className="w-3 h-3" />
+                    Change Sessions Path
+                  </button>
+                  <button
+                    onClick={() => setShowHermesSetup(false)}
+                    className="px-3 py-1.5 bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-300 rounded-lg text-xs ring-1 ring-zinc-700/60 transition-colors duration-150"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
             </GlassCard>
           </motion.div>

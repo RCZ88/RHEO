@@ -168,6 +168,32 @@ components:
 
 The prompt you generate should equip the receiving AI with context and then task it with acting as the **Lead Designer and Engineer**. It should not provide "Options A, B, and C" for the user to pick from. Instead, it should demand a single, comprehensive, and well-reasoned solution that includes data-processing logic, visual specifications, and interaction design.
 
+## ⚠️ Runtime Pitfalls
+
+### Context Compaction Prunes Large Skill Content
+
+The `generate-prompt` SKILL.md is very large (~27K chars). When Hermes compresses context during a long session, the `skill_view(name='generate-prompt')` call may return pruned content — sections A/B/C, Phase 1-4 details, and source code examples can be truncated or lost entirely.
+
+**Recovery procedure when skill_view returns pruned content:**
+1. The skill's structural requirements are: §A (skills list), §B (MCP inventory), §C (anti-slop checklist), §D-H (source code snippets for StatusBand, MomentumHero, DeskFlowCard), design tokens, animation tokens, engineering/design/UX tasks, Phase 3 planning.
+2. Rebuild the PROMPT.md from these structural requirements even without the full skill content loaded.
+3. Use `git show ec849f3:src/pages/dashboard/StatusBand.tsx` and similar commands to recover source code from the last known-good commit.
+4. The CONTEXT_BUNDLE.md must include actual source code lines, not descriptions.
+
+### Conditional `motion.div` Component Type Requires `as any` Cast
+
+When using `framer-motion` with conditional rendering:
+```tsx
+const Comp = noMotion ? 'div' : motion.div
+```
+TypeScript fails with `TS2322` when spreading props because `'div' | typeof motion.div` doesn't match `HTMLMotionProps<"div">`. The `motion.div` variant also rejects `children: (Element | null)[]`.
+
+**Fix:** Cast the conditional component:
+```tsx
+const Comp = noMotion ? 'div' : motion.div as any
+```
+Do NOT use `React.FC<HTMLMotionProps<"div">>` — it resolves `children` to `React.ReactNode` and still fails. `as any` is the only reliable approach.
+
 ## MANDATORY: Before Creating Any Prompt
 
 **STEP 0 — Update state.md first:**

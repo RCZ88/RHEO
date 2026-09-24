@@ -257,9 +257,9 @@ function tick (
 
     const appName = resolved.name
     const appLower = appName.toLowerCase()
-    const isTrackerApp = appLower.includes('electron') ||
-                         appLower.includes('deskflow') ||
-                         appLower.includes('rheo')
+const isTrackerApp = appLower === 'electron' ||
+                          appLower === 'deskflow' ||
+                          appLower === 'rheo'
 
     if (appName !== state.currentApp) {
       const rawDuration = state.lastSuccessfulObservationTime - state.sessionStart

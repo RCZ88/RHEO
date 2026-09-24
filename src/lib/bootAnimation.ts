@@ -1,5 +1,5 @@
 // R-10 · Boot splash config helpers — reads boot_animation from deskflow preferences
-import { deskflowAPI } from '../preload';
+const deskflowAPI = (window as unknown as { deskflowAPI?: any }).deskflowAPI;
 
 export interface BootAnimationConfig {
   enabled: boolean;

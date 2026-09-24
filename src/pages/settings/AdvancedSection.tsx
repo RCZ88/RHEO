@@ -140,7 +140,7 @@ export function AdvancedSection({ activeTab, settingsSearch, ...props }: Advance
   const renderContent = () => {
     switch (activeTab) {
       case 'general': return <GeneralTab {...props} sensors={sensors} />;
-      case 'category': return <CategoryTab {...props} sensors={sensors} handleDragStart={handleDragStart} handleDragOver={handleDragOver} handleDragEnd={handleDragEnd} />;
+      case 'category': return <CategoryTab {...props} sensors={sensors} handleDragStart={handleDragStart} handleDragOver={handleDragOver} handleDragEnd={handleDragEnd} customCategories={customCategories} setCustomCategories={setCustomCategories} />;
       case 'finance': return <FinanceTab {...props} />;
       case 'database': return <Suspense fallback={<div className="py-24 flex items-center justify-center text-zinc-500 text-sm">Loading database…</div>}><DatabasePage /></Suspense>;
       case 'devices': return <DevicesPanel />;

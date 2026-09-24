@@ -38,6 +38,8 @@ export async function callProvider(
         messages: [{ role: 'system', content: req.systemPrompt }, ...req.messages],
         max_tokens: req.maxTokens ?? 500,
         temperature: req.temperature ?? 0.4,
+        ...(req.tools?.length ? { tools: req.tools } : {}),
+        ...(req.toolChoice ? { tool_choice: req.toolChoice } : {}),
       };
 
   console.log(`[PROV] >>> ${config.id} calling ${url} model=${req.model} maxTokens=${req.maxTokens ?? 500}`);

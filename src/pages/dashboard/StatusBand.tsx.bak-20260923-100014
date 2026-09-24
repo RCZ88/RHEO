@@ -1,0 +1,268 @@
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { BlurFade } from '../../components/ui/blur-fade';
+import { NumberTicker } from '../../components/ui/number-ticker';
+import { NeonGradientCard } from '../../components/ui/neon-gradient-card';
+import { AnimatedCircularProgressBar } from '../../components/ui/animated-circular-progress-bar';
+import { DotPattern } from '../../components/ui/dot-pattern';
+import { Zap, Play, Globe, Monitor, Clock, ArrowUp, Activity } from 'lucide-react';
+
+function formatTime(ms: number): string {
+  if (!ms || !isFinite(ms)) return '00:00:00';
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatDate(): string {
+  const now = new Date();
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${dayNames[now.getDay()]} ${monthNames[now.getMonth()]} ${now.getDate()}`;
+}
+
+interface StatusBandProps {
+  displayTimeMs: number;
+  isCurrentlyProductive: boolean;
+  isDistracting: boolean;
+  currentAppName: string;
+  totalFocusedMs: number;
+  isReal?: boolean;
+  isInBrowser?: boolean;
+  onStartFocus?: () => void;
+  isPaused?: boolean;
+  websiteTitle?: string;
+  websiteCategory?: string;
+}
+
+function getAccentColor(state: 'productive' | 'neutral' | 'distracting') {
+  switch (state) {
+    case 'productive': return { dot: '#34d399', neonFirst: 'rgba(16,185,129,0.2)', neonSecond: 'rgba(59,130,246,0.15)', arc: '#34d399', dotBg: 'bg-emerald-500/15 text-emerald-400' };
+    case 'distracting': return { dot: '#fbbf24', neonFirst: 'rgba(245,158,11,0.15)', neonSecond: 'rgba(239,68,68,0.12)', arc: '#fbbf24', dotBg: 'bg-amber-500/15 text-amber-400' };
+    default: return { dot: '#71717a', neonFirst: 'rgba(99,102,241,0.1)', neonSecond: 'rgba(139,92,246,0.08)', arc: '#71717a', dotBg: 'bg-zinc-500/15 text-zinc-400' };
+  }
+}
+
+type TierTransition = {
+  id: number;
+  from: string | null;
+  to: string;
+  timestamp: number;
+};
+
+export function StatusBand({
+  displayTimeMs,
+  isCurrentlyProductive,
+  isDistracting,
+  currentAppName,
+  totalFocusedMs,
+  isInBrowser,
+  onStartFocus,
+  isPaused,
+  websiteTitle,
+  websiteCategory,
+}: StatusBandProps) {
+  const totalMinutes = Math.floor(totalFocusedMs / 1000 / 60);
+  const stateKey = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
+  const accent = getAccentColor(stateKey);
+  const isActive = !isPaused && (isCurrentlyProductive || isDistracting);
+  const timeStr = useMemo(() => formatTime(displayTimeMs), [displayTimeMs]);
+  const [hours, minutes, seconds] = timeStr.split(':');
+
+  const dailyFocusTarget = 240;
+  const focusPercent = Math.min(100, Math.round((totalMinutes / dailyFocusTarget) * 100));
+
+  const currentTier = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
+
+  const prevTierRef = useRef<string | null>(null);
+  const [transitions, setTransitions] = useState<TierTransition[]>([]);
+  const transitionIdRef = useRef(0);
+  const [showRecap, setShowRecap] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const prev = prevTierRef.current;
+    if (prev !== null && prev !== currentTier) {
+      const id = transitionIdRef.current++;
+      const newT: TierTransition = { id, from: prev, to: currentTier, timestamp: Date.now() };
+      setTransitions(prev => [newT, ...prev].slice(0, 5));
+      setShowRecap(true);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = setTimeout(() => setShowRecap(false), 5000);
+    }
+    prevTierRef.current = currentTier;
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [currentTier]);
+
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const tierLabel = (t: string | null) => {
+    if (!t) return 'Idle';
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+
+  const recapLines = useMemo(() => {
+    if (transitions.length === 0) return [];
+    return transitions.slice(0, 3).map(t => ({
+      id: t.id,
+      text: `${tierLabel(t.from)} → ${tierLabel(t.to)}`,
+      ago: Math.floor((now - t.timestamp) / 1000),
+    }));
+  }, [transitions, now]);
+
+  return (
+    <BlurFade delay={0} duration={0.3}>
+      <NeonGradientCard
+        borderSize={1}
+        borderRadius={16}
+        neonColors={{ firstColor: accent.neonFirst, secondColor: accent.neonSecond }}
+        className="w-full h-full"
+      >
+        <div className="relative overflow-hidden rounded-[inherit]">
+          <DotPattern opacity={0.03} radius={1} gap={20} />
+          <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent z-20" />
+          <div className="relative z-10 flex flex-col gap-3 p-4" style={{ minHeight: '140px' }}>
+
+            <div className="flex items-center justify-between bg-black/20 border border-white/[0.03] rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: accent.dot }} />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-400">
+                  {isPaused ? 'Paused' : isActive ? (isDistracting ? 'Distracting' : 'Locked In') : 'Idle'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Zap size={11} className="text-amber-500/60" />
+                  <span className="text-[11px] text-zinc-500 font-sans">
+                    <span className="font-mono font-semibold text-zinc-300 tabular-nums">
+                      <NumberTicker value={totalMinutes} suffix="m" delay={300} duration={1200} />
+                    </span>
+                    {' '}focused
+                  </span>
+                </div>
+                <span className="text-[10px] text-zinc-600 font-mono tabular-nums">{formatDate()}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center py-1">
+              <AnimatedCircularProgressBar
+                value={focusPercent}
+                size={130}
+                strokeWidth={5}
+                gaugePrimaryColor={accent.arc}
+                gaugeSecondaryColor="rgba(255,255,255,0.06)"
+              >
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-[32px] font-mono font-bold text-zinc-100 leading-none tracking-tight">
+                    {hours}
+                  </span>
+                  <span className="text-[18px] font-mono font-bold text-zinc-600 mx-0.5">:</span>
+                  <span className="text-[32px] font-mono font-bold text-zinc-100 leading-none tracking-tight">
+                    {minutes}
+                  </span>
+                  <span className="text-[18px] font-mono font-bold text-zinc-600 mx-0.5">:</span>
+                  <span className="text-[32px] font-mono font-bold text-zinc-100 leading-none tracking-tight">
+                    {seconds}
+                  </span>
+                </div>
+              </AnimatedCircularProgressBar>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {currentAppName ? (
+                  <div className="flex items-center gap-2 bg-black/20 border border-white/[0.03] rounded-lg px-3 py-1.5 min-w-0">
+                    {isInBrowser ? <Globe size={12} className="text-zinc-500 shrink-0" /> : <Monitor size={12} className="text-zinc-500 shrink-0" />}
+                    <span className="text-[12px] font-medium text-zinc-300 truncate font-sans">
+                      {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
+                    </span>
+                    {isInBrowser && websiteCategory && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800/50 text-zinc-500 border border-zinc-700/20 font-sans hidden sm:inline">{websiteCategory}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 opacity-40 bg-black/20 border border-white/[0.03] rounded-lg px-3 py-1.5">
+                    <Clock size={11} className="text-zinc-600" />
+                    <span className="text-[11px] text-zinc-600 font-sans">Waiting for activity</span>
+                  </div>
+                )}
+              </div>
+
+              {onStartFocus && !isPaused && (
+                <motion.button
+                  onClick={onStartFocus}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 border border-zinc-700/30 hover:bg-zinc-700/50 hover:text-zinc-200 transition-colors text-[11px] font-medium font-sans"
+                >
+                  <Play size={9} />
+                  Focus
+                </motion.button>
+              )}
+            </div>
+
+            <AnimatePresence mode="popLayout">
+              {showRecap && recapLines.length > 0 && (
+                <motion.div
+                  key="recap"
+                  layout
+                  initial={{ opacity: 0, y: -10, scaleY: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scaleY: 1 }}
+                  exit={{ opacity: 0, y: -6, scaleY: 0.98 }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 260,
+                    damping: 26,
+                    mass: 0.6,
+                    opacity: { duration: 0.2, ease: 'easeOut' },
+                  }}
+                  className="origin-top"
+                >
+                  <div className="bg-black/20 border border-white/[0.03] rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Activity size={10} className="text-zinc-500" />
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-zinc-500">Since Last Visit</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        {recapLines.map((line) => (
+                          <motion.div
+                            key={line.id}
+                            layout
+                            initial={{ opacity: 0, scale: 0.85, y: -6 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: -3 }}
+                            transition={{
+                              type: 'spring',
+                              stiffness: 300,
+                              damping: 24,
+                              mass: 0.5,
+                            }}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800/40 border border-zinc-700/30 text-[10px]"
+                          >
+                            <ArrowUp size={8} className="text-zinc-500" />
+                            <span className="text-zinc-400 font-mono">{line.text}</span>
+                            <span className="text-zinc-600">{line.ago}s ago</span>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+          </div>
+        </div>
+      </NeonGradientCard>
+    </BlurFade>
+  );
+}

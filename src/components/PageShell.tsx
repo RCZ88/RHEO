@@ -11,7 +11,7 @@ export function PageShell({ variant = 'default', page, className = '', style, ch
   const layoutClass = {
     default:       'p-5 space-y-4',
     'sticky-header': 'flex flex-col h-full',
-    dashboard:     'p-5 space-y-4',
+    dashboard:     'p-3 space-y-2 flex flex-col flex-1 min-h-0',
   }[variant];
 
   return (

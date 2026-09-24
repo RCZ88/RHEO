@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Minus, Square, X, Bell, Eye, MousePointer2, Clock, Settings2 } from 'lucide-react';
+import { Minus, Square, X, Bell, MousePointer2 } from 'lucide-react';
 
 // Live accessor — resolved fresh each call so the preload bridge is always visible
 const api = () => (window as any)?.deskflowAPI ?? null;
@@ -23,7 +23,6 @@ export default function TitleBar({
   // ── Title bar auto-hide state ──
   const [tbMode, setTbMode] = useState<'always' | 'hover' | 'auto'>('always');
   const [hidden, setHidden] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -31,18 +30,9 @@ export default function TitleBar({
   useEffect(() => {
     const a = api();
     if (!a?.getTitleBarMode) return;
-    a.getTitleBarMode().then(m => {
-      if (m && typeof m === 'string') setTbMode(m as TbMode);
+    a.getTitleBarMode().then((m: string) => {
+      if (m && typeof m === 'string') setTbMode(m as 'always' | 'hover' | 'auto');
     }).catch(() => {});
-  }, []);
-
-  const setMode = useCallback((mode: 'always' | 'hover' | 'auto') => {
-    setTbMode(mode);
-    setHidden(false);
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    if (autoTimer.current) clearTimeout(autoTimer.current);
-    const a = api();
-    if (a?.setTitleBarMode) a.setTitleBarMode(mode).catch(() => {});
   }, []);
 
   // Auto-hide timer for 'auto' mode (3s inactivity)
@@ -90,26 +80,6 @@ export default function TitleBar({
       if (autoTimer.current) clearTimeout(autoTimer.current);
     };
   }, [tbMode, hidden, resetAutoTimer]);
-
-  // Close settings on click outside
-  const settingsRef = useRef<HTMLDivElement>(null);
-
-  // Listen for command palette / external trigger to open settings
-  useEffect(() => {
-    const fn = () => setSettingsOpen(true);
-    window.addEventListener('open-titlebar-settings', fn);
-    return () => window.removeEventListener('open-titlebar-settings', fn);
-  }, []);
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const fn = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
-  }, [settingsOpen]);
 
   // ── Original refresh logic ──
   const refreshState = useCallback(async () => {
@@ -165,19 +135,7 @@ export default function TitleBar({
     onOpenNotifPanel?.();
   };
 
-  // ── Render helpers ──
-  const modeIcons: Record<TbMode, React.ReactNode> = {
-    always: <Eye size={13} />,
-    hover: <MousePointer2 size={13} />,
-    auto: <Clock size={13} />,
-  };
-  const modeLabels = {
-    always: 'Always show',
-    hover: 'Hide / hover to show',
-    auto: 'Auto-hide after 3s',
-  };
-
-  // Build the title bar content (shared between always and hover/auto modes)
+  // ── Original refresh logic ──
   const buildTitleBar = () => (
     <div
       className="relative z-20 shrink-0 h-9 flex items-center justify-between select-none light:bg-stone-200/90"
@@ -260,13 +218,6 @@ export default function TitleBar({
         >
           <X className="w-3.5 h-3.5 transition-colors group-hover:text-red-400 text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
         </button>
-        <button
-          onClick={() => setSettingsOpen(!settingsOpen)}
-          className="group h-full w-10 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
-          title="Title bar settings"
-        >
-          <Settings2 className="w-3.5 h-3.5 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
-        </button>
       </div>
     </div>
   );
@@ -278,37 +229,13 @@ export default function TitleBar({
         <div onMouseLeave={onMouseLeave} onMouseEnter={onMouseEnter}>
           {buildTitleBar()}
         </div>
-        {/* Settings dropdown */}
-        {settingsOpen && (
-          <div ref={settingsRef}
-            className="fixed top-[52px] right-4 z-50 rounded-xl border overflow-hidden shadow-2xl min-w-[210px]"
-            style={{ background: '#1a1a1a', borderColor: 'rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <Settings2 size={12} style={{ color: '#a1a1aa' }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#a1a1aa' }}>Title bar</span>
-            </div>
-            {(['always', 'hover', 'auto'] as const).map((m) => (
-              <button key={m}
-                onClick={() => { setMode(m); setSettingsOpen(false); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/5 cursor-pointer"
-              >
-                {modeIcons[m]}
-                <span className="flex-1 text-[12px]" style={{ color: '#d4d4d8' }}>{modeLabels[m]}</span>
-                {tbMode === m && (
-                  <span className="text-[9px] shrink-0 px-1.5 py-0.5 rounded-full border" style={{ borderColor: '#22c55e', color: '#22c55e' }}>on</span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     );
   }
 
   // ── Hover / Auto mode: thin shelf + animated title bar ──
   return (
-    <div className="relative z-20" ref={settingsRef}>
+    <div className="relative z-20">
       {/* Thin shelf strip that stays visible to catch hover */}
       <div
         className="h-[3px] shrink-0 flex items-center justify-end pr-2 cursor-default transition"
@@ -332,29 +259,6 @@ export default function TitleBar({
       >
         {buildTitleBar()}
       </div>
-      {/* Settings dropdown */}
-      {settingsOpen && (
-        <div className="fixed top-[52px] right-4 z-50 rounded-xl border overflow-hidden shadow-2xl min-w-[210px]"
-          style={{ background: '#1a1a1a', borderColor: 'rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <Settings2 size={12} style={{ color: '#a1a1aa' }} />
-            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#a1a1aa' }}>Title bar</span>
-          </div>
-          {(['always', 'hover', 'auto'] as const).map((m) => (
-            <button key={m}
-              onClick={() => { setMode(m); setSettingsOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/5 cursor-pointer"
-            >
-              {modeIcons[m]}
-              <span className="flex-1 text-[12px]" style={{ color: '#d4d4d8' }}>{modeLabels[m]}</span>
-              {tbMode === m && (
-                <span className="text-[9px] shrink-0 px-1.5 py-0.5 rounded-full border" style={{ borderColor: '#22c55e', color: '#22c55e' }}>on</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

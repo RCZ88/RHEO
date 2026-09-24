@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskFlow Dashboard Layout Editor — Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #09090b; color: #d4d4d8; }
+
+  /* ── Dashboard Mini Page ── */
+  .dash-page {
+    max-width: 1400px; margin: 0 auto; padding: 12px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .dash-row { display: flex; gap: 12px; }
+  .dash-row.full { flex-direction: column; }
+
+  .dash-card {
+    background: rgba(24,24,27,0.9); border: 1px solid rgba(63,63,70,0.5);
+    border-radius: 10px; padding: 14px; position: relative; overflow: hidden;
+  }
+  .dash-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+  .dash-card.green::before { background: #34d399; box-shadow: 0 0 8px #34d39944; }
+  .dash-card.pink::before  { background: #ec4899; box-shadow: 0 0 8px #ec489944; }
+  .dash-card.amber::before { background: #fbbf24; box-shadow: 0 0 8px #fbbf2444; }
+  .dash-card.violet::before { background: #a855f7; box-shadow: 0 0 8px #a855f744; }
+  .dash-card.cyan::before   { background: #22d3ee; box-shadow: 0 0 8px #22d3ee44; }
+  .dash-card.slate::before  { background: #71717a; }
+  .dash-card.fuchsia::before{ background: #f43f5e; }
+
+  .dash-card .label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; margin-bottom: 6px; }
+  .dash-card .value { font-size: 22px; font-weight: 700; color: #fafafa; }
+  .dash-card .sub  { font-size: 11px; color: #52525b; margin-top: 4px; }
+
+  .row-1 { grid-template-columns: 8fr 4fr; }
+  .row-4 { grid-template-columns: repeat(4, 1fr); }
+  .row-5 { grid-template-columns: 8fr 4fr; }
+
+  /* ── Editor Popup ── */
+  .editor-overlay {
+    position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+  }
+  .editor-panel {
+    width: 560px; max-width: calc(100vw - 40px); height: 100vh;
+    background: rgba(9,9,11,0.97); border-left: 1px solid rgba(63,63,70,0.5);
+    backdrop-filter: blur(20px); display: flex; flex-direction: column;
+    box-shadow: -8px 0 40px rgba(0,0,0,0.6);
+    animation: slideIn 0.25s ease-out;
+  }
+  @keyframes slideIn { from { opacity:0; transform: translateX(12px); } to { opacity:1; transform: translateX(0); } }
+
+  .editor-header { padding: 16px 20px; border-bottom: 1px solid rgba(63,63,70,0.4); display: flex; justify-content: space-between; align-items: center; }
+  .editor-header h2 { font-size: 13px; font-weight: 600; color: #fafafa; }
+  .editor-header p { font-size: 11px; color: #52525b; margin-top: 2px; }
+  .editor-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Left Preview ── */
+  .preview-panel { width: 240px; padding: 16px; background: rgba(24,24,27,0.4); border-right: 1px solid rgba(63,63,70,0.3); }
+  .preview-panel h3 { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #3f3f46; margin-bottom: 12px; }
+
+  .preview-grid { display: flex; flex-direction: column; gap: 2px; width: 220px; }
+  .preview-row { display: grid; gap: 2px; }
+  .preview-cell {
+    border-radius: 3px; border: 1px solid; padding: 6px;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 36px; transition: opacity 0.2s;
+  }
+  .preview-cell.dim { opacity: 0.25; }
+  .preview-cell span { font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #a1a1aa; }
+
+  .preview-row.row-1 { grid-template-columns: 2fr 1fr; }
+  .preview-row.row-2 { grid-template-columns: 1fr; }
+  .preview-row.row-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .preview-row.row-5 { grid-template-columns: 2fr 1fr; }
+
+  /* ── Right Toggles ── */
+  .toggles-panel { flex: 1; overflow-y: auto; padding: 12px; }
+  .toggle-section { margin-bottom: 16px; }
+  .toggle-section h4 { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #3f3f46; margin-bottom: 8px; }
+  .toggle-item {
+    display: flex; align-items: center; gap: 8px; min-height: 44px;
+    padding: 8px 10px; border-radius: 8px; margin-bottom: 4px;
+    border: 1px solid transparent; transition: all 0.15s;
+  }
+  .toggle-item.visible { background: rgba(39,39,42,0.6); border-color: rgba(63,63,70,0.5); }
+  .toggle-item.hidden  { background: rgba(24,24,27,0.3); }
+  .toggle-dot { width: 6px; height: 24px; border-radius: 3px; flex-shrink: 0; }
+  .toggle-info { flex: 1; }
+  .toggle-info .name { font-size: 12px; font-weight: 500; color: #d4d4d8; }
+  .toggle-info .desc { font-size: 10px; color: #52525b; }
+  .toggle-item.hidden .toggle-info .name { color: #52525b; }
+  .toggle-item.hidden .toggle-info .desc { color: #27272a; }
+
+  .toggle-btn {
+    width: 36px; height: 20px; border-radius: 10px; border: none;
+    cursor: pointer; transition: all 0.15s; position: relative;
+  }
+  .toggle-btn.on  { background: rgba(236,72,153,0.25); border: 1px solid rgba(236,72,153,0.4); }
+  .toggle-btn.off { background: #27272a; border: 1px solid #3f3f46; }
+  .toggle-btn::after {
+    content: ''; position: absolute; top: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #71717a; transition: all 0.15s;
+  }
+  .toggle-btn.on::after { left: 18px; background: #ec4899; }
+  .toggle-btn.off::after { left: 2px; background: #52525b; }
+
+  .reset-btn {
+    display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+    border-radius: 8px; font-size: 11px; color: #71717a; border: 1px solid #3f3f46;
+    background: transparent; cursor: pointer; transition: all 0.15s;
+  }
+  .reset-btn:hover { color: #d4d4d8; border-color: #52525b; }
+
+  /* ── FAB Button ── */
+  .fab {
+    position: fixed; bottom: 20px; right: 20px; z-index: 49;
+    display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px;
+    border-radius: 12px; background: rgba(24,24,27,0.85); backdrop-filter: blur(20px);
+    border: 1px solid rgba(99,102,241,0.3); color: #a1a1aa;
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .fab:hover { border-color: rgba(236,72,153,0.5); color: #fafafa; box-shadow: 0 0 20px rgba(236,72,153,0.1); }
+  .fab.active { border-color: rgba(236,72,153,0.5); color: #ec4899; }
+  .fab .count {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    padding: 2px 6px; border-radius: 999px; background: rgba(236,72,153,0.15); color: #ec4899;
+  }
+
+  /* ── Empty state ── */
+  .empty-state { padding: 20px; text-align: center; font-size: 11px; color: #a1a1aa; }
+
+  /* ── Focus ring demo ── */
+  *:focus-visible { outline: 2px solid rgba(236,72,153,0.5); outline-offset: 2px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════ DASHBOARD PAGE (mini) ════════════════ -->
+<div class="dash-page" id="dashPage">
+  <!-- Row 1: StatusBand (8fr) + Momentum (4fr) -->
+  <div class="dash-row row-1">
+    <div class="dash-card green" style="grid-column: span 2;">
+      <div class="label">Focus Stopwatch <span style="color:#34d399;">🔒 LOCKED</span></div>
+      <div class="value">02:47:33</div>
+      <div class="sub">Tier: productive · Streak: 14 days</div>
+    </div>
+    <div class="dash-card pink">
+      <div class="label">Daily Momentum</div>
+      <div class="value">87</div>
+      <div class="sub" style="color:#ec4899;">↑ up · 12h streak</div>
+    </div>
+  </div>
+
+  <!-- Row 2: Tier Breakdown (full) -->
+  <div class="dash-row full">
+    <div class="dash-card amber">
+      <div class="label">Tier Breakdown</div>
+      <div style="display:flex;gap:8px;height:8px;border-radius:4px;overflow:hidden;">
+        <div style="flex:3;background:#34d399;border-radius:4px;"></div>
+        <div style="flex:1;background:#fbbf24;border-radius:4px;"></div>
+        <div style="flex:1;background:#ef4444;border-radius:4px;"></div>
+      </div>
+      <div class="sub">66% productive · 22% neutral · 12% distracting</div>
+    </div>
+  </div>
+
+  <!-- Row 3: Pinned Activities (full) -->
+  <div class="dash-row full">
+    <div class="dash-card violet">
+      <div class="label">Pinned Activities</div>
+      <div class="sub">3 pinned · Last: Deep Focus 2h 14m</div>
+    </div>
+  </div>
+
+  <!-- Row 4: 4 quarters -->
+  <div class="dash-row row-4">
+    <div class="dash-card"><div class="label">Goals</div><div class="value">5/7</div></div>
+    <div class="dash-card fuchsia"><div class="label">Quick Focus</div><div class="value">+</div></div>
+    <div class="dash-card amber"><div class="label">Deadlines</div><div class="value">3</div></div>
+    <div class="dash-card cyan"><div class="label">Longest Focus</div><div class="value">4h</div></div>
+  </div>
+
+  <!-- Row 5: Schedule + Insights -->
+  <div class="dash-row row-5">
+    <div class="dash-card green"><div class="label">Schedule</div><div class="sub">3 blocks today</div></div>
+    <div class="dash-card cyan"><div class="label">Insights</div><div class="sub">AI daily insight</div></div>
+  </div>
+
+  <!-- Row 6: Productivity Chart (full) -->
+  <div class="dash-row full">
+    <div class="dash-card"><div class="label">Productivity Chart</div><div class="sub">Weekly focus distribution</div></div>
+  </div>
+
+  <!-- Row 7: Recent Sessions (full) -->
+  <div class="dash-row full">
+    <div class="dash-card slate"><div class="label">Recent Sessions</div><div class="sub">Latest tracked activity feed</div></div>
+  </div>
+</div>
+
+<!-- ════════════════ FAB BUTTON ════════════════ -->
+<button class="fab" id="fabBtn" onclick="toggleEditor()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  Widgets
+  <span class="count" id="countBadge">3 off</span>
+</button>
+
+<!-- ════════════════ EDITOR POPUP ════════════════ -->
+<div class="editor-overlay" id="editorOverlay" style="display:none;" onclick="if(event.target===this)toggleEditor()">
+  <div class="editor-panel">
+    <div class="editor-header">
+      <div>
+        <h2>Layout Editor</h2>
+        <p>Toggle and arrange widgets — preview mirrors the real grid</p>
+      </div>
+      <button class="reset-btn" onclick="resetLayout()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 1 3.3-6.9"/><path d="M3 2v5h5"/></svg>
+        Reset layout
+      </button>
+    </div>
+
+    <div class="editor-body">
+      <!-- LEFT: Live Preview -->
+      <div class="preview-panel">
+        <h3>Live preview</h3>
+        <div class="preview-grid" id="previewGrid"></div>
+      </div>
+
+      <!-- RIGHT: Toggles -->
+      <div class="toggles-panel" id="togglesPanel"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════ WIDGET REGISTRY ════════════════
+const WIDGET_META = {
+  'status-band':        { id: 'status-band',        name: 'Focus Stopwatch',      description: 'Live timer with neon tier glow',            accent: '#34d399', locked: true },
+  momentum:             { id: 'momentum',           name: 'Daily Momentum',       description: 'Score, streak and breakdown',              accent: '#ec4899' },
+  'tier-breakdown':     { id: 'tier-breakdown',     name: 'Tier Breakdown',       description: 'Time split across app categories',         accent: '#fbbf24' },
+  'pinned-activities':  { id: 'pinned-activities',  name: 'Pinned Activities',    description: 'Your pinned focus sessions',               accent: '#a855f7' },
+  goals:                { id: 'goals',              name: 'Goals',                description: 'Today\u2019s goal completion',                  accent: '#8b5cf6' },
+  'quick-focus':        { id: 'quick-focus',        name: 'Quick Focus',          description: 'One-tap focus launcher',                   accent: '#f43f5e' },
+  deadlines:            { id: 'deadlines',          name: 'Deadlines',            description: 'Upcoming due dates',                       accent: '#fbbf24' },
+  'longest-focus':      { id: 'longest-focus',      name: 'Longest Focus',        description: 'Personal best session',                    accent: '#22d3ee' },
+  schedule:             { id: 'schedule',           name: 'Schedule',             description: 'Today\u2019s planned blocks',                   accent: '#ec4899' },
+  insights:             { id: 'insights',           name: 'Insights',             description: 'AI daily insight strip',                   accent: '#22d3ee' },
+  'productivity-chart': { id: 'productivity-chart', name: 'Productivity Chart',   description: 'Weekly focus distribution',                accent: '#34d399' },
+  'recent-sessions':    { id: 'recent-sessions',    name: 'Recent Sessions',      description: 'Latest tracked activity feed',             accent: '#71717a' },
+};
+
+const ROW_TEMPLATES = [
+  { key: 'row-1', breakpointCols: 12, cells: [
+    { id: 'status-band', w: 2, h: 1.0 },
+    { id: 'momentum',    w: 1, h: 1.0 },
+  ]},
+  { key: 'row-2', breakpointCols: 12, cells: [{ id: 'tier-breakdown', w: 1, h: 0.28 }] },
+  { key: 'row-3', breakpointCols: 12, cells: [{ id: 'pinned-activities', w: 1, h: 0.9 }] },
+  { key: 'row-4', breakpointCols: 4,  cells: [
+    { id: 'goals',         w: 1, h: 0.85 },
+    { id: 'quick-focus',   w: 1, h: 0.85 },
+    { id: 'deadlines',     w: 1, h: 0.85 },
+    { id: 'longest-focus', w: 1, h: 0.85 },
+  ]},
+  { key: 'row-5', breakpointCols: 12, cells: [
+    { id: 'schedule', w: 2, h: 0.8 },
+    { id: 'insights', w: 1, h: 0.8 },
+  ]},
+  { key: 'row-6', breakpointCols: 12, cells: [{ id: 'productivity-chart', w: 1, h: 1.0 }] },
+  { key: 'row-7', breakpointCols: 12, cells: [{ id: 'recent-sessions', w: 1, h: 0.9 }] },
+];
+
+const ALL_WIDGET_IDS = ROW_TEMPLATES.flatMap(r => r.cells.map(c => c.id));
+
+// ════════════════ LAYOUT STATE ════════════════
+let hidden = [];
+const defaults = { hidden: [], order: {} };
+ROW_TEMPLATES.forEach(r => defaults.order[r.key] = r.cells.map(c => c.id));
+
+function loadLayout() {
+  try {
+    const raw = localStorage.getItem('deskflow-dashboard-layout-v1');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.hidden)) hidden = parsed.hidden.filter(id => ALL_WIDGET_IDS.includes(id));
+    }
+  } catch {}
+  return hidden;
+}
+
+function saveLayout() {
+  try { localStorage.setItem('deskflow-dashboard-layout-v1', JSON.stringify({ hidden })); } catch {}
+}
+
+loadLayout();
+
+// ════════════════ BUILD UI ════════════════
+function isVisible(id) { return !hidden.includes(id); }
+function toggleVisible(id) {
+  if (hidden.includes(id)) hidden = hidden.filter(h => h !== id);
+  else hidden = [...hidden, id];
+  saveLayout();
+  renderAll();
+}
+function resetLayout() {
+  hidden = [];
+  saveLayout();
+  renderAll();
+}
+function hiddenCount() { return hidden.length; }
+
+function renderPreview() {
+  const grid = document.getElementById('previewGrid');
+  grid.innerHTML = '';
+
+  ROW_TEMPLATES.forEach(row => {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'preview-row row-' + row.key.replace('row-', '');
+    const cols = row.breakpointCols;
+
+    // Determine visible cell widths
+    const visibleCells = row.cells.filter(c => isVisible(c.id));
+    const totalVisible = visibleCells.length;
+
+    row.cells.forEach(cell => {
+      const shown = isVisible(cell.id);
+      const cellDiv = document.createElement('div');
+      cellDiv.className = 'preview-cell' + (shown ? '' : ' dim');
+      cellDiv.style.borderColor = WIDGET_META[cell.id].accent + '55';
+      cellDiv.style.background = `linear-gradient(135deg, ${WIDGET_META[cell.id].accent}14 0%, rgba(24,24,27,0.9) 60%)`;
+      cellDiv.style.boxShadow = `inset 0 0 12px ${WIDGET_META[cell.id].accent}0d`;
+      cellDiv.style.gridColumn = `span ${cell.w}`;
+      cellDiv.innerHTML = `<span>${WIDGET_META[cell.id].name}</span>`;
+      rowDiv.appendChild(cellDiv);
+    });
+    grid.appendChild(rowDiv);
+  });
+}
+
+function renderToggles() {
+  const panel = document.getElementById('togglesPanel');
+  panel.innerHTML = '';
+
+  ROW_TEMPLATES.forEach(row => {
+    const section = document.createElement('div');
+    section.className = 'toggle-section';
+    const humanKey = row.key.replace('row-', 'Row ');
+    section.innerHTML = `<h4>${humanKey} \u00B7 ${row.cells.length} widget${row.cells.length > 1 ? 's' : ''}</h4>`;
+
+    const ul = document.createElement('ul');
+    ul.style.cssText = 'list-style:none;padding:0;margin:0;';
+
+    row.cells.forEach((cell, i) => {
+      const meta = WIDGET_META[cell.id];
+      const shown = isVisible(cell.id);
+
+      const li = document.createElement('li');
+      li.className = 'toggle-item ' + (shown ? 'visible' : 'hidden');
+      li.innerHTML = `
+        <span style="width:6px;height:24px;border-radius:3px;background:${meta.accent};box-shadow:${shown ? '0 0 8px ' + meta.accent : 'none'};flex-shrink:0;"></span>
+        <div class="toggle-info">
+          <div class="name">${meta.name}${meta.locked ? ' <span style="color:#52525b;font-size:9px;">\uD83D\uDD12</span>' : ''}</div>
+          <div class="desc">${meta.description}</div>
+        </div>
+        <button onclick="toggleVisible('${cell.id}')" aria-label="${shown ? 'Hide' : 'Show'} ${meta.name}" style="width:36px;height:20px;border-radius:10px;border:none;cursor:pointer;background:${shown ? 'rgba(236,72,153,0.25)' : '#27272a'};border:1px solid ${shown ? 'rgba(236,72,153,0.4)' : '#3f3f46'};position:relative;transition:all 0.15s;">
+          <span style="position:absolute;top:2px;width:16px;height:16px;border-radius:50%;background:${shown ? '#ec4899' : '#52525b'};left:${shown ? '18px' : '2px'};transition:all 0.15s;"></span>
+        </button>
+      `;
+      ul.appendChild(li);
+    });
+
+    section.appendChild(ul);
+    panel.appendChild(section);
+  });
+
+  // Empty state
+  const nonLockedCount = ROW_TEMPLATES.flatMap(r => r.cells).filter(c => !WIDGET_META[c.id].locked).length;
+  const nonLockedHidden = hidden.filter(id => !WIDGET_META[id].locked).length;
+  if (nonLockedHidden === nonLockedCount) {
+    const empty = document.createElement('p');
+    empty.style.cssText = 'font-size:11px;color:#a1a1aa;padding:8px 8px 16px;';
+    empty.textContent = 'All optional widgets hidden \u2014 the dashboard will show only the core stopwatch.';
+    panel.appendChild(empty);
+  }
+
+  // Update count badge
+  const badge = document.getElementById('countBadge');
+  badge.textContent = hiddenCount() + ' off';
+  badge.style.display = hiddenCount() > 0 ? '' : 'none';
+}
+
+function renderAll() {
+  renderPreview();
+  renderToggles();
+}
+
+function toggleEditor() {
+  const overlay = document.getElementById('editorOverlay');
+  const fab = document.getElementById('fabBtn');
+  const isOpen = overlay.style.display !== 'none';
+  overlay.style.display = isOpen ? 'none' : 'flex';
+  fab.classList.toggle('active', !isOpen);
+  if (!isOpen) renderAll();
+}
+
+// Initial render
+renderAll();
+</script>
+</body>
+</html>

@@ -588,7 +588,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
     const api = (window as any).deskflowAPI;
     if (!api?.onForegroundChange) return;
     api.onForegroundChange((data: any) => {
-      if (data.app && !data.app.toLowerCase().includes('deskflow') && !data.app.toLowerCase().includes('electron')) {
+      if (data.app && data.app.toLowerCase() !== 'deskflow' && data.app.toLowerCase() !== 'electron' && data.app.toLowerCase() !== 'rheo') {
         setLiveCurrentApp({ app: data.app, category: data.category || 'Other', title: data.title });
         liveSessionStartRef.current = Date.now();
         setLiveElapsed(0);

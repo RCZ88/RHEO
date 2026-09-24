@@ -26,75 +26,40 @@ export interface GoalHandlerDeps {
   toInt: (v: unknown) => number;
   buildChain: (state: any, assistant: string) => any[];
   runWithFallback: (chain: any[], opts: any) => Promise<{ result: any }>;
-  GOAL_DUMP_SYSTEM: string;
-  GOAL_FEEDBACK_SYSTEM: string;
+  GOAL_DUMP_SYSTEM?: string;
+  GOAL_FEEDBACK_SYSTEM?: string;
 }
 
 export function registerGoalHandlers(deps: GoalHandlerDeps) {
-  const { db, mainWindow, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback, GOAL_DUMP_SYSTEM, GOAL_FEEDBACK_SYSTEM } = deps;
+  const { db, mainWindow, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback } = deps;
 
 ipcMain.handle('get-goals', async (_event, date: string) => {
   try {
-    if (!data.script?.trim()) return { success: false, error: 'Empty script' };
-    const { buildChain: buildChainFS, runWithFallback: runWithFallbackFS } = require('./services/providers/router');
-    const pState = JSON.parse(userPreferences.aiProviders || 'null');
-    if (!pState) return { success: false, error: 'No AI providers configured. Add one in Settings → AI.' };
-    const chain = buildChainFS(pState, 'default');
-    if (chain.length === 0) return { success: false, error: 'No enabled AI providers. Enable at least one in Settings → AI.' };
-
-    const DIRECTOR_PROMPT = `You are an elite Video Retention Editor AI. Your goal is to maximize viewer retention by generating on-screen visual overlays (cards) based on the provided transcript.
-
-You must adhere strictly to the "Clement Dark Tech" design system constraints (safe zones, max word counts, specific card types).
-
-OUTPUT FORMAT:
-You must output ONLY valid JSON wrapped in \`\`\`json ... \`\`\` tags. Do not include explanations, commentary, or any text outside the JSON block.
-
-JSON SCHEMA:
-{
-  "metadata": {
-    "style_profile": "clement_dark_tech",
-    "target_aspect": "9:16",
-    "total_duration_sec": number
-  },
-  "overlays": [
-    {
-      "id": "string (uuid)",
-      "start_time": number (seconds),
-      "end_time": number (seconds),
-      "type": "hook" | "body" | "caption" | "bullet" | "keyword",
-      "text": "string (strict max words: hook=8, body=12, caption=14, bullet=10, keyword=6)",
-      "emphasis_words": ["array of strings to highlight in cyan/yellow"],
-      "animation": {
-        "in": "fade" | "slide_up" | "pop",
-        "out": "fade" | "slide_down"
-      }
-    }
-  ]
-}
-
-RULES:
-1. Never overlap overlays — each overlay must have a unique time window.
-2. Hook cards only in the first 5 seconds of the video.
-3. Respect the face-cam safe zone (bottom 400px, right 320px) — do not place overlays there.
-4. Extract technical terms for 'keyword' cards.
-5. Use 'bullet' cards for lists or step-by-step instructions.
-6. Use 'caption' cards for descriptive text that supports the spoken content.
-7. Use 'body' cards for the main message or call-to-action.
-8. Set emphasis_words to highlight key terms that should appear in cyan or yellow.
-9. Choose the most appropriate animation for each overlay type.
-10. NEVER output anything except the JSON block.`;
-
-    const { result, usedProviderId } = await runWithFallbackFS(chain, {
-      systemPrompt: DIRECTOR_PROMPT,
-      messages: [{ role: 'user', content: data.script.trim() }],
-      maxTokens: 4000,
-      temperature: 0.4,
-    });
-
-    return { success: true, content: String(result.content), providerId: usedProviderId };
+    const rows = db!.prepare('SELECT * FROM goals WHERE date = ? ORDER BY created_at ASC').all(date) as any[];
+    const reviewRow = db!.prepare('SELECT review_summary FROM goal_reviews WHERE date = ?').get(date) as any;
+    return {
+      date,
+      reviewSummary: reviewRow?.review_summary,
+      goals: rows.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        category: r.category,
+        target: { type: r.target_type, targetSeconds: r.target_seconds, matchCategory: r.match_category },
+        period: r.period,
+        status: r.status,
+        date: r.date,
+        source: r.source,
+        links: JSON.parse(r.links || '[]'),
+        parentId: r.parent_id,
+        parentIds: parseGoalParentIds(r),
+        progressSeconds: r.progress_seconds,
+        createdAt: r.created_at,
+        completedAt: r.completed_at,
+      })),
+    };
   } catch (err: any) {
-    console.error('[FeatureStudio] AI compile failed:', err);
-    return { success: false, error: err.message || 'AI generation failed' };
+    return { date, goals: [], error: err.message };
   }
 });
 

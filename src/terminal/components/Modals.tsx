@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import {
-  Blocks, Boxes, Clock, Copy, Download, FolderInput, History, Layers, Play, Plus, RotateCcw, Save, Search,
-  Settings2, Star, Terminal, Trash2, Upload, X, Zap,
+  Blocks, Boxes, Check, Clock, Copy, Download, FolderInput, History, Layers, Play, Plus, RotateCcw, Save, Search,
+  Settings2, Star, Terminal, Trash2, Upload, X, Zap, Import,
 } from "lucide-react";
 import type { Preset, SavedCommand, Workspace } from "../lib/types";
 import { PRESETS, TAB_COLORS, uid } from "../lib/data";
@@ -50,7 +50,8 @@ export function Palette({ store, onClose, onCmd, onNewCmd }: { store: Store; onC
       { title: "Save workspace…", sub: "snapshot tabs", go: () => onCmd("__save_ws__") },
       { title: "Open stats", sub: "analytics", go: () => { store.setRightTab("stats"); } },
       { title: "Open history search", sub: "every command", go: () => { store.setRightTab("history"); } },
-      { title: "Open MCP bus", sub: "tools & log", go: () => { store.setRightTab("mcp"); } },
+      {title: "Open MCP bus", sub: "tools & log", go: () => { store.setRightTab("mcp"); } },
+      { title: "Import terminal history", sub: "paste & parse commands", go: () => onCmd("__import__") },
       { title: "Cycle theme", sub: "appearance", go: () => onCmd("__cycle_theme__") },
       { title: "Balance splits", sub: "layout 50/50", go: () => { const t = store.activeTab; if (t) store.balanceAction(t.id); } },
     ].filter((a) => a.title.toLowerCase().includes(ql)).map((a, i) => ({ kind: "act" as const, id: `a${i}`, title: a.title, sub: a.sub, color: "var(--t-accent)", icon: "terminal", go: a.go }));
@@ -378,6 +379,83 @@ export function RunCmdModal({ store, cmd, onClose, notify }: { store: Store; cmd
         ))}
         <div className="text-[12px] mono p-2.5 rounded-xl break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "#34d399" }}>$ {final}</div>
         <button onClick={run} className="w-full h-10 rounded-xl text-white text-[12.5px] font-semibold flex items-center justify-center gap-2" style={{ background: "var(--t-accent)" }}><Play size={14} />Execute in active pane</button>
+      </div>
+    </Shell>
+  );
+}
+
+export function ImportModal({ store, onClose, notify }: { store: Store; onClose: () => void; notify: (m: string) => void }) {
+  const [pasted, setPasted] = useState("");
+  const [tabId, setTabId] = useState(store.activeTab?.id ?? "");
+  const [paneId, setPaneId] = useState(store.activeTab?.activePaneId ?? "");
+  const [result, setResult] = useState<{ imported: number; errors: number } | null>(null);
+
+  const handleImport = () => {
+    if (!pasted.trim()) { notify("Nothing to import"); return; }
+    const r = store.importFromText(pasted, tabId || undefined, paneId || undefined);
+    setResult(r);
+    notify(`Imported ${r.imported} command${r.imported === 1 ? "" : "s"}${r.errors ? ` · ${r.errors} error${r.errors === 1 ? "" : "s"}` : ""}`);
+    if (r.imported > 0) setTimeout(onClose, 600);
+  };
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setPasted(text);
+    } catch { notify("Clipboard read denied"); }
+  };
+
+  return (
+    <Shell onClose={onClose} wide>
+      <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, #34d399, #22d3ee)" }}><Import size={17} /></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Import terminal history</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Paste copied terminal output — commands are auto-extracted from prompt lines</div></div>
+        <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
+      </div>
+      <div className="px-5 pb-5 space-y-3">
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>Target tab</label>
+            <select value={tabId} onChange={(e) => setTabId(e.target.value)} className="w-full h-9 px-2 rounded-xl border text-[12px] mt-1 outline-none mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}>
+              {store.tabs.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>Target pane</label>
+            <select value={paneId} onChange={(e) => setPaneId(e.target.value)} className="w-full h-9 px-2 rounded-xl border text-[12px] mt-1 outline-none mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}>
+              {store.tabs.find((t) => t.id === tabId)?.panes ? Object.entries(store.tabs.find((t) => t.id === tabId).panes).map(([id, p]) => <option key={id} value={id}>pane ${id.slice(0, 6)}</option>) : null}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>Pasted terminal content</label>
+          <textarea
+            value={pasted}
+            onChange={(e) => { setPasted(e.target.value); setResult(null); }}
+            onPaste={(e) => { setTimeout(() => { const t = e.target.value; setPasted(t); setResult(null); }, 0); }}
+            placeholder={"Paste here, or click the paste button to grab from clipboard...\n\nExample:\nuser@penguin:~/projects$ ls -la\nuser@penguin:~/projects$ cd nova\nuser@penguin:~/projects/nova$ git status"}
+            rows={10}
+            spellCheck={false}
+            className="w-full p-3 rounded-xl border text-[12px] outline-none mono resize-none font-mono"
+            style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}
+          />
+        </div>
+        {result && (
+          <div className="rounded-xl border p-3 flex items-center gap-3" style={{ borderColor: result.imported > 0 ? "var(--t-accent)" : "#fb7185", background: "var(--t-bg)" }}>
+            <div className={`w-8 h-8 rounded-lg grid place-items-center ${result.imported > 0 ? "text-white" : "text-white"}`} style={{ background: result.imported > 0 ? "var(--t-accent)" : "#fb7185" }}>
+              {result.imported > 0 ? <Check size={16} /> : <X size={16} />}
+            </div>
+            <div>
+              <div className="font-semibold text-[13px]" style={{ color: "var(--t-fg)" }}>{result.imported > 0 ? `Imported ${result.imported} command${result.imported === 1 ? "" : "s"}` : "No commands found to import"}</div>
+              <div className="text-[11px]" style={{ color: "var(--t-muted)" }}>Commands are extracted from prompt lines ($ cmd, user@host:~$ cmd, ❯ cmd)</div>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button onClick={handlePaste} className="flex-1 h-10 rounded-xl border text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-accent)" }}><Upload size={13} />Paste from clipboard</button>
+          <button onClick={handleImport} className="flex-1 h-10 rounded-xl text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5" style={{ background: "var(--t-accent)" }}><Import size={13} />Import commands</button>
+        </div>
+        <div className="text-[10.5px] mono text-center" style={{ color: "var(--t-muted)" }}>Ctrl+V to paste · detects $ cmd, user@host:~$ cmd, ❯ cmd patterns</div>
       </div>
     </Shell>
   );

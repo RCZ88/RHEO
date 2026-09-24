@@ -60,6 +60,7 @@ class AiAgentService {
   private confirmQueue: Array<{ toolName: string; args: Record<string, any>; resolve: (v: boolean) => void }> = []
   private progressCallback: ((progress: { round: number; totalRounds: number; toolName?: string; toolArgs?: Record<string, any>; status: 'thinking' | 'executing' | 'completed' | 'error'; message?: string; streamedContent?: string }) => void) | null = null
   private injectedContext = ''
+  currentRequestId = '';
 
   getConfig() {
     return { ...this.config }
@@ -111,7 +112,7 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
 
   private async buildConnectorContext(): Promise<string> {
     try {
-      const api = (window as any).deskflowAPI;
+      const api = (window as unknown as { deskflowAPI: any }).deskflowAPI;
       if (!api?.connectors) return '';
       const connectors = await api.connectors.list();
       if (!Array.isArray(connectors) || connectors.length === 0) return '';
@@ -253,7 +254,7 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
 
   private async callLLM(systemPrompt: string, tools: any[], round: number = 0, totalRounds: number = 1, onChunk?: (text: string) => void): Promise<any> {
     console.log('[AiAgent:callLLM] round=' + round + '/' + totalRounds + ' historyLen=' + this.conversationHistory.length)
-    const api = (window as any).deskflowAPI
+    const api = (window as unknown as { deskflowAPI: any }).deskflowAPI
 
     let preferredModel = ''
     let state: any = null
@@ -303,7 +304,6 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
 
     return new Promise((resolve, reject) => {
       let fullContent = ''
-      const streamedToolCalls: Record<number, any> = {}
       let cleanup: (() => void) | null = null
       let timeout: ReturnType<typeof setTimeout> | null = null
 
@@ -320,9 +320,10 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
         }
         if (data.done) {
           cleanup?.(); if (timeout) clearTimeout(timeout)
-          const toolCalls = Object.keys(streamedToolCalls).length > 0
-            ? Object.values(streamedToolCalls).filter((tc: any) => tc.id && tc.function.name)
-            : undefined
+          const invokeResult = data as any;
+          const toolCalls = invokeResult?.toolCalls || Object.keys(this.streamedToolCalls).length > 0
+            ? Object.values(this.streamedToolCalls).filter((tc: any) => tc.id && tc.function.name)
+            : undefined;
           console.log('[AiAgent:callLLM] done, contentLen=' + fullContent.length + ' toolCalls=' + (toolCalls?.length || 0))
           resolve({
             choices: [{ message: { content: fullContent, ...(toolCalls ? { tool_calls: toolCalls } : {}) } }],
@@ -336,7 +337,7 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
         reject(new Error('Provider call timed out after 60s'))
       }, 60000)
 
-      api.providerChatCall({ provider: target, messages, model, maxTokens: this.config.maxTokens, temperature: this.config.temperature }).catch((err: any) => {
+      api.providerChatCall({ provider: target, messages, model, maxTokens: this.config.maxTokens, temperature: this.config.temperature, tools: tools && tools.length ? tools : undefined, requestId: this.currentRequestId }).catch((err: any) => {
         cleanup?.(); if (timeout) clearTimeout(timeout)
         reject(err)
       })
@@ -364,7 +365,7 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
 
   private async executeAction(result: any): Promise<any> {
     if (!result || !result._action) return result
-    const api = (window as any).deskflowAPI
+    const api = (window as unknown as { deskflowAPI: any }).deskflowAPI
     if (!api) return { ...result, _executed: false, error: 'deskflowAPI not available' }
 
     try {

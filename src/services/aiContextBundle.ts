@@ -1,7 +1,7 @@
-type AnyRec = Record<string, unknown>
+import type { DeskflowAPI } from '../types/deskflow-api'
 
-function bridge(): AnyRec | undefined {
-  const w = window as unknown as { deskflowAPI?: AnyRec }
+function bridge(): DeskflowAPI | undefined {
+  const w = window as unknown as { deskflowAPI?: DeskflowAPI }
   return w.deskflowAPI
 }
 

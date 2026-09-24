@@ -2,15 +2,31 @@
 // Prevent EPIPE crashes when stdout/stderr pipes break (e.g. terminal closes)
 process.stdout.on('error', (err: any) => { if (err.code === 'EPIPE') return; console.error(err); });
 process.stderr.on('error', (err: any) => { if (err.code === 'EPIPE') return; console.error(err); });
-// Crash resilience: log uncaught exceptions instead of dying silently
+// Crash resilience: log uncaught exceptions and attempt graceful handling
+// SECURITY: Prevent main process crashes from taking down the entire app
 process.on('uncaughtException', (err) => {
-    console.error('[DeskFlow] UNCAUGHT EXCEPTION (non-fatal):', err?.message || err);
+    console.error('[DeskFlow] UNCAUGHT EXCEPTION:', err?.message || err);
     console.error(err?.stack || '');
+    // SECURITY: Log to file for forensic analysis
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const logPath = path.join(electron_1.app.getPath('userData'), 'error-log.txt');
+        fs.appendFileSync(logPath, new Date().toISOString() + ' - ' + (err?.message || err) + '\n' + (err?.stack || '') + '\n');
+    } catch (_e) { /* best effort */ }
 });
 process.on('unhandledRejection', (reason: any) => {
-    console.error('[DeskFlow] UNHANDLED REJECTION (non-fatal):', reason?.message || reason);
+    console.error('[DeskFlow] UNHANDLED REJECTION:', reason?.message || reason);
     console.error(reason?.stack || '');
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const logPath = path.join(electron_1.app.getPath('userData'), 'error-log.txt');
+        fs.appendFileSync(logPath, new Date().toISOString() + ' - REJECTION: ' + (reason?.message || reason) + '\n');
+    } catch (_e) { /* best effort */ }
 });
+// SECURITY: Global input validation middleware registration
+import { sanitizeString, validateNonEmptyString, validatePositiveInt } from './infrastructure/ipc/validation';
  var __importDefault = function (mod) {
         return (mod && mod.__importDefault) ? mod : { "default": mod };
     };
@@ -50,6 +66,8 @@ const { getTemplate, listTemplates, getTemplatesByFramework } = MotionTemplatesM
 const CliWrapperModule = require("./services/design/CliWrapperService");
 const { installComponent } = CliWrapperModule;
 const ColorSyncModule = require("./services/design/ColorSyncService");
+// WordTracker module for Hermes smart path detection
+const wordTrackerModule = require("./main/wordTracker");
 const { syncTokens, generateCssVariables, generateRealtimeColorsUrl, parseRealtimeColorsUrl } = ColorSyncModule;
 const SearchIndexModule = require("./services/search/index");
 const { registerSearchIpc } = SearchIndexModule;
@@ -62,6 +80,7 @@ import { registerGoalHandlers } from "./infrastructure/ipc/goal-handlers";
 import { registerFinanceHandlers } from "./infrastructure/ipc/finance-handlers";
 import { registerSessionHandlers } from "./infrastructure/ipc/session-handlers";
 import { registerTrackingHandlers } from "./infrastructure/ipc/tracking-handlers";
+import { registerGasHandlers } from "./main/gas/ipc";
 import { StateCoordinator } from "./main/stateCoordinator";
 
 // --- Global shortcut for DevTools ---
@@ -1569,11 +1588,19 @@ const HermesPlugin: AIAgentPlugin = {
         const localAppData = process.env.LOCALAPPDATA || path_1.default.join(homedir, 'AppData', 'Local');
         const profilesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
         if (fs_1.default.existsSync(profilesDir)) return true;
+        // hermes-agent directory (cross-platform)
+        const hermesAgentDir = path_1.default.join(localAppData, 'hermes-agent');
+        if (fs_1.default.existsSync(hermesAgentDir)) return true;
         // Linux shell-agent store: ~/.hermes/sessions (Hermes/ln)
         const linuxHerpesSessions = path_1.default.join(homedir, '.hermes', 'sessions');
         if (fs_1.default.existsSync(linuxHerpesSessions)) return true;
         const linuxHerpesProfiles = path_1.default.join(homedir, '.hermes', 'profiles');
         if (fs_1.default.existsSync(linuxHerpesProfiles)) return true;
+        // Smart path: check custom path saved via Hermes setup UI
+        try {
+            const customPath = wordTrackerModule.wordTrackerGetConfig('hermes_sessions_path');
+            if (customPath && fs_1.default.existsSync(customPath)) return true;
+        } catch {}
         return false;
     },
 
@@ -1581,6 +1608,14 @@ const HermesPlugin: AIAgentPlugin = {
         const homedir = require('os').homedir();
         const localAppData = process.env.LOCALAPPDATA || path_1.default.join(homedir, 'AppData', 'Local');
         const paths: string[] = [];
+
+        // Smart path: include custom path saved via Hermes setup UI
+        try {
+            const customPath = wordTrackerModule.wordTrackerGetConfig('hermes_sessions_path');
+            if (customPath && fs_1.default.existsSync(customPath)) {
+                paths.push(customPath);
+            }
+        } catch {}
 
         // Windows: hermes\profiles\<profile>\sessions
         const profilesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
@@ -1591,6 +1626,28 @@ const HermesPlugin: AIAgentPlugin = {
                     const sessionsDir = path_1.default.join(profilesDir, profile, 'sessions');
                     if (fs_1.default.isDirectorySync?.(sessionsDir) ?? fs_1.default.existsSync(sessionsDir)) {
                         paths.push(sessionsDir);
+                    }
+                }
+            } catch {}
+        }
+
+        // hermes-agent directory (cross-platform)
+        const hermesAgentDir = path_1.default.join(localAppData, 'hermes-agent');
+        if (fs_1.default.existsSync(hermesAgentDir)) {
+            try {
+                const entries = fs_1.default.readdirSync(hermesAgentDir);
+                for (const entry of entries) {
+                    const entryPath = path_1.default.join(hermesAgentDir, entry);
+                    if (fs_1.default.isDirectorySync?.(entryPath)) {
+                        // Check for sessions subdir
+                        const sessionsDir = path_1.default.join(entryPath, 'sessions');
+                        if (fs_1.default.existsSync(sessionsDir)) {
+                            paths.push(sessionsDir);
+                        } else {
+                            paths.push(entryPath);
+                        }
+                    } else if (entry.endsWith('.json') || entry.endsWith('.jsonl')) {
+                        paths.push(entryPath);
                     }
                 }
             } catch {}
@@ -4062,10 +4119,30 @@ function initializeStorage() {
           }
         } catch (e) { console.error('[DeskFlow] AFK purge migration error:', e); }
 
-        // Initialize word tracker module
-        const { initWordTracker, ensureWordTrackerTables } = require('./main/wordTracker');
-        initWordTracker(db);
-        ensureWordTrackerTables(db);
+        // Initialize word tracker module (wrapped in try-catch so handlers always register)
+        try {
+          const wordTrackerModule = require('./main/wordTracker');
+          wordTrackerModule.initWordTracker(db);
+          wordTrackerModule.ensureWordTrackerTables(db);
+
+          // ─── Word Tracker IPC Handlers ────────────────────────────────
+          electron_1.ipcMain.handle('wordTrackerGetWords', () => wordTrackerModule.wordTrackerGetWords());
+          electron_1.ipcMain.handle('wordTrackerAddWord', (_event, word: string, label?: string, color?: string, tolerance?: string) => wordTrackerModule.wordTrackerAddWord(word, label, color, tolerance));
+          electron_1.ipcMain.handle('wordTrackerRemoveWord', (_event, wordId: number) => wordTrackerModule.wordTrackerRemoveWord(wordId));
+          electron_1.ipcMain.handle('wordTrackerToggleWord', (_event, wordId: number, enabled: number) => wordTrackerModule.wordTrackerToggleWord(wordId, enabled));
+          electron_1.ipcMain.handle('wordTrackerSetTolerance', (_event, wordId: number, tolerance: string) => wordTrackerModule.wordTrackerSetTolerance(wordId, tolerance));
+          electron_1.ipcMain.handle('wordTrackerEditWord', (_event, wordId: number, updates: any) => wordTrackerModule.wordTrackerEditWord(wordId, updates));
+          electron_1.ipcMain.handle('wordTrackerCounts', (_event, projectId?: string) => wordTrackerModule.wordTrackerGetCounts(projectId));
+          electron_1.ipcMain.handle('wordTrackerCountsByProject', (_event, wordId: number) => wordTrackerModule.wordTrackerCountsByProject(wordId));
+          electron_1.ipcMain.handle('wordTrackerGetConfig', (_event, key: string) => wordTrackerModule.wordTrackerGetConfig(key));
+          electron_1.ipcMain.handle('wordTrackerSetConfig', (_event, key: string, value: any) => wordTrackerModule.wordTrackerSetConfig(key, value));
+          electron_1.ipcMain.handle('wordTrackerResetCounts', () => wordTrackerModule.wordTrackerResetCounts());
+          electron_1.ipcMain.handle('wordTrackerScanJsonl', (_event, projectId?: string) => wordTrackerModule.wordTrackerScanJsonl(projectId));
+          electron_1.ipcMain.handle('wordTrackerCountText', (_event, text: string, projectId?: string) => wordTrackerModule.wordTrackerCountText(text, projectId));
+          console.log('[DeskFlow] ✅ wordTracker handlers registered');
+        } catch (e) {
+          console.error('[DeskFlow] ⚠️ wordTracker init failed:', e);
+        }
 
         console.log('[DeskFlow] ✅ SQLite database initialized at', dbPath);
 
@@ -4156,10 +4233,11 @@ const { buildChain, runWithFallback } = require("./services/providers/router");
           });
           console.log('[DeskFlow] ✅ Content Engine module registered');
         try { registerCategoryHandlers({ db, categoryConfig: categoryConfig as any, mainWindow: mainWindow as any, currentApp, saveCategoryConfig, categorizeApp }); console.log('[DeskFlow] ✅ Category handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Category handlers failed to register:', err.message); }
-        try { registerGoalHandlers({ db, mainWindow: mainWindow as any, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback, GOAL_DUMP_SYSTEM, GOAL_FEEDBACK_SYSTEM }); console.log('[DeskFlow] ✅ Goal handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Goal handlers failed to register:', err.message); }
-        try { registerFinanceHandlers({ db, mainWindow: mainWindow as any, userPreferences, financePasswordHash, getLocalDateStr, toInt }); console.log('[DeskFlow] ✅ Finance handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Finance handlers failed to register:', err.message); }
+        try { registerGoalHandlers({ db, mainWindow: mainWindow as any, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback }); console.log('[DeskFlow] ✅ Goal handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Goal handlers failed to register:', err.message); }
+        try { registerFinanceHandlers({ db, mainWindow: mainWindow as any, userPreferences, financePasswordHash, financePasswordSalt: financePasswordSalt, financeDataKey: financeDataKey, financeLocked, financeRememberDevice, financeRememberDeviceExpiry, financeLockTimeout, getLocalDateStr, toInt, financeDisplayCurrency }); console.log('[DeskFlow] ✅ Finance handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Finance handlers failed to register:', err.message); }
         try { registerSessionHandlers({ db, useJson }); console.log('[DeskFlow] ✅ Session handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Session handlers failed to register:', err.message); }
         try { registerTrackingHandlers({ db, getIsTracking: () => isTracking, setIsTracking: (v) => { isTracking = v; }, getTrackingInterval: () => trackingInterval, setTrackingInterval: (v) => { trackingInterval = v; }, getLastPollTime: () => lastPollTime, setLastPollTime: (v) => { lastPollTime = v; }, pollForeground, userPreferences }); console.log('[DeskFlow] ✅ Tracking handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Tracking handlers failed to register:', err.message); }
+        try { registerGasHandlers({ db }); console.log('[GAS] ✅ Gas handlers registered'); } catch (err: any) { console.error('[GAS] ⚠️ Gas handlers failed to register:', err.message); }
         } catch (err: any) {
           console.error('[DeskFlow] ⚠️ Content Engine module failed to register:', err.message);
         }
@@ -4433,7 +4511,10 @@ function getStats() {
     }
 }
 // --- Sleep gap detection (module scope so pollForeground can call it) ---
-function checkSleepGap(gapStart: number, gapEnd: number, opts?: { skipActiveGuard?: boolean }): void {
+ function markStatsDirty(): void {
+     // Intentionally a no-op for now; reserved for future cache invalidation.
+ }
+ function checkSleepGap(gapStart: number, gapEnd: number, opts?: { skipActiveGuard?: boolean }): void {
     const gapMs = gapEnd - gapStart;
     const gapMinutes = Math.round(gapMs / (1000 * 60));
     if (gapMs < SLEEP_DETECTION_MIN_GAP_MS) return;
@@ -4521,9 +4602,10 @@ let lastSuccessfulObservationTime = Date.now();
 let consecutiveNullPolls = 0;
 let MAX_SESSION_MS = 120 * 60 * 1000; // 120 minutes — cap for long sessions (was 30min)
 const MAX_LOGGED_SESSION_MS = 3600000; // 1 hour - cap logged sessions to prevent heatmap inflation
-let SLEEP_GAP_MS = 30000; // 30 seconds — gap threshold to detect system sleep (was 10s)
-const BROWSER_MAX_DELTA_MS = 10 * 60 * 1000; // 10 minutes — separate cap for browser delta (extension sends ~5s normally)
-const IDLE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes — OS-level idle before pausing tracking
+ const SLEEP_GAP_MS = 300000; // 5 minutes — gap threshold to detect system sleep (was 30s)
+ const BROWSER_MAX_DELTA_MS = 10 * 60 * 1000; // 10 minutes — separate cap for browser delta (extension sends ~5s normally)
+ const BROWSER_MAX_NULL_POLL = 60; // polls before closing a browser session when extension doesn't report
+ const IDLE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes — OS-level idle before pausing tracking
 let lastCheckpointTime = Date.now();
 const CHECKPOINT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes — checkpoint interval for long sessions (was 5min)
 const TRANSIENT_APPS = [
@@ -4663,6 +4745,23 @@ const TIER_MAP_CACHE_TTL_MS = 30000; // 30 seconds
 function invalidateTierMapCache() {
     cachedTierMap = null;
     tierMapLastRefresh = 0;
+}
+function getTierMap(db: any): Map<string, string> {
+    if (cachedTierMap && Date.now() - tierMapLastRefresh < TIER_MAP_CACHE_TTL_MS) return cachedTierMap;
+    const map = new Map<string, string>();
+    const rows = db!.prepare('SELECT DISTINCT app_name FROM stats_daily').all() as any[];
+    for (const row of rows) {
+        const cat = categorizeApp(row.app_name);
+        map.set(row.app_name, getTierForCategory(cat));
+    }
+    const browserRows = db!.prepare('SELECT DISTINCT domain FROM browser_sessions WHERE domain IS NOT NULL').all() as any[];
+    for (const row of browserRows) {
+        const cat = categorizeApp(row.domain);
+        map.set(row.domain, getTierForCategory(cat));
+    }
+    cachedTierMap = map;
+    tierMapLastRefresh = Date.now();
+    return map;
 }
 // Track only the MOST RECENTLY active browser domain (only one active at a time)
 let lastActiveBrowserDomain = null;
@@ -4830,17 +4929,12 @@ const GAME_POLL_SKIP = 6; // Only call active-win every 6th poll (30s) during ga
 let currentIsResolvedGame = false;
 
 // Real window polling using active-win
-async function pollForeground() {
-    if (!isTracking)
-        return;
-    const now = Date.now();
-    // Capture the previous poll attempt time BEFORE updating lastPollTime.
-    // timeSinceLastPoll (sleep-gap detection) uses this old value.
-    const previousPollTime = lastPollTime;
-    // Update lastPollTime at the start of each poll attempt (before any await).
-    // This marks "we tried" — distinct from lastSuccessfulObservationTime which
-    // marks "we got a valid result".
-    lastPollTime = now;
+ async function pollForeground() {
+     const now = Date.now();
+     const previousPollTime = lastPollTime;
+     lastPollTime = now;
+     if (!isTracking)
+         return;
     // --- Idle-based sleep detection (runs every poll, independent of window focus/poll gaps) ---
     // Catches "fell asleep with RHEO focused" — no blur/focus event ever fires there.
     try {
@@ -5054,7 +5148,7 @@ async function pollForeground() {
         // 'track' = treat like any other app (log sessions, update timer)
         // 'show-other' / 'pause' = notify renderer but don't log sessions
         const trackerAppMode = userPreferences.trackerAppMode || 'track';
-        if (appLower.includes('electron') || appLower.includes('deskflow') || appLower.includes('rheo')) {
+        if (appLower === 'electron' || appLower === 'deskflow' || appLower === 'rheo') {
             if (trackerAppMode === 'track') {
                 // Fall through to normal tracking — log session, update timer
                 // Don't reset currentApp so session tracking works
@@ -5096,7 +5190,7 @@ async function pollForeground() {
             // Session duration uses lastSuccessfulObservationTime: the elapsed time
             // since the last valid observation, not since the last poll attempt.
             const rawDuration = lastSuccessfulObservationTime - sessionStart;
-            const isTrackerApp = appLower.includes('electron') || appLower.includes('deskflow') || appLower.includes('rheo');
+            const isTrackerApp = appLower === 'electron' || appLower === 'deskflow' || appLower === 'rheo';
             // The browser IS logged as a normal app row (Comet appears in the app list with its
             // full time). Website rows are separate (handleBrowserData) and excluded from totals.
             const shouldLog = currentApp && rawDuration > 5000 && !(isTrackerApp && trackerAppMode !== 'track');
@@ -5128,7 +5222,7 @@ async function pollForeground() {
         // Periodic checkpointing
         if (currentApp && (now - lastCheckpointTime > CHECKPOINT_INTERVAL_MS)) {
             const checkpointDuration = now - sessionStart;
-            const isTrackerCheckpoint = currentApp && (currentApp.toLowerCase().includes('electron') || currentApp.toLowerCase().includes('deskflow') || currentApp.toLowerCase().includes('rheo'));
+            const isTrackerCheckpoint = currentApp && (currentApp.toLowerCase() === 'electron' || currentApp.toLowerCase() === 'deskflow' || currentApp.toLowerCase() === 'rheo');
             const shouldCheckpoint = checkpointDuration > 5000 && !(isTrackerCheckpoint && trackerAppMode !== 'track');
             if (shouldCheckpoint) {
                 const duration = Math.min(checkpointDuration, MAX_SESSION_MS);
@@ -5600,9 +5694,15 @@ function createWindow() {
     try {
         const { CompositionEngineManager } = require('./domains/compositions/CompositionEngineManager');
         compositionEngine = new CompositionEngineManager(db!, () => mainWindow);
+        compositionEngine.activate();
+        console.log('[Compositions] engine activated');
         console.log('[DeskFlow] ✅ Compositions engine initialized');
     } catch (err) {
         console.error('[DeskFlow] Failed to init CompositionEngine:', err);
+    }
+    // Composition tick producer — fires system.tick every 60s
+    if (compositionEngine) {
+        setInterval(() => { try { compositionEngine?.emitEvent('system.tick', 'system', { now: Date.now() }); } catch {} }, 60000);
     }
 
     // Start polling (configurable via settings, default 1 second)
@@ -13900,6 +14000,39 @@ electron_1.ipcMain.handle('context:run-now', async (_event, kind: string) => {
     }
 });
 
+// Composition engine IPC handlers
+electron_1.ipcMain.handle('compositions:report', async (_event, id: string) => {
+    try { return compositionEngine?.getRuleReport?.(id) ?? null; } catch { return null; }
+});
+electron_1.ipcMain.handle('compositions:run-now', async (_event, id: string) => {
+    try { return compositionEngine?.runNow?.(id) ?? { ok: false, error: 'not available' }; } catch { return { ok: false, error: 'not available' }; }
+});
+electron_1.ipcMain.handle('compositions:usage', async () => {
+    try {
+        const rows = db.prepare("SELECT date(created_at) as d, provider, SUM(tokens_in) as tokensIn, SUM(tokens_out) as tokensOut, COUNT(*) as cnt FROM ai_debug_log WHERE source='ai-assistant' GROUP BY d, provider ORDER BY d DESC LIMIT 30").all();
+        return { success: true, rows };
+    } catch (e: any) { return { success: false, error: e.message }; }
+});
+electron_1.ipcMain.handle('ai-chat:usage', async () => {
+    try {
+        const rows = db.prepare("SELECT date(created_at) as d, provider, SUM(tokens_in) as tokensIn, SUM(tokens_out) as tokensOut, COUNT(*) as cnt FROM ai_debug_log WHERE source='ai-assistant' GROUP BY d, provider ORDER BY d DESC LIMIT 30").all();
+        return { success: true, rows };
+    } catch (e: any) { return { success: false, error: e.message }; }
+});
+electron_1.ipcMain.handle('conversations:import', async (_event, data: { conversations: Array<{source: string; title: string; imported_at: number; payload_json: string}> }) => {
+    try {
+        const rows = data.conversations;
+        if (!rows || !rows.length) return { success: true, imported: 0 };
+        const insert = db.prepare("INSERT OR REPLACE INTO learn_conversations (source, title, imported_at, payload_json) VALUES (?, ?, ?, ?)");
+        const tx = db.transaction(() => { for (const c of rows) insert.run(c.source, c.title, c.imported_at, JSON.stringify(c.payload_json)); });
+        tx();
+        return { success: true, imported: rows.length };
+    } catch (e: any) { return { success: false, error: e.message }; }
+});
+electron_1.ipcMain.handle('conversations:list', async () => {
+    try { return db.prepare("SELECT source, title, imported_at FROM learn_conversations ORDER BY imported_at DESC LIMIT 50").all(); } catch (e: any) { return []; }
+});
+
 electron_1.ipcMain.handle('terminal:destroy-old-format', async (_event, terminalId: string) => {
     failPendingWrites(terminalId);
     const success = terminalManager.kill(terminalId);
@@ -16233,6 +16366,17 @@ electron_1.ipcMain.handle('debug-ai-agents', async () => {
     return { agents: agentStatus, database: dbState };
 });
 
+// Set Hermes sessions path
+electron_1.ipcMain.handle('set-hermes-sessions-path', (_event, path: string) => {
+    try {
+        const { wordTrackerSetConfig } = require('./main/wordTracker');
+        wordTrackerSetConfig('hermes_sessions_path', path);
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
 // Sync commits from a local Git repository
 electron_1.ipcMain.handle('sync-commits', async (event, projectId: string, repoPath: string) => {
     if (useJson) return { success: false, message: 'Commit sync requires SQLite' };
@@ -17868,7 +18012,7 @@ electron_1.ipcMain.handle('test-ai-provider', async (_event, providerId: string)
 });
 
 // ========== Streaming provider chat (used by AiChat / aiAgentService) ==========
-electron_1.ipcMain.handle('provider-chat-call', async (event, data: { provider: any; messages: Array<{ role: string; content: string }>; model?: string; maxTokens?: number; temperature?: number }) => {
+electron_1.ipcMain.handle('provider-chat-call', async (event, data: { provider: any; messages: any[]; model?: string; maxTokens?: number; temperature?: number; tools?: any[]; requestId?: string }) => {
   try {
     const p = userPreferences || {};
     const pState = migrateProviderNames(JSON.parse(p.aiProviders || 'null'));
@@ -17878,18 +18022,18 @@ electron_1.ipcMain.handle('provider-chat-call', async (event, data: { provider: 
     vaultLogSafe({ source: 'ai-assistant', event: 'prompt', provider: cfg.id, model: data.model || cfg.models[0], role: 'system', payload: { messages: data.messages } });
     const result = await call(
       cfg,
-      { model: data.model || cfg.models[0] || 'gpt-4o-mini', messages: data.messages, maxTokens: data.maxTokens, temperature: data.temperature },
-      { onChunk: (delta: string) => { event.sender.send('provider-chunk', { delta, providerId: cfg.id }); }, pathTag: 'B-chat' },
+      { model: data.model || cfg.models[0] || 'gpt-4o-mini', messages: data.messages, maxTokens: data.maxTokens, temperature: data.temperature, tools: data.tools, toolChoice: 'auto' },
+      { onChunk: (delta: string) => { event.sender.send('provider-chunk', { delta, providerId: cfg.id, requestId: data.requestId }); }, pathTag: 'B-chat' },
     );
     const reasoning = (result as any).reasoning;
     if (reasoning != null && String(reasoning).trim()) {
       vaultLogSafe({ source: 'ai-assistant', event: 'thinking', provider: cfg.id, model: data.model || cfg.models[0], payload: reasoning });
     }
     vaultLogSafe({ source: 'ai-assistant', event: 'output', provider: cfg.id, model: data.model || cfg.models[0], payload: result.content, tokensIn: result.usage?.prompt_tokens, tokensOut: result.usage?.completion_tokens });
-    event.sender.send('provider-chunk', { delta: null, done: true, providerId: cfg.id, full: result.content, diagId: result.diagId, durationMs: result.durationMs });
-    return { success: true, content: result.content, diagId: result.diagId, durationMs: result.durationMs };
+    event.sender.send('provider-chunk', { delta: null, done: true, providerId: cfg.id, full: result.content, diagId: result.diagId, durationMs: result.durationMs, requestId: data.requestId });
+    return { success: true, content: result.content, toolCalls: result.tool_calls, diagId: result.diagId, durationMs: result.durationMs };
   } catch (err: any) {
-    event.sender.send('provider-chunk', { delta: null, error: err.message, done: true });
+    event.sender.send('provider-chunk', { delta: null, error: err.message, done: true, requestId: data.requestId });
     vaultLogSafe({ source: 'ai-assistant', event: 'error', provider: (data as any).provider?.id, payload: err.message });
     return { success: false, error: err.message };
   }
@@ -17920,11 +18064,9 @@ electron_1.ipcMain.handle('provider-chat-basic', async (_event, data: { provider
 // ========== AI Chat persistence (AiPage) ==========
 electron_1.ipcMain.handle('ai-chat:load', async (_event, threadDate: string) => {
   try {
-    const rows = db.prepare('SELECT id, role, content, parsed_json, created_at FROM ai_chat_messages WHERE thread_date = ? ORDER BY created_at ASC').all(threadDate);
-    return { success: true, messages: rows };
-  } catch (err: any) {
-    return { success: false, error: err.message, messages: [] };
-  }
+    const rows = db.prepare('SELECT id, role, content, parsed_json, created_at FROM ai_chat_messages WHERE thread_date = ? ORDER BY id ASC').all(threadDate) as any[];
+    return { success: true, messages: rows.map(r => ({ id: r.id, role: r.role, content: r.content, parsed_json: r.parsed_json, timestamp: Date.parse(String(r.created_at).replace(' ', 'T') + 'Z') || Number(r.created_at) || 0 })) };
+  } catch (err: any) { return { success: false, error: err.message, messages: [] }; }
 });
 
 electron_1.ipcMain.handle('ai-chat:save', async (_event, data: { threadDate: string; messages: Array<{ role: string; content: string; parsed_json?: string; timestamp?: number }> }) => {
@@ -19005,7 +19147,7 @@ async function freshForegroundIsBrowser(browsersList: string[]): Promise<boolean
         if (!appName) return null;
         const lower = appName.toLowerCase();
         // If the OS foreground is DeskFlow itself, it means the user is back in the app
-        if (lower.includes('electron') || lower.includes('deskflow') || lower.includes('rheo')) {
+        if (lower === 'electron' || lower === 'deskflow' || lower === 'rheo') {
             return false;
         }
         // If it matches any configured browser ? still browser ? website data is valid
@@ -19230,6 +19372,15 @@ function stopBrowserSessionFlushTimer() {
         clearInterval(browserSessionFlushInterval);
         browserSessionFlushInterval = null;
     }
+}
+function validatePeriod(period, dateOffset) {
+    const validPeriods = ['today', 'week', '7day', '30day', 'all'];
+    if (!validPeriods.includes(period)) {
+        console.warn('[DeskFlow] Invalid period:', period, '— defaulting to today');
+        return ['today', 0];
+    }
+    const offset = Math.max(0, Math.min(100, Number(dateOffset) || 0));
+    return [period, offset];
 }
 function computeBrowserDateRange(period, dateOffset) {
     [period, dateOffset] = validatePeriod(period, dateOffset);
@@ -20247,7 +20398,7 @@ electron_1.ipcMain.handle('detect-usage-gaps', (event, { period = 'week', minGap
             if (periodEndMs > merged[merged.length - 1].end) addGap(merged[merged.length - 1].end, periodEndMs);
         }
 
-        console.log('[DeskFlow] detect-usage-gaps: period=' + period + ' found ' + gaps.length + ' gaps');
+         console.debug('[DeskFlow] detect-usage-gaps: period=' + period + ' found ' + gaps.length + ' gaps');
         return gaps;
     } catch (err) {
         console.error('[DeskFlow] detect-usage-gaps error:', err);
@@ -21402,6 +21553,56 @@ electron_1.ipcMain.handle('get-longest-focus', async () => {
         console.error('[DeskFlow] get-longest-focus error:', err);
         return { today: [], week: [], allTime: [] };
     }
+});
+
+// ── Dashboard Data Handlers ─────────────────────
+electron_1.ipcMain.handle('get-dashboard-aggregates', async (_event, request: { period: string; dateOffset?: number; weekOffset?: number; platform?: string }) => {
+  try {
+    const { period = 'week', dateOffset = 0, platform } = request;
+    const today = new Date();
+    const start = new Date(today);
+    if (period === 'week') { start.setDate(start.getDate() - 7 + (dateOffset || 0) * 7); }
+    else if (period === 'month') { start.setMonth(start.getMonth() - 1 + (dateOffset || 0)); }
+    else { start.setDate(start.getDate() - 1 + (dateOffset || 0)); }
+    const end = new Date(today);
+    if (platform) {
+      end.setDate(end.getDate() + 1);
+      const rows = db!.prepare('SELECT date, app_name, app_type, SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date >= ? AND date < ? AND platform = ? GROUP BY date, app_name ORDER BY date').all(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), platform) as any[];
+      return { success: true, period, dateRange: [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)], data: rows };
+    }
+    const rows = db!.prepare('SELECT date, app_name, app_type, SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date >= ? AND date < ? GROUP BY date, app_name ORDER BY date').all(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)) as any[];
+    const heatmap = new Map<string, any>();
+    for (const r of rows) {
+      const key = r.date + '|' + r.app_name;
+      heatmap.set(key, { date: r.date, app_name: r.app_name, app_type: r.app_type, total_seconds: r.total_seconds, sessions: r.sessions });
+    }
+    return { success: true, period, dateRange: [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)], data: Array.from(heatmap.values()) };
+  } catch (err: any) {
+    console.error('[DeskFlow] get-dashboard-aggregates error:', err);
+    return { success: false, error: err.message, data: [] };
+  }
+});
+
+electron_1.ipcMain.handle('get-dashboard-data', async (_event, params: { period: string; dateOffset?: number }) => {
+  try {
+    const { period = 'today', dateOffset = 0 } = params;
+    const today = new Date();
+    let start: Date;
+    if (period === 'today') { start = new Date(today); start.setHours(0, 0, 0, 0); }
+    else if (period === 'week') { start = new Date(today); start.setDate(start.getDate() - 7 + dateOffset * 7); start.setHours(0, 0, 0, 0); }
+    else { start = new Date(today); start.setHours(0, 0, 0, 0); }
+    const end = new Date(today); end.setHours(23, 59, 59, 999);
+    const dateStr = start.toISOString().slice(0, 10);
+    const dailyTotal = db!.prepare('SELECT SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date = ?').get(dateStr) as any;
+    const topApps = db!.prepare('SELECT app_name, app_type, SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date = ? GROUP BY app_name ORDER BY total_seconds DESC LIMIT 10').all(dateStr) as any[];
+    const hourlyRows = period === 'week'
+      ? db!.prepare('SELECT date, SUM(total_seconds) as total_seconds FROM stats_daily WHERE date >= ? AND date < ? GROUP BY date ORDER BY date').all(start.toISOString().slice(0, 10), new Date(end.getTime() + 86400000).toISOString().slice(0, 10)) as any[]
+      : [];
+    return { success: true, period, dateRange: [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)], dailyTotal: dailyTotal || { total_seconds: 0, sessions: 0 }, topApps, hourlyData: hourlyRows };
+  } catch (err: any) {
+    console.error('[DeskFlow] get-dashboard-data error:', err);
+    return { success: false, error: err.message, dailyTotal: { total_seconds: 0, sessions: 0 }, topApps: [], hourlyData: [] };
+  }
 });
 
 electron_1.ipcMain.handle('clear-productivity-sessions', () => {
@@ -26618,7 +26819,7 @@ electron_1.ipcMain.handle('insights:rewind', async (_event, params: { period: st
 electron_1.ipcMain.handle('get-home-summary', async () => {
   if (useJson || !db) return { success: false, error: 'No database' };
   try {
-    const today = todayStr();
+    const today = new Date().toISOString().split('T')[0];
 
     // Focus minutes — sum ALL app usage for today
     let focusMinutes = 0;
@@ -26880,6 +27081,18 @@ electron_1.ipcMain.handle('resume:testAiConnection', async () => {
   } catch (err: any) {
     return { success: false, error: err?.message || String(err) || 'Unknown error' };
   }
+});
+
+// Freeze-resistant terminal logging
+function frozenLog(...args: any[]) {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a).substring(0, 200) : String(a)).join(' ');
+  process.stderr.write(`[FROZEN-DBG] ${msg}\n`);
+  console.log(`[FROZEN-DBG] ${msg}`);
+}
+
+electron_1.ipcMain.handle('terminal:log', async (_, ...args: any[]) => {
+  frozenLog(...args);
+  return { success: true };
 });
 
 export { getAgentConfig, AgentConfig, detectAgentPrompt, AgentVerifyResult };

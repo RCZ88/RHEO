@@ -276,6 +276,13 @@ html.light :focus-visible {
 	--desktop-border: #27272a;
 }
 
+/* ===== Terminal page (data-page="terminal") — RHEO Dark default ===== */
+html[data-page="terminal"] {
+	--page-accent: #f472b6;
+	--ws-accent: #f472b6;
+	--ws-accent2: #2dd4bf;
+}
+
 /* ===== Root variables (theme-dependent via CSS cascade) ===== */
 :root {
 	--bg-primary: var(--color-background);

@@ -56,6 +56,7 @@ export interface Workspace {
   color: string;
   tabs: TerminalTab[];
   activeTabId: string;
+  themeId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -189,7 +190,7 @@ export interface ZoomState {
   paneId: string;
 }
 
-export type RightPanelTab = "inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys";
+export type RightPanelTab = "inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys" | "notes" | "handbook";
 
 export interface DailyStat {
   date: string;

@@ -11,7 +11,7 @@ import Sidebar, { SIDEBAR_ITEMS } from './components/Sidebar';
 import {
   Code2, BarChart3, Settings, Play, Pause, Clock,
   Download, Trash2, Zap, Database, AlertTriangle,
-  Shield,
+  Shield, Folder,
   ChevronLeft, ChevronRight, Save,
   Wallet, GraduationCap, Activity, Smartphone, Brain, HeartHandshake, Sparkles, Trophy,
   Bed, UserCheck, Bell, Command, LayoutDashboard, AlertCircle, RotateCcw, Bug,
@@ -359,7 +359,7 @@ function App() {
     }
   }, [currentPageId, navigate]);
 
-  // Keyboard shortcut: Ctrl+F — native find-in-page bar.
+  // Keyboard shortcut: Ctrl+F — open the native find overlay.
   // Ctrl+K opens the command palette separately.
   // In smart-search inputs, Ctrl+F opens the smart search overlay instead.
   useEffect(() => {
@@ -371,10 +371,12 @@ function App() {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
         if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
-        // Native find in smart-search inputs: let browser handle it, don't open overlay
+        // Native find in smart-search inputs: let browser handle it
         return;
       }
-      // Allow native Ctrl+F find bar — do NOT call preventDefault()
+      // Open the native find overlay instead of browser's native find bar
+      e.preventDefault();
+      setNativeFindOpen(true);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -2245,26 +2247,26 @@ function App() {
   const [focusMode, setFocusMode] = useState(false);
 
   // Total time by category (apps + all websites, used for score calculation)
-  const timeByCategory = useMemo(() => {
-    const categoryTime: Record<string, number> = {};
-    
-    // Desktop apps - include ALL apps
-    filteredLogs.forEach(log => {
-      if (log.is_browser_tracking) return; // Only skip actual website tracking
-      const cat = log.category || 'Uncategorized';
-      categoryTime[cat] = (categoryTime[cat] || 0) + log.duration;
-    });
-    
-    // Websites - map to app categories for productivity calculation
-    browserLogs.forEach(log => {
-      const domain = (log as any).domain || 'Unknown';
-      const websiteCategory = (log as any).category || 'Uncategorized';
-      const mappedCategory = WEBSITE_CATEGORY_MAP[websiteCategory] || 'Other';
-      categoryTime[mappedCategory] = (categoryTime[mappedCategory] || 0) + log.duration;
-    });
-    
-    return categoryTime;
-  }, [filteredLogs, browserLogs]);
+   const timeByCategory = useMemo(() => {
+     const categoryTime: Record<string, number> = {};
+     
+     // Desktop apps - include ALL apps, apply category overrides
+     filteredLogs.forEach(log => {
+       if (log.is_browser_tracking) return;
+       const cat = categoryOverrides[log.app.toLowerCase()] || log.category || 'Uncategorized';
+       categoryTime[cat] = (categoryTime[cat] || 0) + log.duration;
+     });
+     
+     // Websites - map to app categories for productivity calculation
+     browserLogs.forEach(log => {
+       const domain = (log as any).domain || 'Unknown';
+       const websiteCategory = (log as any).category || 'Uncategorized';
+       const mappedCategory = WEBSITE_CATEGORY_MAP[websiteCategory] || 'Other';
+       categoryTime[mappedCategory] = (categoryTime[mappedCategory] || 0) + log.duration;
+     });
+     
+     return categoryTime;
+   }, [filteredLogs, browserLogs, categoryOverrides]);
 
   // Compute productivity score - same algorithm as ProductivityPage
   const TIER_WEIGHTS = { productive: 1.0, neutral: 0.5, distracting: 0 };
@@ -2346,7 +2348,7 @@ function App() {
       
       // Filter by mode: Focus only includes productive categories
       if (timeMode === 'focus') {
-        const category = log.category || 'Uncategorized';
+        const category = categoryOverrides[log.app.toLowerCase()] || log.category || 'Uncategorized';
         if (!tierAssignments?.productive.includes(category)) {
           return; // Skip non-productive categories in Focus mode
         }
@@ -2394,7 +2396,7 @@ function App() {
       if (logDate >= weekStart && logDate <= today) {
         const dayName = dayNames[logDate.getDay()];
         const hours = log.duration / 3600; // convert seconds to hours
-        const category = log.category || 'Uncategorized';
+        const category = categoryOverrides[log.app.toLowerCase()] || log.category || 'Uncategorized';
         
         if (tierAssignments?.productive.includes(category)) {
           weekData[dayName].productive += hours;
@@ -2426,7 +2428,7 @@ function App() {
         },
       ]
     };
-  }, [filteredLogs, tierAssignments]);
+  }, [filteredLogs, tierAssignments, categoryOverrides]);
 
   // Generate AI Summary
   const generateAISummary = () => {

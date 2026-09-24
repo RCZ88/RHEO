@@ -11,29 +11,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms: number) {
   return (...args: Parameters<T>) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-declare global {
-  interface Window {
-    deskflowAPI?: {
-      terminalWrite: (terminalId: string, data: string) => Promise<{ success: boolean }>;
-      terminalWriteRaw: (terminalId: string, data: string) => Promise<{ success: boolean }>;
-      terminalResize: (terminalId: string, cols: number, rows: number) => Promise<{ success: boolean }>;
-      terminalDestroy: (terminalId: string) => Promise<{ success: boolean }>;
-      onTerminalData: (callback: (id: string, data: string) => void) => (() => void);
-      onTerminalExit: (callback: (id: string, exitCode: number, signal: string) => void) => (() => void);
-      onTerminalReady: (callback: (id: string) => void) => (() => void);
-      onAgentReady: (callback: (data: { terminalId: string }) => void) => (() => void);
-      onAgentTimeout: (callback: (data: { terminalId: string; agentType: string }) => void) => (() => void);
-      retryAgentInit: (terminalId: string, agentType: string) => Promise<{ success: boolean }>;
-      spawnTerminal: (terminalId: string, cwd?: string, agentType?: string, cols?: number, rows?: number) => Promise<boolean>;
-      onAiTaskUpdated: (callback: (data: { terminalId: string; status: string; messageId?: string }) => void) => (() => void);
-      onAiTaskFileChanged: (callback: (data: { tasks: any[] }) => void) => (() => void);
-      getPromptStatus: (terminalId?: string) => Promise<{ success: boolean; data: any[] }>;
-      aiTaskWatch: (projectPath: string) => Promise<{ success: boolean }>;
-      aiTaskStopWatch: (projectPath: string) => Promise<{ success: boolean }>;
-      aiTaskAdd: (task: { terminalId: string; prompt: string; agent: string; sessionId?: string; projectPath?: string }) => Promise<{ success: boolean; task?: any }>;
-    };
-  }
-}
+
 
 export interface PaneNode {
   type: 'leaf' | 'split';

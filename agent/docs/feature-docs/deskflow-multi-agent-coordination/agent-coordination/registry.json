@@ -3,13 +3,13 @@
   "agents": {
     "[object Object]": {
       "id": {
-        "AGENT_ID": "opencode-dash-fix-20260920",
-        "task": "fix borders + restore HeroBand"
+        "agentId": "opencode-perf-audit-20260922",
+        "task": "IPC payload sizes + rAF loop count"
       },
-      "startedAt": 1789888554994,
+      "startedAt": 1790086345907,
       "task": "",
-      "pid": 89373,
-      "lastHeartbeat": 1789888554994
+      "pid": 21162,
+      "lastHeartbeat": 1790086350694
     }
   },
   "leases": {},

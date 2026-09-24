@@ -11,12 +11,25 @@ export interface FinanceHandlerDeps {
   mainWindow: BrowserWindow | null;
   userPreferences: Record<string, any>;
   financePasswordHash: string | null;
+  financePasswordSalt: string | null;
+  financeDataKey: Buffer | null;
+  financeLocked: boolean;
+  financeRememberDevice: boolean;
+  financeRememberDeviceExpiry: number | null;
+  financeLockTimeout: number;
   getLocalDateStr: (d?: Date) => string;
   toInt: (v: unknown) => number;
+  financeDisplayCurrency: string;
 }
 
+const MAX_FINANCE_ATTEMPTS = 5;
+
 export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
-  const { db, mainWindow, userPreferences, financePasswordHash, getLocalDateStr, toInt } = deps;
+  const { db, mainWindow, userPreferences, financePasswordHash, financePasswordSalt, financeDataKey, financeRememberDevice, financeRememberDeviceExpiry, getLocalDateStr, toInt } = deps;
+  let financeLocked = deps.financeLocked;
+  let financeDisplayCurrency = deps.financeDisplayCurrency;
+  let financeLockTimeout = deps.financeLockTimeout;
+  let financeAttemptsLeft = MAX_FINANCE_ATTEMPTS;
 
 ipcMain.handle('finance:check-password-setup', async () => {
   return { hasPassword: !!financePasswordHash };
@@ -601,6 +614,19 @@ ipcMain.handle('finance:get-security-settings', async () => {
     lockTimeout: financeLockTimeout,
     displayCurrency: financeDisplayCurrency,
   };
+});
+
+ipcMain.handle('finance:get-lock-state', async () => {
+  return { locked: financeLocked };
+});
+
+ipcMain.handle('finance:is-locked', async () => {
+  return { locked: financeLocked };
+});
+
+ipcMain.handle('finance:lock', async () => {
+  financeLocked = true;
+  return { locked: true };
 });
 
 ipcMain.handle('finance:check-page-access', async () => {

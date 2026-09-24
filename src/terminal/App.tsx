@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { useConsoleStore } from "./hooks/useConsoleStore";
 import { THEMES, uid } from "./lib/data";
 import { buildTranscript, download, fillDynamic, matchCombo } from "./lib/utils";
@@ -9,9 +9,9 @@ import { BottomBar, LeftSidebar, TabStrip } from "./components/Chrome";
 import { SplitView, TermPane } from "./components/Terminal";
 import { RightPanel } from "./components/Panels";
 import { NewTabModal, Palette, PresetsModal, RunCmdModal, SaveCmdModal, SaveWsModal, Toasts, WorkspacesModal } from "./components/Modals";
-import { Check, Download, Maximize2, Pencil, Radio, Search, X } from "lucide-react";
+import { Check, Download, Maximize2, Pencil, Radio, Search, X, Upload, Import } from "lucide-react";
 
-type Modal = "palette" | "presets" | "workspaces" | "savews" | "newtab" | "savecmd" | "rename" | "find" | null;
+type Modal = "palette" | "presets" | "workspaces" | "savews" | "newtab" | "savecmd" | "rename" | "find" | "import" | null;
 
 const PASSIVE_KEYS = ["t", "w", "r", "h", "v", "]", "[", "k", "l", "s", "f", "y", "p", "b", "d", "z", "tab", "arrowright", "arrowleft"];
 
@@ -35,6 +35,8 @@ export default function App() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2400);
   }, []);
 
+  const demoMode = store.demoMode;
+  const setDemoMode = store.setDemoMode;
   const theme = store.theme;
   const cssVars = useMemo(() => ({
     ["--t-bg" as string]: theme.bg,
@@ -45,6 +47,9 @@ export default function App() {
     ["--t-accent" as string]: theme.accent,
     ["--t-accent2" as string]: theme.accent2,
     ["--t-border" as string]: theme.border,
+    ["--t-promptUser" as string]: theme.promptUser,
+    ["--t-promptPath" as string]: theme.promptPath,
+    ["--t-selection" as string]: theme.selection,
   }), [theme]);
 
   const openRunCmd = useCallback((idOrCmd: string) => {
@@ -84,6 +89,7 @@ export default function App() {
       case "find": if (t) { setFindOpen(true); setFindQ(""); notify("Find mode active"); } break;
       case "balance": if (t) store.balanceAction(t.id); notify("Panes balanced"); break;
       case "export-transcript": exportTranscript(); break;
+      case "import-history": setModal("import"); break;
       case "cycle-theme": {
         const i = THEMES.findIndex((x) => x.id === store.appearance.themeId);
         const n = THEMES[(i + 1) % THEMES.length];
@@ -132,6 +138,7 @@ export default function App() {
     else if (c === "__new_tab__") setModal("newtab");
     else if (c === "__broadcast__") doAction("broadcast");
     else if (c.startsWith("__runcmd__")) openRunCmd(c.replace("__runcmd__", ""));
+    else if (c === "__import__") { setModal("import"); notify("Import terminal history"); }
     else {
       const tt = store.activeTab;
       if (tt) store.runCommand(tt.id, tt.activePaneId, c);
@@ -148,7 +155,7 @@ export default function App() {
   const matchCount = findQ && t ? Object.values(t.panes).reduce((a, p) => a + p.lines.filter((l) => l.text.toLowerCase().includes(findQ.toLowerCase())).length, 0) : 0;
 
   return (
-    <div className={store.appearance.glow ? "term-glow h-full flex flex-col" : "h-full flex flex-col"} style={{ background: theme.bg, ...cssVars } as React.CSSProperties}>
+    <div data-page="terminal" className={store.appearance.glow ? "term-glow h-full flex flex-col" : "h-full flex flex-col"} style={{ background: theme.bg, ...cssVars } as React.CSSProperties}>
       <div className="pointer-events-none fixed inset-0 z-0" style={{ background: `radial-gradient(900px 400px at 15% -5%, ${theme.accent}14, transparent 60%), radial-gradient(800px 380px at 95% 0%, ${theme.accent2}12, transparent 60%)` }} />
       <a href="#terminal-main" className="sr-only focus:not-sr-only focus:absolute focus:z-[70] focus:px-3 focus:py-2 focus:rounded-lg" style={{ background: "var(--t-accent)", color: "#fff" }}>Skip to terminal</a>
       <div className="relative z-10 flex flex-col h-full min-h-0">
@@ -160,6 +167,8 @@ export default function App() {
           onPresets={() => setModal("presets")}
           onNewTab={() => setModal("newtab")}
           leftOpen={leftOpen} setLeftOpen={setLeftOpen} rightOpen={rightOpen} setRightOpen={setRightOpen}
+          demoMode={demoMode} setDemoMode={setDemoMode}
+          onRename={() => { setRenameDraft(t.label); setModal("rename"); }}
         />
         <TabStrip store={store} onNewTab={() => setModal("newtab")} />
         <div className="flex-1 flex min-h-0 gap-2 px-3 pb-1">
@@ -181,7 +190,8 @@ export default function App() {
               <span className="text-[10.5px] mono hidden sm:inline" style={{ color: "var(--t-muted)" }}>{t ? Object.keys(t.panes).length : 0} panes · {t?.shell ?? store.shell} · {store.distro.split(" ")[0]}</span>
               {store.broadcastTabId === t?.id && <span className="flex items-center gap-1 text-[10px] mono font-bold px-1.5 py-1 rounded-lg" style={{ background: "rgba(251,113,133,.12)", color: "#fb7185" }}><Radio size={11} />BROADCAST</span>}
               <div className="flex-1" />
-              <button onClick={() => setFindOpen((v) => !v)} title="Find in panes" aria-pressed={findOpen} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: findOpen ? "var(--t-accent)" : "var(--t-border)", color: findOpen ? "var(--t-accent)" : "var(--t-fg)" }}><span className="flex items-center gap-1"><Search size={12} />Find</span></button>
+              <button onClick={() => { setModal("find"); if (t) { setFindOpen(true); notify("Find mode active"); } }} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Search size={12} />Find</button>
+              <button onClick={() => { setModal("import"); notify("Import terminal history"); }} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)] hidden sm:flex items-center gap-1" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Import size={12} />Import</button>
               <button onClick={() => t && store.splitPane(t.id, t.activePaneId, "row")} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>⇄ Split</button>
               <button onClick={() => t && store.splitPane(t.id, t.activePaneId, "col")} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>⇅ Stack</button>
               <button onClick={() => t && store.balanceAction(t.id)} className="h-7 px-2.5 rounded-lg text-[11px] font-bold transition hover:brightness-110" style={{ background: "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: "var(--t-accent)" }}>Balance</button>
@@ -263,6 +273,7 @@ export default function App() {
         {modal === "savews" && <SaveWsModal store={store} onClose={() => setModal(null)} notify={notify} />}
         {modal === "newtab" && <NewTabModal store={store} onClose={() => setModal(null)} notify={notify} />}
         {modal === "savecmd" && <SaveCmdModal store={store} initial={saveCmdInitial} onClose={() => setModal(null)} notify={notify} />}
+        {modal === "import" && <ImportModal store={store} onClose={() => setModal(null)} notify={notify} />}
         {modal === "rename" && t && (
           <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: "rgba(3,5,10,.6)" }} onClick={() => setModal(null)} role="dialog" aria-modal="true" aria-label="rename tab">
             <div className="w-full max-w-sm rounded-2xl border p-5 anim-pop" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }} onClick={(e) => e.stopPropagation()}>

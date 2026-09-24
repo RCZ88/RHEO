@@ -625,3 +625,4 @@ export function getJobStats(): { pending: number; processing: number; completed:
     }
   } catch { return { pending: 0, processing: 0, completed: 0, failed: 0, skipped: 0 } }
 }
+export const contextBrain = { getAllCurrentFacts, addFact, logEpisode, getEpisodes, traverseFromEntity, findEntities, getEntitiesList, getFactsList };

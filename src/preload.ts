@@ -1,5 +1,108 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// SECURITY: Valid IPC channel allowlist - prevents unauthorized channel access
+const VALID_CHANNELS = new Set([
+  'foreground-changed', 'tracking-heartbeat', 'browser-tracking-event',
+  'browser-identified', 'sleep-detection', 'external-data-changed',
+  // Core API
+  'get-logs', 'update-app-log', 'delete-app-log',
+  'get-dashboard-aggregates', 'get-app-stats', 'get-domain-stats',
+  'get-period-rankings', 'get-dashboard-data', 'get-page-stats',
+  'backfill-aggregations', 'get-logs-by-period', 'get-stats',
+  'get-daily-stats', 'toggle-tracking', 'set-tracking', 'restart-tracking',
+  'get-platform-info', 'get-tracking-mode', 'set-tracking-mode',
+  'clear-data', 'get-preference', 'set-preference',
+  // Session
+  'create-session', 'get-sessions', 'update-session', 'delete-session',
+  'get-session-state', 'save-session-config', 'update-session-category',
+  'update-session-resume-id',
+  // Focus
+  'focusGroup:list', 'focusGroup:get', 'focusGroup:save', 'focusGroup:remove',
+  'focusGroup:startWith', 'focusGroup:startWithMany', 'focusGroup:linkUsage',
+  // Goals
+  'goal:create', 'goal:list', 'goal:get', 'goal:update', 'goal:delete',
+  'goal:progress', 'goal:update-progress',
+  // Finance
+  'finance:get-wallets', 'finance:create-transaction', 'finance:update-transaction',
+  'finance:delete-transaction', 'finance:get-categories', 'finance:get-summary',
+  // Categories
+  'save-category-config', 'get-category-config', 'get-categories',
+  'update-categories-from-overrides',
+  // Tracking
+  'get-tracking-data', 'get-activity-stats', 'get-browser-stats',
+  'get-browser-category-stats', 'get-app-activity',
+  // Terminal
+  'terminal:create', 'terminal:list', 'terminal:get', 'terminal:update',
+  'terminal:delete', 'terminal:get-messages', 'terminal:send-message',
+  'save-terminal-message', 'delete-terminal-message', 'save-terminal-session',
+  'delete-terminal-session', 'save-terminal-layout', 'delete-terminal-layout',
+  'save-terminal-preset', 'terminal:resize',
+  // Projects
+  'get-projects', 'create-project', 'update-project', 'delete-project',
+  'get-project-line-stats', 'delete-project-line-stats',
+  'save-project-run-config',
+  // AI Context
+  'ai-context:list', 'ai-context:get', 'ai-context:create', 'ai-context:update',
+  'ai-context:delete', 'ai-context:group-create', 'ai-context:group-delete',
+  // Browser
+  'get-browser-profiles', 'create-browser-profile', 'delete-browser-profile',
+  'update-browser-profile-app', 'get-browser-activity',
+  // System
+  'backup:create', 'backup:restore', 'get-schema', 'get-database-tables',
+  'get-table-schema', 'get-table-data', 'get-table-data-count',
+  'get-table-changes', 'get-table-foreign-keys',
+  'get-logs-by-duration', 'get-logs-by-app', 'clear-logs',
+  'rebuild-daily-stats', 'rebuild-browser-stats', 'rebuild-app-totals',
+  // Word Tracker
+  'wordTrackerGetWords', 'wordTrackerAddWord', 'wordTrackerRemoveWord',
+  'wordTrackerToggleWord', 'wordTrackerSetTolerance', 'wordTrackerEditWord',
+  'wordTrackerCounts', 'wordTrackerCountsByProject', 'wordTrackerGetConfig',
+  'wordTrackerSetConfig', 'wordTrackerResetCounts', 'wordTrackerScanJsonl',
+  'wordTrackerCountText',
+  // STT
+  'stt:transcript-save', 'stt:transcript-update', 'stt:transcript-delete',
+  // Auth
+  'auth:update-sync-url', 'auth:get-sync-url',
+  // Conductor
+  'conductor:send-directive', 'conductor:get-missions', 'conductor:get-status',
+  // Agent
+  'agent:send', 'agent:get-status', 'agent:list',
+  // AIGateway
+  'aigateway:send-prompt', 'aigateway:get-status',
+  // AI Usage
+  'ai-usage:track', 'ai-usage:get-stats', 'ai-usage:cleanup',
+  // CLI
+  'cli:check-updates',
+  // Overlay Studio
+  'overlay-studio:save-caption', 'overlay-studio:get-captions',
+  // Memory
+  'memory:delete', 'memory:get', 'memory:create', 'memory:update',
+  // Context
+  'context:update-profile', 'context:get-profile',
+  // Brain
+  'brain:create-episode', 'brain:get-episodes',
+  // Composition
+  'compositions:validate', 'compositions:evaluate', 'compositions:history',
+  'compositions:status', 'compositions:settings:get', 'compositions:settings:set',
+  // Gas
+  'gas:sync', 'gas:export',
+  // Splash
+  'boot-animation-config', 'replay-splash', 'splash-complete',
+  // File operations
+  'save-file', 'read-file', 'delete-file',
+  // Sync
+  'sync:push', 'sync:pull', 'sync:get-status',
+  // Notifications
+  'notification:send', 'notification:clear', 'notification:get-all',
+  // Tasks
+  'task:create', 'task:update', 'task:delete', 'task:get', 'task:list',
+]);
+
+// SECURITY: Validate IPC channel before sending
+function validateChannel(channel: string): boolean {
+  return VALID_CHANNELS.has(channel);
+}
+
 // Bridge external-data-changed IPC event to window CustomEvent
 // This allows main process to trigger renderer-side data refreshes
 ipcRenderer.on('external-data-changed', () => {
@@ -7,6 +110,14 @@ ipcRenderer.on('external-data-changed', () => {
 });
 
 contextBridge.exposeInMainWorld('deskflowAPI', {
+  // SECURITY: Send an IPC message to the main process after validating the channel
+  send: (channel: string, data?: any) => {
+    if (VALID_CHANNELS.has(channel)) {
+      ipcRenderer.send(channel, data);
+    } else {
+      console.error(`[DeskFlow] SECURITY: Invalid IPC channel attempted: ${channel}`);
+    }
+  },
   // Listen for foreground window changes
   onForegroundChange: (callback: (data: any) => void) => {
     const handler = (_event: any, data: any) => callback(data);
@@ -155,14 +266,11 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   // Keyboard shortcuts
   getKeyboardShortcuts: () => ipcRenderer.invoke('get-keyboard-shortcuts'),
   setKeyboardShortcuts: (shortcuts: Record<string, string>) => ipcRenderer.invoke('set-keyboard-shortcuts', shortcuts),
-  getPreference: (key: string) => ipcRenderer.invoke('get-preference', key),
-  setPreference: (key: string, value: any) => ipcRenderer.invoke('set-preference', key, value),
-
-  // Get custom AI agent storage paths
-  getAIAgentCustomPaths: () => ipcRenderer.invoke('get-ai-agent-custom-paths'),
+  // Keyboard shortcuts
 
   // Set custom path for an AI agent plugin
   setAIAgentCustomPath: (pluginId: string, dirPath: string) => ipcRenderer.invoke('set-ai-agent-custom-path', pluginId, dirPath),
+  getAIAgentCustomPaths: () => ipcRenderer.invoke('get-ai-agent-custom-paths'),
 
   // Browser tracking methods (optional period filter and dateOffset)
   getBrowserLogs: (period: string, dateOffset = 0) => ipcRenderer.invoke('get-browser-logs', period, dateOffset),
@@ -521,6 +629,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   getAISessionsPaginated: (tool: string, limit?: number, offset?: number) => ipcRenderer.invoke('get-ai-sessions-paginated', tool, limit, offset),
   getAISessionMessages: (sessionId: string, tool: string) => ipcRenderer.invoke('get-ai-session-messages', sessionId, tool),
   debugAIAgents: () => ipcRenderer.invoke('debug-ai-agents'),
+  setHermesSessionsPath: (path: string) => ipcRenderer.invoke('set-hermes-sessions-path', path),
   onAISyncProgress: (callback: (data: any) => void) => {
     const handler = (_event: any, data: any) => callback(data);
     ipcRenderer.on('ai-sync-progress', handler);
@@ -1153,15 +1262,25 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   aiDebugClear: (opts: { sources?: string[]; events?: string[]; olderThanMs?: number }) =>
     ipcRenderer.invoke('ai-debug:clear', opts),
 
+  // AI Usage stats
+  aiChatUsage: () => ipcRenderer.invoke('ai-chat:usage'),
+  // Conversations (external AI bridge)
+  conversationsImport: (data: any) => ipcRenderer.invoke('conversations:import', data),
+  conversationsList: () => ipcRenderer.invoke('conversations:list'),
+
+  // Composition engine
+  compositionsReport: (id: string) => ipcRenderer.invoke('compositions:report', id),
+  compositionsRunNow: (id: string) => ipcRenderer.invoke('compositions:run-now', id),
+
   // Streaming provider chat (AiChat)
   providerChatCall: (data: { provider: any; messages: Array<{ role: string; content: string }>; model?: string; maxTokens?: number; temperature?: number }) =>
     ipcRenderer.invoke('provider-chat-call', data),
   providerChatBasic: (data: { provider: any; messages: Array<{ role: string; content: string }>; model?: string; maxTokens?: number; temperature?: number }) =>
     ipcRenderer.invoke('provider-chat-basic', data),
-  onProviderChunk: (callback: (data: { delta?: string; done?: boolean; error?: string; full?: string; diagId?: string; durationMs?: number; providerId?: string; purpose?: string }) => void) => {
-    const handler = (_event: any, data: any) => callback(data);
+  onProviderChunk: (callback: (data: { delta?: string; done?: boolean; error?: string; full?: string; diagId?: string; durationMs?: number; providerId?: string; purpose?: string; requestId?: string }) => void, requestId?: string) => {
+    const handler = (_event: any, data: any) => { if (!requestId || !data.requestId || data.requestId === requestId) callback(data); };
     ipcRenderer.on('provider-chunk', handler);
-    return () => { ipcRenderer.removeListener('provider-chunk', handler); };
+    return () => ipcRenderer.removeListener('provider-chunk', handler);
   },
   getProviderDiagnostics: () => ipcRenderer.invoke('get-provider-diagnostics'),
   clearProviderLogs: () => ipcRenderer.invoke('clear-provider-logs'),
@@ -1814,12 +1933,15 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   compositionsStatus: (ruleId?: string) => ipcRenderer.invoke('compositions:status', ruleId),
   compositionsSettingsGet: (key: string) => ipcRenderer.invoke('compositions:settings:get', key),
   compositionsSettingsSet: (key: string, value: string) => ipcRenderer.invoke('compositions:settings:set', key, value),
+  // ── GAS Integration ──
+  gasSync: (payload: any) => ipcRenderer.invoke('gas:sync', payload),
+  gasExport: (payload: any) => ipcRenderer.invoke('gas:export', payload),
 });
 
 // R-10: Splash renderer preload bridge (single IPC channel for splash↔main)
 contextBridge.exposeInMainWorld('splashAPI', {
   getBootAnimationConfig: () => ipcRenderer.invoke('boot-animation-config'),
-  onReplay: (cb) => ipcRenderer.on('replay-splash', () => cb()),
+  onReplay: (cb: () => void) => ipcRenderer.on('replay-splash', () => cb()),
   sendComplete: () => ipcRenderer.invoke('splash-complete'),
 });
 

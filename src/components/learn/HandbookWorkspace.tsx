@@ -91,9 +91,9 @@ function TypingTerminal() {
   return (
     <div className="bg-zinc-950 border border-zinc-800/60 rounded-xl shadow-none overflow-hidden mb-7">
       <div className="flex items-center gap-[7px] px-3.5 py-2.5 bg-zinc-900 border-b border-zinc-800/60">
-        <span className="w-[11px] h-[11px] rounded-full bg-[#ff5f57]" />
-        <span className="w-[11px] h-[11px] rounded-full bg-[#febc2e]" />
-        <span className="w-[11px] h-[11px] rounded-full bg-[#28c840]" />
+        <span className="w-[11px] h-[11px] rounded-full bg-red-500" />
+        <span className="w-[11px] h-[11px] rounded-full bg-amber-400" />
+        <span className="w-[11px] h-[11px] rounded-full bg-green-500" />
         <span className="ml-2 font-mono text-[11px] text-zinc-500">~/handbook</span>
       </div>
       <div ref={bodyRef} className="px-5 py-4 font-mono text-[13.5px] min-h-[88px]" />
@@ -361,7 +361,7 @@ export function HandbookWorkspace() {
         className="fixed top-0 left-0 h-[2px] z-[99] transition-[width] duration-100 linear"
         style={{
           width: `${scrollPct}%`,
-          background: 'linear-gradient(90deg, #7ee787, #79c0ff)',
+          background: 'linear-gradient(90deg, var(--resume-success), var(--resume-info))',
         }}
       />
 
@@ -485,9 +485,9 @@ export function HandbookWorkspace() {
             {/* Practice terminal */}
             <div className="bg-zinc-950 border border-zinc-800/60 rounded-xl overflow-hidden mb-7 shadow-none">
               <div className="flex items-center gap-[7px] px-3.5 py-2.5 bg-zinc-900 border-b border-zinc-800/60">
-                <span className="w-[11px] h-[11px] rounded-full bg-[#ff5f57]" />
-                <span className="w-[11px] h-[11px] rounded-full bg-[#febc2e]" />
-                <span className="w-[11px] h-[11px] rounded-full bg-[#28c840]" />
+                <span className="w-[11px] h-[11px] rounded-full bg-red-500" />
+                <span className="w-[11px] h-[11px] rounded-full bg-amber-400" />
+                <span className="w-[11px] h-[11px] rounded-full bg-green-500" />
                 <span className="ml-2 font-mono text-[11px] text-zinc-500">~/handbook/practice</span>
               </div>
               <div className="px-5 py-4 font-mono text-[13.5px] min-h-[120px]">

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { generateUUID } from '../lib/uuid'
+import type { DeskflowAPI } from '../types/deskflow-api'
+import { aiAgentService } from '../services/ai'
+import { toolRegistry } from '../services/ai'
+import '../../services/ai/canvasTools'
 import {
   parseAssistantContent,
   serializeParsed,
@@ -8,6 +12,8 @@ import {
 import { buildContextBundleDetailed, todayIso } from "../services/aiContextBundle"
 import { parseNlAutomation, stripAutomationBlock } from "../components/ai/automations/lib/nlParser"
 import { generateDsl } from "../components/ai/automations/lib/dslGenerator"
+
+export interface AgentStep { id: string; label: string; status: 'pending' | 'active' | 'done' }
 
 export interface ChatMsg {
   id: string
@@ -27,8 +33,8 @@ export interface ChatThreadMeta {
 
 type AnyRec = Record<string, unknown>
 
-function bridge(): AnyRec | undefined {
-  const w = window as unknown as { deskflowAPI?: AnyRec }
+function bridge(): DeskflowAPI | undefined {
+  const w = window as unknown as { deskflowAPI?: DeskflowAPI }
   return w.deskflowAPI
 }
 
@@ -95,6 +101,9 @@ export function useAiChat(): UseAiChat {
   const [threads, setThreads] = useState<ChatThreadMeta[]>([])
   const [currentThreadDate, setCurrentThreadDate] = useState(getThreadDate())
   const [memories, setMemories] = useState<{ id: string; text: string; category: string }[]>([])
+  const [agentSteps, setAgentSteps] = useState<Array<{id:string;label:string;status:'pending'|'active'|'done'}>>([])
+  const [agentStatus, setAgentStatus] = useState<string | undefined>()
+  const [pendingConfirm, setPendingConfirm] = useState<{toolName:string;args:any}|null>(null)
 
   const cleanupRef = useRef<null | (() => void)>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -158,6 +167,28 @@ export function useAiChat(): UseAiChat {
 
   useEffect(() => { refreshThreads() }, [refreshThreads])
 
+  // Subscribe to aiAgentService progress
+  useEffect(() => {
+    aiAgentService.setProgressCallback(p => {
+      setAgentStatus(p.message);
+      setStreaming(prev => prev);
+      if (p.status === 'executing' && p.toolName) {
+        setAgentSteps(s => [...s.filter(x => x.status !== 'active'), { id: p.toolName! + Date.now(), label: 'Running ' + p.toolName, status: 'active' }]);
+      }
+      if (p.status === 'completed' || p.status === 'error') {
+        setAgentSteps(s => s.map(x => x.status === 'active' ? { ...x, status: 'done' } : x));
+      }
+    });
+    return () => aiAgentService.clearProgressCallback();
+  }, []);
+
+  // Listen for canvas-add events from tool handler
+  useEffect(() => {
+    const h = (e: any) => { const { title, body, kind } = e.detail || {}; if (title) addMessage({ id: crypto.randomUUID(), role: 'assistant', content: '### ' + title + '\n' + (body || ''), timestamp: Date.now() }); };
+    window.addEventListener('deskflow:ai-canvas-add', h);
+    return () => window.removeEventListener('deskflow:ai-canvas-add', h);
+  }, []);
+
   // Load memories for a thread
   const loadMemories = useCallback(async (threadDate: string) => {
     try {
@@ -194,13 +225,13 @@ export function useAiChat(): UseAiChat {
               content,
               (m.parsed_json as string | undefined) ?? null,
             )
-            return {
-              id: uid(),
-              role: (m.role as "user" | "assistant") || "assistant",
-              content: parsed && parsed.type !== "text" ? text : content,
-              parsed: parsed && parsed.type !== "text" ? parsed : undefined,
-              timestamp: (m.timestamp as number) || undefined,
-            }
+return {
+      id: String(m.id ?? uid()),
+      role: (m.role as "user" | "assistant") || "assistant",
+      content: parsed && parsed.type !== "text" ? text : content,
+      parsed: parsed && parsed.type !== "text" ? parsed : undefined,
+      timestamp: typeof m.timestamp === 'number' ? m.timestamp : Number(m.timestamp) || undefined,
+    }
           }),
         )
       } else {
@@ -355,6 +386,23 @@ export function useAiChat(): UseAiChat {
       setConnecting(true)
       setThinking(false)
 
+      const useAgentLoop = true;
+
+      // Agent loop path
+      if (useAgentLoop) {
+        aiAgentService.currentRequestId = crypto.randomUUID();
+        setStreaming(true); setAgentSteps([]); setAgentStatus('Starting agent...');
+        try {
+          const reply = await aiAgentService.processMessage(text);
+          setAssistantMessage(assistantId, { content: reply });
+          await finish(reply);
+        } catch (e: any) {
+          setAssistantMessage(assistantId, { parsed: { type: 'error', message: 'Agent failed', recovery: String(e?.message || e) } });
+          stop();
+        }
+        return;
+      }
+
       let target: { provider: unknown; model: string } | null = null
       let providerState: ProviderState | null = null
       try {
@@ -433,7 +481,7 @@ export function useAiChat(): UseAiChat {
         const nl = parseNlAutomation(finalText)
         if (nl) {
           try {
-            await (bridge() as AnyRec).compositionsCreate?.({
+            await bridge()?.compositionsCreate?.({
               id: generateUUID(),
               name: nl.config.name,
               description: nl.narration || nl.config.name,
@@ -456,19 +504,16 @@ export function useAiChat(): UseAiChat {
             api.aiDebugLog({ source: "ai-assistant", event: "parsed", provider: target?.provider?.id, model: target?.model, contextId: threadDateRef.current, role: "assistant", payload: { parsed, displayText } })
           }
         } catch { /* vault push is best-effort */ }
-        setMessages((prev) => {
-          const next = prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content: parsed && parsed.type !== "text" ? prose : displayText,
-                  parsed: parsed && parsed.type !== "text" ? parsed : undefined,
-                }
-              : m,
-          )
-          persist(next)
-          return next
-        })
+setMessages((prev) => {
+           const next = prev.map((m) =>
+             m.id === assistantId
+               ? { ...m, content: parsed && parsed.type !== "text" ? prose : displayText, parsed: parsed && parsed.type !== "text" ? parsed : undefined }
+               : m,
+           )
+           persist(next)
+           void extractMemories(threadDateRef.current, next)
+           return next
+         })
         stop()
       }
 
@@ -574,6 +619,18 @@ export function useAiChat(): UseAiChat {
 
   useEffect(() => () => stop(), [stop])
 
+  // Poll for pending confirmation
+  useEffect(() => {
+    if (!streaming) return
+    const id = setInterval(() => { setPendingConfirm(aiAgentService.getPendingConfirm()) }, 500)
+    return () => clearInterval(id)
+  }, [streaming])
+
+  // Reset agent on reset/startNewThread/loadThread
+  const resetWrapped = useCallback(async () => { aiAgentService.resetConversation(); await reset(); }, [reset])
+  const startNewThreadWrapped = useCallback(() => { aiAgentService.resetConversation(); startNewThread(); }, [startNewThread])
+  const loadThreadWrapped = useCallback(async (d: string) => { aiAgentService.resetConversation(); await loadThread(d); }, [loadThread])
+
   return {
     messages,
     input,
@@ -584,19 +641,22 @@ export function useAiChat(): UseAiChat {
     error,
     contextWarnings,
     hasProvider,
+    agentSteps,
+    agentStatus,
+    pendingConfirm,
     send,
     stop,
-    reset,
+    reset: resetWrapped,
     dismissError,
     setAssistantMessage,
     addMessage,
     threads,
     currentThreadDate,
-    loadThread,
+    loadThread: loadThreadWrapped,
     deleteThread,
     renameThread,
     refreshThreads,
-    startNewThread,
+    startNewThread: startNewThreadWrapped,
     memories,
   }
 }

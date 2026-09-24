@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Copy, Check, X, Loader2, AlertTriangle, BookOpen, RotateCcw } from 'lucide-react';
 import type { CommandNote } from './CommandNotesPanel';
 
@@ -14,9 +14,9 @@ interface Props {
   saving: boolean;
   savingLabel: string;
   emptyCommandOkay?: boolean;
-  }
+}
 
-const SYSTEM_PROMPT = `You are Penguin Console's command-note tutor. Generate a concise command note as JSON ONLY (no markdown, no prose outside the JSON). Output this exact shape:
+const BASE_SYSTEM_PROMPT = `You are Penguin Console's command-note tutor. Generate a concise command note as JSON ONLY (no markdown, no prose outside the JSON). Output this exact shape:
 
 {
   "title": "short title (e.g. grep recursive)",
@@ -31,6 +31,11 @@ const SYSTEM_PROMPT = `You are Penguin Console's command-note tutor. Generate a 
 
 Rules: keep each field tight. 'params' only if the command takes flags/args worth naming. If no safety concern, write 'None'. Keep 'related' to real commands. NEVER return anything outside the JSON object.`;
 
+function buildSystemPrompt(section: string, command: string): string {
+  if (!section || section === 'All') return BASE_SYSTEM_PROMPT;
+  return `${BASE_SYSTEM_PROMPT}\n\nFocus area: ${section}. The command "${command}" belongs to this section. Explain it in the context of ${section.toLowerCase()}, emphasizing how it fits into that workflow.`;
+}
+
 export function AddPromptModal({
   initialCommand,
   initialSection,
@@ -41,8 +46,11 @@ export function AddPromptModal({
   savingLabel,
 }: Props) {
   const [mode, setMode] = useState<Mode>('generate');
-  const [prompt, setPrompt] = useState(SYSTEM_PROMPT);
-  const [userMsg, setUserMsg] = useState(`Explain the command "${initialCommand}" in detail so a learner can understand when and how to use it.`);
+  const [prompt, setPrompt] = useState(() => buildSystemPrompt(initialSection, initialCommand));
+  const [userMsg, setUserMsg] = useState(() => {
+    const topic = initialSection && initialSection !== 'All' ? ` in the context of ${initialSection}` : '';
+    return `Explain the command "${initialCommand}"${topic} in detail so a learner can understand when and how to use it.`;
+  });
   const [resp, setResp] = useState('');
   const [parsed, setParsed] = useState<CommandNote | null>(null);
   const [parseErr, setParseErr] = useState('');

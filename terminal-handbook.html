@@ -21,10 +21,12 @@
     --pink:#ec4899;
     --amber:#fbbf24;
     --amber-dim:rgba(251,191,36,.12);
-    --rose:#fb7185;
-    --rose-dim:rgba(251,113,133,.10);
-    --violet:#a78bfa;
-    --violet-dim:rgba(167,139,250,.12);
+--rose:#fb7185;
+--rose-dim:rgba(251,113,133,.10);
+--violet:#a78bfa;
+--violet-dim:rgba(167,139,250,.12);
+--green:#28c840;
+--green-dim:rgba(40,200,64,.12);
     --mono:"Cascadia Code","JetBrains Mono","SF Mono",Consolas,monospace;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
   }
@@ -92,7 +94,7 @@
         box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 1px rgba(236,72,153,.08);overflow:hidden;margin-bottom:30px;backdrop-filter:blur(16px);}
   .term .titlebar{display:flex;align-items:center;gap:7px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);}
   .term .dot{width:11px;height:11px;border-radius:50%;}
-  .term .dot.r{background:#ff5f57;}.term .dot.y{background:#febc2e;}.term .dot.g{background:#28c840;}
+  .term .dot.r{background:var(--pink);}.term .dot.y{background:var(--amber);}.term .dot.g{background:var(--green);}
   .term .title{margin-left:8px;font-family:var(--mono);font-size:11px;color:var(--faint);}
   .term .body{padding:16px 18px;font-family:var(--mono);font-size:13.5px;min-height:88px;}
   .term .line{margin-bottom:4px;white-space:pre-wrap;word-break:break-all;}
@@ -165,7 +167,7 @@
             border-bottom:1px solid var(--line);flex-wrap:wrap;}
   .cmd .bar .dollar{font-family:var(--mono);color:var(--accent);font-size:13px;user-select:none;}
   .cmd .bar .dollar.root{color:var(--amb);}
-  .cmd .bar code{color:#e6edf3;font-size:13.5px;font-weight:500;}
+  .cmd .bar code{color:var(--txt);font-size:13.5px;font-weight:500;}
   .cmd .body{padding:10px 14px 12px;}
   .row{display:flex;gap:10px;font-size:13.5px;margin-top:5px;}
   .row:first-child{margin-top:0;}

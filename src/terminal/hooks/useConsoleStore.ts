@@ -133,6 +133,7 @@ interface Persist {
   tabs: TerminalTab[]; activeTabId: string; groups: TermGroup[]; workspaces: Workspace[];
   commands: SavedCommand[]; history: HistoryEntry[]; shortcuts: Shortcut[]; appearance: Appearance;
   distro: string; shell: string; demoMode: boolean; sidebarWidth: number; rightPanelWidth: number;
+  autosaveEnabled: boolean;
 }
 
 function load(): Persist | null {
@@ -165,7 +166,7 @@ export function useConsoleStore() {
     { id: uid("m"), ts: Date.now() - 1000 * 60 * 18, server: "git-ops", tool: "commit_ctx", detail: "git status → clean", ok: true },
     { id: uid("m"), ts: Date.now() - 1000 * 60 * 6, server: "shell-exec", tool: "history_ctx", detail: "injected 12 cmds as context", ok: true },
   ]);
-  const [rightTab, setRightTab] = useState<"inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys" | "notes">("inspect");
+  const [rightTab, setRightTab] = useState<"inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys" | "notes" | "handbook">("inspect");
   const [historyQuery, setHistoryQuery] = useState("");
   const [notesQuery, setNotesQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
@@ -178,12 +179,23 @@ export function useConsoleStore() {
   const [demoMode, setDemoMode] = useState(s?.demoMode ?? true);
   const [sidebarWidth, setSidebarWidth] = useState(264);
   const [rightPanelWidth, setRightPanelWidth] = useState(330);
+  const [autosaveEnabled, setAutosaveEnabled] = useState(s?.autosaveEnabled ?? false);
 
   useEffect(() => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth } satisfies Persist));
+      localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled } satisfies Persist));
     } catch { /* quota */ }
-  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth]);
+  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled]);
+
+  useEffect(() => {
+    if (!autosaveEnabled) return;
+    const interval = setInterval(() => {
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled } satisfies Persist));
+      } catch { /* quota */ }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autosaveEnabled]);
 
   const sortedTabs = useMemo(() => [...tabs].sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false)), [tabs]);
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
@@ -438,11 +450,11 @@ export function useConsoleStore() {
     const ws: Workspace = {
       id: uid("ws"), name, description: description || `${tabs.length} tabs · ${tabs.reduce((a, t) => a + Object.keys(t.panes).length, 0)} panes · saved ${new Date().toLocaleString()}`,
       color: color ?? TAB_COLORS[workspaces.length % TAB_COLORS.length],
-      tabs: JSON.parse(JSON.stringify(tabs)), activeTabId, createdAt: Date.now(), updatedAt: Date.now(),
+      tabs: JSON.parse(JSON.stringify(tabs)), activeTabId, themeId: appearance.themeId, createdAt: Date.now(), updatedAt: Date.now(),
     };
     setWorkspaces((w) => [ws, ...w]);
     return ws;
-  }, [tabs, activeTabId, workspaces.length]);
+  }, [tabs, activeTabId, appearance.themeId, workspaces.length]);
 
   const restoreWorkspace = useCallback((id: string) => {
     const ws = workspaces.find((w) => w.id === id);
@@ -452,6 +464,7 @@ export function useConsoleStore() {
     setActiveTabId(ws.activeTabId && tabs2.some((t) => t.id === ws.activeTabId) ? ws.activeTabId : tabs2[0]?.id);
     setZoom(null);
     setBroadcastTabId(null);
+    if (ws.themeId) setAppearance((a) => ({ ...a, themeId: ws.themeId! }));
     setWorkspaces((w) => w.map((x) => (x.id === id ? { ...x, updatedAt: Date.now() } : x)));
   }, [workspaces]);
 
@@ -490,6 +503,71 @@ export function useConsoleStore() {
     navigator.clipboard?.writeText(text).catch(() => {});
   }, [tabs]);
 
+  /** Parse pasted terminal output and import commands as history entries.
+   *  Looks for prompt lines like `user@host:~$ cmd` or `~/path$ cmd` or `▶ cmd`
+   *  and extracts the command portion after the prompt marker. */
+  const importFromText = useCallback((text: string, tabId?: string, paneId?: string) => {
+    const t = tabs.find((tab) => tab.id === (tabId ?? activeTabId)) ?? activeTab;
+    if (!t) return { imported: 0, errors: 0 };
+    const targetTabId = t.id;
+    const targetPaneId = paneId ?? t.activePaneId;
+    const targetPane = t.panes[targetPaneId];
+    const cwd = targetPane?.cwd ?? "/home/user";
+
+    const lines = text.split("\n");
+    const cmds: string[] = [];
+    // Pattern: detect command lines after a shell prompt
+    // Matches: "user@host:~$ cmd", "~/path$ cmd", "path$ cmd", "❯ cmd", "> cmd", "user@host$ cmd"
+    const promptRe = /^(?:[\w.-]+@)?[\w.-]+:\$?\s*[~$>❯]\s+(.+)$/;
+    const simplePromptRe = /^\s*[:$~>❯]\s+(.+)$/;
+
+    for (const raw of lines) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      // Skip output lines (no prompt marker)
+      let cmd = null;
+      // Try full prompt pattern first
+      let m = trimmed.match(promptRe);
+      if (m) { cmd = m[1].trim(); }
+      else {
+        // Try simple prompt pattern (just $: cmd or > cmd)
+        m = trimmed.match(simplePromptRe);
+        if (m) { cmd = m[1].trim(); }
+      }
+      // Also detect lines starting with $ (common in copied terminal output)
+      if (!cmd && trimmed.startsWith("$ ")) {
+        cmd = trimmed.slice(2).trim();
+      }
+      if (cmd && cmd.length > 1 && !cmd.startsWith("__")) {
+        // Deduplicate consecutive duplicates
+        if (cmds.length === 0 || cmds[cmds.length - 1] !== cmd) {
+          cmds.push(cmd);
+        }
+      }
+    }
+
+    if (!cmds.length) return { imported: 0, errors: 0 };
+
+    const now = Date.now();
+    let imported = 0;
+    for (const cmd of cmds) {
+      setHistory((h) => [{
+        id: uid("h"),
+        command: cmd,
+        preview: "imported",
+        tabId: targetTabId,
+        tabLabel: t.label,
+        paneId: targetPaneId,
+        cwd,
+        timestamp: now - imported * 1000,
+        exitCode: 0,
+        durationMs: 4,
+      }, ...h].slice(0, 500));
+      imported++;
+    }
+    return { imported, errors: 0 };
+  }, [tabs, activeTabId, activeTab, setHistory]);
+
   
 
   return {
@@ -512,8 +590,9 @@ export function useConsoleStore() {
       if (keep) merged[firstId] = { ...keep, id: firstId };
       return { ...t, layout, panes: merged, activePaneId: active, focusedPaneId: active };
     }),
-    demoMode, setDemoMode, sidebarWidth, setSidebarWidth, rightPanelWidth, setRightPanelWidth,
+    demoMode, setDemoMode, sidebarWidth, setSidebarWidth, rightPanelWidth, setRightPanelWidth, autosaveEnabled, setAutosaveEnabled,
     copyAllContent,
+    importFromText,
   };
 }
 

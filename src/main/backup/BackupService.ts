@@ -201,7 +201,7 @@ export async function createBackup(
   const mirroredTo = mirrorCopy(gzPath)
   if (mirroredTo) console.log(`[Backup] mirrored to ${mirroredTo}`)
   rotate()
-  console.log(`[Backup] ${trigger}: ${totalRows} rows -> ${basename(gzPath)}`)
+  console.debug(`[Backup] ${trigger}: ${totalRows} rows -> ${basename(gzPath)}`)
   return manifest
 }
 

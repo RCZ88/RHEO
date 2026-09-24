@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from "motion/react";
 import { Search, Copy, Check, Sparkles, BookOpen, AlertTriangle, Trash2, Plus, X, ChevronDown, ChevronRight, Clipboard, Loader2, Clock } from 'lucide-react';
 import { getHandbookData, peekData, type HandbookSection } from '../../services/learn/handbook-data';
 import type { CommandNote } from './CommandNotesStore';

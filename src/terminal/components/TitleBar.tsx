@@ -1,23 +1,18 @@
-import { AppWindow, Boxes, Circle, Command, Minus, PanelLeft, PanelRight, Plus, Save, Search, Sparkles, Square, X, Pencil } from "lucide-react";
+import { AppWindow, Boxes, Circle, Command, PanelLeft, PanelRight, Plus, Save, Search, Pencil } from "lucide-react";
 import type { Store } from "../hooks/useConsoleStore";
 import { isElectron } from "../lib/electron";
 import { timeAgo } from "../lib/utils";
 
-export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, onNewTab, leftOpen, setLeftOpen, rightOpen, setRightOpen, demoMode, setDemoMode, sidebarWidth, setSidebarWidth, rightPanelWidth, setRightPanelWidth, onRename }: {
+export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, onNewTab, leftOpen, setLeftOpen, rightOpen, setRightOpen, demoMode, setDemoMode, onRename }: {
   store: Store; onPalette: () => void; onSaveWs: () => void; onWorkspaces: () => void; onPresets: () => void; onNewTab: () => void;
   leftOpen: boolean; setLeftOpen: (v: boolean) => void; rightOpen: boolean; setRightOpen: (v: boolean) => void;
-  demoMode: boolean; setDemoMode: (v: boolean) => void; sidebarWidth: number; setSidebarWidth: (v: number) => void; rightPanelWidth: number; setRightPanelWidth: (v: number) => void;
+  demoMode: boolean; setDemoMode: (v: boolean) => void;
   onRename: () => void;
 }) {
   const lastCmd = store.history[0];
   const electron = isElectron();
   return (
     <div className="h-12 shrink-0 flex items-center gap-3 px-3 border-b relative z-30" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
-      <div className="flex items-center gap-1.5 pr-1" role="group" aria-label="window controls">
-        <button title="Minimize" aria-label="minimize" onClick={() => window.deskflowAPI?.windowMinimize?.()} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10 text-[var(--t-muted)] hover:text-[var(--t-fg)] transition"><Minus size={14} /></button>
-        <button title="Maximize" aria-label="maximize" onClick={() => window.deskflowAPI?.windowMaximize?.()} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10 text-[var(--t-muted)] hover:text-[var(--t-fg)] transition"><Square size={12} /></button>
-        <button title="Close" aria-label="close" onClick={() => window.deskflowAPI?.windowClose?.()} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-red-500/90 hover:text-white text-[var(--t-muted)] transition"><X size={14} /></button>
-      </div>
       <div className="w-px h-6" style={{ background: "var(--t-border)" }} />
       <div className="flex items-center gap-2.5 select-none">
         <div className="w-8 h-8 rounded-[10px] grid place-items-center shadow-lg" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", boxShadow: "0 4px 18px -4px var(--t-accent)" }}>
@@ -47,18 +42,6 @@ export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, 
       <div className="flex items-center gap-1">
         {/* DEMO/REAL mode toggle */}
         <button onClick={() => setDemoMode(!demoMode)} title={demoMode ? "Switch to real mode" : "Switch to demo mode"} className={`h-8 px-2.5 rounded-lg text-[11px] font-semibold transition ${demoMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>{demoMode ? "DEMO" : "REAL"}</button>
-        {/* Sidebar width adjust — distinct from toggle: arrow indicator + width readout */}
-        <div className="flex items-center gap-1 rounded-lg border text-[11px] mono transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)", background: "var(--t-bg)" }}>
-          <button onClick={() => setSidebarWidth(Math.max(120, sidebarWidth - 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Narrow sidebar"><Minus size={10} /></button>
-          <span className="w-8 text-center font-semibold select-none" style={{ color: "var(--t-fg)" }}>{sidebarWidth}</span>
-          <button onClick={() => setSidebarWidth(Math.min(600, sidebarWidth + 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Widen sidebar"><Plus size={10} /></button>
-        </div>
-        {/* Inspector width adjust — same treatment */}
-        <div className="flex items-center gap-1 rounded-lg border text-[11px] mono transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)", background: "var(--t-bg)" }}>
-          <button onClick={() => setRightPanelWidth(Math.max(120, rightPanelWidth - 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Narrow inspector"><Minus size={10} /></button>
-          <span className="w-8 text-center font-semibold select-none" style={{ color: "var(--t-fg)" }}>{rightPanelWidth}</span>
-          <button onClick={() => setRightPanelWidth(Math.min(600, rightPanelWidth + 20))} className="w-6 h-6 rounded hover:bg-white/10" title="Widen inspector"><Plus size={10} /></button>
-        </div>
         {/* Toggle sidebar — filled accent when ON */}
         <button onClick={() => setLeftOpen(!leftOpen)} title={leftOpen ? "Hide sidebar" : "Show sidebar"} aria-pressed={leftOpen} className={`w-8 h-8 rounded-lg grid place-items-center transition ${leftOpen ? "bg-[var(--t-accent)] text-white hover:brightness-110" : "text-[var(--t-muted)] hover:bg-white/10 hover:text-[var(--t-fg)]"}`}><PanelLeft size={16} /></button>
         {/* Toggle inspector — filled accent when ON */}

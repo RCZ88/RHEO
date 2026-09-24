@@ -375,7 +375,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
       {/* Page Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-[22px] text-zinc-200 font-semibold leading-tight">Schedule</h1>
+          <h1 className="text-[18px] text-zinc-200 font-semibold leading-tight">Schedule</h1>
           <p className="text-[12px] text-zinc-500 mt-0.5">{prettyDate(selectedDate)} · manage blocks, deadlines & reminders</p>
         </div>
         <div className="flex items-center gap-2">
@@ -405,7 +405,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
       <div className={`flex flex-col lg:flex-row gap-4 ${side === 'left' ? 'lg:flex-row-reverse' : ''}`}>
 
         {/* LEFT (2/3): ScheduleCard week view + TodoList + ScheduleSyncCard */}
-        <div className="flex-2 min-w-0 space-y-4">
+        <div className="flex-[2] min-w-0 space-y-4">
 
           {/* ScheduleCard — Week View */}
           <WarmCard ambient>
@@ -445,42 +445,66 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
         </div>
 
         {/* RIGHT (1/3): DeadlineRadar + BellBoard + DeadlinesCard */}
-        <div className="lg:flex-1 min-w-0 space-y-4">
+        <div className="flex-1 min-w-0 space-y-4">
 
           {/* DeadlineRadar */}
-          <div className={loading ? 'animate-pulse' : ''}>
+          {loading ? (
+            <WarmCard ambient>
+              <div className="space-y-2 animate-pulse">
+                <div className="h-4 bg-zinc-800/40 rounded w-1/3" />
+                <div className="grid grid-cols-7 gap-0.5">{Array.from({ length: 28 }).map((_, i) => <div key={i} className="h-7 bg-zinc-800/30 rounded" />)}</div>
+                <div className="h-8 bg-zinc-800/40 rounded w-full" />
+              </div>
+            </WarmCard>
+          ) : (
             <DeadlineRadar marks={radarMarks} selectedDate={selectedDate} onPick={setSelectedDate} />
-          </div>
+          )}
 
           {/* BellBoard */}
-          <BellBoard reminders={reminders} onCreate={(text, dueDate) => { try { api.createReminder?.({ text, dueDate: dueDate || selectedDate }); } catch {} setReminders(prev => [...prev, { id: `rem_${Date.now()}`, text, due_date: dueDate || selectedDate, goal_id: null, done: false, created_at: new Date().toISOString() }]); }} onToggle={handleToggleReminder} onDelete={handleDeleteReminder} selectedDate={selectedDate} />
+          {loading ? (
+            <WarmCard ambient>
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 bg-zinc-800/40 rounded w-1/4" />
+                <div className="h-10 bg-zinc-800/30 rounded" />
+                {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-8 bg-zinc-800/30 rounded" />)}
+              </div>
+            </WarmCard>
+          ) : (
+            <BellBoard reminders={reminders} onCreate={(text, dueDate) => { try { api.createReminder?.({ text, dueDate: dueDate || selectedDate }); } catch {} setReminders(prev => [...prev, { id: `rem_${Date.now()}`, text, due_date: dueDate || selectedDate, goal_id: null, done: false, created_at: new Date().toISOString() }]); }} onToggle={handleToggleReminder} onDelete={handleDeleteReminder} selectedDate={selectedDate} />
+          )}
 
           {/* DeadlinesCard */}
           <DeadlinesCard deadlines={deadlines} reminders={reminders} loading={loading} error={error} onAdd={handleAddDeadline} onDelete={handleDeleteDeadline} onUpdate={handleUpdateDeadline} onComplete={handleCompleteDeadline} onToggleReminder={handleToggleReminder} onDeleteReminder={handleDeleteReminder} goalOptions={goalOptions} />
         </div>
 
         {/* Calendar sidebar */}
-        <div className="lg:w-72 shrink-0">
+        <div className="w-72 shrink-0">
           <WarmCard ambient>
             <div className="flex items-center justify-between mb-3">
               <div className="text-[12px] font-medium text-zinc-400 flex items-center gap-1.5"><CalendarDays size={13} className="text-amber-400" />{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-              <button onClick={toggleSide} className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 transition-colors">{side === 'left' ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}</button>
+              <button onClick={toggleSide} className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 transition-colors" aria-label="Toggle calendar sidebar">{side === 'left' ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}</button>
             </div>
             <div className="grid grid-cols-7 gap-0.5 text-center mb-3">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => <div key={d} className="text-[8px] text-zinc-600 py-0.5">{d}</div>)}</div>
-            <div className="space-y-1.5 max-h-64 overflow-y-auto">
-              {deadlines.filter(d => d.due_date && d.status !== 'completed').slice(0, 5).map(d => (
-                <div key={d.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-rose-500" /><span className="flex-1 text-zinc-400 truncate">{d.title}</span><span className="text-[9px] text-zinc-600 tabular-nums">{daysUntil(d.due_date) ?? '—'}d</span></div>
-              ))}
-              {reminders.filter(r => !r.done).slice(0, 5).map(r => (
-                <div key={r.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" /><span className="flex-1 text-zinc-400 truncate">{r.text}</span></div>
-              ))}
-              {schedule.slice(0, 5).map(s => (
-                <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-pink-500" /><span className="flex-1 text-zinc-400 truncate">{s.title}</span><span className="text-[9px] text-zinc-600 tabular-nums">{s.start_time}</span></div>
-              ))}
-              {longTermGoals.slice(0, 3).map(l => (
-                <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: catDot(l.category || 'work') }} /><span className="flex-1 text-zinc-400 truncate">{l.title}</span></div>
-              ))}
-            </div>
+            {loading ? (
+              <div className="space-y-1.5">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-6 bg-zinc-800/40 rounded-lg animate-pulse" />)}</div>
+            ) : deadlines.filter(d => d.due_date && d.status !== 'completed').length === 0 && reminders.filter(r => !r.done).length === 0 && schedule.length === 0 && longTermGoals.length === 0 ? (
+              <div className="text-center py-6"><CalendarDays size={20} className="mx-auto text-zinc-700 mb-2" /><p className="text-[11px] text-zinc-600">Nothing on the calendar</p><p className="text-[10px] text-zinc-700 mt-0.5">Add deadlines, reminders, or goals to see them here</p></div>
+            ) : (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {deadlines.filter(d => d.due_date && d.status !== 'completed').slice(0, 5).map(d => (
+                  <div key={d.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-rose-500" /><span className="flex-1 text-zinc-400 truncate">{d.title}</span><span className="text-[9px] text-zinc-600 tabular-nums">{daysUntil(d.due_date) ?? '—'}d</span></div>
+                ))}
+                {reminders.filter(r => !r.done).slice(0, 5).map(r => (
+                  <div key={r.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" /><span className="flex-1 text-zinc-400 truncate">{r.text}</span></div>
+                ))}
+                {schedule.slice(0, 5).map(s => (
+                  <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-pink-500" /><span className="flex-1 text-zinc-400 truncate">{s.title}</span><span className="text-[9px] text-zinc-600 tabular-nums">{s.start_time}</span></div>
+                ))}
+                {longTermGoals.slice(0, 3).map(l => (
+                  <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: catDot(l.category || 'work') }} /><span className="flex-1 text-zinc-400 truncate">{l.title}</span></div>
+                ))}
+              </div>
+            )}
           </WarmCard>
         </div>
       </div>

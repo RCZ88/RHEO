@@ -25,9 +25,11 @@ export type ContentPart = ContentPartText | ContentPartImage;
 export interface CanonicalRequest {
   model: string;
   systemPrompt: string;
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] }>;
+  messages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string | ContentPart[]; tool_calls?: any[]; tool_call_id?: string }>;
   maxTokens?: number;
   temperature?: number;
+  tools?: Array<{ type: 'function'; function: { name: string; description: string; parameters: any } }>;
+  toolChoice?: 'auto' | 'none';
 }
 
 export interface CanonicalResponse {

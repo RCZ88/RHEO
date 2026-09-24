@@ -90,13 +90,16 @@ async function fromX11(): Promise<LinuxForegroundWindow | undefined> {
 }
 
 async function fromXdotool(): Promise<LinuxForegroundWindow | undefined> {
+  // On pure Wayland, xdotool may work via XWayland but can be slow.
+  // Use a shorter timeout to avoid blocking the poll cycle.
+  const timeout = (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) ? 300 : COMMAND_TIMEOUT_MS;
   try {
-    const { stdout: idOutput } = await execFileAsync('xdotool', ['getactivewindow'], { timeout: COMMAND_TIMEOUT_MS });
+    const { stdout: idOutput } = await execFileAsync('xdotool', ['getactivewindow'], { timeout });
     const windowId = idOutput.trim();
     if (!windowId) return undefined;
     const [{ stdout: title }, { stdout: pidOutput }] = await Promise.all([
-      execFileAsync('xdotool', ['getwindowname', windowId], { timeout: COMMAND_TIMEOUT_MS }),
-      execFileAsync('xdotool', ['getwindowpid', windowId], { timeout: COMMAND_TIMEOUT_MS }),
+      execFileAsync('xdotool', ['getwindowname', windowId], { timeout }),
+      execFileAsync('xdotool', ['getwindowpid', windowId], { timeout }),
     ]);
     const processId = parsePid(pidOutput.trim());
     const executable = await executablePath(processId);
@@ -126,39 +129,98 @@ async function fromKWin(): Promise<LinuxForegroundWindow | undefined> {
       `var f = new File("${resultFile}"); f.open(File.WriteOnly); f.write(JSON.stringify(value)); f.close();`,
     ].join('\n');
     await fs.writeFile(scriptFile, script);
-    const stdout = await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.loadScript', scriptFile, 'rheo-foreground-' + Date.now()], { timeout: COMMAND_TIMEOUT_MS });
-    const scriptId = parseInt(stdout.stdout.trim());
-    if (scriptId < 0) { await fs.rm(scriptFile, { force: true }).catch(() => {}); await fs.rm(resultFile, { force: true }).catch(() => {}); return undefined; }
-    try { await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.start'], { timeout: COMMAND_TIMEOUT_MS }); } catch {}
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    try {
-      const data = await fs.readFile(resultFile, 'utf8');
-      const obj = JSON.parse(data);
-      await fs.rm(scriptFile, { force: true }).catch(() => {});
-      await fs.rm(resultFile, { force: true }).catch(() => {});
-      if (obj && obj.name) {
-        return { platform: 'linux', title: obj.title || null, owner: { name: obj.name, processId: obj.pid || 0 } };
-      }
-    } catch {}
-    await fs.rm(scriptFile, { force: true }).catch(() => {});
-    await fs.rm(resultFile, { force: true }).catch(() => {});
-  } catch {}
+    // Wrap qdbus calls in a race with a shorter total timeout to prevent
+    // the entire poll cycle from stalling on a hanging D-Bus connection.
+    const kwinResult = await Promise.race([
+      (async () => {
+        const stdout = await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.loadScript', scriptFile, 'rheo-foreground-' + Date.now()], { timeout: COMMAND_TIMEOUT_MS });
+        const scriptId = parseInt(stdout.stdout.trim());
+        if (scriptId < 0) return undefined;
+        try { await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.start'], { timeout: COMMAND_TIMEOUT_MS }); } catch {}
+        await new Promise(resolve => setTimeout(resolve, 300));
+        try {
+          const data = await fs.readFile(resultFile, 'utf8');
+          const obj = JSON.parse(data);
+          await fs.rm(scriptFile, { force: true }).catch(() => {});
+          await fs.rm(resultFile, { force: true }).catch(() => {});
+          if (obj && obj.name) {
+            return { platform: 'linux', title: obj.title || null, owner: { name: obj.name, processId: obj.pid || 0 } };
+          }
+        } catch {}
+        await fs.rm(scriptFile, { force: true }).catch(() => {});
+        await fs.rm(resultFile, { force: true }).catch(() => {});
+        return undefined;
+      })(),
+      new Promise<undefined>((_, reject) => setTimeout(() => reject(new Error('kwin timeout')), 2000)),
+    ]);
+    return kwinResult;
+  } catch {
+    try { await fs.rm(scriptFile, { force: true }).catch(() => {}); await fs.rm(resultFile, { force: true }).catch(() => {}); } catch {}
+    return undefined;
+  }
+}
+
+// GNOME Shell detection — placeholder; not needed on KDE
+async function fromGnomeShell(): Promise<LinuxForegroundWindow | undefined> {
   return undefined;
+}
+
+// Use wmctrl to get the active window (works on X11 and some Wayland setups)
+async function fromWmctrl(): Promise<LinuxForegroundWindow | undefined> {
+  try {
+    const { stdout: activeOutput } = await execFileAsync(
+      'wmctrl', ['-G', '-l'], { timeout: COMMAND_TIMEOUT_MS },
+    );
+    const lines = activeOutput.trim().split('\n');
+    // Find the line with '*' (active window) — wmctrl marks active with '*'
+    const activeLine = lines.find(line => line.trim().startsWith('*'));
+    if (!activeLine) return undefined;
+
+    // Parse: desktop, window_id, owner, x, y, width, height, title
+    // Remove leading '*' and split by whitespace
+    const cleanLine = activeLine.trim().replace(/^\*/, '').trim();
+    const parts = cleanLine.split(/\s+/);
+    if (parts.length < 8) return undefined;
+
+    const windowId = parts[1];
+    const title = parts.slice(7).join(' ');
+
+    if (!windowId || /^0x0+$/i.test(windowId)) return undefined;
+
+    return {
+      platform: 'linux',
+      title: title || null,
+      owner: { name: parts[2] || 'Unknown' },
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export async function getLinuxForegroundWindow(): Promise<LinuxForegroundWindow | undefined> {
   if (process.platform !== 'linux') return undefined;
   if (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) {
-    // Try KDE/KWin first
+    // KDE Wayland: use KWin first, then wmctrl via XWayland
     if (/kde/i.test(process.env.XDG_CURRENT_DESKTOP || '')) {
       const kwinResult = await fromKWin();
       if (kwinResult && kwinResult.title) return kwinResult;
     }
-    // Fall back to xdotool (works via XWayland on most Wayland compositors)
+    // GNOME Wayland: try gdbus
+    if (/gnome/i.test(process.env.XDG_CURRENT_DESKTOP || '')) {
+      const gnomeResult = await fromGnomeShell();
+      if (gnomeResult && gnomeResult.title) return gnomeResult;
+    }
+    // Fall back to wmctrl (works via XWayland on most compositors)
+    const wmctrlResult = await fromWmctrl();
+    if (wmctrlResult && wmctrlResult.title) return wmctrlResult;
+    // Last resort: xdotool via XWayland
     const xdotoolResult = await fromXdotool();
     if (xdotoolResult && xdotoolResult.title) return xdotoolResult;
-    // Last resort: try xprop even if xdotool can't give us details
+    // Absolute last resort: xprop
     return fromX11();
   }
-  return (await fromX11()) || (await fromXdotool());
+  // X11 session: try wmctrl, then xdotool, then xprop
+  const wmctrlResult = await fromWmctrl();
+  if (wmctrlResult && wmctrlResult.title) return wmctrlResult;
+  return (await fromXdotool()) || (await fromX11());
 }

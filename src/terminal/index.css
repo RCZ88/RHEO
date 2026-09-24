@@ -7,11 +7,26 @@ html, body, #root { height: 100%; }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #05070d;
-  color: #e6ebf5;
+  background: var(--ws-surface, #09090b);
+  color: var(--color-foreground, #fafafa);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Terminal theme CSS custom properties — mapped to LAMINAR tokens */
+[data-theme="rheo-dark"] {
+  --t-bg: var(--ws-surface);
+  --t-panel: var(--ws-surface-raised);
+  --t-panel2: #1f1f23;
+  --t-fg: var(--color-foreground);
+  --t-muted: var(--color-muted-foreground);
+  --t-accent: #f472b6;
+  --t-accent2: #2dd4bf;
+  --t-border: var(--ws-border);
+  --t-promptUser: #f472b6;
+  --t-promptPath: #2dd4bf;
+  --t-selection: #3f3f46;
 }
 
 .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
@@ -20,9 +35,9 @@ body {
 /* scrollbars */
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: rgba(130, 145, 180, 0.22); border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
-*::-webkit-scrollbar-thumb:hover { background: rgba(130, 145, 180, 0.42); background-clip: content-box; border: 2px solid transparent; }
-* { scrollbar-width: thin; scrollbar-color: rgba(130,145,180,.3) transparent; }
+*::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #3f3f46); border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover, #52525b); background-clip: content-box; border: 2px solid transparent; }
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, #3f3f46) transparent; }
 
 /* terminal cursor */
 @keyframes tblink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
@@ -46,47 +61,47 @@ body {
 input[type="range"].slider {
   -webkit-appearance: none; appearance: none;
   height: 4px; border-radius: 99px;
-  background: linear-gradient(to right, var(--t-accent, #7aa2f7) 0%, var(--t-accent, #7aa2f7) var(--fill, 50%), rgba(130,145,180,.22) var(--fill, 50%));
+  background: linear-gradient(to right, var(--ws-accent, #06b6d4) 0%, var(--ws-accent, #06b6d4) var(--fill, 50%), rgba(130,145,180,.22) var(--fill, 50%));
   outline: none; cursor: pointer;
 }
 input[type="range"].slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 14px; height: 14px; border-radius: 99px;
-  background: #fff; border: 3px solid var(--t-accent, #7aa2f7);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--t-accent, #7aa2f7) 70%, transparent);
+  background: #fff; border: 3px solid var(--ws-accent, #06b6d4);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--ws-accent, #06b6d4) 70%, transparent);
   transition: transform .12s;
 }
 input[type="range"].slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
 input[type="range"].slider::-moz-range-thumb {
   width: 12px; height: 12px; border-radius: 99px;
-  background: #fff; border: 3px solid var(--t-accent, #7aa2f7);
+  background: #fff; border: 3px solid var(--ws-accent, #06b6d4);
 }
 
 .split-divider { transition: background .15s; }
-.split-divider:hover, .split-divider.dragging { background: color-mix(in srgb, var(--t-accent) 65%, transparent) !important; }
+.split-divider:hover, .split-divider.dragging { background: color-mix(in srgb, var(--ws-accent, #06b6d4) 65%, transparent) !important; }
 .split-divider .div-tools { opacity: 0; transition: opacity .15s; }
 .split-divider:hover .div-tools { opacity: 1; }
 
 .term-glow .term-pane {
-  text-shadow: 0 0 18px color-mix(in srgb, var(--t-accent) 22%, transparent);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--ws-accent, #06b6d4) 22%, transparent);
 }
 
 .pane-find mark, .hl-mark {
-  background: color-mix(in srgb, var(--t-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--ws-accent, #06b6d4) 45%, transparent);
   color: #fff;
   border-radius: 3px;
   padding: 0 1px;
 }
 
-.tree-guide { border-left: 1px dashed color-mix(in srgb, var(--t-accent) 30%, transparent); }
+.tree-guide { border-left: 1px dashed color-mix(in srgb, var(--ws-accent, #06b6d4) 30%, transparent); }
 
 .tab-dragging { opacity: .45; }
-.tab-drop-hint { outline: 2px dashed var(--t-accent); outline-offset: 2px; }
+.tab-drop-hint { outline: 2px dashed var(--ws-accent, #06b6d4); outline-offset: 2px; }
 
-select option { background: #11151f; }
+select option { background: var(--ws-surface-raised, #18181b); }
 
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--t-accent, #7aa2f7) 70%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--ws-accent, #06b6d4) 70%, transparent);
   outline-offset: 1px;
 }
 
