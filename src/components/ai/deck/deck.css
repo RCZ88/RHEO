@@ -130,6 +130,14 @@
   transform: scale(0.97);
 }
 
+.dk-topbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
 .dk-topbar-btn--sm {
   height: 26px;
   padding: 0 10px;

@@ -11,6 +11,8 @@ import { PinnedActivities } from './dashboard/PinnedActivities';
 import { QuickFocusCard } from '../components/focus/QuickFocusCard';
 import { ScheduleCard } from './dashboard/ScheduleCard';
 import { StatusBand } from './dashboard/StatusBand';
+import { WidgetLibraryPopup } from '../components/dashboard/WidgetLibraryPopup';
+import { useDashboardLayout } from '../hooks/useDashboardLayout';
 import { GoalsCard } from '../components/dashboard/GoalsCard';
 import { DeadlinesCard } from '../components/dashboard/DeadlinesCard';
 import { LongestFocusCard } from '../components/dashboard/LongestFocusCard';
@@ -296,7 +298,7 @@ export default function DashboardPage({
   activityFeed: feedFromParent = [],
   onActivityFeedChange
 }: DashboardPageProps) {
-  const isCardVisible = (_id: string): boolean => true;
+  const { isVisible, toggleVisible, moveCell, reset, orderedRow, hiddenCount } = useDashboardLayout();
 
   const getPersistedTimerState = () => {
     // Try parent state first - only if it has meaningful data
@@ -2565,6 +2567,46 @@ export default function DashboardPage({
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   const [showCardLibrary, setShowCardLibrary] = useState(false);
 
+  // ── Card layering: z-index + pinning ──
+  const Z_KEY = 'deskflow-widget-zindices';
+  const PIN_KEY = 'deskflow-pinned-widgets';
+  const [widgetZIndices, setWidgetZIndices] = useState<Record<string, number>>(() => {
+    try { const saved = localStorage.getItem(Z_KEY); return saved ? JSON.parse(saved) : {}; } catch { return {}; }
+  });
+  const [pinnedWidgets, setPinnedWidgets] = useState<Set<string>>(() => {
+    try { const saved = localStorage.getItem(PIN_KEY); return saved ? new Set(JSON.parse(saved)) : new Set(); } catch { return new Set(); }
+  });
+
+  useEffect(() => { try { localStorage.setItem(Z_KEY, JSON.stringify(widgetZIndices)); } catch {} }, [widgetZIndices]);
+  useEffect(() => { try { localStorage.setItem(PIN_KEY, JSON.stringify([...pinnedWidgets])); } catch {} }, [pinnedWidgets]);
+
+  const baseZ = 10;
+  const getZIndex = useCallback((widgetId: string) => {
+    if (pinnedWidgets.has(widgetId)) return 1000;
+    return widgetZIndices[widgetId] ?? baseZ;
+  }, [widgetZIndices, pinnedWidgets]);
+
+  const bringToFront = useCallback((widgetId: string) => {
+    setWidgetZIndices(prev => {
+      const max = Object.values(prev).reduce((a, b) => Math.max(a, b), baseZ);
+      const next = { ...prev, [widgetId]: max + 1 };
+      // Remove non-pinned entries to keep it clean (only track recently elevated)
+      const cleaned: Record<string, number> = {};
+      for (const [id, z] of Object.entries(next)) {
+        if (pinnedWidgets.has(id) || z > baseZ) cleaned[id] = z;
+      }
+      return cleaned;
+    });
+  }, [pinnedWidgets]);
+
+  const togglePin = useCallback((widgetId: string) => {
+    setPinnedWidgets(prev => {
+      const next = new Set(prev);
+      if (next.has(widgetId)) next.delete(widgetId); else next.add(widgetId);
+      return next;
+    });
+  }, []);
+
   // Fetch available platforms on mount
   useEffect(() => {
     (async () => {
@@ -2670,7 +2712,7 @@ export default function DashboardPage({
       <div className="flex items-center justify-end mb-3">
         <button
           onClick={() => setShowCardLibrary(v => !v)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--ws-border)] hover:border-[var(--page-accent)]/50 transition-all duration-200 text-[12px] font-medium text-zinc-300 hover:text-[var(--page-accent)] shadow-lg"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--ws-border)] hover:border-[var(--page-accent)]/50 transition-colors duration-200 text-[12px] font-medium text-zinc-300 hover:text-[var(--page-accent)] shadow-lg"
           title="Customize Dashboard Widgets"
         >
           {showCardLibrary ? <X size={14} /> : <LayoutGrid size={14} />}
@@ -2678,16 +2720,25 @@ export default function DashboardPage({
         </button>
       </div>
 
- <div className="relative z-10 flex flex-col flex-1 min-h-0 w-full">
-          <div className="mx-auto px-5 flex flex-col flex-1 min-h-0 w-full">
+<div className="relative z-10 flex flex-col flex-1 min-h-0 w-full">
+           <div className="mx-auto px-5 flex flex-col flex-1 min-h-0 w-full">
+
+           {/* Z-Index Layer Indicator */}
+           <div className="flex items-center gap-2 mb-2 px-1">
+             <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-wider">Layers:</span>
+             {pinnedWidgets.size > 0 && (
+               <span className="text-[9px] font-mono text-amber-400/60">PINNED: {[...pinnedWidgets].join(', ')}</span>
+             )}
+             <span className="text-[9px] font-mono text-zinc-700">Click any card to bring it to front</span>
+           </div>
 
 {/* Row 1: HeroBand (Stopwatch) + Momentum Hero */}
-            {(isCardVisible('status-band') || isCardVisible('momentum-hero')) && (
-<DeskFlowCardMotion className="mb-2">
-              <div className="grid grid-cols-1 md:grid-cols-[9fr_3fr] gap-6 items-stretch w-full">
-               {isCardVisible('status-band') && (
-               <div data-section="Hero" className="min-w-0 flex-1">
-               <StatusBand
+{(isVisible('status-band') || isVisible('momentum')) && (
+<DeskFlowCardMotion className="mb-2" zIndex={getZIndex('status-band')} onClick={() => bringToFront('status-band')} pinned={pinnedWidgets.has('status-band')}>
+              <div className="grid grid-cols-1 md:grid-cols-[8fr_4fr] gap-6 items-stretch w-full">
+                {isVisible('status-band') && (
+                <div data-section="Hero" className="min-w-0 flex-1">
+                <StatusBand
                  displayTimeMs={displayTime?.ms || 0}
                  isCurrentlyProductive={isCurrentlyProductive}
                  isDistracting={isDistracting}
@@ -2703,8 +2754,8 @@ export default function DashboardPage({
                />
                </div>
                )}
-{isCardVisible('momentum-hero') && (
-                <div data-section="Momentum Hero" className="min-w-0 flex-1 border-l border-[var(--ws-border)] pl-4">
+{isVisible('momentum') && (
+                 <div data-section="Momentum Hero" className="min-w-0 flex-1 border-l border-[var(--ws-border)] pl-4">
                 <MomentumHero momentum={momentum} loading={dashLoading} isCurrentlyProductive={isCurrentlyProductive} isDistracting={isDistracting} />
                 </div>
                 )}
@@ -2712,10 +2763,10 @@ export default function DashboardPage({
              </DeskFlowCardMotion>
             )}
 
-           {/* Row 2: Tier Breakdown Strip */}
-           {isCardVisible('tier-breakdown') && (
-<DeskFlowCardMotion className="mb-2">
-             <div data-section="Tier Breakdown" className="w-full">
+{/* Row 2: Tier Breakdown Strip */}
+            {isVisible('tier-breakdown') && (
+<DeskFlowCardMotion className="mb-2" zIndex={getZIndex('tier-breakdown')} onClick={() => bringToFront('tier-breakdown')} pinned={pinnedWidgets.has('tier-breakdown')}>
+              <div data-section="Tier Breakdown" className="w-full">
              <TierBreakdownStrip
              productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
              neutralHours={dashboardData?.overview?.neutralSeconds ? Math.round(dashboardData.overview.neutralSeconds / 3600 * 10) / 10 : 0}
@@ -2726,10 +2777,10 @@ export default function DashboardPage({
           </DeskFlowCardMotion>
           )}
 
-          {/* Row 3: Pinned Activities */}
-          {isCardVisible('pinned-activities') && (
-          <DeskFlowCardMotion className="mb-2">
-            <div data-section="Pinned" className="w-full">
+{/* Row 3: Pinned Activities */}
+           {isVisible('pinned-activities') && (
+           <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('pinned-activities')} onClick={() => bringToFront('pinned-activities')} pinned={pinnedWidgets.has('pinned-activities')}>
+             <div data-section="Pinned" className="w-full">
             <PinnedActivities
               pinnedActivities={pinnedActivities}
               setPinnedActivities={setPinnedActivities}
@@ -2748,11 +2799,11 @@ export default function DashboardPage({
           </DeskFlowCardMotion>
           )}
 
-            {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
-            {(isCardVisible('goals-card') || isCardVisible('focus-card') || isCardVisible('deadlines-card')) && (
-            <DeskFlowCardMotion className="mb-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
-                 {isCardVisible('goals-card') && (
+{/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
+{(isVisible('goals') || isVisible('quick-focus') || isVisible('deadlines')) && (
+<DeskFlowCardMotion className="mb-2" zIndex={getZIndex('goals')} onClick={() => bringToFront('goals')} pinned={pinnedWidgets.has('goals')}>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 w-full">
+                 {isVisible('goals') && (
                  <div data-section="Goals Card" className="w-full">
                  <GoalsCard
                    goals={goals}
@@ -2771,8 +2822,8 @@ export default function DashboardPage({
                  />
                  </div>
                  )}
-                 {isCardVisible('focus-card') && (
-                 <div data-section="Focus Start" className="w-full">
+{isVisible('quick-focus') && (
+                  <div data-section="Focus Start" className="w-full">
                  <QuickFocusCard
                    state={deepFocus.state}
                    onStart={deepFocus.start}
@@ -2780,7 +2831,7 @@ export default function DashboardPage({
                  />
                  </div>
                  )}
-                 {isCardVisible('deadlines-card') && (
+                 {isVisible('deadlines') && (
                  <div data-section="Deadlines Card" className="w-full">
                  <DeadlinesCard
                    deadlines={deadlines}
@@ -2800,8 +2851,8 @@ export default function DashboardPage({
                  />
                  </div>
                  )}
-              {isCardVisible('focus-card') && (
-              <div data-section="Longest Focus" className="w-full">
+{isVisible('longest-focus') && (
+               <div data-section="Longest Focus" className="w-full">
                <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
               </div>
               )}
@@ -2810,9 +2861,9 @@ export default function DashboardPage({
             )}
 
             {/* Row 5: Schedule */}
-            {isCardVisible('schedule-hero') && (
-            <DeskFlowCardMotion className="mb-2">
-               <div data-section="Schedule" className="w-full">
+            {isVisible('schedule') && (
+             <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('schedule')} onClick={() => bringToFront('schedule')} pinned={pinnedWidgets.has('schedule')}>
+                <div data-section="Schedule" className="w-full">
                 <ScheduleCard
                    entries={schedule}
                    loading={dashLoading}
@@ -2827,18 +2878,18 @@ export default function DashboardPage({
             )}
 
              {/* AI Insights Strip */}
-            {isCardVisible('insight-strip') && (
-            <DeskFlowCardMotion className="mb-2">
-            <div data-section="Insight Strip" className="w-full">
+            {isVisible('insights') && (
+             <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('insights')} onClick={() => bringToFront('insights')} pinned={pinnedWidgets.has('insights')}>
+             <div data-section="Insight Strip" className="w-full">
             <InsightStrip insights={aiInsights} />
             </div>
             </DeskFlowCardMotion>
             )}
 
            {/* Row 6: Productivity Chart */}
-           {isCardVisible('productivity-chart') && (
-             <DeskFlowCardMotion className="mb-2">
-             <div className="p-5">
+           {isVisible('productivity-chart') && (
+              <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('longest-focus')} onClick={() => bringToFront('longest-focus')} pinned={pinnedWidgets.has('longest-focus')}>
+              <div className="p-5">
                <div>
                <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
                <div className="h-52 mt-2">
@@ -2888,11 +2939,11 @@ export default function DashboardPage({
                </div>
                <div className="flex gap-3 mt-4">
                  <button onClick={() => setExpandedModal('heatmap')}
-                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-pink-500/50 hover:text-pink-400 transition-all duration-200">
+                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-pink-500/50 hover:text-pink-400 transition-colors duration-200">
                    View Heatmap
                  </button>
                  <button onClick={() => setExpandedModal('solar')}
-                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-indigo-500/50 hover:text-indigo-400 transition-all duration-200">
+                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-indigo-500/50 hover:text-indigo-400 transition-colors duration-200">
                    View Solar System
                  </button>
                </div>
@@ -2902,9 +2953,9 @@ export default function DashboardPage({
            )}
 
           {/* Row 7: Activity Feed */}
-          {isCardVisible('activity-feed') && (
-          <DeskFlowCardMotion className="mb-2">
-             <div className="p-5">
+          {isVisible('recent-sessions') && (
+           <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('recent-sessions')} onClick={() => bringToFront('recent-sessions')} pinned={pinnedWidgets.has('recent-sessions')}>
+              <div className="p-5">
                <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
              <div className="space-y-0.5 mt-3">
                {activityFeedWithElapsed.length === 0 ? (
@@ -2946,59 +2997,30 @@ export default function DashboardPage({
         </div>
       </div>
 
-      {/* Row: 8 New Widgets from Kimi Spec */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {isCardVisible('ai-usage') && (
-          <AiUsageWidget
-            usage={widgetData?.aiUsage}
-            onSelect={() => navigate('/ai')}
-          />
+{isVisible('ai-usage') && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <AiUsageWidget usage={widgetData?.aiUsage} onSelect={() => navigate('/ai')} />
+            <ConsoleWidget stats={widgetData?.consoleStats} onSelect={() => navigate('/terminal/tabs/console')} />
+            <FinanceWidget summary={widgetData?.financeSummary} onSelect={() => navigate('/finance')} />
+          </div>
         )}
-        {isCardVisible('console-widget') && (
-          <ConsoleWidget
-            stats={widgetData?.consoleStats}
-            onSelect={() => navigate('/terminal/tabs/console')}
-          />
+        {isVisible('learn-widget') && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <LearnWidget stats={widgetData?.learnStats} onSelect={() => navigate('/lyceum')} />
+            <BrowserWidget stats={widgetData?.browserStats} onSelect={() => navigate('/browser-history')} />
+            <BrainWidget stats={widgetData?.brainStats} onSelect={() => navigate('/context-brain')} />
+          </div>
         )}
-        {isCardVisible('finance-widget') && (
-          <FinanceWidget
-            summary={widgetData?.financeSummary}
-            onSelect={() => navigate('/finance')}
-          />
+        {(isVisible('covenant-widget') || isVisible('health-widget')) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {isVisible('covenant-widget') && (
+              <CovenantWidget stats={widgetData?.covenantStats} onSelect={() => navigate('/covenant')} />
+            )}
+            {isVisible('health-widget') && (
+              <HealthWidget sleep={widgetData?.sleepStats} onSelect={() => navigate('/external')} />
+            )}
+          </div>
         )}
-        {isCardVisible('learn-widget') && (
-          <LearnWidget
-            stats={widgetData?.learnStats}
-            onSelect={() => navigate('/lyceum')}
-          />
-        )}
-        {isCardVisible('browser-widget') && (
-          <BrowserWidget
-            stats={widgetData?.browserStats}
-            onSelect={() => navigate('/browser-history')}
-          />
-        )}
-        {isCardVisible('brain-widget') && (
-          <BrainWidget
-            stats={widgetData?.brainStats}
-            onSelect={() => navigate('/context-brain')}
-          />
-        )}
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {isCardVisible('covenant-widget') && (
-          <CovenantWidget
-            stats={widgetData?.covenantStats}
-            onSelect={() => navigate('/covenant')}
-          />
-        )}
-        {isCardVisible('health-widget') && (
-          <HealthWidget
-            sleep={widgetData?.sleepStats}
-            onSelect={() => navigate('/external')}
-          />
-        )}
-      </div>
 
       {/* Modals — UNCHANGED */}
       <AnimatePresence>
@@ -3021,15 +3043,15 @@ export default function DashboardPage({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60 light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]" title="Previous week">
+                  <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-colors duration-150 border border-zinc-700/30 hover:border-zinc-600/60 light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]" title="Previous week">
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setWeekOffset(0)} className="px-2 py-1 text-xs text-zinc-400 hover:text-white transition-all duration-150 rounded hover:bg-zinc-800/40 light:text-stone-900 light:hover:bg-stone-100">Today</button>
+                  <button onClick={() => setWeekOffset(0)} className="px-2 py-1 text-xs text-zinc-400 hover:text-white transition-colors duration-150 rounded hover:bg-zinc-800/40 light:text-stone-900 light:hover:bg-stone-100">Today</button>
                   <button onClick={() => setWeekOffset(w => Math.min(w + 1, 0))} disabled={weekOffset >= 0}
-                    className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-all duration-150 border border-zinc-700/30 hover:border-zinc-600/60 disabled:opacity-30 disabled:cursor-not-allowed light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)] light:disabled:opacity-30 light:disabled:cursor-not-allowed" title="Next week">
+                    className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-colors duration-150 border border-zinc-700/30 hover:border-zinc-600/60 disabled:opacity-30 disabled:cursor-not-allowed light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)] light:disabled:opacity-30 light:disabled:cursor-not-allowed" title="Next week">
                     <ChevronRight className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setExpandedModal(null)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50 ml-2 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]">
+                  <button onClick={() => setExpandedModal(null)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-colors duration-150 border border-transparent hover:border-zinc-700/50 ml-2 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]">
                     <X className="w-5 h-5 text-zinc-400" />
                   </button>
                 </div>
@@ -3095,11 +3117,11 @@ export default function DashboardPage({
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setSolarFullscreenWithEvent(!solarFullscreen)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-all duration-150 border border-transparent hover:border-zinc-700/50 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]"
+                  <button onClick={() => setSolarFullscreenWithEvent(!solarFullscreen)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-colors duration-150 border border-transparent hover:border-zinc-700/50 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]"
                     title={solarFullscreen ? "Exit fullscreen" : "Fullscreen"}>
                     {solarFullscreen ? <Minimize2 className="w-5 h-5 light:text-stone-500" /> : <Maximize2 className="w-5 h-5 text-zinc-400" />}
                   </button>
-                  <button onClick={() => { setExpandedModal(null); setSolarFullscreenWithEvent(false); }} className="p-2 hover:bg-red-900/50 rounded-lg transition-all duration-150 border border-transparent hover:border-red-500/30" title="Close">
+                  <button onClick={() => { setExpandedModal(null); setSolarFullscreenWithEvent(false); }} className="p-2 hover:bg-red-900/50 rounded-lg transition-colors duration-150 border border-transparent hover:border-red-500/30" title="Close">
                     <X className="w-5 h-5 light:text-stone-500" />
                   </button>
                 </div>
@@ -3115,8 +3137,9 @@ export default function DashboardPage({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>
 
-    </PageShell>
+        <WidgetLibraryPopup />
+      </PageShell>
   );
 }

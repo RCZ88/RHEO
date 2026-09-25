@@ -1566,6 +1566,67 @@ export function AiPage() {
                 <Sparkles size={11} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Features</span>
               </button>
+              {/* Group: Navigation */}
+              <button
+                onClick={() => setHistoryOpen(v => !v)}
+                title="Goals & Reminders"
+                className="dk-topbar-btn dk-topbar-btn--sm"
+              >
+                <Bell size={12} className="text-amber-400" />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Goals</span>
+                {reminders.filter(r => !r.done).length > 0 && (
+                  <span style={{ marginLeft: 4, borderRadius: 999, background: "rgba(251,191,36,.15)", padding: "0 5px", fontSize: 9, color: "#fbbf24" }}>
+                    {reminders.filter(r => !r.done).length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={chat.startNewThread}
+                title="New Thread"
+                className="dk-topbar-btn dk-topbar-btn--sm"
+              >
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>+ New</span>
+              </button>
+              <span className="dk-topbar-sep" />
+              {/* Group: AI Tools */}
+              <button
+                onClick={() => setShowFeatures(true)}
+                title="AI Features"
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--violet"
+              >
+                <Sparkles size={11} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Features</span>
+              </button>
+              {aiSubPage === 'vault' ? (
+                <button
+                  onClick={() => setAiSubPage(p => (p === 'vault' ? 'assistant' : 'vault'))}
+                  title="AI Debug Vault"
+                  className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
+                >
+                  <Bug size={11} />
+                  <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vault</span>
+                </button>
+              ) : null}
+              {aiSubPage === 'context' ? (
+                <button
+                  onClick={() => setAiSubPage(p => (p === 'context' ? 'assistant' : 'context'))}
+                  title="AI Context Captures"
+                  className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--cyan"
+                >
+                  <MessageSquare size={11} />
+                  <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Context</span>
+                </button>
+              ) : null}
+              <button
+                onClick={() => setConfiguringFeature('vision')}
+                title="Configure Vision Model"
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--pink"
+              >
+                <Eye size={11} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vision</span>
+              </button>
+              <span className="dk-topbar-sep" />
+              {/* Group: Utilities */}
               <button
                 onClick={() => {
                   try {
@@ -1581,30 +1642,6 @@ export function AiPage() {
               >
                 <Download size={11} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Export</span>
-              </button>
-              <button
-                onClick={() => setAiSubPage(p => (p === 'vault' ? 'assistant' : 'vault'))}
-                title="AI Debug Vault"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
-              >
-                <Bug size={11} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vault</span>
-              </button>
-              <button
-                onClick={() => setAiSubPage(p => (p === 'context' ? 'assistant' : 'context'))}
-                title="AI Context Captures"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--cyan"
-              >
-                <MessageSquare size={11} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Context</span>
-              </button>
-              <button
-                onClick={() => setConfiguringFeature('vision')}
-                title="Configure Vision Model"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--pink"
-              >
-                <Eye size={11} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vision</span>
               </button>
             </div>
           </div>

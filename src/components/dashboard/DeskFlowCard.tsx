@@ -3,6 +3,7 @@ import * as React from "react";
 
 import { motion, type HTMLMotionProps } from "motion/react"
 import { cn } from "@/lib/utils"
+import { Pin } from "lucide-react"
 import {
   CardHeader,
   CardTitle,
@@ -103,19 +104,30 @@ export function DeskFlowCard({
 export function DeskFlowCardMotion({
   className,
   children,
+  zIndex,
+  onClick,
+  pinned,
   ...props
-}: { className?: string; children: React.ReactNode }) {
+}: { className?: string; children: React.ReactNode; zIndex?: number; onClick?: () => void; pinned?: boolean }) {
   return (
     <motion.div
       whileHover={{ y: -2, scale: 1.005, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
       whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      style={{ zIndex, position: 'relative' }}
       className={cn(
-        "rounded-xl bg-zinc-900/80 overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(244,63,94,0.12)] flex-1 min-h-0",
+        "rounded-xl bg-zinc-900/80 overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(244,63,94,0.12)] flex-1 min-h-0 cursor-pointer",
+        pinned ? "ring-1 ring-amber-500/30" : "",
         className,
       )}
       {...props}
     >
+      {pinned && (
+        <div className="absolute top-2 right-2 z-50 flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-mono">
+          <Pin size={10} /> PINNED
+        </div>
+      )}
       {children}
     </motion.div>
-  )
+  );
 }
