@@ -558,7 +558,7 @@ export default function LifePage() {
               </motion.div>
             )}
             {pageTab === 'schedule' && (
-              <motion.div key="schedule" {...crossfade} className="w-full">
+              <motion.div key="schedule" {...crossfade} className="w-full h-full">
                 <SchedulePage embedded />
               </motion.div>
             )}
