@@ -81,7 +81,7 @@ export function CalendarSidebar({
 
   return (
     <aside
-      className="lg:flex-1 min-w-[320px] max-w-[480px] lg:sticky lg:top-5 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto"
+      className="lg:flex-1 min-w-[320px] max-w-[480px] lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto"
       aria-label="Calendar"
     >
       {/* Header strip: label + side toggle. Flat chrome, never 3D. */}
@@ -120,7 +120,7 @@ export function CalendarSidebar({
           transition: 'opacity 520ms cubic-bezier(0.16,1,0.3,1) 80ms',
         }} />
         {/* MonthWall: frozen, byte-identical props (R-60). */}
-        <MonthWall goals={goals} deadlines={deadlines} reminders={reminders} schedule={schedule} longTermGoals={longTermGoals} />
+        <MonthWall goals={goals} deadlines={deadlines} reminders={reminders} schedule={schedule} longTermGoals={longTermGoals} selectedDate={selectedDate} />
         {/* Day strip below the wall — props byte-identical, wiring intact. */}
         <div className="mt-3">
           <CalendarStrip selectedDate={selectedDate} onDateChange={onDateChange} goalDates={goalDates} marks={marks} weekGoals={weekGoals} />

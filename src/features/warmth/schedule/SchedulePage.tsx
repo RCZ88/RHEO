@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { WarmCard } from '../WarmCard';
 import { ScheduleCard } from '../../../pages/dashboard/ScheduleCard';
-import { CalendarStrip } from '../../../components/goals/CalendarStrip';
+import { CalendarSidebar } from '../../../components/goals/CalendarSidebar';
 import { TodoList } from '../../../components/goals/TodoList';
 import { ScheduleSyncCard } from '../../../components/dashboard/ScheduleSyncCard';
 import { DeadlinesCard } from '../../../components/dashboard/DeadlinesCard';
@@ -158,7 +158,7 @@ function DeadlineRadar({ marks, selectedDate, onPick }: { marks: Map<string, { c
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <div key={i} className="text-[8px] text-zinc-600 py-0.5">{d}</div>)}
         {Array.from({ length: lead }).map((_, i) => <div key={`b${i}`} />)}
         {Array.from({ length: dim }).map((_, i) => {
-          const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
           const dayMarks = marks.get(dateStr) || []; const isToday = dateStr === today;
           return (
             <button key={dateStr} onClick={() => onPick(dateStr)} className={`relative h-7 rounded-md text-[10px] tabular-nums transition-colors flex flex-col items-center justify-center ${isToday ? 'bg-amber-500/15 text-amber-300 font-semibold' : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'}`}>
@@ -303,6 +303,8 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showWeekSchedule, setShowWeekSchedule] = useState(false);
+  const [showAddBlock, setShowAddBlock] = useState(false);
+  const [blockForm, setBlockForm] = useState({ title: '', start_time: '09:00', end_time: '10:00', category: 'class' as ScheduleCategory });
 
   const [weekGoals, setWeekGoals] = useState<Record<string, Goal[]>>({});
   const { focusState, activeGoalIds, getAccumulatedSeconds } = useFocusGoals(goals);
@@ -335,6 +337,13 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
   };
   const updateScheduleEntry = async (id: string, patch: Partial<ScheduleEntry>) => { setSchedule(prev => prev.map(e => (e.id === id ? { ...e, ...patch } : e))); try { await api.updateScheduleEntry(id, patch); } catch {} };
   const deleteScheduleEntry = async (id: string) => { setSchedule(prev => prev.filter(e => e.id !== id)); try { await api.deleteScheduleEntry(id); } catch {} };
+
+  const handleAddBlock = async () => {
+    if (!blockForm.title.trim()) return;
+    await addScheduleEntry({ title: blockForm.title.trim(), location: '', day_of_week: new Date(selectedDate + 'T00:00:00').getDay(), start_time: blockForm.start_time, end_time: blockForm.end_time, category: blockForm.category, color: '#22d3ee', goal_id: undefined });
+    setShowAddBlock(false);
+    setBlockForm({ title: '', start_time: '09:00', end_time: '10:00', category: 'class' });
+  };
 
   /* ── deadlines ── */
   const handleAddDeadline = async (dl: Omit<Deadline, 'id' | 'createdAt' | 'status'>) => {
@@ -371,7 +380,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
 
   /* ── render ── */
   return (
-    <div className="w-full max-w-[1600px] mx-auto px-4 py-6">
+    <div className={embedded ? 'w-full h-full' : 'w-full max-w-[1600px] mx-auto px-4 py-6'}>
       {/* Page Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -379,17 +388,32 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
           <p className="text-[12px] text-zinc-500 mt-0.5">{prettyDate(selectedDate)} · manage blocks, deadlines & reminders</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => {}} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/10 text-pink-400 border border-pink-500/20 hover:bg-pink-500/20 transition-all duration-200 text-[12px] font-medium" style={{ transition: 'all 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
-            <Plus size={13} /> Add Block
+          <button onClick={() => setShowAddBlock(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/10 text-pink-400 border border-pink-500/20 hover:bg-pink-500/20 transition-all duration-200 text-[12px] font-medium" style={{ transition: 'all 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
+            <Plus size={13} /> {showAddBlock ? 'Cancel' : 'Add Block'}
           </button>
-          <button onClick={() => {}} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 text-zinc-300 border border-zinc-700/50 hover:border-pink-500/30 hover:text-pink-400 transition-all duration-200 text-[12px] font-medium" style={{ transition: 'all 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
+          {showAddBlock && (
+            <div className="flex items-center gap-2 bg-zinc-900/60 border border-zinc-700/50 rounded-lg p-2">
+              <input value={blockForm.title} onChange={e => setBlockForm(p => ({ ...p, title: e.target.value }))} placeholder="Block title" className="bg-transparent text-[12px] text-zinc-200 placeholder:text-zinc-600 outline-none border border-zinc-700/50 rounded px-2 py-1" />
+              <input type="time" value={blockForm.start_time} onChange={e => setBlockForm(p => ({ ...p, start_time: e.target.value }))} className="bg-transparent text-[12px] text-zinc-200 outline-none border border-zinc-700/50 rounded px-2 py-1" />
+              <input type="time" value={blockForm.end_time} onChange={e => setBlockForm(p => ({ ...p, end_time: e.target.value }))} className="bg-transparent text-[12px] text-zinc-200 outline-none border border-zinc-700/50 rounded px-2 py-1" />
+              <select value={blockForm.category} onChange={e => setBlockForm(p => ({ ...p, category: e.target.value as ScheduleCategory }))} className="bg-transparent text-[12px] text-zinc-200 outline-none border border-zinc-700/50 rounded px-2 py-1">
+                <option value="class">Class</option>
+                <option value="lab">Lab</option>
+                <option value="study">Study</option>
+                <option value="exam">Exam</option>
+                <option value="meeting">Meeting</option>
+                <option value="other">Other</option>
+              </select>
+              <button onClick={handleAddBlock} className="text-[12px] text-emerald-400 hover:text-emerald-300 font-medium px-2 py-1">Save</button>
+            </div>
+          )}
+          <button onClick={async () => { try { const res = await api.addDeadline?.({ title: 'New Deadline', due_date: selectedDate, status: 'pending' }); if (res?.success && res.id) setDeadlines(prev => [...prev, { ...res, createdAt: res.createdAt || new Date().toISOString(), status: 'pending' }]); } catch {} }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 text-zinc-300 border border-zinc-700/50 hover:border-pink-500/30 hover:text-pink-400 transition-all duration-200 text-[12px] font-medium" style={{ transition: 'all 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
             <Bell size={13} /> Add Deadline
           </button>
         </div>
       </div>
 
-      {/* Calendar Strip */}
-      <CalendarStrip selectedDate={selectedDate} onDateChange={setSelectedDate} goalDates={new Set(Object.keys(weekGoals))} marks={radarMarks} weekGoals={weekGoals} />
+      
 
       {/* Focus indicator */}
       <AnimatePresence>
@@ -477,35 +501,22 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
           <DeadlinesCard deadlines={deadlines} reminders={reminders} loading={loading} error={error} onAdd={handleAddDeadline} onDelete={handleDeleteDeadline} onUpdate={handleUpdateDeadline} onComplete={handleCompleteDeadline} onToggleReminder={handleToggleReminder} onDeleteReminder={handleDeleteReminder} goalOptions={goalOptions} />
         </div>
 
-        {/* Calendar sidebar */}
-        <div className="w-72 shrink-0">
-          <WarmCard ambient>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-[12px] font-medium text-zinc-400 flex items-center gap-1.5"><CalendarDays size={13} className="text-amber-400" />{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-              <button onClick={toggleSide} className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 transition-colors" aria-label="Toggle calendar sidebar">{side === 'left' ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}</button>
-            </div>
-            <div className="grid grid-cols-7 gap-0.5 text-center mb-3">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => <div key={d} className="text-[8px] text-zinc-600 py-0.5">{d}</div>)}</div>
-            {loading ? (
-              <div className="space-y-1.5">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-6 bg-zinc-800/40 rounded-lg animate-pulse" />)}</div>
-            ) : deadlines.filter(d => d.due_date && d.status !== 'completed').length === 0 && reminders.filter(r => !r.done).length === 0 && schedule.length === 0 && longTermGoals.length === 0 ? (
-              <div className="text-center py-6"><CalendarDays size={20} className="mx-auto text-zinc-700 mb-2" /><p className="text-[11px] text-zinc-600">Nothing on the calendar</p><p className="text-[10px] text-zinc-700 mt-0.5">Add deadlines, reminders, or goals to see them here</p></div>
-            ) : (
-              <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {deadlines.filter(d => d.due_date && d.status !== 'completed').slice(0, 5).map(d => (
-                  <div key={d.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-rose-500" /><span className="flex-1 text-zinc-400 truncate">{d.title}</span><span className="text-[9px] text-zinc-600 tabular-nums">{daysUntil(d.due_date) ?? '—'}d</span></div>
-                ))}
-                {reminders.filter(r => !r.done).slice(0, 5).map(r => (
-                  <div key={r.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" /><span className="flex-1 text-zinc-400 truncate">{r.text}</span></div>
-                ))}
-                {schedule.slice(0, 5).map(s => (
-                  <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0 bg-pink-500" /><span className="flex-1 text-zinc-400 truncate">{s.title}</span><span className="text-[9px] text-zinc-600 tabular-nums">{s.start_time}</span></div>
-                ))}
-                {longTermGoals.slice(0, 3).map(l => (
-                  <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-[11px]"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: catDot(l.category || 'work') }} /><span className="flex-1 text-zinc-400 truncate">{l.title}</span></div>
-                ))}
-              </div>
-            )}
-          </WarmCard>
+        {/* 3D Calendar Sidebar — flex child with proper sizing and sticky */}
+        <div className="flex flex-col lg:min-w-[320px] lg:max-w-[480px] lg:sticky lg:top-5 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
+          <CalendarSidebar
+            side={side}
+            onToggleSide={toggleSide}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            weekGoals={weekGoals}
+            marks={radarMarks}
+            goalDates={new Set(Object.keys(weekGoals))}
+            goals={goals}
+            deadlines={deadlines}
+            reminders={reminders}
+            schedule={schedule}
+            longTermGoals={longTermGoals}
+          />
         </div>
       </div>
     </div>
