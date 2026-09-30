@@ -1,4 +1,4 @@
-# Skill Router — Universal Skill Dispatcher v1.4.0
+# Skill Router — Universal Skill Dispatcher v1.5.0
 
 > **PURPOSE:** This is the master routing table for ALL skills in `agent/skills/`. It maps every task/scenario to the correct skill(s), enforces load order, and ensures no skill is forgotten. Load this skill FIRST whenever you begin a task.
 >
@@ -20,6 +20,10 @@
 
 ```
 User task enters
+│
+├─ ANY task that writes source, builds, runs the app, migrates the DB, or commits
+│  └─ COORDINATION category → load `multi-agent-coordination` FIRST
+│     (other agents share this repo; register → status → claim before you write)
 │
 ├─ "fix the problems" / "work through problems.md"
 │  └─ FIX PROBLEMS category
@@ -358,6 +362,9 @@ See `agent/skills/paint/references/conflict-resolution.md` for the resolved rows
 
 ## 4. Load Ordering Rules
 
+0. **`multi-agent-coordination` loads FIRST, always, for any write.** It gates every
+   other category: you cannot register, claim, or build until you know who else is live.
+   Load it before FIX / DESIGN / COMMIT / TESTING.
 1. **MANDATORY skills in specified order first.**
 2. **RECOMMENDED skills after mandatory, in order listed.**
 3. **`maintain-context` is ALWAYS last** — it syncs knowledge after all changes are done.
@@ -387,6 +394,11 @@ See `agent/skills/paint/references/conflict-resolution.md` for the resolved rows
 | Test UI with only IPC probes | Test the real rendered UI — button clicks, state changes, console logs |
 | Make code changes and skip `maintain-context` | Graphify + vault + state.md go out of sync |
 | Ignore a user correction without loading `agent-reflect` | The same mistake will repeat across sessions |
+| Edit source, build, or commit without loading `multi-agent-coordination` | Register → `status` → `claim` first. An agent that skips this collides silently |
+| Run `npm run build` / `npm start` bare | Use `run-exclusive.mjs` — concurrent builds corrupt `dist/` and cause black screens |
+| `git add -A` in a shared repo | Stage explicit paths; `-A` swallows other agents' half-finished work under your message |
+| "Fix" a file with uncommitted changes you didn't make | It belongs to a live agent. Report it; never `git checkout` / `git restore` it |
+| Treat `coord.mjs` exit code 0 as proof it ran | Confirm it PRINTED (`status` → `AGENTS (n)`). Empty output = the tool is a no-op |
 | Load ALL skills at once for every task | Only load what the category mandates — overloading wastes context |
 | Assume a single skill is enough for a UI task | Design tasks need MULTIPLE skills working together (infra + tokens + UX + motion) |
 | Use a visual mechanic without checking semantic fit | Every mechanic MUST map to the page's information type per DESIGN_SYSTEM_CONTEXT.md §3 |

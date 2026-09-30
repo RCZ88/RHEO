@@ -104,7 +104,42 @@ Any agent that violates this rule has failed at its most basic responsibility.
 - If Probe cannot work (no debug port, CI without display), note "NOT LAUNCHED" in the cycle
   report — do not attempt to launch and verify manually.
 
+## 0a. COORDINATION GATE — RUN THIS BEFORE YOU TOUCH ANYTHING (non-negotiable)
+
+**You are not the only agent in this repo.** Others are editing, building, running the
+app and committing RIGHT NOW, and they will not warn you. `MULTI_AGENT_PROTOCOL.md` is
+auto-loaded into your context — reading it is not the same as following it.
+
+Two real losses happened in one session because this gate was skipped:
+
+- An agent's `git add`-broad commit swallowed **713 lines** belonging to another agent.
+- `TerminalPage.tsx` was mid-rewrite (**+4,570 lines**, broken JSX) by a live agent. A
+  build failed on it; "fixing" it would have destroyed live work.
+
+```bash
+export AGENT_ID="opencode-<task>-$(date +%Y%m%d)"
+COORD=agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/coord.mjs
+
+node $COORD register --agent "$AGENT_ID" --task "<what you are doing>"   # 1. announce
+node $COORD status                                                        # 2. WHO IS LIVE?
+node $COORD claim  --agent "$AGENT_ID" --paths <every file you will edit> # 3. claim
+```
+
+- **Step 2 is not optional.** One second of output tells you who holds what.
+- **A DENIED claim is a HARD STOP.** Do not edit anyway.
+- **Never `git add -A`.** Stage explicit paths, then `git diff --cached --name-only`.
+- **Never `npm run build` / `npm start` bare** — use
+  `run-exclusive.mjs build -- node scripts/build.mjs`. Queue behind an existing build.
+- **A file with uncommitted changes you did not make is not yours.** Report it. Never
+  `git checkout` / `git restore` it.
+- **Exit code 0 with empty output is NOT proof the tool ran** — confirm `status` PRINTS
+  `AGENTS (n)`.
+- Release when done: `node $COORD done --agent "$AGENT_ID"`.
+
+Full detail: `agent/skills/multi-agent-coordination/SKILL.md`.
+
 ## 1. STARTUP RITUAL (do this before responding to ANYTHING)
+0. **Run the §0a COORDINATION GATE above. Before reading anything else.**
 1. Read `MEMORY.md` (durable lessons — see Section 4). This is the **compiled** version (max 10 newest entries). For the full archive, see `MEMORY_FULL.md`.
 2. Read the state Hub `agent/state.md` (read-only global view — see Section 1b), then read
    YOUR OWN spoke `agent/state/{SESSION_ID}.md` (current cycle number + role + what's in
