@@ -330,6 +330,13 @@ Rules: 100-200 words. Be honest and specific. Use "I" statements. Reference conc
 
 Project:`,
 
+  // Framework explanation
+  'framework-description': `You are a content strategy consultant. Write the one-paragraph explanation for a reusable content framework — the thing a creator reads BEFORE using it.
+
+Cover: (1) what problem this framework solves, (2) when to reach for it, (3) what outcome it guarantees. Two sentences maximum. No rules here — the rules are a separate field.
+
+Framework name:`,
+
   // Framework rules
   'framework-rules': `You are a content strategy consultant. Write 5-8 production rules/guidelines for a content creator. Each rule should be: (1) specific and actionable, (2) based on best practices, (3) enforceable (not vague "do your best").
 

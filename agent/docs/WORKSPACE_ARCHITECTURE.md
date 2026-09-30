@@ -49,6 +49,15 @@ User Action → TerminalPage State → IPC Invoke → main.ts Handler → SQLite
 9. Frontend `onTerminalData` receives data and writes to xterm.js
 10. First data arrival clears placeholder text
 
+### Conductor Orchestration Flow
+
+1. `ConductorService` lives in main process (`src/services/conductor/ConductorService.ts`)
+2. Host interface (`ConductorHost`) provides `spawnAgentTerminal`, `writeTerminal`, `killTerminal`, `isAgentReady`, `broadcast`
+3. **Critical:** `spawnAgentTerminal` spawns PTY directly via `terminalManager.spawn()` — does NOT depend on renderer
+4. Renderer notification (`terminal:spawn-for-conductor`) is best-effort only
+5. Missions managed via `Map<string, Mission>` with nodes, messages, escalations, pending children
+6. IPC handlers: `conductor:start`, `conductor:pause`, `conductor:resume`, `conductor:kill`, `conductor:send-directive`
+
 **CRITICAL:** `spawnedTerminals` is an in-memory `Set`, NOT localStorage. localStorage persisted across app restarts and caused terminals to never spawn again.
 
 ---
@@ -264,6 +273,31 @@ interface PromptTemplate {
 9. **Analytics charts** - Replace text stats with Recharts visualizations
 10. **Todo due dates** - Add scheduling to todos
 11. **Workspace templates** - Save entire workspace states (layout + open files + todos) as templates
+
+---
+
+## Backup System
+
+Backup functionality lives in `src/main/backup/BackupService.ts` (360 lines). Provides:
+
+### Features
+- **DB Backup:** WAL checkpoint before copy, gzip compression, SHA256 manifest, integrity verification
+- **Retention:** Hourly (24), daily (14), weekly (8), monthly (12) buckets with pruning
+- **Mirror:** Optional mirror directory for redundant copies
+- **Scheduling:** Startup/interval/quit/manual/pre-restore triggers
+- **Restore:** Integrity-checked restore with previous DB preserved as `.replaced-*.db`
+- **Export:** JSON and CSV exports of all tables
+
+### Settings
+Controlled via `backup-settings.json` in userData:
+- `autoBackup`: boolean (default true) — toggles interval scheduler
+- `mirrorDir`: string — optional mirror path
+- `retention`: { hourly, daily, weekly, monthly }
+
+### IPC Handlers
+`backup:create`, `backup:list`, `backup:restore`, `backup:exportJSON`, `backup:exportCSV`, `backup:status`, `backup:verify`, `backup:settings:get`, `backup:settings:set`, `backup:pickMirrorDir`
+
+**Note:** `startBackupScheduler` respects `autoBackup:false` — if disabled, no interval timer starts.
 
 ---
 

@@ -1,9 +1,20 @@
 # dictionary.md — DeskFlow terminology & location resolution
 
 > PURPOSE: resolve ambiguous words to an EXACT place in the app before acting.
-> This file is FORCE-INJECTED into every agent prompt (opencode.json instructions).
+>
+> ⚠️ **THIS FILE IS *NOT* FORCE-INJECTED.** It is ~36KB, which is why it is not in
+> `opencode.json` → `instructions`. (It was previously documented here as
+> "FORCE-INJECTED into every agent prompt" — that was **false** and made everyone
+> trust it and nobody read it.) Treat it as LOOK-UP-ON-DEMAND.
+>
+> **What IS force-loaded is [`SURFACES.md`](./SURFACES.md)** — the small alias index
+> (word you say → route → owning file). Read THAT first. Use this file only when
+> SURFACES.md has no row, or the term is a concept rather than a place.
+>
 > Rule (see AGENTS.md): before you create/move/modify anything that lives
 > "somewhere", look the noun up HERE first. If it's not here, ASK — do not guess.
+> If the noun is a *place*, also check SURFACES.md, and if it is missing there,
+> ADD a row to SURFACES.md rather than grepping.
 
 ## 🔴 High-confusion terms (these have burned us before)
 
@@ -418,6 +429,65 @@
 - ProfileTab ("Identity & Profile"), ContextGraphView ("Knowledge Graph"),
   BrainManagementView ("Memory & Brain") — all stacked inside the `self` tab of LifePage
   (max-w-5xl space-y-10, uppercase section headers). Never re-split into separate tabs.
+- ✅ **MOVED 2026-09-30 (user decision, SHIPPED):** the brain now lives on **AI Assistant**
+  (`BrainSurface.tsx`, the **Brain** button in the AiPage topbar — a 4th `aiSubPage`).
+  Tabs: Graph / Search / Trail / Manage. Life's `self` tab keeps Identity + episode/entity/fact
+  counts + an "Open Context Brain" link (`#/life?tab=self`, and Life defaults to `river`
+  view mode so the `self` tab needs the Pages toggle).
+  **`ContextRetrievalPanel` and `ExternalAITrail` are no longer dead code** — both had zero
+  reachable mount sites before this.
+- ⚠ **Still-dead brain UI (2026-09-30):** `features/warmth/ContextGraphView.tsx` is still
+  imported by `LifePage.tsx:27` and NEVER rendered; `components/life/ContextGraphView.tsx`
+  has zero importers. `BrainGraph.tsx` / `CanvasGraph.tsx` are reachable only via
+  `BrainVisualization`. `/context-brain` route does not exist (remapped per
+  `components/dashboard/widgetNav.ts:25`).
+- ⚠ **API SHAPE TRAP (cost a verification cycle):** `brain:get-entities` and `brain:get-facts`
+  return `{ items, total }` — NOT `{ entities }` / `{ facts }`. Facts use camelCase
+  `subjectId`/`objectId`/`objectLiteral`, not snake_case. A fact with `object_id IS NULL`
+  is a LITERAL (e.g. `has_conversation: "..."`), so it counts as a fact but never becomes
+  a graph edge — a graph showing `0 links` with non-zero facts is correct, not a bug.
+
+### Chat Library — one store for every AI conversation (2026-09-30)
+- **MEANS:** the search/group/browse surface for EVERY conversation with any AI — in-app
+  DeskFlow chat, external AI (ChatGPT/Claude/Perplexity…) captured by the extension, AI
+  Gateway runs, and imported files. Not a "chat history" list.
+- **Engine:** `src/main/ai/chatLibrary.ts`. Makes `ai_chat_threads` + `ai_chat_messages`
+  the single store. `ingestConversation()` is the ONE funnel; `searchChats()` is the query.
+- **Load-bearing invariants:** (1) ingest is content-hash deduped (`sha1` of normalised
+  transcript) because the extension re-captures the same conversation on every poll;
+  (2) `migrateChatLibrary()` MUST run before any ingest or the additive
+  `source`/`group_id`/`pinned` columns do not exist and inserts silently fail.
+- **Wiring:** IPC `chat-library:*` (main.ts ~18640); preload `chatLibrary*`
+  (preload.ts ~1254). Auto-ingest wired into `ai-chat:save` and `POST /ai-context`.
+  The **AI Gateway `sendPrompt` path does NOT feed the library yet** (gaps: gateway has no
+  session/provider wiring into the library, and imports the brain-blind `sendPrompt`).
+- **UI:** `src/components/ai/chat/ChatLibrary.tsx`, opened by the **Library** button in the
+  AiPage topbar. Two-column: search-first index | transcript preview. Pinned items render
+  in their own section ABOVE the group sections (pin beats group order). Auto-titles skip
+  greetings ("hi"/"ok") and take the first substantive user turn. Auto-group classifies
+  into Work/Learning/Creative/Life/Reference/Unsorted by keyword.
+- **Still dead:** the `Export` button (AiPage ~1636) downloads JSON that nothing reads back.
+
+### External AI transport — extension vs gateway (2026-09-30)
+- **MEANS:** the seam every bridge "Send to AI" button uses.
+  **EXTENSION (default, unchanged):** queue → extension injects into an AI tab you already
+  have open + logged into → scrapes reply → matched by `correlationId` (async).
+  **GATEWAY (opt-in):** Playwright drives the provider web UI with a per-provider persistent
+  profile + AES-256-GCM vault; the reply arrives SYNCHRONOUSLY in the promise, so there is
+  no correlation to wait for. User choice persists in `localStorage.deskflow_external_ai_transport`.
+- **Engine:** `src/services/externalAiTransport.ts` (`getPreferredTransport`,
+  `setPreferredTransport`, `gatewayAvailability`, `sendViaGateway`, `extractField`).
+- **Consumed by:** `ai-bridge/FieldAIButton.tsx`, `ai-bridge/BridgeForm.tsx`,
+  `content-engine/ExternalAIBridge.tsx`, `content-engine/ExternalAIBridgeField.tsx`
+  — the only 4 real seams; the other ~11 files consume those and needed no change.
+- **Gateway is brain-blind upstream** — `AIGatewayService.sendPrompt` only writes
+  `aigateway_runs`. Compensated in `main.ts` `aigateway:send-prompt`, which mirrors every
+  successful run into the Chat Library AND writes a brain episode, so both transports feed
+  the same learning loop.
+- **Sign-in:** Workspace → AI Gateway → Providers → "Setup" (opens real Chrome at the login
+  URL, solve 2FA/CAPTCHA by hand) → "Verify & Save" (persists cookies to the vault).
+  There is NO automated login and there should not be — every adapter sets
+  `antiBot.cloudflare: true`, so scripting that login is a ToS violation and a ban risk.
 
 ## 🛠️ Tool Terms (IPC tools available to agents)
 

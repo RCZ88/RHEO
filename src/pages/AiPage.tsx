@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Settings, BookOpen, Newspaper, Bell, History, Sparkles, ListTodo, Bug, MessageSquare, Eye, Download } from 'lucide-react';
+import { Settings, BookOpen, Newspaper, Bell, History, Library, Brain, Sparkles, ListTodo, Bug, MessageSquare, Eye, Download } from 'lucide-react';
 import { useCanvasState } from '../hooks/useCanvasState';
 import { loadDefaultSetup, BUILTIN_DEFAULT_SETUP } from '../services/canvasPersistence';
 import type { CardType } from '../types/canvas';
@@ -52,6 +52,9 @@ const AiProviderSelectModal = lazy(() => import('../components/AiProviderSelectM
 const ConnectorSetupModal = lazy(() => import('../components/ConnectorSetupModal').then(m => ({ default: m.ConnectorSetupModal })));
 const GoalsRemindersDrawer = lazy(() => import('../components/ai/reminders/GoalsRemindersDrawer').then(m => ({ default: m.GoalsRemindersDrawer })));
 const ChatHistory = lazy(() => import('../components/ai/chat/ChatHistory').then(m => ({ default: m.ChatHistory })));
+const ChatLibrary = lazy(() => import('../components/ai/chat/ChatLibrary').then(m => ({ default: m.ChatLibrary })));
+const BrainSurface = lazy(() => import('../components/ai/chat/BrainSurface').then(m => ({ default: m.BrainSurface })));
+const ChatExportBridge = lazy(() => import('../components/ai/chat/ChatExportBridge').then(m => ({ default: m.ChatExportBridge })));
 const ActionOverlay = lazy(() => import('../components/ai/primitives/ActionOverlay').then(m => ({ default: m.ActionOverlay })));
 const AiBuildingIndicator = lazy(() => import('../components/ai/primitives/AiBuildingIndicator').then(m => ({ default: m.AiBuildingIndicator })));
 const CanvasGrid = lazy(() => import('../components/ai/canvas/CanvasGrid').then(m => ({ default: m.CanvasGrid })));
@@ -124,7 +127,7 @@ export function AiPage() {
   const [aiProviders, setAiProviders] = useState<Array<{ id: string; label: string; models: string[]; enabled: boolean }>>([]);
   const [aiRouting, setAiRouting] = useState<Record<string, { providerId: string; model: string; smallProviderId?: string; smallModel?: string } | null>>({});
   const [configuringFeature, setConfiguringFeature] = useState<'default' | 'researchDigest' | 'goalAssistant' | 'vision' | null>(null);
-  const [aiSubPage, setAiSubPage] = useState<'assistant' | 'vault' | 'context'>('assistant');
+  const [aiSubPage, setAiSubPage] = useState<'assistant' | 'vault' | 'context' | 'brain'>('assistant');
   const [showConnectorSetup, setShowConnectorSetup] = useState(false);
   const [connectorsState, setConnectorsState] = useState<'loading' | 'error' | 'empty' | 'ready'>('loading');
   const [connectors, setConnectors] = useState<Array<{ id: string; name: string; status: string; detail?: string; itemCount?: number; type?: string }>>([]);
@@ -177,6 +180,8 @@ export function AiPage() {
   // History drawer state
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chatHistoryOpen, setChatHistoryOpen] = useState(false);
+  const [chatLibraryOpen, setChatLibraryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [expandedCardIds, setExpandedCardIds] = useState<Set<string>>(new Set());
   const [canvasMode, setCanvasMode] = useState<'deck' | 'canvas' | 'compositions'>('canvas');
@@ -1523,6 +1528,14 @@ export function AiPage() {
                 <History size={12} />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>History</span>
               </button>
+              <button
+                onClick={() => setChatLibraryOpen(true)}
+                title="Search and group every conversation"
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
+              >
+                <Library size={12} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Library</span>
+              </button>
               <div className="flex items-center bg-zinc-900 light:bg-white/60 light:bg-white/40 rounded-lg p-0.5 border border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50">
                 {(['canvas', 'deck', 'compositions'] as const).map(mode => (
                   <button
@@ -1618,6 +1631,14 @@ export function AiPage() {
                 </button>
               ) : null}
               <button
+                onClick={() => setAiSubPage(p => (p === 'brain' ? 'assistant' : 'brain'))}
+                title="Context Brain — knowledge graph, search, external AI trail"
+                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
+              >
+                <Brain size={11} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Brain</span>
+              </button>
+              <button
                 onClick={() => setConfiguringFeature('vision')}
                 title="Configure Vision Model"
                 className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--pink"
@@ -1628,16 +1649,8 @@ export function AiPage() {
               <span className="dk-topbar-sep" />
               {/* Group: Utilities */}
               <button
-                onClick={() => {
-                  try {
-                    const json = JSON.stringify(chat.messages, null, 2);
-                    const blob = new Blob([json], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.json`; a.click();
-                    URL.revokeObjectURL(url);
-                  } catch (e) { console.error('[AiPage] export JSON:', e); }
-                }}
-                title="Export Chat (JSON)"
+                onClick={() => setExportOpen(true)}
+                title="Export, import, or save this conversation to the brain"
                 className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--green"
               >
                 <Download size={11} />
@@ -1654,6 +1667,10 @@ export function AiPage() {
           ) : aiSubPage === 'context' ? (
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
               <AiContextPanel open={true} />
+            </div>
+          ) : aiSubPage === 'brain' ? (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <BrainSurface onOpenLibrary={() => setChatLibraryOpen(true)} />
             </div>
           ) : canvasMode === 'compositions' ? (
             <div style={{ flex: 1, minHeight: 0, padding: 20 }} data-section="ai.compositions">
@@ -1994,6 +2011,25 @@ actionResults={actionResults}
         onDeleteThread={handleDeleteThread}
         onRenameThread={chat.renameThread}
         onNewThread={chat.startNewThread}
+      />
+
+      {/* Chat Library — search, group and browse every conversation */}
+      <ChatLibrary
+        open={chatLibraryOpen}
+        onClose={() => setChatLibraryOpen(false)}
+        onOpenThread={(threadDate) => {
+          setChatLibraryOpen(false);
+          void handleLoadThread(threadDate);
+        }}
+      />
+
+      {/* Export / Import / Save-to-brain */}
+      <ChatExportBridge
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        threadDate={chat.currentThreadDate}
+        threadTitle={(chat.threads || []).find((t: any) => t.threadDate === chat.currentThreadDate)?.title}
+        messageCount={chat.messages?.length}
       />
 
       <SlashCommandManager

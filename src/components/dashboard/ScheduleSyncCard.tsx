@@ -21,7 +21,7 @@ interface ScheduleSyncCardProps {
   loading?: boolean;
 }
 
-export function ScheduleSyncCard({ schedule, goals, loading = false }: ScheduleSyncCardProps) {
+export function ScheduleSyncCard({ schedule = [], goals = [], loading = false }: ScheduleSyncCardProps) {
   const today = new Date().getDay();
 
   const todaySchedule = useMemo(() =>
@@ -93,7 +93,7 @@ export function ScheduleSyncCard({ schedule, goals, loading = false }: ScheduleS
 
             return (
               <motion.div key={entry.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
-                className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all duration-150 ${
+                className={`flex items-center gap-2.5 p-2 rounded-lg border transition-colors duration-150 ${
                   status === 'active' ? 'bg-sky-500/[0.06] border-sky-500/20' : status === 'past' ? 'bg-zinc-900/20 border-zinc-800/30 opacity-50' : 'bg-zinc-900/30 border-zinc-800/30 hover:border-zinc-700/40'
                 }`}>
                 <div className="w-16 text-right shrink-0">

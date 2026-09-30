@@ -8,7 +8,7 @@ import * as React from "react";
 //         Human-Centric UX (progressive insight disclosure, plain copy)
 // ============================================================
 
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import {
   Flame, TrendingUp, Target, Clock, AlertTriangle,
   Zap, Sparkles, BarChart3, PieChart, Activity
@@ -18,7 +18,7 @@ import { AnimatedShinyText } from '../ui/animated-shiny-text';
 import { MomentumOrb } from './MomentumOrb';
 import { StreakBadge } from './StreakBadge';
 import { BlurText } from './BlurText';
-import { SpotlightCard } from './SpotlightCard';
+import { Card } from '@/components/ui/card';
 import type { DashboardInsights } from './types';
 
 interface InsightsCardProps {
@@ -29,17 +29,19 @@ interface InsightsCardProps {
 export function InsightsCard({ insights, loading = false }: InsightsCardProps) {
   if (loading) {
     return (
-      <div className="relative rounded-xl overflow-hidden bg-zinc-950/50 backdrop-blur-xl border border-zinc-800/40 p-5">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
-        <div className="animate-pulse space-y-3">
-          <div className="h-5 bg-zinc-800 rounded w-1/4" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-16 bg-zinc-800/30 rounded-lg" />
-            ))}
+      <Card className="rounded-[10px] h-full">
+        <CardContent className="p-5">
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
+          <div className="animate-pulse space-y-3">
+            <div className="h-5 bg-zinc-800 rounded w-1/4" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-16 bg-zinc-800/30 rounded-lg" />
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -49,11 +51,9 @@ export function InsightsCard({ insights, loading = false }: InsightsCardProps) {
   } = insights;
 
   return (
-    <SpotlightCard
-      spotlightColor="rgba(245, 158, 11, 0.08)"
-      className="relative rounded-xl overflow-hidden bg-zinc-950/50 backdrop-blur-xl border border-zinc-800/40 p-5"
-    >
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
+    <Card className="rounded-[10px] h-full">
+      <CardContent className="p-5">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
 
       {/* Signature Hero Row: MomentumOrb + Key Metrics */}
       <div className="flex flex-col md:flex-row items-start md:items-center gap-5 mb-5">
@@ -137,9 +137,10 @@ export function InsightsCard({ insights, loading = false }: InsightsCardProps) {
           <span className="text-[12px] text-rose-300">
             {urgentDeadlines} urgent deadline{urgentDeadlines > 1 ? 's' : ''} need{urgentDeadlines === 1 ? 's' : ''} attention
           </span>
-        </motion.div>
-      )}
-    </SpotlightCard>
+         </motion.div>
+       )}
+     </CardContent>
+     </Card>
   );
 }
 

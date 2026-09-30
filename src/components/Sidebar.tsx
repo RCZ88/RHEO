@@ -345,7 +345,7 @@ export const Sidebar = memo(function SidebarComponent({
           </button>
           ) : (
             <div className="flex items-center justify-between w-full">
-              <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest select-none">RHEO</span>
+              <SidebarLogo href="#/" />
               <button
                 onClick={onToggle}
                 className="p-1 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"

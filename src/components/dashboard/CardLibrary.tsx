@@ -14,8 +14,11 @@ import {
   Plus, Trash2, Save, RotateCcw, LayoutDashboard, Filter,
 } from 'lucide-react';
 import { WidgetRegistry, DEFAULT_LAYOUT, type DashboardLayoutConfig, type WidgetConfig, type WidgetSize } from './WidgetRegistry';
+import { DashboardDataProvider, type DashboardData } from './DashboardContext';
 import { getWidgetTheme } from './widgetTheme';
 import './registerWidgets';
+import { useDashboardLayout } from '../../hooks/useDashboardLayout';
+import { toDashboardId } from './widgetRegistry';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -214,16 +217,24 @@ function ColumnPicker({ columns, onChange }: { columns: number; onChange: (n: nu
 type ViewMode = 'grid' | 'list';
 type CategoryFilter = 'all' | WidgetConfig['category'];
 
+/** Natural (un-squeezed) render size for a widget inside a preview cell. */
+const PREVIEW_NATURAL_W = 300;
+const PREVIEW_NATURAL_H = 260;
+
 interface CardLibraryProps {
   onChanged?: (layout: DashboardLayoutConfig) => void;
   onSaved?: () => void;
   previews?: Record<string, ReactNode>;
   onClose?: () => void;
+  /** Real dashboard data — required so widget previews render actual content, not blanks. */
+  data?: DashboardData;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibraryProps) {
+export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: CardLibraryProps) {
+  // Single source of truth: the same hook the dashboard renders with.
+  const { isVisible, toggleVisible } = useDashboardLayout();
   // ── State ────────────────────────────────────────────────────────────────
 
   const [layout, setLayout] = useState<DashboardLayoutConfig>(DEFAULT_LAYOUT);
@@ -246,6 +257,21 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
   const gridRef = useRef<HTMLDivElement>(null);
   const dragCounterRef = useRef(0);
 
+  // Measured width of the preview grid — used to scale each widget down to fit
+  // its cell. Widgets lay out at NATURAL_W and are visually shrunk, so their
+  // internal stat rows never collide the way they do when squeezed narrow.
+  const [gridW, setGridW] = useState(0);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) setGridW(e.contentRect.width);
+    });
+    ro.observe(el);
+    setGridW(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, []);
+
   // ── Load saved state ─────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -267,8 +293,19 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
   // ── Widget helpers ────────────────────────────────────────────────────────
 
   const allWidgets = WidgetRegistry.getAll();
-  const visibleWidgets = allWidgets.filter(w => layout.widgetVisibility[w.id] !== false && layout.widgetOrder.includes(w.id));
-  const hiddenWidgets = allWidgets.filter(w => !layout.widgetOrder.includes(w.id) || layout.widgetVisibility[w.id] === false);
+  // Truth comes from useDashboardLayout — the SAME hook the dashboard renders
+  // with. Reading it from the library's own layout was why the two disagreed and
+  // cards appeared on the dashboard that the user had never switched on.
+  const visibleWidgets = allWidgets.filter(w => {
+    const dashId = toDashboardId(w.id);
+    if (!dashId) return false;                 // no dashboard equivalent -> not "on"
+    return isVisible(dashId);
+  });
+  const hiddenWidgets = allWidgets.filter(w => {
+    const dashId = toDashboardId(w.id);
+    if (!dashId) return false;                 // cannot render at all -> don't offer it
+    return !isVisible(dashId);
+  });
 
   const filteredHiddenWidgets = hiddenWidgets.filter(w => {
     if (searchQuery) {
@@ -364,13 +401,18 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
   }, [onChanged]);
 
   const toggleWidget = useCallback((widgetId: string) => {
-    const visible = isWidgetVisible(widgetId);
+    // Drive the dashboard's own hook — that is what the renderer reads. The
+    // library's own layout object only tracks grid position, not visibility.
+    const dashId = toDashboardId(widgetId);
+    if (!dashId) return;               // nothing on the dashboard renders this
+    toggleVisible(dashId);
+    const visible = !isWidgetVisible(widgetId);
     if (visible) {
-      removeWidget(widgetId);
-    } else {
       addWidget(widgetId);
+    } else {
+      removeWidget(widgetId);
     }
-  }, [addWidget, removeWidget]);
+  }, [addWidget, removeWidget, toggleVisible]);
 
   const resizeWidget = useCallback((widgetId: string, size: WidgetSize) => {
     const config = WidgetRegistry.get(widgetId);
@@ -629,7 +671,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
   // ── Render: Available Widgets Panel ───────────────────────────────────────
 
   const renderAvailableWidgets = () => (
-    <div className="flex flex-col">
+    <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
           Available Cards
@@ -652,7 +694,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
           </p>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 gap-2 overflow-y-auto">
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 flex-1 min-h-0 content-start overflow-y-auto">
           {filteredHiddenWidgets.map(widget => {
             const theme = getWidgetTheme(widget.id);
             const WidgetIcon = getIcon(widget.icon);
@@ -667,7 +709,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                className={`group relative rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-3 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:border-[var(--page-accent)]/30 ${
+                className={`group relative rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-3 cursor-pointer transition-colors duration-150 hover:-translate-y-0.5 hover:border-[var(--page-accent)]/30 ${
                   dragSource?.widgetId === widget.id ? 'ring-2 ring-[var(--page-accent)]/50 scale-105' : ''
                 }`}
                 onClick={() => addWidget(widget.id)}
@@ -749,7 +791,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
           })}
         </div>
       ) : (
-        <div className="space-y-1 overflow-y-auto">
+        <div className="space-y-1 flex-1 min-h-0 content-start overflow-y-auto">
           {filteredHiddenWidgets.map(widget => {
             const theme = getWidgetTheme(widget.id);
             const WidgetIcon = getIcon(widget.icon);
@@ -763,7 +805,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                className={`group flex items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 py-2.5 cursor-pointer transition-all duration-150 hover:-translate-x-0.5 hover:border-[var(--page-accent)]/30 ${
+                className={`group flex items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:-translate-x-0.5 hover:border-[var(--page-accent)]/30 ${
                   dragSource?.widgetId === widget.id ? 'ring-2 ring-[var(--page-accent)]/50' : ''
                 }`}
                 onClick={() => addWidget(widget.id)}
@@ -829,7 +871,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
   // ── Render: Dashboard Preview Panel ───────────────────────────────────────
 
   const renderDashboardPreview = () => (
-    <div className="flex flex-col">
+    <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
           Your Dashboard
@@ -883,7 +925,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
           </AnimatePresence>
 
           {/* Grid preview */}
-          <div className="p-3">
+          <div className="p-3 flex-1 min-h-0 overflow-y-auto">
             <div
               className="grid gap-2"
               style={{
@@ -891,12 +933,23 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
               }}
             >
               {visibleWidgets.map(widget => {
-                const theme = getWidgetTheme(widget.id);
-                const WidgetIcon = getIcon(widget.icon);
                 const position = layout.gridPositions[widget.id] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
                 const currentSize = { cols: position.colSpan, rows: position.rowSpan };
                 const availableSizes = getAvailableSizes(widget);
                 const selectedSize = availableSizes.find(s => s.cols === currentSize.cols && s.rows === currentSize.rows);
+
+                const FallbackComponent = WidgetRegistry.get(widget.id)?.component;
+
+                // Scale the widget to fit its grid cell. The widget renders at
+                // NATURAL_W/NATURAL_H (its real proportions) and is scaled down,
+                // so text never overlaps the way it does when the cell squeezes it.
+                const GAP = 8;
+                const ROW_UNIT = 68;
+                const cellW = gridW > 0
+                  ? (gridW - GAP * (layout.columns - 1)) / layout.columns * position.colSpan + GAP * (position.colSpan - 1)
+                  : 0;
+                const scale = cellW > 0 ? Math.min(1, cellW / PREVIEW_NATURAL_W) : 0;
+                const cellH = position.rowSpan * ROW_UNIT;
 
                 return (
                   <motion.div
@@ -906,7 +959,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                    className="relative group rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-2.5 overflow-hidden"
+                    className="relative group rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] overflow-hidden"
                     style={{
                       gridColumn: `span ${position.colSpan}`,
                       gridRow: `span ${position.rowSpan}`,
@@ -922,58 +975,52 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
                       <X size={10} />
                     </button>
 
-                    {/* Icon */}
-                    <div className="flex items-center gap-2 mb-1">
+                    {/* Actual widget component preview — real component, real context data,
+                        laid out at natural size then scaled to fit the cell */}
+                    {FallbackComponent ? (
                       <div
-                        className="flex h-6 w-6 items-center justify-center rounded-md"
-                        style={{ backgroundColor: theme.tint, color: theme.accent }}
+                        className="overflow-hidden"
+                        style={{ height: cellH }}
                       >
-                        <WidgetIcon size={12} />
+                        <div
+                          style={{
+                            width: PREVIEW_NATURAL_W,
+                            height: PREVIEW_NATURAL_H,
+                            transform: scale ? `scale(${scale})` : undefined,
+                            transformOrigin: 'top left',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          <FallbackComponent />
+                        </div>
                       </div>
-                      <span className="text-[11px] font-semibold text-[var(--text-primary)] truncate">
-                        {widget.name}
-                      </span>
-                    </div>
+                    ) : (
+                      <div className="p-2.5 flex items-center justify-center h-full">
+                        <p className="text-[10px] text-[var(--text-muted)]">{widget.name}</p>
+                      </div>
+                    )}
 
-                    {/* Kicker */}
-                    <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                      {theme.kicker}
-                    </div>
-
-                    {/* Description (truncated) */}
-                    <p className="text-[10px] text-[var(--text-secondary)] leading-snug line-clamp-2 mb-1.5">
-                      {widget.description}
-                    </p>
-
-                    {/* Size indicator */}
-                    <div className="flex items-center gap-1 mb-1.5">
+                    {/* Size indicator + resize controls */}
+                    <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between gap-1 bg-gradient-to-t from-[var(--color-card)] via-[var(--color-card)]/90 to-transparent pt-4 pb-1 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <span className="text-[9px] font-mono text-[var(--text-muted)]">
                         {sizeLabel(currentSize)}
+                        {selectedSize ? ` · ${availableSizes.length} opts` : ''}
                       </span>
-                      {selectedSize && (
-                        <span className="text-[9px] text-[var(--text-muted)]">
-                          of {availableSizes.length} options
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Resize controls */}
-                    {editMode && availableSizes.length > 1 && (
-                      <div className="absolute bottom-1 left-1 right-1 flex items-center gap-1 justify-center">
+                      {editMode && availableSizes.length > 1 && (
                         <button
                           onClick={e => {
                             e.stopPropagation();
                             setResizingWidget(widget.id);
                             setSelectedSizeId(`${widget.id}-size`);
                           }}
-                          className="flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-transparent px-1.5 py-0.5 text-[9px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
+                          className="flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--color-card)] px-1.5 py-0.5 text-[9px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
                         >
                           <Grid3X3 size={8} />
                           Resize
                           <ChevronDown size={8} />
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     {/* Size dropdown */}
                     <AnimatePresence initial={false}>
@@ -1242,7 +1289,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
 
   const innerContent = (
     <div
-      className="relative w-full max-w-5xl max-h-[88vh] rounded-2xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col"
+      className="relative w-full max-w-[1600px] max-h-[92vh] rounded-2xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col"
       onClick={e => e.stopPropagation()}
     >
       {/* Header */}
@@ -1259,7 +1306,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
       <div className="flex-1 min-h-[360px] overflow-hidden">
         <div className="flex h-full">
           {/* Available widgets — left panel */}
-          <div className="w-[320px] flex-shrink-0 border-r border-[var(--border-subtle)] min-h-0">
+          <div className="w-[380px] flex-shrink-0 border-r border-[var(--border-subtle)] min-h-0">
             <div className="h-full min-h-0 overflow-hidden">
               {renderAvailableWidgets()}
             </div>
@@ -1293,7 +1340,10 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
     </div>
   );
 
+  if (!data) return null;
+
   return (
+    <DashboardDataProvider value={data}>
     <AnimatePresence>
       {onClose ? (
         // When wrapped by parent modal, render just the content (no overlay)
@@ -1313,6 +1363,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose }: CardLibra
         </motion.div>
       )}
     </AnimatePresence>
+    </DashboardDataProvider>
   );
 }
 

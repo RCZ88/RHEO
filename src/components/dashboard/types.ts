@@ -35,6 +35,9 @@ export interface Reminder {
   id: string;
   text: string;
   due_date: string | null;
+  /** Optional time-of-day 'HH:mm'. Separate from due_date so date-keyed
+   *  calendar grids keep working. Null = all-day reminder. */
+  due_time?: string | null;
   goal_id: string | null;
   done: boolean;
   created_at: string;
@@ -78,6 +81,13 @@ export interface MomentumScore {
   trend: 'up' | 'down' | 'stable';
   completionRate: number;
   scheduleAdherence: number;
+  /**
+   * Setup signals. A breakdown row is only shown when the underlying feature is
+   * actually configured — a user with no goals should not see "Goals completed
+   * today: 0%". Absent = treated as "not set up" (fail-safe for old callers).
+   */
+  hasGoals?: boolean;
+  hasSchedule?: boolean;
 }
 
 export interface DashboardState {

@@ -1564,3 +1564,13 @@ Restructured from 12 flat tabs into 5 group buttons with browser-tab-style nav (
 - Added §11 Token Collapse, §12 Fonts, §13 Name/RHEO Sweep, §14 Data-Page Registry
 - Added §15 Naming Law, §16 Framer-Motion-Sanctioned Motion
 - §10 Pre-Task Checklist expanded (3 new items)
+
+## 2026-09-24  Dashboard Layout Editor (IMPLEMENTED)
+- **Feature name:** Dashboard Layout Editor
+- **Spec:** User-provided RESULT specification (Part 0-7 audit + implementation)
+- **Files touched:** `src/components/dashboard/widgetRegistry.tsx`, `src/hooks/useDashboardLayout.ts`, `src/components/dashboard/WidgetLibraryPopup.tsx`, `src/pages/DashboardPage.tsx`, `src/components/dashboard/CardLibrary.tsx`, `src/components/dashboard/ScheduleSyncCard.tsx`
+- **Decision:** Renderer localStorage (`deskflow-dashboard-layout-v1`), no IPC/backend needed
+- **Known limitation:** Partial-row hide in row 4 leaves empty grid tracks in v1; 4-quarter grid collapses to fewer columns when widgets are hidden
+- **What was built:** Single source of truth registry (`widgetRegistry.tsx`) with 12 widgets and ROW_TEMPLATES geometry, `useDashboardLayout.ts` hook for persistence (sanitized, self-healing), `WidgetLibraryPopup.tsx` editor with live proportional preview and grouped toggles, full integration into `DashboardPage.tsx` replacing `isCardVisible` stub with `useDashboardLayout`
+- **Defects fixed:** D1 spacing drift (mb-4→mb-2), D2 trend keys verified (up/down/stable correct), D3 framer-motion→motion/react (already fixed), D4 transition-all→transition-colors, D6 removed margin-top hack
+- **Status:** IMPLEMENTED

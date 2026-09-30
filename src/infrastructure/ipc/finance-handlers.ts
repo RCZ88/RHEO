@@ -25,7 +25,18 @@ export interface FinanceHandlerDeps {
 const MAX_FINANCE_ATTEMPTS = 5;
 
 export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
-  const { db, mainWindow, userPreferences, financePasswordHash, financePasswordSalt, financeDataKey, financeRememberDevice, financeRememberDeviceExpiry, getLocalDateStr, toInt } = deps;
+  const { db, mainWindow, userPreferences, getLocalDateStr, toInt } = deps;
+  // These MUST be mutable locals, not `const` destructured from deps.
+  // `ipcMain.handle` bodies assign to them (data-key derivation on unlock,
+  // password re-hash, remember-device toggling). Assigning to a `const`
+  // binding throws TypeError in strict mode, which the surrounding try/catch
+  // swallowed — so finance unlock and "remember this device" silently failed
+  // and every subsequent handler in this file kept operating on stale values.
+  let financePasswordHash = deps.financePasswordHash;
+  let financePasswordSalt = deps.financePasswordSalt;
+  let financeDataKey = deps.financeDataKey;
+  let financeRememberDevice = deps.financeRememberDevice;
+  let financeRememberDeviceExpiry = deps.financeRememberDeviceExpiry;
   let financeLocked = deps.financeLocked;
   let financeDisplayCurrency = deps.financeDisplayCurrency;
   let financeLockTimeout = deps.financeLockTimeout;

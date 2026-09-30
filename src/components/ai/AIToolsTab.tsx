@@ -272,6 +272,7 @@ export default function AIToolsTab({
 }: AIToolsTabProps) {
   // ── Sync state ──
   const [syncingAI, setSyncingAI] = useState(false)
+  const [syncVersion, setSyncVersion] = useState(0)
   const [syncProgress, setSyncProgress] = useState<string | null>(null)
   const [aiSyncResult, setAiSyncResult] = useState<{
     success: boolean
@@ -907,6 +908,7 @@ export default function AIToolsTab({
         }
         setAiSyncResult({ success: true, agents })
         setSyncProgress('Refreshing data...')
+        setSyncVersion(v => v + 1)
         await onDataRefresh()
         const status = await window.deskflowAPI?.getAISyncStatus()
         if (status?.lastRunAt) {
@@ -951,7 +953,7 @@ export default function AIToolsTab({
     setHermesLoading(true)
     try {
       const info = (await window.deskflowAPI!.debugAIAgents()) as any
-      const hermesInfo = info?.hermes || info?.agents?.find((a: any) => a.id === 'hermes') || null
+      const hermesInfo = info?.agents?.hermes || null
       const paths: string[] = []
       if (hermesInfo?.paths) {
         paths.push(...hermesInfo.paths)
@@ -2745,6 +2747,7 @@ export default function AIToolsTab({
             <AISessionHistory
               activeToolIds={activeToolIds}
               selectedTool={sessionTool}
+              forceRefresh={syncVersion}
             />
           )}
         </div>

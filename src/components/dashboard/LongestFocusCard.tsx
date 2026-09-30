@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Zap, Clock, Monitor } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { NumberTicker } from '../ui/number-ticker';
 
 interface FocusSession {
@@ -58,9 +59,8 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
   const color = topSession ? getSessionColor(topSession.durationSeconds) : '#34d399';
 
   return (
-    <div className="relative rounded-xl h-full overflow-hidden flex flex-col">
-
-      <div className="p-4 sm:p-5 h-full flex flex-col relative z-10">
+    <Card className="rounded-[10px] h-full">
+      <CardContent className="p-4 sm:p-5 h-full flex flex-col relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-3 shrink-0">
           <div className="flex items-center gap-2">
@@ -79,7 +79,7 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all ${
+                className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors ${
                   view === v
                     ? 'light:bg-[rgb(28 25 23 / 0.04)] light:text-stone-900'
                     : 'light:text-stone-400 hover:light:text-stone-500'
@@ -190,7 +190,7 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </CardContent>
+    </Card>
   );
 }

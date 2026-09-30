@@ -3,6 +3,7 @@
 // LAMINAR: solid token surface, hairline, radius 10
 import { motion } from 'motion/react';
 import { Globe, Shield, Clock } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 
 interface BrowserWidgetProps {
   stats?: {
@@ -56,6 +57,7 @@ export function BrowserWidget({ stats, loading, error }: BrowserWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">Browser</span>
         </div>
+        <WidgetJumpButton widgetId="browser-widget" iconOnly />
         {tracking && (
           <div className="flex items-center gap-1 text-[10px] text-amber-400">
             <Shield size={10} />

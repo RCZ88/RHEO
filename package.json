@@ -128,6 +128,7 @@
     "tabulator-tables": "^6.5.2",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.2.1",
+    "thinking-orbs": "^0.3.2",
     "three": "^0.183.2",
     "ts-fsrs": "^5.4.1",
     "tsdav": "^2.3.0",

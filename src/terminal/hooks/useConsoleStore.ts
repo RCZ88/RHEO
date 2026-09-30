@@ -9,24 +9,33 @@ import { execShell, execShellReal } from "../lib/shell";
 const LS_KEY = "penguin-console-v3";
 const LS_OLD = "penguin-console-v2";
 
-function mkPane(cwd = "/home/user", seedCmd?: string, env?: Record<string, string>): PaneState {
+/** Hard cap on retained scrollback per pane. */
+const MAX_LINES = 600;
+
+function mkPane(cwd = "/home/user", seedCmd?: string, env?: Record<string, string>, demo = true): PaneState {
   const lines: TerminalLine[] = [
-    { id: uid("l"), type: "dim", text: MOTD[0], timestamp: Date.now() },
-    { id: uid("l"), type: "dim", text: MOTD[1], timestamp: Date.now() },
+    { id: uid("l"), type: "dim", text: MOTD[0], timestamp: Date.now(), demo },
+    { id: uid("l"), type: "dim", text: MOTD[1], timestamp: Date.now(), demo },
   ];
   return { id: uid("pane"), cwd, lines, cmdHistory: seedCmd ? [seedCmd] : [], historyCursor: -1, lastExit: 0 };
 }
 
-function layoutFor(kind: Preset["layout"], bootstraps: string[], env: Record<string, string>, opts: { distro: string; shell: string }): { layout: PaneNode; panes: Record<string, PaneState>; active: string } {
+function layoutFor(kind: Preset["layout"], bootstraps: string[], env: Record<string, string>, opts: { distro: string; shell: string }, demo = true): { layout: PaneNode; panes: Record<string, PaneState>; active: string } {
   const panes: Record<string, PaneState> = {};
   const mk = (i: number) => {
-    const p = mkPane("/home/user", bootstraps[i]);
+    const p = mkPane("/home/user", bootstraps[i], env, demo);
     if (bootstraps[i]) {
-      const r = execShell(bootstraps[i], p.cwd, env, opts);
-      p.lines.push({ id: uid("l"), type: "input", text: bootstraps[i], timestamp: Date.now() });
-      r.lines.forEach((l) => { if (!l.text.startsWith("__")) p.lines.push({ ...l, id: uid("l"), timestamp: Date.now() }); });
-      p.cwd = r.newCwd;
-      p.lastExit = r.exitCode;
+      if (demo) {
+        const r = execShell(bootstraps[i], p.cwd, env, opts);
+        p.lines.push({ id: uid("l"), type: "input", text: bootstraps[i], timestamp: Date.now(), demo });
+        r.lines.forEach((l) => { if (!l.text.startsWith("__")) p.lines.push({ ...l, id: uid("l"), timestamp: Date.now(), demo }); });
+        p.cwd = r.newCwd;
+        p.lastExit = r.exitCode;
+      } else {
+        // REAL mode: never fabricate output. Record the bootstrap command without
+        // inventing a result — the real shell will run it when the user executes it.
+        p.cmdHistory = [];
+      }
     }
     panes[p.id] = p;
     return p.id;
@@ -56,15 +65,15 @@ function layoutFor(kind: Preset["layout"], bootstraps: string[], env: Record<str
   return { layout, panes, active: ids[0] };
 }
 
-export function mkTab(label: string, color: string, groupId: string, kind: Preset["layout"] = "single", bootstraps: string[] = [], icon = "terminal", shell = "zsh"): TerminalTab {
-  const { layout, panes, active } = layoutFor(kind, bootstraps, {}, { distro: "Ubuntu 24.04 LTS", shell });
-  return { id: uid("tab"), label, color, groupId, icon, shell, note: "", layout, panes, activePaneId: active, focusedPaneId: active, createdAt: Date.now(), stats: { cmdCount: bootstraps.filter(Boolean).length } };
+export function mkTab(label: string, color: string, groupId: string, kind: Preset["layout"] = "single", bootstraps: string[] = [], icon = "terminal", shell = "zsh", demo = true): TerminalTab {
+  const { layout, panes, active } = layoutFor(kind, bootstraps, {}, { distro: "Ubuntu 24.04 LTS", shell }, demo);
+  return { id: uid("tab"), label, color, groupId, icon, shell, note: "", layout, panes, activePaneId: active, focusedPaneId: active, createdAt: Date.now(), stats: { cmdCount: demo ? bootstraps.filter(Boolean).length : 0 } };
 }
 
-function seedTabs(): TerminalTab[] {
-  const t1 = mkTab("nova · dev", "#22d3ee", "g-dev", "triple", ["cd ~/projects/nova && git status", "docker ps", "neofetch"], "code", "zsh");
-  const t2 = mkTab("ops · prod-01", "#a78bfa", "g-ops", "dual-h", ["ssh prod-01", "tail -f /var/log/syslog"], "server", "bash");
-  const t3 = mkTab("sys · monitor", "#34d399", "g-sys", "single", ["neofetch"], "activity", "fish");
+function seedTabs(demo = true): TerminalTab[] {
+  const t1 = mkTab("nova · dev", "#22d3ee", "g-dev", "triple", ["cd ~/projects/nova && git status", "docker ps", "neofetch"], "code", "zsh", demo);
+  const t2 = mkTab("ops · prod-01", "#a78bfa", "g-ops", "dual-h", ["ssh prod-01", "tail -f /var/log/syslog"], "server", "bash", demo);
+  const t3 = mkTab("sys · monitor", "#34d399", "g-sys", "single", ["neofetch"], "activity", "fish", demo);
   t3.pinned = false;
   return [t1, t2, t3];
 }
@@ -81,7 +90,7 @@ function seedHistory(tabs: TerminalTab[]): HistoryEntry[] {
     out.push({
       id: uid("h"), command: cmd, preview: i % 17 === 5 ? "✗ exit 1" : "✓ exit 0",
       tabId: tab.id, tabLabel: tab.label, paneId: paneIds[0], cwd: "/home/user/projects/nova",
-      timestamp: ts, exitCode: i % 17 === 5 ? 1 : 0, durationMs: 40 + ((i * 37) % 900),
+      timestamp: ts, exitCode: i % 17 === 5 ? 1 : 0, durationMs: 40 + ((i * 37) % 900), demo: true,
     });
   }
   return out.sort((a, b) => b.timestamp - a.timestamp);
@@ -151,13 +160,16 @@ export function useConsoleStore() {
   if (saved.current === undefined) saved.current = typeof window !== "undefined" ? load() : null;
   const s = saved.current;
 
-  const initialTabs = useMemo(() => s?.tabs ?? seedTabs(), []); // eslint-disable-line
+  const initialDemo = s?.demoMode ?? true;
+  const [demoMode, setDemoMode] = useState(initialDemo);
+
+  const initialTabs = useMemo(() => s?.tabs ?? seedTabs(initialDemo), []); // eslint-disable-line
   const [tabs, setTabs] = useState<TerminalTab[]>(initialTabs);
   const [activeTabId, setActiveTabId] = useState(s?.activeTabId ?? initialTabs[0].id);
   const [groups, setGroups] = useState<TermGroup[]>(s?.groups ?? DEFAULT_GROUPS);
   const [workspaces, setWorkspaces] = useState<Workspace[]>(s?.workspaces ?? []);
   const [commands, setCommands] = useState<SavedCommand[]>(s?.commands ?? DEFAULT_COMMANDS);
-  const [history, setHistory] = useState<HistoryEntry[]>(() => s?.history ?? seedHistory(initialTabs));
+  const [history, setHistory] = useState<HistoryEntry[]>(() => (initialDemo ? s?.history ?? seedHistory(initialTabs) : (s?.history ?? []).filter((h) => !h.demo)));
   const [shortcuts, setShortcuts] = useState<Shortcut[]>(s?.shortcuts ?? DEFAULT_SHORTCUTS);
   const [appearance, setAppearance] = useState<Appearance>(() => ({ ...DEFAULT_APPEARANCE, ...(s?.appearance ?? {}) }));
   const [mcp, setMcp] = useState<MCPServer[]>(DEFAULT_MCP);
@@ -176,26 +188,73 @@ export function useConsoleStore() {
   const [distro, setDistro] = useState(s?.distro ?? "Ubuntu 24.04 LTS");
   const [shell, setShell] = useState(s?.shell ?? "zsh");
   const [paneEnv, setPaneEnv] = useState<Record<string, Record<string, string>>>({});
-  const [demoMode, setDemoMode] = useState(s?.demoMode ?? true);
-  const [sidebarWidth, setSidebarWidth] = useState(264);
+  const [sidebarWidth, setSidebarWidth] = useState(s?.sidebarWidth ?? 264);
   const [rightPanelWidth, setRightPanelWidth] = useState(330);
   const [autosaveEnabled, setAutosaveEnabled] = useState(s?.autosaveEnabled ?? false);
 
+  // ---- persistence ---------------------------------------------------------
+  // Trims scrollback before serialising: the full store (every tab x 800 lines +
+  // 500 history rows) stringifies to megabytes and froze the main thread when it
+  // ran synchronously on every state change.
+  const PERSIST_LINE_CAP = 300;
+  const snapshot = useRef<Persist | null>(null);
+  snapshot.current = {
+    tabs: tabs.map((t) => ({
+      ...t,
+      panes: Object.fromEntries(Object.entries(t.panes).map(([k, p]) => [k, { ...p, lines: p.lines.slice(-PERSIST_LINE_CAP) }])),
+    })),
+    activeTabId, groups, workspaces, commands,
+    history: history.slice(0, 400),
+    shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled,
+  };
+  const writeNow = useCallback(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(snapshot.current)); } catch { /* quota */ }
+  }, []);
+
   useEffect(() => {
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled } satisfies Persist));
-    } catch { /* quota */ }
-  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled]);
+    const t = window.setTimeout(writeNow, 400);
+    return () => window.clearTimeout(t);
+  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled, writeNow]);
 
   useEffect(() => {
     if (!autosaveEnabled) return;
-    const interval = setInterval(() => {
-      try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ tabs, activeTabId, groups, workspaces, commands, history: history.slice(0, 400), shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled } satisfies Persist));
-      } catch { /* quota */ }
-    }, 30000);
+    const interval = setInterval(writeNow, 30000);
     return () => clearInterval(interval);
-  }, [autosaveEnabled]);
+  }, [autosaveEnabled, writeNow]);
+
+  // ---- DEMO <-> REAL switch ------------------------------------------------
+  // Switching to REAL must visibly change the surface. Keep ONLY lines that a
+  // real execution actually produced (`real: true`). Everything else is discarded:
+  // simulated output, the MOTD banner, AND untagged legacy data already sitting in
+  // localStorage from a build that predates the demo/real flags — which is why a
+  // `demo`-flag-only filter left the old fake data on screen.
+  const prevDemo = useRef(demoMode);
+  useEffect(() => {
+    if (prevDemo.current === demoMode) return;
+    prevDemo.current = demoMode;
+    if (demoMode) return;
+    setTabs((prev) => prev.map((t) => {
+      const panes: Record<string, PaneState> = {};
+      for (const [k, p] of Object.entries(t.panes)) {
+        const kept = p.lines.filter((l) => l.real === true);
+        const keptCmds = new Set(kept.filter((l) => l.type === "input").map((l) => l.text));
+        panes[k] = { ...p, lines: kept, cmdHistory: p.cmdHistory.filter((c) => keptCmds.has(c)) };
+      }
+      return { ...t, panes, stats: { cmdCount: 0 } };
+    }));
+    setHistory((h) => h.filter((e) => e.demo !== true && (e as HistoryEntry).real === true));
+    setMcpLog([]);
+    void (async () => {
+      try {
+        // Empty cwd -> the main process substitutes the real os.homedir(), so pwd
+        // reports the genuine working directory instead of echoing back "/".
+        const r = await execShellReal("pwd", "");
+        const real = r.lines.find((l) => l.type === "output")?.text.trim();
+        if (!real || !real.startsWith("/")) return;
+        setTabs((prev) => prev.map((t) => ({ ...t, panes: Object.fromEntries(Object.entries(t.panes).map(([k, p]) => [k, { ...p, cwd: real }])) })));
+      } catch { /* keep default cwd */ }
+    })();
+  }, [demoMode]);
 
   const sortedTabs = useMemo(() => [...tabs].sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false)), [tabs]);
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
@@ -210,7 +269,7 @@ export function useConsoleStore() {
     mutateTab(tabId, (t) => {
       const pane = t.panes[paneId];
       if (!pane) return t;
-      return { ...t, panes: { ...t.panes, [paneId]: { ...pane, lines: [...pane.lines, ...lines].slice(-800) } } };
+      return { ...t, panes: { ...t.panes, [paneId]: { ...pane, lines: [...pane.lines, ...lines].slice(-MAX_LINES) } } };
     });
   }, [mutateTab]);
 
@@ -230,7 +289,7 @@ export function useConsoleStore() {
         ...t.panes,
         [paneId]: {
           ...t.panes[paneId],
-          lines: [...t.panes[paneId].lines, { id: uid("l"), type: "input" as const, text: cmd, timestamp: ts }].slice(-800),
+          lines: [...t.panes[paneId].lines, { id: uid("l"), type: "input" as const, text: cmd, timestamp: ts, demo: demoMode, real: !demoMode }].slice(-MAX_LINES),
           cmdHistory: [cmd, ...t.panes[paneId].cmdHistory.filter((c) => c !== cmd)].slice(0, 120),
           historyCursor: -1,
         },
@@ -252,15 +311,15 @@ export function useConsoleStore() {
     } else if (sysText.startsWith("__THEME__")) {
       const name = sysText.replace("__THEME__", "").toLowerCase().trim();
       const found = THEMES.find((t) => t.name.toLowerCase().includes(name) || t.id === name);
-      pushLines(tabId, paneId, [{ id: uid("l"), type: found ? "success" : "error", text: found ? `✓ theme → ${found.name}` : `theme "${name}" not found · try: ${THEMES.map((t) => t.id).join(", ")}`, timestamp: Date.now() }]);
+      pushLines(tabId, paneId, [{ id: uid("l"), type: found ? "success" : "error", text: found ? `✓ theme → ${found.name}` : `theme "${name}" not found · try: ${THEMES.map((t) => t.id).join(", ")}`, timestamp: Date.now(), real: !demoMode }]);
       if (found) setAppearance((a) => ({ ...a, themeId: found.id }));
     } else if (sysText === "__STATS__") {
       setRightTab("stats");
-      pushLines(tabId, paneId, [{ id: uid("l"), type: "success", text: "→ opened Stats inspector (right panel)", timestamp: Date.now() }]);
+      pushLines(tabId, paneId, [{ id: uid("l"), type: "success", text: "→ opened Stats inspector (right panel)", timestamp: Date.now(), real: !demoMode }]);
     } else if (sysText.startsWith("__MCP__")) {
       setRightTab("mcp");
       logMcp("shell-exec", "run", `$ ${cmd} → context bus`, true);
-      pushLines(tabId, paneId, [{ id: uid("l"), type: "success", text: "→ opened MCP inspector (right panel)", timestamp: Date.now() }]);
+      pushLines(tabId, paneId, [{ id: uid("l"), type: "success", text: "→ opened MCP inspector (right panel)", timestamp: Date.now(), real: !demoMode }]);
     } else if (sysText.startsWith("__WORKSPACE__")) {
       const rest = sysText.replace("__WORKSPACE__", "").trim();
       if (rest.startsWith("save")) {
@@ -271,19 +330,19 @@ export function useConsoleStore() {
           tabs: JSON.parse(JSON.stringify(tabs)), activeTabId, createdAt: Date.now(), updatedAt: Date.now(),
         };
         setWorkspaces((w) => [ws, ...w]);
-        pushLines(tabId, paneId, [{ id: uid("l"), type: "success", text: `✓ workspace "${name}" saved`, timestamp: Date.now() }]);
+        pushLines(tabId, paneId, [{ id: uid("l"), type: "success", text: `✓ workspace "${name}" saved`, timestamp: Date.now(), real: !demoMode }]);
       } else {
-        pushLines(tabId, paneId, [{ id: uid("l"), type: "dim", text: "usage: workspace save <name> · ws save <name>", timestamp: Date.now() }]);
+        pushLines(tabId, paneId, [{ id: uid("l"), type: "dim", text: "usage: workspace save <name> · ws save <name>", timestamp: Date.now(), real: !demoMode }]);
       }
     } else if (sysText === "__CLOSE_PANE__") {
-      setHistory((h) => [{ id: uid("h"), command: cmd, preview: "pane closed", tabId, tabLabel: tab.label, paneId, cwd: pane.cwd, timestamp: ts, exitCode: 0, durationMs: res.durationMs }, ...h].slice(0, 500));
+      setHistory((h) => [{ id: uid("h"), command: cmd, preview: "pane closed", tabId, tabLabel: tab.label, paneId, cwd: pane.cwd, timestamp: ts, exitCode: 0, durationMs: res.durationMs, real: !demoMode }, ...h].slice(0, 500));
       closePaneRef.current?.(tabId, paneId);
       return;
     } else {
-      pushLines(tabId, paneId, res.lines.map((l) => ({ ...l, id: uid("l"), timestamp: Date.now() })));
+      pushLines(tabId, paneId, res.lines.map((l) => ({ ...l, id: uid("l"), timestamp: Date.now(), demo: demoMode, real: !demoMode })));
       mutateTab(tabId, (t) => ({ ...t, panes: { ...t.panes, [paneId]: { ...t.panes[paneId], cwd: res.newCwd, lastExit: res.exitCode } } }));
     }
-    setHistory((h) => [{ id: uid("h"), command: cmd, preview: res.exitCode === 0 ? `✓ exit 0 · ${res.durationMs}ms` : `✗ exit ${res.exitCode}`, tabId, tabLabel: tab.label, paneId, cwd: pane.cwd, timestamp: ts, exitCode: res.exitCode, durationMs: res.durationMs }, ...h].slice(0, 500));
+    setHistory((h) => [{ id: uid("h"), command: cmd, preview: res.exitCode === 0 ? `✓ exit 0 · ${res.durationMs}ms` : `✗ exit ${res.exitCode}`, tabId, tabLabel: tab.label, paneId, cwd: pane.cwd, timestamp: ts, exitCode: res.exitCode, durationMs: res.durationMs, real: !demoMode }, ...h].slice(0, 500));
   }, [distro, shell, paneEnv, mutateTab, pushLines, tabs, workspaces.length, logMcp, demoMode]);
 
   const closePaneRef = useRef<((tabId: string, paneId: string) => void) | null>(null);
@@ -305,11 +364,11 @@ export function useConsoleStore() {
 
   const newTab = useCallback((preset?: { label?: string; color?: string; groupId?: string; layout?: Preset["layout"]; bootstraps?: string[]; icon?: string; shell?: string }) => {
     const g = preset?.groupId ?? (groups[0]?.id ?? "g-dev");
-    const t = mkTab(preset?.label ?? `shell ${tabs.length + 1}`, preset?.color ?? TAB_COLORS[tabs.length % TAB_COLORS.length], g, preset?.layout ?? "single", preset?.bootstraps ?? [], preset?.icon ?? "terminal", preset?.shell ?? shell);
+    const t = mkTab(preset?.label ?? `shell ${tabs.length + 1}`, preset?.color ?? TAB_COLORS[tabs.length % TAB_COLORS.length], g, preset?.layout ?? "single", preset?.bootstraps ?? [], preset?.icon ?? "terminal", preset?.shell ?? shell, demoMode);
     setTabs((p) => [...p, t]);
     setActiveTabId(t.id);
     return t.id;
-  }, [tabs.length, groups, shell]);
+  }, [tabs.length, groups, shell, demoMode]);
 
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
@@ -376,7 +435,7 @@ export function useConsoleStore() {
     mutateTab(tabId, (t) => {
       const ids = listPaneIds(t.layout);
       if (ids.length <= 1) {
-        const p = mkPane("/home/user");
+        const p = mkPane("/home/user", undefined, undefined, demoMode);
         return { ...t, layout: { kind: "pane", paneId: p.id }, panes: { [p.id]: p }, activePaneId: p.id, focusedPaneId: p.id };
       }
       const layout = removePane(t.layout, paneId) ?? t.layout;
@@ -385,7 +444,7 @@ export function useConsoleStore() {
       const remaining = listPaneIds(layout);
       return { ...t, layout, panes, activePaneId: remaining.includes(t.activePaneId) ? t.activePaneId : remaining[0], focusedPaneId: remaining[0] };
     });
-  }, [mutateTab]);
+  }, [mutateTab, demoMode]);
   closePaneRef.current = closePane;
 
   const movePaneToNewTab = useCallback((tabId: string, paneId: string) => {
@@ -469,39 +528,59 @@ export function useConsoleStore() {
   }, [workspaces]);
 
   const stats = useMemo(() => {
+    // Single pass over history — the previous version filtered the full history
+    // 14x (days) plus once per tab and per group, and re-ran on every output line.
     const total = history.length;
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    const today = history.filter((h) => h.timestamp >= todayStart.getTime()).length;
-    const weekStart = Date.now() - 7 * 86400000;
-    const week = history.filter((h) => h.timestamp >= weekStart).length;
+    const todayCut = todayStart.getTime();
+    const weekCut = Date.now() - 7 * 86400000;
+    const dayCuts: number[] = [];
+    for (let i = 13; i >= 0; i--) dayCuts.push(Date.now() - i * 86400000);
     const freq: Record<string, number> = {};
-    history.forEach((h) => { const k = h.command.split(/\s+/).slice(0, 2).join(" "); freq[k] = (freq[k] ?? 0) + 1; });
-    const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 8);
-    const days: { date: string; label: string; count: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
-      const key = d.toISOString().slice(0, 10);
-      const c = history.filter((h) => new Date(h.timestamp).toISOString().slice(0, 10) === key).length;
-      days.push({ date: key, label: d.toLocaleDateString([], { month: "numeric", day: "numeric" }), count: c });
-    }
-    const perTab = tabs.map((t) => ({ id: t.id, label: t.label, color: t.color, count: history.filter((h) => h.tabId === t.id).length + t.stats.cmdCount }));
-    const perGroup = groups.map((g) => ({ id: g.id, name: g.name, color: g.color, count: history.filter((h) => tabs.find((t) => t.id === h.tabId)?.groupId === g.id).length }));
+    const perTabCount: Record<string, number> = {};
     const hours = new Array(24).fill(0) as number[];
-    history.forEach((h) => { hours[new Date(h.timestamp).getHours()]++; });
-    const errors = history.filter((h) => h.exitCode !== 0).length;
+    const dayCount = new Array(14).fill(0) as number[];
+    let today = 0, week = 0, errors = 0, msTotal = 0;
+    const dayKeys = dayCuts.map((c) => new Date(c).toISOString().slice(0, 10));
+    for (const h of history) {
+      if (h.timestamp >= todayCut) today++;
+      if (h.timestamp >= weekCut) week++;
+      if (h.exitCode !== 0) errors++;
+      msTotal += h.durationMs;
+      const k = h.command.split(/\s+/).slice(0, 2).join(" ");
+      freq[k] = (freq[k] ?? 0) + 1;
+      perTabCount[h.tabId] = (perTabCount[h.tabId] ?? 0) + 1;
+      hours[new Date(h.timestamp).getHours()]++;
+      const hk = new Date(h.timestamp).toISOString().slice(0, 10);
+      const di = dayKeys.indexOf(hk);
+      if (di >= 0) dayCount[di]++;
+    }
+    const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const days = dayCuts.map((c, i) => {
+      const d = new Date(c);
+      return { date: dayKeys[i], label: d.toLocaleDateString([], { month: "numeric", day: "numeric" }), count: dayCount[i] };
+    });
+    const groupOfTab: Record<string, string> = {};
+    tabs.forEach((t) => { groupOfTab[t.id] = t.groupId; });
+    const perGroupCount: Record<string, number> = {};
+    history.forEach((h) => { const g = groupOfTab[h.tabId]; if (g) perGroupCount[g] = (perGroupCount[g] ?? 0) + 1; });
+    const perTab = tabs.map((t) => ({ id: t.id, label: t.label, color: t.color, count: (perTabCount[t.id] ?? 0) + t.stats.cmdCount }));
+    const perGroup = groups.map((g) => ({ id: g.id, name: g.name, color: g.color, count: perGroupCount[g.id] ?? 0 }));
     const okRate = total ? Math.round(((total - errors) / total) * 100) : 100;
-    const avgMs = total ? Math.round(history.reduce((a, h) => a + h.durationMs, 0) / total) : 0;
+    const avgMs = total ? Math.round(msTotal / total) : 0;
     return { total, today, week, top, days, perTab, perGroup, hours, errors, okRate, avgMs, panes: tabs.reduce((a, t) => a + Object.keys(t.panes).length, 0) };
   }, [history, tabs, groups]);
 
   const openNotesTab = useCallback(() => setRightTab("notes"), []);
   const closeNotesTab = useCallback(() => setRightTab("inspect"), []);
 
-  const copyAllContent = useCallback(() => {
-    const lines = tabs.map((t) => t.panes).flatMap((panes) => Object.values(panes).flatMap((p) => p.lines));
-    const text = lines.map((l) => l.text).filter(Boolean).join("\n");
+  const copyAllContent = useCallback((tabId?: string, paneId?: string) => {
+    const t = tabs.find((tab) => tab.id === (tabId ?? activeTabId)) ?? activeTab;
+    const targetPane = paneId != null ? t.panes[paneId] : t.panes[t.activePaneId];
+    if (!targetPane) return;
+    const text = targetPane.lines.map((l) => l.text).filter(Boolean).join("\n");
     navigator.clipboard?.writeText(text).catch(() => {});
-  }, [tabs]);
+  }, [tabs, activeTabId, activeTab]);
 
   /** Parse pasted terminal output and import commands as history entries.
    *  Looks for prompt lines like `user@host:~$ cmd` or `~/path$ cmd` or `▶ cmd`
@@ -584,7 +663,7 @@ export function useConsoleStore() {
     balanceAction: (tabId: string) => mutateTab(tabId, (t) => ({ ...t, layout: balance(t.layout) })),
     applyTemplate: (tabId: string, kind: Preset["layout"]) => mutateTab(tabId, (t) => {
       const keep = Object.values(t.panes)[0];
-      const { layout, panes, active } = layoutFor(kind, [], {}, { distro, shell: t.shell ?? shell });
+      const { layout, panes, active } = layoutFor(kind, [], {}, { distro, shell: t.shell ?? shell }, demoMode);
       const firstId = Object.keys(panes)[0];
       const merged = { ...panes };
       if (keep) merged[firstId] = { ...keep, id: firstId };

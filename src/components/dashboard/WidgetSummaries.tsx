@@ -262,8 +262,8 @@ export function ActivityFeedSummary() {
         {recent.map((session: any, i: number) => (
           <div key={i} className="flex items-center gap-2">
             <div className={`w-1.5 h-1.5 rounded-full ${
-              session.tier === 'productive' ? 'bg-[var(--success)]' :
-              session.tier === 'distracting' ? 'bg-[var(--error)]' : 'bg-[var(--warning)]'
+              session.tier === 'productive' ? 'bg-[var(--tier-productive)]' :
+              session.tier === 'distracting' ? 'bg-[var(--tier-distracting)]' : 'bg-[var(--tier-neutral)]'
             }`} />
             <span className="text-[12px] text-[var(--text-secondary)] truncate flex-1">
               {session.app || session.name || 'Unknown'}
@@ -415,8 +415,8 @@ export function StatusBandSummary() {
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div className={`w-3 h-3 rounded-full ${
-          ctx.isCurrentlyProductive ? 'bg-[var(--success)]' :
-          ctx.isDistracting ? 'bg-[var(--warning)]' : 'bg-[var(--text-muted)]'
+          ctx.isCurrentlyProductive ? 'bg-[var(--tier-productive)]' :
+          ctx.isDistracting ? 'bg-[var(--tier-distracting)]' : 'bg-[var(--tier-neutral)]'
         }`} />
         <div className="flex-1">
           <div className="font-display text-[22px] font-bold leading-none text-[var(--text-primary)]">

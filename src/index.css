@@ -37,6 +37,19 @@
 	--resume-score-high: #16a34a;
 	--resume-score-mid: #ca8a04;
 	--resume-score-low: #dc2626;
+
+	/* ── PRODUCTIVITY TIER COLORS — the single source of truth ──────────────
+	   Every component that colours a productivity tier must read these, NOT a
+	   hardcoded hex. Before they existed, 9 files disagreed: neutral was blue
+	   #3b82f6 in Settings/Productivity, zinc #71717a in the dashboard
+	   StatusBand, and amber #fbbf24 in TierBreakdownStrip/WidgetSummaries.
+	   Overridable at runtime from Settings → Colors via applyTierColors(). */
+	--tier-productive: #22c55e;
+	--tier-neutral: #3b82f6;
+	--tier-distracting: #ef4444;
+	--tier-productive-muted: color-mix(in srgb, #22c55e 12%, transparent);
+	--tier-neutral-muted: color-mix(in srgb, #3b82f6 12%, transparent);
+	--tier-distracting-muted: color-mix(in srgb, #ef4444 12%, transparent);
 	--resume-preview-bg: #ffffff;
 	--resume-preview-text: #1a1a2e;
 	--resume-highlight: #fef3c7;

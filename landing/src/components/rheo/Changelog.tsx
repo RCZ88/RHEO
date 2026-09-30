@@ -13,6 +13,16 @@ type Entry = {
 
 const ENTRIES: Entry[] = [
   {
+    version: "v0.2.0",
+    date: "2026-09-30",
+    kind: "NEW",
+    notes: [
+      "Chat Library — every AI conversation is kept, searchable, pinnable, groupable, and exportable.",
+      "Dashboard rebuilt around a widget registry, with jump-to-widget navigation and persisted layouts.",
+      "Native find bar now really highlights each match and scrolls it into view.",
+    ],
+  },
+  {
     version: "v0.1.0",
     date: "2026-08-31",
     kind: "NEW",

@@ -998,15 +998,21 @@ ipcMain.handle('get-reminders', async () => {
   }
 });
 
-ipcMain.handle('create-reminder', async (_event, data: { text: string; due_date?: string; goal_id?: string }) => {
+ipcMain.handle('create-reminder', async (_event, data: { text: string; due_date?: string; goal_id?: string; due_time?: string }) => {
   try {
     const id = 'rem_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     // Normalize any ISO timestamp to a YYYY-MM-DD date so the calendar grid
     // (which keys by date) and daysUntil() line up. Raw timestamps previously
     // produced NaN counts and never landed on the calendar.
     const normDate = data.due_date ? data.due_date.slice(0, 10) : null;
-    db!.prepare('INSERT INTO reminders (id, text, due_date, goal_id, done) VALUES (?, ?, ?, ?, 0)').run(
-      id, data.text, normDate, data.goal_id || null,
+    // due_time is its own HH:mm column rather than being folded into due_date,
+    // so the date-keyed calendar grid keeps working while a time-of-day shows.
+    const rawTime = String(data.due_time || '').trim();
+    const normTime = /^([01]?\d|2[0-3]):[0-5]\d$/.test(rawTime)
+      ? rawTime.split(':').map((n: string) => n.padStart(2, '0')).join(':')
+      : null;
+    db!.prepare('INSERT INTO reminders (id, text, due_date, goal_id, done, due_time) VALUES (?, ?, ?, ?, 0, ?)').run(
+      id, data.text, normDate, data.goal_id || null, normTime,
     );
     // Capture deadline episode into context brain
     try {

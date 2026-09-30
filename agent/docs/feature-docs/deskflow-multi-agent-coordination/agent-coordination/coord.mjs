@@ -17,7 +17,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REG_PATH = path.join(HERE, 'registry.json')
@@ -165,6 +165,17 @@ export function claim(agent, paths, task) {
   const wanted = paths.map(norm)
   return withReg((reg) => {
     upsertAgent(reg, agent, task)
+    // A claim is the ONLY proof another agent is alive. If the registry is empty,
+    // every other "lock" in this repo is decorative -- say so loudly instead of
+    // letting an agent assume it has exclusive access it does not have.
+    const others = Object.keys(reg.agents).filter(a => a !== agent)
+    if (others.length === 0) {
+      console.warn(
+        '[coord] WARNING: you are the ONLY registered agent. No peer has registered,\n' +
+        '[coord]          so this claim protects nothing. Other agents may be editing\n' +
+        '[coord]          right now without a lease. Do not assume exclusive access.'
+      )
+    }
     const conflicts = []
     for (const w of wanted) {
       for (const [held, l] of Object.entries(reg.leases)) {
@@ -328,4 +339,8 @@ Usage:
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main()
+// pathToFileURL handles absolute-vs-relative argv[1] AND percent-encoding
+// (this repo lives under a path with a space in it: "App Tracker"). The old
+// `file://${process.argv[1]}` template silently never matched on Linux, so
+// main() never ran and every CLI command was a silent no-op.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) main()

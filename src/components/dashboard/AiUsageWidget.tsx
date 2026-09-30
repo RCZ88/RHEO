@@ -3,7 +3,8 @@
 // LAMINAR: solid token surface, hairline, radius 10, motion/react only
 
 import { motion } from 'motion/react';
-import { Bot, ArrowRight } from 'lucide-react';
+import { Bot } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 import type { WidgetConfig } from './WidgetRegistry';
 
 interface AIUsageWidgetProps {
@@ -63,7 +64,7 @@ export function AiUsageWidget({ usage, loading, error }: AIUsageWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">AI Usage</span>
         </div>
-        <ArrowRight size={12} className="text-zinc-500" />
+        <WidgetJumpButton widgetId="ai-usage" iconOnly />
       </div>
 
       <div className="grid grid-cols-2 gap-3 flex-1">

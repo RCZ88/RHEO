@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useState, useCallback } from 'react';
+import { tierColor as getTierColor } from '../lib/tierColors';
 import {
   Target, TrendingUp, TrendingDown, Clock, Award, Zap,
   Monitor, Globe, BarChart3, Info, Timer, Eye, EyeOff,
@@ -1344,24 +1345,24 @@ export default function ProductivityPage({
         <div className="flex items-center gap-2">
           <button onClick={() => setTierFilter('productive')}
             className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 ${tierFilter === 'productive'
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                ? 'bg-[var(--tier-productive)]/20 text-[var(--tier-productive)] border border-[var(--tier-productive)]/40'
                 : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white hover:bg-zinc-800'
               }`}>
-            <div className="w-2 h-2 rounded-full bg-emerald-400" /> Productive
+            <div className="w-2 h-2 rounded-full bg-[var(--tier-productive)]" /> Productive
           </button>
           <button onClick={() => setTierFilter('neutral')}
             className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 ${tierFilter === 'neutral'
-                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
+                ? 'bg-[var(--tier-neutral)]/20 text-[var(--tier-neutral)] border border-[var(--tier-neutral)]/40'
                 : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white hover:bg-zinc-800'
               }`}>
-            <div className="w-2 h-2 rounded-full bg-blue-400" /> Neutral
+            <div className="w-2 h-2 rounded-full bg-[var(--tier-neutral)]" /> Neutral
           </button>
           <button onClick={() => setTierFilter('distracting')}
             className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 ${tierFilter === 'distracting'
-                ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                ? 'bg-[var(--tier-distracting)]/20 text-[var(--tier-distracting)] border border-[var(--tier-distracting)]/40'
                 : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white hover:bg-zinc-800'
               }`}>
-            <div className="w-2 h-2 rounded-full bg-red-400" /> Distracting
+            <div className="w-2 h-2 rounded-full bg-[var(--tier-distracting)]" /> Distracting
           </button>
           {(() => {
             let totalItems = productivityData.items;
@@ -1433,7 +1434,7 @@ export default function ProductivityPage({
               return apps.length > 0 ? apps.map((item, idx) => {
                 const itemTier = tierAssignments.productive.includes(item.category) ? 'productive' :
                   tierAssignments.distracting.includes(item.category) ? 'distracting' : 'neutral';
-                const tierColor = itemTier === 'productive' ? '#22c55e' : itemTier === 'distracting' ? '#ef4444' : '#3b82f6';
+                const tierColor = getTierColor(itemTier);
 
                 return (
                   <div key={idx} className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-xl">

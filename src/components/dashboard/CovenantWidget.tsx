@@ -3,6 +3,7 @@
 // LAMINAR: solid token surface, hairline, radius 10
 import { motion } from 'motion/react';
 import { Shield, CheckCircle2, Clock, Target } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 
 interface CovenantWidgetProps {
   stats?: {
@@ -56,6 +57,7 @@ export function CovenantWidget({ stats, loading, error }: CovenantWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">Covenant</span>
         </div>
+        <WidgetJumpButton widgetId="covenant-widget" iconOnly />
       </div>
 
       <div className="grid grid-cols-3 gap-2">

@@ -9,6 +9,11 @@ export interface TerminalLine {
   type: "input" | "output" | "error" | "success" | "system" | "dim";
   text: string;
   timestamp: number;
+  /** True when this line was produced by the simulated shell, not a real process. */
+  demo?: boolean;
+  /** True only when produced by a REAL-mode execution. Anything without this flag
+   *  (legacy saved data, MOTD, simulated output) is discarded on switch to REAL. */
+  real?: boolean;
 }
 
 export interface PaneState {
@@ -84,6 +89,10 @@ export interface HistoryEntry {
   timestamp: number;
   exitCode: number;
   durationMs: number;
+  /** True when this entry came from the demo seed, not from a real executed command. */
+  demo?: boolean;
+  /** True when produced by a REAL-mode execution; untagged legacy entries are dropped on switch. */
+  real?: boolean;
 }
 
 export interface Shortcut {

@@ -228,6 +228,12 @@ function runSingle(rawSeg: string, ctx: Ctx): Single {
       const r = runSingle(`cat ${f}`, ctx);
       const n = bin === "head" ? 10 : 10;
       void n;
+      if (args.includes("-f") || args.includes("--follow")) {
+        return ok([
+          ...r.lines.slice(0, 6),
+          { type: "dim", text: "(follow mode — simulated, pauses here)" },
+        ]);
+      }
       return ok(r.lines.slice(0, 6));
     }
     case "wc": return ok([{ type: "output", text: argv.includes("-l") ? "128" : "128  942  6120" }]);
@@ -272,6 +278,14 @@ function runSingle(rawSeg: string, ctx: Ctx): Single {
     }
     case "service": return ok([{ type: "success", text: `${pre}✓ service ${args} · done (simulated)` }]);
     case "journalctl":
+      if (args.includes("-f") || args.includes("--follow")) {
+        return ok([
+          { type: "dim", text: "-- Logs begin at Tue 2026-09-09 08:00:11 --" },
+          { type: "output", text: "Sep 09 09:00:11 penguin systemd[1]: Reached target Graphical Interface." },
+          { type: "output", text: "Sep 09 09:12:01 penguin systemd[1]: Started Penguin Console." },
+          { type: "dim", text: "(follow mode — simulated, pauses here)" },
+        ]);
+      }
       return ok([{ type: "dim", text: "-- Logs begin at Tue 2026-09-09 08:00:11 --" }, { type: "output", text: "Sep 09 09:00:11 penguin systemd[1]: Reached target Graphical Interface.\nSep 09 09:12:01 penguin systemd[1]: Started Penguin Console." }]);
     case "dmesg": return ok([{ type: "dim", text: "[    0.000000] Linux version 6.8.0-41-generic (simulated ring buffer)" }]);
     case "git": {
@@ -413,16 +427,14 @@ function runSingle(rawSeg: string, ctx: Ctx): Single {
 
 const SPECIAL_COMMANDS = new Set(["theme", "stats", "mcp", "workspace", "ws", "exit", "logout", "clear", "reset", "__CLEAR__", "__THEME__", "__STATS__", "__MCP__", "__WORKSPACE__", "__CLOSE_PANE__"]);
 
-const SYSTEM_COMMANDS = new Set(["help", "pwd", "whoami", "hostname", "id", "groups", "uname", "date", "uptime", "echo", "clear", "history", "ls", "cd", "tree", "neofetch", "df", "du", "free", "ps", "top", "htop", "sensors", "systemctl", "journalctl", "dmesg", "env", "export", "unset", "which", "man", "cowsay", "fortune", "yes"]);
-
-async function callTerminalExec(command: string, cwd: string): Promise<{ stdout: string; stderr: string; code: number; timedOut: boolean }> {
+async function callTerminalExec(command: string, cwd: string, env: Record<string, string> = {}): Promise<{ stdout: string; stderr: string; code: number; timedOut: boolean }> {
   try {
     const api = (window as any).deskflowAPI?.terminalAPI;
     if (api?.exec) {
-      return await api.exec(command, cwd);
+      return await api.exec(command, cwd, env);
     }
   } catch { /* fallback */ }
-  return { stdout: '', stderr: 'terminal:exec not available', code: 1, timedOut: false };
+  return { stdout: '', stderr: 'terminal:exec not available (is the preload bridge loaded?)', code: 1, timedOut: false };
 }
 
 function isSpecialCommand(raw: string): boolean {
@@ -432,6 +444,11 @@ function isSpecialCommand(raw: string): boolean {
   if (cmd === 'sudo') {
     const inner = raw.trim().slice(5).trim();
     return inner ? isSpecialCommand(inner) : false;
+  }
+  // Follow-mode commands: -f / --follow would hang a short-lived exec handler
+  if (cmd === 'tail' || cmd === 'journalctl' || cmd === 'dmesg') {
+    const args = raw.trim().split(/\s+/).slice(1).join(' ');
+    if (args.includes('-f') || args.includes('--follow')) return true;
   }
   return false;
 }
@@ -446,13 +463,18 @@ export async function execShellReal(raw: string, cwd: string, env: Record<string
     return { ...execShell(cmd, cwd, env), durationMs: Math.round(performance.now() - t0) };
   }
 
-  const fullEnv = { HOME: "/home/user", USER: "user", SHELL: "/bin/bash", TERM: "xterm-256color", PWD: cwd, ...env };
+  // Follow-mode commands (-f / --follow) can't be served by a short-lived exec handler — serve simulated output
+  const followMatch = cmd.match(/^(tail|journalctl|dmesg)\b/);
+  if (followMatch && (cmd.includes('-f') || cmd.includes('--follow'))) {
+    return { ...execShell(cmd, cwd, env), durationMs: Math.round(performance.now() - t0) };
+  }
+
   try {
-    const result = await callTerminalExec(cmd, cwd);
+    const result = await callTerminalExec(cmd, cwd, env);
     const stdout = result.stdout || '';
     const stderr = result.stderr || '';
     const exitCode = result.code ?? 0;
-    const durationMs = result.timedOut ? 30000 : Math.max(4, Math.round(performance.now() - t0));
+    const durationMs = Math.max(4, Math.round(performance.now() - t0));
 
     const lines: ExecLine[] = [];
     if (stdout) {
@@ -465,7 +487,9 @@ export async function execShellReal(raw: string, cwd: string, env: Record<string
         if (text) lines.push({ type: 'error', text });
       });
     }
-    if (lines.length === 0 && exitCode === 0) {
+    if (result.timedOut) {
+      lines.push({ type: 'error', text: `command timed out after 20s and was killed (interactive commands like vim/top/ssh are not supported here)` });
+    } else if (lines.length === 0 && exitCode === 0) {
       lines.push({ type: 'success', text: `✓ executed · ${durationMs}ms` });
     }
     if (lines.length === 0 && exitCode !== 0) {

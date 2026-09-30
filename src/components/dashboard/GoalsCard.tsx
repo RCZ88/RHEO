@@ -9,13 +9,13 @@
 
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Target, Check, Plus, X, Edit3, Trash2,
   ChevronDown, ChevronUp, RefreshCw, Zap,
   Sparkles, ArrowRight, Flame, AlertCircle,
 } from 'lucide-react';
-import { SpotlightCard } from './SpotlightCard';
+import { Card, CardContent } from '@/components/ui/card';
 import { AnimatedShinyText } from '../ui/animated-shiny-text';
 import { NumberTicker } from '../ui/number-ticker';
 import { confetti } from '../ui/confetti';
@@ -199,9 +199,8 @@ export function GoalsCard({
   // ─── Loading Skeleton ───
   if (loading) {
     return (
-      <SpotlightCard spotlightColor="rgba(139, 92, 246, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden p-5 h-full">
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent" />
+      <Card className="rounded-[10px] h-full">
+        <CardContent className="p-5 h-full">
           <div className="animate-pulse space-y-4">
             <div className="h-5 light:bg-white light:border-[var(--ws-border-strong)] rounded w-1/3" />
             <div className="h-3 light:bg-[var(--ws-surface-sunken)] rounded w-1/2" />
@@ -209,33 +208,30 @@ export function GoalsCard({
               <div key={i} className="h-14 light:bg-[var(--ws-surface-sunken)] rounded-lg" />
             ))}
           </div>
-        </div>
-      </SpotlightCard>
+        </CardContent>
+    </Card>
     );
   }
 
   // ─── Error State ───
   if (error) {
     return (
-      <SpotlightCard spotlightColor="rgba(139, 92, 246, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden p-5 h-full flex flex-col items-center justify-center text-center">
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent" />
+      <Card className="rounded-[10px] h-full">
+        <CardContent className="p-5 h-full flex flex-col items-center justify-center text-center">
           <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
             <AlertCircle size={24} className="light:text-stone-400" />
           </div>
           <p className="text-[14px] font-medium light:text-stone-400">Could not load goals</p>
           <p className="text-[12px] light:text-stone-400 mt-1 max-w-[220px]">{error}</p>
-        </div>
-      </SpotlightCard>
+        </CardContent>
+    </Card>
     );
   }
 
   return (
-      <SpotlightCard spotlightColor="rgba(139, 92, 246, 0.08)" className="rounded-xl h-full">
-      <div className="relative rounded-xl overflow-hidden p-5 flex flex-col h-full">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-violet-500/30 via-violet-500/10 to-transparent" />
-
-        {/* Header */}
+      <Card className="rounded-[10px] h-full">
+        <CardContent className="p-5 flex flex-col h-full">
+          {/* Header */}
         <div className="flex items-center justify-between mb-4 shrink-0">
           <div className="flex items-center gap-2.5">
             <button
@@ -472,7 +468,7 @@ export function GoalsCard({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-3 p-3 rounded-lg border light:border-[var(--ws-border-strong)]/30 hover:light:border-[var(--ws-border)] light:bg-[var(--ws-surface-raised)] light:border-[var(--ws-border-strong)]/20 hover:light:bg-white light:border-[var(--ws-border-strong)]/40 transition-all duration-200 group/card">
+                  <div className="flex items-start gap-3 p-3 rounded-lg border light:border-[var(--ws-border-strong)]/30 hover:light:border-[var(--ws-border)] light:bg-[var(--ws-surface-raised)] light:border-[var(--ws-border-strong)]/20 hover:light:bg-white light:border-[var(--ws-border-strong)]/40 transition-colors duration-200 group/card">
                     <motion.button
                       whileTap={{ scale: 0.85 }}
                       onClick={() => handleToggle(goal.id, goal.status === 'done')}
@@ -667,7 +663,7 @@ export function GoalsCard({
             </AnimatePresence>
           </div>
         )}
-      </div>
-    </SpotlightCard>
+    </CardContent>
+    </Card>
   );
 }

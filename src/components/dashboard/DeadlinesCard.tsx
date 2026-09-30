@@ -4,12 +4,12 @@
 // ============================================================
 
 import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertCircle, Clock, CheckCircle2, Plus, X, Edit3, Trash2,
   Bell, ChevronDown, ChevronUp, AlertTriangle, RotateCcw
 } from 'lucide-react';
-import { SpotlightCard } from './SpotlightCard';
+import { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -270,9 +270,8 @@ export function DeadlinesCard({
 
   if (loading) {
     return (
-      <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden  p-5 h-full">
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
+      <Card className="rounded-[10px] h-full">
+        <CardContent className="p-5 h-full">
           <div className="animate-pulse space-y-4">
             <div className="h-5 light:bg-white light:border-[var(--ws-border-strong)] rounded w-1/3" />
             <div className="h-3 light:bg-[var(--ws-surface-sunken)] rounded w-1/2" />
@@ -280,31 +279,28 @@ export function DeadlinesCard({
               <div key={i} className="h-14 light:bg-[var(--ws-surface-sunken)] rounded-lg" />
             ))}
           </div>
-        </div>
-      </SpotlightCard>
+        </CardContent>
+    </Card>
     );
   }
 
   if (error) {
     return (
-      <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-        <div className="relative rounded-xl overflow-hidden  p-5 h-full flex flex-col items-center justify-center text-center">
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
+      <Card className="rounded-[10px] h-full">
+        <CardContent className="p-5 h-full flex flex-col items-center justify-center text-center">
           <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
             <AlertCircle size={24} className="light:text-stone-400" />
           </div>
           <p className="text-[14px] font-medium light:text-stone-400">Could not load items</p>
           <p className="text-[12px] light:text-stone-400 mt-1 max-w-[220px]">{error}</p>
-        </div>
-      </SpotlightCard>
+        </CardContent>
+    </Card>
     );
   }
 
   return (
-    <SpotlightCard spotlightColor="rgba(244, 63, 94, 0.08)" className="rounded-xl h-full">
-      <div className="relative rounded-xl overflow-hidden  p-5 flex flex-col h-full">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-rose-500/30 via-rose-500/10 to-transparent" />
-
+    <Card className="rounded-[10px] h-full">
+      <CardContent className="p-5 flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -351,7 +347,7 @@ export function DeadlinesCard({
                 <div className="flex gap-1 p-0.5 rounded-lg light:bg-[var(--ws-surface-sunken)] border light:border-[var(--ws-border)]">
                   <button
                     onClick={() => setAddType('deadline')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
                       addType === 'deadline'
                         ? 'bg-rose-500/15 text-rose-300 border border-rose-500/20'
                         : 'light:text-stone-400 hover:light:text-stone-900/70'
@@ -362,7 +358,7 @@ export function DeadlinesCard({
                   </button>
                   <button
                     onClick={() => setAddType('reminder')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
                       addType === 'reminder'
                         ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
                         : 'light:text-stone-400 hover:light:text-stone-900/70'
@@ -421,7 +417,7 @@ export function DeadlinesCard({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setNewDl(p => ({ ...p, hasReminder: !p.hasReminder }))}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all border ${
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors border ${
                           newDl.hasReminder
                             ? 'bg-amber-500/15 text-amber-300 border-amber-500/20'
                             : 'light:bg-[var(--ws-surface-sunken)] light:text-stone-400 light:border-[var(--ws-border)] hover:light:text-stone-400'
@@ -572,7 +568,7 @@ export function DeadlinesCard({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setEditHasReminder(!editHasReminder)}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all border ${
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors border ${
                           editHasReminder
                             ? 'bg-amber-500/15 text-amber-300 border-amber-500/20'
                             : 'light:bg-[var(--ws-surface-sunken)] light:text-stone-400 light:border-[var(--ws-border)] hover:light:text-stone-400'
@@ -625,7 +621,7 @@ export function DeadlinesCard({
                   exit="exit"
                   className="group"
                 >
-                  <div className={`relative p-3 rounded-lg border transition-all duration-200 ${
+                  <div className={`relative p-3 rounded-lg border transition-colors duration-200 ${
                     !reminder && urgency === 'overdue' ? 'border-rose-500/30 bg-rose-500/[0.03]' : 'light:border-[var(--ws-border-strong)]/30 hover:light:border-[var(--ws-border)] light:bg-white light:border-[var(--ws-border-strong)]/20 hover:light:bg-white light:border-[var(--ws-border-strong)]/40'
                   }`}>
                     {/* Indicator bar */}
@@ -830,7 +826,7 @@ export function DeadlinesCard({
             </AnimatePresence>
           </div>
         )}
-      </div>
-    </SpotlightCard>
+    </CardContent>
+    </Card>
   );
 }

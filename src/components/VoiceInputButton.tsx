@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
+import { ThinkingOrb } from 'thinking-orbs';
 import { type UseVoiceInput } from '../hooks/useVoiceInput';
 import { MOTION } from './ai/tokens';
 
@@ -16,6 +17,7 @@ export function VoiceInputButton({ voice, disabled }: VoiceInputButtonProps) {
   const isListening = voice.state === 'listening';
   const isProcessing = voice.state === 'processing';
   const isError = voice.state === 'error';
+  const isActive = isListening || isProcessing;
   const countdownRatio = voice.countdownMs / 5000;
   const strokeDashoffset = circumference * (1 - countdownRatio);
   const isNearEnd = countdownRatio < 0.3;
@@ -45,8 +47,16 @@ export function VoiceInputButton({ voice, disabled }: VoiceInputButtonProps) {
       >
         {isProcessing ? (
           <Loader2 className="h-4 w-4 animate-spin" />
+        ) : isActive ? (
+          <ThinkingOrb
+            state={isListening ? 'listening' : 'working'}
+            size={32}
+            theme="auto"
+            color="#f472b6"
+            aria-label={label}
+          />
         ) : (
-          isListening ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />
+          <MicOff className="h-4 w-4" />
         )}
 
         {isListening && (

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useDroppable } from '@dnd-kit/core';
+import { tierColor as getTierColor } from '../../../lib/tierColors';
 
 export function TierContainer({ tier, color, label, description, creditLabel, children }: {
   tier: 'productive' | 'neutral' | 'distracting';
@@ -10,9 +11,9 @@ export function TierContainer({ tier, color, label, description, creditLabel, ch
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: tier });
-  const tierColor = tier === 'productive' ? '#22c55e' : tier === 'neutral' ? '#3b82f6' : '#ef4444';
+  const tierColor = getTierColor(tier);
   return (
-    <div ref={setNodeRef} className={`p-4 rounded-xl border transition-colors duration-150 ${isOver ? 'border-2 border-solid' : ''} ${tier === 'productive' ? 'bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/20' : tier === 'neutral' ? 'bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20' : 'bg-gradient-to-br from-red-500/10 to-transparent border-red-500/20'}`}
+    <div ref={setNodeRef} className={`p-4 rounded-xl border transition-colors duration-150 ${isOver ? 'border-2 border-solid' : ''} ${tier === 'productive' ? 'bg-gradient-to-br from-[var(--tier-productive)]/10 to-transparent border-[var(--tier-productive)]/20' : tier === 'neutral' ? 'bg-gradient-to-br from-[var(--tier-neutral)]/10 to-transparent border-[var(--tier-neutral)]/20' : 'bg-gradient-to-br from-[var(--tier-distracting)]/10 to-transparent border-[var(--tier-distracting)]/20'}`}
       style={isOver ? { borderColor: tierColor, borderWidth: 2 } : undefined}>
       <div className="flex items-center gap-3 mb-4">
         <div className="w-4 h-4 rounded-full" style={{ background: `linear-gradient(135deg, ${tierColor} 0%, ${tierColor}88 100%)`, boxShadow: `0 0 10px ${tierColor}50` }} />

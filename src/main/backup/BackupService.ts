@@ -331,20 +331,42 @@ export async function restoreFromBackup(backupGzName: string): Promise<void> {
   vdb.close()
   if (!ok) { unlinkSync(tmp); throw new Error('[Restore] candidate failed integrity check') }
 
+  // Verify manifest SHA256 before restoring
+  const manifestPath = gzPath.replace(/\.gz$/, '.json')
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    if (manifest.sha256 && sha256File(gzPath) !== manifest.sha256) {
+      unlinkSync(tmp)
+      throw new Error('[Restore] SHA256 mismatch - refusing to restore possibly tampered backup')
+    }
+  } catch (e: any) {
+    if (e.message?.includes('SHA256')) throw e
+    // No manifest found - proceed with caution (backward compat)
+  }
+
   const dbPath = getDbPath()
   if (existsSync(dbPath)) {
     renameSync(dbPath, dbPath + `.replaced-${Date.now()}.db`)
   }
   for (const ext of ['-wal', '-shm']) { try { unlinkSync(dbPath + ext) } catch { } }
   renameSync(tmp, dbPath)
+  // Prune old replaced files - keep only the 2 newest
+  const replaced = readdirSync(dirname(dbPath)).filter(f => f.startsWith(basename(dbPath) + '.replaced-')).sort().reverse()
+  for (const old of replaced.slice(2)) { try { unlinkSync(join(dirname(dbPath), old)) } catch {} }
   console.log(`[Restore] restored from ${backupGzName} (previous DB kept as .replaced-*.db)`)
 }
 
 let timer: NodeJS.Timeout | null = null
 
 export function startBackupScheduler(db: any) {
-  createBackup(db, 'startup').catch((e: any) => console.error('[Backup] startup backup failed', e))
-  timer = setInterval(() => { createBackup(db, 'interval').catch((e: any) => console.error(e)) }, INTERVAL_MS)
+  const tick = () => {
+    const s = getSettings()
+    if (!s.autoBackup) return
+    createBackup(db, 'interval').catch((e: any) => console.error('[Backup] interval failed', e))
+  }
+  const s0 = getSettings()
+  if (s0.autoBackup) createBackup(db, 'startup').catch((e: any) => console.error('[Backup] startup failed', e))
+  timer = setInterval(tick, INTERVAL_MS)
 }
 
 export function stopBackupScheduler() { if (timer) clearInterval(timer) }

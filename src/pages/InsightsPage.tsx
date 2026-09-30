@@ -29,6 +29,7 @@ import { SectionHeader } from '../components/SectionHeader';
 import { InsightCard } from '../components/insights/InsightCard';
 import { RewindPlayer } from '../components/insights/RewindPlayer';
 import type { InsightAtom } from '../shared/insights';
+import { tierColor } from '../lib/tierColors';
 
 const RankingsPage = lazy(() => import('./RankingsPage'));
 
@@ -2053,9 +2054,9 @@ export default function InsightsPage({
                   </div>
                   <div className="space-y-2">
                     {tierDistribution.total > 0 ? [
-                      { label: 'Productive', color: '#34d399', value: tierDistribution.productive, pct: Math.round((tierDistribution.productive/tierDistribution.total)*100) },
-                      { label: 'Neutral', color: '#60a5fa', value: tierDistribution.neutral, pct: Math.round((tierDistribution.neutral/tierDistribution.total)*100) },
-                      { label: 'Distracting', color: '#f43f5e', value: tierDistribution.distracting, pct: Math.round((tierDistribution.distracting/tierDistribution.total)*100) },
+                      { label: 'Productive', color: tierColor('productive'), value: tierDistribution.productive, pct: Math.round((tierDistribution.productive/tierDistribution.total)*100) },
+                      { label: 'Neutral', color: tierColor('neutral'), value: tierDistribution.neutral, pct: Math.round((tierDistribution.neutral/tierDistribution.total)*100) },
+                      { label: 'Distracting', color: tierColor('distracting'), value: tierDistribution.distracting, pct: Math.round((tierDistribution.distracting/tierDistribution.total)*100) },
                     ].map((tier, i) => (
                       <motion.div key={tier.label} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i*0.06 }} className="group">
                         <div className="flex items-center gap-3">

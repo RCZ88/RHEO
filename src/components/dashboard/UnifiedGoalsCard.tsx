@@ -40,8 +40,10 @@ interface UnifiedGoalsCardProps {
 }
 
 export function UnifiedGoalsCard({
-  goals, longTermGoals, schedule, loading, onToggle, onAdd, onDelete, onUpdate,
-  onGenerate, onAcceptSuggestion, onDismissSuggestion, suggestions,
+  goals = [], longTermGoals = [], schedule = [], loading = false,
+  onToggle = () => {}, onAdd = () => {}, onDelete = () => {}, onUpdate = () => {},
+  onGenerate = () => {}, onAcceptSuggestion = () => {}, onDismissSuggestion = () => {},
+  suggestions = [],
 }: UnifiedGoalsCardProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -193,7 +195,7 @@ export function UnifiedGoalsCard({
           )}
           {activeGoals.map(goal => (
             <motion.div key={goal.id} variants={itemVariants} initial="hidden" animate="show" exit="exit" layout className="group">
-              <div className="flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:bg-zinc-800/30 hover:border-zinc-700/30 transition-all duration-150">
+              <div className="flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:bg-zinc-800/30 hover:border-zinc-700/30 transition-colors duration-150">
                 <motion.button whileTap={{ scale: 0.85 }} onClick={() => handleToggle(goal.id, goal.status === 'done')}
                   className={`w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${goal.status === 'done' ? 'bg-violet-500 border-violet-500' : 'border-zinc-600 hover:border-violet-400/50'}`}>
                   {goal.status === 'done' && <Check size={10} className="text-white" strokeWidth={3} />}

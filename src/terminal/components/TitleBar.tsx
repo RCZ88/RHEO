@@ -40,8 +40,19 @@ export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, 
         </div>
       )}
       <div className="flex items-center gap-1">
-        {/* DEMO/REAL mode toggle */}
-        <button onClick={() => setDemoMode(!demoMode)} title={demoMode ? "Switch to real mode" : "Switch to demo mode"} className={`h-8 px-2.5 rounded-lg text-[11px] font-semibold transition ${demoMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>{demoMode ? "DEMO" : "REAL"}</button>
+        {/* DEMO/REAL mode toggle — the label is the source of truth for which shell
+            executes: DEMO = simulated, REAL = real child process on this machine. */}
+        <button
+          onClick={() => setDemoMode(!demoMode)}
+          data-testid="mode-toggle"
+          data-mode={demoMode ? "demo" : "real"}
+          aria-pressed={!demoMode}
+          title={demoMode ? "Simulated shell — click to run REAL commands on this machine" : "Real shell — click to switch to the simulated DEMO console"}
+          className={`h-8 px-2.5 rounded-lg text-[11px] font-semibold transition flex items-center gap-1.5 ${demoMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${demoMode ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+          {demoMode ? "DEMO" : "REAL"}
+        </button>
         {/* Toggle sidebar — filled accent when ON */}
         <button onClick={() => setLeftOpen(!leftOpen)} title={leftOpen ? "Hide sidebar" : "Show sidebar"} aria-pressed={leftOpen} className={`w-8 h-8 rounded-lg grid place-items-center transition ${leftOpen ? "bg-[var(--t-accent)] text-white hover:brightness-110" : "text-[var(--t-muted)] hover:bg-white/10 hover:text-[var(--t-fg)]"}`}><PanelLeft size={16} /></button>
         {/* Toggle inspector — filled accent when ON */}

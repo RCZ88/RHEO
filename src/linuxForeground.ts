@@ -69,14 +69,20 @@ async function executablePath(pid?: number): Promise<string | undefined> {
 async function fromX11(): Promise<LinuxForegroundWindow | undefined> {
   const env = { ...process.env, LC_ALL: 'C' };
   try {
-    const { stdout: activeOutput } = await execFileAsync(
-      'xprop', ['-root', '\t$0', '_NET_ACTIVE_WINDOW'], { env, timeout: COMMAND_TIMEOUT_MS },
+    // In broken XWayland environments _NET_ACTIVE_WINDOW returns an invalid
+    // window ID (e.g. 0x600003 not in _NET_CLIENT_LIST). Use _NET_CLIENT_LIST_STACKING
+    // — the last window is the foreground/active one.
+    const { stdout: stackingOutput } = await execFileAsync(
+      'xprop', ['-root', '_NET_CLIENT_LIST_STACKING'], { env, timeout: COMMAND_TIMEOUT_MS },
     );
-    const windowId = activeOutput.match(/0x[0-9a-f]+/i)?.[0];
+    const ids = (stackingOutput.match(/0x[0-9a-f]+/gi) || []);
+    if (ids.length === 0) return undefined;
+    const windowId = ids[ids.length - 1]; // last = topmost/active
     if (!windowId || /^0x0+$/i.test(windowId)) return undefined;
     const { stdout } = await execFileAsync(
       'xprop', ['-id', windowId], { env, timeout: COMMAND_TIMEOUT_MS },
     );
+    if (!stdout.trim()) return undefined;
     const metadata = parseLinuxWindowMetadata(windowId, stdout);
     if (!metadata) return undefined;
     metadata.owner.path = await executablePath(metadata.owner.processId);
@@ -90,137 +96,463 @@ async function fromX11(): Promise<LinuxForegroundWindow | undefined> {
 }
 
 async function fromXdotool(): Promise<LinuxForegroundWindow | undefined> {
-  // On pure Wayland, xdotool may work via XWayland but can be slow.
-  // Use a shorter timeout to avoid blocking the poll cycle.
-  const timeout = (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) ? 300 : COMMAND_TIMEOUT_MS;
-  try {
-    const { stdout: idOutput } = await execFileAsync('xdotool', ['getactivewindow'], { timeout });
-    const windowId = idOutput.trim();
-    if (!windowId) return undefined;
-    const [{ stdout: title }, { stdout: pidOutput }] = await Promise.all([
-      execFileAsync('xdotool', ['getwindowname', windowId], { timeout }),
-      execFileAsync('xdotool', ['getwindowpid', windowId], { timeout }),
-    ]);
-    const processId = parsePid(pidOutput.trim());
-    const executable = await executablePath(processId);
-    return {
-      platform: 'linux',
-      title: title.trim() || null,
-      owner: {
-        name: executable ? path.basename(executable) : 'Unknown',
-        path: executable,
-        processId,
-      },
-    };
-  } catch {
-    return undefined;
-  }
-}
+    // On broken XWayland environments, xdotool getactivewindow returns
+    // an invalid window ID (e.g. 0x400003) not in _NET_CLIENT_LIST. So:
+    //   1. TRY `getactivewindow` (the correct answer when it works).
+    //   2. VALIDATE it — only accept a non-zero id.
+    //   3. Otherwise fall back to `search --onlyvisible` + _NET_WM_STATE_FOCUSED.
+    //
+    // Previously the code went straight to the search loop, which returns windows
+    // in TREE order, not stacking order — so it regularly picked the wrong window
+    // (often RHEO's own window, which is a real XWayland window).
+    const timeout = (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) ? 300 : COMMAND_TIMEOUT_MS;
+    try {
+      const { stdout: activeOut } = await execFileAsync(
+        'xdotool', ['getactivewindow'], { timeout },
+      );
+      const activeId = activeOut.trim();
+      if (activeId && !/^0x0+$/i.test(activeId)) {
+        const title = await getXdotoolWindowName(activeId, timeout);
+        const pid = await getXdotoolWindowPid(activeId, timeout);
+        const executable = pid ? await executablePath(pid) : undefined;
+        if (title || executable) {
+          return {
+            platform: 'linux',
+            title: title || null,
+            owner: {
+              name: executable ? path.basename(executable) : 'Unknown',
+              path: executable,
+              processId: pid,
+            },
+          };
+        }
+      }
+    } catch { /* fall through to the search scan */ }
 
-// Use qdbus (available on KDE) instead of Python gi/PyGObject which is often missing
-async function fromKWin(): Promise<LinuxForegroundWindow | undefined> {
-  if (process.platform !== 'linux') return undefined;
-  try {
-    const scriptFile = path.join(os.tmpdir(), `rheo-kwin-${Date.now()}.js`);
-    const resultFile = path.join(os.tmpdir(), `rheo-kwin-out-${Date.now()}.json`);
-    const script = [
-      `var w = workspace.activeWindow;`,
-      `var value = (w && !w.desktopWindow && !w.dock) ? { name: String(w.resourceClass || w.desktopFileName || ''), pid: Number(w.pid), title: String(w.caption || '') } : null;`,
-      `var f = new File("${resultFile}"); f.open(File.WriteOnly); f.write(JSON.stringify(value)); f.close();`,
-    ].join('\n');
-    await fs.writeFile(scriptFile, script);
-    // Wrap qdbus calls in a race with a shorter total timeout to prevent
-    // the entire poll cycle from stalling on a hanging D-Bus connection.
-    const kwinResult = await Promise.race([
-      (async () => {
-        const stdout = await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.loadScript', scriptFile, 'rheo-foreground-' + Date.now()], { timeout: COMMAND_TIMEOUT_MS });
-        const scriptId = parseInt(stdout.stdout.trim());
-        if (scriptId < 0) return undefined;
-        try { await execFileAsync('qdbus', ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.start'], { timeout: COMMAND_TIMEOUT_MS }); } catch {}
-        await new Promise(resolve => setTimeout(resolve, 300));
+    try {
+      const { stdout: searchOutput } = await execFileAsync(
+        'xdotool', ['search', '--onlyvisible', '--class', '.*'], { timeout },
+      );
+      const windowIds = searchOutput.trim().split('\n').filter(id => id.trim());
+      if (windowIds.length === 0) return undefined;
+
+      // Check each window for _NET_WM_STATE_FOCUSED using xprop
+      for (const winId of windowIds) {
         try {
-          const data = await fs.readFile(resultFile, 'utf8');
-          const obj = JSON.parse(data);
-          await fs.rm(scriptFile, { force: true }).catch(() => {});
-          await fs.rm(resultFile, { force: true }).catch(() => {});
-          if (obj && obj.name) {
-            return { platform: 'linux', title: obj.title || null, owner: { name: obj.name, processId: obj.pid || 0 } };
+          const { stdout: xpropOutput } = await execFileAsync(
+            'xprop', ['-id', winId.trim()], { timeout },
+          );
+          if (xpropOutput.includes('_NET_WM_STATE_FOCUSED')) {
+            const title = await getXdotoolWindowName(winId.trim(), timeout);
+            const pid = await getXdotoolWindowPid(winId.trim(), timeout);
+            const executable = pid ? await executablePath(pid) : undefined;
+            return {
+              platform: 'linux',
+              title: title || null,
+              owner: {
+                name: executable ? path.basename(executable) : 'Unknown',
+                path: executable,
+                processId: pid,
+              },
+            };
           }
-        } catch {}
-        await fs.rm(scriptFile, { force: true }).catch(() => {});
-        await fs.rm(resultFile, { force: true }).catch(() => {});
-        return undefined;
-      })(),
-      new Promise<undefined>((_, reject) => setTimeout(() => reject(new Error('kwin timeout')), 2000)),
-    ]);
-    return kwinResult;
+        } catch { continue; }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+}
+
+async function getXdotoolWindowName(winId: string, timeout: number): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('xdotool', ['getwindowname', winId], { timeout });
+    return stdout.trim();
+  } catch { return ''; }
+}
+
+async function getXdotoolWindowPid(winId: string, timeout: number): Promise<number | undefined> {
+  try {
+    const { stdout } = await execFileAsync('xdotool', ['getwindowpid', winId], { timeout });
+    return parsePid(stdout.trim());
+  } catch { return undefined; }
+}
+
+// ── Native-Wayland compositor strategies ─────────────────────────────────────
+// KWin scripting CANNOT be used to read the active window on modern Plasma:
+//   * QJSEngine exposes no `File` class  -> cannot write a result file
+//   * `org.kde.kwin.Scripting.runScript` does not exist -> no return channel
+//   * `print()` does not reach the journal
+// (all three verified empirically). `org.kde.KWin.getWindowInfo()` needs a KWin
+// window UUID, which the X11 ids from xdotool/wmctrl do not map to.
+//
+// So the correct approach on Wayland is to use the compositor's OWN query tool.
+// Each strategy below is OPTIONAL and auto-detected: a machine that has none of
+// them simply skips that step. Nothing is hardcoded to a specific distro or DE —
+// the chain adapts to whatever the device actually provides.
+//
+//   kdotool  -> KDE Plasma (Wayland + X11)
+//   hyprctl  -> Hyprland
+//   swaymsg  -> Sway
+//   wlrctl   -> wlroots-based compositors (Sway/Hyprland/Wayfire)
+//   gdbus    -> GNOME Shell (requires Evaluations enabled in Looking Glass)
+
+const STRATEGY_TIMEOUT_MS = 1200;
+
+async function toolAvailable(bin: string): Promise<boolean> {
+  try {
+    await execFileAsync('which', [bin], { timeout: 1500 });
+    return true;
   } catch {
-    try { await fs.rm(scriptFile, { force: true }).catch(() => {}); await fs.rm(resultFile, { force: true }).catch(() => {}); } catch {}
+    return false;
+  }
+}
+
+const toolCache = new Map<string, boolean>();
+async function hasTool(bin: string): Promise<boolean> {
+  if (toolCache.has(bin)) return toolCache.get(bin)!;
+  const v = await toolAvailable(bin);
+  toolCache.set(bin, v);
+  return v;
+}
+
+function windowFrom(
+  name: string,
+  title: string | null,
+  pid?: number,
+): LinuxForegroundWindow | undefined {
+  const cleanName = (name || '').trim();
+  const cleanTitle = (title || '').trim();
+  if (!cleanName && !cleanTitle) return undefined;
+  return {
+    platform: 'linux',
+    title: cleanTitle || null,
+    owner: { name: cleanName || 'Unknown', processId: pid || 0 },
+  };
+}
+
+/** Prefer a real executable name (from /proc/<pid>/exe) over a WM_CLASS. */
+async function refineName(name: string, pid?: number): Promise<string> {
+  if (pid) {
+    const exe = await executablePath(pid);
+    if (exe) {
+      const base = path.basename(exe);
+      // Electron/CEF apps all report a bare `electron`/`chrome` binary; keep the
+      // friendlier class name in that case and let the caller map it.
+      if (!/^(electron|chrome|chromium|cef_host|mono)$/i.test(base)) return base;
+    }
+  }
+  return name;
+}
+
+// ── KDE Plasma: kdotool ───────────────────────────────────────────────────────
+async function fromKdotool(): Promise<LinuxForegroundWindow | undefined> {
+  if (!(await hasTool('kdotool'))) return undefined;
+  try {
+    // kdotool supports chained subcommands, e.g.
+    //   kdotool getactivewindow getwindowclassname
+    // Try the richest form first, then fall back to individual queries.
+    const cls = await execFileAsync(
+      'kdotool', ['getactivewindow', 'getwindowclassname'], { timeout: STRATEGY_TIMEOUT_MS },
+    ).catch(() => null);
+    const name = cls ? String(cls.stdout).trim().split('\n').pop()?.trim() || '' : '';
+
+    const titleRes = await execFileAsync(
+      'kdotool', ['getactivewindow', 'getwindowname'], { timeout: STRATEGY_TIMEOUT_MS },
+    ).catch(() => null);
+    const title = titleRes ? String(titleRes.stdout).trim() : '';
+
+    if (!name && !title) return undefined;
+
+    let pid: number | undefined;
+    const pidRes = await execFileAsync(
+      'kdotool', ['getactivewindow', 'getwindowpid'], { timeout: STRATEGY_TIMEOUT_MS },
+    ).catch(() => null);
+    if (pidRes) pid = parsePid(String(pidRes.stdout).trim());
+
+    const refined = await refineName(name, pid);
+    return windowFrom(refined, title, pid);
+  } catch {
     return undefined;
   }
 }
 
-// GNOME Shell detection — placeholder; not needed on KDE
+// ── Hyprland: hyprctl ────────────────────────────────────────────────────────
+async function fromHyprctl(): Promise<LinuxForegroundWindow | undefined> {
+  if (!(await hasTool('hyprctl'))) return undefined;
+  try {
+    const { stdout } = await execFileAsync(
+      'hyprctl', ['activewindow', '-j'], { timeout: STRATEGY_TIMEOUT_MS },
+    );
+    const data = JSON.parse(String(stdout));
+    if (!data || (!data.class && !data.title)) return undefined;
+    const pid = parsePid(String(data.pid || ''));
+    const refined = await refineName(String(data.class || ''), pid);
+    return windowFrom(refined, String(data.title || ''), pid);
+  } catch {
+    return undefined;
+  }
+}
+
+// ── Sway: swaymsg ─────────────────────────────────────────────────────────────
+async function fromSwaymsg(): Promise<LinuxForegroundWindow | undefined> {
+  if (!(await hasTool('swaymsg'))) return undefined;
+  try {
+    const { stdout } = await execFileAsync(
+      'swaymsg', ['-t', 'get_tree', '-r'], { timeout: STRATEGY_TIMEOUT_MS },
+    );
+    const tree = JSON.parse(String(stdout));
+    const node = tree?.nodes?.find((n: any) => n?.focused);
+    if (!node) return undefined;
+    const appName = String(node?.app?.name || '');
+    const className = String(node?.window_properties?.class || '');
+    const pid = parsePid(String(node?.pid || ''));
+    const refined = await refineName(appName || className, pid);
+    return windowFrom(refined, String(node?.name || ''), pid);
+  } catch {
+    return undefined;
+  }
+}
+
+// ── wlroots compositors: wlrctl ──────────────────────────────────────────────
+async function fromWlrctl(): Promise<LinuxForegroundWindow | undefined> {
+  if (!(await hasTool('wlrctl'))) return undefined;
+  try {
+    const { stdout } = await execFileAsync('wlrctl', ['activewindow', 'title'], { timeout: STRATEGY_TIMEOUT_MS });
+    const title = String(stdout).trim();
+    const clsRes = await execFileAsync('wlrctl', ['activewindow', 'class'], { timeout: STRATEGY_TIMEOUT_MS }).catch(() => null);
+    const name = clsRes ? String(clsRes.stdout).trim() : '';
+    return windowFrom(name, title);
+  } catch {
+    return undefined;
+  }
+}
+// GNOME Shell detection via the `org.gnome.Shell.Eval` D-Bus method.
+// This requires "Evaluation of JavaScript in GNOME Shell" to be enabled in
+// Looking Glass (Alt+F2 -> `lg` -> `Settings` -> Evaluations = true), so it is
+// best-effort: if the method is not exposed, gdbus errors and we return
+// undefined, letting the XWayland strategies run instead.
 async function fromGnomeShell(): Promise<LinuxForegroundWindow | undefined> {
-  return undefined;
+    if (process.platform !== 'linux') return undefined;
+    const resultFile = path.join(os.tmpdir(), `rheo-gnome-out-${Date.now()}.json`);
+    const script = [
+      `const w = global.get_window_actor(global.display.focus_window);`,
+      `const win = w ? w.meta_window : null;`,
+      `const v = (win && !win.is_skip_taskbar()) ? {`,
+      `  name: String(win.get_wm_class() || win.get_class() || ''),`,
+      `  pid: Number(win.get_pid() || 0),`,
+      `  title: String(win.get_title() || ''),`,
+      `} : null;`,
+      `const f = new Gio.File({ uri: 'file://${resultFile}' });`,
+      `f.replace_contents(JSON.stringify(v), null, false, Gio.FileCreateFlags.NONE, null);`,
+      `v ? v.title : '';`,
+    ].join('\n');
+    try {
+      const { stdout } = await execFileAsync(
+        'gdbus',
+        [
+          'call', '--session',
+          '--dest', 'org.gnome.Shell',
+          '--object-path', '/org/gnome/Shell',
+          '--method', 'org.gnome.Shell.Eval',
+          script,
+        ],
+        { timeout: COMMAND_TIMEOUT_MS },
+      );
+      await fs.rm(resultFile, { force: true }).catch(() => {});
+      // stdout looks like: ('', <js-return-value>, []) or an error tuple.
+      const titleMatch = stdout.match(/'((?:[^'\\]|\\.)*)'/);
+      if (!titleMatch) return undefined;
+      const title = titleMatch[1].replace(/\\'/g, "'");
+      if (!title) return undefined;
+      let name = '';
+      let pid = 0;
+      const nameMatch = stdout.match(/name['"]?[:=]\s*'([^']*)'/i);
+      if (nameMatch) name = nameMatch[1];
+      const pidMatch = stdout.match(/pid['"]?[:=]\s*(\d+)/i);
+      if (pidMatch) pid = Number(pidMatch[1]);
+      if (!name) {
+        const exe = pid ? await executablePath(pid) : undefined;
+        name = exe ? path.basename(exe) : 'Unknown';
+      }
+      return { platform: 'linux', title, owner: { name, processId: pid } };
+    } catch {
+      await fs.rm(resultFile, { force: true }).catch(() => {});
+      return undefined;
+    }
 }
 
 // Use wmctrl to get the active window (works on X11 and some Wayland setups)
+// In broken XWayland environments, wmctrl -G -l has no '*' active marker and
+// _NET_ACTIVE_WINDOW returns an invalid window ID. We use wmctrl -l -p which
+// reliably shows all windows with their PIDs, and pick the last non-virtual one.
 async function fromWmctrl(): Promise<LinuxForegroundWindow | undefined> {
   try {
-    const { stdout: activeOutput } = await execFileAsync(
-      'wmctrl', ['-G', '-l'], { timeout: COMMAND_TIMEOUT_MS },
+    const { stdout } = await execFileAsync(
+      'wmctrl', ['-l', '-p'], { timeout: COMMAND_TIMEOUT_MS },
     );
-    const lines = activeOutput.trim().split('\n');
-    // Find the line with '*' (active window) — wmctrl marks active with '*'
-    const activeLine = lines.find(line => line.trim().startsWith('*'));
-    if (!activeLine) return undefined;
+    const lines = stdout.trim().split('\n');
+    if (lines.length === 0) return undefined;
 
-    // Parse: desktop, window_id, owner, x, y, width, height, title
-    // Remove leading '*' and split by whitespace
-    const cleanLine = activeLine.trim().replace(/^\*/, '').trim();
-    const parts = cleanLine.split(/\s+/);
-    if (parts.length < 8) return undefined;
-
-    const windowId = parts[1];
-    const title = parts.slice(7).join(' ');
-
-    if (!windowId || /^0x0+$/i.test(windowId)) return undefined;
-
-    return {
-      platform: 'linux',
-      title: title || null,
-      owner: { name: parts[2] || 'Unknown' },
-    };
+    // Find the last non-virtual window (not "Wayland to X Recording bridge",
+    // "xwaylandvideobridge", etc.) — that's the active app window.
+    const virtualPatterns = ['wayland to x', 'xwayland', 'recording bridge'];
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(/\s+/);
+      if (parts.length < 3) continue;
+      const windowId = parts[0];
+      const pid = parsePid(parts[2]);
+      if (!windowId || /^0x0+$/i.test(windowId)) continue;
+      if (!pid) continue;
+      // Skip virtual/xwayland bridge windows
+      try {
+        const exePath = await executablePath(pid);
+        if (!exePath) continue;
+        const exeName = path.basename(exePath).toLowerCase();
+        if (virtualPatterns.some(p => exeName.includes(p))) continue;
+        const title = parts.slice(3).join(' ');
+        return {
+          platform: 'linux',
+          title: title || null,
+          owner: { name: path.basename(exePath), path: exePath, processId: pid },
+        };
+      } catch { continue; }
+    }
+    return undefined;
   } catch {
     return undefined;
   }
 }
 
-export async function getLinuxForegroundWindow(): Promise<LinuxForegroundWindow | undefined> {
-  if (process.platform !== 'linux') return undefined;
-  if (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) {
-    // KDE Wayland: use KWin first, then wmctrl via XWayland
-    if (/kde/i.test(process.env.XDG_CURRENT_DESKTOP || '')) {
-      const kwinResult = await fromKWin();
-      if (kwinResult && kwinResult.title) return kwinResult;
+/**
+ * BUMP ON EVERY DETECTION CHANGE. Printed in the tracking diagnostic so a
+ * stale running process is immediately obvious instead of silently producing
+ * confusing traces (which cost several cycles of guessing).
+ */
+export const LINUX_DETECT_BUILD = 'native-chain-v3-20260930';
+
+/** Which strategy produced the last successful result (for diagnostics). */
+export let lastStrategyUsed: string | null = null;
+/** Ordered log of every strategy attempted on the last call (for diagnostics). */
+export let lastStrategyTrace: string[] = [];
+
+/**
+ * Probe which helper binaries are actually installed, and describe the
+ * session. If the compositor-native tools are missing, native Wayland
+ * windows are simply NOT OBSERVABLE and no amount of code can fix that —
+ * the user must install them. This makes that situation diagnosable instead
+ * of a silent black hole.
+ */
+export async function probeLinuxTrackingEnvironment(): Promise<{
+  platform: string;
+  sessionType: string | null;
+  currentDesktop: string | null;
+  waylandDisplay: string | null;
+  tools: Record<string, boolean>;
+  note: string;
+}> {
+  const tools: Record<string, boolean> = {};
+  for (const bin of ['qdbus6', 'qdbus', 'qdbus-qt6', 'qdbus-qt5', 'gdbus', 'kdotool', 'hyprctl', 'swaymsg', 'wlrctl', 'xdotool', 'wmctrl', 'xprop']) {
+    try {
+      await execFileAsync('which', [bin], { timeout: 1500 });
+      tools[bin] = true;
+    } catch {
+      try {
+        await execFileAsync(bin, ['--version'], { timeout: 1500 });
+        tools[bin] = true;
+      } catch {
+        tools[bin] = false;
+      }
     }
-    // GNOME Wayland: try gdbus
-    if (/gnome/i.test(process.env.XDG_CURRENT_DESKTOP || '')) {
-      const gnomeResult = await fromGnomeShell();
-      if (gnomeResult && gnomeResult.title) return gnomeResult;
-    }
-    // Fall back to wmctrl (works via XWayland on most compositors)
-    const wmctrlResult = await fromWmctrl();
-    if (wmctrlResult && wmctrlResult.title) return wmctrlResult;
-    // Last resort: xdotool via XWayland
-    const xdotoolResult = await fromXdotool();
-    if (xdotoolResult && xdotoolResult.title) return xdotoolResult;
-    // Absolute last resort: xprop
-    return fromX11();
   }
-  // X11 session: try wmctrl, then xdotool, then xprop
-  const wmctrlResult = await fromWmctrl();
-  if (wmctrlResult && wmctrlResult.title) return wmctrlResult;
-  return (await fromXdotool()) || (await fromX11());
+  const isWayland = process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY;
+  // A compositor-native tool is what can see NATIVE Wayland windows.
+  // qdbus is deliberately NOT counted: KWin scripting provably cannot return
+  // data (no File class, no runScript, print() unreachable).
+  const nativeTool =
+    (tools['kdotool'] && 'kdotool (KDE)') ||
+    (tools['hyprctl'] && 'hyprctl (Hyprland)') ||
+    (tools['wlrctl'] && 'wlrctl (wlroots)') ||
+    (tools['swaymsg'] && 'swaymsg (Sway)') ||
+    (tools['gdbus'] && 'gdbus (GNOME Shell — needs Evaluations enabled)') ||
+    '';
+  const xwaylandOk = tools['xdotool'] || tools['wmctrl'] || tools['xprop'];
+  let note = 'X11 session: xprop/xdotool/wmctrl can see every window.';
+  if (isWayland) {
+    if (nativeTool) {
+      note = `Wayland: native tracking available via ${nativeTool}.`;
+    } else if (xwaylandOk) {
+      note = 'Wayland with NO compositor-native tool — ONLY XWayland apps (RHEO, Spotify, ...) can be tracked. Install kdotool (KDE), hyprctl (Hyprland), swaymsg/wlrctl (wlroots) or enable GNOME Looking Glass Evaluations.';
+    } else {
+      note = 'Wayland with NO tracking tools at all. Install kdotool / hyprctl / swaymsg, or xdotool + wmctrl + xorg.xprop for XWayland apps.';
+    }
+  }
+  return {
+    platform: `${process.platform} ${process.arch}`,
+    sessionType: process.env.XDG_SESSION_TYPE || null,
+    currentDesktop: process.env.XDG_CURRENT_DESKTOP || null,
+    waylandDisplay: process.env.WAYLAND_DISPLAY || null,
+    tools,
+    note,
+  };
+}
+
+export async function getLinuxForegroundWindow(): Promise<LinuxForegroundWindow | undefined> {
+  lastStrategyUsed = null;
+  lastStrategyTrace = [];
+  if (process.platform !== 'linux') return undefined;
+
+  // A strategy that returns a window is the answer. Otherwise the next one runs.
+  const tryStrategy = async (name: string, fn: () => Promise<LinuxForegroundWindow | undefined>) => {
+    const win = await fn();
+    if (win && win.title) {
+      lastStrategyUsed = name;
+      lastStrategyTrace.push(`${name}=OK(${win.owner?.name})`);
+      return win;
+    }
+    // On Wayland, an XWayland strategy "succeeding" is worse than failing: it
+    // reports the last X11-focused window (often RHEO's own), which is stale
+    // and never changes. Make that explicitly visible in the trace.
+    const viaXwayland = name === 'xdotool' || name === 'wmctrl' || name === 'xprop';
+    lastStrategyTrace.push(
+      viaXwayland
+        ? `${name}=STALE?(xwayland-cannot-see-native-wayland)`
+        : `${name}=miss`,
+    );
+    return undefined;
+  };
+
+  // Compositor-native strategies: the ONLY ones that can see native Wayland
+  // windows. Every one is optional and auto-detected, so this adapts to whatever
+  // the device provides instead of assuming a specific distro/DE:
+  //   kdotool (KDE) -> hyprctl (Hyprland) -> wlrctl (wlroots) -> swaymsg (Sway)
+  //   -> gdbus/GNOME Shell
+  // Order is by reliability for the most common compositors; each is skipped
+  // automatically when its tool is absent.
+  const NATIVE_STRATEGIES: Array<[string, () => Promise<LinuxForegroundWindow | undefined>]> = [
+    ['kdotool', fromKdotool],
+    ['hyprctl', fromHyprctl],
+    ['wlrctl', fromWlrctl],
+    ['swaymsg', fromSwaymsg],
+    ['gnome-shell', fromGnomeShell],
+  ];
+  for (const [name, fn] of NATIVE_STRATEGIES) {
+    if (!(await hasTool(name === 'gnome-shell' ? 'gdbus' : name))) {
+      lastStrategyTrace.push(`${name}=absent(tool-not-installed)`);
+      continue;
+    }
+    const r = await tryStrategy(name, fn);
+    if (r) return r;
+  }
+
+  // XWayland strategies: xdotool checks real focus, wmctrl uses stacking,
+  // xprop is the last resort. On Wayland these can only ever see XWayland apps
+  // (RHEO, Spotify, ...), so they are a degraded fallback, not a real answer.
+  const x = await tryStrategy('xdotool', fromXdotool);
+  if (x) return x;
+  const w = await tryStrategy('wmctrl', fromWmctrl);
+  if (w) return w;
+  return tryStrategy('xprop', fromX11);
 }

@@ -557,12 +557,29 @@ graph LR
 | 4.5 | 2026-06-16 | Complete AI agent system with real LLM tool calling + Nemotron safety layer |
 | 5.0 | 2026-07-11 | Massive release: AI system, Finance overhaul, Lyceum Learn module, workspace redesign, startup fix |
 | 6.0 | 2026-08-06 | Automation DSL engine, canvas grouping + floating nav, Gold goals & River of Years, Resume Builder persistence, Finance Budget & Subscriptions, Smart Gap Fill, Design Studio, TUI agent interaction, IPC allowlist, 100+ features |
+| 7.0 | 2026-09-30 | **App-review baseline.** Chat Library, external-AI transport seam, dashboard widget registry + jump-nav, native find bar rewrite, Penguin Console real-mode fix, Linux foreground detection, Settings Colors/Prompts sections, multi-agent coordination CLI fix |
 
 ---
 
 ## 🚀 Development Highlights
 
-### v6.0 (2026-08-06) — Latest
+### v7.0 (2026-09-30) — Latest · App-review baseline
+
+This release is the **review baseline**: the tree is committed so an app-wide quality
+review (delegated to Qwen) starts from a known, reproducible point.
+
+- **Chat Library** — AI conversations persisted, searchable, pinnable, thread-grouped, and exportable (`src/main/ai/chatLibrary.ts`, `src/components/ai/chat/`)
+- **External AI Transport** — one prompt pipeline shared by the app and the browser extension (`src/services/externalAiTransport.ts`)
+- **Dashboard Widget Registry** — widgets register declaratively, with jump-to-widget navigation and persisted layouts (`src/components/dashboard/widgetRegistry.tsx`, `widgetNav.ts`, `src/hooks/useDashboardLayout.ts`)
+- **Native Find Bar Rewrite** — real highlight injection + scroll-into-view, replacing the previous blur-overlay that only listed matches
+- **Penguin Console Real-Mode Fix** — generated output is now tagged and filtered on a positive flag, so REAL mode no longer shows simulated or legacy rows
+- **Linux Foreground Detection** — dedicated foreground resolver + diagnostics script (`src/main/linuxForeground.ts`, `scripts/diagnose-linux-foreground.mjs`)
+- **Settings** — new Colors and Prompts sections (`src/pages/settings/ColorsSection.tsx`, `PromptsSection.tsx`)
+- **Multi-Agent Coordination Fix** — the `coord.mjs` CLI silently no-op'd on Linux because its entrypoint guard compared a relative `process.argv[1]` against a `file://` URL; now uses `pathToFileURL`
+- **Build hardening** — `optimizeDeps.entries` pinned and `server.fs` deny-list added in `vite.config.ts`
+
+### v6.0 (2026-08-06)
+
 - **Automation DSL Engine** - Declarative automation rules + compositions with real execution
 - **Canvas System** - Card grouping preserving real card content, floating canvas navigation mode
 - **Gold Goals + River of Years** - Life page: daily/weekly goals, The Vault, life-phases timeline with AI era trends & summaries
@@ -742,7 +759,7 @@ If you encounter issues:
 
 ## VS Code Activity Extension
 
-The `vscode-extension/` folder contains the **DeskFlow Activity Tracker** VS Code extension � it captures live coding telemetry (files opened, lines changed, active duration) and batches it to the DeskFlow local capture server (port `54321`, POST `/code-activity`) every 60 seconds, feeding the `code_activity` table behind the IDE page's "Coding Activity" charts and Live Pulse grid.
+The `vscode-extension/` folder contains the **DeskFlow Activity Tracker** VS Code extension � it captures live coding telemetry (files opened, lines changed, active duration) and batches it to the DeskFlow local capture server (port `54321`, POST `/code-activity`) every 60 seconds, feeding the `code_activity` table behind the IDE page's "Coding Activity" charts and Live Pulse grid.
 
 **Installing the VS Code Extension**
 

@@ -39,6 +39,7 @@ import FocusPage from './pages/FocusPage';
 import ConductorPage from './pages/ConductorPage';
 
 import { AiPage } from './pages/AiPage';
+// TEMP-DISABLED-BY-AGENT: their NEON WIP has unresolved imports (withAlpha/resolveColor)
 import { FeatureStudioPage } from './features/overlay-studio/OverlayStudioPage';
 import { AppBackground } from './components/AppBackground';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -56,7 +57,10 @@ import NotFoundPage from './pages/NotFoundPage';
 import FeatureSpecViewer from './components/FeatureSpecViewer';
 import AfkPromptModal from './components/AfkPromptModal';
 import NativeFindOverlay from './components/NativeFindOverlay';
-import SmartSearchOverlay from './components/SmartSearch/SmartSearchOverlay';
+// The All/Page/Section scope UI that used to live in its own overlay now lives
+// inside NativeFindOverlay, on the same surface as the Ctrl+F shortcut that
+// people actually press. See NativeFindOverlay's header.
+import type { SearchHit } from './services/search/index';
 import MissedTimePanel from './components/MissedTimePanel';
 import { PairPhoneModal } from './components/PairPhoneModal';
 import { VoiceProvider } from './context/VoiceContext';
@@ -311,21 +315,32 @@ function App() {
   const currentPageId = location.pathname === '/' ? 'dashboard'
     : location.pathname.replace('/', '') || 'dashboard';
 
-  // Smart Search — Ctrl+F: find-in-page bar (no blur, page visible).
+  // Find bar — one surface, two scopes (see NativeFindOverlay).
+  //   Ctrl+F            → 'page'  (live find-in-page, highlights + scrolls)
+  //   sidebar magnifier → 'all'   (indexed search across the app)
   // Ctrl+K is handled separately by GlobalSearchCommandPalette.
   const [nativeFindOpen, setNativeFindOpen] = useState(false);
-  const [smartSearchOpen, setSmartSearchOpen] = useState(false);
+  const [findScope, setFindScope] = useState<'page' | 'all'>('page');
 
-  // Listen for native find open event from useAppSmartSearch hook
+  const openFind = useCallback((scope: 'page' | 'all') => {
+    setFindScope(scope);
+    setNativeFindOpen(true);
+  }, []);
+
+  // The three sidebar "Smart search" buttons dispatch `smart-search:open`.
+  // Nothing in the app ever listened for it — the only listeners lived in
+  // useAppSmartSearch, which is never called — so those buttons were no-ops and
+  // the All/Section scope feature had no reachable entry point at all.
   useEffect(() => {
-    const handler = () => setNativeFindOpen(true);
-    window.addEventListener('native-find:open', handler);
-    return () => window.removeEventListener('native-find:open', handler);
-  }, []);
-
-  const handleSmartSearchClose = useCallback(() => {
-    setSmartSearchOpen(false);
-  }, []);
+    const onSmart = () => openFind('all');
+    const onNative = () => openFind('page');
+    window.addEventListener('smart-search:open', onSmart);
+    window.addEventListener('native-find:open', onNative);
+    return () => {
+      window.removeEventListener('smart-search:open', onSmart);
+      window.removeEventListener('native-find:open', onNative);
+    };
+  }, [openFind]);
 
   const handleSmartSearchSelect = useCallback((hit: SearchHit) => {
     console.debug('[SmartSearch] selected:', hit);
@@ -359,28 +374,23 @@ function App() {
     }
   }, [currentPageId, navigate]);
 
-  // Keyboard shortcut: Ctrl+F — open the native find overlay.
+  // Keyboard shortcut: Ctrl+F / ⌘F — open the find-in-page bar.
   // Ctrl+K opens the command palette separately.
-  // In smart-search inputs, Ctrl+F opens the smart search overlay instead.
+  //
+  // Electron has NO browser find bar, so if we do not open our own, Ctrl+F is
+  // a literal no-op. That is why this handler is unconditional: it fires even
+  // when a text field has focus (Chrome does the same), and it captures the
+  // event so no other Ctrl+F handler can swallow it.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
-      const key = e.key.toLowerCase();
-      if (key !== 'f') return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-        if (!(e.target as HTMLElement).dataset?.smartSearchInput) return;
-        // Native find in smart-search inputs: let browser handle it
-        return;
-      }
-      // Open the native find overlay instead of browser's native find bar
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (e.key.toLowerCase() !== 'f') return;
       e.preventDefault();
-      setNativeFindOpen(true);
+      openFind('page');
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [openFind]);
 
   // Fallback: poll hash and force re-render if React Router misses the change
   const lastHashRef = useRef(window.location.hash);
@@ -3218,6 +3228,7 @@ const devFireSmartFill = async () => {
               <Route path="/external" element={<ExternalPage selectedPeriod={selectedPeriod} dateOffset={dateOffset} onDateOffsetChange={setDateOffset} />} />
 
               <Route path="/ai" element={<AiPage />} />
+              
               <Route path="/studio" element={<FeatureStudioPage />} />
               <Route path="/finance" element={<FinancePage />} />
               {/* Resume Builder */}
@@ -3226,9 +3237,8 @@ const devFireSmartFill = async () => {
               <Route path="/resume/preview" element={<ResumePreviewPage />} />
               <Route path="/resume/import" element={<ResumeImportPage />} />
               <Route path="/resume/export" element={<ResumeExportPage />} />
-               {/* Legacy routes � kept as redirect for any bookmarked URLs */}
-               <Route path="/dashboard" element={<Navigate to="/" replace />} />
-              <Route path="/old-dashboard" element={<Navigate to="/external" replace />} />
+               {/* Legacy routes — kept as redirect for any bookmarked URLs */}
+               <Route path="/old-dashboard" element={<Navigate to="/external" replace />} />
 
               <Route path="/guide" element={<GuidePage />} />
               <Route path="/compositions" element={<Navigate to="/ai" replace />} />
@@ -3774,17 +3784,14 @@ const devFireSmartFill = async () => {
             }}
           />
 
-          {/* Smart Search Bar — Ctrl+F / ⌘F find-in-page with scope toggle */}
+          {/* Find & Scope bar — Ctrl+F / ⌘F (page scope) or the sidebar
+              magnifier (all scope). Live find + indexed search, user-placed. */}
           <NativeFindOverlay
             open={nativeFindOpen}
             onClose={() => setNativeFindOpen(false)}
-          />
-          <SmartSearchOverlay
-            open={smartSearchOpen}
-            onClose={handleSmartSearchClose}
-            onSelect={handleSmartSearchSelect}
+            initialScope={findScope}
             currentPageId={currentPageId}
-            shortcutHint="⌘F"
+            onSelect={handleSmartSearchSelect}
           />
           {DEV_TRIGGER_ENABLED && (
             <DevTriggerPanel

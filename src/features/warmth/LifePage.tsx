@@ -24,7 +24,6 @@ import GoldPage from '../../features/warmth/gold/GoldPage'
 import { SchedulePage } from '../../features/warmth/schedule/SchedulePage'
 import { HabitsPage } from '../../features/warmth/habits/HabitsPage'
 import { ProfileTab } from '../../components/life/ProfileTab'
-import { ContextGraphView } from './ContextGraphView'
 import { BrainManagementView } from './context-brain/BrainManagementView'
 import { NeuralFlow } from './context-brain/NeuralFlow'
 import { SelfOrchestrator } from './self/SelfOrchestrator'
@@ -56,6 +55,9 @@ const PAGE_TABS: { key: PageTab; label: string; icon: typeof HeartHandshake; acc
   { key: 'gold', label: 'Gold', icon: Layers, accent: '#fbbf24' },
   { key: 'notes', label: 'Notes', icon: BookOpen, accent: '#a78bfa' },
   { key: 'schedule', label: 'Schedule', icon: Calendar, accent: '#ec4899' },
+  // 'habits' had a content branch but no tab button, so deep-linking to it
+  // (the Deadlines dashboard widget) landed on invisible content.
+  { key: 'habits', label: 'Habits', icon: Target, accent: '#34d399' },
   { key: 'self', label: 'Self', icon: User, accent: '#8b5cf6' },
 ]
 
@@ -127,6 +129,42 @@ export default function LifePage() {
     try { return (localStorage.getItem('life-view-mode') as ViewMode) || 'river' } catch { return 'river' }
   })
   const [pageTab, setPageTab] = useState<PageTab>('covenant')
+
+  // Deep-nav landing for the dashboard widget jump buttons.
+  //
+  // navigateTo() (src/lib/deepNav.ts) writes the tab hint to
+  // localStorage['<route>-activeTab'] and the section to sessionStorage.
+  // The app uses a HashRouter, so `?tab=` lives in location.hash — NOT
+  // location.search — which is why reading the query alone never worked.
+  // Read both, in the same priority order navigateTo intends.
+  useEffect(() => {
+    const valid: PageTab[] = ['covenant', 'memories', 'gold', 'notes', 'schedule', 'habits', 'self']
+    let wanted: PageTab | null = null
+
+    // 1) hash query, e.g. #/life?tab=schedule
+    try {
+      const hash = window.location.hash || ''
+      const qIdx = hash.indexOf('?')
+      if (qIdx !== -1) {
+        const q = new URLSearchParams(hash.slice(qIdx + 1)).get('tab')
+        if (q && (valid as string[]).includes(q)) wanted = q as PageTab
+      }
+    } catch { /* ignore */ }
+
+    // 2) the deepNav hint key this app already writes
+    if (!wanted) {
+      try {
+        const hint = localStorage.getItem('/life-activeTab')
+        if (hint && (valid as string[]).includes(hint)) wanted = hint as PageTab
+        localStorage.removeItem('/life-activeTab')
+      } catch { /* ignore */ }
+    }
+
+    if (wanted) {
+      setPageTab(wanted)
+      setViewMode('pages')
+    }
+  }, [])
 
   const [lens, setLens] = useState<LensId>('phases')
   const [zoomStop, setZoomStop] = useState('Life')

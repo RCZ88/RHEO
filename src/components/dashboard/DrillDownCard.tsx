@@ -10,7 +10,7 @@ interface DrillDownCardProps {
   onView: () => void;
 }
 
-export function DrillDownCard({ kind, title, subtitle, preview, onView }: DrillDownCardProps) {
+export function DrillDownCard({ kind = 'heatmap', title = '', subtitle = '', preview, onView = () => {} }: DrillDownCardProps) {
   const isHeatmap = kind === 'heatmap';
 
   return (

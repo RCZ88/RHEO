@@ -74,6 +74,10 @@ export interface WidgetCardProps {
   empty?: boolean;
   emptyMessage?: string;
   emptyIcon?: React.ReactNode;
+  /** Primary call-to-action rendered inside the empty state. An empty widget
+   *  with no way to create its first item is a dead end — every card that owns
+   *  an "add" flow must pass this. */
+  emptyAction?: ReactNode;
   footer?: ReactNode;
   className?: string;
 }
@@ -102,6 +106,7 @@ export function WidgetCard({
   empty = false,
   emptyMessage = 'No data available',
   emptyIcon,
+  emptyAction,
   footer,
   className = '',
 }: WidgetCardProps) {
@@ -168,9 +173,14 @@ export function WidgetCard({
               </div>
             )}
             <p className="text-[13px] text-[var(--text-secondary)]">{emptyMessage}</p>
-            <p className="text-[11px] text-[var(--text-muted)] mt-1">Data will appear here when available</p>
+            {emptyAction ? (
+              <div className="mt-4">{emptyAction}</div>
+            ) : (
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">Data will appear here when available</p>
+            )}
           </div>
         </CardContent>
+        {footer && <CardFooter className="pt-0">{footer}</CardFooter>}
       </Card>
     );
   }

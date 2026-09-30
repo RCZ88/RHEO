@@ -378,6 +378,10 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   setDomainCategory: (domain: string, category: string) => ipcRenderer.invoke('set-domain-category', domain, category),
   setAppTier: (appName: string, tier: string) => ipcRenderer.invoke('set-app-tier', appName, tier),
   setDomainTier: (domain: string, tier: string) => ipcRenderer.invoke('set-domain-tier', domain, tier),
+  clearAppTier: (appName: string) => ipcRenderer.invoke('clear-app-tier', appName),
+  clearDomainTier: (domain: string) => ipcRenderer.invoke('clear-domain-tier', domain),
+  getAppTierMap: () => ipcRenderer.invoke('get-app-tier-map'),
+  getDomainTierMap: () => ipcRenderer.invoke('get-domain-tier-map'),
   setTierAssignments: (assignments: { productive: string[]; neutral: string[]; distracting: string[] }) => ipcRenderer.invoke('set-tier-assignments', assignments),
   applyCategoryToHistorical: (tierAssignments: any) => ipcRenderer.invoke('apply-category-to-historical', tierAssignments),
   getTierAssignments: () => ipcRenderer.invoke('get-tier-assignments'),
@@ -819,13 +823,13 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
     destroy: (id: string) => ipcRenderer.invoke('terminal:destroy', id),
-    exec: (command: string, cwd?: string) => ipcRenderer.invoke('terminal:exec', command, cwd),
+    exec: (command: string, cwd?: string, env?: Record<string, string>) => ipcRenderer.invoke('terminal:exec', command, cwd, env),
     onData: (callback: (id: string, data: string) => void) => {
-      ipcRenderer.on('terminal:data', (_event, id, data) => callback(id, data));
+      const handler = (_event: any, id: string, data: string) => callback(id, data);
+      ipcRenderer.on('terminal:data', handler);
+      return () => ipcRenderer.removeListener('terminal:data', handler);
     },
-    removeDataListener: () => {
-      ipcRenderer.removeAllListeners('terminal:data');
-    }
+    removeDataListener: () => {}
   },
 
   // ========== Terminal Presets ==========
@@ -1251,6 +1255,29 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   aiChatSend: (data: { threadDate: string; message: string; providerId?: string }) =>
     ipcRenderer.invoke('ai-chat:send', data),
 
+  // ── Chat Library — unified store for every AI conversation ──────────────
+  chatLibrarySearch: (opts?: { query?: string; groupId?: string | null; source?: string | null; limit?: number }) =>
+    ipcRenderer.invoke('chat-library:search', opts || {}),
+  chatLibraryStats: () => ipcRenderer.invoke('chat-library:stats'),
+  chatLibraryGroups: () => ipcRenderer.invoke('chat-library:groups'),
+  chatLibrarySaveGroup: (data: { id?: string; name: string; color?: string; sortOrder?: number }) =>
+    ipcRenderer.invoke('chat-library:group-save', data),
+  chatLibraryDeleteGroup: (id: string) => ipcRenderer.invoke('chat-library:group-delete', id),
+  chatLibrarySetThreadGroup: (threadDate: string, groupId: string | null) =>
+    ipcRenderer.invoke('chat-library:thread-group', { threadDate, groupId }),
+  chatLibrarySetThreadPin: (threadDate: string, pinned: boolean) =>
+    ipcRenderer.invoke('chat-library:thread-pin', { threadDate, pinned }),
+  chatLibraryThreadMessages: (threadDate: string) =>
+    ipcRenderer.invoke('chat-library:thread-messages', threadDate),
+  chatLibraryIngest: (data: {
+    source: string;
+    provider: string;
+    messages: Array<{ role: string; content: string; timestamp?: number }>;
+    externalId?: string;
+    title?: string;
+    url?: string;
+  }) => ipcRenderer.invoke('chat-library:ingest', data),
+
   // AI Debug Vault
   aiDebugLog: (ev: { source?: string; event: string; feature?: string; provider?: string; model?: string; contextId?: string; role?: string; payload?: unknown; tokensIn?: number; tokensOut?: number }) =>
     ipcRenderer.invoke('ai-debug:log', ev),
@@ -1334,7 +1361,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // ========== Goal Reminders ==========
   getReminders: () => ipcRenderer.invoke('get-reminders'),
-  createReminder: (data: { text: string; due_date?: string; goal_id?: string }) => ipcRenderer.invoke('create-reminder', data),
+  createReminder: (data: { text: string; due_date?: string; goal_id?: string; due_time?: string }) => ipcRenderer.invoke('create-reminder', data),
   toggleReminder: (id: string, done: boolean) => ipcRenderer.invoke('toggle-reminder', id, done),
   deleteReminder: (id: string) => ipcRenderer.invoke('delete-reminder', id),
 
@@ -1567,6 +1594,10 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
       return () => { ipcRenderer.removeListener('vision:progress', handler); };
     },
   },
+
+  // ========== Local Ollama Image Recognition (VLM) ==========
+  ollamaChat: (opts: { model: string; imageBase64: string; textPrompt: string }) =>
+    ipcRenderer.invoke('ollama-chat', opts),
 
   // ========== Agent Prompts ==========
   agentPrompts: {
@@ -1936,6 +1967,10 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   // ── GAS Integration ──
   gasSync: (payload: any) => ipcRenderer.invoke('gas:sync', payload),
   gasExport: (payload: any) => ipcRenderer.invoke('gas:export', payload),
+
+  // ── Lecture (SlideMind) ──
+  lectureApi: (req: any) => ipcRenderer.invoke('lecture:api', req),
+  lectureDigest: (url: string) => ipcRenderer.invoke('lecture:digest', url),
 });
 
 // R-10: Splash renderer preload bridge (single IPC channel for splash↔main)

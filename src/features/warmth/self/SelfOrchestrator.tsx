@@ -5,7 +5,6 @@ import {
   Sparkles, Zap, ExternalLink, MousePointerClick,
 } from 'lucide-react'
 import { ProfileTab } from '../../../components/life/ProfileTab'
-import { BrainManagementView } from '../context-brain/BrainManagementView'
 import { SelfErrorBoundary } from './SelfErrorBoundary'
 import { DotPattern } from '../../../components/ui/dot-pattern'
 import { NeuralFlow } from '../context-brain/NeuralFlow'
@@ -476,7 +475,37 @@ export function SelfOrchestrator() {
                     className="overflow-hidden"
                   >
                     <div className="px-5 pb-5 -mx-5 -mb-5">
-                      <BrainManagementView />
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {([
+                          ['episodes', 'episodes'],
+                          ['entities', 'entities'],
+                          ['currentFacts', 'facts'],
+                        ] as const).map(([k, label]) => (
+                          <div key={k} className="flex flex-col gap-0.5">
+                            <span className="text-[18px] font-semibold font-mono text-zinc-200">
+                              {(stats as any)?.[k] ?? 0}
+                            </span>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500">{label}</span>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => { window.location.hash = '#/ai' }}
+                          className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors"
+                          style={{
+                            background: `${ACCENTS.cyan}14`,
+                            border: `1px solid ${ACCENTS.cyan}30`,
+                            color: ACCENTS.cyan,
+                          }}
+                          title="Open the Context Brain on AI Assistant"
+                        >
+                          <Brain size={11} /> Open Context Brain
+                          <ExternalLink size={10} />
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-2.5">
+                        The knowledge graph, retrieval search, and external-AI trail now live on
+                        AI Assistant. This page keeps the identity view.
+                      </p>
                     </div>
                   </motion.div>
                 )}

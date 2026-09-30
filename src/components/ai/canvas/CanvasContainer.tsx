@@ -1,5 +1,9 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import {
+  FolderOpen, FilePlus2, Save, SquarePlus, LayoutGrid, Frame,
+  ZoomIn, ZoomOut, Scan, Magnet, Undo2, Redo2, Maximize2, Minimize2,
+} from 'lucide-react'
 import { DotPattern } from '../../ui/dot-pattern'
 import { CanvasGrid } from './CanvasGrid'
 import { CanvasInput } from './CanvasInput'
@@ -342,7 +346,19 @@ export function CanvasContainer({
 
   return (
     <div ref={containerRef} className={`dk-canvas-container ${isFullscreen ? 'fullscreen' : ''}`}>
-      <DotPattern className="dk-canvas-dot-pattern" opacity={0.08} radius={1.5} gap={24} />
+      {/* POLKA DOT BACKGROUND.
+          The circles are `fill="currentColor"`, and this SVG is a direct child
+          of .dk-canvas-container — which sets NO `color`. So the dots inherited
+          whatever the route shell happened to set, and at the old
+          `opacity={0.08}` that composited to ~rgb(26,26,28) over the #060608
+          void = 1.17:1. That is why the canvas read as a dead black void with
+          no dots at all.
+
+          opacity is now 1 and the brightness lives in ONE place — the
+          `color` on .dk-canvas-dot-pattern in canvas.css — so nothing can
+          double-dim it. radius 3 keeps each dot well above sub-pixel at any
+          zoom the canvas allows (floor is 0.5). */}
+      <DotPattern className="dk-canvas-dot-pattern" radius={3} gap={26} opacity={1} />
       <SaveIndicator status={saveStatus} />
 
       {showManager && onLoadCanvas && (
@@ -357,110 +373,84 @@ export function CanvasContainer({
         />
       )}
 
-      <div className="dk-canvas-toolbar" data-tutorial="ai.auto-arrange">
-        <button onClick={() => setShowManager(v => !v)} title="Canvas manager — save/load canvases">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
-        </button>
-        <button onClick={() => setShowSetup(true)} title="Default canvas setup — choose cards for new canvases"
-          style={{ color: 'var(--dk-text-muted)' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
-        </button>
-        <div className="dk-canvas-toolbar-separator" />
-        <button onClick={handleArrange} title="Arrange cards neatly">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="3" width="7" height="7" /><rect x1="14" y="3" width="7" height="7" />
-            <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-          </svg>
-        </button>
-        <button onClick={() => setShowDrawer(true)} title="Add card to canvas"
-          className="text-emerald-400 hover:text-emerald-300"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-        <button onClick={handleFocus} title="Focus — bring camera to cards">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-          </svg>
-        </button>
-        <div className="dk-canvas-toolbar-separator" />
-        <button onClick={handleZoomOut} title="Zoom out">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
-          </svg>
-        </button>
-        <span className="dk-canvas-zoom-label">{Math.round(zoom * 100)}%</span>
-        <button onClick={handleZoomIn} title="Zoom in">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
-          </svg>
-        </button>
-        <div className="dk-canvas-toolbar-separator" />
-        <button
-          onClick={onToggleAutoFocus}
-          title={autoFocus ? "Auto-focus: ON — canvas follows AI activity" : "Auto-focus: OFF — manual navigation"}
-          style={{ color: autoFocus ? 'var(--dk-accent)' : 'var(--dk-text-muted)' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-          </svg>
-        </button>
-        <div className="dk-canvas-toolbar-separator" />
-        <button onClick={onSaveCanvas}
-          title="Save canvas layout"
-          style={{ color: saveStatus === 'saved' ? 'var(--dk-accent)' : 'var(--dk-text-muted)' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-            <polyline points="17,21 17,13 7,13 7,21" />
-            <polyline points="7,3 7,8 15,8" />
-          </svg>
-        </button>
-        <div className="dk-canvas-toolbar-separator" />
-        <button onClick={onUndo} title="Undo (Ctrl+Z)" disabled={!canUndo}
-          style={{ color: canUndo ? 'var(--dk-text-muted)' : 'var(--dk-text-faint)', opacity: canUndo ? 1 : 0.35, cursor: canUndo ? 'pointer' : 'not-allowed' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
-          </svg>
-        </button>
-        <button onClick={onRedo} title="Redo (Ctrl+Shift+Z)" disabled={!canRedo}
-          style={{ color: canRedo ? 'var(--dk-text-muted)' : 'var(--dk-text-faint)', opacity: canRedo ? 1 : 0.35, cursor: canRedo ? 'pointer' : 'not-allowed' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
-          </svg>
-        </button>
-        <div className="dk-canvas-toolbar-separator" />
-        <button onClick={() => setConfirmNewCanvas(true)}
-          title="New canvas"
-          style={{ color: 'var(--dk-text-muted)' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-        <div className="dk-canvas-toolbar-separator" />
-        <button onClick={() => setIsFullscreen(v => !v)} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
-          {isFullscreen ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-            </svg>
-          )}
-        </button>
+      {/* TOOLBAR — grouped by intent.
+          WAS: 20 buttons in a flat row with 8 separators, so nothing read as a
+          group. Two PAIRS OF IDENTICAL ICONS: "Focus" and "Auto-focus" both
+          drew the same crosshair, and "Add card" and "New canvas" both drew the
+          same plus — indistinguishable without hovering. One button was also
+          hard-coded `text-emerald-400` among gray siblings (a second signal hue
+          on the chrome — LAMINAR §2), and every icon was a hand-rolled inline
+          SVG path (LAMINAR §7 item 8: lucide only).
+
+          NOW: 5 labelled clusters, one separator per boundary, unique lucide
+          icons, and a real on/off state for the two toggles. */}
+      <div className="dk-canvas-toolbar" data-tutorial="ai.auto-arrange" role="toolbar" aria-label="Canvas tools">
+
+        {/* 1 — CANVAS (which document) */}
+        <div className="dk-canvas-group" role="group" aria-label="Canvas">
+          <button onClick={() => setShowManager(v => !v)} title="Canvas manager — open, rename, delete saved canvases" aria-label="Canvas manager">
+            <FolderOpen size={16} />
+          </button>
+          <button onClick={() => setConfirmNewCanvas(true)} title="New blank canvas" aria-label="New canvas">
+            <FilePlus2 size={16} />
+          </button>
+          <button onClick={onSaveCanvas} title="Save canvas layout"
+            aria-label="Save canvas layout" aria-pressed={saveStatus === 'saved'}
+            data-on={saveStatus === 'saved' ? 'true' : undefined}>
+            <Save size={16} />
+          </button>
+        </div>
+
+        {/* 2 — COMPOSE (change what is on the canvas) */}
+        <div className="dk-canvas-group" role="group" aria-label="Compose">
+          <button onClick={() => setShowDrawer(true)} title="Add a card to the canvas" aria-label="Add card">
+            <SquarePlus size={16} />
+          </button>
+          <button onClick={handleArrange} title="Arrange all cards into a neat grid" aria-label="Arrange cards">
+            <LayoutGrid size={16} />
+          </button>
+          <button onClick={() => setShowSetup(true)} title="Choose the default card set for new canvases" aria-label="Card presets">
+            <Frame size={16} />
+          </button>
+        </div>
+
+        {/* 3 — NAVIGATE (camera) */}
+        <div className="dk-canvas-group" role="group" aria-label="Navigate">
+          <button onClick={handleZoomOut} title="Zoom out" aria-label="Zoom out">
+            <ZoomOut size={16} />
+          </button>
+          <span className="dk-canvas-zoom-label" aria-live="off">{Math.round(zoom * 100)}%</span>
+          <button onClick={handleZoomIn} title="Zoom in" aria-label="Zoom in">
+            <ZoomIn size={16} />
+          </button>
+          <button onClick={handleFocus} title="Fit all cards in view" aria-label="Fit cards in view">
+            <Scan size={16} />
+          </button>
+        </div>
+
+        {/* 4 — AUTOMATION (mode toggles — these are switches, not actions) */}
+        <div className="dk-canvas-group" role="group" aria-label="Automation">
+          <button onClick={onToggleAutoFocus} className="dk-canvas-toggle"
+            title={autoFocus ? 'Auto-follow is ON — the canvas follows AI activity' : 'Auto-follow is OFF — you control the camera'}
+            aria-label="Auto-follow AI activity" aria-pressed={!!autoFocus} data-on={autoFocus ? 'true' : undefined}>
+            <Magnet size={16} />
+          </button>
+        </div>
+
+        {/* 5 — HISTORY + DISPLAY */}
+        <div className="dk-canvas-group" role="group" aria-label="History and display">
+          <button onClick={onUndo} title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!canUndo}>
+            <Undo2 size={16} />
+          </button>
+          <button onClick={onRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={!canRedo}>
+            <Redo2 size={16} />
+          </button>
+          <button onClick={() => setIsFullscreen(v => !v)} className="dk-canvas-toggle"
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            aria-label="Fullscreen" aria-pressed={isFullscreen} data-on={isFullscreen ? 'true' : undefined}>
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        </div>
       </div>
 
       <CanvasGrid

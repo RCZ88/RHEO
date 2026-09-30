@@ -8,6 +8,7 @@ export function useTerminalLayout(projectId: string | null = null, initialLayout
   const [layout, setLayoutState] = useState<PaneNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeLayoutId, setActiveLayoutId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadLayout = useCallback(async () => {
@@ -84,10 +85,13 @@ export function useTerminalLayout(projectId: string | null = null, initialLayout
           setActiveLayoutId(result.id);
         }
       }
-    } catch (e) {
-      // Silently ignore save errors to prevent console spam
+    } catch (e: any) {
+      console.error('[useTerminalLayout] Save FAILED:', e);
+      setSaveError(String(e?.message || e));
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => { if (layout) saveLayout(layout).catch(() => {}); }, 2000);
     }
-  }, [activeLayoutId, projectId]);
+  }, [activeLayoutId, projectId, layout]);
 
   useEffect(() => {
     loadLayout();
@@ -110,5 +114,7 @@ export function useTerminalLayout(projectId: string | null = null, initialLayout
     saveLayout(defaultLayout);
   }, [initialLayout, saveLayout]);
 
-  return { layout, setLayout, isLoading, resetLayout };
+  const retrySave = useCallback(() => { if (layout) saveLayout(layout).catch(() => {}); }, [layout]);
+
+  return { layout, setLayout, isLoading, resetLayout, saveError, retrySave };
 }

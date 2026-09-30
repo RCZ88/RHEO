@@ -117,7 +117,7 @@ export function PinnedActivities({
                         </span>
                       )}
                       <Icon className={`w-4 h-4 ${
-                        isSelected ? 'text-pink-400' : activity.is_productive ? 'text-emerald-500' : 'text-indigo-400'
+                        isSelected ? 'text-pink-400' : activity.is_productive ? 'text-[var(--tier-productive)]' : 'text-[var(--tier-neutral)]'
                       }`} />
                       <span className="text-[12px] font-medium whitespace-nowrap">{activity.name}</span>
                       {isSelected && externalSessionRunning && (

@@ -6,7 +6,6 @@ import { promisify } from 'util';
 
 const execFileP = promisify(execFile);
 
-// Process names (lowercased) that mean "a launcher is focused, not a game"
 export const GAME_LAUNCHERS: Record<string, string[]> = {
   steam: ['steam.exe', 'steamwebhelper.exe'],
   epic: ['epicgameslauncher.exe', 'unrealcefsubprocess.exe'],
@@ -24,8 +23,6 @@ const LAUNCHER_EXES = new Set(
 export const isLauncherProcess = (name?: string | null): boolean =>
   !!name && LAUNCHER_EXES.has(name.toLowerCase());
 
-// Seed map: generic exe name -> display name. Extended at startup from the
-// Steam library (see buildInstalledGameIndex). Keys are lowercased exe names.
 export const KNOWN_GAME_PROCESSES: Record<string, string> = {
   'client.exe': 'Wuthering Waves',
   'wutheringwaves.exe': 'Wuthering Waves',
@@ -38,7 +35,6 @@ export const KNOWN_GAME_PROCESSES: Record<string, string> = {
   'valorant-win64-shipping.exe': 'Valorant',
 };
 
-// Window-title fallback. "Wuthering Waves - Steam" -> "Wuthering Waves"
 export function gameNameFromTitle(title?: string | null): string | null {
   if (!title) return null;
   const m = title.match(/^(.+?)\s*[-–—]\s*(?:steam|epic games)\s*$/i);
@@ -48,7 +44,6 @@ export function gameNameFromTitle(title?: string | null): string | null {
   return null;
 }
 
-// exe-name (lower) -> display name, built once. Also tracks install dirs.
 export const installedGameIndex = new Map<string, string>();
 
 function steamRoots(): string[] {
@@ -62,14 +57,9 @@ function steamRoots(): string[] {
 }
 
 const safeExists = (p: string): boolean => {
-  try {
-    return fs.existsSync(p);
-  } catch {
-    return false;
-  }
+  try { return fs.existsSync(p); } catch { return false; }
 };
 
-// Minimal VDF value scrape: pull all "path" entries from libraryfolders.vdf
 function libraryPaths(steamRoot: string): string[] {
   const out = [path.join(steamRoot, 'steamapps')];
   try {
@@ -79,14 +69,10 @@ function libraryPaths(steamRoot: string): string[] {
     for (const m of vdf.matchAll(/"path"\s*"([^"]+)"/g)) {
       out.push(path.join(m[1].replace(/\\\\/g, '\\'), 'steamapps'));
     }
-  } catch {
-    // no library file: fall back to default only
-  }
+  } catch { return out; }
   return out;
 }
 
-// Read appmanifest_*.acf -> { name, installdir }. Index the install dir name
-// AND a best-guess exe so both process-name and title paths can resolve.
 export function buildInstalledGameIndex(): void {
   installedGameIndex.clear();
   try {
@@ -118,26 +104,19 @@ let scanInFlight: Promise<string | null> | null = null;
 
 export function lookupExe(exe: string, fullPath?: string | null): string | null {
   const k = exe.toLowerCase();
-  
-  // 1. Check if we can disambiguate by path (most reliable for generic names like Client.exe)
   if (fullPath) {
     const lowerPath = fullPath.toLowerCase();
     for (const [dir, name] of installedGameIndex.entries()) {
-      // If the path contains the install directory name, it's a very strong match
       if (lowerPath.includes(dir)) return name;
     }
   }
-
-  // 2. Fallback to direct process name mapping
   return KNOWN_GAME_PROCESSES[k] ?? installedGameIndex.get(k) ?? null;
 }
 
-// Returns a game display name if a known game process is running, else null
-async function scanForGameProcess(): Promise<string | null> {
+export async function scanForGameProcess(): Promise<string | null> {
   const now = Date.now();
   if (now - scanCache.at < SCAN_TTL) return scanCache.name;
   if (scanInFlight) return scanInFlight;
-
   scanInFlight = (async () => {
     let found: string | null = null;
     try {
@@ -153,9 +132,7 @@ async function scanForGameProcess(): Promise<string | null> {
           if (hit) { found = hit; break; }
         }
       }
-    } catch {
-      // timeout / denied: keep found = null
-    }
+    } catch {}
     scanCache = { name: found, at: Date.now() };
     scanInFlight = null;
     return found;
@@ -163,8 +140,98 @@ async function scanForGameProcess(): Promise<string | null> {
   return scanInFlight;
 }
 
-export type ResolveSource = 'title' | 'map' | 'index' | 'scan' | 'keepalive' | 'raw';
+export type ResolveSource = 'title' | 'map' | 'index' | 'scan' | 'keepalive' | 'raw' | 'electron-title';
 let lastResolvedGame: string | null = null;
+
+const ELECTRON_TITLE_MAP: Record<string, string> = {
+  'spotify': 'Spotify', 'spotify web player': 'Spotify',
+  'visual studio code': 'VS Code', 'code - oss': 'VS Code', 'code oss': 'VS Code',
+  'vscode': 'VS Code', 'code': 'VS Code', 'vscode insiders': 'VS Code',
+  'slack': 'Slack', 'discord': 'Discord', 'teams': 'Microsoft Teams',
+  'microsoft teams': 'Microsoft Teams',
+  'obs studio': 'OBS Studio', 'obs': 'OBS Studio',
+  'notion': 'Notion', 'figma': 'Figma',
+  'whatsapp': 'WhatsApp', 'signal': 'Signal', 'zoom': 'Zoom',
+  'notepad': 'Notepad', 'notepad++': 'Notepad++',
+  'calculator': 'Calculator',
+  'chrome': 'Chrome', 'chromium': 'Chrome', 'brave': 'Brave',
+  'edge': 'Microsoft Edge', 'firefox': 'Firefox', 'safari': 'Safari',
+  'opera': 'Opera', 'vivaldi': 'Vivaldi', 'arc': 'Arc',
+  'cursor': 'Cursor', 'chatgpt': 'ChatGPT', 'claude': 'Claude',
+  'perplexity': 'Perplexity', 'gemini': 'Gemini',
+  'github': 'GitHub', 'gitlab': 'GitLab',
+  'jetbrains': 'JetBrains', 'intellij': 'IntelliJ', 'pycharm': 'PyCharm',
+  'webstorm': 'WebStorm', 'android studio': 'Android Studio', 'xcode': 'Xcode',
+  'terminal': 'Terminal', 'iterm': 'iTerm', 'hyper': 'Hyper',
+  'alacritty': 'Alacritty', 'kitty': 'Kitty',
+  'gnome terminal': 'GNOME Terminal', 'konsole': 'Konsole',
+  'postman': 'Postman', 'insomnia': 'Insomnia', 'dbeaver': 'DBeaver',
+  'docker': 'Docker', 'docker desktop': 'Docker Desktop',
+  'vlc': 'VLC', 'mpv': 'MPV', 'thunderbird': 'Thunderbird',
+  'mail': 'Mail', 'outlook': 'Outlook', 'gmail': 'Gmail',
+  'google drive': 'Google Drive', 'dropbox': 'Dropbox', 'onedrive': 'OneDrive',
+  'calendar': 'Calendar', 'trello': 'Trello', 'asana': 'Asana',
+  'todoist': 'Todoist', 'linear': 'Linear', 'jira': 'Jira',
+  'evernote': 'Evernote', 'obsidian': 'Obsidian', 'sketch': 'Sketch',
+  'affinity': 'Affinity', 'canva': 'Canva',
+  'gimp': 'GIMP', 'inkscape': 'Inkscape', 'blender': 'Blender',
+  'audacity': 'Audacity', 'photoshop': 'Photoshop',
+  'illustrator': 'Illustrator', 'premiere': 'Premiere Pro',
+  'lightroom': 'Lightroom', 'indesign': 'InDesign',
+  'acrobat': 'Acrobat', 'reader': 'Adobe Reader',
+  'rheo': 'RHEO', 'deskflow': 'DeskFlow', 'app tracker': 'RHEO',
+  'steam': 'Steam', 'epic': 'Epic Games', 'origin': 'Origin',
+  'minecraft': 'Minecraft', 'fortnite': 'Fortnite', 'roblox': 'Roblox',
+  'valorant': 'Valorant', 'warframe': 'Warframe',
+  'apex legends': 'Apex Legends', 'csgo': 'CS2',
+  'dota': 'Dota 2', 'league of legends': 'League of Legends',
+  'reddit': 'Reddit', 'twitter': 'X', 'x': 'X',
+  'facebook': 'Facebook', 'instagram': 'Instagram', 'tiktok': 'TikTok',
+  'youtube': 'YouTube', 'netflix': 'Netflix', 'twitch': 'Twitch',
+  'soundcloud': 'SoundCloud', 'vimeo': 'Vimeo',
+  'logseq': 'Logseq', 'joplin': 'Joplin',
+  'simplenote': 'Simplenote', 'google keep': 'Google Keep',
+  'wallpaper engine': 'Wallpaper Engine',
+  'apple music': 'Apple Music', 'music': 'Music',
+  'transmission': 'Transmission', 'qbittorrent': 'qBittorrent',
+};
+
+function stripSuffixes(title: string): string {
+  const suffixes = [
+    'spotify web player', 'visual studio code', 'code - oss', 'code oss',
+    'vscode insiders', 'microsoft teams', 'obs studio', 'epic games launcher',
+    'docker desktop', 'android studio', 'grand theft auto', 'premiere pro',
+    'notepad++', 'adobe xd', 'adobe illustrator', 'adobe photoshop',
+    'after effects', 'lightroom classic', 'indesign', 'acrobat reader',
+    'windows media player', 'groove music', 'apple podcasts',
+    'final fantasy xiv', 'world of Warcraft', 'league of legends',
+  ];
+  let stripped = title.toLowerCase().trim();
+  for (const suf of suffixes) {
+    stripped = stripped.replace(new RegExp(`[-–—]\\s*${suf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i'), '');
+  }
+  // Generic suffix removal
+  stripped = stripped.replace(/[-–—]\s*(spotify|visual studio code|code|slack|discord|teams|obs|notion|figma|whatsapp|signal|zoom|notepad|calculator|rheo|deskflow|app tracker|chrome|chromium|brave|edge|firefox|safari|opera|vivaldi|arc|cursor|chatgpt|claude|perplexity|gemini|github|gitlab|postman|insomnia|dbeaver|docker|vlc|mpv|thunderbird|trello|asana|todoist|linear|jira|terminal|iterm|hyper|alacritty|kitty|jetbrains|intellij|pycharm|webstorm|android studio|xcode|vscode|steam|epic|origin|minecraft|fortnite|roblox|valorant|csgo|counter strike|dota|league of legends|teamfight tactics|grand theft auto|gta|elden ring|cyberpunk|starfield|skyrim|fallout|wow|ffxiv|destiny|borderlands|gearbox|spotify web player)\s*$/i, '');
+  return stripped.trim();
+}
+
+async function resolveElectronByTitle(title: string): Promise<string | null> {
+  if (!title) return null;
+  const lower = title.toLowerCase().trim();
+  const stripped = stripSuffixes(title);
+  for (const [key, name] of Object.entries(ELECTRON_TITLE_MAP)) {
+    if (lower === key || lower.startsWith(key + ' ') || lower.startsWith(key + '-') || lower.startsWith(key + '—') || lower.startsWith(key + '-')) {
+      return name;
+    }
+    if (stripped === key || stripped.startsWith(key + ' ') || stripped.startsWith(key + '-')) {
+      return name;
+    }
+    if (lower.includes(key) && lower.length <= key.length + 25) {
+      return name;
+    }
+  }
+  return null;
+}
 
 export async function resolveForegroundApp(
   raw: { owner?: { name?: string; path?: string }; title?: string } | null,
@@ -180,6 +247,21 @@ export async function resolveForegroundApp(
 
   const launcher = isLauncherProcess(proc);
   const mappedByProc = lookupExe(proc, procPath);
+
+  if (proc.toLowerCase() === 'electron') {
+    const byTitle = await resolveElectronByTitle(title);
+    if (byTitle) {
+      lastResolvedGame = byTitle;
+      return { name: byTitle, source: 'electron-title' };
+    }
+    // Use the title as the app name instead of falling back to 'Electron'
+    if (title && title !== 'Electron') {
+      lastResolvedGame = title;
+      return { name: title, source: 'electron-title' };
+    }
+    lastResolvedGame = null;
+    return { name: 'Electron', source: 'raw' };
+  }
 
   if (!launcher && !mappedByProc) {
     lastResolvedGame = null;
@@ -207,9 +289,7 @@ export async function resolveForegroundApp(
   return { name: proc, source: 'raw' };
 }
 
-// For manual "Rescan games" button
 export function rescanGames(): void {
   buildInstalledGameIndex();
-  // Reset scan cache so next game poll will re-scan
   scanCache = { name: null, at: 0 };
 }

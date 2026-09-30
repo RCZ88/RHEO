@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useConsoleStore } from "./hooks/useConsoleStore";
+import type { Store } from "./hooks/useConsoleStore";
 import { THEMES, uid } from "./lib/data";
 import { buildTranscript, download, fillDynamic, matchCombo } from "./lib/utils";
 import type { SavedCommand } from "./lib/types";
@@ -14,6 +15,70 @@ import { Check, Download, Maximize2, Pencil, Radio, Search, X, Upload, Import } 
 type Modal = "palette" | "presets" | "workspaces" | "savews" | "newtab" | "savecmd" | "rename" | "find" | "import" | null;
 
 const PASSIVE_KEYS = ["t", "w", "r", "h", "v", "]", "[", "k", "l", "s", "f", "y", "p", "b", "d", "z", "tab", "arrowright", "arrowleft"];
+
+const SIDEBAR_MIN = 208;
+const SIDEBAR_MAX = 520;
+const SIDEBAR_DEFAULT = 264;
+
+/** Drag handle for the left sidebar. Clamped so the sidebar can never be shrunk
+ *  far enough to obstruct the terminal, nor dragged wide enough to crowd it out.
+ *  Drag + arrow keys (keyboard resizing) + double-click to reset. */
+function SidebarResizer({ store }: { store: Store }) {
+  const clamp = (n: number) => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(n)));
+  const onDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = store.sidebarWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    // Coalesce to one state write per frame. Without this, every mousemove pushes a
+    // full re-render of the whole console and the drag becomes janky/laggy.
+    let pending = startW;
+    let frame = 0;
+    const move = (ev: MouseEvent) => {
+      pending = clamp(startW + (ev.clientX - startX));
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        store.setSidebarWidth(pending);
+      });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      if (frame) cancelAnimationFrame(frame);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`resize sidebar, ${store.sidebarWidth} pixels`}
+      aria-valuenow={store.sidebarWidth}
+      aria-valuemin={SIDEBAR_MIN}
+      aria-valuemax={SIDEBAR_MAX}
+      tabIndex={0}
+      data-testid="sidebar-resizer"
+      onMouseDown={onDown}
+      onDoubleClick={() => store.setSidebarWidth(SIDEBAR_DEFAULT)}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") { e.preventDefault(); store.setSidebarWidth(clamp(store.sidebarWidth - 16)); }
+        if (e.key === "ArrowRight") { e.preventDefault(); store.setSidebarWidth(clamp(store.sidebarWidth + 16)); }
+        if (e.key === "Home") { e.preventDefault(); store.setSidebarWidth(SIDEBAR_MIN); }
+        if (e.key === "End") { e.preventDefault(); store.setSidebarWidth(SIDEBAR_MAX); }
+      }}
+      title="Drag to resize · arrows nudge · double-click resets"
+      className="sidebar-resizer w-2 shrink-0 cursor-col-resize grid place-items-center group/resizer outline-none"
+    >
+      <span className="w-0.5 h-8 rounded-full transition group-hover/resizer:bg-[var(--t-accent)] group-focus-visible/resizer:bg-[var(--t-accent)]" style={{ background: "var(--t-border)" }} />
+    </div>
+  );
+}
 
 export default function App() {
   const store = useConsoleStore();
@@ -37,8 +102,7 @@ export default function App() {
 
   const demoMode = store.demoMode;
   const setDemoMode = store.setDemoMode;
-  const theme = store.theme;
-  const cssVars = useMemo(() => ({
+  const theme = store.theme;  const cssVars = useMemo(() => ({
     ["--t-bg" as string]: theme.bg,
     ["--t-panel" as string]: theme.panel,
     ["--t-panel2" as string]: theme.panel2,
@@ -174,10 +238,11 @@ export default function App() {
         <div className="flex-1 flex min-h-0 gap-2 px-3 pb-1">
           <AnimatePresence initial={false}>
             {leftOpen && (
-              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: 264, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden lg:block shrink-0 rounded-2xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
-                <div className="w-[264px] h-full">
+              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: store.sidebarWidth + 8, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden lg:flex shrink-0 rounded-2xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+                <div className="h-full" style={{ width: store.sidebarWidth }}>
                   <LeftSidebar store={store} onPresets={() => setModal("presets")} onWorkspaces={() => setModal("workspaces")} onNewTab={() => setModal("newtab")} />
                 </div>
+                <SidebarResizer store={store} />
               </motion.div>
             )}
           </AnimatePresence>

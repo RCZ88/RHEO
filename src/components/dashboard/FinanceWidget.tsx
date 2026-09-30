@@ -3,6 +3,7 @@
 // LAMINAR: solid token surface, hairline, radius 10
 import { motion } from 'motion/react';
 import { DollarSign, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 
 interface FinanceWidgetProps {
   summary?: {
@@ -61,6 +62,7 @@ export function FinanceWidget({ summary, loading, error }: FinanceWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">Finance</span>
         </div>
+        <WidgetJumpButton widgetId="finance-widget" iconOnly />
       </div>
 
       <div className="grid grid-cols-2 gap-3 flex-1">

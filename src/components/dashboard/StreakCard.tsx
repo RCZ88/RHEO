@@ -61,7 +61,7 @@ function getMilestone(streak: number) {
   return null;
 }
 
-export function StreakCard({ goals, className = '' }: StreakCardProps) {
+export function StreakCard({ goals = [], className = '' }: StreakCardProps) {
   const [streaks, setStreaks] = useState<StreakData>({ currentStreak: 0, bestStreak: 0, completedDates: [], categoryStreaks: {} });
 
   useEffect(() => { setStreaks(calculateStreaks(goals)); }, [goals]);

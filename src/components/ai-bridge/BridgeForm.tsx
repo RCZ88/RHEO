@@ -21,6 +21,10 @@ import { LivePromptPreview, DynamicSectionDef } from './LivePromptPreview'
 import { buildFormPrompt, BridgeCategory, SECTION_COLORS, buildInjectCommand, STYLE_TEMPLATES, PROMPT_SECTIONS } from './prompt'
 import { parseBridgeResponse } from './parse'
 import { toast } from '@/features/content-engine/components/ui'
+import {
+  getPreferredTransport, setPreferredTransport, gatewayAvailability,
+  sendViaGateway, extractField, type Transport,
+} from '@/services/externalAiTransport'
 
 const CLIENT_PENDING_TTL_MS = 5 * 60 * 1000
 
@@ -58,6 +62,17 @@ export function BridgeForm({
   const [pendingImport, setPendingImport] = useState<Record<string, string> | null>(null)
   const [styleId, setStyleId] = useState(externalStyleId || '')
   const [frameMode, setFrameMode] = useState<'strict' | 'flexible'>(externalFrameMode)
+  const [transport, setTransport] = useState<Transport>(getPreferredTransport)
+  const [signedIn, setSignedIn] = useState<string[]>([])
+  const [busyGateway, setBusyGateway] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    void gatewayAvailability().then((a) => {
+      if (live) setSignedIn(a.signedIn)
+    })
+    return () => { live = false }
+  }, [transport])
   // Section toggle — only meaningful for content-engine (skill checklist)
   const [sections, setSections] = useState<string[]>(PROMPT_SECTIONS.map((s) => s.id))
 
@@ -123,6 +138,38 @@ export function BridgeForm({
     const unsubscribe = api.onBridgeResponse(handler)
     return () => { unsubscribe?.() }
   }, [])
+
+  const runGateway = async () => {
+    setBusyGateway(true)
+    setError(null)
+    const res = await sendViaGateway(prompt)
+    setBusyGateway(false)
+    if (!res.ok) {
+      setError(res.error || 'The provider did not answer.')
+      setFeedback(null)
+      return
+    }
+    const keys = fields.map((f) => f.key)
+    const { values, error: parseError } = extractField(res.text!, keys)
+    if (!Object.keys(values).length) {
+      setError(parseError || 'Could not read the response.')
+      return
+    }
+    const snapshot = valuesRef.current
+    const autoFill: Record<string, string> = {}
+    const confirm: Record<string, string> = {}
+    for (const k of keys) {
+      const v = values[k]
+      if (v === undefined) continue
+      if (snapshot[k] === '' || snapshot[k] === pendingRef.current?.valuesAtSend[k]) autoFill[k] = v
+      else confirm[k] = v
+    }
+    if (Object.keys(autoFill).length) {
+      onBulkUpdateRef.current?.({ ...snapshot, ...autoFill })
+      toast(`Imported ${Object.keys(autoFill).length} field(s) from ${res.provider}`)
+    }
+    if (Object.keys(confirm).length) setPendingImport(confirm)
+  }
 
   const copy = async () => {
     await navigator.clipboard.writeText(prompt)
@@ -223,10 +270,12 @@ export function BridgeForm({
           </button>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={sendToAI}
-              className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium bg-[#f5c518]/15 text-[#f5c518] border border-[#f5c518]/30 hover:bg-[#f5c518]/25 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
+              onClick={() => (transport === 'gateway' ? runGateway() : sendToAI())}
+              disabled={busyGateway}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium bg-[#f5c518]/15 text-[#f5c518] border border-[#f5c518]/30 hover:bg-[#f5c518]/25 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50 disabled:opacity-50"
             >
-              <ExternalLink size={9} /> Send to AI
+              {busyGateway ? <Loader2 size={9} className="animate-spin" /> : <ExternalLink size={9} />}
+              {busyGateway ? 'Sending…' : 'Send to AI'}
             </button>
             <button
               onClick={copy}
@@ -263,6 +312,33 @@ export function BridgeForm({
                   >{t.label}</button>
                 ))}
               </div>
+            </div>
+
+            {/* Transport picker — extension default, gateway opt-in */}
+            <div className="flex items-center gap-1.5">
+              {(['extension', 'gateway'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => { setTransport(t); setPreferredTransport(t) }}
+                  disabled={t === 'gateway' && signedIn.length === 0}
+                  title={t === 'gateway' && signedIn.length === 0
+                    ? 'Sign in to an AI provider first: Workspace -> AI Gateway -> Providers'
+                    : t === 'gateway'
+                      ? `Send hands-free via ${signedIn[0]}`
+                      : 'Inject into your already-open AI chat tab'}
+                  className="rounded-md px-2 py-0.5 text-[9px] border capitalize transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2"
+                  style={
+                    transport === t
+                      ? { borderColor: 'rgba(245,197,24,0.4)', background: 'rgba(245,197,24,0.10)', color: '#f5c518' }
+                      : { borderColor: '#27272a', color: '#a1a1aa' }
+                  }
+                >
+                  {t}
+                </button>
+              ))}
+              {transport === 'gateway' && (
+                <span className="text-[9px] text-zinc-500">via {signedIn[0] || 'not signed in'}</span>
+              )}
             </div>
 
             {/* Frame mode */}

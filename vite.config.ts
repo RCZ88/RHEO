@@ -15,7 +15,13 @@ export default defineConfig(async () => {
         '@': path.resolve(__dirname, 'src'),
       },
     },
-    optimizeDeps: { exclude: ['better-sqlite3'] },
+    optimizeDeps: { exclude: ['better-sqlite3'], entries: ['index.html'] },
+    server: {
+      fs: {
+        allow: ['src', 'index.html', 'public'],
+        deny: ['**/agent/**', '**/TEMP/**', '**/dist-electron/**', '**/release/**', '**/rheo-landing*/**', '**/motion-lab/**', '**/browser-extension/**', '**/lecturer-feature/**', '**/graphify-out/**', '**/scripts/**', '**/resources/**', '**/backups/**'],
+      },
+    },
     base: './',
     build: {
       emptyOutDir: true,

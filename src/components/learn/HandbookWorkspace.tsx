@@ -13,10 +13,10 @@ const api = (window as any).deskflowAPI;
 // ── Depth colors from HTML ──
 const DEPTH_STYLES: Record<string, { color: string; bg: string; border: string; dot: string; label: string }> = {
 core:   { color: 'text-cyan-400', bg: 'bg-cyan-400/8', border: 'border-cyan-400/35', dot: 'bg-cyan-400', label: 'core' },
-  daily:  { color: 'text-emerald-400', bg: 'bg-emerald-400/12', border: 'border-emerald-400/35', dot: 'bg-emerald-400', label: 'daily' },
-  power:  { color: 'text-purple-400', bg: 'bg-purple-400/12', border: 'border-purple-400/35', dot: 'bg-purple-400', label: 'power' },
-  rescue: { color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/35', dot: 'bg-red-400', label: 'rescue' },
-  sudo:   { color: 'text-amber-400', bg: 'bg-amber-400/12', border: 'border-amber-400/35', dot: 'bg-amber-400', label: 'sudo' },
+  daily:  { color: 'text-[var(--hb-green)]', bg: 'bg-[color-mix(in_srgb,var(--hb-green)_12,transparent)]', border: 'border-[color-mix(in_srgb,var(--hb-green)_35,transparent)]', dot: 'bg-[var(--hb-green)]', label: 'daily' },
+  power:  { color: 'text-[var(--hb-violet)]', bg: 'bg-[color-mix(in_srgb,var(--hb-violet)_12,transparent)]', border: 'border-[color-mix(in_srgb,var(--hb-violet)_35,transparent)]', dot: 'bg-[var(--hb-violet)]', label: 'power' },
+  rescue: { color: 'text-[var(--hb-rose)]', bg: 'bg-[color-mix(in_srgb,var(--hb-rose)_10,transparent)]', border: 'border-[color-mix(in_srgb,var(--hb-rose)_35,transparent)]', dot: 'bg-[var(--hb-rose)]', label: 'rescue' },
+  sudo:   { color: 'text-[var(--hb-amber)]', bg: 'bg-[color-mix(in_srgb,var(--hb-amber)_12,transparent)]', border: 'border-[color-mix(in_srgb,var(--hb-amber)_35,transparent)]', dot: 'bg-[var(--hb-amber)]', label: 'sudo' },
 };
 
 function Badge({ type, label }: { type: string; label: string }) {
@@ -53,7 +53,7 @@ function TypingTerminal() {
 
       const line = document.createElement('div');
       line.className = 'mb-1 whitespace-pre-wrap break-all';
-      line.innerHTML = '<span class="text-emerald-400 select-none">$ </span><span class="text-zinc-100"></span><span class="inline-block w-2 h-[15px] bg-emerald-400 align-[-2px] animate-pulse"></span>';
+      line.innerHTML = '<span class="text-[var(--hb-green)] select-none">$ </span><span class="text-[var(--hb-txt)]"></span><span class="inline-block w-2 h-[15px] bg-[var(--hb-green)] align-[-2px] animate-pulse"></span>';
       body.appendChild(line);
 
       const inp = line.querySelector('span:nth-child(2)') as HTMLSpanElement;
@@ -68,7 +68,7 @@ function TypingTerminal() {
             s.out.forEach((o, k) => {
               const t2 = setTimeout(() => {
                 const d = document.createElement('div');
-                d.className = `mb-1 ${o.includes('Complete') ? 'text-emerald-400' : 'text-zinc-400'}`;
+                d.className = `mb-1 ${o.includes('Complete') ? 'text-[var(--hb-green)]' : 'text-[var(--hb-dim)]'}`;
                 d.textContent = o;
                 body.appendChild(d);
                 if (k === s.out.length - 1) {
@@ -89,12 +89,12 @@ function TypingTerminal() {
   }, []);
 
   return (
-    <div className="bg-zinc-950 border border-zinc-800/60 rounded-xl shadow-none overflow-hidden mb-7">
-      <div className="flex items-center gap-[7px] px-3.5 py-2.5 bg-zinc-900 border-b border-zinc-800/60">
-        <span className="w-[11px] h-[11px] rounded-full bg-red-500" />
-        <span className="w-[11px] h-[11px] rounded-full bg-amber-400" />
+    <div className="bg-[var(--hb-bg)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded-xl shadow-none overflow-hidden mb-7">
+      <div className="flex items-center gap-[7px] px-3.5 py-2.5 bg-[var(--hb-bg2)] border-b border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)]">
+        <span className="w-[11px] h-[11px] rounded-full bg-[var(--hb-rose)]" />
+        <span className="w-[11px] h-[11px] rounded-full bg-[var(--hb-amber)]" />
         <span className="w-[11px] h-[11px] rounded-full bg-green-500" />
-        <span className="ml-2 font-mono text-[11px] text-zinc-500">~/handbook</span>
+        <span className="ml-2 font-mono text-[11px] text-[var(--hb-dim)]">~/handbook</span>
       </div>
       <div ref={bodyRef} className="px-5 py-4 font-mono text-[13.5px] min-h-[88px]" />
     </div>
@@ -348,21 +348,19 @@ export function HandbookWorkspace() {
 
   if (loading || !data) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-zinc-950">
-        <p className="text-zinc-500 text-sm font-mono">Loading handbook...</p>
+      <div className="flex-1 flex items-center justify-center bg-[var(--hb-bg)]">
+        <p className="text-[var(--hb-dim)] text-sm font-mono">Loading handbook...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden bg-zinc-950" style={{ backgroundImage: 'radial-gradient(ellipse 800px 500px at 75% -10%, rgba(121,192,255,0.05), transparent), radial-gradient(ellipse 600px 400px at 10% 30%, rgba(126,231,135,0.04), transparent)' }}>
+    <div className="hb-scope flex-1 flex min-h-0 overflow-hidden bg-[var(--hb-bg)] relative">
+      <div className="hb-substrate" aria-hidden="true" />
       {/* Scroll progress bar */}
       <div
-        className="fixed top-0 left-0 h-[2px] z-[99] transition-[width] duration-100 linear"
-        style={{
-          width: `${scrollPct}%`,
-          background: 'linear-gradient(90deg, var(--resume-success), var(--resume-info))',
-        }}
+        className="hb-progress fixed top-0 left-0 h-[2px] z-[99] transition-[width] duration-100 linear"
+        style={{ width: `${scrollPct}%` }}
       />
 
       {/* Tab bar */}
@@ -370,7 +368,7 @@ export function HandbookWorkspace() {
         <button
           onClick={() => setActiveTab('sections')}
           className={`flex items-center gap-2 px-4 text-[12px] font-mono uppercase tracking-wider border-b-2 transition-colors ${
-            activeTab === 'sections' ? 'text-emerald-400 border-emerald-400 bg-zinc-900' : 'text-zinc-500 border-transparent hover:text-zinc-100'
+            activeTab === 'sections' ? 'text-[var(--hb-green)] border-[var(--hb-green)] bg-[var(--hb-bg2)]' : 'text-[var(--hb-dim)] border-transparent hover:text-[var(--hb-txt)]'
           }`}
         >
           <BookOpen className="w-3.5 h-3.5" /> Sections
@@ -378,7 +376,7 @@ export function HandbookWorkspace() {
         <button
           onClick={() => setActiveTab('ai-notes')}
           className={`flex items-center gap-2 px-4 text-[12px] font-mono uppercase tracking-wider border-b-2 transition-colors ${
-            activeTab === 'ai-notes' ? 'text-purple-400 border-purple-400 bg-zinc-900' : 'text-zinc-500 border-transparent hover:text-zinc-100'
+            activeTab === 'ai-notes' ? 'text-[var(--hb-violet)] border-[var(--hb-violet)] bg-[var(--hb-bg2)]' : 'text-[var(--hb-dim)] border-transparent hover:text-[var(--hb-txt)]'
           }`}
         >
           <Sparkles className="w-3.5 h-3.5" /> AI Notes
@@ -386,7 +384,7 @@ export function HandbookWorkspace() {
         <button
           onClick={() => setActiveTab('practice')}
           className={`flex items-center gap-2 px-4 text-[12px] font-mono uppercase tracking-wider border-b-2 transition-colors ${
-            activeTab === 'practice' ? 'text-emerald-400 border-emerald-400 bg-zinc-900' : 'text-zinc-500 border-transparent hover:text-zinc-100'
+            activeTab === 'practice' ? 'text-[var(--hb-green)] border-[var(--hb-green)] bg-[var(--hb-bg2)]' : 'text-[var(--hb-dim)] border-transparent hover:text-[var(--hb-txt)]'
           }`}
         >
           <Play className="w-3.5 h-3.5" /> Practice
@@ -394,10 +392,10 @@ export function HandbookWorkspace() {
       </div>
 
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 overflow-y-auto border-r border-zinc-800/60 bg-gradient-to-b from-zinc-900 to-zinc-950 p-5">
-        <div className="pb-5 mb-4 border-b border-zinc-800/60">
-          <div className="font-mono text-[15px] text-emerald-400"><b className="text-zinc-100 font-semibold">~/handbook</b> $</div>
-          <div className="text-[11px] text-zinc-500 mt-1.5 tracking-wider uppercase">THE TERMINAL, HUMAN-READABLE</div>
+      <aside className="w-64 shrink-0 overflow-y-auto border-r border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] bg-gradient-to-b from-[var(--hb-bg2)] to-[var(--hb-bg)] p-5">
+        <div className="pb-5 mb-4 border-b border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)]">
+          <div className="font-mono text-[15px] text-[var(--hb-green)]"><b className="text-[var(--hb-txt)] font-semibold">~/handbook</b> $</div>
+          <div className="text-[11px] text-[var(--hb-dim)] mt-1.5 tracking-wider uppercase">THE TERMINAL, HUMAN-READABLE</div>
         </div>
 
         {activeTab === 'sections' && (
@@ -411,11 +409,11 @@ export function HandbookWorkspace() {
                 }}
                 className={`flex items-baseline gap-2.5 w-full text-left px-3 py-1.5 text-[13px] rounded transition-colors ${
                   activeSection === s.id
-                    ? 'text-emerald-400 bg-gradient-to-r from-emerald-400/12 to-transparent border-l-2 border-emerald-400'
-                    : 'text-zinc-400 hover:text-zinc-100 border-l-2 border-transparent'
+                    ? 'text-[var(--hb-green)] bg-gradient-to-r from-[color-mix(in_srgb,var(--hb-green)_12,transparent)] to-transparent border-l-2 border-[var(--hb-green)]'
+                    : 'text-[var(--hb-dim)] hover:text-[var(--hb-txt)] border-l-2 border-transparent'
                 }`}
               >
-                <span className="font-mono text-[10.5px] text-zinc-500 w-5 shrink-0">{s.number}</span>
+                <span className="font-mono text-[10.5px] text-[var(--hb-dim)] w-5 shrink-0">{s.number}</span>
                 {s.title}
               </button>
             ))}
@@ -424,38 +422,38 @@ export function HandbookWorkspace() {
 
         {activeTab === 'practice' && (
           <div className="space-y-4">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-2">Streak</div>
-            <div className="font-mono text-emerald-400 text-lg font-bold">{streakData ?? '—'}</div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mt-4 mb-2">Achievements</div>
-            <div className="text-zinc-100 text-xs space-y-1">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--hb-dim)] mb-2">Streak</div>
+            <div className="font-mono text-[var(--hb-green)] text-lg font-bold">{streakData ?? '—'}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--hb-dim)] mt-4 mb-2">Achievements</div>
+            <div className="text-[var(--hb-txt)] text-xs space-y-1">
               {(achievementsData || []).slice(0, 5).map((a: any, i: number) => (
                 <div key={i} className="flex items-center gap-2">
-                  <span className="text-amber-400">●</span> {a.key || a.badgeKey || 'Achievement'}
+                  <span className="text-[var(--hb-amber)]">●</span> {a.key || a.badgeKey || 'Achievement'}
                 </div>
               ))}
-              {(achievementsData || []).length === 0 && <div className="text-zinc-500">None yet</div>}
+              {(achievementsData || []).length === 0 && <div className="text-[var(--hb-dim)]">None yet</div>}
             </div>
-            <div className="mt-6 pt-4 border-t border-zinc-800/60">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-2">Practice Count</div>
-              <div className="font-mono text-emerald-400">{localStorage.getItem('handbook-practiceCount') || '0'}</div>
+            <div className="mt-6 pt-4 border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)]">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--hb-dim)] mb-2">Practice Count</div>
+              <div className="font-mono text-[var(--hb-green)]">{localStorage.getItem('handbook-practiceCount') || '0'}</div>
             </div>
-            <div className="mt-4 pt-4 border-t border-zinc-800/60">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-2">Command Usage</div>
+            <div className="mt-4 pt-4 border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)]">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--hb-dim)] mb-2">Command Usage</div>
               <div className="space-y-1 max-h-[200px] overflow-y-auto">
                 {commandUsage.slice(0, 8).map((c: any, i: number) => (
                   <div key={i} className="flex items-center justify-between text-xs">
                     <span className="font-mono text-cyan-400">{c.command}</span>
-                    <span className="text-zinc-400">{c.total}×</span>
+                    <span className="text-[var(--hb-dim)]">{c.total}×</span>
                   </div>
                 ))}
-                {commandUsage.length === 0 && <div className="text-zinc-500">No commands yet</div>}
+                {commandUsage.length === 0 && <div className="text-[var(--hb-dim)]">No commands yet</div>}
               </div>
             </div>
           </div>
         )}
 
-        <div className="mt-8 pt-4 border-t border-zinc-800/60">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-3">Depth</div>
+        <div className="mt-8 pt-4 border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--hb-dim)] mb-3">Depth</div>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(DEPTH_STYLES).map(([key, s]) => (
               <span key={key} className={`inline-flex items-center gap-1.5 font-mono text-[10px] px-2 py-1 rounded-full border ${s.bg} ${s.color} ${s.border}`}>
@@ -473,46 +471,46 @@ export function HandbookWorkspace() {
           <div>
             {/* Practice hero */}
             <header className="pt-8 pb-8">
-              <div className="font-mono text-[12px] text-zinc-500 tracking-[2px] uppercase mb-3.5">interactive practice</div>
-              <h1 className="text-[clamp(26px,4vw,38px)] font-bold tracking-[-0.5px] leading-[1.15] mb-4 text-zinc-100">
-                Type a command. <em className="text-emerald-400 not-italic">Run it.</em> Learn it.
+              <div className="font-mono text-[12px] text-[var(--hb-dim)] tracking-[2px] uppercase mb-3.5">interactive practice</div>
+              <h1 className="text-[clamp(26px,4vw,38px)] font-bold tracking-[-0.5px] leading-[1.15] mb-4 text-[var(--hb-txt)]">
+                Type a command. <em className="text-[var(--hb-green)] not-italic">Run it.</em> Learn it.
               </h1>
-              <p className="text-zinc-400 max-w-[600px] text-[15.5px] mb-7">
+              <p className="text-[var(--hb-dim)] max-w-[600px] text-[15.5px] mb-7">
                 Execute real terminal commands via <code className="text-cyan-400">learn:runCode</code>, then review flashcards and track your streak.
               </p>
             </header>
 
             {/* Practice terminal */}
-            <div className="bg-zinc-950 border border-zinc-800/60 rounded-xl overflow-hidden mb-7 shadow-none">
-              <div className="flex items-center gap-[7px] px-3.5 py-2.5 bg-zinc-900 border-b border-zinc-800/60">
-                <span className="w-[11px] h-[11px] rounded-full bg-red-500" />
-                <span className="w-[11px] h-[11px] rounded-full bg-amber-400" />
+            <div className="bg-[var(--hb-bg)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded-xl overflow-hidden mb-7 shadow-none">
+              <div className="flex items-center gap-[7px] px-3.5 py-2.5 bg-[var(--hb-bg2)] border-b border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)]">
+                <span className="w-[11px] h-[11px] rounded-full bg-[var(--hb-rose)]" />
+                <span className="w-[11px] h-[11px] rounded-full bg-[var(--hb-amber)]" />
                 <span className="w-[11px] h-[11px] rounded-full bg-green-500" />
-                <span className="ml-2 font-mono text-[11px] text-zinc-500">~/handbook/practice</span>
+                <span className="ml-2 font-mono text-[11px] text-[var(--hb-dim)]">~/handbook/practice</span>
               </div>
               <div className="px-5 py-4 font-mono text-[13.5px] min-h-[120px]">
                 <div className="mb-4">
-                  <span className="text-emerald-400 select-none">$ </span>
+                  <span className="text-[var(--hb-green)] select-none">$ </span>
                   <input
                     type="text"
                     value={practiceInput}
                     onChange={e => setPracticeInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { handleRunCode(practiceInput, 'daily'); setPracticeInput(''); } }}
                     placeholder="type a command and press Enter"
-                    className="flex-1 bg-transparent border-none outline-none text-zinc-100 font-mono text-[13.5px] placeholder:text-zinc-500 w-full"
+                    className="flex-1 bg-transparent border-none outline-none text-[var(--hb-txt)] font-mono text-[13.5px] placeholder:text-[var(--hb-dim)] w-full"
                     autoFocus
                   />
                 </div>
-                {practiceLoading && <div className="text-zinc-500 text-xs mb-2"><span className="inline-block w-2 h-[15px] bg-emerald-400 animate-pulse"></span> executing...</div>}
-                {practiceOutput && <div className="text-emerald-400 whitespace-pre-wrap mb-2">{practiceOutput}</div>}
-                {practiceError && <div className="text-red-400 whitespace-pre-wrap mb-2">{practiceError}</div>}
-                {featureIntegrating && <div className="text-zinc-500 text-[11px]">persisting to learner profile...</div>}
+                {practiceLoading && <div className="text-[var(--hb-dim)] text-xs mb-2"><span className="inline-block w-2 h-[15px] bg-[var(--hb-green)] animate-pulse"></span> executing...</div>}
+                {practiceOutput && <div className="text-[var(--hb-green)] whitespace-pre-wrap mb-2">{practiceOutput}</div>}
+                {practiceError && <div className="text-[var(--hb-rose)] whitespace-pre-wrap mb-2">{practiceError}</div>}
+                {featureIntegrating && <div className="text-[var(--hb-dim)] text-[11px]">persisting to learner profile...</div>}
               </div>
-              <div className="px-3.5 py-2.5 border-t border-zinc-800/60 flex gap-2 flex-wrap">
+              <div className="px-3.5 py-2.5 border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] flex gap-2 flex-wrap">
                 <button
                   onClick={() => { handleRunCode(practiceInput, 'daily'); setPracticeInput(''); }}
                   disabled={practiceLoading || !practiceInput.trim()}
-                  className="flex items-center gap-1 font-mono text-[11px] px-5 py-4 rounded-xl bg-emerald-400 text-zinc-950 font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1 font-mono text-[11px] px-5 py-4 rounded-xl bg-[var(--hb-green)] text-[var(--hb-dim)] font-semibold hover:bg-[var(--hb-green)] transition-colors disabled:opacity-40"
                 >
                   <Play className="w-3 h-3" /> Run
                 </button>
@@ -520,13 +518,13 @@ export function HandbookWorkspace() {
                   <>
                     <button
                       onClick={() => { persistPractice(practiceCmdMeta.command, !practiceError); setPracticeInput(''); }}
-                      className="flex items-center gap-1 font-mono text-[11px] px-3 py-1.5 rounded-xl border border-zinc-800/60 text-emerald-400 hover:border-emerald-400 transition-colors"
+                      className="flex items-center gap-1 font-mono text-[11px] px-3 py-1.5 rounded-xl border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] text-[var(--hb-green)] hover:border-[var(--hb-green)] transition-colors"
                     >
                       <ArrowUp className="w-3 h-3" /> Persist
                     </button>
                     <button
                       onClick={() => { loadFlashcards(practiceCmdMeta.command); setPracticeInput(''); }}
-                      className="flex items-center gap-1 font-mono text-[11px] px-3 py-1.5 rounded-xl border border-zinc-800/60 text-purple-400 hover:border-purple-400 transition-colors"
+                      className="flex items-center gap-1 font-mono text-[11px] px-3 py-1.5 rounded-xl border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] text-[var(--hb-violet)] hover:border-[var(--hb-violet)] transition-colors"
                     >
                       <BookOpen className="w-3 h-3" /> Flashcards
                     </button>
@@ -542,18 +540,18 @@ export function HandbookWorkspace() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 20 }}
-                  className="bg-zinc-900 border border-zinc-800/60 rounded-xl px-5 py-4"
+                  className="bg-[var(--hb-bg2)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded-xl px-5 py-4"
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">Flashcard {flashcardIndex + 1}/{flashcardDeck.length}</span>
-                    <button onClick={() => setShowFlashcards(false)} className="text-zinc-500 hover:text-zinc-100 text-xs">✕ close</button>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--hb-dim)]">Flashcard {flashcardIndex + 1}/{flashcardDeck.length}</span>
+                    <button onClick={() => setShowFlashcards(false)} className="text-[var(--hb-dim)] hover:text-[var(--hb-txt)] text-xs">✕ close</button>
                   </div>
-                  <div className="text-zinc-100 text-sm mb-4 font-mono">{flashcardDeck[flashcardIndex]?.question || flashcardDeck[flashcardIndex]?.front || 'No question'}</div>
+                  <div className="text-[var(--hb-txt)] text-sm mb-4 font-mono">{flashcardDeck[flashcardIndex]?.question || flashcardDeck[flashcardIndex]?.front || 'No question'}</div>
                   <div className="flex gap-2">
-                    <button onClick={() => reviewCard(1)} className="flex-1 font-mono text-[11px] px-3 py-2 rounded-xl border border-emerald-400 text-emerald-400 hover:bg-emerald-400/10">Again</button>
-                    <button onClick={() => reviewCard(2)} className="flex-1 font-mono text-[11px] px-3 py-2 rounded-xl border border-amber-400 text-amber-400 hover:bg-amber-400/10">Hard</button>
+                    <button onClick={() => reviewCard(1)} className="flex-1 font-mono text-[11px] px-3 py-2 rounded-xl border border-[var(--hb-green)] text-[var(--hb-green)] hover:bg-[color-mix(in_srgb,var(--hb-green)_10,transparent)]">Again</button>
+                    <button onClick={() => reviewCard(2)} className="flex-1 font-mono text-[11px] px-3 py-2 rounded-xl border border-[var(--hb-amber)] text-[var(--hb-amber)] hover:bg-[color-mix(in_srgb,var(--hb-amber)_10,transparent)]">Hard</button>
                     <button onClick={() => reviewCard(3)} className="flex-1 font-mono text-[11px] px-3 py-2 rounded-xl border border-cyan-400 text-cyan-400 hover:bg-cyan-400/10">Good</button>
-                    <button onClick={() => reviewCard(4)} className="flex-1 font-mono text-[11px] px-3 py-2 rounded-xl border border-purple-400 text-purple-400 hover:bg-purple-400/10">Easy</button>
+                    <button onClick={() => reviewCard(4)} className="flex-1 font-mono text-[11px] px-3 py-2 rounded-xl border border-[var(--hb-violet)] text-[var(--hb-violet)] hover:bg-[color-mix(in_srgb,var(--hb-violet)_10,transparent)]">Easy</button>
                   </div>
                 </motion.div>
               )}
@@ -576,12 +574,12 @@ export function HandbookWorkspace() {
           <>
             {/* Hero */}
             <header className="pt-16 pb-11">
-              <div className="font-mono text-[12px] text-zinc-500 tracking-[2px] uppercase mb-3.5">a field guide, not a textbook</div>
-              <h1 className="text-[clamp(30px,4.5vw,44px)] font-bold tracking-[-0.5px] leading-[1.15] mb-4 text-zinc-100">
-                You don't need to <em className="text-emerald-400 not-italic">memorize</em> the terminal.<br/>
-                You need to <em className="text-emerald-400 not-italic">read</em> it.
+              <div className="font-mono text-[12px] text-[var(--hb-dim)] tracking-[2px] uppercase mb-3.5">a field guide, not a textbook</div>
+              <h1 className="text-[clamp(30px,4.5vw,44px)] font-bold tracking-[-0.5px] leading-[1.15] mb-4 text-[var(--hb-txt)]">
+                You don't need to <em className="text-[var(--hb-green)] not-italic">memorize</em> the terminal.<br/>
+                You need to <em className="text-[var(--hb-green)] not-italic">read</em> it.
               </h1>
-              <p className="text-zinc-400 max-w-[600px] text-[15.5px] mb-7">
+              <p className="text-[var(--hb-dim)] max-w-[600px] text-[15.5px] mb-7">
                 Every command below says what it does, when to reach for it, and the gotcha that bites beginners.
               </p>
 
@@ -590,7 +588,7 @@ export function HandbookWorkspace() {
 
               {/* Depth legend */}
               <div className="flex gap-2 flex-wrap items-center">
-                <span className="font-mono text-[11px] text-zinc-500 mr-1">depth:</span>
+                <span className="font-mono text-[11px] text-[var(--hb-dim)] mr-1">depth:</span>
                 {Object.entries(DEPTH_STYLES).map(([key, s]) => (
                   <span key={key} className={`inline-flex items-center gap-1.5 font-mono text-[11px] px-[11px] py-1 rounded-full border ${s.bg} ${s.color} ${s.border}`}>
                     <span className={`w-[7px] h-[7px] rounded-full ${s.dot}`} />
@@ -602,19 +600,19 @@ export function HandbookWorkspace() {
 
             {/* Search */}
             <div className="sticky top-0 z-20 py-4 mb-4" style={{ background: 'linear-gradient(180deg, #0a0e14 78%, transparent)' }}>
-              <div className="flex items-center gap-2.5 bg-zinc-900 border border-zinc-800/60 rounded-xl px-5 py-4 transition-[border-color,box-shadow] focus-within:border-[var(--page-accent)] focus-within:ring-2 focus-within:ring-emerald-400/30">
-                <span className="font-mono text-emerald-400 text-sm select-none">$</span>
+              <div className="flex items-center gap-2.5 bg-[var(--hb-bg2)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded-xl px-5 py-4 transition-[border-color,box-shadow] focus-within:border-[var(--page-accent)] focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--hb-green)_30,transparent)]">
+                <span className="font-mono text-[var(--hb-green)] text-sm select-none">$</span>
                 <input
                   ref={searchRef}
                   type="text"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   placeholder="grep the handbook..."
-                  className="flex-1 bg-transparent border-none outline-none text-zinc-100 font-mono text-[13.5px] placeholder:text-zinc-500"
+                  className="flex-1 bg-transparent border-none outline-none text-[var(--hb-txt)] font-mono text-[13.5px] placeholder:text-[var(--hb-dim)]"
                 />
-                <kbd className="font-mono text-[10px] text-zinc-500 border border-zinc-800/60 rounded px-1.5 py-0.5">/</kbd>
+                <kbd className="font-mono text-[10px] text-[var(--hb-dim)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded px-1.5 py-0.5">/</kbd>
               </div>
-              <div className="font-mono text-[11px] text-zinc-500 mt-1.5 pl-1">
+              <div className="font-mono text-[11px] text-[var(--hb-dim)] mt-1.5 pl-1">
                 {query ? `${filtered.reduce((n, s) => n + s.commands.length, 0)} matches` : `${totalCmds} commands · press / to search`}
               </div>
             </div>
@@ -624,13 +622,13 @@ export function HandbookWorkspace() {
               {filtered.map(s => (
                 <section key={s.id} id={s.id} className="scroll-mt-6 mb-16">
                   <div className="flex items-baseline gap-4 mb-1.5 pt-3">
-                    <span className="font-mono text-[13px] text-zinc-500">{s.number}</span>
-                    <h2 className="text-[21px] font-semibold tracking-[-0.3px] text-zinc-100">{s.title}</h2>
+                    <span className="font-mono text-[13px] text-[var(--hb-dim)]">{s.number}</span>
+                    <h2 className="text-[21px] font-semibold tracking-[-0.3px] text-[var(--hb-txt)]">{s.title}</h2>
                   </div>
-                  <div className="font-mono text-[11px] text-zinc-500 mb-3.5">
-                    <b className="text-emerald-400 font-normal">~/handbook</b>/{s.crumb}
+                  <div className="font-mono text-[11px] text-[var(--hb-dim)] mb-3.5">
+                    <b className="text-[var(--hb-green)] font-normal">~/handbook</b>/{s.crumb}
                   </div>
-                  {s.why && <p className="text-zinc-400 text-[14px] mb-5 max-w-[620px]">{s.why}</p>}
+                  {s.why && <p className="text-[var(--hb-dim)] text-[14px] mb-5 max-w-[620px]">{s.why}</p>}
 
                   <div className="space-y-2.5">
                     {s.commands.map((cmd, idx) => (
@@ -662,8 +660,8 @@ export function HandbookWorkspace() {
             </div>
 
             {/* Footer */}
-            <p className="text-zinc-500 font-mono text-xs mt-10 mb-4">
-              ~/handbook $ <span className="text-emerald-400">exit</span> <span className="text-zinc-500"># now go break something fixable</span>
+            <p className="text-[var(--hb-dim)] font-mono text-xs mt-10 mb-4">
+              ~/handbook $ <span className="text-[var(--hb-green)]">exit</span> <span className="text-[var(--hb-dim)]"># now go break something fixable</span>
             </p>
           </>
         )}
@@ -676,7 +674,7 @@ export function HandbookWorkspace() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="fixed bottom-8 right-8 z-50 w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800/60 text-emerald-400 flex items-center justify-center hover:bg-zinc-800 hover:border-emerald-400 transition-colors shadow-none"
+              className="fixed bottom-8 right-8 z-50 w-10 h-10 rounded-full bg-[var(--hb-bg2)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] text-[var(--hb-green)] flex items-center justify-center hover:bg-[var(--hb-panel)] hover:border-[var(--hb-green)] transition-colors shadow-none"
               title="back to top"
             >
               <ArrowUp className="w-4 h-4" />
@@ -736,31 +734,31 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
   const gotchaRow = rows.find(r => r.tag.toLowerCase() === 'gotcha');
 
   return (
-    <div className={`bg-zinc-900 border border-zinc-800/60 rounded-xl shadow-none overflow-hidden transition-[border-color,transform,box-shadow] hover:border-zinc-700/60 hover:translate-x-[3px] hover:shadow-[-3px_0_0_0_var(--line2)]`}>
+    <div className={`hb-cmd`}>
       {/* Bar */}
-      <div className="flex items-center gap-2 px-3.5 py-2.5 bg-zinc-800 border-b border-zinc-800/60 flex-wrap">
-        <span className={`font-mono ${cmd.isRoot ? 'text-amber-400' : 'text-emerald-400'} text-[13px] select-none`}>{cmd.isRoot ? '#' : '$'}</span>
-        <code className="text-zinc-100 text-[13.5px] font-medium flex-1">{cmd.command}</code>
+      <div className="hb-cmd-bar">
+        <span className={`hb-dollar ${cmd.isRoot ? 'text-[var(--hb-amber)]' : 'text-[var(--hb-accent)]'}`}>{cmd.isRoot ? '#' : '$'}</span>
+        <code className="text-[var(--hb-txt)] text-[13.5px] font-medium flex-1">{cmd.command}</code>
         {cmd.badges.map((b, i) => (
           <Badge key={i} type={b.type} label={b.label} />
         ))}
         <button
           onClick={() => onCopy(cmd.command)}
-          className={`font-mono text-[10.5px] px-2 py-1 rounded border transition-colors ${copiedCmd === cmd.command ? 'text-emerald-400 border-emerald-400' : 'text-zinc-500 border-zinc-800/60 hover:text-emerald-400'}`}
+          className={`hb-copy ${copiedCmd === cmd.command ? 'text-[var(--hb-green)] border-[var(--hb-green)]' : ''}`}
         >
           {copiedCmd === cmd.command ? '✓ copied' : '⧉ copy'}
         </button>
         <button
           onClick={() => { onToggleExpand(cmd.command); onExplain(cmd, section); }}
           disabled={aiLoadingCmd === cmd.command}
-          className={`flex items-center gap-1 font-mono text-[10.5px] px-2 py-1 rounded border transition-colors ${aiLoadingCmd === cmd.command ? 'text-amber-400 border-amber-400 animate-pulse' : 'text-zinc-500 border-zinc-800/60 hover:text-emerald-400'}`}
+          className={`flex items-center gap-1 font-mono text-[10.5px] px-2 py-1 rounded border transition-colors ${aiLoadingCmd === cmd.command ? 'text-[var(--hb-amber)] border-[var(--hb-amber)] animate-pulse' : 'text-[var(--hb-dim)] border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] hover:text-[var(--hb-green)]'}`}
         >
           <Sparkles className="w-3 h-3" />
           {aiLoadingCmd === cmd.command ? '...' : 'explain'}
         </button>
         <button
           onClick={handleBridgeSend}
-          className="flex items-center gap-1 font-mono text-[10.5px] px-2 py-1 rounded border text-zinc-500 border-zinc-800/60 hover:text-purple-400 hover:border-purple-400 transition-colors"
+          className="flex items-center gap-1 font-mono text-[10.5px] px-2 py-1 rounded border text-[var(--hb-dim)] border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] hover:text-[var(--hb-violet)] hover:border-[var(--hb-violet)] transition-colors"
         >
           <ExternalLink className="w-3 h-3" /> external AI
         </button>
@@ -769,21 +767,21 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
       {/* Body */}
       <div className="px-3.5 py-2.5">
         {doesRow && (
-          <div className="flex gap-2.5 text-[13.5px]">
-            <span className="font-mono text-[9.5px] uppercase tracking-[1px] text-zinc-500 w-[52px] shrink-0 pt-[3px]">does</span>
-            <span className="text-zinc-400">{doesRow.value}</span>
+          <div className="hb-row">
+            <span className="hb-tag">does</span>
+            <span className="hb-val">{doesRow.value}</span>
           </div>
         )}
         {whenRow && (
-          <div className="flex gap-2.5 text-[13.5px] mt-[5px]">
-            <span className="font-mono text-[9.5px] uppercase tracking-[1px] text-zinc-500 w-[52px] shrink-0 pt-[3px]">when</span>
-            <span className="text-zinc-400">{whenRow.value}</span>
+          <div className="hb-row">
+            <span className="hb-tag">when</span>
+            <span className="hb-val">{whenRow.value}</span>
           </div>
         )}
         {gotchaRow && (
-          <div className="flex gap-2.5 text-[13.5px] mt-[5px]">
-            <span className="font-mono text-[9.5px] uppercase tracking-[1px] text-amber-400 w-[52px] shrink-0 pt-[3px]">gotcha</span>
-            <span className="text-amber-400">{gotchaRow.value}</span>
+          <div className="hb-row hb-row-warn">
+            <span className="hb-tag">gotcha</span>
+            <span className="hb-val">{gotchaRow.value}</span>
           </div>
         )}
       </div>
@@ -796,20 +794,20 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="border-t border-zinc-800/60 overflow-hidden"
+            className="border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] overflow-hidden"
           >
             <div className="p-4 space-y-4">
               {/* Explanation */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-400">AI Explanation</span>
-                  <span className="font-mono text-[9px] text-zinc-500">{aiResponse.estimatedMinutes} min read</span>
+                  <Sparkles className="w-4 h-4 text-[var(--hb-green)]" />
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--hb-green)]">AI Explanation</span>
+                  <span className="font-mono text-[9px] text-[var(--hb-dim)]">{aiResponse.estimatedMinutes} min read</span>
                 </div>
-                <p className="text-zinc-100 text-sm mb-2">{aiResponse.explanation.what}</p>
-                <p className="text-zinc-400 text-xs mb-2"><b className="text-zinc-100">When:</b> {aiResponse.explanation.when}</p>
+                <p className="text-[var(--hb-txt)] text-sm mb-2">{aiResponse.explanation.what}</p>
+                <p className="text-[var(--hb-dim)] text-xs mb-2"><b className="text-[var(--hb-txt)]">When:</b> {aiResponse.explanation.when}</p>
                 {aiResponse.explanation.gotcha && (
-                  <div className="flex items-start gap-2 text-xs text-amber-400">
+                  <div className="flex items-start gap-2 text-xs text-[var(--hb-amber)]">
                     <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
                     <span>{aiResponse.explanation.gotcha}</span>
                   </div>
@@ -819,12 +817,12 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
               {/* Params */}
               {aiResponse.params.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">Parameters</div>
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--hb-dim)]">Parameters</div>
                   {aiResponse.params.map((p, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs">
                       {p.flag && <code className="text-cyan-400 font-mono bg-cyan-400/10 px-1.5 py-0.5 rounded">-{p.flag}</code>}
-                      {p.arg && <code className="text-emerald-400 font-mono bg-emerald-400/10 px-1.5 py-0.5 rounded">{p.arg}</code>}
-                      <span className="text-zinc-400">{p.meaning}</span>
+                      {p.arg && <code className="text-[var(--hb-green)] font-mono bg-[color-mix(in_srgb,var(--hb-green)_10,transparent)] px-1.5 py-0.5 rounded">{p.arg}</code>}
+                      <span className="text-[var(--hb-dim)]">{p.meaning}</span>
                     </div>
                   ))}
                 </div>
@@ -834,8 +832,8 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
               {aiResponse.safety && aiResponse.safety.level !== 'safe' && (
                 <div className={`flex items-start gap-2 p-2 rounded-xl ${
                   aiResponse.safety.level === 'destructive'
-                    ? 'bg-red-400/10 text-red-400'
-                    : 'bg-amber-400/10 text-amber-400'
+                    ? 'bg-[color-mix(in_srgb,var(--hb-rose)_10,transparent)] text-[var(--hb-rose)]'
+                    : 'bg-[color-mix(in_srgb,var(--hb-amber)_10,transparent)] text-[var(--hb-amber)]'
                 }`}>
                   <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   <span className="text-xs">{aiResponse.safety.note}</span>
@@ -845,12 +843,12 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
               {/* Exercises */}
               {aiResponse.exercises.length > 0 && (
                 <div className="space-y-2">
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">Practice</div>
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--hb-dim)]">Practice</div>
                   {aiResponse.exercises.map((ex, i) => (
-                    <div key={i} className="bg-zinc-950 border border-zinc-800/60 rounded-xl p-3">
-                      <div className="text-zinc-100 text-xs font-medium mb-1">{ex.title}</div>
-                      <code className="text-emerald-400 font-mono text-[11px] block mb-1">{ex.command}</code>
-                      <p className="text-zinc-500 text-[11px]">{ex.explanation}</p>
+                    <div key={i} className="bg-[var(--hb-bg)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded-xl p-3">
+                      <div className="text-[var(--hb-txt)] text-xs font-medium mb-1">{ex.title}</div>
+                      <code className="text-[var(--hb-green)] font-mono text-[11px] block mb-1">{ex.command}</code>
+                      <p className="text-[var(--hb-dim)] text-[11px]">{ex.explanation}</p>
                     </div>
                   ))}
                 </div>
@@ -859,11 +857,11 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
               {/* Related */}
               {aiResponse.related.length > 0 && (
                 <div className="space-y-1">
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">Related</div>
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--hb-dim)]">Related</div>
                   {aiResponse.related.map((r, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <code className="text-cyan-400 font-mono text-[10px]">{r.command}</code>
-                      <span className="text-zinc-500">{r.relation}</span>
+                      <span className="text-[var(--hb-dim)]">{r.relation}</span>
                     </div>
                   ))}
                 </div>
@@ -875,33 +873,33 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
 
       {/* AI Error */}
       {isExpanded && aiErrorCmd === cmd.command && (
-        <div className="border-t border-zinc-800/60 p-4 text-xs text-red-400">
+        <div className="border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] p-4 text-xs text-[var(--hb-rose)]">
           Failed to get AI explanation. Try again.
         </div>
       )}
 
       {/* External AI Bridge — paste-back */}
       {bridgeActive && (
-        <div className="border-t border-zinc-800/60 p-4 space-y-3">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-purple-400">External AI Bridge</div>
-          <p className="text-zinc-500 text-[11px]">Prompt copied to clipboard. Paste ChatGPT/Claude JSON output here:</p>
+        <div className="border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] p-4 space-y-3">
+          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--hb-violet)]">External AI Bridge</div>
+          <p className="text-[var(--hb-dim)] text-[11px]">Prompt copied to clipboard. Paste ChatGPT/Claude JSON output here:</p>
           <textarea
             value={bridgePaste}
             onChange={e => setBridgePaste(e.target.value)}
             placeholder="Paste JSON here..."
             rows={4}
-            className="w-full bg-zinc-950 border border-zinc-800/60 rounded-xl px-3 py-2 font-mono text-[12px] text-zinc-100 placeholder:text-zinc-500 resize-none outline-none focus:border-purple-400"
+            className="w-full bg-[var(--hb-bg)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded-xl px-3 py-2 font-mono text-[12px] text-[var(--hb-txt)] placeholder:text-[var(--hb-dim)] resize-none outline-none focus:border-[var(--hb-violet)]"
           />
           <div className="flex gap-2">
             <button
               onClick={handleBridgeParse}
-              className="font-mono text-[11px] px-5 py-4 rounded-xl bg-purple-400 text-zinc-950 font-semibold hover:bg-purple-500 transition-colors"
+              className="font-mono text-[11px] px-5 py-4 rounded-xl bg-[var(--hb-violet)] text-[var(--hb-dim)] font-semibold hover:bg-[var(--hb-violet)] transition-colors"
             >
               Parse & Render
             </button>
             <button
               onClick={() => { setBridgeActive(false); setBridgePaste(''); setBridgeResponse(null); }}
-              className="font-mono text-[11px] px-3 py-1.5 rounded-xl border border-zinc-800/60 text-zinc-500 hover:text-zinc-100 transition-colors"
+              className="font-mono text-[11px] px-3 py-1.5 rounded-xl border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] text-[var(--hb-dim)] hover:text-[var(--hb-txt)] transition-colors"
             >
               Close
             </button>
@@ -914,59 +912,59 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
         <motion.div
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
-          className="border-t border-zinc-800/60 overflow-hidden"
+          className="border-t border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] overflow-hidden"
         >
           <div className="p-4 space-y-4">
             <div className="flex items-center gap-2 mb-2">
-              <ExternalLink className="w-4 h-4 text-purple-400" />
-              <span className="font-mono text-[10px] uppercase tracking-wider text-purple-400">External AI Output</span>
-              <span className="font-mono text-[9px] text-zinc-500">{bridgeResponse.estimatedMinutes} min read</span>
+              <ExternalLink className="w-4 h-4 text-[var(--hb-violet)]" />
+              <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--hb-violet)]">External AI Output</span>
+              <span className="font-mono text-[9px] text-[var(--hb-dim)]">{bridgeResponse.estimatedMinutes} min read</span>
             </div>
-            <p className="text-zinc-100 text-sm mb-2">{bridgeResponse.explanation?.what}</p>
-            <p className="text-zinc-400 text-xs mb-2"><b className="text-zinc-100">When:</b> {bridgeResponse.explanation?.when}</p>
+            <p className="text-[var(--hb-txt)] text-sm mb-2">{bridgeResponse.explanation?.what}</p>
+            <p className="text-[var(--hb-dim)] text-xs mb-2"><b className="text-[var(--hb-txt)]">When:</b> {bridgeResponse.explanation?.when}</p>
             {bridgeResponse.explanation?.gotcha && (
-              <div className="flex items-start gap-2 text-xs text-amber-400">
+              <div className="flex items-start gap-2 text-xs text-[var(--hb-amber)]">
                 <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
                 <span>{bridgeResponse.explanation.gotcha}</span>
               </div>
             )}
             {bridgeResponse.params && bridgeResponse.params.length > 0 && (
               <div className="space-y-1.5">
-                <div className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">Parameters</div>
+                <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--hb-dim)]">Parameters</div>
                 {bridgeResponse.params.map((p, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs">
                     {p.flag && <code className="text-cyan-400 font-mono bg-cyan-400/10 px-1.5 py-0.5 rounded">-{p.flag}</code>}
-                    {p.arg && <code className="text-emerald-400 font-mono bg-emerald-400/10 px-1.5 py-0.5 rounded">{p.arg}</code>}
-                    <span className="text-zinc-400">{p.meaning}</span>
+                    {p.arg && <code className="text-[var(--hb-green)] font-mono bg-[color-mix(in_srgb,var(--hb-green)_10,transparent)] px-1.5 py-0.5 rounded">{p.arg}</code>}
+                    <span className="text-[var(--hb-dim)]">{p.meaning}</span>
                   </div>
                 ))}
               </div>
             )}
             {bridgeResponse.safety && bridgeResponse.safety.level !== 'safe' && (
-              <div className={`flex items-start gap-2 p-2 rounded-xl ${bridgeResponse.safety.level === 'destructive' ? 'bg-red-400/10 text-red-400' : 'bg-amber-400/10 text-amber-400'}`}>
+              <div className={`flex items-start gap-2 p-2 rounded-xl ${bridgeResponse.safety.level === 'destructive' ? 'bg-[color-mix(in_srgb,var(--hb-rose)_10,transparent)] text-[var(--hb-rose)]' : 'bg-[color-mix(in_srgb,var(--hb-amber)_10,transparent)] text-[var(--hb-amber)]'}`}>
                 <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <span className="text-xs">{bridgeResponse.safety.note}</span>
               </div>
             )}
             {bridgeResponse.exercises && bridgeResponse.exercises.length > 0 && (
               <div className="space-y-2">
-                <div className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">Practice</div>
+                <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--hb-dim)]">Practice</div>
                 {bridgeResponse.exercises.map((ex, i) => (
-                  <div key={i} className="bg-zinc-950 border border-zinc-800/60 rounded-xl p-3">
-                    <div className="text-zinc-100 text-xs font-medium mb-1">{ex.title}</div>
-                    <code className="text-emerald-400 font-mono text-[11px] block mb-1">{ex.command}</code>
-                    <p className="text-zinc-500 text-[11px]">{ex.explanation}</p>
+                  <div key={i} className="bg-[var(--hb-bg)] border border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] rounded-xl p-3">
+                    <div className="text-[var(--hb-txt)] text-xs font-medium mb-1">{ex.title}</div>
+                    <code className="text-[var(--hb-green)] font-mono text-[11px] block mb-1">{ex.command}</code>
+                    <p className="text-[var(--hb-dim)] text-[11px]">{ex.explanation}</p>
                   </div>
                 ))}
               </div>
             )}
             {bridgeResponse.related && bridgeResponse.related.length > 0 && (
               <div className="space-y-1">
-                <div className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">Related</div>
+                <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--hb-dim)]">Related</div>
                 {bridgeResponse.related.map((r, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs">
                     <code className="text-cyan-400 font-mono text-[10px]">{r.command}</code>
-                    <span className="text-zinc-500">{r.relation}</span>
+                    <span className="text-[var(--hb-dim)]">{r.relation}</span>
                   </div>
                 ))}
               </div>
@@ -982,11 +980,11 @@ function CommandCard({ cmd, section, copiedCmd, onCopy, onExplain, aiLoadingCmd,
 
 function Callout({ callout }: { callout: { type: string; title: string; body: string } }) {
   return (
-    <div className={`mt-4 p-5 rounded-r-xl border-l-[3px] ${callout.type === 'danger' ? 'border-l-red-400 bg-gradient-to-r from-red-400/10 to-zinc-900' : 'border-l-amber-400 bg-zinc-900'}`}>
-      <div className={`font-mono text-[10px] uppercase tracking-wider font-semibold mb-1.5 ${callout.type === 'danger' ? 'text-red-400' : 'text-amber-400'}`}>
+    <div className={`mt-4 p-5 rounded-r-xl border-l-[3px] ${callout.type === 'danger' ? 'border-l-[var(--hb-rose)] bg-gradient-to-r from-[color-mix(in_srgb,var(--hb-rose)_10,transparent)] to-[var(--hb-bg2)]' : 'border-l-[var(--hb-amber)] bg-[var(--hb-bg2)]'}`}>
+      <div className={`font-mono text-[10px] uppercase tracking-wider font-semibold mb-1.5 ${callout.type === 'danger' ? 'text-[var(--hb-rose)]' : 'text-[var(--hb-amber)]'}`}>
         {callout.title}
       </div>
-      <p className="text-sm text-zinc-400">{callout.body}</p>
+      <p className="text-sm text-[var(--hb-dim)]">{callout.body}</p>
     </div>
   );
 }
@@ -999,16 +997,16 @@ function Table({ table }: { table: { headers: string[]; rows: string[][] } }) {
           <thead>
             <tr>
               {table.headers.map((h, hi) => (
-                <th key={hi} className="font-mono text-[10px] uppercase tracking-wider text-zinc-500 text-left px-3 py-2 border-b border-zinc-800/60 font-medium">{h}</th>
+                <th key={hi} className="font-mono text-[10px] uppercase tracking-wider text-[var(--hb-dim)] text-left px-3 py-2 border-b border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] font-medium">{h}</th>
               ))}
             </tr>
           </thead>
         )}
         <tbody>
           {table.rows.map((row, ri) => (
-            <tr key={ri} className="hover:bg-zinc-800/50 transition-colors">
+            <tr key={ri} className="hover:bg-[color-mix(in_srgb,var(--hb-panel)_50,transparent)] transition-colors">
               {row.map((cell, ci) => (
-                <td key={ci} className={`px-3 py-2 border-b border-zinc-800/60 ${ci === 0 ? 'text-zinc-100 font-medium' : 'text-zinc-400'}`}>{cell}</td>
+                <td key={ci} className={`px-3 py-2 border-b border-[color-mix(in_srgb,var(--hb-panel)_60,transparent)] ${ci === 0 ? 'text-[var(--hb-txt)] font-medium' : 'text-[var(--hb-dim)]'}`}>{cell}</td>
               ))}
             </tr>
           ))}
@@ -1032,10 +1030,10 @@ function SectionDetail({ section, onBack, copiedCmd, onCopy, onExplain, aiLoadin
 }) {
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-2 text-zinc-400 hover:text-zinc-100 text-sm mb-6 transition-colors">
+      <button onClick={onBack} className="flex items-center gap-2 text-[var(--hb-dim)] hover:text-[var(--hb-txt)] text-sm mb-6 transition-colors">
         <ChevronLeft className="w-4 h-4" /> Back
       </button>
-      <h2 className="text-[21px] font-semibold text-zinc-100 mb-6">{section.title}</h2>
+      <h2 className="text-[21px] font-semibold text-[var(--hb-txt)] mb-6">{section.title}</h2>
 
       <div className="space-y-2.5">
         {section.commands.map((cmd, idx) => (

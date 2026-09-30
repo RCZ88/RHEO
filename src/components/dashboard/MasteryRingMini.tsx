@@ -16,7 +16,7 @@ export function MasteryRingMini({ mastered = 0, total = 1 }: MasteryRingMiniProp
     <div className="relative rounded-xl overflow-hidden
       bg-[rgba(24,24,27,0.80)] backdrop-blur-xl
       border border-[rgba(63,63,70,0.50)] p-5
-      hover:border-[rgba(82,82,91,0.80)] transition-all duration-250 h-full">
+      hover:border-[rgba(82,82,91,0.80)] transition-colors duration-250 h-full">
 
       <div className="absolute top-0 left-4 right-4 h-px
         bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent opacity-60 pointer-events-none" />

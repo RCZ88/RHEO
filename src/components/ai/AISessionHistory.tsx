@@ -36,6 +36,7 @@ const AGENT_META: Record<string, { name: string; color: string }> = {
   qwen: { name: "Qwen CLI", color: "#f59e0b" },
   aider: { name: "Aider", color: "#f59e0b" },
   kilocode: { name: "KiloCode", color: "#22c55e" },
+  hermes: { name: "Hermes", color: "#8b5cf6" },
 }
 
 const PAGE_SIZE = 10
@@ -108,9 +109,10 @@ function SkeletonRow() {
 export interface AISessionHistoryProps {
   activeToolIds: string[]
   selectedTool?: string
+  forceRefresh?: number
 }
 
-export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHistoryProps) {
+export function AISessionHistory({ activeToolIds, selectedTool, forceRefresh = 0 }: AISessionHistoryProps) {
   const reduce = useReducedMotion()
   const [sessions, setSessions] = useState<AISession[]>([])
   const [total, setTotal] = useState(0)
@@ -118,6 +120,7 @@ export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHisto
   const [loading, setLoading] = useState(true)
   const prevToolRef = useRef<string>("")
   const prevIdsRef = useRef<string>("")
+  const prevForceRef = useRef<number>(-1)
 
   const activeTool = selectedTool || activeToolIds[0] || null
 
@@ -160,13 +163,14 @@ export function AISessionHistory({ activeToolIds, selectedTool }: AISessionHisto
   // Reset when activeToolIds changes (new sync)
   useEffect(() => {
     const idsKey = activeToolIds.join(",")
-    if (idsKey === prevIdsRef.current) return
+    if (idsKey === prevIdsRef.current && forceRefresh === prevForceRef.current) return
     prevIdsRef.current = idsKey
+    prevForceRef.current = forceRefresh
     if (activeTool) {
       prevToolRef.current = "" // force re-fetch
       fetchSessions(activeTool, 0)
     }
-  }, [activeToolIds, activeTool, fetchSessions])
+  }, [activeToolIds, activeTool, forceRefresh, fetchSessions])
 
   if (activeToolIds.length === 0 || !activeTool) return null
 
@@ -277,7 +281,7 @@ function SessionRow({
   tool: string
 }) {
   const [expanded, setExpanded] = useState(false)
-  const totalTokens = session.input_tokens + session.output_tokens
+  const totalTokens = session.input_tokens + session.output_tokens + (session.cache_read_tokens || 0) + (session.cache_write_tokens || 0)
 
   return (
     <motion.div

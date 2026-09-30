@@ -1,17 +1,27 @@
 {
   "version": 1,
   "agents": {
-    "[object Object]": {
-      "id": {
-        "agentId": "opencode-perf-audit-20260922",
-        "task": "IPC payload sizes + rAF loop count"
-      },
-      "startedAt": 1790086345907,
-      "task": "",
-      "pid": 21162,
-      "lastHeartbeat": 1790086350694
+    "build-64369": {
+      "id": "build-64369",
+      "startedAt": 1790783396544,
+      "task": "npm run build",
+      "pid": 64369,
+      "lastHeartbeat": 1790783456610
+    },
+    "build-64457": {
+      "id": "build-64457",
+      "startedAt": 1790783398116,
+      "task": "node scripts/build.mjs",
+      "pid": 64457,
+      "lastHeartbeat": 1790783398116
     }
   },
   "leases": {},
-  "locks": {}
+  "locks": {
+    "build": {
+      "agent": "build-64369",
+      "since": 1790783396544,
+      "ttlMs": 1200000
+    }
+  }
 }

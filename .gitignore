@@ -201,3 +201,6 @@ _incoming/
 *.bak.*
 src.old/
 .next.bak
+
+# Transient build lock (PID written by scripts/build.mjs)
+.build-lock

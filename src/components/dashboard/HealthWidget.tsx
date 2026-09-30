@@ -3,6 +3,7 @@
 // LAMINAR: solid token surface, hairline, radius 10
 import { motion } from 'motion/react';
 import { Moon, Droplets, Heart, Wind, Activity } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 
 interface HealthWidgetProps {
   stats?: {
@@ -68,6 +69,7 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">Health</span>
         </div>
+        <WidgetJumpButton widgetId="health-widget" iconOnly />
       </div>
 
       <div className="grid grid-cols-2 gap-3">

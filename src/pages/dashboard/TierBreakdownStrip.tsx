@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle2, MinusCircle, XCircle, Clock } from 'lucide-react';
 import { BlurFade } from '../../components/ui/blur-fade';
 import { NumberTicker } from '../../components/ui/number-ticker';
+import { tierColor } from '../../lib/tierColors';
 
 interface TierBreakdownStripProps {
   productiveHours: number;
@@ -20,25 +21,25 @@ export function TierBreakdownStrip({
     {
       label: 'Productive',
       value: productiveHours,
-      color: '#34d399',
-      textColor: 'text-emerald-400 light:text-emerald-600',
-      borderColor: 'border-t-emerald-400/30',
+      color: tierColor('productive'),
+      textColor: 'text-[var(--tier-productive)]',
+      borderColor: 'border-t-[var(--tier-productive)]/30',
       icon: <CheckCircle2 size={14} />
     },
     {
       label: 'Neutral',
       value: neutralHours,
-      color: '#fbbf24',
-      textColor: 'text-amber-400 light:text-amber-600',
-      borderColor: 'border-t-amber-400/30',
+      color: tierColor('neutral'),
+      textColor: 'text-[var(--tier-neutral)]',
+      borderColor: 'border-t-[var(--tier-neutral)]/30',
       icon: <MinusCircle size={14} />
     },
     {
       label: 'Distracting',
       value: distractingHours,
-      color: '#f87171',
-      textColor: 'text-red-400 light:text-red-600',
-      borderColor: 'border-t-red-400/30',
+      color: tierColor('distracting'),
+      textColor: 'text-[var(--tier-distracting)]',
+      borderColor: 'border-t-[var(--tier-distracting)]/30',
       icon: <XCircle size={14} />
     },
     {

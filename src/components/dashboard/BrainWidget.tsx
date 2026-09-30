@@ -3,6 +3,7 @@
 // LAMINAR: solid token surface, hairline, radius 10
 import { motion } from 'motion/react';
 import { Brain, Network, Search, Clock } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 
 interface BrainWidgetProps {
   stats?: {
@@ -58,6 +59,7 @@ export function BrainWidget({ stats, loading, error }: BrainWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">Context Brain</span>
         </div>
+        <WidgetJumpButton widgetId="brain-widget" iconOnly />
       </div>
 
       <div className="grid grid-cols-3 gap-2">

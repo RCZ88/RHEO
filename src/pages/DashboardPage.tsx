@@ -11,7 +11,7 @@ import { PinnedActivities } from './dashboard/PinnedActivities';
 import { QuickFocusCard } from '../components/focus/QuickFocusCard';
 import { ScheduleCard } from './dashboard/ScheduleCard';
 import { StatusBand } from './dashboard/StatusBand';
-import { WidgetLibraryPopup } from '../components/dashboard/WidgetLibraryPopup';
+
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
 import { GoalsCard } from '../components/dashboard/GoalsCard';
 import { DeadlinesCard } from '../components/dashboard/DeadlinesCard';
@@ -28,6 +28,7 @@ import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { DayDetailPopup } from '../components/DayDetailPopup';
 import { DeskFlowCardMotion } from '../components/dashboard/DeskFlowCard';
+import { WidgetJumpButton } from '../components/dashboard/WidgetJumpButton';
 import OrbitSystem from '../components/OrbitSystem';
 import { useHomeSummary } from '../hooks/useHomeSummary';
 import { useDeepFocus } from '../hooks/useDeepFocus';
@@ -39,7 +40,7 @@ import type { Period } from '../lib/dateRange';
 import { awaitApi } from '../lib/awaitApi';
 import { TimerResetOverlay } from '../components/dashboard/TimerResetOverlay';
 import { CardLibrary } from '../components/dashboard/CardLibrary';
-import { LayoutGrid, Grid3X3, X, BarChart3, Clock } from 'lucide-react';
+import { LayoutGrid, Grid3X3, X, BarChart3, Clock, Terminal, ChevronLeft, ChevronRight, Sun, Minimize2, Maximize2 } from 'lucide-react';
 import { maxBy } from '../utils/safeMath';
 
 import { AiUsageWidget } from '../components/dashboard/AiUsageWidget';
@@ -50,6 +51,19 @@ import { BrowserWidget } from '../components/dashboard/BrowserWidget';
 import { BrainWidget } from '../components/dashboard/BrainWidget';
 import { CovenantWidget } from '../components/dashboard/CovenantWidget';
 import { HealthWidget } from '../components/dashboard/HealthWidget';
+// Library-only opt-in widgets (see OPT_IN_WIDGETS in widgetRegistry.tsx).
+// Each renders only when the user enables it from the Card Library.
+import { DailySurveyCard } from '../components/dashboard/DailySurveyCard';
+import { UnifiedGoalsCard } from '../components/dashboard/UnifiedGoalsCard';
+import { StreakCard } from '../components/dashboard/StreakCard';
+import { ScheduleSyncCard } from '../components/dashboard/ScheduleSyncCard';
+import { DrillDownCard } from '../components/dashboard/DrillDownCard';
+import { SpotlightCard } from '../components/dashboard/SpotlightCard';
+import { MomentumOrb } from '../components/dashboard/MomentumOrb';
+import { MomentumScore } from '../components/dashboard/MomentumScore';
+import { buildDashboardData } from './dashboard/aggregateNormalizer';
+import { useDashStats } from './dashboard/useDashStats';
+import { useDashTheme } from './dashboard/useDashTheme';
 
 interface ActivityFeedItem {
   id: string;
@@ -507,6 +521,26 @@ export default function DashboardPage({
   const [ftPersons, setFtPersons] = useState<{ id: number; name: string; balance?: number; wallet_id?: number | null }[]>([]);
   const [lastTxDate, setLastTxDate] = useState<{ lastUpdated: string; lastDate: string } | null>(null);
 
+  // Per-app / per-domain tier overrides. These beat the category-derived tier in
+  // getTierFromCategory, so a single app can be re-tiered without dragging every
+  // other app in its category with it. Written by set-app-tier / set-domain-tier.
+  const [appTierMap, setAppTierMap] = useState<Record<string, 'productive' | 'neutral' | 'distracting'>>({});
+  const [domainTierMap, setDomainTierMap] = useState<Record<string, 'productive' | 'neutral' | 'distracting'>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const api = window.deskflowAPI as any;
+    if (!api?.getAppTierMap) return;
+    Promise.all([api.getAppTierMap?.(), api.getDomainTierMap?.()])
+      .then(([apps, domains]: any[]) => {
+        if (cancelled) return;
+        if (apps && typeof apps === 'object') setAppTierMap(apps);
+        if (domains && typeof domains === 'object') setDomainTierMap(domains);
+      })
+      .catch(() => { /* non-fatal — fall back to category-derived tiers */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Gap/unfilled time indicator
   const [unfilledMinutes, setUnfilledMinutes] = useState(0);
   const [gapCount, setGapCount] = useState(0);
@@ -575,6 +609,11 @@ export default function DashboardPage({
   }, [externalSessionRunning, externalElapsedMs, currentProductiveMs, currentDistractingMs, selectedExternalActivity, lastTier, isPaused, currentApp, currentWebsite]);
 
   // ── Widget Data (collected for widget system) ──
+  // Real data for the 8 stat widgets. Each fetch is independently guarded inside
+  // the hook, so one failing endpoint never blanks another widget.
+  const dashStats = useDashStats({ enabled: true });
+  const { theme: dashTheme, toggle: toggleDashTheme } = useDashTheme();
+
   const widgetData = useMemo(() => ({
     goals,
     longTermGoals,
@@ -614,11 +653,20 @@ export default function DashboardPage({
     gapCount: 0,
     loading: dashLoading,
     error: dashError,
+    // ── previously never supplied → every one of these rendered a permanent zero ──
+    aiUsage: dashStats.aiUsage,
+    financeSummary: dashStats.financeSummary,
+    learnStats: dashStats.learnStats,
+    browserStats: dashStats.browserStats,
+    brainStats: dashStats.brainStats,
+    consoleStats: dashStats.consoleStats,
+    covenantStats: dashStats.covenantStats,
+    sleepStats: dashStats.sleepStats,
   }), [goals, longTermGoals, suggestions, dashboardInsights, streak, productivityScore,
        deadlines, reminders, schedule, dashboardData, activityFeed, isPaused,
        isCurrentlyProductive, isDistracting, displayTime, currentApp, currentWebsite,
        isInBrowser, masteryMastered, masteryTotal,
-       aiInsights, dashLoading, dashError]);
+       aiInsights, dashLoading, dashError, dashStats]);
 
   // Fetch non-dashboard data (sleep, etc.)
   useEffect(() => {
@@ -656,15 +704,20 @@ export default function DashboardPage({
         console.log('[FROZEN-DBG] Dashboard fetch DONE in', Math.round(t1 - t0), 'ms');
         if (data.error) { console.error('[Dashboard] Aggregate error:', data.error); return; }
         api.terminalLog?.('[FROZEN-DBG] Dashboard data received, setting state');
-        setDashboardData(data);
+        // The IPC returns raw rows; the page expects a normalized shape.
+        // See src/pages/dashboard/aggregateNormalizer.ts — `productiveSeconds` and
+        // `weeklyHeatmap` were never produced by any handler, so every read below
+        // silently resolved to 0. Normalizing here fixes the whole contract at once.
+        const normalized = buildDashboardData({ raw: data });
+        setDashboardData(normalized as any);
 
         // Compute productivity score, streak, best day
-        if (data?.overview) {
-          const total = data.overview.totalSeconds || 1;
-          const prod = data.overview.productiveSeconds || 0;
+        if (normalized.overview) {
+          const total = normalized.overview.totalSeconds || 1;
+          const prod = normalized.overview.productiveSeconds || 0;
           setProductivityScore(Math.round((prod / total) * 100));
         }
-        if (data?.weeklyHeatmap) {
+        if (normalized.weeklyHeatmap) {
           // Streak: consecutive days with productive time > 30min
           let s = 0;
           const today = new Date();
@@ -672,7 +725,7 @@ export default function DashboardPage({
             const d = new Date(today);
             d.setDate(d.getDate() - i);
             const dateStr = d.toISOString().split('T')[0];
-            const dayData = data.weeklyHeatmap.find((w: any) => w.date === dateStr);
+            const dayData = normalized.weeklyHeatmap.find((w: any) => w.date === dateStr);
             if (dayData && dayData.productiveHours > 0.5) s++;
             else break;
           }
@@ -681,7 +734,7 @@ export default function DashboardPage({
           // Best day of week
           const dayTotals: Record<string, number> = {};
           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          data.weeklyHeatmap.forEach((w: any) => {
+          normalized.weeklyHeatmap.forEach((w: any) => {
             const d = new Date(w.date);
             const dayName = dayNames[d.getDay()];
             dayTotals[dayName] = (dayTotals[dayName] || 0) + (w.productiveHours || 0);
@@ -1141,7 +1194,19 @@ export default function DashboardPage({
   }, [activityFeed]);
 
   // Determine tier from category
-  const getTierFromCategory = (category?: string): 'productive' | 'neutral' | 'distracting' => {
+  /**
+   * Resolve an app's tier.
+   *
+   * A per-app override (categoryConfig.appTierMap, written by the set-app-tier
+   * handler) always wins over the category-derived tier. Without this, "make this
+   * one app neutral" was impossible: an app's tier came only from its CATEGORY,
+   * so moving it also moved every other app in that category.
+   */
+  const getTierFromCategory = (category?: string, appOrDomain?: string): 'productive' | 'neutral' | 'distracting' => {
+    if (appOrDomain) {
+      const o = appTierMap?.[appOrDomain] ?? domainTierMap?.[appOrDomain];
+      if (o === 'productive' || o === 'neutral' || o === 'distracting') return o;
+    }
     if (!category) return 'neutral';
     const tiers = tierAssignments || DEFAULT_TIER_ASSIGNMENTS;
     if (tiers.productive.includes(category)) return 'productive';
@@ -1489,7 +1554,7 @@ export default function DashboardPage({
     const currentCategory = isInBrowser
       ? (currentWebsite?.category || lastNonBrowserApp?.category)
       : currentApp?.category;
-    const tier = getTierFromCategory(currentCategory || '');
+    const tier = getTierFromCategory(currentCategory || '', currentApp?.app || currentApp?.title || undefined);
     const prevTier = prevTierRef.current;
 
     // Tier transition: reset the OUTGOING tier's timer when switching productive ↔ distracting
@@ -1585,7 +1650,7 @@ export default function DashboardPage({
     const currentCategory = isInBrowser
       ? (currentWebsite?.category || lastNonBrowserApp?.category)
       : currentApp?.category;
-    const tier = getTierFromCategory(currentCategory || '');
+    const tier = getTierFromCategory(currentCategory || '', currentApp?.app || currentApp?.title || undefined);
     const appName = currentApp?.app || currentWebsite?.title || currentWebsite?.domain || lastNonBrowserApp?.app || 'Unknown';
 
     // Don't start a session on mount when no real app is active
@@ -2622,7 +2687,7 @@ export default function DashboardPage({
 
 
   return (
-    <PageShell page="dashboard" variant="dashboard" className="text-white">
+    <PageShell page="dashboard" variant="dashboard" className="text-white dash-root">
       <CurrentCanvas accent="#34d399" render={renderStream} />
       <TimerResetOverlay trigger={resetTrigger} />
 
@@ -2642,7 +2707,7 @@ export default function DashboardPage({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/95 max-w-4xl w-full max-h-[88vh] overflow-auto p-4"
+              className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/95 max-w-7xl w-full max-h-[88vh] overflow-auto p-4"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -2672,6 +2737,7 @@ export default function DashboardPage({
                   setShowCardLibrary(false);
                 }}
                 onClose={() => setShowCardLibrary(false)}
+                data={widgetData}
               />
             </motion.div>
           </motion.div>
@@ -2709,7 +2775,22 @@ export default function DashboardPage({
       )}
 
       {/* Widget Library Toggle — inside dashboard content, part of page flow */}
-      <div className="flex items-center justify-end mb-3">
+      <div className="flex items-center justify-end gap-2 mb-3">
+        {/* Theme toggle: CURRENT (default) <-> TERMINAL. Applies a
+            [data-dash-theme] attribute on <html>; with it absent the dashboard
+            is byte-for-byte the current design. */}
+        <button
+          onClick={toggleDashTheme}
+          data-dash-theme-toggle
+          aria-pressed={dashTheme === 'terminal'}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--page-accent)]/40 hover:border-[var(--page-accent)] hover:bg-[var(--page-accent)]/10 transition-colors duration-200 text-[12px] font-semibold text-[var(--page-accent)] cursor-pointer"
+          title={dashTheme === 'terminal'
+            ? 'Terminal theme is ON — click to switch back to the current theme'
+            : 'Current theme — click to switch to the Terminal theme'}
+        >
+          <Terminal size={14} />
+          Theme: {dashTheme === 'terminal' ? 'TERMINAL' : 'CURRENT'}
+        </button>
         <button
           onClick={() => setShowCardLibrary(v => !v)}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--ws-border)] hover:border-[var(--page-accent)]/50 transition-colors duration-200 text-[12px] font-medium text-zinc-300 hover:text-[var(--page-accent)] shadow-lg"
@@ -2721,7 +2802,7 @@ export default function DashboardPage({
       </div>
 
 <div className="relative z-10 flex flex-col flex-1 min-h-0 w-full">
-           <div className="mx-auto px-5 flex flex-col flex-1 min-h-0 w-full">
+           <div className="mx-auto px-4 lg:px-6 flex flex-col flex-1 min-h-0 w-full">
 
            {/* Z-Index Layer Indicator */}
            <div className="flex items-center gap-2 mb-2 px-1">
@@ -2735,9 +2816,10 @@ export default function DashboardPage({
 {/* Row 1: HeroBand (Stopwatch) + Momentum Hero */}
 {(isVisible('status-band') || isVisible('momentum')) && (
 <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('status-band')} onClick={() => bringToFront('status-band')} pinned={pinnedWidgets.has('status-band')}>
-              <div className="grid grid-cols-1 md:grid-cols-[8fr_4fr] gap-6 items-stretch w-full">
+              <div className="grid grid-cols-1 md:grid-cols-[8fr_4fr] gap-3 items-stretch w-full">
                 {isVisible('status-band') && (
-                <div data-section="Hero" className="min-w-0 flex-1">
+                <div data-section="Hero" className="relative min-w-0 flex-1">
+                <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="status-band" iconOnly /></div>
                 <StatusBand
                  displayTimeMs={displayTime?.ms || 0}
                  isCurrentlyProductive={isCurrentlyProductive}
@@ -2751,12 +2833,23 @@ export default function DashboardPage({
                  isPaused={isPaused}
                  websiteTitle={currentWebsite?.title}
                  websiteCategory={currentWebsite?.category}
+                 appCategory={currentApp?.category}
                />
                </div>
                )}
 {isVisible('momentum') && (
-                 <div data-section="Momentum Hero" className="min-w-0 flex-1 border-l border-[var(--ws-border)] pl-4">
-                <MomentumHero momentum={momentum} loading={dashLoading} isCurrentlyProductive={isCurrentlyProductive} isDistracting={isDistracting} />
+                 <div data-section="Momentum Hero" className="relative min-w-0 flex-1 pl-5 ml-1 border-l border-dashed border-[var(--dk-border-subtle,rgba(255,255,255,0.07))] self-stretch">
+                <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="momentum" iconOnly /></div>
+                <MomentumHero
+                  momentum={
+                    momentum
+                      ? { ...momentum, hasGoals: (goals?.length ?? 0) > 0, hasSchedule: (schedule?.length ?? 0) > 0 }
+                      : null
+                  }
+                  loading={dashLoading}
+                  isCurrentlyProductive={isCurrentlyProductive}
+                  isDistracting={isDistracting}
+                />
                 </div>
                 )}
              </div>
@@ -2765,7 +2858,7 @@ export default function DashboardPage({
 
 {/* Row 2: Tier Breakdown Strip */}
             {isVisible('tier-breakdown') && (
-<DeskFlowCardMotion className="mb-2" zIndex={getZIndex('tier-breakdown')} onClick={() => bringToFront('tier-breakdown')} pinned={pinnedWidgets.has('tier-breakdown')}>
+<DeskFlowCardMotion className="mb-2" zIndex={getZIndex('tier-breakdown')} onClick={() => bringToFront('tier-breakdown')} pinned={pinnedWidgets.has('tier-breakdown')} jumpWidgetId="tier-breakdown">
               <div data-section="Tier Breakdown" className="w-full">
              <TierBreakdownStrip
              productiveHours={dashboardData?.overview?.productiveSeconds ? Math.round(dashboardData.overview.productiveSeconds / 3600 * 10) / 10 : 0}
@@ -2779,7 +2872,7 @@ export default function DashboardPage({
 
 {/* Row 3: Pinned Activities */}
            {isVisible('pinned-activities') && (
-           <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('pinned-activities')} onClick={() => bringToFront('pinned-activities')} pinned={pinnedWidgets.has('pinned-activities')}>
+           <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('pinned-activities')} onClick={() => bringToFront('pinned-activities')} pinned={pinnedWidgets.has('pinned-activities')} jumpWidgetId="pinned-activities">
              <div data-section="Pinned" className="w-full">
             <PinnedActivities
               pinnedActivities={pinnedActivities}
@@ -2804,7 +2897,8 @@ export default function DashboardPage({
 <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('goals')} onClick={() => bringToFront('goals')} pinned={pinnedWidgets.has('goals')}>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 w-full">
                  {isVisible('goals') && (
-                 <div data-section="Goals Card" className="w-full">
+                 <div data-section="Goals Card" className="relative w-full">
+                  <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="goals" iconOnly /></div>
                  <GoalsCard
                    goals={goals}
                    longTermGoals={longTermGoals}
@@ -2823,7 +2917,8 @@ export default function DashboardPage({
                  </div>
                  )}
 {isVisible('quick-focus') && (
-                  <div data-section="Focus Start" className="w-full">
+                  <div data-section="Focus Start" className="relative w-full">
+                  <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="quick-focus" iconOnly /></div>
                  <QuickFocusCard
                    state={deepFocus.state}
                    onStart={deepFocus.start}
@@ -2832,7 +2927,8 @@ export default function DashboardPage({
                  </div>
                  )}
                  {isVisible('deadlines') && (
-                 <div data-section="Deadlines Card" className="w-full">
+                 <div data-section="Deadlines Card" className="relative w-full">
+                  <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="deadlines" iconOnly /></div>
                  <DeadlinesCard
                    deadlines={deadlines}
                    reminders={reminders}
@@ -2852,7 +2948,8 @@ export default function DashboardPage({
                  </div>
                  )}
 {isVisible('longest-focus') && (
-               <div data-section="Longest Focus" className="w-full">
+               <div data-section="Longest Focus" className="relative w-full">
+                <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="longest-focus" iconOnly /></div>
                <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
               </div>
               )}
@@ -2862,7 +2959,7 @@ export default function DashboardPage({
 
             {/* Row 5: Schedule */}
             {isVisible('schedule') && (
-             <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('schedule')} onClick={() => bringToFront('schedule')} pinned={pinnedWidgets.has('schedule')}>
+             <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('schedule')} onClick={() => bringToFront('schedule')} pinned={pinnedWidgets.has('schedule')} jumpWidgetId="schedule">
                 <div data-section="Schedule" className="w-full">
                 <ScheduleCard
                    entries={schedule}
@@ -2879,7 +2976,7 @@ export default function DashboardPage({
 
              {/* AI Insights Strip */}
             {isVisible('insights') && (
-             <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('insights')} onClick={() => bringToFront('insights')} pinned={pinnedWidgets.has('insights')}>
+             <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('insights')} onClick={() => bringToFront('insights')} pinned={pinnedWidgets.has('insights')} jumpWidgetId="insights">
              <div data-section="Insight Strip" className="w-full">
             <InsightStrip insights={aiInsights} />
             </div>
@@ -2888,7 +2985,7 @@ export default function DashboardPage({
 
            {/* Row 6: Productivity Chart */}
            {isVisible('productivity-chart') && (
-              <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('longest-focus')} onClick={() => bringToFront('longest-focus')} pinned={pinnedWidgets.has('longest-focus')}>
+              <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('productivity-chart')} onClick={() => bringToFront('productivity-chart')} pinned={pinnedWidgets.has('productivity-chart')} jumpWidgetId="productivity-chart">
               <div className="p-5">
                <div>
                <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
@@ -2954,7 +3051,7 @@ export default function DashboardPage({
 
           {/* Row 7: Activity Feed */}
           {isVisible('recent-sessions') && (
-           <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('recent-sessions')} onClick={() => bringToFront('recent-sessions')} pinned={pinnedWidgets.has('recent-sessions')}>
+           <DeskFlowCardMotion className="mb-2" zIndex={getZIndex('recent-sessions')} onClick={() => bringToFront('recent-sessions')} pinned={pinnedWidgets.has('recent-sessions')} jumpWidgetId="recent-sessions">
               <div className="p-5">
                <SectionHeader title="Recent Sessions" icon={<Clock size={14} />} />
              <div className="space-y-0.5 mt-3">
@@ -2970,9 +3067,9 @@ export default function DashboardPage({
                      >
                        <div className="flex items-center gap-3 min-w-0">
                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                           item.tier === 'productive' ? 'bg-[var(--success)]' :
-                           item.tier === 'distracting' ? 'bg-[var(--error)]' :
-                           'bg-[var(--warning)]'
+                           item.tier === 'productive' ? 'bg-[var(--tier-productive)]' :
+                           item.tier === 'distracting' ? 'bg-[var(--tier-distracting)]' :
+                           'bg-[var(--tier-neutral)]'
                          }`} />
                          <div className="min-w-0">
                            <div className="text-[13px] text-[var(--text-primary)] truncate">{item.name}</div>
@@ -2997,30 +3094,124 @@ export default function DashboardPage({
         </div>
       </div>
 
-{isVisible('ai-usage') && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <AiUsageWidget usage={widgetData?.aiUsage} onSelect={() => navigate('/ai')} />
-            <ConsoleWidget stats={widgetData?.consoleStats} onSelect={() => navigate('/terminal/tabs/console')} />
-            <FinanceWidget summary={widgetData?.financeSummary} onSelect={() => navigate('/finance')} />
-          </div>
-        )}
-        {isVisible('learn-widget') && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <LearnWidget stats={widgetData?.learnStats} onSelect={() => navigate('/lyceum')} />
-            <BrowserWidget stats={widgetData?.browserStats} onSelect={() => navigate('/browser-history')} />
-            <BrainWidget stats={widgetData?.brainStats} onSelect={() => navigate('/context-brain')} />
-          </div>
-        )}
-        {(isVisible('covenant-widget') || isVisible('health-widget')) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* BUG FIX: these 6 stat widgets used to be rendered inside 2 grouped
+            `isVisible()` gates, so hiding ONE of them (e.g. learn-widget) also
+            hid the two widgets sharing its grid — their layout-editor toggles
+            did nothing and their jump buttons vanished with them. Every widget
+            now carries its own gate and the grid reflows around the visible
+            ones, so any combination of on/off renders correctly. */}
+        {(isVisible('ai-usage') || isVisible('console-widget') || isVisible('finance-widget')
+          || isVisible('learn-widget') || isVisible('browser-widget') || isVisible('brain-widget')
+          || isVisible('covenant-widget') || isVisible('health-widget')) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {isVisible('ai-usage') && (
+              <AiUsageWidget usage={widgetData?.aiUsage} />
+            )}
+            {isVisible('console-widget') && (
+              <ConsoleWidget stats={widgetData?.consoleStats} />
+            )}
+            {isVisible('finance-widget') && (
+              <FinanceWidget summary={widgetData?.financeSummary} />
+            )}
+            {isVisible('learn-widget') && (
+              <LearnWidget stats={widgetData?.learnStats} />
+            )}
+            {isVisible('browser-widget') && (
+              <BrowserWidget stats={widgetData?.browserStats} />
+            )}
+            {isVisible('brain-widget') && (
+              <BrainWidget stats={widgetData?.brainStats} />
+            )}
             {isVisible('covenant-widget') && (
-              <CovenantWidget stats={widgetData?.covenantStats} onSelect={() => navigate('/covenant')} />
+              <CovenantWidget stats={widgetData?.covenantStats} />
             )}
             {isVisible('health-widget') && (
-              <HealthWidget sleep={widgetData?.sleepStats} onSelect={() => navigate('/external')} />
+              <HealthWidget stats={widgetData?.sleepStats} />
             )}
           </div>
         )}
+
+      {/* ── Library-only opt-in widgets ──────────────────────────────────────
+          These 8 have no default row. They render ONLY when switched on from the
+          Card Library, so the dashboard never shows anything uninvited. */}
+      {(isVisible('daily-survey') || isVisible('unified-goals') || isVisible('streak')
+        || isVisible('schedule-sync') || isVisible('drilldown') || isVisible('spotlight')
+        || isVisible('momentum-orb') || isVisible('momentum-score')) && (
+        <div className="grid grid-cols-12 gap-4 w-full">
+          {isVisible('daily-survey') && (
+            <div className="col-span-12 md:col-span-6 lg:col-span-4">
+              <DailySurveyCard goals={goals} />
+            </div>
+          )}
+
+          {isVisible('unified-goals') && (
+            <div className="col-span-12 lg:col-span-8">
+              <UnifiedGoalsCard
+                goals={goals}
+                longTermGoals={longTermGoals}
+                schedule={schedule}
+                onToggle={() => {}}
+                onAdd={() => {}}
+                onDelete={() => {}}
+                onUpdate={() => {}}
+                onGenerate={() => {}}
+                onAcceptSuggestion={() => {}}
+                onDismissSuggestion={() => {}}
+                suggestions={suggestions ?? []}
+              />
+            </div>
+          )}
+
+          {isVisible('streak') && (
+            <div className="col-span-12 md:col-span-6 lg:col-span-4">
+              <StreakCard goals={goals} />
+            </div>
+          )}
+
+          {isVisible('schedule-sync') && (
+            <div className="col-span-12 lg:col-span-8">
+              <ScheduleSyncCard schedule={schedule} goals={goals} />
+            </div>
+          )}
+
+          {isVisible('drilldown') && (
+            <div className="col-span-12 md:col-span-6 lg:col-span-4">
+              <DrillDownCard
+                kind="heatmap"
+                title="Activity Heatmap"
+                subtitle="Where your time went"
+                onView={() => setExpandedModal('heatmap')}
+              />
+            </div>
+          )}
+
+          {isVisible('spotlight') && (
+            <div className="col-span-12 md:col-span-6 lg:col-span-4">
+              <SpotlightCard>
+                <div className="p-4">
+                  <div className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Spotlight</div>
+                  <div className="mt-1 text-sm text-[var(--text-primary)]">Pin a card here to keep it in view.</div>
+                </div>
+              </SpotlightCard>
+            </div>
+          )}
+
+          {isVisible('momentum-orb') && (
+            <div className="col-span-12 md:col-span-6 lg:col-span-4 flex justify-center py-2">
+              <MomentumOrb momentum={productivityScore ?? 0} streak={streak ?? 0} />
+            </div>
+          )}
+
+          {isVisible('momentum-score') && (
+            <div className="col-span-12 md:col-span-6 lg:col-span-4">
+              <MomentumScore
+                goals={goals}
+                focusTimeMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modals — UNCHANGED */}
       <AnimatePresence>
@@ -3029,7 +3220,7 @@ export default function DashboardPage({
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setExpandedModal(null)}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-auto bg-zinc-900/95 backdrop-blur-xl border-zinc-800/60 light:bg-white light:border-[var(--ws-border-strong)]"
+              className="relative rounded-xl p-5 border max-w-7xl w-full max-h-[90vh] overflow-auto bg-zinc-900/95 backdrop-blur-xl border-zinc-800/60 light:bg-white light:border-[var(--ws-border-strong)]"
               onClick={(e) => e.stopPropagation()}>
               <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-pink-500/30 via-pink-500/10 to-transparent" />
               <div className="flex items-center justify-between mb-6">
@@ -3103,7 +3294,7 @@ export default function DashboardPage({
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setExpandedModal(null)}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className={solarFullscreen ? "fixed inset-0 z-50 bg-black flex flex-col" : "relative rounded-xl p-5 border max-w-4xl w-full max-h-[90vh] overflow-hidden light:bg-white light:border-[var(--ws-border-strong)]"}
+              className={solarFullscreen ? "fixed inset-0 z-50 bg-black flex flex-col" : "relative rounded-xl p-5 border max-w-7xl w-full max-h-[90vh] overflow-hidden light:bg-white light:border-[var(--ws-border-strong)]"}
               onClick={(e) => e.stopPropagation()}>
               {!solarFullscreen && <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/30 via-indigo-500/10 to-transparent" />}
               <div className={`flex items-center justify-between px-4 pt-4 ${solarFullscreen ? '' : 'mb-4'}`}>
@@ -3139,7 +3330,7 @@ export default function DashboardPage({
         )}
         </AnimatePresence>
 
-        <WidgetLibraryPopup />
+
       </PageShell>
   );
 }

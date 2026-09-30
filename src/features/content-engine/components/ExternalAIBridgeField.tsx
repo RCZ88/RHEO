@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowRight, Check, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getPreferredTransport, gatewayAvailability, sendViaGateway, extractField } from '@/services/externalAiTransport'
 
 const api = () => (window as any).deskflowAPI
 const extApi = () => (window as any).deskflowAPI?.extensionQueueCommand
@@ -43,6 +44,7 @@ export function ExternalAIBridgeField({
   const [pasting, setPasting] = useState(false)
   const [pasteValue, setPasteValue] = useState('')
   const [lastResult, setLastResult] = useState<'success' | 'error' | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Build a field-specific prompt
   const buildFieldPrompt = (): string => {
@@ -71,6 +73,26 @@ Rules:
   }
 
   const sendToAI = async () => {
+    // Gateway is opt-in: only used when the user has signed in AND switched to it.
+    if (getPreferredTransport() === 'gateway') {
+      const avail = await gatewayAvailability()
+      if (avail.ready) {
+        setSending(true)
+        const res = await sendViaGateway(buildFieldPrompt())
+        setSending(false)
+        if (res.ok) {
+          const { values, error } = extractField(res.text!, [fieldName])
+          const incoming = values[fieldName]
+          if (incoming !== undefined) { onUpdate(incoming); setLastResult('success'); return }
+          setError(error || `The response did not include "${fieldName}".`)
+          return
+        }
+        setError(res.error || 'The provider did not answer.')
+        return
+      }
+      setError(avail.reason || 'No AI provider is signed in yet.')
+      return
+    }
     setSending(true)
     try {
       // Try extension injection first

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { FieldAIButton } from '@/components/ai-bridge/FieldAIButton';
 import { WarmCard } from '../WarmCard';
+import { Button } from '../../../components/ui/button';
 import { HabitTracker } from '../../../components/goals/HabitTracker';
 import { HierarchyTree } from '../../../components/goals/HierarchyTree';
 import { ConnectionExplorer } from '../../../components/goals/ConnectionExplorer';
@@ -260,6 +261,73 @@ function DayRing({ done, total }: { done: number; total: number }) {
     <div className="relative shrink-0">
       <AnimatedCircularProgressBar value={pct} size={46} strokeWidth={4} gaugePrimaryColor="#fbbf24" gaugeSecondaryColor="rgba(63,63,70,0.5)" />
       <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-zinc-300 tabular-nums">{done}/{total}</span>
+    </div>
+  );
+}
+
+/* — WeekReview: Mon→Sun hard-data recap with covenant streak dots — */
+function WeekReview({ weekDates, reflections }: {
+  weekDates: string[];
+  reflections: Record<string, DailyReflection>;
+}) {
+  const doneDates = covenantDoneDates();
+  const streak = covenantStreak();
+  const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const maxProd = Math.max(1, ...weekDates.map(d => reflections[d]?.productiveSec || 0));
+  const avgProd = weekDates.reduce((s, d) => s + (reflections[d]?.productiveSec || 0), 0) / 7;
+  const goalsSealed = weekDates.reduce((s, d) => s + (reflections[d]?.goals.completed || 0), 0);
+  const habitsKept = weekDates.reduce((s, d) => s + (reflections[d]?.habits.completed || 0), 0);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[12px] font-medium text-zinc-300 flex items-center gap-1.5">
+          <TrendingUp size={13} className="text-amber-400" />
+          This week, at a glance
+          <span className="warmth-serif italic text-zinc-600 font-normal">— Monday to Sunday</span>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {weekDates.map((d, i) => {
+          const ref = reflections[d];
+          const prod = ref?.productiveSec || 0;
+          const isToday = d === todayStr();
+          return (
+            <div key={d} className={`flex items-center gap-3 px-2.5 py-1.5 rounded-lg ${isToday ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-zinc-900/30'}`}>
+              <div className="w-11 shrink-0">
+                <div className={`text-[9px] uppercase tracking-wider ${isToday ? 'text-amber-400' : 'text-zinc-600'}`}>{dow[i]}</div>
+                <div className={`text-[11px] font-semibold tabular-nums ${isToday ? 'text-amber-300' : 'text-zinc-500'}`}>{d.slice(5)}</div>
+              </div>
+              <div className="flex-1 h-2 rounded-full bg-zinc-800/60 overflow-hidden">
+                <motion.div
+                  /* LAMINAR §6 / PAINT Gate E: transform only, never width.
+                     scaleX from a left origin gives the same fill with no layout cost. */
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: Math.min(1, prod / maxProd) }}
+                  transition={{ duration: 0.5, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
+                  className="h-full w-full rounded-full origin-left"
+                  /* LAMINAR §7.1: no decorative chrome gradient — a flat amber fill
+                     reads the same at 2px and stops the card from looking decorated. */
+                  style={{ backgroundColor: prod > 0 ? 'var(--color-amber-400)' : 'transparent' }}
+                />
+              </div>
+              <div className="w-12 text-right text-[11px] tabular-nums text-zinc-400">{prod > 0 ? formatTime(prod) : '—'}</div>
+              <div className="w-6 text-center text-[11px] tabular-nums text-emerald-400">{ref?.goals.completed || ''}</div>
+              <div className="w-5 text-center">
+                {doneDates.has(d)
+                  ? <Flame size={12} className="inline text-amber-400" />
+                  : <span className="text-zinc-700">·</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 pt-2.5 border-t border-zinc-800/50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+        <span>avg <span className="text-zinc-300 tabular-nums">{formatTime(Math.round(avgProd))}</span>/day</span>
+        <span><span className="text-emerald-400 tabular-nums">{goalsSealed}</span> routines sealed</span>
+        <span><span className="text-violet-400 tabular-nums">{habitsKept}</span> habits kept</span>
+        <span className="flex items-center gap-1"><Flame size={12} className="text-amber-400" /> <span className="text-amber-300 tabular-nums">{streak}</span> day streak</span>
+      </div>
     </div>
   );
 }
@@ -594,9 +662,22 @@ export function HabitsPage() {
           {/* Habit Tracker */}
           <WarmCard ambient>
             <div className="text-[12px] font-medium text-zinc-400 mb-3 flex items-center gap-1.5">
-              <Target size={13} className="text-pink-400" />
+              <Target size={13} style={{ color: 'var(--page-accent)' }} aria-hidden />
               Habit Tracker
               <span className="text-zinc-600 font-normal ml-1">{habitTotalCount} habits</span>
+              {/* HabitTracker renders no add affordance of its own, and
+                  GoalEmptyState only appears when the list is EMPTY — so once you
+                  had one habit there was no way to add a second. */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setIsAdding(true); setNewCriteria(defaultCriteria); }}
+                aria-expanded={isAdding}
+                className="ml-auto gap-1.5"
+              >
+                <Plus size={13} aria-hidden />
+                Add habit
+              </Button>
             </div>
             {loading ? (
               <div className="space-y-2"><div className="h-8 bg-zinc-800/50 rounded-lg animate-pulse" /><div className="h-8 bg-zinc-800/50 rounded-lg animate-pulse" /></div>

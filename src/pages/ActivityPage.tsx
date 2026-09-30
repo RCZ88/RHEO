@@ -49,10 +49,21 @@ const pillTransition = { type: 'spring' as const, stiffness: 400, damping: 32 };
 
 export default function ActivityPage(props: ActivityPageProps) {
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    const valid = ['websites', 'productivity', 'focus', 'external'] as TabKey[]
+    // 1) ?tab= in the URL (the page's own effect writes it back on mount)
     try {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get('tab');
-      if (tab === 'websites' || tab === 'productivity' || tab === 'focus' || tab === 'external') return tab;
+      const tab = new URLSearchParams(window.location.search).get('tab')
+      if (tab && valid.includes(tab as TabKey)) return tab as TabKey
+    } catch {}
+    // 2) the deepNav hint key navigateTo() writes: '/activity-activeTab'.
+    //    The dashboard widget jump buttons rely on this — without it every
+    //    widget deep-linked to /activity landed on the default 'apps' tab.
+    try {
+      const hint = localStorage.getItem('/activity-activeTab')
+      if (hint && valid.includes(hint as TabKey)) {
+        localStorage.removeItem('/activity-activeTab')
+        return hint as TabKey
+      }
     } catch {}
     return 'apps';
   });

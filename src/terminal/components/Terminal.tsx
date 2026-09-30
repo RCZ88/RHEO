@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Appearance, PaneNode, PaneState, TerminalTab, ThemeDef } from "../lib/types";
 import type { Store } from "../hooks/useConsoleStore";
 import { cx, fmtTime } from "../lib/utils";
@@ -30,11 +30,11 @@ export function Prompt({ pane, theme, appearance, shell }: { pane: PaneState; th
   return <span><span style={{ color: u }} className="font-bold">user@penguin</span><span style={{ color: theme.muted }}>:</span><span style={{ color: p }} className="font-semibold">{short}</span><span style={{ color: theme.muted }}>{shell === "fish" ? "> " : "$ "}</span></span>;
 }
 
-function LineColor(type: string, theme: ThemeDef) {
+function LineColor(type: string, theme: Pick<ThemeDef, "fg" | "accent" | "muted">) {
   switch (type) {
     case "input": return theme.fg;
-    case "error": return "#fb7185";
-    case "success": return "#34d399";
+    case "error": return theme.accent;
+    case "success": return theme.accent;
     case "system": return theme.accent;
     case "dim": return theme.muted;
     default: return theme.fg;
@@ -47,6 +47,31 @@ function highlight(text: string, q: string): React.ReactNode {
   if (i < 0) return text;
   return <>{text.slice(0, i)}<mark className="hl-mark">{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</>;
 }
+
+/** One scrollback row. Memoised so that typing in the input re-renders the prompt
+ *  row only, instead of the entire scrollback (which reached 800 rows and made
+ *  every keystroke visibly lag). */
+const TermLineRow = memo(function TermLineRow({ l, q, fg, accent, muted, fontSize, onCopy }: {
+  l: { id: string; type: string; text: string; timestamp: number };
+  q: string; fg: string; accent: string; muted: string; fontSize: number; onCopy: (t: string) => void;
+}) {
+  return (
+    <div className="group/line flex gap-1.5 items-baseline anim-sweep" style={{ color: LineColor(l.type, { fg, accent, muted }) }}>
+      {l.type === "input" ? (
+        <>
+          <span className="shrink-0 opacity-50 select-none" style={{ fontSize: fontSize - 2 }}>▸</span>
+          <span className="break-all whitespace-pre-wrap flex-1 font-medium">{highlight(l.text, q)}</span>
+          <span className="shrink-0 text-[9px] mono opacity-0 group-hover/line:opacity-60">{fmtTime(l.timestamp)}</span>
+        </>
+      ) : (
+        <>
+          <span className="break-all whitespace-pre-wrap flex-1" style={{ opacity: l.type === "dim" ? 0.85 : 1 }}>{highlight(l.text, q)}</span>
+          <button onClick={(e) => { e.stopPropagation(); onCopy(l.text); }} className="shrink-0 opacity-0 group-hover/line:opacity-60 hover:!opacity-100 transition" style={{ color: muted }} aria-label="copy line"><Copy size={10} /></button>
+        </>
+      )}
+    </div>
+  );
+});
 
 export function TermPane({ store, tab, pane, focused, findQ, onBell }: { store: Store; tab: TerminalTab; pane: PaneState; focused: boolean; findQ?: string; onBell?: () => void }) {
   const { theme, appearance } = { theme: store.theme, appearance: store.appearance };
@@ -63,7 +88,16 @@ export function TermPane({ store, tab, pane, focused, findQ, onBell }: { store: 
     if (el) el.scrollTop = el.scrollHeight;
   }, [pane.lines.length, tab.id]);
 
-  const flash = (m: string) => { setToast(m); window.setTimeout(() => setToast(null), 1400); };
+  const flash = useCallback((m: string) => { setToast(m); window.setTimeout(() => setToast(null), 1400); }, []);
+
+  const copyLine = useCallback((txt: string) => { navigator.clipboard?.writeText(txt).catch(() => {}); flash("copied"); }, [flash]);
+
+  const lineRows = useMemo(
+    () => pane.lines.map((l) => (
+      <TermLineRow key={l.id} l={l} q={findQ ?? ""} fg={theme.fg} accent={theme.accent} muted={theme.muted} fontSize={appearance.fontSize} onCopy={copyLine} />
+    )),
+    [pane.lines, findQ, theme.fg, theme.accent, theme.muted, appearance.fontSize, copyLine],
+  );
 
   const submit = (cmd: string) => {
     store.runCommand(tab.id, pane.id, cmd);
@@ -136,8 +170,6 @@ export function TermPane({ store, tab, pane, focused, findQ, onBell }: { store: 
     }
   };
 
-  const copyLine = (txt: string) => { navigator.clipboard?.writeText(txt).catch(() => {}); flash("copied"); };
-
   return (
     <div
       onClick={() => { store.focusPane(tab.id, pane.id); inputRef.current?.focus(); }}
@@ -158,7 +190,7 @@ export function TermPane({ store, tab, pane, focused, findQ, onBell }: { store: 
         <div className="flex items-center gap-1 px-2 h-7 shrink-0 border-b select-none" style={{ borderColor: theme.border, background: "color-mix(in srgb, var(--t-bg) 55%, transparent)" }}>
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: focused ? tab.color : theme.muted }} />
           <span className="text-[10px] mono truncate flex-1" style={{ color: theme.muted }}>{pane.cwd.replace("/home/user", "~")} · {shellTag(tab.shell)}</span>
-          {pane.lastExit !== 0 && <span className="text-[9px] mono font-bold px-1 rounded" style={{ background: "rgba(251,113,133,.15)", color: "#fb7185" }}>✗{pane.lastExit}</span>}
+          {pane.lastExit !== 0 && <span className="text-[9px] mono font-bold px-1 rounded" style={{ background: "rgba(251,113,133,.15)", color: theme.accent }}>✗{pane.lastExit}</span>}
           <button title="Find in pane" onClick={(e) => { e.stopPropagation(); onBell?.(); }} className="w-5 h-5 rounded grid place-items-center hover:bg-white/10" style={{ color: theme.muted }}><Search size={11} /></button>
           <button title="Split horizontal" onClick={(e) => { e.stopPropagation(); store.splitPane(tab.id, pane.id, "row"); }} className="w-5 h-5 rounded grid place-items-center hover:bg-white/10" style={{ color: theme.muted }}><SplitSquareHorizontal size={11} /></button>
           <button title="Split vertical" onClick={(e) => { e.stopPropagation(); store.splitPane(tab.id, pane.id, "col"); }} className="w-5 h-5 rounded grid place-items-center hover:bg-white/10" style={{ color: theme.muted }}><SplitSquareVertical size={11} /></button>
@@ -166,23 +198,11 @@ export function TermPane({ store, tab, pane, focused, findQ, onBell }: { store: 
           <button title="Close pane" onClick={(e) => { e.stopPropagation(); store.closePane(tab.id, pane.id); }} className="w-5 h-5 rounded grid place-items-center hover:bg-red-500/80 hover:text-white" style={{ color: theme.muted }}><X size={11} /></button>
         </div>
       )}
+      <div className="flex items-center gap-1 px-2 h-7 shrink-0 border-b select-none" style={{ borderColor: theme.border, background: "color-mix(in srgb, var(--t-bg) 55%, transparent)" }}>
+        <button title="Copy all in pane" onClick={(e) => { e.stopPropagation(); store.copyAllContent(tab.id, pane.id); flash("copied all"); }} className="w-5 h-5 rounded grid place-items-center hover:bg-white/10" style={{ color: theme.muted }}><Copy size={11} /></button>
+      </div>
       <div ref={scrollRef} className={cx("flex-1 overflow-y-auto min-h-0 pane-find", dense && "leading-snug")} style={{ padding: dense ? Math.max(6, appearance.padding - 6) : appearance.padding }}>
-        {pane.lines.map((l) => (
-          <div key={l.id} className="group/line flex gap-1.5 items-baseline anim-sweep" style={{ color: LineColor(l.type, theme) }}>
-            {l.type === "input" ? (
-              <>
-                <span className="shrink-0 opacity-50 select-none" style={{ fontSize: appearance.fontSize - 2 }}>▸</span>
-                <span className="break-all whitespace-pre-wrap flex-1 font-medium">{highlight(l.text, findQ ?? "")}</span>
-                <span className="shrink-0 text-[9px] mono opacity-0 group-hover/line:opacity-60">{fmtTime(l.timestamp)}</span>
-              </>
-            ) : (
-              <>
-                <span className="break-all whitespace-pre-wrap flex-1" style={{ opacity: l.type === "dim" ? 0.85 : 1 }}>{highlight(l.text, findQ ?? "")}</span>
-                <button onClick={(e) => { e.stopPropagation(); copyLine(l.text); }} className="shrink-0 opacity-0 group-hover/line:opacity-60 hover:!opacity-100 transition" style={{ color: theme.muted }} aria-label="copy line"><Copy size={10} /></button>
-              </>
-            )}
-          </div>
-        ))}
+        {lineRows}
         <div className="flex items-baseline gap-1 mt-0.5">
           <div className="shrink-0"><Prompt pane={pane} theme={theme} appearance={appearance} shell={tab.shell} /></div>
           <div className="relative flex-1 flex items-center">

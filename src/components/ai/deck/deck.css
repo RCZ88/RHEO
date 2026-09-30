@@ -50,9 +50,16 @@
 }
 .dk-root * { box-sizing: border-box; }
 
+/* --- Root: full available width ---
+   WAS `max-width: 1400px; margin: 0 auto;` — a PROSE reading measure that
+   also caged the canvas, topbar, chat and composer. The canvas is a spatial
+   surface (Figma/Miro class), not a text column: clamping it to 1400px left
+   ~490px of dead space on a wide window and made it read as a narrow strip.
+
+   The clamp now lives on the CHAT column only (below), so prose keeps a
+   comfortable measure while the canvas + topbar get the full window. */
 .dk-wrap {
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -1311,13 +1318,25 @@
   50% { opacity: 0.8; }
 }
 
-/* --- Chat Inner (ChatPanel content inside dk-chat-card) --- */
+/* --- Chat Inner (ChatPanel content inside dk-chat-card) ---
+   The reading measure removed from .dk-wrap now lives HERE, so chat lines
+   stay ~1400px max while the canvas above it is full-bleed. auto margins
+   centre it within whatever width the window gives. */
 .dk-chat-inner {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   position: relative;
+  width: 100%;
+  max-width: 1400px;
+  margin-inline: auto;
+}
+
+/* Composer keeps the same measure as the chat column. */
+.dk-input-area > * {
+  max-width: 1400px;
+  margin-inline: auto;
 }
 
 /* --- Status Bar additions --- */

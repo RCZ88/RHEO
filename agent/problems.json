@@ -1637,5 +1637,175 @@
     "checks": [],
     "created_at": "2026-08-27T12:00:00.000Z",
     "updated_at": "2026-08-27T12:00:00.000Z"
+  },
+  {
+    "id": "188",
+    "title": "Goal hub is unreachable: 5 root causes block Goal-as-the-hub",
+    "status": "NEW",
+    "priority": "critical",
+    "category": "goals",
+    "terminal_id": null,
+    "session_id": null,
+    "session_name": null,
+    "skill_used": "paint",
+    "user_notes": "The Goal is supposed to be the modular hub of the Life page — link a goal to todolist, habits, schedule, learning, sleep, everything. The backend is ~90% built and completely unreachable in practice. DO THESE IN ORDER; each is a prerequisite for the next.",
+    "fix_description": null,
+    "files": [
+      "src/infrastructure/ipc/goal-handlers.ts",
+      "src/components/goals/ConnectionExplorer.tsx",
+      "src/features/warmth/gold/GoldPage.tsx",
+      "src/features/warmth/schedule/SchedulePage.tsx"
+    ],
+    "checks": [
+      {
+        "id": "g1",
+        "text": "Backfill NULL goal ids in the DB (21 of 27 goals have id=NULL, so loadGoals drops them via `if (!g.id) continue`). Requires DB backup + explicit user OK first. Verify with SELECT COUNT(*) FROM goals WHERE id IS NULL"
+      },
+      {
+        "id": "g2",
+        "text": "Fix response-shape mismatch: goal-handlers getGoalConnections returns {success,goal,parentLtgs,childGoals,todos,schedules,deadlines} but ConnectionExplorer reads res.connections.* (scheduleBlocks||schedules). Pick one shape and align both sides."
+      },
+      {
+        "id": "g3",
+        "text": "Make goal_id actually settable: todos/deadlines/schedule_entries/reminders all have the column but goal_id set = 0 everywhere. Add goal linking to each editor (ScheduleCard has a goal select, TodoList uses LinkPicker, deadlines/reminders have none)."
+      },
+      {
+        "id": "g4",
+        "text": "Mount ConnectionExplorer on GoldPage and SchedulePage, not only HabitsPage:910 where it is reachable only by clicking a HierarchyTree node."
+      },
+      {
+        "id": "g5",
+        "text": "Expand the hub beyond its current 7 sections (Todos, Subtasks, Schedule, Deadlines, Parent, Linked Goal, Linked Habit) to the full CrossFeatureLink union: learn, finance, external, ide, focus, sleep, brain, notes, composition. Handler currently hardcodes notes:[] and brainEntities:[]. Verify each backing table has real data before wiring."
+      }
+    ],
+    "created_at": "2026-09-30T22:48:11",
+    "linked_requests": [],
+    "linked_problems": []
+  },
+  {
+    "id": "189",
+    "title": "21 of 27 goals invisible: NULL primary key hides the whole feature",
+    "status": "NEW",
+    "priority": "critical",
+    "category": "goals",
+    "terminal_id": null,
+    "session_id": null,
+    "session_name": null,
+    "skill_used": "paint",
+    "user_notes": "GoldPage.loadGoals does `if (!g.id) continue`, silently discarding 21 goals. Every NULL-id row came from an AI/assistant write path (source='ai' / 'ai_assistant'); save-goal has no id fallback so it inserts NULL directly. 11 'suggested' goals are ALSO invisible by design — GoldPage.tsx:1009 filters `status !== 'suggested'` with no 'N suggested' affordance to surface them.",
+    "fix_description": null,
+    "files": [
+      "src/infrastructure/ipc/goal-handlers.ts",
+      "src/features/warmth/gold/GoldPage.tsx"
+    ],
+    "checks": [
+      {
+        "id": "a1",
+        "text": "Decide + implement id fallback in save-goal so a goal without an id generates one instead of writing NULL (goal.id is PRIMARY KEY, so these writes should have failed loudly — they didn't, meaning the rows predate the current constraint)."
+      },
+      {
+        "id": "a2",
+        "text": "Surface the 11 'suggested' goals in a reviewable section instead of filtering them out permanently."
+      },
+      {
+        "id": "a3",
+        "text": "Backfill existing NULL ids (DB write — backup + user OK required)."
+      }
+    ],
+    "created_at": "2026-09-30T22:48:11",
+    "linked_requests": [],
+    "linked_problems": []
+  },
+  {
+    "id": "190",
+    "title": "Two schedule cards do the same job on the Schedule page",
+    "status": "NEW",
+    "priority": "high",
+    "category": "ui",
+    "terminal_id": null,
+    "session_id": null,
+    "session_name": null,
+    "skill_used": "paint",
+    "user_notes": "SchedulePage renders BOTH ScheduleCard (interactive: add/edit/delete blocks) AND ScheduleSyncCard (read-only display of the same day's blocks). Redundant and confusing — one has abilities the other lacks. PAINT scope: Schedule page add/display surface only.",
+    "fix_description": null,
+    "files": [
+      "src/features/warmth/schedule/SchedulePage.tsx",
+      "src/components/dashboard/ScheduleSyncCard.tsx",
+      "src/pages/dashboard/ScheduleCard.tsx"
+    ],
+    "checks": [
+      {
+        "id": "s1",
+        "text": "Decide which card is canonical. Recommend: keep ScheduleCard (it owns the only working add path) and delete ScheduleSyncCard."
+      },
+      {
+        "id": "s2",
+        "text": "Remove the loser and re-verify the add/edit/delete flow end to end."
+      }
+    ],
+    "created_at": "2026-09-30T22:48:11",
+    "linked_requests": [],
+    "linked_problems": []
+  },
+  {
+    "id": "191",
+    "title": "Redundant calendar systems on the Gold page",
+    "status": "NEW",
+    "priority": "high",
+    "category": "ui",
+    "terminal_id": null,
+    "session_id": null,
+    "session_name": null,
+    "skill_used": "paint",
+    "user_notes": "GoldPage is about routines and time budgets, not calendars, yet it renders CalendarStrip (line 1040) AND CalendarSidebar (line 1242) — two date-navigation widgets for the same job. Same pattern on SchedulePage: DeadlineRadar (1016) + CalendarSidebar (1059) are both date pickers.",
+    "fix_description": null,
+    "files": [
+      "src/features/warmth/gold/GoldPage.tsx",
+      "src/features/warmth/schedule/SchedulePage.tsx",
+      "src/features/warmth/habits/HabitsPage.tsx"
+    ],
+    "checks": [
+      {
+        "id": "c1",
+        "text": "Audit all four date-navigation widgets (CalendarStrip, CalendarSidebar, DeadlineRadar, and the QuickDates row in BellBoard) and collapse to ONE date navigator per page."
+      },
+      {
+        "id": "c2",
+        "text": "Keep DeadlineRadar's mark dots only if it earns its place as a deadline overview, not as a second way to change the selected date."
+      }
+    ],
+    "created_at": "2026-09-30T22:48:11",
+    "linked_requests": [],
+    "linked_problems": []
+  },
+  {
+    "id": "192",
+    "title": "todo-popup and reminder due_time shipped without verification",
+    "status": "NEW",
+    "priority": "medium",
+    "category": "ui",
+    "terminal_id": null,
+    "session_id": null,
+    "session_name": null,
+    "skill_used": "paint",
+    "user_notes": "Reminders now take date+time (new reminders.due_time column, month-grid picker) and the pinned todo popup now has its 6 main-process handlers. NEITHER has been run — probe_discover finds no Electron instance with a debug port, so both are statically verified only.",
+    "fix_description": null,
+    "files": [
+      "src/features/warmth/schedule/SchedulePage.tsx",
+      "src/main.ts"
+    ],
+    "checks": [
+      {
+        "id": "v1",
+        "text": "Launch the app with a debug port and verify: add a reminder with date+time, reload, confirm the time persisted and renders as '2:30 PM'."
+      },
+      {
+        "id": "v2",
+        "text": "Verify the pinned todo popup opens from the TodoList pin button and that the reminder date picker opens the month grid."
+      }
+    ],
+    "created_at": "2026-09-30T22:48:11",
+    "linked_requests": [],
+    "linked_problems": []
   }
 ]

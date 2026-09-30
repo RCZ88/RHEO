@@ -1,5 +1,13 @@
 import type { NavigateFunction } from 'react-router-dom'
 
+export interface DeepNavTarget {
+  route: string
+  section?: string
+  tab?: string
+  subpage?: string
+  state?: Record<string, any>
+}
+
 const NAVIGATE_KEY = 'deepNav:navigate'
 const SECTION_STORAGE_KEY = 'deepNav:section'
 

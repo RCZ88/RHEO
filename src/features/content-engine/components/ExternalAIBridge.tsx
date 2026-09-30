@@ -4,6 +4,7 @@ import { AmberButton, Card, GhostButton, TextArea, toast } from './ui'
 import { PromptSectionToggle, PROMPT_SECTIONS, STYLE_TEMPLATES } from './PromptSectionToggle'
 import { cn } from '@/lib/utils'
 import DynamicPromptPreview from '@/components/DynamicPromptPreview'
+import { getPreferredTransport, gatewayAvailability, sendViaGateway } from '@/services/externalAiTransport'
 
 const api = () => (window as any).deskflowAPI?.contentEngine
 const extApi = () => (window as any).deskflowAPI?.extensionQueueCommand
@@ -168,6 +169,21 @@ export function ExternalAIBridge({
   // 2-click flow: send prompt to AI tab via extension
   const sendToAI = async () => {
     if (!prompt) return
+    // Gateway is opt-in: only when the user signed in AND switched to it.
+    if (getPreferredTransport() === 'gateway') {
+      const avail = await gatewayAvailability()
+      if (avail.ready) {
+        setWaitingForResponse(true)
+        const res = await sendViaGateway(prompt)
+        setWaitingForResponse(false)
+        if (!res.ok) { setError(res.error || 'The provider did not answer.'); return }
+        setPaste(res.text!)
+        setImporting(true)
+        return
+      }
+      setError(avail.reason || 'No AI provider is signed in yet.')
+      return
+    }
     // Try extension injection
     try {
       const ext = extApi()

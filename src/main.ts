@@ -81,6 +81,7 @@ import { registerFinanceHandlers } from "./infrastructure/ipc/finance-handlers";
 import { registerSessionHandlers } from "./infrastructure/ipc/session-handlers";
 import { registerTrackingHandlers } from "./infrastructure/ipc/tracking-handlers";
 import { registerGasHandlers } from "./main/gas/ipc";
+import { registerLectureHandlers } from "./services/lecture/index";
 import { StateCoordinator } from "./main/stateCoordinator";
 
 // --- Global shortcut for DevTools ---
@@ -1591,9 +1592,11 @@ const HermesPlugin: AIAgentPlugin = {
         // hermes-agent directory (cross-platform)
         const hermesAgentDir = path_1.default.join(localAppData, 'hermes-agent');
         if (fs_1.default.existsSync(hermesAgentDir)) return true;
-        // Linux shell-agent store: ~/.hermes/sessions (Hermes/ln)
+        // Linux: ~/.hermes/sessions + ~/.local/share/hermes (Hermes/ln)
         const linuxHerpesSessions = path_1.default.join(homedir, '.hermes', 'sessions');
         if (fs_1.default.existsSync(linuxHerpesSessions)) return true;
+        const linuxLocalShare = path_1.default.join(homedir, '.local', 'share', 'hermes');
+        if (fs_1.default.existsSync(linuxLocalShare)) return true;
         const linuxHerpesProfiles = path_1.default.join(homedir, '.hermes', 'profiles');
         if (fs_1.default.existsSync(linuxHerpesProfiles)) return true;
         // Smart path: check custom path saved via Hermes setup UI
@@ -1659,10 +1662,29 @@ const HermesPlugin: AIAgentPlugin = {
             paths.push(flatWindowsSessions);
         }
 
-        // Linux store: ~/.hermes/sessions + ~/.hermes/profiles/<profile>/sessions + ~/.hermes/staging/sessions
+        // Linux store: ~/.hermes/sessions + ~/.local/share/hermes + ~/.hermes/profiles/<profile>/sessions + ~/.hermes/staging/sessions
         const linuxBase = path_1.default.join(homedir, '.hermes');
         const linuxSessions = path_1.default.join(linuxBase, 'sessions');
         if (fs_1.default.existsSync(linuxSessions)) paths.push(linuxSessions);
+
+        // Also check ~/.local/share/hermes (standard XDG path for Hermes/ln)
+        const linuxLocalShare = path_1.default.join(homedir, '.local', 'share', 'hermes');
+        if (fs_1.default.existsSync(linuxLocalShare)) {
+            paths.push(linuxLocalShare);
+            // Check for nested session subdirs
+            try {
+                const entries = fs_1.default.readdirSync(linuxLocalShare);
+                for (const entry of entries) {
+                    const entryPath = path_1.default.join(linuxLocalShare, entry);
+                    if (fs_1.default.isDirectorySync?.(entryPath)) {
+                        const sessionsDir = path_1.default.join(entryPath, 'sessions');
+                        if (fs_1.default.existsSync(sessionsDir)) {
+                            paths.push(sessionsDir);
+                        }
+                    }
+                }
+            } catch {}
+        }
 
         const linuxProfiles = path_1.default.join(linuxBase, 'profiles');
         if (fs_1.default.existsSync(linuxProfiles)) {
@@ -1797,7 +1819,7 @@ async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
     for (const plugin of AI_AGENT_PLUGINS) {
         try {
             if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('ai-sync-progress', { agent: plugin.id, name: plugin.name, status: 'detecting' });
+                safeSend(mainWindow, 'ai-sync-progress', { agent: plugin.id, name: plugin.name, status: 'detecting' });
             }
 
             // Yield between plugins so UI stays responsive
@@ -1809,7 +1831,7 @@ async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
             if (!isDetected) continue;
 
             if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('ai-sync-progress', { agent: plugin.id, name: plugin.name, status: 'parsing' });
+                safeSend(mainWindow, 'ai-sync-progress', { agent: plugin.id, name: plugin.name, status: 'parsing' });
             }
 
             const paths = plugin.getStoragePaths();
@@ -1869,7 +1891,7 @@ async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
                 console.log(`[DeskFlow] ${plugin.name} parsed ${sessions.length} sessions`);
 
                 if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('ai-sync-progress', { agent: plugin.id, name: plugin.name, status: 'saving', count: sessions.length });
+                    safeSend(mainWindow, 'ai-sync-progress', { agent: plugin.id, name: plugin.name, status: 'saving', count: sessions.length });
                 }
 
                 if (sessions.length === 0) continue;
@@ -2493,6 +2515,14 @@ function initializeStorage() {
         db.exec('CREATE INDEX IF NOT EXISTS idx_code_activity_path ON code_activity(project_path)');
 
         // Terminal layouts
+        // [MSG-HYGIENE] One-shot purge of historical raw ANSI garbage rows
+        try {
+            const done = db.prepare("SELECT value FROM user_preferences WHERE key = 'ansi_msg_purge_v1'").get() as any;
+            if (!done) {
+                db.prepare("DELETE FROM terminal_messages WHERE content LIKE '%' || char(27) || '[%'").run();
+                db.prepare("INSERT OR REPLACE INTO user_preferences (key, value) VALUES ('ansi_msg_purge_v1', '1')").run();
+            }
+        } catch {}
         db.exec(`
             CREATE TABLE IF NOT EXISTS terminal_layouts (
               id TEXT PRIMARY KEY,
@@ -3011,7 +3041,119 @@ function initializeStorage() {
           )
         `);
         try { db.exec('CREATE INDEX IF NOT EXISTS idx_activity_log_entity ON activity_log(entity_type, entity_id)'); } catch {}
-        try { db.exec('CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at)'); } catch {}
+        try { db.exec('CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at)'); } catch {};
+
+        // ── SlideMind lecture tables (sm_*) ───────────────────────────────
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_decks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            filename TEXT,
+            slide_count INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'ready',
+            total_tokens INTEGER DEFAULT 0,
+            language TEXT DEFAULT 'en',
+            uploaded_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_slides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deck_id INTEGER NOT NULL,
+            slide_number INTEGER DEFAULT 1,
+            title TEXT,
+            text_content TEXT,
+            shapes_json TEXT,
+            notes TEXT,
+            token_estimate INTEGER DEFAULT 0,
+            FOREIGN KEY (deck_id) REFERENCES sm_decks(id) ON DELETE CASCADE
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_slide_elements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slide_id INTEGER NOT NULL,
+            element_type TEXT DEFAULT 'text',
+            content TEXT,
+            position_json TEXT,
+            token_estimate INTEGER DEFAULT 0,
+            FOREIGN KEY (slide_id) REFERENCES sm_slides(id) ON DELETE CASCADE
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_images (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT,
+            ocr_text TEXT,
+            caption TEXT,
+            region_json TEXT,
+            token_estimate INTEGER DEFAULT 0,
+            image_url TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_transcripts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            source_type TEXT DEFAULT 'mic',
+            language TEXT DEFAULT 'auto',
+            detected_language TEXT DEFAULT 'en',
+            content TEXT,
+            duration_sec INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_web_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT,
+            source_type TEXT DEFAULT 'website',
+            title TEXT,
+            extracted_text TEXT,
+            summary TEXT,
+            prompt_pack TEXT,
+            status TEXT DEFAULT 'ready',
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_prompts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            prompt_type TEXT DEFAULT 'slide_qa',
+            source_ref TEXT,
+            content TEXT,
+            token_estimate INTEGER DEFAULT 0,
+            target_ai TEXT DEFAULT 'chatgpt',
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_research_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT DEFAULT 'stack',
+            title TEXT,
+            description TEXT,
+            tools TEXT,
+            status TEXT DEFAULT 'planned',
+            priority INTEGER DEFAULT 5
+          )
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sm_auth_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service_name TEXT,
+            username_label TEXT,
+            status TEXT DEFAULT 'not_connected',
+            session_expires TEXT,
+            script TEXT,
+            notes TEXT
+          )
+        `);
+        try { db.exec('CREATE INDEX IF NOT EXISTS idx_sm_slides_deck ON sm_slides(deck_id)'); } catch {}
+        try { db.exec('CREATE INDEX IF NOT EXISTS idx_sm_elements_slide ON sm_slide_elements(slide_id)'); } catch {}
+        try { db.exec('CREATE INDEX IF NOT EXISTS idx_sm_prompts_created ON sm_prompts(created_at)'); } catch {}
 
         // ═══════════════════════════════════════════════════════════════════════
         // PRE-AGGREGATED STATS TABLES (Performance optimization)
@@ -3194,9 +3336,17 @@ function initializeStorage() {
             due_date TEXT,
             goal_id TEXT,
             done INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now'))
+            created_at TEXT DEFAULT (datetime('now')),
+            due_time TEXT
           )
         `);
+        // older-DB safety: reminders created before the time picker have no due_time
+        const remCols = db.prepare(`PRAGMA table_info(reminders)`).all().map((c: any) => c.name);
+        for (const [col, type] of [
+          ['due_time', 'TEXT DEFAULT NULL'],
+        ] as [string, string][]) {
+          if (!remCols.includes(col)) { try { db.exec(`ALTER TABLE reminders ADD COLUMN ${col} ${type}`); } catch {} }
+        }
 
         // Notes table (personal note-taking)
         db.exec(`
@@ -4188,6 +4338,48 @@ function initializeStorage() {
           console.warn('[DeskFlow] ?? Vision/Critique module failed to register:', err.message);
         }
 
+        // Register Local Ollama Image Recognition (VLM) IPC handler
+        // NOTE: must be `electron_1.ipcMain` — this module only binds `electron_1`
+        // (line 36). A bare `ipcMain` throws ReferenceError, which the enclosing
+        // SQLite try/catch swallows into a bogus "falling back to JSON" message and
+        // then SKIPS every handler registration below (goals, deadlines, reminders,
+        // schedule, longterm goals, finance, tracking, categories, sessions, gas,
+        // lecture) — surfacing as a flood of "No handler registered for 'X'".
+        electron_1.ipcMain.handle('ollama-chat', async (_event, opts: { model: string; imageBase64: string; textPrompt: string }) => {
+          try {
+            const { model, imageBase64, textPrompt } = opts;
+            const body = JSON.stringify({
+              model,
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'text', text: textPrompt },
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}` } },
+                ],
+              }],
+              max_tokens: 4000,
+              stream: false,
+            });
+            const res = await fetch('http://localhost:11434/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+            });
+            if (!res.ok) {
+              const errText = await res.text();
+              return { error: `Ollama HTTP ${res.status}: ${errText.slice(0, 300)}` };
+            }
+            const data = await res.json();
+            return {
+              content: data?.choices?.[0]?.message?.content?.trim() || '',
+              raw: data,
+            };
+          } catch (err: any) {
+            return { error: err?.message || String(err) };
+          }
+        });
+        console.log('[DeskFlow] ? Local Ollama VLM image recognition handler registered');
+
         // Register Lyceum Learn module IPC handlers
         try {
           console.log('[DeskFlow] Registering Lyceum Learn module... db:', db ? 'OK' : 'NULL');
@@ -4232,15 +4424,26 @@ const { buildChain, runWithFallback } = require("./services/providers/router");
             return result.content;
           });
           console.log('[DeskFlow] ✅ Content Engine module registered');
+        } catch (err: any) {
+          console.error('[DeskFlow] ⚠️ Content Engine module failed to register:', err.message, err.stack);
+        }
+
+        // ── CRITICAL: these handler groups MUST stay OUTSIDE the Content Engine
+        // try/catch above. They are completely unrelated to Content Engine / the
+        // AI provider chain, but they used to sit inside that same try block.
+        // When the Content Engine registration (or the provider chain) threw, the
+        // catch swallowed it and these lines were SKIPPED, so the app booted with
+        // NO handlers for goals, deadlines, reminders, schedule, longterm goals,
+        // finance, categories, tiers, sessions, tracking, gas or lectures —
+        // surfacing as a flood of "No handler registered for 'X'" and an app the
+        // user cannot start. One unrelated failure must never take these down.
         try { registerCategoryHandlers({ db, categoryConfig: categoryConfig as any, mainWindow: mainWindow as any, currentApp, saveCategoryConfig, categorizeApp }); console.log('[DeskFlow] ✅ Category handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Category handlers failed to register:', err.message); }
         try { registerGoalHandlers({ db, mainWindow: mainWindow as any, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback }); console.log('[DeskFlow] ✅ Goal handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Goal handlers failed to register:', err.message); }
         try { registerFinanceHandlers({ db, mainWindow: mainWindow as any, userPreferences, financePasswordHash, financePasswordSalt: financePasswordSalt, financeDataKey: financeDataKey, financeLocked, financeRememberDevice, financeRememberDeviceExpiry, financeLockTimeout, getLocalDateStr, toInt, financeDisplayCurrency }); console.log('[DeskFlow] ✅ Finance handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Finance handlers failed to register:', err.message); }
         try { registerSessionHandlers({ db, useJson }); console.log('[DeskFlow] ✅ Session handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Session handlers failed to register:', err.message); }
         try { registerTrackingHandlers({ db, getIsTracking: () => isTracking, setIsTracking: (v) => { isTracking = v; }, getTrackingInterval: () => trackingInterval, setTrackingInterval: (v) => { trackingInterval = v; }, getLastPollTime: () => lastPollTime, setLastPollTime: (v) => { lastPollTime = v; }, pollForeground, userPreferences }); console.log('[DeskFlow] ✅ Tracking handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Tracking handlers failed to register:', err.message); }
         try { registerGasHandlers({ db }); console.log('[GAS] ✅ Gas handlers registered'); } catch (err: any) { console.error('[GAS] ⚠️ Gas handlers failed to register:', err.message); }
-        } catch (err: any) {
-          console.error('[DeskFlow] ⚠️ Content Engine module failed to register:', err.message);
-        }
+        try { registerLectureHandlers(db); console.log('[Lecture] ✅ SlideMind handlers registered'); } catch (err: any) { console.error('[Lecture] ⚠️ SlideMind handlers failed to register:', err.message); }
 
         storageError = null;
     }
@@ -4586,7 +4789,7 @@ function getStats() {
         );
     } catch (err) { console.error('[DeskFlow] Failed to write sleep detection:', err); }
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('sleep-detection', { gapStart, gapEnd, gapMinutes });
+        safeSend(mainWindow, 'sleep-detection', { gapStart, gapEnd, gapMinutes });
     }
 }
 // --- Tracking state ---
@@ -4929,12 +5132,30 @@ const GAME_POLL_SKIP = 6; // Only call active-win every 6th poll (30s) during ga
 let currentIsResolvedGame = false;
 
 // Real window polling using active-win
+let pollInFlight = false;
  async function pollForeground() {
-     const now = Date.now();
-     const previousPollTime = lastPollTime;
-     lastPollTime = now;
-     if (!isTracking)
-         return;
+    // Reentrancy guard: this function is async and its detection chain spawns
+    // several child processes (qdbus/xdotool/wmctrl), so a slow poll can
+    // overrun the interval and overlap the next tick. Overlapping polls reset
+    // each other's shared diagnostic state and can double-count session
+    // boundaries. Skip the overlapping invocation.
+    if (pollInFlight) {
+        return;
+    }
+    pollInFlight = true;
+    try {
+        await pollForegroundInner();
+    } finally {
+        pollInFlight = false;
+    }
+}
+
+async function pollForegroundInner() {
+    const now = Date.now();
+    const previousPollTime = lastPollTime;
+    lastPollTime = now;
+    if (!isTracking)
+        return;
     // --- Idle-based sleep detection (runs every poll, independent of window focus/poll gaps) ---
     // Catches "fell asleep with RHEO focused" — no blur/focus event ever fires there.
     try {
@@ -4981,29 +5202,69 @@ let currentIsResolvedGame = false;
         }
 
         // --- Collect foreground ---
-        // active-win's native addon throws "Assignment to constant variable"
-        // on some Electron/Node configs (Windows/Linux). Try it first; on
-        // failure fall back to linuxForeground (Linux) or log (Windows).
+        // CRITICAL (Linux): `active-win` is PURE X11 on Linux — it shells out to
+        // `xprop -root _NET_ACTIVE_WINDOW`. It therefore essentially NEVER throws;
+        // instead it silently returns a stale/invalid window id on broken
+        // Wayland/XWayland setups (exactly the case documented in
+        // linuxForeground.ts). Because the old code only consulted the
+        // linuxForeground chain from inside a `catch`, that chain was DEAD CODE.
+        // The visible symptom: only XWayland apps (RHEO, Spotify, ...) were ever
+        // tracked, because native Wayland windows are invisible to
+        // xprop/xdotool/wmctrl.
+        //
+        // Fix: on Linux run the real detection chain (KWin -> GNOME -> xdotool ->
+        // wmctrl -> xprop) FIRST, and use active-win only when it finds nothing.
         let result = null;
         let collectorError = null;
-        try {
-            result = await (0, active_win_1.default)();
-        } catch (e) {
-            collectorError = e;
-            if (process.platform === 'linux') {
-                // On Linux, active-win's .default may not exist or may throw for any
-                // reason (missing native addon, ESM/CommonJS mismatch, etc.). Always
-                // fall through to the xdotool/xprop/qdbus fallback.
-                try {
-                    const fallback = await linuxForeground_1.getLinuxForegroundWindow();
-                    if (fallback && fallback.title) {
-                        result = { owner: { name: fallback.owner?.name || '', path: fallback.owner?.path || '' }, title: fallback.title };
-                    }
-                } catch (lfErr) {
-                    console.error('[DeskFlow] linuxForeground error:', lfErr.message);
+        if (process.platform === 'linux') {
+            try {
+                const lf = await linuxForeground_1.getLinuxForegroundWindow();
+                // Snapshot the diagnostics IMMEDIATELY. pollForeground is async and
+                // can overlap the next interval tick, and a concurrent call resets
+                // the shared trace array — reading it after any further await
+                // produced the alternating `trace=` (empty) lines.
+                const stratSnapshot = linuxForeground_1.lastStrategyUsed;
+                const traceSnapshot = (linuxForeground_1.lastStrategyTrace || []).slice();
+                if (lf && (lf.title || lf.owner?.name)) {
+                    result = {
+                        owner: { name: lf.owner?.name || '', path: lf.owner?.path || '' },
+                        title: lf.title || '',
+                    };
                 }
-            } else if (e && typeof e === 'object' && e.message) {
-                console.error('[DeskFlow] active-win error:', e.message);
+                // Log UNCONDITIONALLY. Native-Wayland blindness is invisible
+                // unless the strategy trace is printed, and requiring a settings
+                // toggle meant we kept guessing instead of reading. While the
+                // winning strategy is a degraded XWayland one (or nothing won),
+                // log EVERY poll so a silently-wrong answer can never hide.
+                const degraded = !stratSnapshot || stratSnapshot === 'xdotool' || stratSnapshot === 'wmctrl' || stratSnapshot === 'xprop';
+                if (degraded || now - lastLinuxDiagAt > 20000) {
+                    lastLinuxDiagAt = now;
+                    // The environment probe shells out to `which` for 8 binaries;
+                    // it cannot change between polls, so resolve it once.
+                    if (!linuxEnvCache) linuxEnvCache = await linuxForeground_1.probeLinuxTrackingEnvironment();
+                    const env = linuxEnvCache;
+                    const installed = Object.entries(env.tools).filter(([, v]) => v).map(([k]) => k);
+                    const missing = Object.entries(env.tools).filter(([, v]) => !v).map(([k]) => k);
+                    console.log(`[DeskFlow] 🔍 LINUX TRACKING DIAG build=${linuxForeground_1.LINUX_DETECT_BUILD}`);
+                    console.log(`   platform=${env.platform} session=${env.sessionType} desktop=${env.currentDesktop} wayland=${env.waylandDisplay}`);
+                    console.log(`   installed: ${installed.join(', ') || 'NONE'}`);
+                    console.log(`   MISSING:   ${missing.join(', ') || 'none'}`);
+                    console.log(`   strategy=${stratSnapshot} trace=${traceSnapshot.join(' ')}`);
+                    console.log(`   resolved=${lf ? `${lf.owner?.name} | ${String(lf.title).slice(0, 50)}` : 'NULL (fell back to active-win)'}`);
+                    console.log(`   NOTE: ${env.note}`);
+                }
+            } catch (lfErr) {
+                console.error('[DeskFlow] linuxForeground error:', lfErr.message);
+            }
+        }
+        if (!result) {
+            try {
+                result = await (0, active_win_1.default)();
+            } catch (e) {
+                collectorError = e;
+                if (e && typeof e === 'object' && e.message) {
+                    console.error('[DeskFlow] active-win error:', e.message);
+                }
             }
         }
 
@@ -5164,7 +5425,7 @@ let currentIsResolvedGame = false;
                 sessionStart = now;
                 lastSuccessfulObservationTime = now;
                 if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('foreground-changed', {
+                    safeSend(mainWindow, 'foreground-changed', {
                         app: appName,
                         title: windowTitle,
                         category: categorizeApp(appName, { isResolvedGame }),
@@ -5209,7 +5470,7 @@ let currentIsResolvedGame = false;
             // Send to renderer
             if (mainWindow && !mainWindow.isDestroyed()) {
                 const isReal = !!appName;
-                mainWindow.webContents.send('foreground-changed', {
+                safeSend(mainWindow, 'foreground-changed', {
                     app: appName || '',
                     title: isReal ? windowTitle : '',
                     category: isReal ? categorizeApp(appName, { isResolvedGame }) : '',
@@ -5246,6 +5507,51 @@ let currentIsResolvedGame = false;
 // --- Window ---
 let mainWindow = null;
 let tray = null;
+
+/**
+ * Send an IPC message to a window's renderer without ever throwing.
+ *
+ * `win.isDestroyed()` is NOT sufficient: it stays false while the BrowserWindow
+ * object is alive but its render frame has already been torn down (window
+ * closed, renderer crash, or reload). Calling `webContents.send()` in that
+ * state throws:
+ *   "Render frame was disposed before WebFrameMain could be accessed"
+ * which is fatal when it happens inside a timer callback such as
+ * pollForeground's tracking interval.
+ *
+ * Checks both the window and the webContents, and swallows races that occur
+ * between the check and the send. Returns whether the message was delivered.
+ */
+function safeSend(target: any, channel: string, ...args: any[]): boolean {
+    try {
+        if (!target) return false;
+        if (typeof target.isDestroyed === 'function' && target.isDestroyed()) return false;
+        const wc = target.webContents ?? target;
+        if (!wc || typeof wc.send !== 'function') return false;
+        if (typeof wc.isDestroyed === 'function' && wc.isDestroyed()) return false;
+        // `webContents.isDestroyed()` can be false while the RENDER FRAME has
+        // already been torn down (window closed / reload / renderer crash). In
+        // that state `send()` does not merely throw — Electron logs
+        //   "Error sending from webFrameMain: Render frame was disposed..."
+        // from INSIDE send(), so wrapping the call in try/catch cannot suppress
+        // the noise. Probing mainFrame first is the only reliable pre-check.
+        try {
+            const frame = wc.mainFrame;
+            if (!frame) return false;
+            if (typeof frame.isDestroyed === 'function' && frame.isDestroyed()) return false;
+        } catch {
+            // Accessing mainFrame itself threw => the frame is gone.
+            return false;
+        }
+        wc.send(channel, ...args);
+        return true;
+    }
+    catch {
+        // Renderer went away between the checks and the send. Nothing to do:
+        // there is no live renderer left to deliver to.
+        return false;
+    }
+}
 let startMinimized = false;
 // --- Extension Command Queue for Two-Way Loop ---
 let pendingExtensionCommands: any[] = [];
@@ -5312,7 +5618,7 @@ function createTray() {
                 isTracking = !isTracking;
                 console.log('[DeskFlow] Tracking:', isTracking ? 'ON' : 'OFF');
                 if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('tracking-heartbeat', { isTracking, currentApp, uptime: Date.now() });
+                    safeSend(mainWindow, 'tracking-heartbeat', { isTracking, currentApp, uptime: Date.now() });
                 }
             }
         },
@@ -5728,7 +6034,7 @@ function createWindow() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             const systemIdleSeconds = electron_1.powerMonitor.getSystemIdleTime();
             const currentCategory = currentApp ? categorizeApp(currentApp) : null;
-            mainWindow.webContents.send('tracking-heartbeat', {
+            safeSend(mainWindow, 'tracking-heartbeat', {
                 isTracking,
                 currentApp,
                 currentCategory,
@@ -5787,18 +6093,18 @@ function createWindow() {
                 JSON.stringify({ lastFocusTime: now }, null, 2)
             );
         } catch (err) { /* ignore */ }
-        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
+        safeSend(mainWindow, 'window:focus-change', mainWindow.isFocused());
     });
     mainWindow.on('blur', () => {
         lastFocusTime = Date.now();
-        mainWindow.webContents.send('window:focus-change', false);
+        safeSend(mainWindow, 'window:focus-change', false);
     });
     // Maximize/unmaximize — notify renderer so title bar can update icon
     mainWindow.on('maximize', () => {
-        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
+        safeSend(mainWindow, 'window:focus-change', mainWindow.isFocused());
     });
     mainWindow.on('unmaximize', () => {
-        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
+        safeSend(mainWindow, 'window:focus-change', mainWindow.isFocused());
     });
     mainWindow.on('focus', () => {
         const now = Date.now();
@@ -5813,7 +6119,7 @@ function createWindow() {
             );
         } catch (err) { /* ignore */ }
         // Notify renderer of focus change so custom title bar can update its state
-        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
+        safeSend(mainWindow, 'window:focus-change', mainWindow.isFocused());
     });
     // Focus the main window when a desktop notification is clicked
     mainWindow.on('activate', () => {
@@ -5946,7 +6252,7 @@ electron_1.ipcMain.handle('window:isFocused', () => {
 });
 electron_1.ipcMain.on('window:focus-change', (_event, focused: boolean) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('window:focus-change', mainWindow.isFocused());
+        safeSend(mainWindow, 'window:focus-change', mainWindow.isFocused());
     }
 });
 
@@ -6815,8 +7121,40 @@ electron_1.ipcMain.handle('aigateway:setup-provider', (_e, providerId: string) =
 electron_1.ipcMain.handle('aigateway:verify-setup', (_e, providerId: string) => {
     try { return getGateway().verifySetup(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
 });
-electron_1.ipcMain.handle('aigateway:send-prompt', (_e, opts: any) => {
-    try { return getGateway().sendPrompt(opts); } catch (e: any) { return { success: false, error: e?.message }; }
+electron_1.ipcMain.handle('aigateway:send-prompt', async (_e, opts: any) => {
+    try {
+        const out = await getGateway().sendPrompt(opts);
+        // AIGatewayService is brain-blind: it only writes `aigateway_runs`. Mirror
+        // every successful run into the Chat Library, which is the funnel that
+        // writes the brain episode — so the gateway transport learns like the
+        // extension transport does instead of silently dropping the knowledge.
+        if (out?.success && out?.data?.text) {
+            try {
+                const lib = chatLib();
+                const promptText = String(opts?.prompt || '');
+                lib.ingestConversation(db, {
+                    source: 'aigateway',
+                    provider: opts?.provider || out.data.provider || 'unknown',
+                    title: promptText.split('\n').find((l: string) => l.trim().length > 0)?.slice(0, 80),
+                    messages: [
+                        { role: 'user', content: promptText.slice(0, 4000) },
+                        { role: 'assistant', content: String(out.data.text).slice(0, 8000) },
+                    ],
+                });
+                episodeWriters.writeAiContextEpisode({
+                    provider: opts?.provider || out.data.provider || 'unknown',
+                    messages: [
+                        { role: 'user', content: promptText.slice(0, 4000) },
+                        { role: 'assistant', content: String(out.data.text).slice(0, 8000) },
+                    ],
+                    source: 'aigateway',
+                });
+            } catch (libErr: any) {
+                console.warn('[aigateway] library/brain mirror failed:', libErr?.message);
+            }
+        }
+        return out;
+    } catch (e: any) { return { success: false, error: e?.message }; }
 });
 electron_1.ipcMain.handle('aigateway:clear-conversation', (_e, providerId: string) => {
     try { return getGateway().clearConversation(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
@@ -6909,6 +7247,11 @@ function isAppMatchingBrowser(appName: string, browserName: string): boolean {
 
 let userPreferences: UserPreferences = {};
 let DEBUG_TRACKING = false;
+// Throttle for the unconditional Linux tracking diagnostic (ms).
+let lastLinuxDiagAt = 0;
+// Cached environment probe: shells out to `which` for 8 binaries and cannot
+// change between polls.
+let linuxEnvCache: any = null;
 const prefsPath = path_1.default.join(userDataPath, 'deskflow-prefs.json');
 function loadPreferences() {
     try {
@@ -6995,7 +7338,7 @@ electron_1.ipcMain.on('replay-splash', () => {
     const all = electron_1.BrowserWindow.getAllWindows();
     for (const w of all) {
         if (w.isVisible() && w.getSize()[0] === 520 && w.getTitle() === 'RHEO') {
-            w.webContents.send('replay-splash');
+            safeSend(w, 'replay-splash');
             break;
         }
     }
@@ -7363,7 +7706,7 @@ electron_1.ipcMain.handle('stt:register-shortcut', async (_event, shortcut) => {
     globalShortcut.unregister('CommandOrControl+Shift+V');
     globalShortcut.register(shortcut.replace('+', '+'), () => {
       const win = BrowserWindow.getFocusedWindow();
-      if (win) win.webContents.send('stt:shortcut-triggered');
+      if (win) safeSend(win, 'stt:shortcut-triggered');
     });
     return { ok: true };
   } catch (e) {
@@ -11051,7 +11394,7 @@ electron_1.ipcMain.handle('get-project-details', (event, projectId) => {
             // Also get model breakdown for this project
             const modelBreakdown = db.prepare(`
                 SELECT model,
-                       SUM(input_tokens + output_tokens) as tokens,
+                       SUM(input_tokens + output_tokens + COALESCE(cache_read_tokens, 0) + COALESCE(cache_write_tokens, 0)) as tokens,
                        COUNT(*) as sessions,
                        SUM(cost_usd) as cost
                 FROM ai_usage 
@@ -11156,7 +11499,7 @@ electron_1.ipcMain.handle('get-ai-usage-summary', (event, period = 'week', dateO
                 tool,
                 SUM(input_tokens) as total_input_tokens,
                 SUM(output_tokens) as total_output_tokens,
-                SUM(input_tokens + output_tokens) as total_tokens,
+                SUM(input_tokens + output_tokens + COALESCE(cache_read_tokens, 0) + COALESCE(cache_write_tokens, 0)) as total_tokens,
                 SUM(cost_usd) as total_cost,
                 COUNT(*) as session_count,
                 SUM(message_count) as total_messages,
@@ -11799,12 +12142,14 @@ electron_1.ipcMain.handle('sync-ai-usage', async () => {
     } finally { aiSyncRunning = false; }
 });
 
-// Terminal layout stubs (prevents console spam until full terminal feature is implemented)
+// [BUGFIX-8] Layout save/load: preserve is_active, scope correctly
 electron_1.ipcMain.handle('get-terminal-layouts', async (_event, projectId?: string) => {
     if (!db) return [];
     try {
-        const stmt = db.prepare('SELECT * FROM terminal_layouts WHERE project_id = ? OR project_id IS NULL ORDER BY updated_at DESC');
-        return stmt.all(projectId || null);
+        // Prefer project-scoped layouts, fall back to global
+        const rows = db.prepare('SELECT * FROM terminal_layouts WHERE project_id = ? ORDER BY updated_at DESC').all(projectId || null);
+        const result = rows.length ? rows : db.prepare('SELECT * FROM terminal_layouts WHERE project_id IS NULL ORDER BY updated_at DESC').all();
+        return result;
     } catch {
         return [];
     }
@@ -11814,17 +12159,24 @@ electron_1.ipcMain.handle('save-terminal-layout', async (_event, data: any) => {
     if (!db) return { success: false };
     try {
         const id = data.id || `layout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const projectId = data.projectId || null;
         const exists = db.prepare('SELECT 1 FROM terminal_layouts WHERE id = ?').get(id);
         if (exists) {
+            // Preserve current is_active when caller did not specify it explicitly
+            const isActiveVal = (data.isActive === undefined)
+                ? ((db.prepare('SELECT is_active FROM terminal_layouts WHERE id = ?').get(id) as any)?.is_active ?? 0)
+                : (data.isActive ? 1 : 0);
             db.prepare(`
                 UPDATE terminal_layouts SET name = ?, layout_data = ?, project_id = ?, is_active = ?, updated_at = datetime('now')
                 WHERE id = ?
-            `).run(data.name, data.layoutData, data.projectId || null, data.isActive ? 1 : 0, id);
+            `).run(data.name, data.layoutData, projectId, isActiveVal, id);
         } else {
+            // New layout for this scope: deactivate siblings in the SAME scope only
+            db.prepare('UPDATE terminal_layouts SET is_active = 0 WHERE (project_id IS ? ) AND is_active = 1').run(projectId);
             db.prepare(`
                 INSERT INTO terminal_layouts (id, name, layout_data, project_id, is_active, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-            `).run(id, data.name, data.layoutData, data.projectId || null, data.isActive ? 1 : 0);
+            `).run(id, data.name, data.layoutData, projectId, data.isActive === false ? 0 : 1);
         }
         return { success: true, id };
     } catch (err: any) {
@@ -11967,6 +12319,15 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     tuiFramework: 'ink',
     sessionIdSource: 'output',
   },
+  hermes: {
+    binaryCandidates: ['hermes', 'hermes.cmd', 'hermes.exe'],
+    readyRegex: /^(?:hermes)?\s*>\s*$/i,
+    installHint: 'Install the Nous Hermes CLI, ensure hermes is on PATH, then restart the app',
+    bracketedPaste: false,
+    inputMode: 'tui-ink',
+    tuiFramework: 'unknown',
+    sessionIdSource: 'output',
+  },
 };
 
 const FALLBACK_READY_REGEX = /^[A-Za-z0-9_-]*\s*>\s*$/;
@@ -11998,6 +12359,21 @@ const SHELL_PROMPT_REGEXES: RegExp[] = [
   /^[A-Za-z]:\\.*>\s*$/,
   /^[^@\s]+@[^:\s]+:.*[#$]\s*$/,
 ];
+
+const path = require('path');
+const fs = require('fs');
+
+function getAgentStateDir(projectCwd: string): string {
+    // Prefer the PROJECT's agent/state dir (that is what AGENTS.md describes),
+    // fall back to userData so packaged builds never crash.
+    const candidate = projectCwd ? path.join(projectCwd, 'agent', 'state') : null;
+    if (candidate && fs.existsSync(path.dirname(candidate))) {
+        try { fs.mkdirSync(candidate, { recursive: true }); return candidate; } catch {}
+    }
+    const fallback = path.join(electron_1.app.getPath('userData'), 'agent-state');
+    try { fs.mkdirSync(fallback, { recursive: true }); } catch {}
+    return fallback;
+}
 
 function looksLikeShell(line: string): boolean {
   return SHELL_PROMPT_REGEXES.some((re) => re.test(line));
@@ -12251,8 +12627,8 @@ function startAgentTimeout(id: string, agentType: string) {
     const diag = diagnoseAgentFailure(id, agentType);
     for (const win of electron_1.BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
-        try { win.webContents.send('agent:timeout', { terminalId: id, agentType }); } catch {}
-        try { win.webContents.send('agent:init-error', { terminalId: id, agentType, ...diag }); } catch {}
+        try { safeSend(win, 'agent:timeout', { terminalId: id, agentType }); } catch {}
+        try { safeSend(win, 'agent:init-error', { terminalId: id, agentType, ...diag }); } catch {}
       }
     }
     failPendingWrites(id);
@@ -12264,7 +12640,7 @@ function startAgentTimeout(id: string, agentType: string) {
 function broadcast(event: string, ...args: any[]) {
   for (const win of electron_1.BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      try { win.webContents.send(event, ...args); } catch {}
+      try { safeSend(win, event, ...args); } catch {}
     }
   }
 }
@@ -12458,7 +12834,7 @@ electron_1.ipcMain.handle('retry-agent-init', async (_event, terminalId: string,
     const windows = BrowserWindow.getAllWindows();
     for (const win of windows) {
       if (!win.isDestroyed()) {
-        win.webContents.send('agent:ready', { terminalId });
+        safeSend(win, 'agent:ready', { terminalId });
       }
     }
     return { success: true };
@@ -12514,7 +12890,7 @@ function parseTerminalOutput(terminalId: string, output: string) {
                 const windows = BrowserWindow.getAllWindows();
                 for (const win of windows) {
                     if (!win.isDestroyed()) {
-                        win.webContents.send('session-metadata-updated', { sessionId, metadata: meta, autoTags: tags });
+                        safeSend(win, 'session-metadata-updated', { sessionId, metadata: meta, autoTags: tags });
                     }
                 }
             }
@@ -12601,8 +12977,8 @@ function handleBugOwnerResponse(response: {
 
                 for (const win of windows) {
                     if (!win.isDestroyed()) {
-                        win.webContents.send('context-changed', { type: 'problem', action: 'created', entity: { id: String(problem.id), title: problem.title, status: problem.status } });
-                        win.webContents.send('context-changed', { type: 'bug_report', action: 'updated', entity: { id: target.id, status: 'identified', linkedProblemId: String(problem.id) } });
+                        safeSend(win, 'context-changed', { type: 'problem', action: 'created', entity: { id: String(problem.id), title: problem.title, status: problem.status } });
+                        safeSend(win, 'context-changed', { type: 'bug_report', action: 'updated', entity: { id: target.id, status: 'identified', linkedProblemId: String(problem.id) } });
                     }
                 }
 
@@ -12643,7 +13019,7 @@ function markTaskCompleted(terminalId: string) {
             const windows = BrowserWindow.getAllWindows();
             for (const win of windows) {
                 if (!win.isDestroyed()) {
-                    win.webContents.send('ai-task:updated', { terminalId, messageId: row.id, status: 'completed' });
+                    safeSend(win, 'ai-task:updated', { terminalId, messageId: row.id, status: 'completed' });
                 }
             }
         }
@@ -12822,7 +13198,7 @@ function detectEditsInOutput(terminalId: string, output: string) {
       const windows = require('electron').BrowserWindow.getAllWindows();
       for (const win of windows) {
         if (!win.isDestroyed()) {
-          win.webContents.send('file:conflict', {
+          safeSend(win, 'file:conflict', {
             filePath,
             requestingTerminal: terminalId,
             lockingTerminal: result.heldBy,
@@ -12851,8 +13227,9 @@ electron_1.ipcMain.handle('terminal:create', async (_event, id: string, cwd: str
             // [STATE-SPOKE] Auto-create spoke file for this session
             try {
                 const sessionId = `${type}-${id.slice(0, 6)}-${Date.now().toString(36).slice(-4)}`;
-                const spokePath = require('path').join('agent', 'state', `${sessionId}.md`);
-                const templatePath = require('path').join('agent', 'state', '_template.md');
+                const spokeDir = getAgentStateDir(cwd);
+                const spokePath = path.join(spokeDir, `${sessionId}.md`);
+                const templatePath = path.join(spokeDir, '_template.md');
                 if (!require('fs').existsSync(spokePath)) {
                     const template = require('fs').readFileSync(templatePath, 'utf-8');
                     const now = new Date().toISOString();
@@ -12884,6 +13261,32 @@ electron_1.ipcMain.handle('terminal:create', async (_event, id: string, cwd: str
             const dataBatchBuffers = new Map<string, string>();
             const dataBatchTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+            // [MSG-HYGIENE] Buffer PTY output per terminal; flush CLEANED transcript
+            // fragments to terminal_messages only when the agent transitions busy->ready.
+            // Never store raw ANSI chunks.
+            const pendingTranscript = new Map<string, string>();
+            function flushTranscriptToDb(terminalId: string) {
+                const raw = pendingTranscript.get(terminalId);
+                if (!raw) return;
+                pendingTranscript.delete(terminalId);
+                try {
+                    const clean = stripAnsi(raw)
+                        .replace(/\r\n/g, '\n')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim();
+                    if (clean.length < 10) return;
+                    if (!db) return;
+                    const sid = (db.prepare('SELECT id FROM terminal_sessions WHERE terminal_id = ? ORDER BY created_at DESC LIMIT 1').get(terminalId) as any)?.id;
+                    if (!sid) return;
+                    // Dedup: skip if identical to the last assistant row for this session
+                    const last = db.prepare(
+                        "SELECT content FROM terminal_messages WHERE session_id = ? AND role = 'assistant' ORDER BY created_at DESC LIMIT 1"
+                    ).get(sid) as any;
+                    if (last && last.content === clean) return;
+                    db.prepare('INSERT INTO terminal_messages (session_id, role, content) VALUES (?, ?, ?)').run(sid, 'assistant', clean);
+                } catch (_e) { /* non-fatal */ }
+            }
+
             terminalManager.getDataHandler(id, function (data) {
                 if (!terminalReadySent.has(id)) {
                     terminalReadySent.add(id);
@@ -12903,14 +13306,9 @@ electron_1.ipcMain.handle('terminal:create', async (_event, id: string, cwd: str
                     }) as any);
                 }
 
-                try {
-                    if (db) {
-                        const sid = (db.prepare('SELECT id FROM terminal_sessions WHERE terminal_id = ? ORDER BY created_at DESC LIMIT 1').get(id) as any)?.id;
-                        if (sid) {
-                            db.prepare('INSERT INTO terminal_messages (session_id, role, content) VALUES (?, ?, ?)').run(sid, 'assistant', data);
-                        }
-                    }
-                } catch (_e) { }
+                // [MSG-HYGIENE] Accumulate PTY output for cleaned flush (never store raw ANSI)
+                const pt = pendingTranscript.get(id) || '';
+                pendingTranscript.set(id, pt + data);
 
                 const st = agentStates.get(id);
                 if (!st) return;
@@ -12959,6 +13357,7 @@ electron_1.ipcMain.handle('terminal:create', async (_event, id: string, cwd: str
 
                 if (st.phase === 'launching' && (detectAgentPrompt(st.dataBuffer, st.agentType) || isTuiSettled(st))) {
                     console.log(`[AGENT-SETTLE] TUI settled or regex matched for ${id}. Flushing queue.`);
+                    flushTranscriptToDb(id);
                     markAgentReady(id, st);
                 } else if ((st.phase === 'busy' || st.phase === 'attention') && promptSeen) {
                     st.phase = 'ready';
@@ -12999,7 +13398,9 @@ electron_1.ipcMain.handle('terminal:create', async (_event, id: string, cwd: str
                 const spawnTime = terminalManager.spawnTimes.get(id);
                 const isRecentSpawn = spawnTime && (Date.now() - spawnTime < 2000);
                 terminalManager.spawnTimes.delete(id);
+                terminalManager.intentionalKills.delete(id);
                 broadcast('terminal:exit', id, exitCode, signal, intentional || !!isRecentSpawn);
+                flushTranscriptToDb(id);
             });
         }
         return result;
@@ -13029,8 +13430,9 @@ electron_1.ipcMain.handle('spawn-terminal', async (_event, id: string, cwd?: str
                 // [STATE-SPOKE] Auto-create spoke file for this session
                 try {
                     const sessionId = `${type}-${id.slice(0, 6)}-${Date.now().toString(36).slice(-4)}`;
-                    const spokePath = require('path').join('agent', 'state', `${sessionId}.md`);
-                    const templatePath = require('path').join('agent', 'state', '_template.md');
+                    const spokeDir = getAgentStateDir(cwd);
+                    const spokePath = path.join(spokeDir, `${sessionId}.md`);
+                    const templatePath = path.join(spokeDir, '_template.md');
                     if (!require('fs').existsSync(spokePath)) {
                         const template = require('fs').readFileSync(templatePath, 'utf-8');
                         const now = new Date().toISOString();
@@ -13061,8 +13463,35 @@ electron_1.ipcMain.handle('spawn-terminal', async (_event, id: string, cwd?: str
             const dataBatchBuffers2 = new Map<string, string>();
             const dataBatchTimers2 = new Map<string, ReturnType<typeof setTimeout>>();
 
+            // [MSG-HYGIENE] Buffer PTY output per terminal; flush CLEANED transcript fragments.
+            // Never store raw ANSI chunks.
+            const pendingTranscript2 = new Map<string, string>();
+            function flushTranscriptToDb2(terminalId: string) {
+                const raw = pendingTranscript2.get(terminalId);
+                if (!raw) return;
+                pendingTranscript2.delete(terminalId);
+                try {
+                    const clean = stripAnsi(raw)
+                        .replace(/\r\n/g, '\n')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim();
+                    if (clean.length < 10) return;
+                    if (!db) return;
+                    const sid = (db.prepare('SELECT id FROM terminal_sessions WHERE terminal_id = ? ORDER BY created_at DESC LIMIT 1').get(terminalId) as any)?.id;
+                    if (!sid) return;
+                    const last = db.prepare(
+                        "SELECT content FROM terminal_messages WHERE session_id = ? AND role = 'assistant' ORDER BY created_at DESC LIMIT 1"
+                    ).get(sid) as any;
+                    if (last && last.content === clean) return;
+                    db.prepare('INSERT INTO terminal_messages (session_id, role, content) VALUES (?, ?, ?)').run(sid, 'assistant', clean);
+                } catch (_e) { /* non-fatal */ }
+            }
+
             terminalManager.getDataHandler(id, function (data) {
-                console.log('[TERMINAL_DEBUG] C2 data callback FIRED for', id, 'data length:', data.length, 'data:', JSON.stringify(data.substring(0, 200)));
+                // [MSG-HYGIENE] Accumulate PTY output for cleaned flush
+                const pt2 = pendingTranscript2.get(id) || '';
+                pendingTranscript2.set(id, pt2 + data);
+
                 if (!terminalReadySent.has(id)) {
                     terminalReadySent.add(id);
                     clearTerminalReadyFallback(id);
@@ -13080,15 +13509,6 @@ electron_1.ipcMain.handle('spawn-terminal', async (_event, id: string, cwd?: str
                         if (batched) broadcast('terminal:data', id, batched);
                     }) as any);
                 }
-
-                try {
-                    if (db) {
-                        const sid = (db.prepare('SELECT id FROM terminal_sessions WHERE terminal_id = ? ORDER BY created_at DESC LIMIT 1').get(id) as any)?.id;
-                        if (sid) {
-                            db.prepare('INSERT INTO terminal_messages (session_id, role, content) VALUES (?, ?, ?)').run(sid, 'assistant', data);
-                        }
-                    }
-                } catch (_e) { }
 
                 const st = agentStates.get(id);
                 if (!st) return;
@@ -13135,6 +13555,7 @@ electron_1.ipcMain.handle('spawn-terminal', async (_event, id: string, cwd?: str
 
                 if (st.phase === 'launching' && (detectAgentPrompt(st.dataBuffer, st.agentType) || isTuiSettled(st))) {
                     console.log(`[AGENT-SETTLE] TUI settled or regex matched for ${id}. Flushing queue.`);
+                    flushTranscriptToDb2(id);
                     markAgentReady(id, st);
                 } else if ((st.phase === 'busy' || st.phase === 'attention') && promptSeen) {
                     st.phase = 'ready';
@@ -13175,7 +13596,9 @@ electron_1.ipcMain.handle('spawn-terminal', async (_event, id: string, cwd?: str
                 const spawnTime = terminalManager.spawnTimes.get(id);
                 const isRecentSpawn = spawnTime && (Date.now() - spawnTime < 2000);
                 terminalManager.spawnTimes.delete(id);
+                terminalManager.intentionalKills.delete(id);
                 broadcast('terminal:exit', id, exitCode, signal, intentional || !!isRecentSpawn);
+                flushTranscriptToDb(id);
             });
         }
         return result;
@@ -13237,7 +13660,7 @@ electron_1.ipcMain.handle('agent:send', async (_event, terminalId: string, data:
             for (const win of windows) {
                 if (!win.isDestroyed()) {
                     try {
-                        win.webContents.send('ai-task:updated', { terminalId, status: 'in_progress', messageId });
+                        safeSend(win, 'ai-task:updated', { terminalId, status: 'in_progress', messageId });
                     } catch (e) { /* silent */ }
                 }
             }
@@ -13416,7 +13839,7 @@ electron_1.ipcMain.handle('write-terminal', async (_event, terminalId: string, d
                 for (const win of windows) {
                     if (!win.isDestroyed()) {
                         try {
-                            win.webContents.send('ai-task:updated', { terminalId, status: 'in_progress', messageId: result.lastInsertRowid });
+                            safeSend(win, 'ai-task:updated', { terminalId, status: 'in_progress', messageId: result.lastInsertRowid });
                         } catch (e) { /* silent */ }
                     }
                 }
@@ -13457,7 +13880,7 @@ electron_1.ipcMain.handle('bug-report:submit', async (_, data: { projectId: stri
 
         // Fire context-changed
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('context-changed', { type: 'bug_report', action: 'created', entity: { id, status: 'pending' } });
+            safeSend(mainWindow, 'context-changed', { type: 'bug_report', action: 'created', entity: { id, status: 'pending' } });
         }
 
         return { success: true, id };
@@ -13535,7 +13958,7 @@ electron_1.ipcMain.handle('bug-report:auto-consult', async (_, data: { problemId
         }
 
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('context-changed', { type: 'bug_report', action: 'created', entity: { id, status: 'pending', flowType: 'auto-consult' } });
+            safeSend(mainWindow, 'context-changed', { type: 'bug_report', action: 'created', entity: { id, status: 'pending', flowType: 'auto-consult' } });
         }
 
         return { success: true, bugReportId: id };
@@ -13611,7 +14034,7 @@ electron_1.ipcMain.handle('bug-report:investigate', async (_, data: { bugReportI
         db.prepare('UPDATE bug_reports SET status = ?, root_cause_report = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newStatus, reportJson, data.bugReportId);
 
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('context-changed', { type: 'bug_report', action: 'updated', entity: { id: data.bugReportId, status: newStatus } });
+            safeSend(mainWindow, 'context-changed', { type: 'bug_report', action: 'updated', entity: { id: data.bugReportId, status: newStatus } });
         }
 
         return {
@@ -13691,7 +14114,7 @@ electron_1.ipcMain.handle('terminal:write-old-format', async (_event, terminalId
             for (const win of windows) {
                 if (!win.isDestroyed()) {
                     try {
-                        win.webContents.send('ai-task:updated', { terminalId, status: 'in_progress', messageId });
+                        safeSend(win, 'ai-task:updated', { terminalId, status: 'in_progress', messageId });
                     } catch (e) { /* silent */ }
                 }
             }
@@ -13734,21 +14157,77 @@ electron_1.ipcMain.handle('electron:execute-command', async (_event, command: st
 });
 
 // ========== terminal:exec — Run a single command via child_process and return output ==========
-electron_1.ipcMain.handle('terminal:exec', async (_event, command: string, cwd?: string) => {
-    try {
-        const cp = require('child_process');
-        const os = require('os');
-        const fs = require('fs');
-        const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'powershell.exe') : (process.env.SHELL || '/bin/bash');
-        let workingDir = cwd && cwd.length > 0 ? cwd : os.homedir();
-        try { if (!fs.existsSync(workingDir)) { workingDir = os.homedir(); } } catch {}
-        const result = cp.execSync(command, { cwd: workingDir, shell, env: { ...process.env, PWD: workingDir, TERM: 'xterm-256color' }, timeout: 30000, maxBuffer: 10 * 1024 * 1024 });
-        return { stdout: result.toString().trim(), stderr: '', code: 0, timedOut: false };
-    } catch (err: any) {
-        const stderr = err?.stderr?.toString?.() || err?.message || 'command failed';
-        const stdout = err?.stdout?.toString?.() || '';
-        return { stdout: stdout.trim(), stderr: stderr.trim(), code: 1, timedOut: false };
+// MUST stay asynchronous. This previously used cp.execSync(), which blocks the whole
+// Electron main process (every window, every IPC handler) for the duration of the
+// command — a slow or stdin-waiting command froze the app solid and read as a crash.
+const TERM_EXEC_TIMEOUT_MS = 20000;
+const TERM_EXEC_MAX_BUFFER = 8 * 1024 * 1024;
+electron_1.ipcMain.handle('terminal:exec', async (_event, command: string, cwd?: string, env?: Record<string, string>) => {
+    const cp = require('child_process');
+    const os = require('os');
+    const fs = require('fs');
+    const isWin = process.platform === 'win32';
+    const shell = isWin ? (process.env.COMSPEC || 'powershell.exe') : (process.env.SHELL || '/bin/bash');
+    let workingDir = cwd && cwd.length > 0 ? cwd : os.homedir();
+    try { if (!fs.existsSync(workingDir)) { workingDir = os.homedir(); } } catch { /* fall through */ }
+    if (!command || typeof command !== 'string' || !command.trim()) {
+        return { stdout: '', stderr: 'empty command', code: 1, timedOut: false };
     }
+    // Pane-level `export`/env vars must reach the child, otherwise REAL mode
+    // silently drops every variable the user set in the pane.
+    const childEnv = { ...process.env, PWD: workingDir, TERM: 'xterm-256color' };
+    if (env && typeof env === 'object') {
+        for (const [k, v] of Object.entries(env)) {
+            if (typeof k !== 'string' || !k || v == null) { delete childEnv[k]; continue; }
+            childEnv[k] = String(v);
+        }
+    }
+    return await new Promise((resolve) => {
+        const args = isWin ? ['/d', '/s', '/c', command] : ['-c', command];
+        let child;
+        try {
+            child = cp.spawn(shell, args, {
+                cwd: workingDir,
+                env: childEnv,
+                // stdin is ignored so REPL/interactive commands (vim, top, python3, ssh)
+                // cannot hang forever waiting for input that this API cannot send.
+                stdio: ['ignore', 'pipe', 'pipe'],
+                detached: !isWin,
+                windowsHide: true,
+            });
+        } catch (err: any) {
+            resolve({ stdout: '', stderr: err?.message || 'spawn failed', code: 127, timedOut: false });
+            return;
+        }
+        let stdout = '', stderr = '', settled = false, timedOut = false;
+        const kill = () => {
+            try {
+                if (isWin) child.kill();
+                else if (child.pid) process.kill(-child.pid, 'SIGKILL');
+                else child.kill('SIGKILL');
+            } catch { /* already dead */ }
+        };
+        const finish = (code: number) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code, timedOut });
+        };
+        const timer = setTimeout(() => { timedOut = true; kill(); finish(124); }, TERM_EXEC_TIMEOUT_MS);
+        child.stdout?.on('data', (b: Buffer) => {
+            if (stdout.length < TERM_EXEC_MAX_BUFFER) stdout += b.toString();
+        });
+        child.stderr?.on('data', (b: Buffer) => {
+            if (stderr.length < TERM_EXEC_MAX_BUFFER) stderr += b.toString();
+        });
+        child.on('error', (err: any) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve({ stdout: stdout.trim(), stderr: err?.message || 'command failed to start', code: 127, timedOut });
+        });
+        child.on('close', (code: number | null) => finish(code ?? 0));
+    });
 });
 
 electron_1.ipcMain.handle('terminal:resize-old-format', async (_event, terminalId: string, cols: number, rows: number) => {
@@ -14215,7 +14694,7 @@ electron_1.ipcMain.handle('agent:set-model', async (_event, terminalId: string, 
     try {
       const { BrowserWindow } = require('electron');
       for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) { try { win.webContents.send('agent:model-changed', { terminalId, model: model.trim() }); } catch (e) {} }
+        if (!win.isDestroyed()) { try { safeSend(win, 'agent:model-changed', { terminalId, model: model.trim() }); } catch (e) {} }
       }
     } catch (e) {}
   }
@@ -15085,7 +15564,7 @@ function parseAndExecuteActions(content: string, sessionId: string, actor: strin
 
   // Notify renderer that context may have changed after action processing
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('context-changed', {
+    safeSend(mainWindow, 'context-changed', {
       type: 'problems',
       action: 'batch-processed',
       source: terminalId || null,
@@ -16355,7 +16834,7 @@ electron_1.ipcMain.handle('debug-ai-agents', async () => {
     if (!useJson && db) {
         try {
             const count = db.prepare('SELECT COUNT(*) as count FROM ai_usage').get() as { count: number };
-            const totalTokens = db.prepare('SELECT SUM(input_tokens + output_tokens) as total FROM ai_usage').get() as { total: number };
+            const totalTokens = db.prepare('SELECT SUM(input_tokens + output_tokens + COALESCE(cache_read_tokens, 0) + COALESCE(cache_write_tokens, 0)) as total FROM ai_usage').get() as { total: number };
             const byTool = db.prepare('SELECT tool, COUNT(*) as count FROM ai_usage GROUP BY tool').all() as { tool: string; count: number }[];
             dbState = { totalRecords: count.count, totalTokens: totalTokens.total || 0, byTool };
         } catch (err: any) {
@@ -18102,6 +18581,22 @@ electron_1.ipcMain.handle('ai-chat:save', async (_event, data: { threadDate: str
     try {
       episodeWriters.writeAiChatEpisode(messages.filter((m: any) => m.role === 'user'), threadDate);
     } catch {}
+    // Mirror into the Chat Library so in-app chats are searchable/groupable
+    // alongside external-AI captures. Idempotent — same transcript is a no-op.
+    try {
+      chatLib().ingestConversation(db, {
+        source: 'deskflow_chat',
+        provider: data.providerId || 'deskflow',
+        externalId: threadDate,
+        messages: messages.map((m: any) => ({
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+        })),
+      });
+    } catch (e: any) {
+      console.warn('[ai-chat:save] chat library ingest failed:', e?.message);
+    }
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -18208,6 +18703,110 @@ electron_1.ipcMain.handle('ai-chat:list-threads', async () => {
     return { success: true, threads: fallback };
   } catch (err: any) {
     return { success: false, error: err.message, threads: [] };
+  }
+});
+
+// ========== Chat Library — unified store for every AI conversation ==========
+// Every source (in-app chat, external-AI capture, AI Gateway, imported file)
+// funnels through chatLibrary.ingestConversation so the library stays deduped
+// and searchable regardless of where a conversation came from.
+const chatLibrary = require('./main/ai/chatLibrary');
+
+let chatLibraryReady = false;
+function chatLib(): typeof import('./main/ai/chatLibrary') {
+  if (!chatLibraryReady) {
+    chatLibrary.migrateChatLibrary(db);
+    chatLibraryReady = true;
+  }
+  return chatLibrary;
+}
+
+electron_1.ipcMain.handle('chat-library:search', async (_event, opts: any = {}) => {
+  try {
+    return { success: true, hits: chatLib().searchChats(db, opts || {}) };
+  } catch (err: any) {
+    return { success: false, error: err.message, hits: [] };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:stats', async () => {
+  try {
+    return { success: true, stats: chatLib().libraryStats(db) };
+  } catch (err: any) {
+    return { success: false, error: err.message, stats: null };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:groups', async () => {
+  try {
+    return { success: true, groups: chatLib().listGroups(db) };
+  } catch (err: any) {
+    return { success: false, error: err.message, groups: [] };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:group-save', async (_event, data: any) => {
+  try {
+    return { success: true, group: chatLib().upsertGroup(db, data || {}) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:group-delete', async (_event, id: string) => {
+  try {
+    return chatLib().deleteGroup(db, id);
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:thread-group', async (_event, data: any) => {
+  try {
+    return chatLib().setThreadGroup(db, data?.threadDate, data?.groupId ?? null);
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:thread-pin', async (_event, data: any) => {
+  try {
+    return chatLib().setThreadPinned(db, data?.threadDate, !!data?.pinned);
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:thread-messages', async (_event, threadDate: string) => {
+  try {
+    return { success: true, messages: chatLib().getThreadMessages(db, threadDate) };
+  } catch (err: any) {
+    return { success: false, error: err.message, messages: [] };
+  }
+});
+
+electron_1.ipcMain.handle('chat-library:ingest', async (_event, data: any) => {
+  try {
+    const result = chatLib().ingestConversation(db, data || {});
+    if (result.threadDate && result.status !== 'duplicate') {
+      try {
+        episodeWriters.writeAiContextEpisode({
+          provider: data?.provider || data?.source || 'unknown',
+          messages: (data?.messages || []).map((m: any) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          url: data?.url,
+          title: data?.title,
+          source: data?.source,
+        });
+      } catch (e: any) {
+        console.warn('[ChatLibrary] brain episode write failed:', e?.message);
+      }
+    }
+    return { success: true, result };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 });
 
@@ -18455,7 +19054,7 @@ function startBrowserTrackingServer() {
                             savePreferences();
                             // Notify renderer immediately
                             if (mainWindow && !mainWindow.isDestroyed()) {
-                                mainWindow.webContents.send('browser-identified', { browser: matched });
+                                safeSend(mainWindow, 'browser-identified', { browser: matched });
                             }
                         }
                     }
@@ -18508,7 +19107,7 @@ function startBrowserTrackingServer() {
                     if (mainWindow && !mainWindow.isDestroyed()) {
                         const category = categorizeDomain(data.domain, data.title, data.url);
                         try {
-                        mainWindow.webContents.send('browser-tracking-event', {
+                        safeSend(mainWindow, 'browser-tracking-event', {
                             type: 'browser-data',
                             domain: data.domain,
                             url: data.url,
@@ -18651,6 +19250,23 @@ function startBrowserTrackingServer() {
                                     url: cap.url,
                                     title: cap.title,
                                 });
+                                // Mirror into the Chat Library — the extension re-captures
+                                // constantly, so this is content-hash deduped upstream.
+                                try {
+                                    chatLib().ingestConversation(db, {
+                                        source: 'external_ai',
+                                        provider: cap.provider || 'unknown',
+                                        externalId: `ai_context_capture:${info.lastInsertRowid}`,
+                                        messages: (cap.messages || []).map((m: any) => ({
+                                            role: m.role,
+                                            content: m.content,
+                                        })),
+                                        url: cap.url,
+                                        title: cap.title,
+                                    });
+                                } catch (libErr: any) {
+                                    console.warn('[ai-context] chat library ingest failed:', libErr?.message);
+                                }
                                 db.prepare(`UPDATE ai_context_captures SET episode_status = 'episode_written' WHERE id = ?`).run(info.lastInsertRowid);
                                 results.push({ dedup_key: dedupKey, status: 'ok', episodeId: `ep_${info.lastInsertRowid}` });
                             } catch (epErr: any) {
@@ -18667,7 +19283,7 @@ function startBrowserTrackingServer() {
                         console.log(`[DeskFlow] /ai-context: accepted ${accepted}/${captures.length} captures`);
                         // Notify renderer of new captures
                         if (mainWindow?.webContents) {
-                            mainWindow.webContents.send('ai-context-captured', { count: accepted });
+                            safeSend(mainWindow, 'ai-context-captured', { count: accepted });
                         }
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -19019,7 +19635,7 @@ function startBrowserTrackingServer() {
                         console.log(`[DeskFlow] Browser extension identified as: ${data.browser} (processes: ${userPreferences.browserProcessNames.join(', ')})`);
                         // Notify renderer so browser selector updates immediately without page reload
                         if (mainWindow && !mainWindow.isDestroyed()) {
-                            mainWindow.webContents.send('browser-identified', { browser: data.browser });
+                            safeSend(mainWindow, 'browser-identified', { browser: data.browser });
                         }
                     }
                     // Auto-create/update browser profile from extension data
@@ -19040,7 +19656,7 @@ function startBrowserTrackingServer() {
                     }
                     // Notify renderer so browser selector updates immediately without page reload
                     if (mainWindow && !mainWindow.isDestroyed()) {
-                        mainWindow.webContents.send('browser-identified', { browser: data.browser });
+                        safeSend(mainWindow, 'browser-identified', { browser: data.browser });
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ status: 'ok', browser: data.browser }));
@@ -19067,7 +19683,7 @@ function startBrowserTrackingServer() {
                     if (mainWindow && !mainWindow.isDestroyed()) {
                         const category = categorizeDomain(log.domain, log.title, log.url);
                         try {
-                            mainWindow.webContents.send('browser-tracking-event', {
+                            safeSend(mainWindow, 'browser-tracking-event', {
                                 type: 'live-log',
                                 message: log.message,
                                 level: log.level,
@@ -19117,7 +19733,7 @@ function startBrowserTrackingServer() {
 function notifyRendererClearBrowser() {
     try {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('browser-tracking-event', {
+            safeSend(mainWindow, 'browser-tracking-event', {
                 type: 'clear',
                 timestamp: Date.now()
             });
@@ -19562,8 +20178,12 @@ function getConductorService() {
     const { BrowserWindow } = require('electron');
     conductorService = new ConductorService({
       spawnAgentTerminal: async (id: string, cwd: string, cols: number, rows: number, agentType?: string) => {
+        // [CONDUCTOR-FIX] Two-phase spawn: PTY created in MAIN, renderer view attaches via broadcast.
+        const spawnResult = terminalManager.spawn(id, cwd, cols, rows);
+        if (!spawnResult.success) return { success: false, error: spawnResult.error };
+        // Broadcast to ALL windows (not just the first) so any TerminalPage can attach the xterm view.
         const win = BrowserWindow.getAllWindows().find((w: any) => !w.isDestroyed());
-        if (win) win.webContents.send('terminal:spawn-for-conductor', { terminalId: id, cwd, cols, rows, agentType });
+        if (win) safeSend(win, 'terminal:spawn-for-conductor', { terminalId: id, cwd, cols, rows, agentType });
         return { success: true };
       },
       writeTerminal: (id: string, data: string) => {
@@ -19575,7 +20195,7 @@ function getConductorService() {
       isAgentReady: (id: string) => terminalManager.has(id),
       broadcast: (event: string, ...args: any[]) => {
         for (const win of BrowserWindow.getAllWindows()) {
-          if (!win.isDestroyed()) win.webContents.send(event, ...args);
+          if (!win.isDestroyed()) safeSend(win, event, ...args);
         }
       },
     });
@@ -19852,12 +20472,46 @@ if (db) {
   }
 }
 
+// ── GPU resilience ────────────────────────────────────────────────────────────
+// On some Linux setups (VMs, containers, missing/unsupported drivers, tiny
+// /dev/shm) Chromium's GPU process cannot launch and the browser aborts the
+// WHOLE app with:
+//   GPU process launch failed: error_code=1002
+//   FATAL:content/browser/gpu/gpu_data_manager_impl_private.cc: GPU process
+//   isn't usable. Goodbye.
+// That is an unrecoverable abort, so we cannot handle it after the fact — we
+// must avoid it. Apply software rendering up front when the user has been
+// bitten by it before (a marker file records the crash), and expose a manual
+// override via DESKFLOW_DISABLE_GPU=1.
+const GPU_DISABLE_MARKER = path.join(electron_1.app.getPath('userData'), '.gpu-disabled');
+try {
+    const forceOff = process.env.DESKFLOW_DISABLE_GPU === '1';
+    if (forceOff || fs_1.default.existsSync(GPU_DISABLE_MARKER)) {
+        electron_1.app.disableHardwareAcceleration();
+        electron_1.app.commandLine.appendSwitch('disable-gpu');
+        electron_1.app.commandLine.appendSwitch('disable-gpu-compositing');
+        electron_1.app.commandLine.appendSwitch('disable-software-rasterizer');
+        console.log('[DeskFlow] GPU: hardware acceleration disabled (software rendering)');
+    }
+} catch { /* never block startup on GPU probing */ }
+
+// If the GPU process dies at runtime, record the marker so the NEXT launch
+// starts in software mode, and try to survive this run.
+try {
+    electron_1.app.on('child-process-gone', (_event, details) => {
+        if (details && details.type === 'GPU') {
+            try { fs_1.default.writeFileSync(GPU_DISABLE_MARKER, new Date().toISOString()); } catch {}
+            console.error('[DeskFlow] ⚠️ GPU process gone — software rendering will be used on next launch');
+        }
+    });
+} catch { /* ignore */ }
+
 // Single instance lock — prevent duplicate RHEO processes
 const gotTheLock = electron_1.app.requestSingleInstanceLock();
 if (!gotTheLock) {
     electron_1.app.quit();
 } else {
-electron_1.app.whenReady().then(() => {
+    electron_1.app.whenReady().then(() => {
     electron_1.app.setName('RHEO');
     // Content Security Policy — defense in depth against XSS
     const { session } = require('electron');
@@ -19941,7 +20595,7 @@ electron_1.app.whenReady().then(() => {
     // Ctrl+Shift+V toggles voice input on the focused window
     electron_1.globalShortcut.register('CommandOrControl+Shift+V', () => {
       const win = electron_1.BrowserWindow.getFocusedWindow();
-      if (win) win.webContents.send('stt:shortcut-triggered');
+      if (win) safeSend(win, 'stt:shortcut-triggered');
     });
     initMemorySystem();
     initContextSystem();
@@ -22623,8 +23277,17 @@ electron_1.ipcMain.handle('update-problem-status', async (_, { problemId, status
     if (!p) return { success: false, error: 'Problem not found' };
     const oldStatus = p?.status || '?';
     const success = ps.updateProblem(problemId, { status });
-    if (success) logActivity({ entityType: 'problem', entityId: String(problemId), entityTitle: p.title, action: 'status_changed', actor: actor || 'user', summary: `Status: ${oldStatus} → ${status}` });
-    if (success) mainWindow?.webContents?.send('context-changed', { type: 'problem', action: 'updated', entity: { id: problemId, title: p.title, status } });
+    if (success) {
+      // Notify the active terminal for this problem if one is bound
+      try {
+        const terminalId = p.terminal_id;
+        if (terminalId) {
+          const msg = `## Status Update\n\nProblem #${problemId} ("${p.title}") status changed: **${oldStatus} → ${status}**\n\nPlease acknowledge and continue.\n`;
+          terminalManager.write(terminalId, msg);
+        }
+      } catch (_) { /* terminal may not exist */ }
+      mainWindow?.webContents?.send('context-changed', { type: 'problem', action: 'updated', entity: { id: problemId, title: p.title, status } });
+    }
     return { success };
   } catch (error: any) {
     console.error('[Tracker Mind] update-problem-status error:', error);
@@ -22649,7 +23312,17 @@ electron_1.ipcMain.handle('update-problem', async (_, data: { id: string; user_n
     if (data.description !== undefined) { updates.description = data.description; changed.push('description'); }
 
     const success = ps.updateProblem(data.id, updates);
-    if (success) logActivity({ entityType: 'problem', entityId: String(data.id), entityTitle: p.title, action: 'updated', actor: 'user', summary: `Updated problem: ${changed.join(', ')}` });
+    if (success) {
+      // Notify the problem's bound terminal if any
+      try {
+        const termId = p.terminal_id;
+        if (termId) {
+          const msg = `## Problem Updated\\n\\nProblem #${data.id} ("${p.title}") updated: ${changed.join(', ')}.\\n`;
+          terminalManager.write(termId, msg);
+        }
+      } catch (_) { /* terminal may not exist */ }
+      logActivity({ entityType: 'problem', entityId: String(data.id), entityTitle: p.title, action: 'updated', actor: 'user', summary: `Updated problem: ${changed.join(', ')}` });
+    }
     if (success) mainWindow?.webContents?.send('context-changed', { type: 'problem', action: 'updated', entity: { id: data.id, title: p.title, status: p.status } });
     return { success };
   } catch (error: any) {
@@ -23325,7 +23998,7 @@ electron_1.ipcMain.handle('send-instructions-to-terminal', async (_, data: { ter
         for (const win of windows) {
           if (!win.isDestroyed()) {
             try {
-              win.webContents.send('ai-task:updated', { terminalId: data.terminalId, status: 'in_progress' });
+              safeSend(win, 'ai-task:updated', { terminalId: data.terminalId, status: 'in_progress' });
             } catch (e) { /* silent */ }
           }
         }
@@ -23455,7 +24128,7 @@ electron_1.ipcMain.handle('add-check-feedback', async (_event, data: {
   }
 
   if (result && mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('context-changed', {
+    safeSend(mainWindow, 'context-changed', {
       type: 'check',
       action: 'feedback-added',
       entity: { checkId, parentId, parentType, feedback },
@@ -23508,7 +24181,7 @@ electron_1.ipcMain.handle('add-problem-check', async (_event, data: { problemId:
     const check = ps.addCheck(data.problemId, data.description, data.instruction || '');
     if (!check) return { success: false, error: 'Problem not found' };
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('context-changed', {
+      safeSend(mainWindow, 'context-changed', {
         type: 'check', action: 'added', entity: { check, parentId: data.problemId, parentType: 'problem' },
       });
     }
@@ -23524,7 +24197,7 @@ electron_1.ipcMain.handle('add-request-check', async (_event, data: { requestId:
     const check = rs.addCheck(data.requestId, data.description, data.instruction || '');
     if (!check) return { success: false, error: 'Request not found' };
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('context-changed', {
+      safeSend(mainWindow, 'context-changed', {
         type: 'check', action: 'added', entity: { check, parentId: data.requestId, parentType: 'request' },
       });
     }
@@ -23542,6 +24215,14 @@ electron_1.ipcMain.handle('complete-check', async (_event, checkId: string) => {
       const check = p.checks?.find((c: any) => c.id === checkId);
       if (check) {
         const result = ps.completeCheck(p.id, checkId);
+        // Notify the problem's bound terminal if any
+        try {
+          const termId = p.terminal_id;
+          if (termId) {
+            const msg = `\r\n## Checklist Complete\r\n\r\nCheck "${checkId}" marked done for problem #${p.id} ("${p.title}").\r\n`;
+            terminalManager.write(termId, msg);
+          }
+        } catch (_) { /* terminal may not exist */ }
         return { success: true, check: result, parentId: p.id, parentType: 'problem' };
       }
     }
@@ -23551,6 +24232,14 @@ electron_1.ipcMain.handle('complete-check', async (_event, checkId: string) => {
       const check = r.checks?.find((c: any) => c.id === checkId);
       if (check) {
         const result = rs.completeCheck(r.id, checkId);
+        // Notify the request's bound terminal if any
+        try {
+          const termId = r.terminal_id;
+          if (termId) {
+            const msg = `\r\n## Checklist Complete\r\n\r\nCheck "${checkId}" marked done for request #${r.id} ("${r.title}").\r\n`;
+            terminalManager.write(termId, msg);
+          }
+        } catch (_) { /* terminal may not exist */ }
         return { success: true, check: result, parentId: r.id, parentType: 'request' };
       }
     }
@@ -24368,7 +25057,7 @@ const result = await window.deskflowAPI?.getData?.(args);
 ### Events (Main ? Renderer)
 \`\`\`ts
 // Main process
-mainWindow.webContents.send('data-updated', payload);
+safeSend(mainWindow, 'data-updated', payload);
 
 // Renderer
 window.deskflowAPI?.onDataUpdated?.((data) => { ... });
@@ -25948,6 +26637,79 @@ electron_1.ipcMain.handle('list-agent-dir-files', async (_, { projectPath }: { p
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// Workspace Initialization — creates the agent/ directory scaffold
+// on first open, matching the front-end "Initialize Workspace" flow.
+// ═══════════════════════════════════════════════════════════════════
+electron_1.ipcMain.handle('initialize-workspace', async (_, { projectPath, contextSystems }: { projectPath: string; contextSystems?: string[] }) => {
+  try {
+    if (!projectPath) return { success: false, error: 'No project path provided' };
+    const agentDir = path_1.default.join(projectPath, 'agent');
+    const fs = fs_1.default;
+    const p = path_1.default;
+
+    // Create agent/ directory
+    if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+
+    // Sub-directories
+    const subDirs = ['context', 'skills', 'state', 'tmp'];
+    for (const d of subDirs) {
+      const full = p.join(agentDir, d);
+      if (!fs.existsSync(full)) fs.mkdirSync(full, { recursive: true });
+    }
+
+    const selected = contextSystems && contextSystems.length > 0 ? contextSystems : ['Problem Tracker', 'Request Board', 'Checklist System'];
+
+    // Agent files to scaffold
+    const files: Record<string, string> = {};
+
+    files['AGENTS.md'] = `<!-- AUTO-GENERATED BY RHEO WORKSPACE INITIALIZER -->\n# AI Agent Workspace\n\n> **Target Agent:** opencode\n\n## Workspace Context\n\nThis directory contains the context files for AI agents working on this project.\n\n## Agent Files\n\n${selected.map(n => `- \`${n.replace(/\s+/g, '_')}.md\``).join('\n')}\n\n## CRITICAL RULE: Read FEATURE_TRACKER.md Before Writing Code\n\n**Before writing ANY new code**, read \`FEATURE_TRACKER.md\` to check if the feature already exists.\n`;
+
+    files['README.md'] = `# AI Agent Workspace\n\n> **Target Agent:** opencode\n\nThis directory holds context, rules, and state for AI agents working on this project.\n\n## Structure\n\n- \`AGENTS.md\` — agent roster and entry points\n- \`state.md\` — current workspace state (auto-managed)\n- \`context/\` — context systems (problems, requests, checklists)\n- \`skills/\` — reusable agent skills\n- \`tmp/\` — temporary scratch files\n`;
+
+    files['state.md'] = `# Workspace State\n\n> **Last updated:** ${new Date().toISOString()}\n\n## Current State\n\n- Workspace: initialized\n- Context systems: ${selected.join(', ')}\n- Status: active\n`;
+
+    files['DEFAULT_SYSTEM_PROMPT.md'] = `## System Prompt\n\nYou are an AI assistant working in a Tracker Mind workspace.\n\n### Workspace Rules\n\n1. Read \`agent/state.md\` first to understand current state\n2. Read \`agent/AGENTS.md\` for agent roster\n3. Use \`## Actions\` blocks to trigger workspace operations\n4. Update \`agent/state.md\` when state changes\n`;
+
+    // Context system files
+    if (selected.includes('Problem Tracker')) {
+      files['PROBLEMS.md'] = `# Problems\n\n> Auto-managed by Tracker Mind\n\n## Active Problems\n\n_(no problems yet)_\n`;
+      files['context/problems.md'] = `# Problem Context\n\n_(auto-generated)_\n`;
+    }
+    if (selected.includes('Request Board')) {
+      files['REQUESTS.md'] = `# Requests\n\n> Auto-managed by Tracker Mind\n\n## Active Requests\n\n_(no requests yet)_\n`;
+      files['context/requests.md'] = `# Request Context\n\n_(auto-generated)_\n`;
+    }
+    if (selected.includes('Checklist System')) {
+      files['checklists.json'] = JSON.stringify({ checklists: [], version: 1 }, null, 2);
+      files['context/checklists.md'] = `# Checklist Context\n\n_(auto-generated)_\n`;
+    }
+
+    // Write all files
+    for (const [name, content] of Object.entries(files)) {
+      const filePath = p.join(agentDir, name);
+      fs.writeFileSync(filePath, content, 'utf-8');
+    }
+
+    // Track in DB if available
+    if (db) {
+      try {
+        const projectId = getProjectIdForPath(projectPath);
+        if (projectId) {
+          db.prepare("INSERT OR REPLACE INTO workspaces (project_id, initialized_at, context_systems) VALUES (?, ?, ?)")
+            .run(projectId, new Date().toISOString(), JSON.stringify(selected));
+        }
+      } catch (_) { /* DB may not be open */ }
+    }
+
+    return { success: true, data: { files: Object.keys(files), contextSystems: selected } };
+  } catch (error: any) {
+    console.error('[DeskFlow] initialize-workspace error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+
 electron_1.ipcMain.handle('save-base-system-prompt', async (_, { agent, prompt }: { agent: string; prompt: string }) => {
   try {
     if (!userPreferences.systemPrompts) userPreferences.systemPrompts = {};
@@ -26023,7 +26785,7 @@ electron_1.ipcMain.handle('ai-task:watch', async (_event, projectPath: string) =
           const windows = BrowserWindow.getAllWindows();
           for (const win of windows) {
             if (!win.isDestroyed()) {
-              win.webContents.send('ai-task:file-changed', { tasks: data.tasks || [] });
+              safeSend(win, 'ai-task:file-changed', { tasks: data.tasks || [] });
             }
           }
         } catch {}
@@ -26089,7 +26851,7 @@ electron_1.ipcMain.handle('ai-task:add', async (_event, task: { terminalId: stri
     const windows = BrowserWindow.getAllWindows();
     for (const win of windows) {
       if (!win.isDestroyed()) {
-        win.webContents.send('ai-task:updated', { terminalId: task.terminalId, status: 'pending', messageId: newTask.id });
+        safeSend(win, 'ai-task:updated', { terminalId: task.terminalId, status: 'pending', messageId: newTask.id });
       }
     }
     
@@ -26222,7 +26984,7 @@ electron_1.ipcMain.handle('broadcast-context-delta', async (_event, data: { term
   let sentCount = 0;
   for (const win of windows) {
     if (!win.isDestroyed()) {
-      win.webContents.send('context-changed', {
+      safeSend(win, 'context-changed', {
         type: data.type,
         action: 'broadcast',
         source: data.terminalId,
@@ -27091,8 +27853,115 @@ function frozenLog(...args: any[]) {
 }
 
 electron_1.ipcMain.handle('terminal:log', async (_, ...args: any[]) => {
-  frozenLog(...args);
-  return { success: true };
+    frozenLog(...args);
+    return { success: true };
+});
+
+// ─── Pinned todo popup window ───────────────────────────────────────────────
+// The renderer half of this feature shipped (TodoMiniPage.tsx + the
+// todoPopup* bridge in preload.ts) but NO handler was ever registered here, so
+// every TodoList mount logged:
+//   Error occurred in handler for 'todo-popup:get-state':
+//   No handler registered for 'todo-popup:get-state'
+// The popup window is created lazily on first toggle and reused after that.
+let todoPopupWindow = null;
+let todoPopupPinned = true;
+
+function broadcastTodoPopupState() {
+    const state = { open: !!todoPopupWindow && !todoPopupWindow.isDestroyed(), pinned: todoPopupPinned };
+    for (const win of electron_1.BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send('todo-popup-state', state);
+    }
+}
+
+async function createTodoPopup() {
+    const { BrowserWindow } = require('electron');
+    const popup = new BrowserWindow({
+        width: 320,
+        height: 460,
+        minWidth: 260,
+        minHeight: 240,
+        title: 'RHEO Tasks',
+        show: false,
+        frame: false,
+        resizable: true,
+        alwaysOnTop: todoPopupPinned,
+        skipTaskbar: false,
+        // Matches the main window's background so the popup never flashes white.
+        backgroundColor: '#0a0a0a',
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path_1.default.join(__dirname, 'preload.cjs'),
+        },
+    });
+    popup.setAlwaysOnTop(todoPopupPinned, 'floating');
+    // Same bundle + same origin as the main window — read the live URL so this
+    // works in BOTH dev (VITE_DEV_SERVER_URL) and prod (localhost:<port>).
+    const base = mainWindow && !mainWindow.isDestroyed()
+        ? mainWindow.webContents.getURL()
+        : process.env.VITE_DEV_SERVER_URL;
+    if (!base) {
+        console.warn('[TodoPopup] no renderer URL available — main window is gone');
+        popup.destroy();
+        return null;
+    }
+    const url = base.split('#')[0].replace(/\/$/, '') + '/index.html#/mini-todo';
+    await popup.loadURL(url);
+    popup.once('ready-to-show', () => popup.show());
+    popup.on('closed', () => {
+        if (todoPopupWindow === popup) todoPopupWindow = null;
+        broadcastTodoPopupState();
+    });
+    return popup;
+}
+
+electron_1.ipcMain.handle('todo-popup:get-state', async () => ({
+    open: !!todoPopupWindow && !todoPopupWindow.isDestroyed(),
+    pinned: todoPopupPinned,
+}));
+
+electron_1.ipcMain.handle('todo-popup:toggle', async () => {
+    if (todoPopupWindow && !todoPopupWindow.isDestroyed()) {
+        todoPopupWindow.close();
+        broadcastTodoPopupState();
+        return { success: true, open: false, pinned: todoPopupPinned };
+    }
+    const popup = await createTodoPopup();
+    if (!popup) return { success: false, error: 'Could not open the pinned task window.', open: false, pinned: todoPopupPinned };
+    todoPopupWindow = popup;
+    broadcastTodoPopupState();
+    return { success: true, open: true, pinned: todoPopupPinned };
+});
+
+electron_1.ipcMain.handle('todo-popup:close', async () => {
+    if (todoPopupWindow && !todoPopupWindow.isDestroyed()) todoPopupWindow.close();
+    broadcastTodoPopupState();
+    return { success: true, open: false, pinned: todoPopupPinned };
+});
+
+electron_1.ipcMain.handle('todo-popup:set-pinned', async (_e, pinned: boolean) => {
+    todoPopupPinned = !!pinned;
+    if (todoPopupWindow && !todoPopupWindow.isDestroyed()) {
+        todoPopupWindow.setAlwaysOnTop(todoPopupPinned, 'floating');
+        if (todoPopupPinned) todoPopupWindow.show();
+    }
+    broadcastTodoPopupState();
+    return { success: true, open: !!todoPopupWindow && !todoPopupWindow.isDestroyed(), pinned: todoPopupPinned };
+});
+
+electron_1.ipcMain.handle('todo-popup:minimize', async () => {
+    if (todoPopupWindow && !todoPopupWindow.isDestroyed()) todoPopupWindow.minimize();
+    return { success: true };
+});
+
+electron_1.ipcMain.handle('todo-popup:focus-main', async () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+    }
+    return { success: true };
 });
 
 export { getAgentConfig, AgentConfig, detectAgentPrompt, AgentVerifyResult };

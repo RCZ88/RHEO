@@ -16,7 +16,9 @@ export function SidebarLogo({ href = '#/' }: SidebarLogoProps) {
       whileTap={reduceMotion ? undefined : { scale: 0.97 }}
       transition={PRESS_SPRING}
     >
+      <span className="sidebar-logo__glow" />
       <img src="/rheo-logo.png" alt="RHEO" className="sidebar-logo__img" />
+      <span className="sidebar-logo__shine" />
     </motion.a>
   );
 }

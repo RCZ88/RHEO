@@ -9,6 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { useDetectedOS } from "./use-detected-os";
 
 const VERSIONS = [
+  { version: "v0.2.0", date: "2026-09-30", kind: "NEW", notes: ["Chat Library — every AI conversation is kept, searchable, pinnable, groupable, and exportable.", "Dashboard rebuilt around a widget registry, with jump-to-widget navigation and persisted layouts.", "Native find bar now really highlights each match and scrolls it into view."] },
   { version: "v0.1.0", date: "2026-08-31", kind: "NEW", notes: ["First public preview build. Timeline, phases, AI-understand, lessons engine.", "Local-first by default. Zero telemetry. macOS / Windows / Linux.", "Reduced-motion mode renders scrub sections as static panels."] },
   { version: "v0.0.9", date: "2026-08-24", kind: "CHG", notes: ["Refined phase-detection heuristics — fewer false 'meeting' tags during solo calls.", "Dashboard donut now reflects weighted depth, not raw duration."] },
   { version: "v0.0.8", date: "2026-08-17", kind: "FIX", notes: ["Fixed a rare crash when a session spanned midnight across timezones.", "Stopped the AI panel re-querying on every keystroke; Enter is now explicit."] },

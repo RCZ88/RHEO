@@ -19,6 +19,10 @@ import { PROMPT_SECTIONS } from '@/features/content-engine/components/PromptSect
 import { parseBridgeResponse } from './parse'
 import { LivePromptPreview, DynamicSectionDef } from './LivePromptPreview'
 import { toast } from '@/features/content-engine/components/ui'
+import {
+  getPreferredTransport, setPreferredTransport, gatewayAvailability,
+  sendViaGateway, extractField, type Transport,
+} from '@/services/externalAiTransport'
 
 const extApi = () => (window as any).deskflowAPI?.extensionQueueCommand
 const CLIENT_PENDING_TTL_MS = 5 * 60 * 1000
@@ -61,6 +65,9 @@ export function FieldAIButton({
   // Local style/frame state seeded from props (external-ai-bridge checklist controls)
   const [styleId, setStyleId] = useState(externalStyleId || '')
   const [frameMode, setFrameMode] = useState<'strict' | 'flexible'>(externalFrameMode)
+  const [transport, setTransport] = useState<Transport>(getPreferredTransport)
+  const [signedIn, setSignedIn] = useState<string[]>([])
+  const [busyGateway, setBusyGateway] = useState(false)
 
   const pendingRef = useRef<{ correlationId: string; valueAtSend: string } | null>(null)
   const clientTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -119,8 +126,46 @@ export function FieldAIButton({
     return () => { unsubscribe?.() }
   }, [fieldName])
 
+  useEffect(() => {
+    let live = true
+    void gatewayAvailability().then((a) => {
+      if (live) setSignedIn(a.signedIn)
+    })
+    return () => { live = false }
+  }, [mode, transport])
+
   const clearClientTimer = () => {
     if (clientTimer.current) { clearTimeout(clientTimer.current); clientTimer.current = null }
+  }
+
+  const runGateway = async () => {
+    setBusyGateway(true)
+    setError(null)
+    const res = await sendViaGateway(prompt)
+    setBusyGateway(false)
+    if (!res.ok) {
+      setError(res.error || 'The provider did not answer.')
+      setMode('paste')
+      return
+    }
+    const { values, error: parseError } = extractField(res.text!, [fieldName])
+    const incoming = values[fieldName]
+    if (incoming === undefined) {
+      setError(parseError || `The response did not include "${fieldName}".`)
+      setMode('paste')
+      return
+    }
+    // Same non-destructive rule as the extension path: never silently clobber
+    // text the user edited after the send started.
+    if (valueRef.current === '' || valueRef.current === pendingRef.current?.valueAtSend) {
+      onUpdateRef.current(incoming)
+      setLastResult('success')
+      setError(null)
+      setMode('idle')
+      toast(`Imported from ${res.provider}`)
+    } else {
+      setPendingImport(incoming)
+    }
   }
 
   const sendToAI = async () => {
@@ -247,6 +292,33 @@ export function FieldAIButton({
             </div>
           </div>
 
+          {/* Transport picker — extension is the default; gateway is opt-in */}
+          <div className="flex items-center gap-1.5">
+            {(['extension', 'gateway'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => { setTransport(t); setPreferredTransport(t) }}
+                disabled={t === 'gateway' && signedIn.length === 0}
+                title={t === 'gateway' && signedIn.length === 0
+                  ? 'Sign in to an AI provider first: Workspace -> AI Gateway -> Providers'
+                  : t === 'gateway'
+                    ? `Send hands-free via ${signedIn[0]}`
+                    : 'Inject into your already-open AI chat tab'}
+                className="rounded-md px-2 py-0.5 text-[9px] border capitalize transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2"
+                style={
+                  transport === t
+                    ? { borderColor: 'rgba(245,197,24,0.4)', background: 'rgba(245,197,24,0.10)', color: '#f5c518' }
+                    : { borderColor: '#27272a', color: '#a1a1aa' }
+                }
+              >
+                {t}
+              </button>
+            ))}
+            {transport === 'gateway' && (
+              <span className="text-[9px] text-zinc-500">via {signedIn[0] || 'not signed in'}</span>
+            )}
+          </div>
+
           {/* Frame mode toggle (external-ai-bridge checklist) */}
           <div className="flex items-center gap-1">
             {(['strict', 'flexible'] as const).map((m) => (
@@ -265,12 +337,12 @@ export function FieldAIButton({
 
           <div className="flex items-center gap-1.5">
             <button
-              onClick={sendToAI}
-              disabled={sending}
-              className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium bg-[#f5c518]/15 text-[#f5c518] border border-[#f5c518]/30 hover:bg-[#f5c518]/25 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
+              onClick={() => (transport === 'gateway' ? runGateway() : sendToAI())}
+              disabled={sending || busyGateway}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium bg-[#f5c518]/15 text-[#f5c518] border border-[#f5c518]/30 hover:bg-[#f5c518]/25 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50 disabled:opacity-50"
             >
-              {sending ? <Wand2 size={9} className="animate-pulse" /> : <ExternalLink size={9} />}
-              {sending ? 'Sending…' : 'Send to AI'}
+              {(sending || busyGateway) ? <Wand2 size={9} className="animate-pulse" /> : <ExternalLink size={9} />}
+              {(sending || busyGateway) ? 'Sending…' : 'Send to AI'}
             </button>
             <button
               onClick={() => { navigator.clipboard.writeText(prompt) }}

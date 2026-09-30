@@ -4,6 +4,7 @@ import * as React from "react";
 import { motion, type HTMLMotionProps } from "motion/react"
 import { cn } from "@/lib/utils"
 import { Pin } from "lucide-react"
+import { WidgetJumpButton } from "./WidgetJumpButton"
 import {
   CardHeader,
   CardTitle,
@@ -107,8 +108,9 @@ export function DeskFlowCardMotion({
   zIndex,
   onClick,
   pinned,
+  jumpWidgetId,
   ...props
-}: { className?: string; children: React.ReactNode; zIndex?: number; onClick?: () => void; pinned?: boolean }) {
+}: { className?: string; children: React.ReactNode; zIndex?: number; onClick?: () => void; pinned?: boolean; jumpWidgetId?: string }) {
   return (
     <motion.div
       whileHover={{ y: -2, scale: 1.005, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
@@ -116,15 +118,23 @@ export function DeskFlowCardMotion({
       onClick={onClick}
       style={{ zIndex, position: 'relative' }}
       className={cn(
-        "rounded-xl bg-zinc-900/80 overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(244,63,94,0.12)] flex-1 min-h-0 cursor-pointer",
+        "rounded-xl bg-zinc-900/80 overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.07)] flex-1 min-h-0 cursor-pointer",
         pinned ? "ring-1 ring-amber-500/30" : "",
         className,
       )}
       {...props}
     >
       {pinned && (
-        <div className="absolute top-2 right-2 z-50 flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-mono">
+        <div className="absolute top-2 left-2 z-50 flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-mono pointer-events-none">
           <Pin size={10} /> PINNED
+        </div>
+      )}
+      {/* Jump-to-source button: the ONLY control in this card that navigates away
+          from the dashboard. Always visible (never hover-only), top-right, and
+          self-stop-propagating so the card's bringToFront click never fires. */}
+      {jumpWidgetId && (
+        <div className="absolute top-2 right-2 z-50">
+          <WidgetJumpButton widgetId={jumpWidgetId} iconOnly />
         </div>
       )}
       {children}

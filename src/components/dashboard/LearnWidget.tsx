@@ -3,6 +3,7 @@
 // LAMINAR: solid token surface, hairline, radius 10
 import { motion } from 'motion/react';
 import { BookOpen, Target, Clock } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 
 interface LearnWidgetProps {
   stats?: {
@@ -58,6 +59,7 @@ export function LearnWidget({ stats, loading, error }: LearnWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">Learn</span>
         </div>
+        <WidgetJumpButton widgetId="learn-widget" iconOnly />
       </div>
 
       <div className="grid grid-cols-3 gap-2">

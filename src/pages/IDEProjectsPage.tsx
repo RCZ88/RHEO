@@ -175,6 +175,7 @@ const AGENT_CONFIG: Record<string, { name: string; icon: string; color: string }
   'qwen': { name: 'Qwen CLI', icon: 'qwen', color: '#f59e0b' },
   'aider': { name: 'Aider', icon: 'aider', color: '#f59e0b' },
   'kilocode': { name: 'KiloCode', icon: 'kilocode', color: '#22c55e' },
+  'hermes': { name: 'Hermes', icon: 'hermes', color: '#8b5cf6' },
 };
 
 const PROVIDER_MAP: Record<string, string> = {
@@ -186,6 +187,7 @@ const PROVIDER_MAP: Record<string, string> = {
   'qwen': 'Alibaba',
   'aider': 'Aider',
   'kilocode': 'KiloCode',
+  'hermes': 'Hermes',
 };
 
 const MODEL_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -210,6 +212,7 @@ const AGENT_LIMITS: Record<string, number> = {
   'qwen': 3000000,
   'aider': 1000000,
   'kilocode': 2000000,
+  'hermes': 2000000,
 };
 
 function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; dailyUsage: Record<string, any>; formatTokens: (v: number) => string }) {

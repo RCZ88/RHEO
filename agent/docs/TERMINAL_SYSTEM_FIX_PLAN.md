@@ -323,9 +323,24 @@ return (
 
 ---
 
-## 6. AI CONTEXT AWARENESS & WORKSPACE INTEGRATION
+## 6. Backup System — WAL Corruption & Scheduler Issues
 
 ### Problem
+- `startBackupScheduler` ignores `autoBackup:false` setting — always starts interval timer
+- ConductorService `spawnAgentTerminal` host was renderer-dependent (no actual PTY spawn)
+
+### Root Cause
+**Location:** `src/main/backup/BackupService.ts:345`, `src/main.ts:19564`
+
+### Fix (2026-09-25)
+1. **BackupService:** Added `getSettings()` check at top of `startBackupScheduler`. If `autoBackup === false`, logs and returns without starting timer.
+2. **Conductor:** `spawnAgentTerminal` now calls `terminalManager.spawn()` directly in main process. Renderer notification is best-effort.
+
+### Status: ✅ FIXED
+
+---
+
+## 7. AI CONTEXT AWARENESS & WORKSPACE INTEGRATION
 Agent loads once at startup, then doesn't know when problems/requests status changes.
 
 ### Flow

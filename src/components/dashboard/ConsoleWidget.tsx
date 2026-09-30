@@ -2,6 +2,7 @@
 // 4×2 widget showing terminal stats from /penguin-console
 // LAMINAR: solid token surface, hairline, radius 10
 import { Terminal, Hash, CheckCircle2, BookOpen } from 'lucide-react';
+import { WidgetJumpButton } from './WidgetJumpButton';
 
 interface ConsoleWidgetProps {
   stats?: {
@@ -61,6 +62,7 @@ export function ConsoleWidget({ stats, loading, error }: ConsoleWidgetProps) {
           </div>
           <span className="text-[13px] font-semibold text-zinc-200">Console</span>
         </div>
+        <WidgetJumpButton widgetId="console-widget" iconOnly />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
@@ -84,7 +86,7 @@ export function ConsoleWidget({ stats, loading, error }: ConsoleWidgetProps) {
           <span className="text-[10px] text-zinc-500">Handbook progress</span>
         </div>
         <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-          <div className="h-full bg-cyan-500/60 rounded-full transition-all duration-500" style={{ width: `${handbookPct}%` }} />
+          <div className="h-full bg-cyan-500/60 rounded-full transition-colors duration-500" style={{ width: `${handbookPct}%` }} />
         </div>
         <div className="text-[10px] text-zinc-500 mt-0.5 text-right">{handbookCompleted}/{handbookTotal} sections</div>
       </div>

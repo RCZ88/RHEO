@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Flame, Target, Activity, Clock } from 'lucide-react';
 import { getCategoryStyle } from '../../lib/CategoryColors';
+import { tierClasses, shade } from '../../lib/tierColors';
 
 const LOCKED_IN_LUMEN = false;
 
@@ -33,6 +34,8 @@ interface StatusBandProps {
   isPaused?: boolean;
   websiteTitle?: string;
   websiteCategory?: string;
+  /** Category of the native (non-browser) foreground app — e.g. "Entertainment". */
+  appCategory?: string;
 }
 
 type TierTransition = {
@@ -54,6 +57,7 @@ export function StatusBand({
   isPaused,
   websiteTitle,
   websiteCategory,
+  appCategory,
 }: StatusBandProps) {
   const totalMinutes = Math.floor(totalFocusedMs / 1000 / 60);
   const stateKey = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
@@ -106,37 +110,47 @@ export function StatusBand({
     }));
   }, [transitions, now]);
 
-  const isTracking = isReal === true;
+  const isTracking = isReal === true || !!currentAppName;
+
+  // Tier accent — reads the --tier-* CSS variables (see src/lib/tierColors.ts)
+  // so Settings → Colors can change productive / neutral / distracting app-wide.
+  // The previous hardcoded values made `neutral` zinc (#71717a) here while
+  // Settings and Productivity used blue, and painted `distracting` red here but
+  // amber (--resume-warning) three lines below.
+  const tier = stateKey;
+  const tc = tierClasses(tier);
+  const tierAccent = tc.hex;
+  const tierText = tc.text;
+  const tierBorder = tc.border;
+  const tierBg = tc.bg;
+
+  // Category colour applies to native apps too, not just the browser.
+  const effectiveCategory = isInBrowser ? websiteCategory : appCategory;
+  const catStyle = (() => { try { return getCategoryStyle(effectiveCategory || 'Other'); } catch { return { text: 'text-zinc-400', bg: 'bg-zinc-500/15', border: 'border-zinc-500/20' }; } })();
   const isWaylandDegraded = process.env.XDG_SESSION_TYPE === 'wayland';
 
-  const catStyle = (() => { try { return getCategoryStyle(websiteCategory || 'Other'); } catch { return { text: 'text-zinc-400', bg: 'bg-zinc-500/15', border: 'border-zinc-500/20' }; } })();
-  const stateColor = stateKey === 'productive' ? 'var(--resume-success)' : stateKey === 'distracting' ? 'var(--resume-warning)' : 'var(--text-muted)';
+  const stateColor = tierAccent;
 
   const circumference = 2 * Math.PI * 42;
   const strokeDashoffset = circumference * (1 - focusPercent / 100);
 
-const timerColor = isDistracting ? 'var(--error)' : isCurrentlyProductive ? 'var(--success)' : 'var(--text-muted)';
-const timerGlow = isDistracting ? 'rgba(239,68,68,0.15)' : isCurrentlyProductive ? 'rgba(34,197,94,0.15)' : 'transparent';
-const timerGradient = isDistracting ? 'from-red-500/20 via-red-500/5 to-transparent' : isCurrentlyProductive ? 'from-emerald-500/20 via-emerald-500/5 to-transparent' : 'from-zinc-500/10 via-zinc-500/5 to-transparent';
+  // The timer digits and their glow use the same tier colour as the rest of the
+  // card, so a neutral app reads blue rather than "muted gray" here and amber
+  // there.
+  const timerColor = tierAccent;
+  const timerGlow = isPaused
+    ? 'transparent'
+    : `color-mix(in srgb, ${tierAccent} 18%, transparent)`;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-5 relative rounded-[10px] border-t border-[var(--ws-border)]">
-      {/* Depth layer 1: inner highlight top edge */}
-      <div className="absolute top-0 left-[2px] right-[2px] h-[1px] -z-10 bg-gradient-to-r from-white/[0.06] via-white/[0.02] to-transparent rounded-t-[10px]" />
-      {/* Depth layer 2: bottom shadow for floating feel */}
-      <div className="absolute bottom-0 left-[3px] right-[3px] h-px -z-10 bg-gradient-to-r from-black/[0.2] via-black/[0.1] to-transparent rounded-b-[10px]" />
-      {/* Glow accent based on tier */}
-      {isActive && (
-        <div className={`absolute top-0 left-0 right-0 h-px bg-gradient-to-r ${timerGradient}`} />
-      )}
-      {isActive && (
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: `radial-gradient(ellipse at 50% 0%, ${timerGlow} 0%, transparent 60%)`,
-        }} />
-      )}
-      {/* Depth layer 3: subtle inset shadow for card depth */}
-      <div className="absolute inset-0 -z-10 rounded-[10px] pointer-events-none" style={{
-        boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.03), inset 0 -1px 0 0 rgba(0,0,0,0.2)',
+    <div className="sb-root h-full flex flex-col p-5 relative">
+      {/* Tier wash — the card itself carries productive / neutral / distracting */}
+      <div className="absolute inset-0 -z-10 pointer-events-none" style={{
+        background: `radial-gradient(ellipse at 50% 0%, ${tierAccent}14 0%, transparent 62%)`,
+      }} />
+      {/* Tier rule — top hairline tinted by tier */}
+      <div className="absolute top-0 left-0 right-0 h-px" style={{
+        background: `linear-gradient(90deg, ${tierAccent}59 0%, ${tierAccent}1f 45%, transparent 100%)`,
       }} />
       {/* Status header */}
       <div className="flex items-center justify-between mb-3 relative z-10">
@@ -164,6 +178,31 @@ const timerGradient = isDistracting ? 'from-red-500/20 via-red-500/5 to-transpar
           }}>
             {timeStr}
           </div>
+
+          {/* The app (or site) the stopwatch is actually timing. This used to
+              render only as a 12px line in the bottom "tracking info" strip, so
+              the big timer read as unattributed — you could not tell what the
+              number belonged to without hunting. Now it sits directly under the
+              digits, at reading size, tinted by the app's tier. */}
+          {isTracking && currentAppName ? (
+            <div
+              className={`mt-2.5 max-w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border ${tierBorder} ${tierBg}`}
+              title={`Tracking: ${currentAppName}`}
+            >
+              {isInBrowser
+                ? <Clock size={13} className={`${tierText} shrink-0`} />
+                : <Activity size={13} className={`${tierText} shrink-0`} />}
+              <span className={`text-[13px] font-semibold truncate ${tierText}`}>
+                {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
+              </span>
+              {effectiveCategory && effectiveCategory !== 'Other' && (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${catStyle.text}`}>
+                  {effectiveCategory}
+                </span>
+              )}
+            </div>
+          ) : null}
+
           <div className="text-[11px] text-zinc-500 mt-1">{totalMinutes}m focused</div>
           {onStartFocus && !isPaused && (
             <button
@@ -183,8 +222,8 @@ const timerGradient = isDistracting ? 'from-red-500/20 via-red-500/5 to-transpar
             <svg width="56" height="56" viewBox="0 0 100 100" className="shrink-0">
               <defs>
                 <linearGradient id="statusGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor={stateKey === 'productive' ? '#22c55e' : stateKey === 'distracting' ? '#ef4444' : '#71717a'} />
-                  <stop offset="100%" stopColor={stateKey === 'productive' ? '#16a34a' : stateKey === 'distracting' ? '#dc2626' : '#525252'} />
+                  <stop offset="0%" stopColor={tierAccent} />
+                  <stop offset="100%" stopColor={shade(tierAccent, -18)} />
                 </linearGradient>
                 <filter id="statusGlow" x="-50%" y="-50%" width="200%" height="200%">
                   <feGaussianBlur stdDeviation="3" result="blur" />
@@ -208,7 +247,7 @@ const timerGradient = isDistracting ? 'from-red-500/20 via-red-500/5 to-transpar
                 filter={isActive ? 'url(#statusGlow)' : undefined}
                 style={{ filter: isActive ? `drop-shadow(0 0 6px ${stateKey === 'productive' ? 'rgba(34,197,94,0.4)' : stateKey === 'distracting' ? 'rgba(239,68,68,0.4)' : 'transparent'})` : undefined }}
               />
-              <text x="50" y="46" textAnchor="middle" fill={stateKey === 'productive' ? '#22c55e' : stateKey === 'distracting' ? '#ef4444' : 'var(--text-primary)'} fontSize="16" fontFamily="Space Grotesk, sans-serif" fontWeight="700">
+              <text x="50" y="46" textAnchor="middle" fill={tierAccent} fontSize="16" fontFamily="Space Grotesk, sans-serif" fontWeight="700">
                 {focusPercent}
               </text>
               <text x="50" y="60" textAnchor="middle" fill="var(--text-muted)" fontSize="7" fontFamily="Inter, sans-serif">
@@ -233,14 +272,17 @@ const timerGradient = isDistracting ? 'from-red-500/20 via-red-500/5 to-transpar
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--ws-border)]">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {isTracking ? (
-            <div className="flex items-center gap-2 bg-zinc-900/60 rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50">
-              {isInBrowser ? <Clock size={11} className="text-zinc-500 shrink-0" /> : <Activity size={11} className="text-zinc-500 shrink-0" />}
-              <span className="text-[12px] font-medium text-zinc-300 truncate font-sans">
+            <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 min-w-0 border ${tierBorder} ${tierBg}`}>
+              {isInBrowser ? <Clock size={11} className={`${tierText} shrink-0`} /> : <Activity size={11} className={`${tierText} shrink-0`} />}
+              <span className={`text-[12px] font-medium truncate font-sans ${tierText}`}>
                 {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
               </span>
-              {isInBrowser && websiteCategory && (
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-sans ${catStyle.text}`}>{websiteCategory}</span>
+              {effectiveCategory && effectiveCategory !== 'Other' && (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded font-sans ${catStyle.text}`}>{effectiveCategory}</span>
               )}
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-sans uppercase tracking-wider ${tierText} opacity-70`}>
+                {tier}
+              </span>
             </div>
           ) : isWaylandDegraded ? (
             <div className="flex items-center gap-2 bg-zinc-900/60 rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50">

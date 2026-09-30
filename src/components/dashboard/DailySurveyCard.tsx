@@ -24,7 +24,7 @@ interface DailySurveyCardProps {
   className?: string;
 }
 
-export function DailySurveyCard({ goals, onComplete, className = '' }: DailySurveyCardProps) {
+export function DailySurveyCard({ goals = [], onComplete, className = '' }: DailySurveyCardProps) {
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);

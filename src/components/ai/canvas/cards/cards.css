@@ -1,25 +1,31 @@
 
 /* ═══════════════════════════════════════════════════════════════
-   AI CANVAS CARD VISIBILITY FIX
-   Ensures AI-generated cards are always visible with proper z-index
+   AI CANVAS CARD VISIBILITY — force-override block
+
+   HISTORY / WHY MOST OF THIS WAS DELETED:
+   This block used to pin `box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important`
+   on every card as a "visibility fix". A BLACK shadow on the #060608 void is
+   invisible by construction, so it not only failed to separate the card, it
+   also locked out the real elevation/catch-light via !important. It also
+   painted a hard-coded pink (236,72,153) glow on hover regardless of the
+   card's own --card-accent, violating LAMINAR §2 (one signal hue per surface)
+   and §7 item 6 (neon glow) — and at 15% alpha it measured 1.31:1 anyway.
+
+   Kept: opacity/visibility forcing. A card that is not painted at all is
+   worse than a dim one, and status/transient states elsewhere should express
+   themselves with border, not by hiding the card body.
+   Removed: the !important box-shadow pins and the pink hover. Elevation and
+   edge are owned by the base card rule below; hover uses the own accent of the card.
    ═══════════════════════════════════════════════════════════════ */
 
+.dk-canvas-card,
 .canvas-card {
-  opacity: 1 !important;
-  visibility: visible !important;
-  z-index: 50 !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  opacity: 1;
+  visibility: visible;
 }
 
 .dk-canvas-card {
-  opacity: 1 !important;
-  visibility: visible !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
-}
-
-.dk-canvas-card:hover {
-  box-shadow: 0 12px 48px rgba(236, 72, 153, 0.15) !important;
-  border-color: rgba(236, 72, 153, 0.3) !important;
+  z-index: 50;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -37,22 +43,39 @@
 .dk-card {
   --card-accent: var(--dk-type-group);
 
+  /* Card edge carries the TYPE HUE. --card-accent is resolved per card type
+     (15 types, cards.css:583-597) and it was the original design: a
+     finance card is emerald, a deadline card is amber. Hardcoding a white
+     edge flattened every card to identical grey and the canvas went bland.
+     Per conflict-resolution 1.2 "one signal hue per surface" means one hue
+     PER CARD, not one hue for the whole canvas -- a card is its own surface.
+     The neutral white edge is kept as the mix partner so low-chroma types
+     (group = rgba(255,255,255,0.45)) still show a visible boundary. */
+  --dk-card-edge:      color-mix(in srgb, var(--card-accent) 42%, rgba(255, 255, 255, 0.14));
+  --dk-card-edge-hi:   color-mix(in srgb, var(--card-accent) 78%, rgba(255, 255, 255, 0.30));
+  /* OPAQUE plate. A 0.08 alpha veil let the dot field read through every card
+     and body text sat directly on a dot grid. Solid zinc-900 = --color-card
+     from src/index.css:196, so it is the live token, not an invented value. */
+  --dk-card-face:      var(--color-card, #18181b);
+  --dk-card-catch:     inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
   position: absolute;
   display: flex;
   flex-direction: column;
   border-radius: var(--dk-radius-lg);
-  background: linear-gradient(
-    168deg,
-    rgba(24, 24, 27, 0.72) 0%,
-    rgba(11, 11, 13, 0.56) 100%
-  );
-  border: 1px solid var(--dk-border-subtle);
-  box-shadow: var(--dk-elev-2), var(--dk-sheen);
+  background: var(--dk-card-face);
+  border: 1px solid var(--dk-card-edge);
+  box-shadow: var(--dk-card-catch);
   overflow: hidden;
   transition: box-shadow var(--dk-dur-base) var(--dk-ease-out), border-color var(--dk-dur-base) var(--dk-ease-out);
 }
 
-/* Aurora glow — accent bleed from top edge */
+/* Type-hue wash — a restrained 3% accent bleed on the top 12% only.
+   The old version covered the top 40% at opacity 0.7 and jumped to 1.0 on
+   hover, which read as a tinted square flashing over the header on every
+   interaction. This is 3%, confined to a thin band, and does NOT change on
+   hover, so the accent is always present and never animates as a highlight.
+   This is the ambient tier: no infinite loop (LAMINAR 6). */
 .dk-canvas-card::before,
 .dk-card::before {
   content: "";
@@ -60,16 +83,15 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 40%;
-  background: radial-gradient(
-    ellipse 100% 100% at 50% 0%,
-    color-mix(in srgb, var(--card-accent) 8%, transparent),
-    transparent 70%
+  height: 12%;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card-accent) 9%, transparent),
+    transparent
   );
   pointer-events: none;
   z-index: 0;
-  opacity: 0.7;
-  transition: opacity var(--dk-dur-base) var(--dk-ease-out);
+  opacity: 1;
 }
 
 /* Top-sheen — specular edge */
@@ -89,39 +111,42 @@
 /* Interaction states */
 .dk-canvas-card:hover,
 .dk-card:hover {
-  border-color: var(--dk-border-default);
-  box-shadow: var(--dk-elev-3), var(--dk-sheen);
+  border-color: var(--dk-card-edge-hi);
+  box-shadow: var(--dk-card-catch), 0 0 0 1px var(--dk-card-edge-hi);
 }
-.dk-canvas-card:hover::before,
-.dk-card:hover::before { opacity: 1; }
+
 
 .dk-canvas-card.focused,
 .dk-card--selected {
   border-color: var(--card-accent) !important;
-  box-shadow: var(--dk-elev-3), 0 0 0 1px var(--card-accent), 0 0 24px color-mix(in srgb, var(--card-accent) 18%, transparent) !important;
+  box-shadow: var(--dk-card-catch), 0 0 0 2px var(--card-accent), 0 0 24px color-mix(in srgb, var(--card-accent) 26%, transparent) !important;
 }
 
 .dk-canvas-card.dragging,
 .dk-card--dragging {
-  box-shadow: var(--dk-elev-4) !important;
+  box-shadow: var(--dk-card-catch), 0 0 0 2px var(--dk-card-edge-hi) !important;
   z-index: 1000 !important;
   cursor: grabbing;
 }
 
-/* Status whispers — subtle border tint (TSX emits status-* classes, not data-status) */
+/* Status whispers — border tint mixed from the EDGE, never from
+   --dk-border-subtle (0.06), which produced a tint too faint to see. */
 .dk-canvas-card.status-active,
-.dk-card.status-active   { border-color: color-mix(in srgb, var(--card-accent) 24%, var(--dk-border-subtle)); }
+.dk-card.status-active   { border-color: color-mix(in srgb, var(--card-accent) 45%, var(--dk-card-edge)); }
 .dk-canvas-card.status-stale,
-.dk-card.status-stale    { opacity: 0.72; }
+.dk-card.status-stale    { border-color: color-mix(in srgb, var(--dk-warning) 45%, var(--dk-card-edge)); }
 .dk-canvas-card.status-loading,
-.dk-card.status-loading  { border-color: color-mix(in srgb, var(--dk-accent) 40%, var(--dk-border-subtle)); }
+.dk-card.status-loading  { border-color: color-mix(in srgb, var(--dk-accent) 55%, var(--dk-card-edge)); }
 .dk-canvas-card.status-error,
-.dk-card.status-error    { border-color: color-mix(in srgb, var(--dk-danger) 35%, var(--dk-border-subtle)); }
+.dk-card.status-error    { border-color: color-mix(in srgb, var(--dk-danger) 60%, var(--dk-card-edge)); }
 .dk-canvas-card.status-error::before,
 .dk-card.status-error::before { background: radial-gradient(ellipse 100% 100% at 50% 0%, color-mix(in srgb, var(--dk-danger) 8%, transparent), transparent 70%); }
 
-/* Transient AI cards — dashed border, reduced opacity */
-.dk-canvas-card.transient { border-style: dashed; opacity: 0.85; }
+/* Transient AI cards — the DASH carries transience. Dimming the card body
+   (was 0.6 in canvas.css / 0.85 here) fought the affordance: it made the
+   card harder to find, which is the opposite of what "temporary" should
+   signal. Border style alone communicates it. */
+.dk-canvas-card.transient { border-style: dashed; }
 
 /* Resize handle */
 .dk-canvas-resize-handle {
@@ -154,15 +179,42 @@
 .dk-card-header {
   position: relative;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 8px;
   padding: 10px 12px 6px;
   min-height: 32px;
 }
 
-.dk-canvas-card-type,
+/* The OUTER card title header.
+   Grid 1fr/auto/1fr with a single child puts the title in the middle `auto`
+   track, so it is TRULY centred regardless of how many sibling nodes appear.
+   That matters here because .dk-canvas-card-actions is `position:absolute`
+   (out of flow, cards.css) — with plain flex + space-between a lone in-flow
+   child is pinned to flex-start, i.e. hard left. Symmetric 16px padding keeps
+   it optically centred while clearing the hover action cluster. */
+.dk-canvas-card-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 10px 16px 6px;
+}
+
+/* The INNER card header (has explicit -left/-right children) stays
+   space-between — that is a real left-title / right-meta layout, declared
+   further down at .dk-card-header. */
+.dk-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ⚠ CLASS-NAME COLLISION, FIXED.
+   `.dk-canvas-card-type` and `.dk-card-icon` used to share ONE selector, which
+   forced `width:22px; height:22px; display:grid; place-items:center` onto the
+   card TITLE. But CardFrame.tsx:48 and GroupCard.tsx:209 both render it as
+   text:  <span className="dk-canvas-card-type">{type}</span>  -> "PLAN",
+   "GROUP", "DEADLINES". Uppercase + 0.06em tracking + nowrap inside a fixed
+   22px box = the word overflowed its own chip and read as a broken,
+   off-centre title. Only `.dk-card-icon` is actually an icon. */
 .dk-card-icon {
   width: 22px;
   height: 22px;
@@ -175,10 +227,16 @@
 }
 
 .dk-canvas-card-type {
-  font: 600 10px/1 var(--dk-sans);
-  color: var(--dk-text-muted);
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font: 600 10px/1.2 var(--dk-sans);
+  color: var(--dk-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dk-card-dot {

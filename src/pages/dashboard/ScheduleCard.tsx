@@ -7,7 +7,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence } from "motion/react";
 import {
-  Calendar, Clock, MapPin, Plus, X, Edit3, Trash2,
+  Calendar, Clock, MapPin, Plus, X, Edit3, Trash2, Loader2,
   BookOpen, FlaskConical, Brain, FileText, Users, MoreHorizontal
 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
@@ -15,7 +15,10 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectItem } from '../../components/ui/select';
 import { WidgetCard } from '../../components/dashboard/WidgetCard';
 import { getWidgetTheme } from '../../components/dashboard/widgetTheme';
-import type { ScheduleEntry, ScheduleCategory } from './types';
+// Was './types' — that path does not exist from src/pages/dashboard/, so
+// ScheduleEntry/ScheduleCategory silently resolved to `any` and every prop
+// check in this file was vacuous. The real SSoT is components/dashboard/types.
+import type { ScheduleEntry, ScheduleCategory } from '../../components/dashboard/types';
 import { EntityChip } from '../../components/goals/EntityChip';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -67,11 +70,13 @@ interface ScheduleCardProps {
   selectedDay?: number;
   loading?: boolean;
   error?: string | null;
-  onAdd: (entry: Omit<ScheduleEntry, 'id' | 'createdAt'>) => void;
+  onAdd: (entry: Omit<ScheduleEntry, 'id' | 'createdAt'>) => boolean | Promise<boolean>;
   onUpdate: (id: string, patch: Partial<ScheduleEntry>) => void;
   onDelete: (id: string) => void;
   linkedGoals?: { id: string; title: string; category: string }[];
-  showAll?: false;
+  /** true = show the whole week, false = only selectedDay. Was typed `?: false`,
+   *  which hard-locked the prop to `false` and rejected every real caller. */
+  showAll?: boolean;
   onDayChange?: (day: number) => void;
 }
 
@@ -83,6 +88,8 @@ export function ScheduleCard({
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showFormError, setShowFormError] = useState<'' | 'title' | 'time' | 'save'>('');
+  const [saving, setSaving] = useState(false);
   const [nowMinutes, setNowMinutes] = useState(new Date().getHours() * 60 + new Date().getMinutes());
 
   useEffect(() => {
@@ -119,9 +126,16 @@ export function ScheduleCard({
   const upcomingEntries = dayEntries.filter(e => parseTime(e.start_time) > nowMinutes);
   const pastEntries = dayEntries.filter(e => parseTime(e.end_time) <= nowMinutes);
 
+  const isEntryDayPast = (entryDayOfWeek: number): boolean => {
+    const today = new Date().getDay();
+    if (selectedDay === today) return false;
+    const diff = entryDayOfWeek - today;
+    return diff < 0 || diff > 3;
+  };
+
   const resetForm = () => setForm({ title: '', location: '', day: selectedDay.toString(), start: '09:00', end: '10:00', category: 'class', goalId: '' });
 
-  const startAdd = () => { resetForm(); setForm(p => ({ ...p, day: selectedDay.toString() })); setIsAdding(true); setEditingId(null); };
+  const startAdd = () => { resetForm(); setForm(p => ({ ...p, day: selectedDay.toString() })); setShowFormError(''); setIsAdding(true); setEditingId(null); };
 
   const startEdit = (entry: ScheduleEntry) => {
     setEditingId(entry.id);
@@ -132,16 +146,29 @@ export function ScheduleCard({
     setIsAdding(false);
   };
 
-  const handleSave = () => {
-    if (!form.title.trim()) return;
+  const handleSave = async () => {
+    if (!form.title.trim()) { setShowFormError('title'); return; }
+    if (form.end <= form.start) { setShowFormError('time'); return; }
+    setShowFormError('');
+    setSaving(true);
+    // `color` is deliberately NOT sent: theme.accent is the literal string
+    // "var(--color-amber-400)", and writing a CSS variable into the
+    // schedule_entries.color column persists a broken value. The IPC handler
+    // owns the default. (LAMINAR §7.7 — no raw hex in a .tsx either.)
     const payload = {
       title: form.title.trim(), location: form.location.trim() || undefined,
       day_of_week: parseInt(form.day), start_time: form.start, end_time: form.end,
-      category: form.category, color: theme.accent, goal_id: form.goalId || null,
+      // undefined (not null) so the IPC handler's own default applies, and so
+      // update-schedule-entry's `patch[k] !== undefined` filter keeps the column.
+      category: form.category, goal_id: form.goalId || undefined,
     };
-    if (editingId) { onUpdate(editingId, payload); setEditingId(null); }
-    else { onAdd(payload); setIsAdding(false); }
-    resetForm();
+    try {
+      if (editingId) { onUpdate(editingId, payload); setEditingId(null); resetForm(); return; }
+      const ok = await onAdd(payload);
+      if (ok === false) { setShowFormError('save'); return; }  // keep form open + say why
+      setIsAdding(false);
+      resetForm();
+    } finally { setSaving(false); }
   };
 
   const handleDelete = (id: string) => {
@@ -159,11 +186,20 @@ export function ScheduleCard({
       accent={theme.accent}
       kicker={theme.kicker}
       loading={loading}
-      error={error}
-      errorMessage="Could not load schedule"
+      error={!!error}
+      errorMessage={error || 'RHEO could not load this schedule.'}
       empty={dayEntries.length === 0 && !isAdding && !editingId}
       emptyMessage={`Nothing scheduled for ${DAY_SHORT[selectedDay]}`}
       emptyIcon={<Calendar size={24} className="opacity-30" />}
+      emptyAction={
+        <button
+          onClick={startAdd}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors"
+          style={{ backgroundColor: `${theme.accent}15`, color: theme.accent, borderColor: `${theme.accent}40` }}
+        >
+          <Plus size={13} /> Add entry
+        </button>
+      }
       footer={
         <button
           onClick={startAdd}
@@ -199,12 +235,24 @@ export function ScheduleCard({
             <div className="border border-[var(--border-subtle)] rounded-lg p-3 space-y-2.5 mb-1">
               <Input
                 value={form.title}
-                onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                onChange={e => { setShowFormError(''); setForm(p => ({ ...p, title: e.target.value })); }}
                 onKeyDown={e => e.key === 'Enter' && handleSave()}
-                placeholder="Entry title (e.g. Linear Algebra)"
+                placeholder="Entry title (required)"
+                aria-label="Entry title"
+                aria-required="true"
+                aria-invalid={showFormError === 'title'}
                 autoFocus
                 className="bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9"
               />
+              {showFormError && (
+                <p role="alert" className="text-[11px]" style={{ color: 'var(--error)' }}>
+                  {showFormError === 'title'
+                    ? 'This entry has no title. Type one so you recognise it on the calendar.'
+                    : showFormError === 'time'
+                      ? 'This entry ends before it starts. Check the start and end times.'
+                      : 'RHEO could not save this entry. Check the app is running, then try again.'}
+                </p>
+              )}
               <div className="flex items-center gap-2">
                 <Input
                   value={form.location}
@@ -212,7 +260,7 @@ export function ScheduleCard({
                   placeholder="Location (optional)"
                   className="flex-1 bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9"
                 />
-                <Select value={form.day} onValueChange={v => setForm(p => ({ ...p, day: v }))} className="w-[90px]">
+                <Select value={form.day} onValueChange={(v: string) => setForm(p => ({ ...p, day: v }))} className="w-[90px]">
                   {DAYS.map((d, i) => <SelectItem key={i} value={i.toString()}>{DAY_SHORT[i]}</SelectItem>)}
                 </Select>
               </div>
@@ -222,7 +270,7 @@ export function ScheduleCard({
                   <span className="text-[var(--text-muted)] text-xs">to</span>
                   <Input type="time" value={form.end} onChange={e => setForm(p => ({ ...p, end: e.target.value }))} className="bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9" />
                 </div>
-                <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v as ScheduleCategory }))} className="w-[110px]">
+                <Select value={form.category} onValueChange={(v: string) => setForm(p => ({ ...p, category: v as ScheduleCategory }))} className="w-[110px]">
                   {(Object.keys(CATEGORY_LABELS) as ScheduleCategory[]).map(cat => (
                     <SelectItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</SelectItem>
                   ))}
@@ -240,8 +288,9 @@ export function ScheduleCard({
                 </select>
               )}
               <div className="flex items-center gap-2 justify-end">
-                <Button size="sm" onClick={handleSave} className="text-[12px] h-8 border border-[var(--border-subtle)] hover:border-[var(--page-accent)]/40">
-                  {editingId ? 'Save' : 'Add'}
+                <Button size="sm" onClick={handleSave} disabled={!form.title.trim() || saving} className="text-[12px] h-8 border border-[var(--border-subtle)] hover:border-[var(--page-accent)]/40 disabled:opacity-40 disabled:cursor-not-allowed">
+                  {saving ? <Loader2 size={12} className="animate-spin" aria-hidden /> : null}
+                  {saving ? 'Saving…' : editingId ? 'Save entry' : 'Add entry'}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => { resetForm(); setIsAdding(false); setEditingId(null); }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[12px] h-8">
                   Cancel
@@ -295,67 +344,75 @@ export function ScheduleCard({
             </div>
           )}
 
-          {/* Upcoming blocks */}
-          {upcomingEntries.map((entry) => {
-            const minsUntil = getMinutesUntil(entry.start_time);
-            return (
-              <div key={entry.id} className="group p-3 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-[var(--text-primary)]">{entry.title}</span>
-                      <span className="text-[10px] text-[var(--text-muted)] px-1 py-0.5 rounded border border-[var(--border-subtle)] flex items-center gap-1">
-                        {CATEGORY_ICONS[entry.category || 'other']}
-                        {CATEGORY_LABELS[entry.category || 'other']}
-                      </span>
-                      {showAll && (
-                        <span className="text-[10px] text-[var(--text-muted)] px-1 py-0.5 rounded border border-[var(--border-subtle)] shrink-0">
-                          {DAY_SHORT[entry.day_of_week]}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      <span className="text-[11px] text-[var(--text-muted)] font-mono">{formatTime(entry.start_time)} – {formatTime(entry.end_time)}</span>
-                      <span className="text-[11px] text-[var(--text-muted)] font-mono">{formatDuration(entry.start_time, entry.end_time)}</span>
-                      {entry.location && (
-                        <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1"><MapPin size={10} />{entry.location}</span>
-                      )}
-                      {entry.goal_id && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === entry.goal_id)?.title || 'Linked goal'} />}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isToday && minsUntil > 0 && minsUntil < 180 && (
-                      <span className="text-[10px] text-[var(--text-muted)] font-mono border border-[var(--border-subtle)] px-1.5 py-0.5 rounded">
-                        in {minsUntil}m
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => startEdit(entry)} className="w-6 h-6 rounded border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors">
-                        <Edit3 size={10} />
-                      </button>
-                      <button onClick={() => handleDelete(entry.id)} className={`w-6 h-6 rounded flex items-center justify-center transition-colors border ${deleteConfirmId === entry.id ? 'border-[var(--error)] text-[var(--error)]' : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--error)]'}`}>
-                        <Trash2 size={10} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+{/* Upcoming blocks */}
+           {upcomingEntries.map((entry) => {
+             const minsUntil = getMinutesUntil(entry.start_time);
+             const dayIsPast = isEntryDayPast(entry.day_of_week);
+             return (
+               <div key={entry.id} className={`group p-3 rounded-lg border transition-colors ${dayIsPast ? 'border-[var(--border-subtle)] bg-[var(--border-subtle)]/10 opacity-60' : 'border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20'}`}>
+                 <div className="flex items-start justify-between gap-3">
+                   <div className="flex-1 min-w-0">
+                     <div className="flex items-center gap-2">
+                       <span className={`text-sm font-medium ${dayIsPast ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>{entry.title}</span>
+                       <span className="text-[10px] text-[var(--text-muted)] px-1 py-0.5 rounded border border-[var(--border-subtle)] flex items-center gap-1">
+                         {CATEGORY_ICONS[entry.category || 'other']}
+                         {CATEGORY_LABELS[entry.category || 'other']}
+                       </span>
+                       {dayIsPast && (
+                         <span className="text-[9px] text-[var(--text-muted)] px-1 py-0.5 rounded border border-[var(--border-subtle)] shrink-0 font-medium">PAST</span>
+                       )}
+                       {showAll && !dayIsPast && (
+                         <span className="text-[10px] text-[var(--text-muted)] px-1 py-0.5 rounded border border-[var(--border-subtle)] shrink-0">
+                           {DAY_SHORT[entry.day_of_week]}
+                         </span>
+                       )}
+                     </div>
+                     <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                       <span className={`text-[11px] font-mono ${dayIsPast ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-muted)]'}`}>{formatTime(entry.start_time)} – {formatTime(entry.end_time)}</span>
+                       {!dayIsPast && <span className="text-[11px] text-[var(--text-muted)] font-mono">{formatDuration(entry.start_time, entry.end_time)}</span>}
+                       {entry.location && !dayIsPast && (
+                         <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1"><MapPin size={10} />{entry.location}</span>
+                       )}
+                       {entry.goal_id && !dayIsPast && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === entry.goal_id)?.title || 'Linked goal'} />}
+                     </div>
+                   </div>
+                   <div className="flex items-center gap-2 shrink-0">
+                     {!dayIsPast && isToday && minsUntil > 0 && minsUntil < 180 && (
+                       <span className="text-[10px] text-[var(--text-muted)] font-mono border border-[var(--border-subtle)] px-1.5 py-0.5 rounded">
+                         in {minsUntil}m
+                       </span>
+                     )}
+                     <div className={`flex items-center gap-1 transition-opacity ${dayIsPast ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
+                       <button onClick={() => startEdit(entry)} className="w-6 h-6 rounded border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors">
+                         <Edit3 size={10} />
+                       </button>
+                       <button onClick={() => handleDelete(entry.id)} className={`w-6 h-6 rounded flex items-center justify-center transition-colors border ${deleteConfirmId === entry.id ? 'border-[var(--error)] text-[var(--error)]' : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--error)]'}`}>
+                         <Trash2 size={10} />
+                       </button>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             );
+           })}
 
-          {/* Past entries */}
-          {isToday && pastEntries.length > 0 && (
-            <div className="pt-2">
-              <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-medium mb-1.5 px-1">Completed today</div>
-              {pastEntries.map(entry => (
-                <div key={entry.id} className="flex items-center gap-2 p-2 rounded-md opacity-50">
-                  <div className="w-1 h-1 rounded-full shrink-0 bg-[var(--text-muted)]" />
-                  <span className="text-[12px] text-[var(--text-muted)] flex-1">{entry.title}</span>
-                  <span className="text-[10px] text-[var(--text-muted)] font-mono">{formatTime(entry.start_time)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+{/* Past entries */}
+           {(isToday || (showAll && pastEntries.length > 0)) && (
+             <div className="pt-2">
+               <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-medium mb-1.5 px-1">{isToday ? 'Completed today' : (showAll ? 'Past entries' : 'Completed')}</div>
+               {pastEntries.map(entry => {
+                 const dayIsPast = isEntryDayPast(entry.day_of_week);
+                 return (
+                   <div key={entry.id} className="flex items-center gap-2 p-2 rounded-md opacity-50">
+                     {dayIsPast && <span className="text-[9px] text-[var(--text-muted)] px-1 py-0.5 rounded border border-[var(--border-subtle)] shrink-0 font-medium">PAST</span>}
+                     <div className="w-1 h-1 rounded-full shrink-0 bg-[var(--text-muted)]" />
+                     <span className="text-[12px] text-[var(--text-muted)] flex-1">{entry.title}</span>
+                     <span className="text-[10px] text-[var(--text-muted)] font-mono">{formatTime(entry.start_time)}</span>
+                   </div>
+                 );
+               })}
+             </div>
+           )}
         </div>
       </div>
     </WidgetCard>

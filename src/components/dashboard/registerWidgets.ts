@@ -29,6 +29,7 @@ import { BrowserWidget } from './BrowserWidget';
 import { BrainWidget } from './BrainWidget';
 import { CovenantWidget } from './CovenantWidget';
 import { HealthWidget } from './HealthWidget';
+import { LongestFocusCard } from './LongestFocusCard';
 
 // ── Dashboard Widgets ──
 WidgetRegistry.register({
@@ -303,4 +304,83 @@ WidgetRegistry.register({
   icon: 'Moon', category: 'health',
   defaultSize: { cols: 6, rows: 2 }, minSize: { cols: 4, rows: 1 }, maxSize: { cols: 8, rows: 3 },
   component: HealthWidget, defaultVisible: true, sourcePage: 'external',
+});
+
+// 'longest-focus' was renderable on the dashboard but had no library entry, so it
+// could never be switched off. Registered with the id the dashboard already uses.
+WidgetRegistry.register({
+  id: 'longest-focus', name: 'Longest Focus', description: 'Your personal best session',
+  icon: 'Trophy', category: 'productivity',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: LongestFocusCard, defaultVisible: true, sourcePage: 'rankings',
+});
+
+// ── Library-only opt-in widgets ──────────────────────────────────────────────
+// These 8 components were written but never wired to a dashboard row, so they
+// could not be switched on. They are registered here (defaultVisible: false) so
+// they appear in the Card Library; the dashboard renders them ONLY after the
+// user enables them. See OPT_IN_WIDGETS in widgetRegistry.tsx.
+import { DailySurveyCard } from './DailySurveyCard';
+import { UnifiedGoalsCard } from './UnifiedGoalsCard';
+import { StreakCard } from './StreakCard';
+import { ScheduleSyncCard } from './ScheduleSyncCard';
+import { DrillDownCard } from './DrillDownCard';
+import { SpotlightCard } from './SpotlightCard';
+import { MomentumOrb } from './MomentumOrb';
+import { MomentumScore } from './MomentumScore';
+
+WidgetRegistry.register({
+  id: 'daily-survey', name: 'Daily Survey', description: 'End-of-day check-in prompts',
+  icon: 'ClipboardCheck', category: 'productivity',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: DailySurveyCard, defaultVisible: false,
+});
+
+WidgetRegistry.register({
+  id: 'unified-goals', name: 'Unified Goals', description: 'Goals and long-term goals in one view',
+  icon: 'Target', category: 'productivity',
+  defaultSize: { cols: 8, rows: 2 }, minSize: { cols: 4, rows: 1 }, maxSize: { cols: 12, rows: 3 },
+  component: UnifiedGoalsCard, defaultVisible: false,
+});
+
+WidgetRegistry.register({
+  id: 'streak', name: 'Streaks', description: 'Goal streaks and milestones',
+  icon: 'Flame', category: 'productivity',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: StreakCard, defaultVisible: false,
+});
+
+WidgetRegistry.register({
+  id: 'schedule-sync', name: 'Schedule Sync', description: 'Schedule entries matched to goals',
+  icon: 'CalendarSync', category: 'schedule',
+  defaultSize: { cols: 8, rows: 2 }, minSize: { cols: 4, rows: 1 }, maxSize: { cols: 12, rows: 3 },
+  component: ScheduleSyncCard, defaultVisible: false,
+});
+
+WidgetRegistry.register({
+  id: 'drilldown', name: 'Drill Down', description: 'Heatmap and ecosystem drill-down',
+  icon: 'Layers', category: 'insights',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: DrillDownCard, defaultVisible: false,
+});
+
+WidgetRegistry.register({
+  id: 'spotlight', name: 'Spotlight', description: 'Focused highlight panel',
+  icon: 'Sparkles', category: 'insights',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: SpotlightCard, defaultVisible: false,
+});
+
+WidgetRegistry.register({
+  id: 'momentum-orb', name: 'Momentum Orb', description: 'Animated momentum visualization',
+  icon: 'Orbit', category: 'productivity',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: MomentumOrb, defaultVisible: false,
+});
+
+WidgetRegistry.register({
+  id: 'momentum-score', name: 'Momentum Score', description: 'Momentum score breakdown',
+  icon: 'Gauge', category: 'productivity',
+  defaultSize: { cols: 4, rows: 2 }, minSize: { cols: 3, rows: 1 }, maxSize: { cols: 6, rows: 3 },
+  component: MomentumScore, defaultVisible: false,
 });

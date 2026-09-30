@@ -12,7 +12,14 @@ import { getSplashApi, type BootAnimationConfig } from './components/boot/bootTi
 import './tokens.css'
 import './index.css'
 import './styles/lyceum-learn-features.css'
+import './styles/terminal-handbook.css'
 import './styles/signaling.css'
+import { applyTierColors, getTierColorOverrides } from './lib/tierColors'
+
+// Re-apply the user's saved tier colours BEFORE the first paint, so a
+// customised productive/neutral/distracting palette survives a reload
+// instead of flashing the default green/blue/red for a frame.
+applyTierColors(getTierColorOverrides());
 
 console.log('BUILD MARKER v5');
 

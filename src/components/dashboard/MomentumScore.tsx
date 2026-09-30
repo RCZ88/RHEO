@@ -70,7 +70,7 @@ function calculateMomentum(goals: any[], focusTimeMs: number): MomentumData {
   };
 }
 
-export function MomentumScore({ goals, focusTimeMs, className = '' }: MomentumScoreProps) {
+export function MomentumScore({ goals = [], focusTimeMs = 0, className = '' }: MomentumScoreProps) {
   const [momentum, setMomentum] = useState<MomentumData>({
     score: 0,
     streak: 0,

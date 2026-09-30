@@ -4,6 +4,158 @@
 
 ### Commit Message
 ```
+feat(v7.0): app-review baseline — Chat Library, external-AI transport, dashboard widget registry, find-bar + console fixes
+
+PURPOSE OF THIS COMMIT
+This commit is the REVIEW BASELINE. An app-wide quality review (every route, not one
+feature) is to be run against this exact tree by Qwen. The full brief — surfaces, how to
+verify, and the pre-existing issues already confirmed here so they are not re-reported as
+regressions — is in agent/docs/app-review-qwen-20260930/BASELINE.md.
+
+200 files changed, +76,232 / -10,480.
+
+CHAT LIBRARY (new subsystem)
+- src/main/ai/chatLibrary.ts (NEW) — main-process persistence + query layer for AI conversations.
+- src/components/ai/chat/ChatLibrary.tsx (NEW) — library surface: list, search, pin, group.
+- src/components/ai/chat/BrainSurface.tsx (NEW) — knowledge surfaced from stored conversations.
+- src/components/ai/chat/ChatExportBridge.tsx (NEW) — export conversations out of the app.
+- 11 new IPC channels: chat-library:ingest, :search, :stats, :groups, :group-save,
+  :group-delete, :thread-group, :thread-messages, :thread-pin.
+
+EXTERNAL AI TRANSPORT SEAM
+- src/services/externalAiTransport.ts (NEW) — one prompt pipeline shared by the app and the
+  browser extension, so a prompt built in one place is transportable to the other.
+- New channels: aigateway:send-prompt, ollama-chat.
+- src/components/ai-bridge/BridgeForm.tsx, FieldAIButton.tsx — bridge UI moved onto the seam.
+
+DASHBOARD — WIDGET REGISTRY + JUMP NAV
+- src/components/dashboard/widgetRegistry.tsx (NEW) — widgets register declaratively instead
+  of being hard-wired into the page.
+- src/components/dashboard/widgetNav.ts (NEW) + WidgetJumpButton.tsx (NEW) — jump-to-widget nav.
+- src/hooks/useDashboardLayout.ts (NEW) — layout state + persistence hook.
+- src/components/widgets/* (NEW, 11 files) — canonical widget set extracted out of
+  src/components/dashboard/ (WidgetCard, WidgetGrid, StatusBand, StreakCard, GoalsCard,
+  DeadlinesCard, LongestFocusCard, MomentumSummary, ProductivityChart, index).
+- Three visual prototypes shipped side by side (SIGNAL / TERMINAL / NEON): 15 new files.
+- DELETED src/components/dashboard/LayoutEditor.tsx and layout-editor.css — superseded by the
+  registry + useDashboardLayout. The orphaned 44KB src/components/dashboard/WidgetGrid.tsx still
+  imports the deleted ./layout-editor.css (known issue K3). Not a build break because nothing
+  imports that file, but it is dead code that must not be revived.
+
+NATIVE FIND BAR
+- src/components/NativeFindOverlay.tsx, src/terminal/components/NativeFindOverlay.tsx —
+  the previous overlay was a full-screen blurred curtain that only LISTED matching text nodes.
+  It now injects real <mark> highlights via a TreeWalker and scrolls the active match into view.
+
+PENGUIN CONSOLE
+- src/terminal/hooks/useConsoleStore.ts — real/demo separation now filters on a POSITIVE tag
+  (keep only real === true), so simulated rows, MOTD, and untagged legacy rows from older builds
+  can no longer leak into REAL mode.
+- src/terminal/lib/shell.ts, lib/types.ts, components/CommandNotesPanel.tsx.
+- src/styles/terminal-handbook.css (NEW) — Terminal Handbook tokens (--hb-*) ported from
+  terminal-handbook.html at the repo root.
+
+LINUX FOREGROUND DETECTION
+- src/main/linuxForeground.ts (NEW) + src/linuxForeground.ts, src/gameDetection.ts.
+- scripts/diagnose-linux-foreground.mjs (NEW) — standalone diagnostic.
+
+SETTINGS
+- src/pages/settings/ColorsSection.tsx (NEW), PromptsSection.tsx (NEW) — new Settings sections.
+- src/pages/settings/AdvancedSection.tsx, shared/TierContainer.tsx, shared/index.tsx.
+- src/lib/tierColors.ts (NEW) — shared tier colour tokens.
+
+NEW IPC SURFACE — 34 channels added in total
+- Chat/AI: chat-library:* (11), aigateway:send-prompt, ollama-chat, add-ai-change-history,
+  get-ai-change-history, clear-ai-change-history, redo-ai-change, undo-ai-change.
+- Keywords: add-keyword-domain, remove-keyword-domain, get-domain-keyword-rules,
+  set-domain-keyword-rules, get-keyword-enabled-domains.
+- Locked items / tiers: get-locked-items, set-locked-items, get-unlocked-items,
+  set-tier-assignments.
+- Reminders/workspace: create-reminder, initialize-workspace.
+- Todo popup: todo-popup:close, :focus-main, :get-state, :minimize, :set-pinned, :toggle.
+- Terminal: terminal:exec (async spawn with ignored stdin — never execSync on the main thread).
+
+LIFE / WARMTH
+- src/features/warmth/LifePage.tsx, schedule/SchedulePage.tsx, habits/HabitsPage.tsx,
+  self/SelfOrchestrator.tsx, life-river/PhaseContextExpanded.tsx — add-button and WeekReview
+  crash fixes.
+
+CONTENT ENGINE / OVERLAY STUDIO
+- src/features/content-engine/components/ExternalAIBridge.tsx, ExternalAIBridgeField.tsx,
+  FrameworksView.tsx, ui.tsx.
+
+MULTI-AGENT COORDINATION FIX
+- agent/docs/.../agent-coordination/coord.mjs — the CLI was a SILENT NO-OP on Linux: the
+  entrypoint guard compared `file://${process.argv[1]}` against import.meta.url, but argv[1] is
+  relative, so main() never ran and every command (register/claim/status/wrappers) exited 0
+  with no output and no registry write. Now uses pathToFileURL(), which also fixes paths
+  containing spaces (this repo lives under "App Tracker"). Added a loud warning when a claim is
+  made with no peer agents registered, so a claim cannot be mistaken for exclusive access.
+
+PAINT SKILL (new design orchestrator)
+- agent/skills/paint/SKILL.md (NEW) + references/conflict-resolution.md, mcp-routing.md,
+  skill-playbooks.md (NEW) — the conductor that sequences all design work.
+- agent/skills/skill-router/SKILL.md — routed all design work through paint; version bumped.
+
+VERSION HISTORY UPDATED
+- README.md — Version History gains 7.0 (2026-09-30) marked as the app-review baseline, plus a
+  matching Development Highlights entry.
+- landing/src/components/rheo/Changelog.tsx — ENTRIES gains v0.2.0 (2026-09-30).
+- landing/src/components/rheo/Download.tsx — VERSIONS gains the same v0.2.0 row. Both arrays are
+  newest-first and rendered generically, so this is a data-only change; no render logic touched.
+- NOTE: the website (0.x) and the README (integers) run two independent version schemes that are
+  not derived from each other. Recorded as known issue K4 rather than silently unifying them.
+
+BUILD / CONFIG / DEPS
+- vite.config.ts — optimizeDeps.entries pinned to index.html; server.fs allow/deny lists added
+  so the dev server stops walking agent/, dist-electron/, graphify-out/, rheo-landing/, etc.
+- package.json — added thinking-orbs ^0.3.2. rheo-landing/package.json — added framer-motion.
+- .gitignore — ignore .build-lock (a transient PID file written by scripts/build.mjs that was
+  about to be committed as a review baseline).
+- scripts/zip-src.mjs, scripts/diagnose-linux-foreground.mjs.
+
+AGENT STATE + DOCUMENTATION
+- agent/SURFACES.md (NEW) — colloquial-word -> route -> owning-file index, force-loaded so an
+  agent stops grepping for words the user already supplied.
+- agent/state.md + 6 new spokes; MEMORY.md, agent/MEMORY.md, MEMORY_FULL.md, dictionary.md,
+  FEATURE_TRACKER.md, docs/TERMINAL_SYSTEM_FIX_PLAN.md, docs/WORKSPACE_ARCHITECTURE.md.
+- New prompt-doc sets: dashboard-cards-redesign-24092026, dashboard-style-redesign-28092026,
+  dashboard-widgets, plus agent-animation-context-pack.md and ai-provider-router-plan.md.
+- agent/docs/workspace-terminal-qwen-audit/ — the previous Qwen audit (6-phase report); included
+  as the precedent format for this review.
+
+VERIFICATION STATUS (stated honestly, not claimed green)
+- Build artifacts are FRESH relative to source: dist-electron/main.cjs 22:34, preload.cjs 22:36,
+  dist/index.html 22:36, all newer than the last source edit (src/main.ts 20:16).
+- npx tsc --noEmit --project tsconfig.app.json FAILS. All failures are PRE-EXISTING and are not
+  introduced by this changeset:
+  (K1) src/terminal/index.ts imports MCP_RESOURCES, MCP_PERIPHERALS, TOOL_NAMES, DEFAULT_PRESET,
+       ANOMALY_LABELS, ANOMALY_ACTIONS from ./lib/data, which exports none of them. Neither file
+       is touched by this diff.
+  (K2) src/terminal_backup/ is a TRACKED backup directory that the typecheck config compiles,
+       producing ~30 further errors from broken imports.
+- No Probe MCP runtime verification was performed this cycle (the app was not launched under a
+  debug port), so no UI feature in this commit is claimed as runtime-verified.
+```
+
+**Date:** 2026-09-30
+
+### Detailed Changes
+
+### Commit Statistics
+- **Files Changed:** 201
+- **Insertions:** +76,377 lines
+- **Deletions:** -10,480 lines
+- **Net Change:** +65,897 lines
+- **Purpose:** app-review baseline for a Qwen quality pass (see
+  `agent/docs/app-review-qwen-20260930/BASELINE.md`)
+
+---
+
+## Previous Commit
+
+### Commit Message
+```
 feat: wire Content Engine → Overlay Studio handoff (replace Assemble stub) + transcript caption track + episode Assets tab
 
 ## Content Engine ↔ Overlay Studio integration (fixes the "unconnected" handoff)

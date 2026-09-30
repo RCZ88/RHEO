@@ -49,6 +49,8 @@ export interface MonthWallProps {
   onAddGoal?: (title: string, dueDate?: string) => void;
   onAddReminder?: (text: string, dueDate?: string) => void;
   renderDay?: (dayData: { date: string; events: WallEvent[]; isToday: boolean; isPast: boolean }) => React.ReactNode;
+  viewDate?: Date;
+  selectedDate?: string;
 }
 
 function loadEvents(): WallEvent[] {
@@ -80,7 +82,9 @@ export function getEventsForDay(events: WallEvent[], date: string): WallEvent[] 
   return events.filter(e => e.date === date).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 }
 
-function deriveEvents(goals: Goal[], deadlines: Deadline[], reminders: Reminder[], schedule: ScheduleEntry[], longTermGoals: any[]): WallEvent[] {
+function deriveEvents(goals: Goal[], deadlines: Deadline[], reminders: Reminder[], schedule: ScheduleEntry[], longTermGoals: any[], viewDate?: Date): WallEvent[] {
+  const viewYear = viewDate?.getFullYear() ?? new Date().getFullYear();
+  const viewMonth = viewDate?.getMonth() ?? new Date().getMonth();
   const events: WallEvent[] = [];
   for (const g of goals) {
     const d = g.deadline || g.date;
@@ -96,8 +100,19 @@ function deriveEvents(goals: Goal[], deadlines: Deadline[], reminders: Reminder[
     events.push({ id: `rm-${r.id}`, date: localDateKeyFromDate(r.due_date), title: r.text, category: 'personal', time: undefined, source: 'reminder', createdAt: r.created_at });
   }
   for (const s of schedule) {
-    const d = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
-    events.push({ id: `sc-${s.id}`, date: d, title: `${s.title} ${s.start_time}-${s.end_time}`, category: s.category || 'work', time: s.start_time, source: 'schedule', createdAt: s.createdAt });
+    const firstDayOfMonth = new Date(viewYear, viewMonth, 1);
+    const targetDayOfWeek = s.day_of_week;
+    let day = firstDayOfMonth.getDay();
+    let date = 1;
+    while (day !== targetDayOfWeek) {
+      date++;
+      day = new Date(viewYear, viewMonth, date).getDay();
+      if (date > 31) break;
+    }
+    if (date <= 31) {
+      const d = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+      events.push({ id: `sc-${s.id}`, date: d, title: `${s.title} ${s.start_time}-${s.end_time}`, category: s.category || 'work', time: s.start_time, source: 'schedule', createdAt: s.createdAt });
+    }
   }
   for (const l of longTermGoals) {
     if (!l.deadline) continue;
@@ -106,11 +121,15 @@ function deriveEvents(goals: Goal[], deadlines: Deadline[], reminders: Reminder[
   return events;
 }
 
-export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = [], reminders = [], schedule = [], longTermGoals = [] }: MonthWallProps) {
+export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = [], reminders = [], schedule = [], longTermGoals = [], viewDate: viewDateProp, selectedDate }: MonthWallProps) {
   const [userEvents, setUserEvents] = useState<WallEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewDate, setViewDate] = useState(() => new Date());
+  const [viewDate, setViewDate] = useState(() => {
+    if (viewDateProp) return new Date(viewDateProp);
+    if (selectedDate) return new Date(selectedDate + 'T00:00:00');
+    return new Date();
+  });
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [undoId, setUndoId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', category: 'work', time: '' });
@@ -143,7 +162,15 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
   }, []);
 
   // Derive real-data events every render
-  const realEvents = useMemo(() => deriveEvents(goals, deadlines, reminders, schedule, longTermGoals), [goals, deadlines, reminders, schedule, longTermGoals]);
+  const realEvents = useMemo(() => deriveEvents(goals, deadlines, reminders, schedule, longTermGoals, viewDate), [goals, deadlines, reminders, schedule, longTermGoals, viewDate]);
+
+  // Sync viewDate when selectedDate changes externally
+  useEffect(() => {
+    if (selectedDate) {
+      const d = new Date(selectedDate + 'T00:00:00');
+      setViewDate(d);
+    }
+  }, [selectedDate]);
 
   // Merge real + user events (user events override same-source by id)
   const events = useMemo(() => {

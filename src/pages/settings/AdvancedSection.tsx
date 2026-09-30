@@ -13,7 +13,7 @@ import { Badge } from '../../components/ui/badge';
 import { Skeleton } from '../../components/ui/skeleton';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { SearchableSection } from './shared';
+import { SearchableSection, TierContainer, SortableChip } from './shared';
 import { DEFAULT_CATEGORIES, CATEGORY_COLORS, DEFAULT_TIER_ASSIGNMENTS, PRESET_COLORS } from './constants';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from '@dnd-kit/core';
@@ -152,7 +152,7 @@ export function AdvancedSection({ activeTab, settingsSearch, ...props }: Advance
 }
 
 function GeneralTab(props: any) {
-  const { idleThreshold, setIdleThreshold, autoExport, setAutoExport, autoStartEnabled, setAutoStartEnabled, timerBehavior, setLocalTimerBehavior, trackerAppMode, setTrackerAppMode, animationSpeed, setAnimationSpeed, dataSyncMode, setDataSyncMode, storageStatus, onExportData, onClearData, hasChanges, onHasChangesChange, saveChanges, bootAnimEnabled, setBootAnimEnabled, bootAnimVariant, setBootAnimVariant, bootAnimWarm, setBootAnimWarm, bootAnimLoading, tbModeState, setTbModeState } = props;
+  const { settingsSearch, idleThreshold, setIdleThreshold, autoExport, setAutoExport, autoStartEnabled, setAutoStartEnabled, timerBehavior, setLocalTimerBehavior, trackerAppMode, setTrackerAppMode, animationSpeed, setAnimationSpeed, dataSyncMode, setDataSyncMode, storageStatus, onExportData, onClearData, hasChanges, onHasChangesChange, saveChanges, bootAnimEnabled, setBootAnimEnabled, bootAnimVariant, setBootAnimVariant, bootAnimWarm, setBootAnimWarm, bootAnimLoading, tbModeState, setTbModeState } = props;
   return (
     <div data-section="settings.general" className="space-y-4">
       <SearchableSection terms={['behavior', 'idle', 'threshold', 'neutral', 'distracting', 'pause', 'reset', 'ignore', 'auto-start', 'auto-export', 'animation', 'window mode']} search={settingsSearch}>

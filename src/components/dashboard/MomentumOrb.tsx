@@ -25,7 +25,7 @@ interface MomentumOrbProps {
   size?: number;
 }
 
-export function MomentumOrb({ momentum, streak, size = 120 }: MomentumOrbProps) {
+export function MomentumOrb({ momentum = 0, streak = 0, size = 120 }: MomentumOrbProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number>(0);

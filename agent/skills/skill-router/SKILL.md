@@ -1,4 +1,4 @@
-# Skill Router — Universal Skill Dispatcher v1.3.2
+# Skill Router — Universal Skill Dispatcher v1.4.0
 
 > **PURPOSE:** This is the master routing table for ALL skills in `agent/skills/`. It maps every task/scenario to the correct skill(s), enforces load order, and ensures no skill is forgotten. Load this skill FIRST whenever you begin a task.
 >
@@ -9,6 +9,8 @@
 1. Identify the user's task category from the Decision Tree (§2).
 2. Read the scenario-to-skill mapping for that category (§3).
 3. Load ALL skills listed under "MANDATORY" for that scenario — in the specified order.
+   **Exception — DESIGN category:** load `paint` and nothing else. `paint` is the conductor
+   for all design work; it sequences the other design skills itself.
 4. Load skills listed under "RECOMMENDED" if the task scope warrants it.
 5. Respect the activation conditions and load ordering rules (§4).
 6. Never skip a MANDATORY skill because you think it doesn't apply — if in doubt, load it.
@@ -23,7 +25,7 @@ User task enters
 │  └─ FIX PROBLEMS category
 │
 ├─ User wants UI changes / component work / design
-│  └─ DESIGN category
+│  └─ DESIGN category → load `paint` ONLY (it conducts everything else)
 │
 ├─ "commit" / "stage" / "push" / "save changes"
 │  └─ COMMIT category
@@ -95,26 +97,43 @@ User task enters
 **Trigger:** Any UI change, component work, new page, "make it look better", "polish", "redesign", "design audit", "visual system", "motion mechanics"
 **Goal:** Generate production-quality UI that follows DeskFlow design system + visual mechanic vocabulary
 
+> **⚠ THE DESIGN CATEGORY IS NOW DISPATCHED THROUGH `paint`.** Load `paint` FIRST and let it
+> conduct the pipeline. It owns the entry gate, the phase order, the MCP sourcing rule, the
+> conflict-resolution table, and the ship gates. The rows below are the skills `paint` loads —
+> they are listed for traceability and so you can verify `paint` is not stale, **but you do
+> not load them directly.** Loading them in an arbitrary order is what causes contradictory
+> output (three accent colors, four radius maximums, glass banned and mandated at once).
+
 | Priority | Skill | Why |
 |----------|-------|-----|
-| **MANDATORY** | `frontend-external-infra` | Never design from zero — pull from MCP component libraries first. Check Source Routing table. |
-| **MANDATORY** | `frontend-design` | DeskFlow design system — colors, spacing, typography, page patterns, component patterns |
-| **MANDATORY** | `Human-Centric UX` | Mandated by AGENTS.md §5b. Every UI must cover all 4 states (empty/loading/error/populated). 6 pillars: clarity, progressive disclosure, visual hierarchy, state coverage, feedback, forgiveness. |
-| **MANDATORY** | `Impeccable` | 7 domains (typography, color, spatial, motion, interaction, responsive, UX writing) + 23 commands + 27 anti-patterns. Catches the details other skills miss. |
-| **MANDATORY** | `motion-alive` | Pick a Liveliness Level (L1/L2/L3) first. Motion taxonomy: reactive, transitional, ambient, narrative. Reduced-motion fallback mandatory. |
-| **MANDATORY** | `design-taste` | Master dispatcher — knobs (variance/motion/density), aesthetic matrix, anti-repetition rules, decision tree. |
-| **MANDATORY** | `ui-ux-pro-max` | Industry-specific rules (developer tools, finance, AI/ML, analytics), style library, color palettes, typography pairings. |
-| **MANDATORY** | `ui-and-charts` | KokonutUI + Bklit UI component registries. Search registry BEFORE writing custom markup. `npx shadcn@latest add @kokonutui/<name>`, `npx shadcn@latest add @bklit/<name>`. Covers charts, dashboards, data viz. |
-| **MANDATORY** | `taste-skill` | 3 tunable knobs (variance/motion/density), aesthetic variant matrix, anti-repetition rules. Prevents generic output. |
-| RECOMMENDED | `animation-stack` | Animation engine selection: GSAP for choreography, Anime.js for small self-contained animations, KokonutUI built-in Motion. One engine per element. Covers `npm install gsap`, `npm install animejs`. |
-| RECOMMENDED | `beautiful-charts` | When the work includes charts, graphs, data visualization |
-| RECOMMENDED | `signature-design` | Page-level redesign / hero work: ONE concept-true centerpiece per screen |
+| **ENTRY** | `paint` | **The conductor.** Loads all design skills in a fixed 8-phase order, routes every MCP call, resolves conflicts against `design/design.md` (LAMINAR), and runs 6 ship gates. Load this one. |
+| loaded by `paint` P3 | `frontend-external-infra` | Never design from zero — pull from MCP component libraries first. Source routing table. |
+| loaded by `paint` P4 | `frontend-design` | DeskFlow design system — component patterns, type scale, page archetypes, z-index ladder |
+| loaded by `paint` P0/P5 | `humancentred-UIUX` | Mandated by AGENTS.md §5b. All 5 states. 6 pillars: clarity, progressive disclosure, visual hierarchy, state coverage, feedback, forgiveness. |
+| loaded by `paint` P4/P5/P7 | `impeccable` | 7 domains + 23 commands + 27 anti-patterns. Catches the details other skills miss. |
+| loaded by `paint` P6 | `motion-alive` | Pick a Liveliness Level (L1/L2/L3) first. Taxonomy: reactive, transitional, ambient, narrative. Reduced-motion mandatory. |
+| loaded by `paint` P1 | `design-taste` | Aggregator view — live knob config + sub-skill index |
+| loaded by `paint` P1 | `taste-skill` | 3 tunable knobs (variance/motion/density). ⚠ Its anti-repetition rules are VOID for App UI. |
+| loaded by `paint` P0 | `ui-ux-pro-max` | Industry-specific rules (developer tools, finance, AI/ML, analytics), style library, color palettes, typography pairings. |
+| loaded by `paint` P3 | `ui-and-charts` | KokonutUI (general UI) + Bklit (charts ONLY). Search registry BEFORE writing custom markup. |
+| loaded by `paint` P2 | `signature-design` | Page-level redesign / hero work: ONE concept-true centerpiece per screen. Conditional — most dense surfaces correctly have no hero. |
+| loaded by `paint` P4 | `font-selection` | Never invent a font |
+| RECOMMENDED | `beautiful-charts` | Chart craft: form follows the question, axis/tooltip/legend discipline |
+| RECOMMENDED | `animation-stack` | Engine selection: GSAP choreography / Anime.js single-element / Motion default. One engine per element. |
 | RECOMMENDED | `google-stitch` | When the user mentions "mockup", "Stitch", "vibe design", "DESIGN.md" |
-| RECOMMENDED | `font-selection` | When choosing/verifying fonts — never invent a font |
 
-**Load order:** ALL 9 MANDATORY skills first (frontend-external-infra → frontend-design → Human-Centric UX → Impeccable → Motion → Design Taste System → ui-ux-pro-max → ui-and-charts → Taste Skill), then RECOMMENDED as needed: animation-stack → beautiful-charts → signature-design → google-stitch → font-selection.
+**Load order:** `paint` ONLY. It sequences everything. If you must reason manually, the
+order is: `ui-ux-pro-max` → `taste-skill` → `design-taste` → `signature-design` (if) →
+`frontend-external-infra` → `ui-and-charts` → `frontend-design` → `impeccable` →
+`font-selection` → `humancentred-UIUX` → `motion-alive` → `animation-stack` → `beautiful-charts`.
 
-**NEVER load only 2 skills. The user has raged about this repeatedly. ALL 9 MANDATORY skills must be loaded for ANY UI work.**
+**NEVER load a design sub-skill directly. Load `paint`.** The user has raged about this
+repeatedly. Do not skip `paint` because it "looks like just another skill" — it is the only
+one that knows which of the other eleven to believe.
+
+**Authority order when skills disagree:** `design/design.md` (LAMINAR) → live tokens in
+`src/index.css` → registry component conventions → `paint` phase order → the sub-skills.
+See `agent/skills/paint/references/conflict-resolution.md` for the resolved rows.
 
 **If this is a page-level redesign** that also changes how data flows, also load `max-security` to review backend changes.
 
@@ -345,12 +364,22 @@ User task enters
 4. **`humancentred-UIUX` is almost NEVER optional** — if the task touches ANY UI (even a console.log or error message that a human reads), load it.
 5. **`max-security` loads after design skills** — review the generated code, not the design decisions.
 6. **When two categories overlap** (e.g., a fix that also changes UI), load skills from BOTH categories. MANDATORY skills from each apply.
+7. **`paint` is a superseding entry point.** If the task is design-shaped, `paint` replaces the
+   DESIGN category's skill list entirely — do not also load design sub-skills by hand.
+8. **Conflict authority (design only):** `design/design.md` (LAMINAR) → live tokens in
+   `src/index.css` → registry conventions → `paint` phase order → the sub-skills. When a
+   sub-skill contradicts LAMINAR, LAMINAR wins and the sub-skill is noted as stale.
 
 ## 5. Anti-Patterns — what NOT to do
 
 | ❌ Wrong | ✅ Correct |
 |----------|-----------|
-| Start coding a UI without loading any design skills | Load backandforth package + `frontend-external-infra` + `humancentred-UIUX` + `frontend-design` first |
+| Start coding a UI without loading any design skills | Load `paint` — it loads the whole design stack in the correct order |
+| Load design sub-skills directly, skipping `paint` | Load `paint`. It is the only skill that knows which of the other eleven to believe |
+| Copy a hardcoded palette or radius out of a skill into code | Read the live tokens from `src/index.css`, then apply LAMINAR (`design/design.md`) |
+| Write custom markup when a registry already has the component | Call the MCP (PAINT phase P3) — search, view source, then re-skin |
+| Animate everything, or skip the Liveliness Level | Pick L1/L2/L3 first (`motion-alive` STEP 0), then stay inside its budget |
+| Ship without empty/loading/error states | PAINT P5 + Gate D — five states per data-driven element |
 | Fix a bug from PROBLEMS.md without loading `fix-problems` | Always load `fix-problems` for the workflow gates (user confirmation, status updates) |
 | Commit code without loading `commit` | `commit` enforces `git add -A`, exhaustive messages, COMMITS.md |
 | Ship code without loading `max-security` | Security review catches injection, crypto, auth, config issues |
@@ -365,10 +394,12 @@ User task enters
 ## 6. Skill activation checklist (run mentally before ANY task)
 
 - [ ] Identify task category from Decision Tree (§2)
+- [ ] If the category is DESIGN — did you load `paint` (not the sub-skills)?
 - [ ] Read the MANDATORY skills for that category (§3)
 - [ ] Load them in the specified order
 - [ ] Check if RECOMMENDED skills apply to task scope
-- [ ] Is `humancentred-UIUX` loaded if the task touches any user-facing output?
+- [ ] If `paint` is loaded — did its phases P0-P7 run in order, and did Gate A-Gate F pass?
+- [ ] If `paint` is loaded — was at least one MCP called to source real components?
 - [ ] Is `maintain-context` queued for after code changes?
 - [ ] Is `max-security` loaded if the task touches auth/crypto/DB/IPC?
 - [ ] If multiple categories overlap, are MANDATORY skills from EACH category loaded?
@@ -381,6 +412,10 @@ skills properly" rage.
 
 1. **Same-cycle sync:** every time a NEW skill is added to `agent/skills/`, update
    this file in the SAME cycle — Decision Tree category, scenario table, load order.
+   **If it is a DESIGN skill, also update `agent/skills/paint/SKILL.md`** (its `requires:`
+   list, the pipeline table, and the phase that owns it) and the relevant row in
+   `agent/skills/paint/references/skill-playbooks.md`. The Router points at `paint` for all
+   design work, so a design skill added without updating `paint` is effectively invisible.
 2. **Stale-detection:** if you know a skill exists on disk (glob
    `agent/skills/*/SKILL.md`) that this Router does not mention, update the Router
    IMMEDIATELY, then load it. Never work around a stale Router.
@@ -394,3 +429,8 @@ skills properly" rage.
 - [ ] Update the category's **Load order** line
 - [ ] Remove or repoint dead references (deleted skills, renamed skills)
 - [ ] Bump version in the title; update AGENTS.md §1c only if the flow itself changed
+- [ ] For any DESIGN skill change: `paint/SKILL.md` (requires + pipeline + phase owner) and
+      `paint/references/skill-playbooks.md` updated in the same cycle
+- [ ] For any MCP or `components.json` registry change: `paint/references/mcp-routing.md` updated
+- [ ] For any LAMINAR version bump (`design/design.md`): the override notes in
+      `paint/references/conflict-resolution.md` re-verified against the new sections
