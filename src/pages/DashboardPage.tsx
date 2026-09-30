@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import { getToastDurationMs, isSticky } from '../lib/toastDuration';
 import { PageShell } from '../components/PageShell';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useScrollToSection } from '../lib/deepNav';
@@ -40,7 +41,7 @@ import type { Period } from '../lib/dateRange';
 import { awaitApi } from '../lib/awaitApi';
 import { TimerResetOverlay } from '../components/dashboard/TimerResetOverlay';
 import { CardLibrary } from '../components/dashboard/CardLibrary';
-import { LayoutGrid, Grid3X3, X, BarChart3, Clock, Terminal, ChevronLeft, ChevronRight, Sun, Minimize2, Maximize2 } from 'lucide-react';
+import { LayoutGrid, Grid3X3, X, BarChart3, Clock, Terminal, ChevronLeft, ChevronRight, Sun, Minimize2, Maximize2, Check } from 'lucide-react';
 import { maxBy } from '../utils/safeMath';
 
 import { AiUsageWidget } from '../components/dashboard/AiUsageWidget';
@@ -1202,6 +1203,37 @@ export default function DashboardPage({
    * one app neutral" was impossible: an app's tier came only from its CATEGORY,
    * so moving it also moved every other app in that category.
    */
+  /**
+   * Re-tier the app/site the stopwatch is currently timing, then confirm with a
+   * toast whose lifetime comes from Settings → General → Notification Duration.
+   * Persisted via set-app-tier into categoryConfig.appTierMap, which wins over
+   * the category-derived tier on the next foreground event.
+   */
+  const [tierToast, setTierToast] = useState<{ id: string; text: string } | null>(null);
+  const changeTrackedTier = useCallback(async (
+    name: string,
+    tier: 'productive' | 'neutral' | 'distracting',
+  ) => {
+    const api = window.deskflowAPI as any;
+    const isSite = !!currentWebsite?.domain && name === (currentWebsite?.title || currentWebsite?.domain);
+    const key = isSite ? (currentWebsite?.domain ?? name) : name;
+    const ok = isSite
+      ? await api?.setDomainTier?.(key, tier)
+      : await api?.setAppTier?.(key, tier);
+    if (!ok) return;
+
+    // Reflect it locally right away — waiting for the next foreground event
+    // would leave the stopwatch showing the old colour for up to a minute.
+    if (isSite) setDomainTierMap(p => ({ ...p, [key]: tier }));
+    else setAppTierMap(p => ({ ...p, [key]: tier }));
+
+    const id = crypto.randomUUID();
+    const text = `${key} is now ${tier}`;
+    setTierToast({ id, text });
+    const ms = getToastDurationMs();
+    if (!isSticky(ms)) window.setTimeout(() => setTierToast(t => (t?.id === id ? null : t)), ms);
+  }, [currentWebsite]);
+
   const getTierFromCategory = (category?: string, appOrDomain?: string): 'productive' | 'neutral' | 'distracting' => {
     if (appOrDomain) {
       const o = appTierMap?.[appOrDomain] ?? domainTierMap?.[appOrDomain];
@@ -2831,10 +2863,36 @@ export default function DashboardPage({
                                  totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
                                  isInBrowser={isInBrowser}
                  isPaused={isPaused}
+                 onChangeTier={changeTrackedTier}
                  websiteTitle={currentWebsite?.title}
                  websiteCategory={currentWebsite?.category}
                  appCategory={currentApp?.category}
                />
+
+               {/* Confirmation that the re-tier was saved. Its display time is
+                   Settings → General → Notification Duration. */}
+               <AnimatePresence>
+                 {tierToast && (
+                   <motion.div
+                     key={tierToast.id}
+                     initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                     animate={{ opacity: 1, y: 0, scale: 1 }}
+                     exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                     transition={{ duration: 0.18 }}
+                     className="absolute z-50 bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700/60 bg-zinc-900/98 light:bg-white shadow-xl"
+                   >
+                     <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                     <span className="text-[12px] text-zinc-200 light:text-zinc-800">{tierToast.text}</span>
+                     <button
+                       onClick={() => setTierToast(null)}
+                       className="ml-1 text-zinc-500 hover:text-zinc-300 transition-colors duration-150"
+                       aria-label="Dismiss"
+                     >
+                       <X className="w-3 h-3" />
+                     </button>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
                </div>
                )}
 {isVisible('momentum') && (

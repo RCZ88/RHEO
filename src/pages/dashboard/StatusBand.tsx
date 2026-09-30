@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Flame, Target, Activity, Clock } from 'lucide-react';
+import { Flame, Target, Activity, Clock, ChevronDown, Check } from 'lucide-react';
 import { getCategoryStyle } from '../../lib/CategoryColors';
 import { tierClasses, shade } from '../../lib/tierColors';
 
@@ -36,6 +36,12 @@ interface StatusBandProps {
   websiteCategory?: string;
   /** Category of the native (non-browser) foreground app — e.g. "Entertainment". */
   appCategory?: string;
+  /**
+   * Re-tier the app/site currently being timed (e.g. "Firefox" productive →
+   * neutral). Optional: when absent the control is not rendered. The parent owns
+   * persistence so the stopwatch stays presentational.
+   */
+  onChangeTier?: (name: string, tier: 'productive' | 'neutral' | 'distracting') => void;
 }
 
 type TierTransition = {
@@ -58,6 +64,7 @@ export function StatusBand({
   websiteTitle,
   websiteCategory,
   appCategory,
+  onChangeTier,
 }: StatusBandProps) {
   const totalMinutes = Math.floor(totalFocusedMs / 1000 / 60);
   const stateKey = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
@@ -109,6 +116,32 @@ export function StatusBand({
       ago: Math.floor((now - t.timestamp) / 1000),
     }));
   }, [transitions, now]);
+
+  // Tier re-assignment popover. The tier a user picks here is written to
+  // categoryConfig.appTierMap via set-app-tier, which BEATS the category-derived
+  // tier — so re-typing one app no longer drags every other app that shares its
+  // category with it.
+  const [tierMenuOpen, setTierMenuOpen] = useState(false);
+  const tierRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!tierMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (tierRef.current && !tierRef.current.contains(e.target as Node)) setTierMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setTierMenuOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [tierMenuOpen]);
+
+  const trackedName = isInBrowser ? (websiteTitle || currentAppName) : currentAppName;
+
+  const pickTier = (next: 'productive' | 'neutral' | 'distracting') => {
+    setTierMenuOpen(false);
+    if (!trackedName || next === tier) return;
+    onChangeTier?.(trackedName, next);
+  };
 
   const isTracking = isReal === true || !!currentAppName;
 
@@ -199,6 +232,48 @@ export function StatusBand({
                 <span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${catStyle.text}`}>
                   {effectiveCategory}
                 </span>
+              )}
+
+              {/* Re-tier this app. The small chevron is the affordance; the whole
+                  chip is clickable so the target is not 8px wide. */}
+              {onChangeTier && (
+                <div className="relative shrink-0" ref={tierRef}>
+                  <button
+                    onClick={() => setTierMenuOpen(o => !o)}
+                    aria-label="Change productivity tier"
+                    title="Change productivity tier"
+                    className={`flex items-center gap-0.5 px-1 py-0.5 rounded ${tierText} opacity-70 hover:opacity-100 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current`}
+                  >
+                    <ChevronDown size={11} className={tierMenuOpen ? 'rotate-180 transition-transform duration-150' : 'transition-transform duration-150'} />
+                  </button>
+
+                  {tierMenuOpen && (
+                    <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-xl border border-zinc-700/60 bg-zinc-900/98 light:bg-white shadow-xl overflow-hidden py-1">
+                      <div className="px-3 pt-1.5 pb-1 text-[9px] uppercase tracking-wider text-zinc-500">Rate as</div>
+                      {(['productive', 'neutral', 'distracting'] as const).map((opt) => {
+                        const active = opt === tier;
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => pickTier(opt)}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors duration-150 ${
+                              active ? 'bg-zinc-800/70 light:bg-zinc-100' : 'hover:bg-zinc-800/50 light:hover:bg-zinc-100/60'
+                            }`}
+                          >
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ background: tierClasses(opt).hex }}
+                            />
+                            <span className={`capitalize ${active ? 'text-zinc-100 light:text-zinc-900 font-medium' : 'text-zinc-400'}`}>
+                              {opt}
+                            </span>
+                            {active && <Check size={12} className="ml-auto text-zinc-400" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           ) : null}
