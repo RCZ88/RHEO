@@ -151,39 +151,61 @@ export function VCalendar({
       classNames={{
         months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
         month: 'space-y-4',
-        caption: 'flex justify-center pt-1 relative items-center mb-2',
-        caption_between:
-          'flex items-center justify-center gap-1 w-full',
+        // ── react-day-picker v10 keys ──────────────────────────────────
+        // This block was still the v8 API: `caption`, `nav_button`,
+        // `nav_button_previous/next`, `table`, `head_row`, `head_cell`, `row`
+        // and `cell` were all removed in v10, and the v8 `selected` / `today` /
+        // `outside` / `disabled` / `hidden` keys moved to `modifiersClassNames`.
+        // Every one of them was silently dropped, leaving the month grid
+        // unstyled — which is what misaligned the day columns.
+        month_caption: 'flex justify-center pt-1 relative items-center mb-2',
         caption_label: 'text-sm font-medium text-zinc-300',
         nav: 'absolute top-0 flex w-full justify-between z-1 pointer-events-none',
-        nav_button: cn(
-          'pointer-events-auto relative flex size-(--cell-size) text-base sm:text-sm items-center justify-center rounded-lg text-foreground not-in-data-selected:hover:bg-accent disabled:pointer-events-none disabled:opacity-64 hover:bg-zinc-800 hover:text-white'
+        button_previous: cn(
+          'pointer-events-auto relative flex size-(--cell-size) text-base sm:text-sm items-center justify-center rounded-lg text-foreground hover:bg-zinc-800 hover:text-white disabled:pointer-events-none disabled:opacity-64'
         ),
-        nav_button_previous: 'absolute left-0 top-1/2 -translate-y-1/2',
-        nav_button_next: 'absolute right-0 top-1/2 -translate-y-1/2',
-        table: 'w-full border-collapse space-y-2',
-        head_row: 'flex',
-        head_cell:
+        button_next: cn(
+          'pointer-events-auto relative flex size-(--cell-size) text-base sm:text-sm items-center justify-center rounded-lg text-foreground hover:bg-zinc-800 hover:text-white disabled:pointer-events-none disabled:opacity-64'
+        ),
+        chevron: '',
+        month_grid: 'w-full border-collapse',
+        weekdays: 'flex',
+        weekday:
           'size-(--cell-size) text-[10px] font-medium text-zinc-500 uppercase',
-        row: 'flex w-full mt-2 items-stretch',
-        cell: cn(
-          'size-(--cell-size) text-center text-sm relative p-0 m-0.5',
-          '[&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md'
+        week: 'flex w-full mt-2 items-stretch',
+        // v10 has no `cell` key: the cell IS the day.
+        day: 'size-(--cell-size) text-center text-sm relative p-0 m-0.5',
+        day_button: cn(
+          'relative flex size-(--cell-size) text-base sm:text-sm items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-white disabled:pointer-events-none disabled:opacity-64 focus:z-10 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-none transition-colors'
         ),
-        day: cn(
-          'relative flex size-(--cell-size) text-base sm:text-sm items-center justify-center rounded-lg text-foreground not-in-data-selected:hover:bg-accent disabled:pointer-events-none disabled:opacity-64 aria-selected:opacity-100 hover:bg-zinc-800 hover:text-white text-zinc-300 data-selected:bg-primary data-selected:text-primary-foreground in-data-selected:hover:bg-primary focus:z-10 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-none transition-colors'
-        ),
+        root: '',
+        dropdowns: '',
+        dropdown_root: '',
+        dropdown: '',
+        weeks: '',
+        week_number: '',
+        week_number_header: '',
+      }}
+      modifiersClassNames={{
         selected:
           'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground',
         today: 'bg-accent text-accent-foreground',
-        outside:
-          'text-muted-foreground/50 aria-selected:bg-transparent data-selected:text-primary-foreground',
+        outside: 'text-muted-foreground/50',
         disabled: 'text-zinc-500 opacity-50',
         hidden: 'invisible',
+        range_start: 'rounded-l-md',
+        range_end: 'rounded-r-md',
+        range_middle: 'aria-selected:bg-accent',
       }}
       components={{
-        IconLeft: () => <ChevronLeft className="h-4 w-4 sm:h-3.5 sm:w-3.5" />,
-        IconRight: () => <ChevronRight className="h-4 w-4 sm:h-3.5 sm:w-3.5" />,
+        // v8 used IconLeft / IconRight; v10 has a single `Chevron` component
+        // that receives an `orientation` of "left" | "right".
+        Chevron: ({ orientation, ...rest }: any) =>
+          orientation === 'left' ? (
+            <ChevronLeft className="h-4 w-4 sm:h-3.5 sm:w-3.5" {...rest} />
+          ) : (
+            <ChevronRight className="h-4 w-4 sm:h-3.5 sm:w-3.5" {...rest} />
+          ),
         MonthCaption: ({ calendarMonth }) => {
           const d = calendarMonth.date;
           return (

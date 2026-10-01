@@ -2,6 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useConsoleStore } from "./hooks/useConsoleStore";
 import type { Store } from "./hooks/useConsoleStore";
+import { getAmbientPrefs } from "../lib/ambient";
+
+/** 0-100 alpha -> 2-digit hex suffix, matching src/lib/ambient.ts. */
+function hexAlpha(v: number): string {
+  return Math.max(0, Math.min(255, Math.round((v / 100) * 255)))
+    .toString(16).padStart(2, "0");
+}
 import { THEMES, uid } from "./lib/data";
 import { buildTranscript, download, fillDynamic, matchCombo } from "./lib/utils";
 import type { SavedCommand } from "./lib/types";
@@ -216,11 +223,27 @@ export default function App() {
     notify("Transcript exported (.md)");
   };
 
+  // Global ambient prefs, kept in sync with Settings.
+  const [ambientPrefs, setAmbientPrefsState] = useState(getAmbientPrefs);
+  useEffect(() => {
+    const onChange = () => setAmbientPrefsState(getAmbientPrefs());
+    window.addEventListener("ambient-prefs-changed", onChange);
+    return () => window.removeEventListener("ambient-prefs-changed", onChange);
+  }, []);
+
   const matchCount = findQ && t ? Object.values(t.panes).reduce((a, p) => a + p.lines.filter((l) => l.text.toLowerCase().includes(findQ.toLowerCase())).length, 0) : 0;
 
   return (
     <div data-page="terminal" className={store.appearance.glow ? "term-glow h-full flex flex-col" : "h-full flex flex-col"} style={{ background: theme.bg, ...cssVars } as React.CSSProperties}>
-      <div className="pointer-events-none fixed inset-0 z-0" style={{ background: `radial-gradient(900px 400px at 15% -5%, ${theme.accent}14, transparent 60%), radial-gradient(800px 380px at 95% 0%, ${theme.accent2}12, transparent 60%)` }} />
+      {/* Terminal's own wash, tinted by the TERMINAL THEME (not --page-accent),
+          so it still tracks the user's chosen terminal theme. Shares the global
+          ambient prefs so one on/off switch governs the whole app: when the user
+          turns the ambient background off it must not survive here. */}
+      {ambientPrefs.enabled && ambientPrefs.intensity > 0 && (
+        <div className="pointer-events-none fixed inset-0 z-0" style={{
+          background: `radial-gradient(${900 + (ambientPrefs.spread / 100) * 1400}px ${400 + (ambientPrefs.spread / 100) * 260}px at 15% -5%, ${theme.accent}${hexAlpha(ambientPrefs.intensity * 0.08)}, transparent 60%), radial-gradient(${800 + (ambientPrefs.spread / 100) * 1300}px ${380 + (ambientPrefs.spread / 100) * 250}px at 95% 0%, ${theme.accent2}${hexAlpha(ambientPrefs.intensity * 0.07)}, transparent 60%)`,
+        }} />
+      )}
       <a href="#terminal-main" className="sr-only focus:not-sr-only focus:absolute focus:z-[70] focus:px-3 focus:py-2 focus:rounded-lg" style={{ background: "var(--t-accent)", color: "#fff" }}>Skip to terminal</a>
       <div className="relative z-10 flex flex-col h-full min-h-0">
         <TitleBar
@@ -238,7 +261,7 @@ export default function App() {
         <div className="flex-1 flex min-h-0 gap-2 px-3 pb-1">
           <AnimatePresence initial={false}>
             {leftOpen && (
-              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: store.sidebarWidth + 8, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden lg:flex shrink-0 rounded-2xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: store.sidebarWidth + 8, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden lg:flex shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
                 <div className="h-full" style={{ width: store.sidebarWidth }}>
                   <LeftSidebar store={store} onPresets={() => setModal("presets")} onWorkspaces={() => setModal("workspaces")} onNewTab={() => setModal("newtab")} />
                 </div>
@@ -246,7 +269,7 @@ export default function App() {
               </motion.div>
             )}
           </AnimatePresence>
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 rounded-2xl border p-2" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-panel) 55%, transparent)" }}>
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 rounded-xl border p-2" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-panel) 55%, transparent)" }}>
             <div className="flex items-center gap-1.5 px-1 pb-2 shrink-0 flex-wrap">
               <span className="flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: `${t?.color ?? theme.accent}15`, color: t?.color ?? theme.fg }}>
                 <span className="w-1.5 h-1.5 rounded-full anim-pulse-dot" style={{ background: t?.color }} />{t?.label}
@@ -279,7 +302,7 @@ export default function App() {
           </div>
           <AnimatePresence initial={false}>
             {rightOpen && (
-              <motion.div key="right" initial={{ width: 0, opacity: 0 }} animate={{ width: 330, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden md:block shrink-0 rounded-2xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+              <motion.div key="right" initial={{ width: 0, opacity: 0 }} animate={{ width: 330, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden md:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
                 <div className="w-[330px] h-full">
                   <RightPanel store={store} notify={notify} groupCtl={{ renameG, setRenameG, gDraft, setGDraft }} />
                 </div>
@@ -341,7 +364,7 @@ export default function App() {
         {modal === "import" && <ImportModal store={store} onClose={() => setModal(null)} notify={notify} />}
         {modal === "rename" && t && (
           <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: "rgba(3,5,10,.6)" }} onClick={() => setModal(null)} role="dialog" aria-modal="true" aria-label="rename tab">
-            <div className="w-full max-w-sm rounded-2xl border p-5 anim-pop" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm rounded-xl border p-5 anim-pop" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }} onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-2 mb-3"><Pencil size={15} style={{ color: "var(--t-accent)" }} /><span className="display font-bold text-[14px]" style={{ color: "var(--t-fg)" }}>Rename tab</span></div>
               <input autoFocus value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && renameDraft.trim()) { store.mutateTab(t.id, (x) => ({ ...x, label: renameDraft.trim().slice(0, 40) })); setModal(null); notify("Tab renamed"); } }} className="w-full h-10 px-3.5 rounded-xl border text-[13.5px] font-semibold outline-none mono" style={{ background: "var(--t-bg)", borderColor: t.color, color: "var(--t-fg)" }} />
               <button onClick={() => { if (renameDraft.trim()) { store.mutateTab(t.id, (x) => ({ ...x, label: renameDraft.trim().slice(0, 40) })); notify("Tab renamed"); } setModal(null); }} className="mt-3 w-full h-10 rounded-xl text-white text-[13px] font-bold flex items-center justify-center gap-2" style={{ background: t.color }}><Check size={15} />Rename</button>
