@@ -1,8 +1,9 @@
 import { useState, useMemo, lazy, Suspense, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Monitor, Globe, Target, Activity, Focus as FocusIcon, Clock, ArrowLeftRight } from 'lucide-react';
+import { Monitor, Globe, Target, Activity, Focus as FocusIcon, Clock, ArrowLeftRight, Sparkles } from 'lucide-react';
 import { LoadingState } from '../components/LoadingState';
 import { ManualAssignModal } from '../components/external/ManualAssignModal';
+import ManualFillModal from '../components/external/ManualFillModal';
 import type { Period } from '../lib/dateRange';
 
 const StatsPage = lazy(() => import('./StatsPage'));
@@ -79,6 +80,7 @@ export default function ActivityPage(props: ActivityPageProps) {
   }, [activeTab]);
 
   const [showManualAssign, setShowManualAssign] = useState(false);
+  const [showManualFill, setShowManualFill] = useState(false);
   const [manualAssignGap, setManualAssignGap] = useState<{ start: Date; end: Date } | null>(null);
   const [manualAssignDate, setManualAssignDate] = useState<Date | null>(null);
   const [manualVersion, setManualVersion] = useState(0);
@@ -220,6 +222,15 @@ export default function ActivityPage(props: ActivityPageProps) {
           >
             <Clock className="h-3.5 w-3.5" />
             Manual time
+          </button>
+
+          <button
+            onClick={() => setShowManualFill(true)}
+            title="Describe a period and the app generates the usage from your specification"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-400 hover:text-emerald-300 transition"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Fill a range
           </button>
         </div>
       </div>
@@ -388,6 +399,14 @@ export default function ActivityPage(props: ActivityPageProps) {
           setManualAssignGap(null);
         }}
         onChanged={() => setManualVersion((v) => v + 1)}
+      />
+
+      {/* Manual Range Backfill — user specifies, app generates */}
+      <ManualFillModal
+        open={showManualFill}
+        onClose={() => setShowManualFill(false)}
+        onChanged={() => setManualVersion((v) => v + 1)}
+        logs={props.allLogs}
       />
     </div>
   );
