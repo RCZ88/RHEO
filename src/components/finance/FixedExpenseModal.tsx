@@ -57,7 +57,7 @@ export function FixedExpenseModal({ expense, wallets, categories, onClose, onSav
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.2 }}
         onClick={e => e.stopPropagation()}>
-        <GlassSurface className="w-full max-w-md p-6 rounded-2xl space-y-4">
+        <GlassSurface className="w-full max-w-md p-6 rounded-xl space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-zinc-100 font-semibold text-base flex items-center gap-2">
               <Receipt className="w-4 h-4 text-amber-500" />

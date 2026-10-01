@@ -238,7 +238,7 @@ export default function CompositionPage() {
                   layout
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-2xl p-5"
+                  className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl p-5"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
@@ -296,7 +296,7 @@ export default function CompositionPage() {
         {showEditor && (
           <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowEditor(false)}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-2xl w-[680px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl w-[680px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
                 <h2 className="text-sm font-medium">{editingRule ? 'Edit Rule' : 'New Rule'}</h2>
                 <button onClick={() => setShowEditor(false)} className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
@@ -388,7 +388,7 @@ export default function CompositionPage() {
         {showHistory && (
           <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowHistory(false)}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-2xl w-[600px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl w-[600px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
                 <h2 className="text-sm font-medium">Execution History</h2>
                 <button onClick={() => setShowHistory(false)} className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">

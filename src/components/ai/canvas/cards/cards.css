@@ -1338,14 +1338,65 @@ html.light .dk-group-label::before { box-shadow: none; }
 .dk-review-content { font: 400 12px/1.6 var(--dk-sans); color: var(--dk-text-secondary); padding: 4px 0 8px; white-space: pre-wrap; }
 
 /* Response cards */
-.dk-response-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--dk-radius-sm); background: rgba(255,255,255,0.02); border: 1px solid var(--dk-border-subtle); min-height: 0; }
+.dk-response-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--dk-radius-sm); background: rgba(255,255,255,0.02); border: 1px solid var(--dk-border-subtle); min-height: 0; overflow: hidden; }
+/* The expand/collapse footer must never be pushed out by its own body, and must
+   never sit on top of it — flex:none pins it to the bottom of the card. */
+.dk-response-expand { flex: none; align-self: center; height: 22px; padding: 0 10px; border-radius: var(--dk-radius-pill); font: 500 10px/1 var(--dk-sans); color: var(--dk-text-muted); background: transparent; border: 1px solid var(--dk-border-subtle); cursor: pointer; }
 .dk-response-user { border-color: rgba(34,211,238,0.22); }
 .dk-response-tool { border-style: dashed; }
 .dk-response-header { display: flex; align-items: center; gap: 6px; }
 .dk-response-label { font: 600 10px/1 var(--dk-sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--dk-text-secondary); }
 .dk-response-time { font: 400 9px/1 var(--dk-mono); color: var(--dk-text-faint); margin-left: auto; }
 .dk-response-tool-badge { align-self: flex-start; font: 500 9px/1 var(--dk-mono); color: var(--dk-type-automation); background: rgba(232,121,249,0.10); padding: 3px 8px; border-radius: var(--dk-radius-pill); }
-.dk-response-body { font: 400 12px/1.65 var(--dk-sans); color: var(--dk-text-secondary); overflow-wrap: break-word; min-height: 0; }
+/* The mail/tool output body.
+   BUG: this had NO overflow rule, so long connector output (e.g. "415 unread"
+   mail digests, tool dumps) grew past the card and painted straight over the
+   "Show less" footer and the card below it — the overlapping text in the
+   screenshot. `min-height: 0` alone does not clip; it only lets a flex child
+   shrink. The body needs to actually be a scroll container AND respect the
+   parent card height, hence flex:1 + min-height:0 + overflow-y:auto.
+   overflow-wrap already handles the long unbroken URLs that mail bodies carry. */
+.dk-response-body {
+  font: 400 12px/1.65 var(--dk-sans);
+  color: var(--dk-text-secondary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+/* Markdown lists and headings inside mail output were not inheriting the body
+   rhythm, so a bulleted digest rendered with browser-default margins and ran
+   past the card edge. Normalise the block rhythm inside the scroll container. */
+.dk-response-body > :first-child { margin-top: 0; }
+.dk-response-body > :last-child { margin-bottom: 0; }
+.dk-response-body ul,
+.dk-response-body ol { margin: 0 0 8px; padding-left: 18px; }
+.dk-response-body li { margin: 0 0 4px; }
+.dk-response-body li > ul,
+.dk-response-body li > ol { margin: 4px 0 0; }
+.dk-response-body h1,
+.dk-response-body h2,
+.dk-response-body h3,
+.dk-response-body h4 {
+  margin: 0 0 6px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--dk-text-primary);
+}
+.dk-response-body h1 { font-size: 14px; }
+.dk-response-body h2 { font-size: 13px; }
+.dk-response-body h3,
+.dk-response-body h4 { font-size: 12px; }
+.dk-response-body a { color: var(--dk-type-response); text-decoration: underline; text-underline-offset: 2px; }
+.dk-response-body blockquote {
+  margin: 0 0 8px;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--dk-border-default);
+  color: var(--dk-text-muted);
+}
 .dk-response-body p { margin: 0 0 6px; }
 .dk-response-body pre { overflow-x: auto; border-radius: 6px; padding: 8px; background: rgba(0,0,0,0.35); font-size: 11px; }
 .dk-response-body code { font-family: var(--dk-mono); font-size: 11px; }

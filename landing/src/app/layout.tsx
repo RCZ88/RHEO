@@ -1,20 +1,26 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "700"],
+const spaceGrotesk = localFont({
+  src: [
+    { path: "../fonts/SpaceGrotesk-500.ttf", weight: "500", style: "normal" },
+    { path: "../fonts/SpaceGrotesk-700.ttf", weight: "700", style: "normal" },
+  ],
   variable: "--font-display",
   display: "swap",
+  fallback: ["Space Grotesk", "system-ui", "sans-serif"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const jetbrainsMono = localFont({
+  src: [
+    { path: "../fonts/JetBrainsMono-400.ttf", weight: "400", style: "normal" },
+    { path: "../fonts/JetBrainsMono-500.ttf", weight: "500", style: "normal" },
+  ],
   variable: "--font-mono",
   display: "swap",
+  fallback: ["JetBrains Mono", "ui-monospace", "monospace"],
 });
 
 const HERO_SUB =

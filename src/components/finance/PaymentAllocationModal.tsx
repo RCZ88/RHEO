@@ -97,7 +97,7 @@ export function PaymentAllocationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md max-h-[90vh] overflow-hidden rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
+      <div className="relative w-full max-w-md max-h-[90vh] overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
         <div className="flex-shrink-0 p-5 border-b border-zinc-800/60">
           <div className="flex items-center justify-between">
             <button onClick={onClose} className="flex items-center gap-1 text-zinc-500 hover:text-zinc-300 text-xs transition-colors">

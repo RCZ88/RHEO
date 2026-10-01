@@ -104,7 +104,7 @@ export function PinnedActivities({
                       }}
                       whileHover={{ y: -1, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
                       whileTap={{ scale: 0.97 }}
-                      className={`flex items-center gap-2 px-3.5 py-2 rounded-[18px] border transition-all duration-150 ${
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all duration-150 ${
                         isSelected
                           ? 'border-pink-500/40 bg-pink-500/[0.08] text-pink-400'
                           : 'bg-[#18181b] light:bg-white border-[#27272a] light:border-[var(--ws-border)] text-zinc-400 light:text-stone-600 hover:border-[#3f3f46] hover:light:border-[var(--ws-border-strong)] hover:bg-[#27272a] hover:light:bg-stone-50'
@@ -172,7 +172,7 @@ export function PinnedActivities({
                 }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex-shrink-0 px-3 py-2 rounded-[18px] border border-dashed border-zinc-700 light:border-[var(--ws-border-strong)] hover:border-zinc-600 transition-colors duration-150 flex items-center gap-1.5"
+                className="flex-shrink-0 px-3 py-2 rounded-xl border border-dashed border-zinc-700 light:border-[var(--ws-border-strong)] hover:border-zinc-600 transition-colors duration-150 flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5 text-zinc-500" />
                 <span className="text-[11px] font-medium text-zinc-500">Add</span>

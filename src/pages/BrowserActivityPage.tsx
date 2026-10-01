@@ -110,6 +110,27 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
+/** Canonical brand colour per browser, matched case-insensitively.
+ *  The extension self-reports 'Chrome'/'Firefox'/'Edge' (capitalised), while
+ *  anything written by hand or by an older build may be lowercase — every
+ *  comparison has to normalise or the badge silently renders the grey fallback
+ *  for every row and "which browser was this?" stays unanswerable. */
+function browserBrandColor(name?: string | null): string {
+  switch ((name || '').toLowerCase()) {
+    case 'chrome': case 'chromium': case 'google chrome': return '#3b82f6';
+    case 'firefox': case 'librewolf': return '#ff6611';
+    case 'edge': case 'microsoft edge': return '#0078d4';
+    case 'brave': return '#fb542b';
+    case 'opera': return '#ff1b2d';
+    case 'vivaldi': return '#ef3939';
+    case 'comet': return '#8b5cf6';
+    case 'arc': return '#7c5cff';
+    case 'zen': return '#f76f53';
+    case 'safari': return '#0fb5f7';
+    default: return '#6b7280';
+  }
+}
+
 export default function BrowserActivityPage({ embedded, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments: tierAssignmentsProp, allLogs, platformFilter = 'all', compareMode = false, availablePlatforms = [] }: BrowserActivityPageProps) {
   const [domainStats, setDomainStats] = useState<any[]>([]);
   const [categoryStats, setCategoryStats] = useState<any[]>([]);
@@ -384,13 +405,15 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
     if (selectedBrowserProfile === 'all') return domainStats;
     const profile = profileByBrowser.get(selectedBrowserProfile);
     const filterBrowserName = profile ? profile.browser_name : selectedBrowserProfile;
-    return domainStats.filter((d: any) => d.browser_name === filterBrowserName);
+    return domainStats.filter((d: any) =>
+      (d.browser_name || '').toLowerCase() === (filterBrowserName || '').toLowerCase());
   }, [domainStats, selectedBrowserProfile, profileByBrowser]);
 
   // Filter browser logs by selected browser profile
   const filteredBrowserLogs = useMemo(() => {
     if (selectedBrowserProfile === 'all') return platformBrowserLogs;
-    return platformBrowserLogs.filter((l: any) => l.browser_name === selectedBrowserProfile);
+    return platformBrowserLogs.filter((l: any) =>
+      (l.browser_name || '').toLowerCase() === (selectedBrowserProfile || '').toLowerCase());
   }, [platformBrowserLogs, selectedBrowserProfile]);
 
   const fetchData = useCallback(async () => {
@@ -1363,15 +1386,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                       <div
                         className="w-2 h-2 rounded-full shrink-0"
                         title={d.browser_name}
-                        style={{
-                          backgroundColor:
-                            d.browser_name === 'chrome' ? '#3b82f6' :
-                            d.browser_name === 'firefox' ? '#ff6611' :
-                            d.browser_name === 'edge' ? '#0078d4' :
-                            d.browser_name === 'brave' ? '#fb542b' :
-                            d.browser_name === 'opera' ? '#ff1b2d' :
-                            d.browser_name === 'comet' ? '#8b5cf6' : '#6b7280'
-                        }}
+                        style={{ backgroundColor: browserBrandColor(d.browser_name) }}
                       />
                     )}
                   </div>

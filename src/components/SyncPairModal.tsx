@@ -113,7 +113,7 @@ export default function SyncPairModal({ open, onClose }: SyncPairModalProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-md rounded-2xl border p-6"
+            className="relative w-full max-w-md rounded-xl border p-6"
             style={{
               backgroundColor: "var(--bg-primary, #0d0d0d)",
               borderColor: "var(--border, #1e1e1e)",

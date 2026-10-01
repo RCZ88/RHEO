@@ -289,7 +289,7 @@ function AddItemModal({ type, item, onClose, onSave }: { type: 'expense' | 'inco
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl p-5" onClick={e => e.stopPropagation()}>
         <h3 className="text-sm font-semibold text-white mb-4">{item ? 'Edit' : 'Add'} {isIncome ? 'Income' : 'Expense'}</h3>
         <div className="space-y-3">
           <div>

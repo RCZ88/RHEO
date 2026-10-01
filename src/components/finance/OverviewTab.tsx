@@ -115,11 +115,11 @@ export function OverviewTab({
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-[20px] h-40" />
-        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-[20px] h-40" />
-        <div className="lg:col-span-4 animate-pulse bg-zinc-800/60 rounded-[20px] h-28" />
-        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-[20px] h-64" />
-        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-[20px] h-64" />
+        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-xl h-40" />
+        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-xl h-40" />
+        <div className="lg:col-span-4 animate-pulse bg-zinc-800/60 rounded-xl h-28" />
+        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-xl h-64" />
+        <div className="lg:col-span-2 animate-pulse bg-zinc-800/60 rounded-xl h-64" />
       </div>
     );
   }
@@ -127,7 +127,7 @@ export function OverviewTab({
   if (error) {
     return (
       <div className="p-5 space-y-4">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-[20px] p-5 text-center">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-center">
           <p className="text-sm text-red-400 mb-2">{error}</p>
           {onRetry && (
             <button

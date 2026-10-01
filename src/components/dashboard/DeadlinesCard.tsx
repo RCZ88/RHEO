@@ -270,7 +270,7 @@ export function DeadlinesCard({
 
   if (loading) {
     return (
-      <Card className="rounded-[10px] h-full">
+      <Card className="rounded-lg h-full">
         <CardContent className="p-5 h-full">
           <div className="animate-pulse space-y-4">
             <div className="h-5 light:bg-white light:border-[var(--ws-border-strong)] rounded w-1/3" />
@@ -286,7 +286,7 @@ export function DeadlinesCard({
 
   if (error) {
     return (
-      <Card className="rounded-[10px] h-full">
+      <Card className="rounded-lg h-full">
         <CardContent className="p-5 h-full flex flex-col items-center justify-center text-center">
           <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
             <AlertCircle size={24} className="light:text-stone-400" />
@@ -299,7 +299,7 @@ export function DeadlinesCard({
   }
 
   return (
-    <Card className="rounded-[10px] h-full">
+    <Card className="rounded-lg h-full">
       <CardContent className="p-5 flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 shrink-0">

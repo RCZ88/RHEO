@@ -45,11 +45,7 @@
     repeating-linear-gradient(90deg, #0a0908 0 8px, transparent 8px 34px) top / 100% 12px no-repeat,
     repeating-linear-gradient(90deg, #0a0908 0 8px, transparent 8px 34px) bottom / 100% 12px no-repeat,
     #141210;
-  scrollbar-width: thin;
-  scrollbar-color: #3f3f46 transparent;
 }
-.memory-reel::-webkit-scrollbar { height: 6px; }
-.memory-reel::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 9999px; }
 
 .reel-frame {
   position: relative;

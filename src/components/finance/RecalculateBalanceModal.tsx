@@ -86,7 +86,7 @@ export function RecalculateBalanceModal({
         <motion.div className="fixed inset-0 z-[100] flex items-center justify-center p-4" variants={modalBackdrop} initial="hidden" animate="show" exit="hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
-            className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-zinc-900/95 border border-zinc-700/50 rounded-2xl shadow-2xl overflow-hidden"
+            className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-zinc-900/95 border border-zinc-700/50 rounded-xl shadow-2xl overflow-hidden"
             variants={modalPanel} initial="hidden" animate="show" exit="exit"
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-700/30 shrink-0">

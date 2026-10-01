@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
-import { tierColor as getTierColor } from '../lib/tierColors';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import { tierColor as getTierColor, tierColor as tierColorValue, TIERS, TIER_LABELS, setTierColor, resetTierColors } from '../lib/tierColors';
+import { DURATION_PRESETS, getToastDurationMs, setToastDurationMs, DEFAULT_DURATION_MS } from '../lib/toastDuration';
+import { getAmbientPrefs, setAmbientPrefs, ambientGradient, type AmbientPrefs } from '../lib/ambient';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -7,8 +9,9 @@ import {
   ChevronRight, X, Plus, GripVertical, Palette, Check, ChevronDown, Globe,
   ChevronLeft, Search, AlertTriangle, Sparkles, ChevronUp, Loader2,
   Eye, EyeOff, DollarSign, Shield, Key, Save, Lock, LockOpen, History, Undo2, Pencil,
-  Upload, FileText, SearchX, Inbox, Keyboard, Monitor, Sun, Moon
+  Upload, FileText, SearchX, Inbox, Keyboard, Monitor, Sun, Moon, Bell, Waves
 } from 'lucide-react';
+import { useSmoothScroll } from '../components/ui/smooth-scroll';
 import { lazy } from 'react';
 import { SearchableSection, ColorPicker, TierContainer, SortableChip } from './settings/shared';
 
@@ -35,7 +38,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { DEFAULT_SYSTEM_PROMPT } from '../lib/defaults';
 import { migrateSystemPrompts, projectKey } from '../lib/promptAssembly';
 import { useLocation } from 'react-router-dom';
-import { useNumberMask } from '../context/NumberMaskContext';
+import { useNumberMask, type MaskMode } from '../context/NumberMaskContext';
 import { SectionHeader } from '../components/SectionHeader'
 import { ProviderDiagnostics } from '../components/ProviderDiagnostics';
 import { GlassCard } from '../components/GlassCard';
@@ -345,6 +348,21 @@ function TierContainer({
   );
 }
 
+/** Tracked-time formatter for browser profile rows.
+ *  browser_profiles.total_duration_ms used to never be written, so this used to
+ *  render "0m" for every profile forever. Now it reflects real accumulated time.
+ *  Deliberately compact — this sits in a dense settings row. */
+function formatTrackedTime(ms: number): string {
+  const totalMin = Math.floor((ms || 0) / 60000);
+  if (totalMin < 1) return '<1m';
+  if (totalMin < 60) return `${totalMin}m`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h < 24) return m ? `${h}h ${m}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
+
 export default function SettingsPage({
   logs = [],
   appStats = [],
@@ -359,6 +377,7 @@ export default function SettingsPage({
   onRegisterSave,
   onRequestNavigate,
   onHasChangesChange,
+  onCategoryOverridesChange,
   onReloadData,
   appColors = {},
   setAppColors,
@@ -380,6 +399,20 @@ export default function SettingsPage({
     return (saved as any) || 'category';
   });
   const location = useLocation();
+  /* Smooth scrolling — the toggleable half of the scroll feature. The other
+     half (scrollbar appearance) is unconditional and lives in
+     src/styles/surface.css, so there is nothing to configure here for it. */
+  const {
+    enabled: smoothScrollEnabled,
+    setEnabled: setSmoothScrollEnabled,
+  } = useSmoothScroll();
+  const smoothScrollBlockedByOS = (() => {
+    try {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  })();
   useEffect(() => {
     const tab = (location.state as any)?.tab;
     if (tab) setActiveTab(tab);
@@ -760,7 +793,26 @@ export default function SettingsPage({
   }, []);
 
   // Title bar auto-hide mode
-  const [tbModeState, setTbModeState] = useState<'always' | 'hover' | 'auto'>('always');
+  const [tbModeState, setTbModeState] = useState<'always' | 'hover' | 'auto'>(() => {
+    try {
+      const saved = localStorage.getItem('titleBarMode');
+      if (saved === 'always' || saved === 'hover' || saved === 'auto') return saved;
+    } catch {}
+    return 'always';
+  });
+  // Seed from the saved preference and stay in sync with changes made elsewhere.
+  useEffect(() => {
+    const a = (window as any)?.deskflowAPI;
+    if (!a?.getTitleBarMode) return;
+    a.getTitleBarMode().then((m: string) => {
+      if (m === 'always' || m === 'hover' || m === 'auto') setTbModeState(m);
+    }).catch(() => {});
+    if (!a?.onTitleBarModeChange) return;
+    const unsub = a.onTitleBarModeChange((m: string) => {
+      if (m === 'always' || m === 'hover' || m === 'auto') setTbModeState(m);
+    });
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
   useEffect(() => {
     (async () => {
       try {
@@ -808,7 +860,7 @@ export default function SettingsPage({
           }
           // Load keyword rules
           if (config?.domainKeywordRules) {
-            setDomainKeywords(config.domainKeywordRules);
+            setDomainKeywordSets(config.domainKeywordRules);
           }
           if (config?.domainDefaultCategories) {
             setDomainDefaultCategories(config.domainDefaultCategories);
@@ -1683,6 +1735,7 @@ export default function SettingsPage({
   const [keywordEnabledDomains, setKeywordEnabledDomains] = useState<string[]>([]);
   const [editingKeywordDomain, setEditingKeywordDomain] = useState<string | null>(null);
   const [domainKeywordSets, setDomainKeywordSets] = useState<Record<string, { category: string; keywords: string[] }[]>>({});
+  const [domainDefaultCategories, setDomainDefaultCategories] = useState<Record<string, string>>({});
   const [newKeywordDomain, setNewKeywordDomain] = useState('');
 
   // Keyword set editing state
@@ -1695,12 +1748,34 @@ export default function SettingsPage({
   const [maxSessionMs, setMaxSessionMs] = useState(300000);
   const [trackingPollInterval, setTrackingPollInterval] = useState(1000);
   const [filterTransientApps, setFilterTransientApps] = useState(true);
+  // How long toasts/notifications stay on screen. Persisted in
+  // localStorage (see src/lib/toastDuration.ts) and applied live.
+  const [toastDuration, setToastDurationState] = useState(() => getToastDurationMs());
+  // Global ambient background (the tinted wash). Live — no save bar.
+  const [ambientPrefs, setAmbientPrefsState] = useState<AmbientPrefs>(getAmbientPrefs);
+  useEffect(() => {
+    const onAmbient = () => setAmbientPrefsState(getAmbientPrefs());
+    window.addEventListener('ambient-prefs-changed', onAmbient);
+    return () => window.removeEventListener('ambient-prefs-changed', onAmbient);
+  }, []);
   const [promptHistoryLimit, setPromptHistoryLimit] = useState(5);
   const [browserRecordingMode, setBrowserRecordingMode] = useState<'always' | 'on-view'>('always');
   const [appRecordingMode, setAppRecordingMode] = useState<'always' | 'on-view'>('always');
   const [availableBrowsers, setAvailableBrowsers] = useState<string[]>([]);
   const [selectedBrowsers, setSelectedBrowsers] = useState<string[]>([]);
   const [serverStatus, setServerStatus] = useState<any>(null);
+  // Live extension truth (who is connected right now). Kept separate from
+  // availableBrowsers (what is merely installed) because conflating the two is
+  // what made this section feel broken: it offered browsers that were not
+  // installed and hid the ones actually reporting.
+  const [extStatus, setExtStatus] = useState<{
+    trackingEnabled?: boolean;
+    connectedBrowsers?: string[];
+    connectedNow?: Array<{ profileId: string; browserName: string | null; ageMs: number }>;
+    profiles?: any[];
+  } | null>(null);
+  const [extLoading, setExtLoading] = useState(true);
+  const [extError, setExtError] = useState<string | null>(null);
 
   // System Prompts state
   const [systemPrompts, setSystemPrompts] = useState<Record<string, string>>({
@@ -1750,6 +1825,33 @@ export default function SettingsPage({
     };
     loadTrackingSettings().catch((e) => console.warn('[Settings] loadTrackingSettings failed:', e?.message || e));
   }, []);
+
+  // ── Live extension liveness ────────────────────────────────────────────────
+  // "Connected" is a heartbeat that expires, so it has to be polled. 10s is fast
+  // enough to feel live without hammering IPC, and it means closing the browser
+  // visibly drops the dot instead of leaving a permanent lie on screen.
+  const refreshExtStatus = useCallback(async () => {
+    if (!window.deskflowAPI?.getExtensionStatus) {
+      setExtError('This build cannot report extension status. Restart DeskFlow to update.');
+      setExtLoading(false);
+      return;
+    }
+    try {
+      const st = await window.deskflowAPI.getExtensionStatus();
+      setExtStatus(st);
+      setExtError(null);
+    } catch (e: any) {
+      setExtError(e?.message || 'Could not read extension status');
+    } finally {
+      setExtLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshExtStatus();
+    const t = setInterval(refreshExtStatus, 10000);
+    return () => clearInterval(t);
+  }, [refreshExtStatus]);
 
   // Listen for browser extension identification (extension calls /browser-identify)
   useEffect(() => {
@@ -1953,6 +2055,71 @@ export default function SettingsPage({
       {/* Content based on active tab */}
       {activeTab === 'appearance' && (
         <div data-section="settings.appearance" className="space-y-6">
+          {/* ── Ambient background ───────────────────────────────────────────
+              The soft tinted wash that used to exist only on the terminal page,
+              now on every route and tinted by that page's --page-accent. Three
+              controls: off/on, how strong the tint is, and how far it spreads.
+              "Spread" is the distracting one — a wide wash tints more of the
+              reading area even when the alpha is low. */}
+          <GlassCard>
+            <SectionHeader title="Ambient Background" icon={<Sparkles className="w-5 h-5" />} />
+            <p className="text-xs text-zinc-500 mb-4">
+              A faint tinted light behind every page. Each screen gets its own hue from its accent colour.
+            </p>
+
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <label className="text-sm font-medium text-zinc-300">Enabled</label>
+                <p className="text-xs text-zinc-500">Turn the wash off entirely</p>
+              </div>
+              <button
+                onClick={() => setAmbientPrefsState(setAmbientPrefs({ enabled: !ambientPrefs.enabled }))}
+                aria-pressed={ambientPrefs.enabled}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${ambientPrefs.enabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${ambientPrefs.enabled ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+
+            {ambientPrefs.enabled && (
+              <>
+                <div className="py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-zinc-300">Intensity</label>
+                    <span className="text-xs font-mono text-zinc-500">{ambientPrefs.intensity}%</span>
+                  </div>
+                  <input
+                    type="range" min={0} max={100} step={5} value={ambientPrefs.intensity}
+                    onChange={(e) => setAmbientPrefsState(setAmbientPrefs({ intensity: Number(e.target.value) }))}
+                    className="w-full accent-emerald-500"
+                  />
+                  <p className="text-[11px] text-zinc-600 mt-1">How visible the tint is. Keep it low — this is atmosphere, not decoration.</p>
+                </div>
+
+                <div className="py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-zinc-300">Spread</label>
+                    <span className="text-xs font-mono text-zinc-500">{ambientPrefs.spread}%</span>
+                  </div>
+                  <input
+                    type="range" min={0} max={100} step={5} value={ambientPrefs.spread}
+                    onChange={(e) => setAmbientPrefsState(setAmbientPrefs({ spread: Number(e.target.value) }))}
+                    className="w-full accent-emerald-500"
+                  />
+                  <p className="text-[11px] text-zinc-600 mt-1">How far the wash reaches. Higher tints more of the screen and reads as more distracting.</p>
+                </div>
+
+                <div className="pt-2">
+                  <p className="text-[11px] text-zinc-500 mb-2">Preview</p>
+                  <div
+                    className="h-16 rounded-lg border border-zinc-700/50"
+                    style={{ background: ambientGradient(ambientPrefs, '#22d3ee') }}
+                  />
+                </div>
+              </>
+            )}
+          </GlassCard>
+
           <GlassCard className="space-y-6">
             <div>
               <h2 className="text-lg font-semibold mb-1">Appearance</h2>
@@ -2060,7 +2227,8 @@ export default function SettingsPage({
                   key={mode}
                   onClick={() => {
                     const a = (window as any)?.deskflowAPI;
-                    if (a?.setTitleBarMode) a.setTitleBarMode(mode).catch(() => {});
+                    if (a?.setTitleBarMode) a.setTitleBarMode(mode).catch((e: any) => console.warn('[Settings] setTitleBarMode failed:', e?.message || e));
+                    try { localStorage.setItem('titleBarMode', mode); } catch {}
                     setTbModeState(mode);
                     setHasChanges(true);
                     onHasChangesChange(true);
@@ -2071,7 +2239,7 @@ export default function SettingsPage({
                       : 'border-zinc-700/40 hover:border-zinc-600/60 hover:bg-zinc-800/40 light:hover:bg-zinc-100/40 light:border-zinc-500/50'
                   }`}
                 >
-                  <Monitor className="w-5 h-5" style={{ color: tbModeState === mode ? undefined : undefined }} />
+                  <Monitor className={`w-5 h-5 ${tbModeState === mode ? 'text-emerald-400' : 'text-zinc-500'}`} />
                   <span className="text-xs font-semibold capitalize">
                     {mode === 'always' ? 'Always show' : mode === 'hover' ? 'Hide + hover' : 'Auto-hide 3s'}
                   </span>
@@ -2087,6 +2255,46 @@ export default function SettingsPage({
                   </div>
                 </button>
               ))}
+            </div>
+          </GlassCard>
+
+          {/* ── Motion ──────────────────────────────────────────────────
+              Inertia is a preference, so it is the only half of the scroll
+              feature that is togglable. The scrollbar's appearance is NOT
+              here and NOT togglable: it is defined once in
+              src/styles/surface.css and is the same on every page, because a
+              scrollbar that changes shape per page is a styling bug, not a
+              setting. The state lives in components/ui/smooth-scroll. */}
+          <GlassCard className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Waves className="w-4 h-4 text-zinc-500" />
+                  Smooth scrolling
+                </h2>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  {smoothScrollBlockedByOS
+                    ? 'Your system asks for reduced motion, so scrolling stays 1:1 and instant. Smooth scrolling is off until you change that system setting.'
+                    : 'Pages glide to a stop instead of stopping dead. Scrollbars stay identical either way.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={smoothScrollEnabled}
+                aria-label="Smooth scrolling"
+                disabled={smoothScrollBlockedByOS}
+                onClick={() => setSmoothScrollEnabled(!smoothScrollEnabled)}
+                className={`relative shrink-0 h-6 w-11 rounded-full transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  smoothScrollEnabled ? 'bg-[var(--page-accent)]' : 'bg-zinc-700 light:bg-zinc-300'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200 ${
+                    smoothScrollEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
             </div>
           </GlassCard>
 
@@ -2680,7 +2888,7 @@ export default function SettingsPage({
                     animate={{ scale: 1, y: 0, opacity: 1 }}
                     exit={{ scale: 0.95, y: 12, opacity: 0 }}
                     transition={{ duration: 0.15 }}
-                    className="relative w-full max-w-lg flex flex-col overflow-hidden rounded-2xl border border-amber-500/30 bg-[#18181b]/95 shadow-2xl"
+                    className="relative w-full max-w-lg flex flex-col overflow-hidden rounded-xl border border-amber-500/30 bg-[#18181b]/95 shadow-2xl"
                   >
                     <div className="flex items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800">
                       <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
@@ -3808,6 +4016,40 @@ export default function SettingsPage({
 
       {activeTab === 'general' && (
         <div data-section="settings.general" className="space-y-4">
+          {/* Notification display time — previously 5 separate hardcoded
+              timeouts (4000/3600/3000/3000ms) in different toast systems. */}
+          <SearchableSection terms={['notification', 'toast', 'duration', 'how long', 'display time', 'message']} search={settingsSearch}>
+          <GlassCard>
+            <SectionHeader title="Notification Duration" icon={<Bell className="w-5 h-5" />} />
+            <p className="text-xs text-zinc-500 mb-3">
+              How long a notification stays on screen. "Stick" keeps it up until you dismiss it.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {DURATION_PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  onClick={() => setToastDurationState(setToastDurationMs(p.value))}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                    toastDuration === p.value
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {toastDuration !== DEFAULT_DURATION_MS && (
+              <button
+                onClick={() => setToastDurationState(setToastDurationMs(DEFAULT_DURATION_MS))}
+                className="mt-3 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors duration-150"
+              >
+                Reset to default (4s)
+              </button>
+            )}
+          </GlassCard>
+          </SearchableSection>
+
           <SearchableSection terms={['behavior', 'idle', 'threshold', 'neutral', 'distracting', 'pause', 'reset', 'ignore', 'auto-start', 'auto-export', 'animation', 'window mode', 'tracker behavior']} search={settingsSearch}>
           <GlassCard className="space-y-4">
             <div>
@@ -4228,65 +4470,177 @@ export default function SettingsPage({
               </div>
             </div>
 
-            {/* Browser Extension Tracking */}
-            <div className="pt-4 border-t border-zinc-700/50 space-y-3">
-              <div>
-                <h3 className="text-sm font-medium text-zinc-300">Browser Extension Tracking</h3>
-                <p className="text-xs text-zinc-500">Toggle which browsers have the DeskFlow extension. Website tracking works for all enabled browsers.</p>
+{/* Browser Extension Tracking — live mirror, not a config menu.
+                Design intent: setup should feel like plugging in a device, not
+                choosing from a list. Extensions announce themselves; this panel
+                reflects reality back. "Connected" is a 60s heartbeat, never a
+                permanent flag, and a browser with no extension is shown quietly
+                because its absence is not an error. */}
+            <div className="pt-4 border-t border-zinc-700/50 space-y-3" data-section="settings.tracking.browsers">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium text-zinc-300">Website Tracking</h3>
+                  <p className="text-xs text-zinc-500">
+                    Install the DeskFlow Browser Bridge on any browser you want tracked. It connects on its own — no setup needed here.
+                  </p>
+                </div>
+                {extStatus && (
+                  <span className={`shrink-0 mt-0.5 text-[11px] font-medium px-2 py-1 rounded-full border ${
+                    extStatus.trackingEnabled
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-500'
+                  }`}>
+                    {extStatus.trackingEnabled ? 'Recording' : 'Paused'}
+                  </span>
+                )}
               </div>
-              {availableBrowsers.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {availableBrowsers.map(b => {
-                    const isEnabled = selectedBrowsers.includes(b.toLowerCase());
-                    return (
+
+              {/* ERROR — plain language + a recovery action, never a raw code. */}
+              {extError && (
+                <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/25">
+                  <p className="text-xs text-amber-300">{extError}</p>
+                  <button
+                    onClick={() => { setExtLoading(true); refreshExtStatus(); }}
+                    className="mt-2 text-[11px] px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 transition-colors"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+
+              {/* LOADING — skeleton matching the row shape, not a bare spinner. */}
+              {!extError && extLoading && (
+                <div className="space-y-2" aria-busy="true" aria-label="Checking connected browsers">
+                  {[0, 1].map(i => (
+                    <div key={i} className="h-11 rounded-lg bg-zinc-800/40 border border-zinc-700/30 animate-pulse" />
+                  ))}
+                </div>
+              )}
+
+              {/* POPULATED / EMPTY — connected browsers, then installed ones. */}
+              {!extError && !extLoading && (() => {
+                const profiles = extStatus?.profiles || [];
+                const connectedProfiles = profiles.filter((p: any) => p.is_connected);
+                const quietProfiles = profiles.filter((p: any) => !p.is_connected);
+                const connectedSet = new Set((extStatus?.connectedBrowsers || []).map(b => b.toLowerCase()));
+                // Installed-but-not-yet-connected browsers the user could add.
+                const installedNotConnected = availableBrowsers
+                  .filter(b => !connectedSet.has(b.toLowerCase()))
+                  .filter(b => !selectedBrowsers.some(s => s.toLowerCase() === b.toLowerCase()));
+
+                const toggleBrowser = async (lower: string) => {
+                  const isEnabled = selectedBrowsers.some(x => x.toLowerCase() === lower);
+                  const next = isEnabled
+                    ? selectedBrowsers.filter(x => x.toLowerCase() !== lower)
+                    : [...selectedBrowsers, lower];
+                  setSelectedBrowsers(next);
+                  if (window.deskflowAPI?.setPreference) {
+                    await window.deskflowAPI.setPreference('browsersWithExtension', next);
+                    await window.deskflowAPI.setPreference('browserWithExtension', next[0] || '');
+                  }
+                  refreshExtStatus();
+                };
+
+                const Row = ({ label, sub, connected, onToggle, active }: any) => (
+                  <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
+                    active
+                      ? 'bg-emerald-500/[0.07] border-emerald-500/25'
+                      : 'bg-zinc-800/40 light:bg-zinc-100/50 border-zinc-700/40'
+                  }`}>
+                    <span className="relative flex h-2.5 w-2.5 shrink-0" title={connected ? 'Reporting now' : 'Not reporting'}>
+                      <span className={`absolute inset-0 rounded-full ${connected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                      {connected && (
+                        <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60 motion-reduce:hidden" />
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm font-medium truncate ${connected ? 'text-zinc-200' : 'text-zinc-400'}`}>{label}</p>
+                      {sub && <p className="text-[11px] text-zinc-500 truncate">{sub}</p>}
+                    </div>
+                    {onToggle && (
                       <button
-                        key={b}
-                        onClick={async () => {
-                          const lower = b.toLowerCase();
-                          const next = isEnabled
-                            ? selectedBrowsers.filter(x => x !== lower)
-                            : [...selectedBrowsers, lower];
-                          setSelectedBrowsers(next);
-                          if (window.deskflowAPI?.setPreference) {
-                            await window.deskflowAPI.setPreference('browsersWithExtension', next);
-                            // Keep backward compat
-                            await window.deskflowAPI.setPreference('browserWithExtension', next[0] || '');
-                          }
-                        }}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition ${
-                          isEnabled
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                            : 'bg-zinc-800/50 light:bg-zinc-100/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300'
+                        onClick={() => onToggle(label.toLowerCase())}
+                        className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors ${
+                          selectedBrowsers.some((x: string) => x.toLowerCase() === label.toLowerCase())
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
+                            : 'bg-zinc-800/60 border-zinc-700/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
                         }`}
                       >
-                        <span className={`w-3 h-3 rounded border-2 flex items-center justify-center ${
-                          isEnabled ? 'border-emerald-400 bg-emerald-400' : 'border-zinc-600'
-                        }`}>
-                          {isEnabled && (
-                            <svg className="w-2 h-2 text-zinc-900" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                          )}
-                        </span>
-                        {b.charAt(0).toUpperCase() + b.slice(1)}
+                        {selectedBrowsers.some((x: string) => x.toLowerCase() === label.toLowerCase()) ? 'Tracking' : 'Track'}
                       </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-xs text-zinc-500">No browsers detected. Install a browser to enable tracking.</p>
-              )}
-              {selectedBrowsers.length > 0 && (
-                <p className="text-[11px] text-emerald-400/80">
-                  Tracking: {selectedBrowsers.map(b => b.charAt(0).toUpperCase() + b.slice(1)).join(', ')}
-                </p>
-              )}
-              {selectedBrowsers.length === 0 && (
-                <p className="text-[11px] text-amber-400/80 flex items-center gap-1.5">
-                  <AlertTriangle className="w-3 h-3" />
-                  No browser enabled — website tracking is off
-                </p>
-              )}
+                    )}
+                  </div>
+                );
+
+                if (profiles.length === 0) {
+                  return (
+                    <div className="p-4 rounded-lg bg-zinc-800/40 light:bg-zinc-100/50 border border-dashed border-zinc-700/60 text-center">
+                      <p className="text-sm text-zinc-300 font-medium">No browser is connected yet</p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Add the <span className="text-zinc-400">DeskFlow Browser Bridge</span> extension to Chrome, Brave, Edge or Firefox.
+                        It will appear here on its own the moment it starts reporting.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2">
+                    {connectedProfiles.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-medium">Connected</p>
+                        {connectedProfiles.map((p: any) => (
+                          <Row
+                            key={`c-${p.id}`}
+                            label={p.profile_name || p.browser_name}
+                            sub={`${p.browser_name || 'Browser'}${p.total_duration_ms ? ` · ${formatTrackedTime(p.total_duration_ms)} tracked` : ''}`}
+                            connected
+                            active
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {quietProfiles.length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-[11px] uppercase tracking-wide text-zinc-600 font-medium">Previously connected</p>
+                        {quietProfiles.map((p: any) => (
+                          <Row
+                            key={`q-${p.id}`}
+                            label={p.profile_name || p.browser_name}
+                            sub={`${p.browser_name || 'Browser'} · not reporting now`}
+                            connected={false}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {installedNotConnected.length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-[11px] uppercase tracking-wide text-zinc-600 font-medium">Installed · no extension</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {installedNotConnected.map(b => (
+                            <button
+                              key={b}
+                              onClick={() => toggleBrowser(b.toLowerCase())}
+                              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 bg-zinc-800/40 light:bg-zinc-100/50 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors text-sm text-left"
+                            >
+                              <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
+                              <span className="truncate">{b.charAt(0).toUpperCase() + b.slice(1)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedBrowsers.length > 0 && (
+                      <p className="text-[11px] text-emerald-400/80 pt-1">
+                        Tracking: {selectedBrowsers.map(b => b.charAt(0).toUpperCase() + b.slice(1)).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Server Status */}
@@ -4618,6 +4972,48 @@ export default function SettingsPage({
               {aiRun.provider && !aiRun.error && <span className="text-xs text-zinc-400 font-mono">via {aiRun.provider}</span>}
             </div>
           )}
+          {/* Tier Colors — the three productivity tiers, app-wide.
+              These are the SAME --tier-* variables the dashboard stopwatch, Tier
+              Breakdown strip, Productivity page and Insights charts read, so a
+              change here repaints every one of them. Before this existed the
+              tiers were hardcoded in 9 files that disagreed with each other. */}
+          <SearchableSection terms={['tier', 'tier color', 'productive', 'neutral', 'distracting', 'productivity color']} search={settingsSearch}>
+          <GlassCard>
+            <SectionHeader
+              title="Tier Colors"
+              icon={<Palette className="w-5 h-5" />}
+            />
+            <p className="text-xs text-zinc-500 mb-4">
+              How productive, neutral and distracting apps are coloured everywhere — stopwatch, charts, lists.
+            </p>
+            <div className="space-y-2">
+              {TIERS.map((t) => (
+                <div key={t} className="flex items-center gap-3 p-2.5 bg-zinc-800/40 light:bg-zinc-100/40 rounded-lg border border-zinc-700/30">
+                  <ColorPicker
+                    value={tierColorValue(t)}
+                    onChange={(color) => setTierColor(t, color)}
+                    size="sm"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-zinc-300 font-medium">{TIER_LABELS[t]}</div>
+                    <div className="text-[11px] text-zinc-500 font-mono">{tierColorValue(t)}</div>
+                  </div>
+                  <div className="h-6 w-16 rounded-md border border-zinc-700/40" style={{ background: tierColorValue(t) }} />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-800/50">
+              <span className="text-[11px] text-zinc-500">Applies immediately, everywhere. No save needed.</span>
+              <button
+                onClick={() => resetTierColors()}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors duration-150"
+              >
+                Reset to defaults
+              </button>
+            </div>
+          </GlassCard>
+          </SearchableSection>
+
           {/* Category Colors Section */}
           <SearchableSection terms={['category', 'colors', 'category color', 'palette']} search={settingsSearch}>
           <GlassCard>

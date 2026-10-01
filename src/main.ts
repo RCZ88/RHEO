@@ -436,8 +436,20 @@ const MODEL_PRICING: Record<string, { input: number; output: number; cacheRead: 
     'default': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2 },
 };
 
+// OpenRouter-style free tiers ("vendor/model:free") genuinely cost nothing.
+// A dedicated constant avoids the substring trap: adding a 'free' key to
+// MODEL_PRICING would let the `.includes()` lookup below price any model whose
+// name merely contains "free" at zero.
+const FREE_MODEL_PRICING = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+
+function isFreeTierModel(model: string): boolean {
+    const lower = model.toLowerCase();
+    return lower.includes(':free') || lower.includes('-free') || lower.endsWith('free');
+}
+
 function getModelPricing(model?: string): { input: number; output: number; cacheRead: number; cacheWrite: number } {
     if (!model) return MODEL_PRICING['default'];
+    if (isFreeTierModel(model)) return FREE_MODEL_PRICING;
     const key = Object.keys(MODEL_PRICING).find(k => model.toLowerCase().includes(k.toLowerCase()));
     return MODEL_PRICING[key || 'default'];
 }
@@ -468,6 +480,13 @@ function* iterJsonl(text: string): Generator<any> {
 }
 
 function calculateCost(session: ParsedSession): number {
+    // A plugin that reports its own authoritative spend (Hermes bills through
+    // several providers) wins over our price table. Only a POSITIVE figure is
+    // trusted — a reported 0 is usually "not computed yet", and the price table
+    // (with the free-tier guard) resolves that case correctly on its own.
+    if (typeof session.cost === 'number' && Number.isFinite(session.cost) && session.cost > 0) {
+        return Math.round(session.cost * 10000) / 10000;
+    }
     const pricing = getModelPricing(session.model);
     let cost = 0;
     cost += (session.inputTokens / 1_000_000) * pricing.input;
@@ -1584,184 +1603,149 @@ const HermesPlugin: AIAgentPlugin = {
     color: '#8b5cf6',
 
     async detect(): Promise<boolean> {
-        const homedir = require('os').homedir();
-        // Primary Windows layout (LOCALAPPDATA\hermes\profiles\<profile>\sessions)
-        const localAppData = process.env.LOCALAPPDATA || path_1.default.join(homedir, 'AppData', 'Local');
-        const profilesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
-        if (fs_1.default.existsSync(profilesDir)) return true;
-        // hermes-agent directory (cross-platform)
-        const hermesAgentDir = path_1.default.join(localAppData, 'hermes-agent');
-        if (fs_1.default.existsSync(hermesAgentDir)) return true;
-        // Linux: ~/.hermes/sessions + ~/.local/share/hermes (Hermes/ln)
-        const linuxHerpesSessions = path_1.default.join(homedir, '.hermes', 'sessions');
-        if (fs_1.default.existsSync(linuxHerpesSessions)) return true;
-        const linuxLocalShare = path_1.default.join(homedir, '.local', 'share', 'hermes');
-        if (fs_1.default.existsSync(linuxLocalShare)) return true;
-        const linuxHerpesProfiles = path_1.default.join(homedir, '.hermes', 'profiles');
-        if (fs_1.default.existsSync(linuxHerpesProfiles)) return true;
-        // Smart path: check custom path saved via Hermes setup UI
-        try {
-            const customPath = wordTrackerModule.wordTrackerGetConfig('hermes_sessions_path');
-            if (customPath && fs_1.default.existsSync(customPath)) return true;
-        } catch {}
-        return false;
+        return getHermesStateDbPaths().length > 0;
     },
 
     getStoragePaths(): string[] {
-        const homedir = require('os').homedir();
-        const localAppData = process.env.LOCALAPPDATA || path_1.default.join(homedir, 'AppData', 'Local');
-        const paths: string[] = [];
-
-        // Smart path: include custom path saved via Hermes setup UI
-        try {
-            const customPath = wordTrackerModule.wordTrackerGetConfig('hermes_sessions_path');
-            if (customPath && fs_1.default.existsSync(customPath)) {
-                paths.push(customPath);
-            }
-        } catch {}
-
-        // Windows: hermes\profiles\<profile>\sessions
-        const profilesDir = path_1.default.join(localAppData, 'hermes', 'profiles');
-        if (fs_1.default.existsSync(profilesDir)) {
-            try {
-                const profiles = fs_1.default.readdirSync(profilesDir);
-                for (const profile of profiles) {
-                    const sessionsDir = path_1.default.join(profilesDir, profile, 'sessions');
-                    if (fs_1.default.isDirectorySync?.(sessionsDir) ?? fs_1.default.existsSync(sessionsDir)) {
-                        paths.push(sessionsDir);
-                    }
-                }
-            } catch {}
-        }
-
-        // hermes-agent directory (cross-platform)
-        const hermesAgentDir = path_1.default.join(localAppData, 'hermes-agent');
-        if (fs_1.default.existsSync(hermesAgentDir)) {
-            try {
-                const entries = fs_1.default.readdirSync(hermesAgentDir);
-                for (const entry of entries) {
-                    const entryPath = path_1.default.join(hermesAgentDir, entry);
-                    if (fs_1.default.isDirectorySync?.(entryPath)) {
-                        // Check for sessions subdir
-                        const sessionsDir = path_1.default.join(entryPath, 'sessions');
-                        if (fs_1.default.existsSync(sessionsDir)) {
-                            paths.push(sessionsDir);
-                        } else {
-                            paths.push(entryPath);
-                        }
-                    } else if (entry.endsWith('.json') || entry.endsWith('.jsonl')) {
-                        paths.push(entryPath);
-                    }
-                }
-            } catch {}
-        }
-
-        // Windows: hermes\sessions (flat dump store)
-        const flatWindowsSessions = path_1.default.join(localAppData, 'hermes', 'sessions');
-        if (fs_1.default.existsSync(flatWindowsSessions)) {
-            paths.push(flatWindowsSessions);
-        }
-
-        // Linux store: ~/.hermes/sessions + ~/.local/share/hermes + ~/.hermes/profiles/<profile>/sessions + ~/.hermes/staging/sessions
-        const linuxBase = path_1.default.join(homedir, '.hermes');
-        const linuxSessions = path_1.default.join(linuxBase, 'sessions');
-        if (fs_1.default.existsSync(linuxSessions)) paths.push(linuxSessions);
-
-        // Also check ~/.local/share/hermes (standard XDG path for Hermes/ln)
-        const linuxLocalShare = path_1.default.join(homedir, '.local', 'share', 'hermes');
-        if (fs_1.default.existsSync(linuxLocalShare)) {
-            paths.push(linuxLocalShare);
-            // Check for nested session subdirs
-            try {
-                const entries = fs_1.default.readdirSync(linuxLocalShare);
-                for (const entry of entries) {
-                    const entryPath = path_1.default.join(linuxLocalShare, entry);
-                    if (fs_1.default.isDirectorySync?.(entryPath)) {
-                        const sessionsDir = path_1.default.join(entryPath, 'sessions');
-                        if (fs_1.default.existsSync(sessionsDir)) {
-                            paths.push(sessionsDir);
-                        }
-                    }
-                }
-            } catch {}
-        }
-
-        const linuxProfiles = path_1.default.join(linuxBase, 'profiles');
-        if (fs_1.default.existsSync(linuxProfiles)) {
-            try {
-                const profiles = fs_1.default.readdirSync(linuxProfiles);
-                for (const profile of profiles) {
-                    const sessionsDir = path_1.default.join(linuxProfiles, profile, 'sessions');
-                    if (fs_1.default.isDirectorySync?.(sessionsDir) ?? fs_1.default.existsSync(sessionsDir)) {
-                        paths.push(sessionsDir);
-                    }
-                }
-            } catch {}
-        }
-
-        const stagingSessions = path_1.default.join(linuxBase, 'staging', 'sessions');
-        if (fs_1.default.existsSync(stagingSessions)) paths.push(stagingSessions);
-
-        // dedupe
-        return [...new Set(paths)];
+        return getHermesStateDbPaths();
     },
 
     async parse(filePath: string): Promise<ParsedSession[]> {
+        // state.db is the only authoritative usage source. The legacy
+        // sessions/request_dump_*.json files are FAILED-request debug dumps
+        // (429 / connection-error payloads with no usage block) — parsing them
+        // only ever produced zero-token rows, so they are no longer ingested.
+        if (filePath.endsWith('.db')) {
+            return this.parseSQLite ? this.parseSQLite(filePath) : Promise.resolve([]);
+        }
+        return Promise.resolve([]);
+    },
+
+    async parseSQLite(dbPath: string): Promise<ParsedSession[]> {
         const sessions: ParsedSession[] = [];
+        let db: any = null;
         try {
-            const content = fs_1.default.readFileSync(filePath, 'utf8');
-            const data = JSON.parse(content);
+            const Database = require('better-sqlite3');
+            // Hermes may be running while we read: open strictly read-only so we
+            // never create journal/WAL files. NOT immutable — hermes writes via
+            // WAL and the -wal/-shm siblings must stay visible.
+            db = new Database(dbPath, { readonly: true, fileMustExist: true });
 
-            // Hermes session files are single JSON objects (not JSONL)
-            const sessionId = data.session_id || path_1.default.basename(filePath, '.json').replace(/^request_dump_/, '');
-            const timestamp = data.timestamp ? new Date(data.timestamp) : new Date();
+            const hasSessions = db
+                .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
+                .get();
+            if (!hasSessions) return sessions;
 
-            // Extract model from request body
-            const model = data.request?.body?.model || '';
+            const rows = db.prepare(`
+                SELECT id, started_at, model, billing_provider,
+                       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+                       reasoning_tokens, message_count, cwd,
+                       actual_cost_usd, estimated_cost_usd
+                FROM sessions
+                WHERE (input_tokens > 0 OR output_tokens > 0)
+            `).all() as any[];
 
-            // Extract tokens from response body usage
-            const usage = data.response?.body?.usage;
-            const inputTokens = toInt(usage?.prompt_tokens);
-            const outputTokens = toInt(usage?.completion_tokens);
-            const cacheReadTokens = toInt(usage?.prompt_tokens_details?.cache_read_tokens);
-            const cacheWriteTokens = toInt(usage?.prompt_tokens_details?.cache_creation_tokens);
+            for (const r of rows) {
+                const inputTokens = toInt(r.input_tokens);
+                const outputTokens = toInt(r.output_tokens);
+                if (!inputTokens && !outputTokens) continue;
 
-            // Count messages in the conversation
-            const messages = data.request?.body?.messages;
-            const messageCount = Array.isArray(messages) ? messages.length : 0;
+                // started_at is a unix timestamp in SECONDS (float). Tolerate an
+                // ISO string too so a schema variant can't wipe the date.
+                let timestamp: Date;
+                if (typeof r.started_at === 'number' && Number.isFinite(r.started_at)) {
+                    timestamp = new Date(r.started_at * 1000);
+                } else {
+                    const parsed = r.started_at ? new Date(String(r.started_at)) : null;
+                    timestamp = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+                }
 
-            // Only include sessions with actual token usage (skip errored/empty requests)
-            if (inputTokens > 0 || outputTokens > 0 || messageCount > 0) {
+                // Hermes bills through several providers and knows its own
+                // spend; prefer its figure over our price table.
+                const reported =
+                    typeof r.actual_cost_usd === 'number' ? r.actual_cost_usd
+                        : typeof r.estimated_cost_usd === 'number' ? r.estimated_cost_usd
+                            : undefined;
+
                 sessions.push({
-                    sessionId,
+                    sessionId: String(r.id),
                     timestamp,
                     inputTokens,
                     outputTokens,
-                    cacheReadTokens: cacheReadTokens || undefined,
-                    cacheWriteTokens: cacheWriteTokens || undefined,
-                    model: model || undefined,
-                    provider: 'openrouter',
-                    messageCount: messageCount > 0 ? messageCount : undefined,
+                    cacheReadTokens: toInt(r.cache_read_tokens) || undefined,
+                    cacheWriteTokens: toInt(r.cache_write_tokens) || undefined,
+                    reasoningTokens: toInt(r.reasoning_tokens) || undefined,
+                    model: r.model || undefined,
+                    provider: r.billing_provider || undefined,
+                    // cwd is what makes hermes visible in project/IDE views —
+                    // those queries filter on project_path IS NOT NULL.
+                    projectPath: r.cwd || undefined,
+                    messageCount: toInt(r.message_count) || undefined,
+                    cost: reported !== undefined && reported !== null ? reported : undefined,
                 });
             }
-        } catch {}
+        } catch (err: any) {
+            console.error(`[DeskFlow] Hermes state.db parse failed (${dbPath}):`, err?.message);
+        } finally {
+            try { db?.close(); } catch {}
+        }
         return sessions;
     },
 
     async parseDir(dirPath: string): Promise<ParsedSession[]> {
         const sessions: ParsedSession[] = [];
         try {
-            const files = fs_1.default.readdirSync(dirPath).filter(f => f.endsWith('.json'));
-            for (let i = 0; i < files.length; i++) {
-                const filePath = path_1.default.join(dirPath, files[i]);
-                const fileSessions = await this.parse(filePath);
-                sessions.push(...fileSessions);
-                if (i % 10 === 0) await yieldToEventLoop();
+            const dbPath = path_1.default.join(dirPath, 'state.db');
+            if (fs_1.default.existsSync(dbPath)) {
+                sessions.push(...(await this.parse(dbPath)));
             }
         } catch {}
         return sessions;
     }
 };
+
+// Resolve the hermes state.db candidate list once per call so a path change or
+// a moved home directory is picked up on the very next sync.
+function getHermesStateDbPaths(): string[] {
+    const homedir = require('os').homedir();
+    const localAppData = process.env.LOCALAPPDATA || path_1.default.join(homedir, 'AppData', 'Local');
+    const candidates: string[] = [
+        path_1.default.join(homedir, '.hermes', 'state.db'),
+        path_1.default.join(homedir, '.local', 'share', 'hermes', 'state.db'),
+        path_1.default.join(localAppData, 'hermes', 'state.db'),
+        path_1.default.join(localAppData, 'hermes-agent', 'state.db'),
+    ];
+
+    // Smart path: the Hermes setup UI may store either the .db itself or a
+    // directory. Try <dir>/state.db and <dir>/../state.db so a previously
+    // saved "~/.hermes/sessions" style path still resolves.
+    try {
+        // Shared per-agent override (the same control every other tool uses).
+        const shared = getAgentCustomPath('hermes');
+        if (shared) {
+            if (shared.endsWith('.db')) {
+                candidates.push(shared);
+            } else {
+                candidates.push(path_1.default.join(shared, 'state.db'));
+                candidates.push(path_1.default.join(shared, '..', 'state.db'));
+            }
+        }
+        const customPath = wordTrackerModule.wordTrackerGetConfig('hermes_sessions_path');
+        if (customPath) {
+            if (customPath.endsWith('.db')) {
+                candidates.push(customPath);
+            } else {
+                candidates.push(path_1.default.join(customPath, 'state.db'));
+                candidates.push(path_1.default.join(customPath, '..', 'state.db'));
+            }
+        }
+    } catch {}
+
+    return [...new Set(candidates.map(p => path_1.default.normalize(p)))]
+        .filter(p => {
+            try { return fs_1.default.existsSync(p) && fs_1.default.statSync(p).isFile(); } catch { return false; }
+        });
+}
 
 // Register all plugins
 const AI_AGENT_PLUGINS: AIAgentPlugin[] = [
@@ -1811,12 +1795,30 @@ function getDirDataSignature(dirPath: string): { fileCount: number; latestMtime:
     return { fileCount, latestMtime };
 }
 
-// Unified sync function using plugins
-async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
+// User-supplied storage location for a plugin, if any.
+//
+// This is applied centrally in syncAllAIAgents/debug-ai-agents rather than
+// inside each plugin: only gemini, codex and kilocode used to read it, so a
+// generic "change path" control silently did nothing for every other tool.
+// Centralising it gives all nine agents the same override without editing — and
+// risking — each plugin's own detection logic.
+function getAgentCustomPath(pluginId: string): string | null {
+    try {
+        const explicit = (global as any).__aiAgentCustomPaths?.[pluginId];
+        if (explicit && fs_1.default.existsSync(explicit)) return explicit;
+    } catch {}
+    return null;
+}
+
+// Unified sync function using plugins.
+// `onlyPluginId` scopes the run to a single agent (used when the user repoints a
+// custom path and we must re-read just that agent immediately).
+async function syncAllAIAgents(db: any, onlyPluginId?: string): Promise<Record<string, number>> {
     const results: Record<string, number> = {};
     const syncState = loadAISyncState();
 
     for (const plugin of AI_AGENT_PLUGINS) {
+        if (onlyPluginId && plugin.id !== onlyPluginId) continue;
         try {
             if (mainWindow && !mainWindow.isDestroyed()) {
                 safeSend(mainWindow, 'ai-sync-progress', { agent: plugin.id, name: plugin.name, status: 'detecting' });
@@ -1825,7 +1827,7 @@ async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
             // Yield between plugins so UI stays responsive
             await yieldToEventLoop();
 
-            const isDetected = await plugin.detect();
+            const isDetected = await plugin.detect() || !!getAgentCustomPath(plugin.id);
             console.log(`[DeskFlow] ${plugin.name} detected: ${isDetected}`);
 
             if (!isDetected) continue;
@@ -1835,10 +1837,41 @@ async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
             }
 
             const paths = plugin.getStoragePaths();
+            const explicitPath = getAgentCustomPath(plugin.id);
+            if (explicitPath && !paths.includes(explicitPath)) paths.push(explicitPath);
             if (DEBUG_TRACKING) console.log(`[DeskFlow] ${plugin.name} paths:`, paths);
 
             let hasChanges = false;
             const newPathStates: Record<string, { mtime: number; fileCount: number }> = {};
+
+            // Drop cached state for paths this agent no longer reports — the user
+            // repointed a custom path, moved a directory, or is on a new OS. Left
+            // behind, these keys accumulate forever and can never match again.
+            const cachedForAgent = syncState.paths[plugin.id];
+            if (cachedForAgent) {
+                const live = new Set(paths);
+                for (const stale of Object.keys(cachedForAgent)) {
+                    if (!live.has(stale)) {
+                        delete cachedForAgent[stale];
+                        console.log(`[DeskFlow] ${plugin.name}: dropped stale sync path ${stale}`);
+                    }
+                }
+            }
+
+            // If the DB holds fewer rows for this tool than it did after our last
+            // sync, rows went missing outside our control. The agent's files are
+            // byte-identical, so the mtime cache would consider them "unchanged"
+            // and the missing sessions would stay invisible forever. Force a full
+            // re-read in that case.
+            let dbRowCount = 0;
+            try {
+                dbRowCount = (db!.prepare('SELECT COUNT(*) as c FROM ai_usage WHERE tool = ?').get(plugin.id) as any)?.c || 0;
+            } catch {}
+            const prevDbRowCount = syncState.dbRowCount?.[plugin.id];
+            const forceReparse = prevDbRowCount === undefined || dbRowCount < prevDbRowCount;
+            if (prevDbRowCount !== undefined && dbRowCount < prevDbRowCount) {
+                console.log(`[DeskFlow] ${plugin.name}: ${prevDbRowCount - dbRowCount} rows missing from ai_usage — forcing full re-read`);
+            }
 
             for (const pluginPath of paths) {
                 if (!fs_1.default.existsSync(pluginPath)) {
@@ -1858,21 +1891,13 @@ async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
                     const stats = getDirDataSignature(pluginPath);
                     currentFileCount = stats.fileCount;
                     currentMtime = stats.latestMtime;
-                    const prevEntries = syncState.fileEntries?.[plugin.id]?.[pluginPath] || 0;
                 } else {
                     currentFileCount = 1;
                 }
 
                 newPathStates[pluginPath] = { mtime: currentMtime, fileCount: currentFileCount };
 
-                // Partial-sync guard: only skip when the stored mtime, file-count AND
-                // the number of DB entries already ingested for this path all match.
-                // Without the entry-count check, a dir whose files were rewritten in
-                // place (same mtime, same count) would never be re-synced after a DB
-                // wipe or first successful sync — past sessions would stay invisible.
-                const prevEntries = syncState.fileEntries?.[plugin.id]?.[pluginPath] ?? 0;
-                const entryCountMatches = prevEntries === currentFileCount;
-                if (prevState && prevState.mtime === currentMtime && prevState.fileCount === currentFileCount && entryCountMatches) {
+                if (!forceReparse && prevState && prevState.mtime === currentMtime && prevState.fileCount === currentFileCount) {
                     if (DEBUG_TRACKING) console.log(`[DeskFlow] ${plugin.name}: ${pluginPath} unchanged, skipping`);
                     continue;
                 }
@@ -1948,6 +1973,11 @@ async function syncAllAIAgents(db: any): Promise<Record<string, number>> {
             if (Object.keys(newPathStates).length > 0) {
                 syncState.paths[plugin.id] = { ...(syncState.paths[plugin.id] || {}), ...newPathStates };
             }
+            // Record the post-insert row count so the next run can detect a
+            // database that lost rows behind our back.
+            try {
+                syncState.dbRowCount[plugin.id] = (db!.prepare('SELECT COUNT(*) as c FROM ai_usage WHERE tool = ?').get(plugin.id) as any)?.c || 0;
+            } catch {}
             if (hasChanges || !syncState.agentLastRun[plugin.id]) {
                 syncState.agentLastRun[plugin.id] = new Date().toISOString();
             }
@@ -2207,6 +2237,21 @@ function initializeStorage() {
             db.exec('ALTER TABLE logs ADD COLUMN platform TEXT DEFAULT NULL');
         }
         catch { /* column exists */ }
+        // profile_id ties a website row to the exact browser profile that produced it.
+        // Without it, two extensions (e.g. Chrome + Firefox) both visiting the same
+        // domain collapse into ONE row and attribution is impossible.
+        try {
+            db.exec('ALTER TABLE logs ADD COLUMN profile_id TEXT DEFAULT NULL');
+        }
+        catch { /* column exists */ }
+        try {
+            db.exec('CREATE INDEX IF NOT EXISTS idx_logs_profile_id ON logs(profile_id)');
+        }
+        catch { /* index exists */ }
+        try {
+            db.exec('CREATE INDEX IF NOT EXISTS idx_logs_domain_browser ON logs(domain, browser_name)');
+        }
+        catch { /* index exists */ }
         // Add productivity columns to daily_stats if they don't exist
         try {
             db.exec('ALTER TABLE daily_stats ADD COLUMN productivity_type TEXT DEFAULT \'unknown\'');
@@ -4439,7 +4484,7 @@ const { buildChain, runWithFallback } = require("./services/providers/router");
         // user cannot start. One unrelated failure must never take these down.
         try { registerCategoryHandlers({ db, categoryConfig: categoryConfig as any, mainWindow: mainWindow as any, currentApp, saveCategoryConfig, categorizeApp }); console.log('[DeskFlow] ✅ Category handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Category handlers failed to register:', err.message); }
         try { registerGoalHandlers({ db, mainWindow: mainWindow as any, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback }); console.log('[DeskFlow] ✅ Goal handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Goal handlers failed to register:', err.message); }
-        try { registerFinanceHandlers({ db, mainWindow: mainWindow as any, userPreferences, financePasswordHash, financePasswordSalt: financePasswordSalt, financeDataKey: financeDataKey, financeLocked, financeRememberDevice, financeRememberDeviceExpiry, financeLockTimeout, getLocalDateStr, toInt, financeDisplayCurrency }); console.log('[DeskFlow] ✅ Finance handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Finance handlers failed to register:', err.message); }
+        try { registerFinanceHandlers({ db, mainWindow: mainWindow as any, userPreferences, financePasswordHash, financePasswordSalt: financePasswordSalt, financeDataKey: financeDataKey, financeLocked, financeRememberDevice, financeRememberDeviceExpiry, financeLockTimeout, getLocalDateStr, toInt, financeDisplayCurrency, hashPassword, verifyPassword, encryptField, decryptField, isEncrypted, safeDecrypt, logAuditEvent, diffFields, formatAuditChanges, decryptAuditData, deriveFinanceDataKey, enc }); console.log('[DeskFlow] ✅ Finance handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Finance handlers failed to register:', err.message); }
         try { registerSessionHandlers({ db, useJson }); console.log('[DeskFlow] ✅ Session handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Session handlers failed to register:', err.message); }
         try { registerTrackingHandlers({ db, getIsTracking: () => isTracking, setIsTracking: (v) => { isTracking = v; }, getTrackingInterval: () => trackingInterval, setTrackingInterval: (v) => { trackingInterval = v; }, getLastPollTime: () => lastPollTime, setLastPollTime: (v) => { lastPollTime = v; }, pollForeground, userPreferences }); console.log('[DeskFlow] ✅ Tracking handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Tracking handlers failed to register:', err.message); }
         try { registerGasHandlers({ db }); console.log('[GAS] ✅ Gas handlers registered'); } catch (err: any) { console.error('[GAS] ⚠️ Gas handlers failed to register:', err.message); }
@@ -4969,6 +5014,131 @@ function getTierMap(db: any): Map<string, string> {
 // Track only the MOST RECENTLY active browser domain (only one active at a time)
 let lastActiveBrowserDomain = null;
 let lastActiveBrowserTimestamp = 0;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTENSION IDENTITY REGISTRY (Phase 1.5)
+// ─────────────────────────────────────────────────────────────────────────────
+// The extension announces itself ONCE via POST /browser-identify, then sends
+// hundreds of /browser-data payloads that carry profileId but (in older builds)
+// no browser name. Without remembering the announce, the app cannot attribute
+// a website row to a browser at all and logs.browser_name stays NULL forever.
+//
+// Keyed by profileId (the extension's own stable per-install UUID).
+const extensionSessions = new Map(); // profileId -> { browserName, profileId, lastSeen, browserVersion }
+const PROFILE_CONNECT_TTL_MS = 60_000; // a profile is "connected" if it spoke in the last 60s
+// Per-browser "most recently active tab" memory (see handleBrowserData).
+// Keyed by profileId so one browser's background tabs cannot suppress another's.
+const lastActiveBrowserTabByProfile = new Map();
+
+function rememberExtensionSession(profileId, browserName, browserVersion) {
+    if (!profileId)
+        return;
+    const existing = extensionSessions.get(profileId);
+    extensionSessions.set(profileId, {
+        profileId,
+        // A later announce must not blank an earlier good one.
+        browserName: browserName || existing?.browserName || null,
+        browserVersion: browserVersion || existing?.browserVersion || null,
+        lastSeen: Date.now(),
+    });
+}
+
+/**
+ * Resolve WHO sent this payload and WHICH browser profile it belongs to.
+ * Precedence:
+ *   1. payload's own browserName (new extension builds)
+ *   2. the registry, from the earlier /browser-identify announce
+ *   3. the currently configured browser, as a last resort
+ */
+function resolveBrowserIdentity(data) {
+    const profileId = data.profileId || null;
+    const known = profileId ? extensionSessions.get(profileId) : null;
+    const browserName = data.browserName
+        || data.browser_name
+        || known?.browserName
+        || userPreferences.browserWithExtension
+        || null;
+    return { profileId, browserName: browserName ? String(browserName) : null };
+}
+
+/**
+ * Composite session key. Previously the map was keyed by DOMAIN ONLY, which meant
+ * Chrome on github.com and Firefox on github.com shared a single row: their
+ * durations summed together and browser_name was clobbered by whichever reported
+ * last. Keying by profile first makes per-browser attribution possible.
+ */
+function browserSessionKey(identity, domain) {
+    return `${identity.profileId || identity.browserName || 'unknown'}::${domain}`;
+}
+
+/** True if this profile is NOT paused by the user. Absent row = allowed.
+ *
+ *  Pause must be per-PROFILE, not per-browser. Falling through to the
+ *  browser-name check when a profileId has no row would mean that pausing
+ *  "Chrome (Work)" also silently killed "Chrome (Personal)" — two profiles of
+ *  the same browser are exactly the two-extension case this feature exists for.
+ *  The name check therefore only applies when we genuinely have no profileId.
+ */
+function isProfileTrackingAllowed(profileId, browserName) {
+    if (!db)
+        return true;
+    try {
+        if (profileId) {
+            const row = db.prepare('SELECT is_active FROM browser_profiles WHERE profile_id = ?')
+                .get(profileId) as any;
+            // Known profile: honour its own flag. No row => never configured.
+            return row ? row.is_active !== 0 : true;
+        }
+        if (browserName) {
+            const paused = db.prepare('SELECT 1 AS p FROM browser_profiles WHERE browser_name = ? AND is_active = 0 LIMIT 1')
+                .get(browserName) as any;
+            // Every known profile for this browser is paused => block.
+            return !paused;
+        }
+        return true;
+    }
+    catch {
+        return true;
+    }
+}
+
+/**
+ * Refresh connection truth for a profile on every accepted payload.
+ * is_connected used to be write-once-true (never cleared), and total_duration_ms
+ * was never written at all, so the UI showed a permanently-connected profile with
+ * "0m tracked" forever.
+ */
+function touchBrowserProfile(profileId, browserName, addedMs) {
+    if (!db || !profileId)
+        return;
+    try {
+        const existing = db.prepare('SELECT id FROM browser_profiles WHERE profile_id = ?')
+            .get(profileId) as any;
+        if (existing) {
+            db.prepare(`UPDATE browser_profiles
+                SET last_seen_at = datetime('now','localtime'),
+                    is_connected = 1,
+                    total_duration_ms = COALESCE(total_duration_ms, 0) + ?,
+                    updated_at = datetime('now','localtime')
+                WHERE id = ?`)
+                .run(Math.max(0, Math.floor(addedMs || 0)), existing.id);
+            return;
+        }
+        // First time we see this profileId on the data path (extension never
+        // called /browser-identify, or prefs were cleared). Create it so the UI
+        // has something real to render.
+        const colors = ['#22c55e', '#3b82f6', '#a855f7', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#10b981'];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        db.prepare(`INSERT INTO browser_profiles
+            (browser_name, profile_id, profile_name, browser_version, last_seen_at, is_connected, color_tag, total_duration_ms)
+            VALUES (?, ?, ?, ?, datetime('now','localtime'), 1, ?, ?)`)
+            .run(browserName || 'browser', profileId, `${browserName || 'Browser'} profile`, null, color, Math.max(0, Math.floor(addedMs || 0)));
+        console.log(`[DeskFlow] 🆕 Auto-registered browser profile ${profileId} (${browserName || 'unknown'}) from data path`);
+    }
+    catch (err) {
+        console.error('[DeskFlow] touchBrowserProfile error:', err);
+    }
+}
 function categorizeApp(appName, opts?: { isResolvedGame?: boolean }) {
     if (opts?.isResolvedGame) return 'Gaming';
     const lower = appName.toLowerCase();
@@ -7299,6 +7469,13 @@ electron_1.ipcMain.handle('get-title-bar-mode', () => {
 electron_1.ipcMain.handle('set-title-bar-mode', (_event, mode: 'always' | 'hover' | 'auto') => {
     userPreferences.titleBarMode = mode;
     savePreferences();
+    // Broadcast so the live TitleBar applies immediately. Without this the
+    // renderer only read the mode on mount, so clicking a mode did nothing
+    // until the app was relaunched.
+    try {
+        const win = electron_1.BrowserWindow.getAllWindows()[0];
+        win?.webContents.send('title-bar-mode-changed', mode);
+    } catch { /* window gone */ }
     return true;
 });
 // R-10: boot animation config — preference store single source (ruling 2)
@@ -7718,46 +7895,110 @@ electron_1.ipcMain.handle('stt:register-shortcut', async (_event, shortcut) => {
 electron_1.ipcMain.handle('get-ai-agent-custom-paths', () => {
     return userPreferences.aiAgentCustomPaths || {};
 });
-electron_1.ipcMain.handle('set-ai-agent-custom-path', (event, pluginId: string, dirPath: string) => {
+electron_1.ipcMain.handle('set-ai-agent-custom-path', async (event, pluginId: string, dirPath: string) => {
     if (!userPreferences.aiAgentCustomPaths) userPreferences.aiAgentCustomPaths = {};
     if (dirPath) {
+        // Reject a path that does not exist: storing it would mark the agent
+        // "detected" via getStoragePaths() in some code paths while parsing
+        // nothing, and it would be indistinguishable from a real install.
+        if (!fs_1.default.existsSync(dirPath)) {
+            return { success: false, error: 'Path does not exist' };
+        }
         userPreferences.aiAgentCustomPaths[pluginId] = dirPath;
     } else {
         delete userPreferences.aiAgentCustomPaths[pluginId];
     }
     (global as any).__aiAgentCustomPaths = { ...userPreferences.aiAgentCustomPaths };
     savePreferences();
-    return true;
+    // Location changed — re-read this agent so the new path is actually ingested.
+    const resync = await resyncAgentAfterPathChange(pluginId);
+    return { success: true, ...resync };
 });
 
 // AI Sync state tracking for efficiency (file mtime tracking) + last sync display
-const SYNC_STATE_VERSION = 2;
+// v3 adds `hostKey` so moving the app to another OS / user / machine discards
+// path state that can never match again (paths are absolute and host-specific).
+const SYNC_STATE_VERSION = 3;
 interface AISyncState {
     version?: number;
     lastRunAt: string | null;
     agentLastRun: Record<string, string>;
     paths: Record<string, Record<string, { mtime: number; fileCount: number }>>;
+    hostKey?: string;
+    // Rows per tool in ai_usage as of the last completed sync. The mtime cache
+    // can only be trusted while this number has not gone DOWN — otherwise the
+    // cache would hide a database that lost rows (partial restore, manual
+    // delete) forever, because the agent's files on disk are unchanged.
+    dbRowCount?: Record<string, number>;
+}
+function getSyncHostKey(): string {
+    try {
+        return [process.platform, require('os').hostname(), require('os').homedir()].join('|');
+    } catch {
+        return 'unknown';
+    }
 }
 function loadAISyncState(): AISyncState {
+    const empty = (): AISyncState => ({ version: SYNC_STATE_VERSION, lastRunAt: null, agentLastRun: {}, paths: {}, hostKey: getSyncHostKey(), dbRowCount: {} });
     const stored = userPreferences.aiSyncState;
     if (stored && typeof stored === 'object' && stored.version === SYNC_STATE_VERSION) {
+        // A different OS / user / machine means every cached absolute path is
+        // stale — start clean rather than skipping paths that can never match.
+        if (stored.hostKey && stored.hostKey !== getSyncHostKey()) {
+            console.log('[DeskFlow] AI sync state discarded: host changed (OS/user/machine)');
+            return empty();
+        }
         return {
             version: stored.version,
             lastRunAt: stored.lastRunAt || null,
             agentLastRun: stored.agentLastRun || {},
             paths: stored.paths || {},
+            hostKey: stored.hostKey || getSyncHostKey(),
+            dbRowCount: stored.dbRowCount || {},
         };
     }
-    return { version: SYNC_STATE_VERSION, lastRunAt: null, agentLastRun: {}, paths: {} };
+    return empty();
 }
 function saveAISyncState(state: AISyncState) {
     state.version = SYNC_STATE_VERSION;
+    state.hostKey = getSyncHostKey();
     userPreferences.aiSyncState = state;
     savePreferences();
 }
 electron_1.ipcMain.handle('get-ai-sync-status', () => {
     return loadAISyncState();
 });
+
+/**
+ * Re-read a single agent's data after its storage location changed.
+ *
+ * Writing a new path is not enough on its own: the cached per-path mtime state
+ * is keyed by absolute path, and the caller has no way to know the data behind
+ * the new location was ever ingested. So we drop this agent's cache entirely
+ * and immediately re-sync just that agent — otherwise the UI shows the new
+ * path while the numbers stay stale until someone hits Sync by hand.
+ */
+async function resyncAgentAfterPathChange(pluginId: string): Promise<{ success: boolean; synced?: number; message?: string; error?: string }> {
+    if (useJson) return { success: false, message: 'AI sync requires SQLite' };
+    try {
+        const state = loadAISyncState();
+        delete state.paths[pluginId];
+        delete state.dbRowCount[pluginId];
+        saveAISyncState(state);
+    } catch (e: any) {
+        console.error(`[DeskFlow] Failed to invalidate ${pluginId} sync cache:`, e?.message);
+    }
+    // Never stack two writers. Losing the race is fine: the cache is already
+    // invalidated, so the in-flight or next sync picks the new path up.
+    if (aiSyncRunning) return { success: false, message: 'Sync already running — will refresh when it finishes' };
+    aiSyncRunning = true;
+    try {
+        const results = await syncAllAIAgents(db, pluginId);
+        return { success: true, synced: results[pluginId] || 0 };
+    } catch (err: any) {
+        return { success: false, error: String(err) };
+    } finally { aiSyncRunning = false; }
+}
 electron_1.ipcMain.handle('clear-ai-sync-state', () => {
     userPreferences.aiSyncState = null;
     saveAISyncState({ version: SYNC_STATE_VERSION, lastRunAt: null, agentLastRun: {}, paths: {} });
@@ -7773,7 +8014,7 @@ electron_1.ipcMain.handle('force-sync-ai-usage', async () => {
     try {
         // Invalidate ALL path-level change tracking so every path is re-parsed
         userPreferences.aiSyncState = null;
-        saveAISyncState({ version: SYNC_STATE_VERSION, lastRunAt: null, agentLastRun: {}, paths: {} });
+        saveAISyncState(loadAISyncState());
         const results = await syncAllAIAgents(db);
         return { success: true, ...results };
     } catch (err: any) {
@@ -8249,6 +8490,143 @@ electron_1.ipcMain.handle('extension:queue-command', (_event, command: any) => {
     } catch (err: any) { return { ok: false, error: err?.message }; }
 });
 
+/**
+ * Real Linux browser detection (replaces a hardcoded list that lied).
+ *
+ * Two independent signals, unioned:
+ *  1. Installed binaries on PATH / in the usual prefixes.
+ *  2. Registered `.desktop` launchers — the authoritative source on most desktops,
+ *     and it catches AppImage/Flatpak installs that live outside every prefix.
+ *
+ * Results are cached briefly so opening Settings repeatedly does not stat the disk
+ * on every render.
+ */
+let linuxBrowsersCache: { at: number; list: string[] } | null = null;
+const LINUX_BROWSERS_TTL_MS = 60_000;
+
+function detectLinuxBrowsers(): string[] {
+    const now = Date.now();
+    if (linuxBrowsersCache && now - linuxBrowsersCache.at < LINUX_BROWSERS_TTL_MS)
+        return linuxBrowsersCache.list;
+
+    const found = new Set<string>();
+
+    // (1) Binaries on PATH + the usual install prefixes.
+    const binNames: Record<string, string[]> = {
+        'chrome': ['google-chrome', 'google-chrome-stable', 'chrome'],
+        'chromium': ['chromium', 'chromium-browser'],
+        'firefox': ['firefox', 'firefox-esr'],
+        'brave': ['brave-browser', 'brave'],
+        'edge': ['microsoft-edge', 'microsoft-edge-stable'],
+        'opera': ['opera'],
+        'vivaldi': ['vivaldi', 'vivaldi-stable'],
+        'zen': ['zen', 'zen-browser'],
+        'arc': ['arc'],
+        'comet': ['comet'],
+        'librewolf': ['librewolf'],
+        'dia': ['dia'],
+    };
+    const pathDirs = (process.env.PATH || '').split(':').filter(Boolean);
+    for (const [brand, names] of Object.entries(binNames)) {
+        for (const name of names) {
+            for (const dir of pathDirs) {
+                try {
+                    if (fs_1.default.existsSync(path_1.default.join(dir, name))) {
+                        found.add(brand);
+                        break;
+                    }
+                }
+                catch { /* unreadable dir */ }
+            }
+            if (found.has(brand))
+                break;
+        }
+    }
+
+    // Common non-PATH locations (snap, flatpak, /opt, ~/.local).
+    const extraRoots = [
+        '/opt/google/chrome', '/opt/microsoft/msedge', '/usr/lib/brave',
+        '/usr/lib/firefox', '/usr/lib/chromium', '/usr/lib/vivaldi',
+        '/var/lib/flatpak/exports/bin', `${process.env.HOME || ''}/.local/bin`,
+        `${process.env.HOME || ''}/.local/share/flatpak/exports/bin`,
+        `${process.env.HOME || ''}/Applications`,
+    ];
+    const extraBins: Record<string, string[]> = {
+        'chrome': ['google-chrome', 'google-chrome-stable'],
+        'chromium': ['chromium'],
+        'firefox': ['firefox'],
+        'brave': ['brave-browser'],
+        'edge': ['microsoft-edge'],
+        'vivaldi': ['vivaldi'],
+        'zen': ['zen'],
+        'comet': ['comet'],
+        'opera': ['opera'],
+    };
+    for (const root of extraRoots) {
+        if (!root)
+            continue;
+        for (const [brand, names] of Object.entries(extraBins)) {
+            if (found.has(brand))
+                continue;
+            for (const n of names) {
+                try {
+                    if (fs_1.default.existsSync(path_1.default.join(root, n))) {
+                        found.add(brand);
+                        break;
+                    }
+                }
+                catch { /* not present */ }
+            }
+        }
+    }
+
+    // (2) Registered .desktop launchers — catches AppImage/Flatpak installs that
+    // live outside every prefix we probed above.
+    try {
+        const desktopDirs = [
+            '/usr/share/applications',
+            '/usr/local/share/applications',
+            '/var/lib/snapd/desktop/applications',
+            `${process.env.HOME || ''}/.local/share/applications`,
+        ];
+        const desktopHints: Array<[RegExp, string]> = [
+            [/google-chrome/i, 'chrome'], [/chromium/i, 'chromium'],
+            [/firefox|librewolf/i, 'firefox'], [/brave/i, 'brave'],
+            [/microsoft-edge|msedge/i, 'edge'], [/opera/i, 'opera'],
+            [/vivaldi/i, 'vivaldi'], [/\bzen\b/i, 'zen'],
+            [/arc/i, 'arc'], [/comet/i, 'comet'], [/\bdia\b/i, 'dia'],
+        ];
+        for (const dir of desktopDirs) {
+            let entries: string[];
+            try {
+                entries = fs_1.default.readdirSync(dir);
+            }
+            catch {
+                continue;
+            }
+            for (const file of entries) {
+                if (!file.endsWith('.desktop'))
+                    continue;
+                for (const [re, brand] of desktopHints) {
+                    if (re.test(file))
+                        found.add(brand);
+                }
+            }
+        }
+    }
+    catch (err) {
+        console.error('[DeskFlow] .desktop scan failed:', err);
+    }
+
+    const list = [...found].sort();
+    if (list.length === 0)
+        console.log('[DeskFlow] detectLinuxBrowsers: nothing found via binaries or .desktop files');
+    else
+        console.log(`[DeskFlow] detectLinuxBrowsers: ${list.join(', ')}`);
+    linuxBrowsersCache = { at: now, list };
+    return list;
+}
+
 electron_1.ipcMain.handle('get-available-browsers', async () => {
     const browsers: string[] = [];
     const platform = process.platform;
@@ -8295,8 +8673,10 @@ electron_1.ipcMain.handle('get-available-browsers', async () => {
                 }
             }
         } else {
-            // Linux
-            browsers.push('chrome', 'firefox', 'brave', 'edge', 'chromium', 'comet', 'zen');
+            // Linux — actually look, instead of returning a hardcoded 7-item list.
+            // The old hardcoded array offered browsers that were not installed and
+            // hid ones that were, which made the settings grid actively misleading.
+            browsers.push(...detectLinuxBrowsers());
         }
     } catch (err) {
         console.error('[DeskFlow] Error detecting browsers:', err);
@@ -8369,11 +8749,66 @@ electron_1.ipcMain.handle('get-tracked-browsers', async () => {
 electron_1.ipcMain.handle('get-browser-profiles', () => {
     if (!db) return [];
     try {
-        return db.prepare('SELECT * FROM browser_profiles ORDER BY browser_name, profile_name').all();
+        // Reap first so "connected" means "spoke in the last 60s" rather than the
+        // write-once-true column it used to be. The UI must never show a stale
+        // green dot for an extension that is not running.
+        reapDisconnectedProfiles();
+        const rows = db.prepare('SELECT * FROM browser_profiles ORDER BY browser_name, profile_name').all() as any[];
+        return rows.map((r) => ({
+            ...r,
+            total_duration_ms: r.total_duration_ms || 0,
+            // Live truth comes from the in-memory announce registry when available;
+            // fall back to the TTL-derived column for profiles seen earlier.
+            is_connected: (() => {
+                const sess = extensionSessions.get(r.profile_id);
+                if (sess)
+                    return (Date.now() - sess.lastSeen) <= PROFILE_CONNECT_TTL_MS ? 1 : 0;
+                return r.is_connected ? 1 : 0;
+            })(),
+        }));
     } catch (err) {
         console.error('[DeskFlow] get-browser-profiles error:', err);
         return [];
     }
+});
+
+/**
+ * One call that backs the whole "setup is automatic" surface: what is configured,
+ * what is connected right now, and which browsers are merely installed. The UI
+ * previously stitched this together from three prefs and guessed at liveness.
+ */
+electron_1.ipcMain.handle('get-extension-status', () => {
+    reapDisconnectedProfiles();
+    const now = Date.now();
+    const live = [...extensionSessions.values()].map(s => ({
+        profileId: s.profileId,
+        browserName: s.browserName,
+        ageMs: now - s.lastSeen,
+        connected: (now - s.lastSeen) <= PROFILE_CONNECT_TTL_MS,
+    }));
+    let profiles: any[] = [];
+    try {
+        profiles = db ? db.prepare('SELECT * FROM browser_profiles ORDER BY browser_name, profile_name').all() as any[] : [];
+    }
+    catch { /* table not created yet */ }
+    const configured: string[] = Array.isArray(userPreferences.browsersWithExtension)
+        ? userPreferences.browsersWithExtension
+        : (userPreferences.browserWithExtension ? [userPreferences.browserWithExtension] : []);
+    const connectedBrowsers = new Set<string>();
+    for (const p of profiles) {
+        const sess = extensionSessions.get(p.profile_id);
+        const connected = sess ? (now - sess.lastSeen) <= PROFILE_CONNECT_TTL_MS : !!p.is_connected;
+        if (connected && p.browser_name)
+            connectedBrowsers.add(String(p.browser_name).toLowerCase());
+    }
+    return {
+        trackingEnabled: isBrowserTrackingEnabled,
+        configuredBrowsers: configured,
+        connectedBrowsers: [...connectedBrowsers],
+        connectedNow: live.filter(l => l.connected),
+        profiles: profiles.map(p => ({ ...p, total_duration_ms: p.total_duration_ms || 0 })),
+        installedBrowsers: process.platform === 'linux' ? detectLinuxBrowsers() : undefined,
+    };
 });
 
 electron_1.ipcMain.handle('toggle-browser-profile', (event, args: { profileId: number; isActive: boolean }) => {
@@ -12133,7 +12568,7 @@ electron_1.ipcMain.handle('sync-ai-usage', async () => {
         const rowCount = db!.prepare('SELECT COUNT(*) as count FROM ai_usage').get() as any;
         if (rowCount && rowCount.count === 0) {
             userPreferences.aiSyncState = null;
-            saveAISyncState({ version: SYNC_STATE_VERSION, lastRunAt: null, agentLastRun: {}, paths: {} });
+            saveAISyncState(loadAISyncState());
         }
         const results = await syncAllAIAgents(db);
         return { success: true, ...results };
@@ -12283,14 +12718,19 @@ interface AgentConfig {
 const DEFAULT_AGENT = 'opencode';
 
 const AGENT_CONFIGS: Record<string, AgentConfig> = {
-  opencode: {
-    binaryCandidates: ['opencode', 'opencode.cmd', 'opencode.exe'],
-    readyRegex: /^(?:opencode)?\s*>\s*$/i,
-    installHint: 'Install with: npm i -g opencode-ai (then restart the app)',
-    bracketedPaste: true,
-    inputMode: 'tui-bubbletea',
-    tuiFramework: 'bubbletea',
-    sessionIdSource: 'db-pid',
+    opencode: {
+        binaryCandidates: ['opencode', 'opencode.cmd', 'opencode.exe'],
+        // opencode is a bubbletea TUI: it never prints a ">" prompt line, so the
+        // old /^(?:opencode)?\s*>\s*$/i could never match and the terminal stayed
+        // 'launching' forever — prompts were queued and silently never written.
+        // Readiness for this agent is decided by the bubbletea settle branch in
+        // isTuiSettled(), not by this regex. Kept only as a loose fallback.
+        readyRegex: /(?:^|\s)(?:opencode|›)(?:\s|$)/i,
+        installHint: 'Install with: npm i -g opencode-ai (then restart the app)',
+        bracketedPaste: true,
+        inputMode: 'tui-bubbletea',
+        tuiFramework: 'bubbletea',
+        sessionIdSource: 'db-pid',
   },
   claude: {
     binaryCandidates: ['claude', 'claude.cmd', 'claude.exe'],
@@ -12346,10 +12786,27 @@ function getAgentConfig(agentType?: string): AgentConfig {
 
 // Strip ANSI escape sequences from terminal output
 function stripAnsi(s: string): string {
+  if (!s) return '';
   return s
+    // CSI FIRST. The catch-all \x1b[@-Z\\-_] rule below eats the ESC[ of a
+    // sequence whose parameters are split across two PTY chunks, leaving the
+    // tail (e.g. ";2;255;255;255m") in the buffer as literal text. That residue
+    // was what detectAgentPrompt was regexing against, so the prompt never
+    // matched and the agent never left 'launching'.
+    .replace(/\x1b\[[0-9;:<=>?]*[ -\/]*[@-~]/g, '')
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
     .replace(/\x1b[@-Z\\-_]/g, '')
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    // Residual literal tail of an SGR sequence split across two PTY chunks, e.g.
+    // ";2;255;255;255m". Deliberately requires 2+ params: a single number before
+    // 'm' is ordinary prose ("I am 5m tall") and must survive, and so must a bare
+    // "m". Only the multi-parameter truecolor form is unambiguous ANSI debris.
+    .replace(/^[;]?\d{1,3}(?:;\d{1,3})*m(?=\s|$)/gm, '')
+    // SGR tail, anchored anywhere (not just line start): opencode's frame wraps,
+    // so the residue can land mid-line after a CR.
+    .replace(/[\s;]\d{1,3}(?:;\d{1,3})*m(?=\s|$)/g, ' ')
+    // OSC/apc payload tail left when the ESC] introducer split across chunks,
+    // e.g. "+q4d73" from a kitty-graphics or OSC-133 payload.
+    .replace(/(?:^|[\s;])[+>][a-zA-Z0-9]{2,12}$/gm, '')
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
 }
 
@@ -12440,9 +12897,10 @@ interface AgentState {
   idleSeq: number;
   launchStartedAt: number;
   lastOutputAt: number;           // Timestamp of last PTY data chunk
-  verifyTimeout?: NodeJS.Timeout; // Timer for write verification
-  handshakeToken?: string;
-  timeoutHandle?: ReturnType<typeof setTimeout>;
+    verifyTimeout?: NodeJS.Timeout; // Timer for write verification
+    handshakeToken?: string;
+    timeoutHandle?: ReturnType<typeof setTimeout>;       // 6s force-ready backstop
+    errorTimeoutHandle?: ReturnType<typeof setTimeout>;  // 15s launch-failure timer
   pendingWrites?: string[];
   currentModel?: string;
   sessionId?: string;              // captured from agent output (primary) or DB (fallback)
@@ -12497,13 +12955,26 @@ function markAgentReady(id: string, st: AgentState) {
 }
 
 function isTuiSettled(st: AgentState): boolean {
-  // Must have received enough data to pass the initial boot splash
-  if (st.dataBuffer.length < 150) return false;
-  const lastLine = getLastNonEmptyTerminalLine(st.dataBuffer);
-  if (looksLikeShell(lastLine)) return false;
-  // Core heuristic: TUI has finished rendering its frame and is waiting for input
-  // (Ink/React TUIs go completely silent on stdout when awaiting stdin).
-  return (Date.now() - st.lastOutputAt) >= 500;
+    // Must have received enough data to pass the initial boot splash
+    if (st.dataBuffer.length < 150) return false;
+    const lastLine = getLastNonEmptyTerminalLine(st.dataBuffer);
+    if (looksLikeShell(lastLine)) return false;
+    const quietFor = Date.now() - st.lastOutputAt;
+    const cfg = getAgentConfig(st.agentType);
+    // Ink/React TUIs (claude, codex, gemini) go fully silent on stdout while
+    // waiting for stdin, so 500ms of quiet is a reliable "it's listening" signal.
+    if (quietFor >= 500) return true;
+    // bubbletea TUIs (opencode) redraw continuously — a cursor, a spinner, a
+    // status line — so they NEVER go quiet and the old silence test could not
+    // ever be true. For them, reaching the prompt region is the signal: enough
+    // output has arrived, the last line is not a shell prompt, and the TUI has
+    // been up for at least a second. Bounded by launchStartedAt so a stalled
+    // spawn still falls through to the 15s error timeout.
+    if (cfg.tuiFramework === 'bubbletea') {
+        const upFor = Date.now() - (st.launchStartedAt || Date.now());
+        return upFor >= 1000;
+    }
+    return false;
 }
 
 // Incremental output parsing + session ID capture + launch error detection.
@@ -12585,9 +13056,15 @@ function clearTerminalReadyFallback(id: string) {
 
 function clearAgentTimeout(terminalId: string) {
   const st = agentStates.get(terminalId);
+  // Clears BOTH the 6s force-ready backstop and the 15s error timer — startAgentTimeout
+  // stashes them in separate fields so neither can survive a successful ready.
   if (st?.timeoutHandle) {
     clearTimeout(st.timeoutHandle);
     st.timeoutHandle = undefined;
+  }
+  if (st?.errorTimeoutHandle) {
+    clearTimeout(st.errorTimeoutHandle);
+    st.errorTimeoutHandle = undefined;
   }
 }
 
@@ -12617,13 +13094,31 @@ function startAgentTimeout(id: string, agentType: string) {
   const st = agentStates.get(id);
   if (!st) return;
 
-  // Blind force-ready REMOVED: we no longer flush the queue on a 5s timer without
-  // verifying the TUI is actually listening (caused silent message loss). The
-  // idle-settle heuristic (isTuiSettled) or the ready-regex drives readiness instead.
+    // Blind force-ready REMOVED: we no longer flush the queue on a 5s timer without
+    // verifying the TUI is actually listening (caused silent message loss). The
+    // idle-settle heuristic (isTuiSettled) or the ready-regex drives readiness instead.
 
-  // Full error timeout at 15s (reduced from 30s since we no longer blind-force at 5s)
-  const timer = setTimeout(() => {
-    if (agentStates.get(id)?.phase !== 'launching') return;
+    // BACKSTOP: a bounded "last chance" force-ready. If the phase is still
+    // 'launching' this far after spawn, the heuristics above did not fire — and
+    // the consequence of staying in 'launching' is that agent:send returns
+    // {queued:true, written:false} and the user's prompt is silently swallowed
+    // forever. A late write that the TUI ignores is recoverable (the write
+    // verifier retries, then surfaces agent:write-failed); a swallowed prompt is
+    // not. Only fires if the PTY produced real output, so a dead spawn still
+    // falls through to the 15s error timeout below.
+    const backstop = setTimeout(() => {
+        const cur = agentStates.get(id);
+        if (!cur || cur.phase !== 'launching') return;
+        if (cur.dataBuffer.length < 150) return;
+        console.warn(`[AGENT-READY] Force-ready backstop fired for ${id} (${agentType}) — settle heuristics did not fire; flushing pending writes.`);
+        markAgentReady(id, cur);
+    }, 6000);
+    st.timeoutHandle = backstop;
+
+    // Full error timeout at 15s (reduced from 30s since we no longer blind-force at 5s)
+    const timer = setTimeout(() => {
+        clearAgentTimeout(id);
+        if (agentStates.get(id)?.phase !== 'launching') return;
     const diag = diagnoseAgentFailure(id, agentType);
     for (const win of electron_1.BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
@@ -12631,9 +13126,9 @@ function startAgentTimeout(id: string, agentType: string) {
         try { safeSend(win, 'agent:init-error', { terminalId: id, agentType, ...diag }); } catch {}
       }
     }
-    failPendingWrites(id);
-  }, 15000);
-  st.timeoutHandle = timer;
+        failPendingWrites(id);
+    }, 15000);
+    st.errorTimeoutHandle = timer;
 }
 
 // Broadcast helper — send to all windows with disposal-safe pattern
@@ -16736,8 +17231,10 @@ electron_1.ipcMain.handle('debug-ai-agents', async () => {
 
     for (const plugin of AI_AGENT_PLUGINS) {
         try {
-            const isDetected = await plugin.detect();
+            const explicitPath = getAgentCustomPath(plugin.id);
+            const isDetected = await plugin.detect() || !!explicitPath;
             const paths = plugin.getStoragePaths();
+            if (explicitPath && !paths.includes(explicitPath)) paths.push(explicitPath);
             const sampleFiles: string[] = [];
             let totalFiles = 0;
 
@@ -16846,11 +17343,18 @@ electron_1.ipcMain.handle('debug-ai-agents', async () => {
 });
 
 // Set Hermes sessions path
-electron_1.ipcMain.handle('set-hermes-sessions-path', (_event, path: string) => {
+electron_1.ipcMain.handle('set-hermes-sessions-path', async (_event, path: string) => {
     try {
+        // Clearing the override must work, so only validate a non-empty value.
+        if (path && !fs_1.default.existsSync(path)) {
+            return { success: false, error: 'Path does not exist' };
+        }
         const { wordTrackerSetConfig } = require('./main/wordTracker');
         wordTrackerSetConfig('hermes_sessions_path', path);
-        return { success: true };
+        // Pointing Hermes at a new location (or back at the default) has to
+        // trigger a re-read, otherwise the numbers on screen belong to the old path.
+        const resync = await resyncAgentAfterPathChange('hermes');
+        return { success: true, ...resync };
     } catch (err) {
         return { success: false, error: err.message };
     }
@@ -19008,7 +19512,10 @@ function startBrowserTrackingServer() {
     const server = http_1.default.createServer((req, res) => {
         // CORS headers for browser extension access
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        // PATCH and DELETE are used by the extension (chart-category editing,
+        // topic deletion). Omitting them made the browser preflight FAIL, so those
+        // two features were unreachable over HTTP no matter what the handler did.
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
         if (req.method === 'OPTIONS') {
             res.writeHead(204);
@@ -19322,12 +19829,15 @@ function startBrowserTrackingServer() {
                 res.end(JSON.stringify({ error: err?.message || 'provider routing failed' }));
             }
         }
-        else if (req.method === 'GET' && req.url === '/extension/episode-status') {
+        else if (req.method === 'GET' && req.url.split('?')[0] === '/extension/episode-status') {
             // 2.4 — capture status + extraction job info
             try {
                 const url = new URL(req.url, `http://${req.headers.host}`);
                 const captureId = url.searchParams.get('captureId');
-                if (!captureId) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'captureId required' })); return; }
+                // NOTE: must not use a falsy check. The extension calls this with
+                // `?captureId=0` for "no capture yet", and '0' is truthy as a string
+                // but 0 is falsy as a number — a falsy guard 400s the valid case.
+                if (captureId === null || captureId === undefined || captureId === '') { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'captureId required' })); return; }
                 const cap = db.prepare('SELECT * FROM ai_context_captures WHERE id = ?').get(captureId);
                 if (!cap) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'capture not found' })); return; }
                 const episodes = db.prepare("SELECT * FROM context_episodes WHERE source_ref = ?").all(`ai_context_capture:${captureId}`);
@@ -19409,6 +19919,25 @@ function startBrowserTrackingServer() {
             } catch (err) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: err?.message || 'topics failed' }));
+            }
+        }
+        else if (req.method === 'DELETE' && /^\/extension\/topics\/\d+/.test(req.url.split('?')[0])) {
+            // The popup's "×" on a topic chip calls DELETE /extension/topics/<id>.
+            // No DELETE handler existed anywhere in this server, so the button
+            // silently 404'd and the topic always reappeared.
+            const topicId = Number(req.url.split('?')[0].split('/').pop());
+            if (!Number.isInteger(topicId) || topicId <= 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'invalid topic id' }));
+                return;
+            }
+            try {
+                const info = db.prepare('DELETE FROM ai_interests WHERE id = ?').run(topicId);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: 'ok', deleted: info.changes }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'delete failed' }));
             }
         }
         else if (req.method === 'POST' && req.url === '/extension/topics') {
@@ -19598,6 +20127,37 @@ function startBrowserTrackingServer() {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ status: 'ok', tracking: isBrowserTrackingEnabled }));
         }
+        else if (req.method === 'GET' && req.url === '/extension/whoami') {
+            // Who is actually connected right now? Built from the in-memory
+            // announce registry (live) plus browser_profiles (durable), so the UI
+            // can render truth on demand instead of guessing from preferences.
+            reapDisconnectedProfiles();
+            const live = [...extensionSessions.values()].map(s => ({
+                profileId: s.profileId,
+                browserName: s.browserName,
+                browserVersion: s.browserVersion,
+                ageMs: Date.now() - s.lastSeen,
+                connected: (Date.now() - s.lastSeen) <= PROFILE_CONNECT_TTL_MS,
+            }));
+            let profiles: any[] = [];
+            try {
+                profiles = db
+                    ? db.prepare(`SELECT browser_name, profile_id, profile_name, is_active,
+                                 is_connected, last_seen_at, total_duration_ms, color_tag, known_app_name
+                          FROM browser_profiles ORDER BY browser_name, profile_name`).all() as any[]
+                    : [];
+            }
+            catch { /* table may not exist yet on first boot */ }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                status: 'ok',
+                trackingEnabled: isBrowserTrackingEnabled,
+                configuredBrowsers: userPreferences.browsersWithExtension || (userPreferences.browserWithExtension ? [userPreferences.browserWithExtension] : []),
+                connectedNow: live.filter(l => l.connected),
+                profiles,
+                activeSessions: activeBrowserSessions.size,
+            }));
+        }
         else if (req.method === 'GET' && req.url === '/status') {
             // Full diagnostic status for debugging browser tracking
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -19631,13 +20191,41 @@ function startBrowserTrackingServer() {
                     if (data.browser) {
                         userPreferences.browserWithExtension = data.browser;
                         userPreferences.browserProcessNames = data.processNames || getBrowserProcessNames(data.browser);
+                        // ── ZERO-CONFIG ADOPTION (Phase 3.1) ─────────────────────
+                        // The user must never have to pick "which browsers have the
+                        // extension" from a list: an extension announcing itself IS
+                        // that answer. Add it to the tracked set so a second browser
+                        // with the extension works without a settings visit, and turn
+                        // website tracking on so a first-time install tracks at once.
+                        const canon = String(data.browser).toLowerCase();
+                        const withExt: string[] = Array.isArray(userPreferences.browsersWithExtension)
+                            ? userPreferences.browsersWithExtension
+                            : [];
+                        if (!withExt.includes(canon)) {
+                            withExt.push(canon);
+                            userPreferences.browsersWithExtension = withExt;
+                            console.log(`[DeskFlow] ⚡ Auto-enabled website tracking for "${canon}" (extension self-reported)`);
+                        }
+                        if (!userPreferences.browserTrackingEnabled) {
+                            userPreferences.browserTrackingEnabled = true;
+                            isBrowserTrackingEnabled = true;
+                            console.log(`[DeskFlow] ⚡ Website tracking turned ON automatically (first extension connected)`);
+                        }
                         savePreferences();
-                        console.log(`[DeskFlow] Browser extension identified as: ${data.browser} (processes: ${userPreferences.browserProcessNames.join(', ')})`);
+                        console.log(`[DeskFlow] Browser extension identified as: ${data.browser} (processes: ${(userPreferences.browserProcessNames || []).join(', ')})`);
                         // Notify renderer so browser selector updates immediately without page reload
                         if (mainWindow && !mainWindow.isDestroyed()) {
-                            safeSend(mainWindow, 'browser-identified', { browser: data.browser });
+                            safeSend(mainWindow, 'browser-identified', {
+                                browser: data.browser,
+                                browsersWithExtension: userPreferences.browsersWithExtension,
+                                browserTrackingEnabled: true,
+                            });
                         }
                     }
+                    // Remember the announce so /browser-data payloads can be
+                    // attributed even if the extension build does not send browserName.
+                    if (data.profileId)
+                        rememberExtensionSession(data.profileId, data.browser, data.browserVersion);
                     // Auto-create/update browser profile from extension data
                     if (data.browser && data.profileId && db) {
                         try {
@@ -19675,7 +20263,12 @@ function startBrowserTrackingServer() {
                 try {
                     const log = JSON.parse(logBody);
                     // Same simple focus check as /browser-data
-                    if (log.is_browser_focused === false) {
+                    // NOTE: `browserFocused` was never defined in this scope — both
+                    // the else-if below and the final response referenced an
+                    // undeclared identifier, so calling this route threw a
+                    // ReferenceError. The payload's own flag is the real source.
+                    const browserFocused = log.is_browser_focused !== false;
+                    if (!browserFocused) {
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ status: 'skipped' }));
                         return;
@@ -19695,11 +20288,9 @@ function startBrowserTrackingServer() {
                                 timestamp: log.timestamp || Date.now()
                             });
                         } catch (_err) {}
-                    } else if (mainWindow && !mainWindow.isDestroyed() && !browserFocused) {
-                        console.log('[DeskFlow] ⏸️ Live-log skipped - browser not focused');
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ status: browserFocused ? 'ok' : 'skipped' }));
+                    res.end(JSON.stringify({ status: 'ok' }));
                 }
                 catch (err) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -19795,25 +20386,37 @@ function handleBrowserData(data) {
     if (focusManager) {
         focusManager.onWebActivity(data.domain);
     }
+    // Resolve WHICH browser profile sent this payload (identity seam).
+    const identity = resolveBrowserIdentity(data);
+    // A profile the user paused must not contribute any data at all.
+    if (!isProfileTrackingAllowed(identity.profileId, identity.browserName)) {
+        return;
+    }
+    rememberExtensionSession(identity.profileId, identity.browserName, data.browserVersion);
+    const sessionKey = browserSessionKey(identity, data.domain);
     const sessionDuration = data.active_duration_ms || 0;
     const dataTimestamp = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
     // Only log if session is meaningful (> 2 seconds)
     if (sessionDuration < 2000)
         return;
-    // STRICT MODE: Only track the MOST RECENTLY active tab
-    // If this domain is NOT the most recent one, skip it
-    if (lastActiveBrowserDomain && lastActiveBrowserDomain !== data.domain) {
-        const timeSinceLastActive = dataTimestamp - lastActiveBrowserTimestamp;
+    // STRICT MODE: Only track the MOST RECENTLY active tab.
+    // This is a PER-BROWSER rule: Chrome's background tabs must not pollute the
+    // foreground, but Chrome and Firefox are separate browsers and must not
+    // suppress each other (they can legitimately have the same domain open).
+    const priorTab = lastActiveBrowserTabByProfile.get(sessionKey.split('::')[0]) ;
+    if (priorTab && priorTab.domain !== data.domain) {
+        const timeSinceLastActive = dataTimestamp - priorTab.timestamp;
         // If the last active was within last 30 seconds and this is a different domain, skip
         if (timeSinceLastActive < 30000) {
-            console.log(`[DeskFlow] ⏭️ Skipped non-active browser tab: ${data.domain} (active: ${lastActiveBrowserDomain})`);
+            console.log(`[DeskFlow] ⏭️ Skipped non-active browser tab: ${data.domain} (active: ${priorTab.domain})`);
             return;
         }
     }
-    // Update last active domain
+    lastActiveBrowserTabByProfile.set(sessionKey.split('::')[0], { domain: data.domain, timestamp: dataTimestamp });
+    // Update last active domain (global, for /status diagnostics only)
     lastActiveBrowserDomain = data.domain;
     lastActiveBrowserTimestamp = dataTimestamp;
-    const existingSession = activeBrowserSessions.get(data.domain);
+    const existingSession = activeBrowserSessions.get(sessionKey);
     if (existingSession) {
         // FIX: Use explicit delta from extension if available (new behavior)
         // Otherwise calculate delta from last recorded duration (legacy behavior)
@@ -19837,6 +20440,9 @@ function handleBrowserData(data) {
             // hours would accumulate 5h+ in one DB row while the browser app itself
             // gets checkpointed in 2-min chunks � making website time > browser time.
             existingSession.duration_ms = Math.min(existingSession.duration_ms + safeDelta, MAX_LOGGED_SESSION_MS);
+            // Liveness stamp. session.timestamp stays frozen at session START for
+            // correct hourly attribution; this tracks "still receiving updates".
+            (existingSession as any)._lastActivityAt = Date.now();
             existingSession.title = data.title || existingSession.title;
             // BUG FIX: Do NOT update timestamp on delta updates. The timestamp
             // represents session START time. Updating it to the latest sync time
@@ -19846,8 +20452,9 @@ function handleBrowserData(data) {
             // Update in SQLite � keep original timestamp, update duration + title + url
             if (!useJson) {
                 try {
-                    const updateStmt = db.prepare(`UPDATE logs SET duration_ms = ?, title = ?, url = ?, browser_name = COALESCE(?, browser_name) WHERE id = ?`);
-                    updateStmt.run(existingSession.duration_ms, data.title || existingSession.title, data.sanitized_url || data.url, data.browser_name || null, existingSession.id);
+                    const updateStmt = db.prepare(`UPDATE logs SET duration_ms = ?, title = ?, url = ?, browser_name = COALESCE(?, browser_name), profile_id = COALESCE(?, profile_id) WHERE id = ?`);
+                    updateStmt.run(existingSession.duration_ms, data.title || existingSession.title, data.sanitized_url || data.url, identity.browserName, identity.profileId, existingSession.id);
+                    touchBrowserProfile(identity.profileId, identity.browserName, safeDelta);
                 }
                 catch (err) {
                     console.error('[DeskFlow] Browser session update failed:', err);
@@ -19889,19 +20496,21 @@ function handleBrowserData(data) {
                 db.prepare(`
                     UPDATE logs SET 
                       app = ?, domain = ?, url = ?, title = ?,
-                      category = ?, browser_name = COALESCE(?, browser_name)
+                      category = ?, browser_name = COALESCE(?, browser_name), profile_id = COALESCE(?, profile_id)
                     WHERE id = ?
                 `).run(
                     data.domain, data.domain,
                     data.sanitized_url || data.url,
                     data.title || data.domain,
                     categorizeDomain(data.domain, data.title, data.url),
-                    data.browser_name || null,
+                    identity.browserName,
+                    identity.profileId,
                     recentBrowserApp.id
                 );
                 console.log(`[DeskFlow] 🔗 Deduplicated browser entry: ${recentBrowserApp.app} → ${data.domain}`);
+                touchBrowserProfile(identity.profileId, identity.browserName, newSessionDuration);
                 // Still create in-memory session for delta tracking
-                activeBrowserSessions.set(data.domain, {
+                activeBrowserSessions.set(sessionKey, {
                     id: recentBrowserApp.id,
                     timestamp: data.timestamp || new Date().toISOString(),
                     app: data.domain,
@@ -19910,7 +20519,9 @@ function handleBrowserData(data) {
                     title: data.title || data.domain,
                     domain: data.domain,
                     is_browser_tracking: true,
-                    browser_name: data.browser_name || null
+                    browser_name: identity.browserName,
+                    profile_id: identity.profileId,
+                    _lastActivityAt: Date.now()
                 });
                 return;
             }
@@ -19937,7 +20548,9 @@ function handleBrowserData(data) {
             domain: data.domain,
             tab_id: data.tab_id,
             is_browser_tracking: true,
-            browser_name: data.browser_name || null
+            browser_name: identity.browserName,
+            profile_id: identity.profileId,
+            _lastActivityAt: Date.now()
         };
         if (useJson) {
             jsonLogs.unshift(entry);
@@ -19948,19 +20561,20 @@ function handleBrowserData(data) {
         else {
             try {
                 const stmt = db.prepare(`
-          INSERT INTO logs (timestamp, app, category, duration_ms, title, project, url, domain, tab_id, is_browser_tracking, browser_name)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO logs (timestamp, app, category, duration_ms, title, project, url, domain, tab_id, is_browser_tracking, browser_name, profile_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-                const result = stmt.run(entry.timestamp, entry.app, entry.category, entry.duration_ms, entry.title, entry.project, entry.url, entry.domain, entry.tab_id, 1, entry.browser_name);
+                const result = stmt.run(entry.timestamp, entry.app, entry.category, entry.duration_ms, entry.title, entry.project, entry.url, entry.domain, entry.tab_id, 1, entry.browser_name, entry.profile_id);
                 entry.id = result.lastInsertRowid;
             }
             catch (err) {
                 console.error('[DeskFlow] Browser data insert failed:', err);
             }
         }
-        updateAggregates(entry.timestamp, entry.app, entry.category, entry.duration_ms, entry.domain, true);
-        activeBrowserSessions.set(data.domain, entry);
-        console.log(`[DeskFlow] ✅ Browser logged: ${data.domain} → ${Math.floor(sessionDuration / 1000)}s`);
+        touchBrowserProfile(identity.profileId, identity.browserName, newSessionDuration);
+        updateAggregates(entry.timestamp, entry.app, entry.category, entry.duration_ms, data.domain, true);
+        activeBrowserSessions.set(sessionKey, entry);
+        console.log(`[DeskFlow] ✅ Browser logged: ${data.domain} → ${Math.floor(sessionDuration / 1000)}s (${identity.browserName || 'unknown browser'}${identity.profileId ? ` / ${identity.profileId.slice(0, 8)}` : ''})`);
     }
 }
 // FIX 2: Periodic flush of stale browser sessions (handles MV3 onSuspend unreliability)
@@ -19972,16 +20586,58 @@ function startBrowserSessionFlushTimer() {
     browserSessionFlushInterval = setInterval(() => {
         const now = Date.now();
         const STALE_THRESHOLD_MS = 60000; // 60 seconds
-        for (const [domain, session] of activeBrowserSessions.entries()) {
-            // Check if this session is stale by comparing its timestamp
-            const sessionAge = now - new Date(session.timestamp).getTime();
+        for (const [key, session] of activeBrowserSessions.entries()) {
+            // Use _lastActivityAt, NOT session.timestamp.
+            // session.timestamp is deliberately the SESSION START time (it is never
+            // refreshed on delta updates, so hourly attribution stays correct), which
+            // meant this timer used to evict a session that was still receiving
+            // updates the instant it passed 60s old — fragmenting one browsing
+            // session into many rows and losing the accumulated in-memory duration.
+            const lastActivity = (session as any)._lastActivityAt
+                ?? new Date(session.timestamp).getTime();
+            const sessionAge = now - lastActivity;
             if (sessionAge > STALE_THRESHOLD_MS) {
                 // Session is stale — remove from active map (it's already persisted in SQLite)
-                activeBrowserSessions.delete(domain);
-                console.log(`[DeskFlow] 🧹 Flushed stale browser session: ${domain} (${Math.floor(session.duration_ms / 1000)}s)`);
+                activeBrowserSessions.delete(key);
+                lastActiveBrowserTabByProfile.delete(String(key).split('::')[0]);
+                console.log(`[DeskFlow] 🧹 Flushed stale browser session: ${key} (${Math.floor(session.duration_ms / 1000)}s)`);
             }
         }
+        reapDisconnectedProfiles(now);
     }, 30000); // Check every 30 seconds
+}
+
+/**
+ * Phase 2.2/2.3 — make "connected" mean "spoke in the last 60s".
+ * is_connected used to be set to 1 once and never cleared, so every profile
+ * ever seen displayed a permanent green dot whether or not the extension was
+ * even running. Derive it from last_seen_at instead of trusting the column.
+ */
+function reapDisconnectedProfiles(now = Date.now()) {
+    if (!db)
+        return;
+    try {
+        // Mark anything whose last_seen_at is older than the TTL as disconnected.
+        const res = db.prepare(`
+            UPDATE browser_profiles
+            SET is_connected = 0, updated_at = datetime('now','localtime')
+            WHERE is_connected = 1
+              AND (
+                last_seen_at IS NULL
+                OR (julianday('now','localtime') - julianday(last_seen_at)) * 86400000 > ?
+              )
+        `).run(PROFILE_CONNECT_TTL_MS);
+        if (res.changes > 0)
+            console.log(`[DeskFlow] 📴 Marked ${res.changes} browser profile(s) disconnected (no heartbeat in ${PROFILE_CONNECT_TTL_MS / 1000}s)`);
+    }
+    catch (err) {
+        console.error('[DeskFlow] reapDisconnectedProfiles error:', err);
+    }
+    // Drop in-memory sessions for extensions that went silent entirely.
+    for (const [profileId, sess] of extensionSessions.entries()) {
+        if (now - sess.lastSeen > PROFILE_CONNECT_TTL_MS * 4)
+            extensionSessions.delete(profileId);
+    }
 }
 function stopBrowserSessionFlushTimer() {
     if (browserSessionFlushInterval) {

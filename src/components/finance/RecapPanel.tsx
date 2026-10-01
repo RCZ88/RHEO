@@ -670,7 +670,7 @@ export function RecapPanel({ dataSection, displayCurrency, onNotify }: RecapPane
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-sm mx-4 rounded-2xl border border-zinc-800 bg-zinc-900/95 backdrop-blur-xl p-5 shadow-2xl"
+              className="w-full max-w-sm mx-4 rounded-xl border border-zinc-800 bg-zinc-900/95 backdrop-blur-xl p-5 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-2 mb-3">

@@ -87,7 +87,7 @@ export function VaultSeal({ size = 120, animate = true, status = 'locked' }: Vau
 
       {/* Shield container */}
       <motion.div
-        className="relative z-10 flex items-center justify-center rounded-2xl"
+        className="relative z-10 flex items-center justify-center rounded-xl"
         style={{
           width: size * 0.42,
           height: size * 0.42,

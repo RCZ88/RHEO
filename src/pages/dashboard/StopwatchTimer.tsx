@@ -67,7 +67,7 @@ export function StopwatchTimer({
 
   return (
     <div className="flex-1 min-w-0">
-      <div className="rounded-[10px] h-full p-5 sm:p-12 relative overflow-hidden bg-[var(--color-card)] border-t border-[var(--ws-border)]">
+      <div className="rounded-lg h-full p-5 sm:p-12 relative overflow-hidden bg-[var(--color-card)] border-t border-[var(--ws-border)]">
         <div className="text-center space-y-6 relative">
           {/* Status indicator */}
           <div className="flex items-center justify-center gap-2">

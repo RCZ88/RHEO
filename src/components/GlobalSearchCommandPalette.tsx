@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Search, BarChart3, Clock, TrendingUp, Monitor, PieChart, Plus, Layers, TrendingDown, Info, BookOpen, AlertTriangle, Wrench, Terminal, Bot, Settings, FileText, Brain, Calendar, Target, Zap, Globe, Wallet, CreditCard, Tag, Users, Receipt, Gauge, Sparkles, Moon, Code2, GitBranch, LineChart, Database, GraduationCap, Heart, Compass, ListTodo, History, Palette, Cpu, Bell, MessageSquare, Shield, FolderOpen, Image, LayoutGrid, Rocket, FlaskConical, Building2, Coins, ScrollText, Boxes, KeyRound, Volume2, Network, Repeat, ShieldAlert } from 'lucide-react';
 import { navigateTo, scrollToSection } from '../lib/deepNav';
 import { useNavigate } from 'react-router-dom';
@@ -39,7 +39,6 @@ const ITEMS: PaletteItem[] = [
   { id: 'nav-reports', label: 'Reports & Insights', route: '/reports', keywords: ['reports', 'insights', 'analysis', 'recap'], group: 'Navigation', icon: 'PieChart' },
   { id: 'nav-database', label: 'Database', route: '/database', keywords: ['database', 'tables', 'sql', 'schema'], group: 'Navigation', icon: 'Database' },
   { id: 'nav-guide', label: 'Guide & Tutorials', route: '/guide', keywords: ['guide', 'help', 'tutorial', 'specs'], group: 'Navigation', icon: 'BookOpen' },
-  { id: 'nav-agentic', label: 'Agentic System', route: '/agentic', keywords: ['agentic', 'agents', 'system', 'comms'], group: 'Navigation', icon: 'Network' },
   { id: 'nav-settings', label: 'Settings', route: '/settings', keywords: ['settings', 'preferences', 'config'], group: 'Navigation', icon: 'Settings' },
   { id: 'titlebar-settings', label: 'Title bar settings', route: '', keywords: ['title bar', 'titlebar', 'hide', 'auto-hide', 'window title'], group: 'Appearance', icon: 'Monitor' },
 
@@ -182,6 +181,9 @@ export default function GlobalSearchCommandPalette({ isOpen, onClose, onNavigate
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const onNavigateRef = useRef(onNavigate);
+  onNavigateRef.current = onNavigate;
 
   const filtered = useMemo(() => {
     if (!query.trim()) return ITEMS;
@@ -205,17 +207,83 @@ export default function GlobalSearchCommandPalette({ isOpen, onClose, onNavigate
     setSelectedIndex(0);
   }, [query]);
 
+  // Keyboard lives on the INPUT, not only on window.
+  //
+  // Why this changed: the handler used to sit on a window bubble-phase listener.
+  // Any listener between the input and window that calls stopPropagation() — or
+  // simply any future capture-phase handler — silently kills Enter, and the
+  // palette looks alive while being keyboard-dead. React's onKeyDown on the
+  // focused element is the only delivery path that cannot be swallowed from the
+  // outside, so it is now the single source of truth. The window listener is
+  // kept ONLY as a fallback for keys pressed while focus is outside the input,
+  // and it bails out when the event already came from the input (no double-fire).
+  // Commit reads from REFS, never from a useCallback closure.
+  //
+  // Why: the previous version closed over `filtered[selectedIndex]` inside a
+  // useCallback whose deps included an `onNavigate` prop that is a fresh inline
+  // arrow on every App render. That combination makes the memoised callback
+  // and the live render disagree, and the failure is invisible — the palette
+  // looks alive, arrows move the highlight, and Enter silently does nothing.
+  // Refs written during render are always current, so this path cannot go stale.
+  const filteredRef = useRef(filtered);
+  const selectedIndexRef = useRef(selectedIndex);
+  filteredRef.current = filtered;
+  selectedIndexRef.current = selectedIndex;
+
+  const move = useCallback(
+    (delta: number) => setSelectedIndex(i => Math.min(Math.max(i + delta, 0), Math.max(filteredRef.current.length - 1, 0))),
+    [],
+  );
+
+  const commit = useCallback(() => {
+    const i = selectedIndexRef.current;
+    const item = filteredRef.current[i];
+    console.log('[CommandPalette] commit requested', { index: i, total: filteredRef.current.length, id: item?.id ?? null });
+    if (!item) return;
+    // Probe hook: lets a runtime test assert the Enter path fired end-to-end
+    // without scraping React internals.
+    window.dispatchEvent(new CustomEvent('command-palette:commit', { detail: { id: item.id, index: i } }));
+    onNavigateRef.current(item);
+  }, []);
+
+  const onInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); move(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); return; }
+    if (e.key === 'Home') { e.preventDefault(); setSelectedIndex(0); return; }
+    if (e.key === 'End') { e.preventDefault(); setSelectedIndex(Math.max(filteredRef.current.length - 1, 0)); return; }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit(); }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
+      // The input owns its own keys — do not double-handle them.
+      if (e.target === inputRef.current) return;
       if (e.key === 'Escape') { onClose(); return; }
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, filtered.length - 1)); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, 0)); }
-      if (e.key === 'Enter' && filtered[selectedIndex]) { onNavigate(filtered[selectedIndex]); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); move(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); return; }
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, filtered, selectedIndex, onClose, onNavigate]);
+  }, [isOpen, move, commit, onClose]);
+
+  // Keep the highlighted row inside the scroll viewport. Without this, arrowing
+  // past the fold moves an invisible selection and Enter then opens something
+  // the user cannot see — the exact "Enter doesn't work" symptom.
+  useEffect(() => {
+    const root = listRef.current;
+    if (!root) return;
+    const el = root.querySelector<HTMLElement>(`[data-idx="${selectedIndex}"]`);
+    if (!el) return;
+    const rTop = root.scrollTop;
+    const rBot = rTop + root.clientHeight;
+    const eTop = el.offsetTop;
+    const eBot = eTop + el.offsetHeight;
+    if (eTop < rTop) root.scrollTop = eTop;
+    else if (eBot > rBot) root.scrollTop = eBot - root.clientHeight;
+  }, [selectedIndex, filtered]);
 
   if (!isOpen) return null;
 
@@ -225,7 +293,7 @@ export default function GlobalSearchCommandPalette({ isOpen, onClose, onNavigate
     <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[20vh]" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-lg bg-zinc-900 border border-zinc-700/50 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden"
+        className="relative w-full max-w-lg bg-zinc-900 border border-zinc-700/50 rounded-xl shadow-2xl shadow-black/50 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800">
@@ -234,12 +302,18 @@ export default function GlobalSearchCommandPalette({ isOpen, onClose, onNavigate
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
+            onKeyDown={onInputKeyDown}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-palette-results"
+            aria-activedescendant={filtered[selectedIndex] ? `cmd-${filtered[selectedIndex].id}` : undefined}
+            aria-label="Search pages, tabs, sections and cards"
             placeholder="Search pages, tabs, sections, cards..."
             className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
           />
           <kbd className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5">ESC</kbd>
         </div>
-        <div className="max-h-[50vh] overflow-y-auto py-2">
+        <div ref={listRef} id="command-palette-results" role="listbox" aria-label="Results" className="max-h-[50vh] overflow-y-auto py-2">
           {filtered.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-zinc-500">No results found</div>
           )}
@@ -254,10 +328,15 @@ export default function GlobalSearchCommandPalette({ isOpen, onClose, onNavigate
                   return (
                     <button
                       key={item.id}
+                      id={`cmd-${item.id}`}
+                      role="option"
+                      aria-selected={idx === selectedIndex}
+                      data-idx={idx}
+                      data-cmd-id={item.id}
                       className={`w-full text-left px-4 py-2.5 flex items-center gap-3 text-sm transition-colors ${
                         idx === selectedIndex ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
                       }`}
-                      onClick={() => onNavigate(item)}
+                      onClick={() => { selectedIndexRef.current = idx; setSelectedIndex(idx); commit(); }}
                       onMouseEnter={() => setSelectedIndex(idx)}
                     >
                       <Icon className="w-4 h-4 shrink-0" />
@@ -269,6 +348,16 @@ export default function GlobalSearchCommandPalette({ isOpen, onClose, onNavigate
               </div>
             );
           })}
+        </div>
+
+        {/* Footer — makes the keyboard contract visible instead of folklore */}
+        <div className="flex items-center gap-4 border-t border-zinc-800 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-600">
+          <span><span className="text-zinc-400">↑↓</span> navigate</span>
+          <span><span className="text-zinc-400">↵</span> open</span>
+          <span><span className="text-zinc-400">esc</span> close</span>
+          <span className="ml-auto normal-case tracking-normal text-zinc-600">
+            {filtered.length > 0 ? `${selectedIndex + 1} of ${filtered.length}` : 'no matches'}
+          </span>
         </div>
       </div>
     </div>

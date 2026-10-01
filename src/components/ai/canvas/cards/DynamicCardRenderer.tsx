@@ -19,7 +19,7 @@ export function DynamicCardRenderer({ component, onDismiss, onAction, isBuilding
     <motion.div
       variants={cardEnterVariants}
       initial="hidden" animate="show" exit="exit"
-      className="relative h-full flex flex-col bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-2xl overflow-hidden light:bg-[var(--color-card)] light:border-[var(--ws-border)]"
+      className="relative h-full flex flex-col bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl overflow-hidden light:bg-[var(--color-card)] light:border-[var(--ws-border)]"
     >
       <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: accent.hex }} />
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/50 light:border-[var(--ws-border)]">

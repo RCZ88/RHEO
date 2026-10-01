@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
+import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot,
@@ -257,6 +258,507 @@ function CostValue({ value }: { value: number }) {
   )
 }
 
+// ═══ Chart chrome tokens ═══════════════════════════════════════════════════
+// Canvas cannot resolve CSS custom properties, so chart.js needs literal color
+// strings. These are the exact values already used by the charts in this file,
+// lifted to module scope so no new raw hex is introduced in a component body.
+const CHART_TICK = '#71717a'
+const CHART_GRID = 'rgba(113,113,122,0.06)'
+const CHART_AXIS = 'rgba(113,113,122,0.12)'
+const CHART_TIP_BG = 'rgba(20, 22, 30, 0.85)'
+const CHART_TIP_TITLE = '#FFFFFF'
+const CHART_TIP_BODY = '#8E95A5'
+const CHART_TIP_BORDER = 'rgba(255,255,255,0.12)'
+
+// ═══ Agent / model comparison ═════════════════════════════════════════════
+// Shared by the detail view in BOTH popup and dropdown modes.
+//
+// The reason this exists as its own component: the dropdown branch had a
+// single hard-coded series, a token-only stat grid, and no metric control, so
+// it inherited whatever `aiChartMode` happened to be — in practice "tokens",
+// with no way to compare one tool against another. Two readings of the same
+// data are both legitimate and answer different questions:
+//
+//   overlay — every series on one axis. Answers "who wins", hides shape.
+//   split   — one small multiple per series. Answers "how do they differ".
+//
+// So the user picks the reading rather than us picking for them.
+
+type CompareMetric = 'tokens' | 'messages' | 'cost' | 'sessions'
+type CompareDimension = 'tools' | 'models'
+type CompareLayout = 'overlay' | 'split'
+
+interface CompareOption {
+  id: string
+  name: string
+  color: string
+}
+
+interface AgentComparePanelProps {
+  dayStrs: string[]
+  chartLabels: string[]
+  metricField: string
+  metricLabel: string
+  getDaily: (key: string) => Record<string, any>
+  options: CompareOption[]
+  selection: string[]
+  dimension: CompareDimension
+  onDimensionChange: (d: CompareDimension) => void
+  layout: CompareLayout
+  onLayoutChange: (l: CompareLayout) => void
+  metric: CompareMetric
+  onMetricChange: (m: CompareMetric) => void
+  tokenSub: 'combined' | 'input' | 'output'
+  onTokenSubChange: (m: 'combined' | 'input' | 'output') => void
+  chartType: 'line' | 'bar'
+  logScale: boolean
+  excludeOutliers: boolean
+  isLoading: boolean
+  errorText: string | null
+  onRetry: () => void
+  onToggle: (key: string) => void
+  onSelectAll: () => void
+  period: 'week' | 'month' | 'all'
+  onPeriodChange: (p: 'week' | 'month' | 'all') => void
+}
+
+function AgentComparePanel(props: AgentComparePanelProps) {
+  const {
+    dayStrs, chartLabels, metricField, metricLabel, getDaily, options, selection,
+    dimension, onDimensionChange, layout, onLayoutChange, metric, onMetricChange,
+    tokenSub, onTokenSubChange, chartType, logScale, excludeOutliers,
+    isLoading, errorText, onRetry, onToggle, onSelectAll, period, onPeriodChange,
+  } = props
+
+  // An empty selection means "all" — the same All-sentinel idiom the per-model
+  // filter in this file already uses, so the two do not behave differently.
+  const activeKeys = selection.length
+    ? selection.filter((k) => options.some((o) => o.id === k))
+    : options.map((o) => o.id)
+
+  const raw = activeKeys.map((key) => {
+    const daily = getDaily(key) || {}
+    return {
+      key,
+      values: dayStrs.map((ds) => Number((daily[ds] || {})[metricField]) || 0),
+    }
+  })
+
+  // ONE threshold for every series, computed from the summed column. If each
+  // series filtered its own outliers, a spike in one tool would be zeroed while
+  // an identical spike in another stayed visible — the chart would then show a
+  // difference that does not exist.
+  let threshold = Infinity
+  if (excludeOutliers && dayStrs.length >= 3) {
+    const summed = dayStrs.map((_, i) => raw.reduce((s, r) => s + r.values[i], 0))
+    const nonZero = summed.filter((v) => v > 0)
+    if (nonZero.length >= 2) {
+      const mean = nonZero.reduce((a, b) => a + b, 0) / nonZero.length
+      const variance = nonZero.reduce((s, v) => s + (v - mean) ** 2, 0) / nonZero.length
+      threshold = mean + 3 * Math.sqrt(variance)
+    }
+  }
+  const series = raw.map((r) => ({
+    ...r,
+    values: threshold === Infinity ? r.values : r.values.map((v) => (v > threshold ? 0 : v)),
+  }))
+
+  const ranked = series
+    .map((r) => {
+      const opt = options.find((o) => o.id === r.key)
+      return {
+        key: r.key,
+        label: opt?.name || r.key,
+        color: opt?.color || CHART_TICK,
+        total: r.values.reduce((a, b) => a + b, 0),
+      }
+    })
+    .sort((a, b) => b.total - a.total)
+  const grandTotal = ranked.reduce((s, r) => s + r.total, 0)
+
+  const isCost = metricField === 'cost'
+  const fmt = (v: number) => (isCost ? formatCurrency(v) : formatTokens(v))
+
+  const makeOptions = (showLegend: boolean) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index' as const, intersect: false },
+    plugins: {
+      legend: showLegend
+        ? {
+            display: true,
+            position: 'bottom' as const,
+            labels: { color: CHART_TICK, font: { size: 9 }, boxWidth: 10, padding: 8, usePointStyle: true },
+          }
+        : { display: false },
+      tooltip: {
+        backgroundColor: CHART_TIP_BG,
+        titleColor: CHART_TIP_TITLE,
+        bodyColor: CHART_TIP_BODY,
+        borderColor: CHART_TIP_BORDER,
+        borderWidth: 1,
+        cornerRadius: 10,
+        padding: { top: 12, bottom: 12, left: 16, right: 16 },
+        usePointStyle: true,
+        callbacks: {
+          label: (ctx: any) => ` ${ctx.dataset.label}: ${fmt(Number(ctx.parsed.y ?? ctx.parsed.x ?? 0))}`,
+        },
+      },
+    },
+    scales: {
+      x: { grid: { display: false }, border: { color: CHART_AXIS }, ticks: { color: CHART_TICK, maxTicksLimit: 8, font: { size: 9 } } },
+      y: {
+        type: (logScale ? 'logarithmic' : 'linear') as 'logarithmic' | 'linear',
+        grid: { color: CHART_GRID },
+        border: { color: CHART_AXIS },
+        ticks: { color: CHART_TICK, font: { size: 9 }, padding: 6 },
+        ...(logScale ? {} : { beginAtZero: true }),
+      },
+    },
+  })
+
+  const overlayData = {
+    labels: chartLabels,
+    datasets: series.map((s) => {
+      const meta = ranked.find((r) => r.key === s.key)!
+      const values = logScale ? s.values.map((v) => (v === 0 ? null : v)) : s.values
+      if (chartType === 'bar') {
+        return {
+          label: meta.label,
+          data: values as (number | null)[],
+          backgroundColor: meta.color + '80',
+          borderColor: meta.color,
+          borderWidth: 1.5,
+          borderRadius: 4,
+          borderSkipped: false,
+        }
+      }
+      return {
+        label: meta.label,
+        data: values as (number | null)[],
+        borderColor: meta.color,
+        // A filled area only reads correctly with a single series; with several
+        // they stack into mud and hide each other.
+        backgroundColor:
+          series.length === 1
+            ? (ctx: any) => {
+                const area = ctx.chart.chartArea
+                if (!area) return meta.color + '20'
+                const g = ctx.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom)
+                g.addColorStop(0, meta.color + '30')
+                g.addColorStop(1, meta.color + '00')
+                return g
+              }
+            : 'transparent',
+        borderWidth: 2,
+        pointRadius: (ctx: any) => (ctx.raw !== null && ctx.raw !== 0 ? 2 : 0) as number,
+        pointBackgroundColor: meta.color,
+        fill: series.length === 1,
+        tension: 0.35,
+        spanGaps: false,
+      }
+    }),
+  }
+
+  const barOptions = { ...makeOptions(true), barPercentage: 0.82, categoryPercentage: 0.85 }
+
+  const Chip = ({
+    active, onClick, title, children,
+  }: { active: boolean; onClick: () => void; title?: string; children: ReactNode }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={cn(
+        'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150 max-w-[120px] truncate',
+        active
+          ? 'bg-zinc-700/60 text-zinc-200'
+          : 'text-zinc-600 light:text-stone-500 hover:text-zinc-400 light:hover:text-stone-400'
+      )}
+    >
+      {children}
+    </button>
+  )
+
+  return (
+    <div className="space-y-3">
+      {/* ── Controls ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+          {(['tools', 'models'] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onDimensionChange(d)}
+              aria-pressed={dimension === d}
+              className={cn(
+                'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
+                dimension === d
+                  ? 'bg-violet-500/20 text-violet-400'
+                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+              )}
+            >
+              {d === 'tools' ? 'Tools' : 'Models'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+          {(['tokens', 'messages', 'sessions', 'cost'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onMetricChange(m)}
+              aria-pressed={metric === m}
+              className={cn(
+                'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
+                metric === m
+                  ? 'bg-violet-500/20 text-violet-400'
+                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+              )}
+            >
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </button>
+          ))}
+          {metric === 'tokens' && (
+            <>
+              <div className="w-px h-3 bg-zinc-700/60 mx-0.5" />
+              {(['combined', 'input', 'output'] as const).map((sub) => (
+                <button
+                  key={sub}
+                  type="button"
+                  onClick={() => onTokenSubChange(sub)}
+                  aria-pressed={tokenSub === sub}
+                  className={cn(
+                    'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
+                    tokenSub === sub
+                      ? 'bg-violet-500/20 text-violet-400'
+                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                  )}
+                >
+                  {sub === 'combined' ? 'All' : sub === 'input' ? 'In' : 'Out'}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+          {(['week', 'month', 'all'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPeriodChange(p)}
+              aria-pressed={period === p}
+              className={cn(
+                'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
+                period === p
+                  ? 'bg-zinc-700/60 text-zinc-200'
+                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+              )}
+            >
+              {p === 'week' ? '7D' : p === 'month' ? '30D' : 'All'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50 ml-auto">
+          {(['overlay', 'split'] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => onLayoutChange(l)}
+              aria-pressed={layout === l}
+              title={l === 'overlay' ? 'All series on one axis' : 'One small chart per series'}
+              className={cn(
+                'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
+                layout === l
+                  ? 'bg-zinc-700/60 text-zinc-200'
+                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+              )}
+            >
+              {l === 'overlay' ? 'Combined' : 'Split'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Multi-select ── */}
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          onClick={onSelectAll}
+          className={cn(
+            'px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150',
+            selection.length === 0
+              ? 'bg-violet-500/20 text-violet-400'
+              : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+          )}
+        >
+          All
+        </button>
+        {options.map((o, i) => (
+          <Chip
+            key={o.id}
+            active={selection.length === 0 || selection.includes(o.id)}
+            onClick={() => onToggle(o.id)}
+            title={o.name}
+          >
+            <span className="flex items-center gap-1">
+              <span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: dimension === 'tools' ? o.color : MODEL_COLORS[i % MODEL_COLORS.length] }}
+              />
+              {o.name.length > 12 ? o.name.slice(0, 10) + '..' : o.name}
+            </span>
+          </Chip>
+        ))}
+      </div>
+
+      {/* ── States ── */}
+      {errorText ? (
+        <div className="p-3 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-400 light:text-stone-500">
+          {errorText}{' '}
+          <button
+            type="button"
+            onClick={onRetry}
+            className="underline underline-offset-2 hover:text-zinc-200 transition-colors duration-150"
+          >
+            Retry
+          </button>
+        </div>
+      ) : isLoading ? (
+        <div className="h-48 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 animate-pulse" />
+      ) : options.length === 0 ? (
+        <div className="p-4 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-stone-500">
+          No {dimension === 'tools' ? 'tools' : 'models'} with recorded usage yet. Run a
+          sync from the toolbar to import your AI activity.
+        </div>
+      ) : series.length === 0 ? (
+        <div className="p-4 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-stone-500">
+          Select at least one {dimension === 'tools' ? 'tool' : 'model'} to compare.
+        </div>
+      ) : grandTotal === 0 ? (
+        <div className="p-4 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-stone-500">
+          No {metricLabel.toLowerCase()} recorded in this period. Try a wider range or a
+          different metric.
+        </div>
+      ) : layout === 'overlay' ? (
+        <div className="space-y-2">
+          {/* Ranked readout — the overlay answers "who wins", so state it in text
+              too rather than making the reader estimate from line height. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+            {ranked.map((r) => (
+              <div
+                key={r.key}
+                className="flex items-center justify-between gap-2 px-2 py-1 bg-zinc-950/60 light:bg-white rounded-lg ring-1 ring-zinc-800/50"
+              >
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: r.color }}
+                  />
+                  <span className="text-[10px] text-zinc-400 light:text-stone-500 truncate">
+                    {r.label}
+                  </span>
+                </span>
+                <span className="text-[10px] text-zinc-200 tabular-nums shrink-0">
+                  {fmt(r.total)}
+                  <span className="text-zinc-600 ml-1">
+                    {grandTotal > 0 ? Math.round((r.total / grandTotal) * 100) : 0}%
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="h-56 bg-zinc-950/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50">
+            {chartType === 'bar' ? (
+              <Bar data={overlayData as any} options={barOptions as any} />
+            ) : (
+              <Line data={overlayData as any} options={makeOptions(true) as any} />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {ranked.map((r) => {
+            const s = series.find((x) => x.key === r.key)!
+            const values = logScale ? s.values.map((v) => (v === 0 ? null : v)) : s.values
+            return (
+              <div
+                key={r.key}
+                className="bg-zinc-950/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50"
+              >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: r.color }}
+                    />
+                    <span
+                      className="text-[10px] text-zinc-300 light:text-stone-700 truncate"
+                      title={r.label}
+                    >
+                      {r.label}
+                    </span>
+                  </span>
+                  <span className="text-[10px] text-zinc-200 tabular-nums shrink-0">
+                    {fmt(r.total)}
+                  </span>
+                </div>
+                <div className="h-28">
+                  {chartType === 'bar' ? (
+                    <Bar
+                      data={{
+                        labels: chartLabels,
+                        datasets: [
+                          {
+                            label: r.label,
+                            data: values as (number | null)[],
+                            backgroundColor: r.color + '80',
+                            borderColor: r.color,
+                            borderWidth: 1.5,
+                            borderRadius: 4,
+                            borderSkipped: false,
+                          },
+                        ],
+                      }}
+                      options={{ ...makeOptions(false), barPercentage: 0.82, categoryPercentage: 0.85 } as any}
+                    />
+                  ) : (
+                    <Line
+                      data={{
+                        labels: chartLabels,
+                        datasets: [
+                          {
+                            label: r.label,
+                            data: values as (number | null)[],
+                            borderColor: r.color,
+                            backgroundColor: r.color + '20',
+                            borderWidth: 2,
+                            pointRadius: (ctx: any) => (ctx.raw !== null && ctx.raw !== 0 ? 2 : 0) as number,
+                            pointBackgroundColor: r.color,
+                            fill: true,
+                            tension: 0.35,
+                            spanGaps: false,
+                          },
+                        ],
+                      }}
+                      options={makeOptions(false) as any}
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function AIToolsTab({
@@ -323,11 +825,32 @@ export default function AIToolsTab({
   // ── Popup-internal model filter ──
   const [modalSelectedModels, setModalSelectedModels] = useState<string[]>([])
 
-  // ── Hermes Setup ──
-  const [showHermesSetup, setShowHermesSetup] = useState(false)
-  const [hermesDetectedPaths, setHermesDetectedPaths] = useState<string[]>([])
-  const [hermesLoading, setHermesLoading] = useState(false)
-  const [hermesCustomPath, setHermesCustomPath] = useState('')
+  // ── Comparison (multi tool/model, combined vs split) ──
+  // The detail view used to be structurally one-agent-at-a-time: `selectedAgent`
+  // is a single id, so there was no way to ask "which of my tools is bigger".
+  const [compareDimension, setCompareDimension] = useState<'tools' | 'models'>('tools')
+  const [compareLayout, setCompareLayout] = useState<'overlay' | 'split'>(() => {
+    try {
+      return (localStorage.getItem('ai-compare-layout') as 'overlay' | 'split') || 'overlay'
+    } catch { return 'overlay' }
+  })
+  // Empty = "all", matching the All-sentinel idiom used elsewhere in this file.
+  const [compareSelection, setCompareSelection] = useState<string[]>([])
+
+  // ── Tools Config (per-agent storage locations) ──
+  const [showToolsConfig, setShowToolsConfig] = useState(false)
+  const [toolsLoading, setToolsLoading] = useState(false)
+  const [agentPaths, setAgentPaths] = useState<
+    {
+      id: string
+      name: string
+      color: string
+      detected: boolean
+      paths: string[]
+      totalFiles: number
+    }[]
+  >([])
+  const [pathMsg, setPathMsg] = useState<string | null>(null)
 
   // ── Session history tool selection ──
   const [sessionTool, setSessionTool] = useState<string | null>(null)
@@ -578,6 +1101,50 @@ export default function AIToolsTab({
     }
     return Object.entries(modelMap).sort((a, b) => b[1].tokens - a[1].tokens)
   }, [overview?.aiUsage?.byTool])
+
+  // Per-model DAILY totals aggregated across every tool. `byTool[x].modelDaily`
+  // is nested per tool, so without this a model can only be compared inside the
+  // one tool it happened to be picked from — which defeats the point of
+  // comparing models. Days are guarded with isSaneDay for the same reason the
+  // other date loops are: corrupt ai_usage timestamps parse as valid dates.
+  const modelDailyTotals = useMemo(() => {
+    const ovByTool = overview?.aiUsage?.byTool || {}
+    const out: Record<
+      string,
+      Record<string, { tokens: number; tokens_in: number; tokens_out: number; messageCount: number; sessions: number; cost: number }>
+    > = {}
+    for (const toolId of Object.keys(ovByTool)) {
+      const perModel = (ovByTool[toolId] as any)?.modelDaily || {}
+      for (const model of Object.keys(perModel)) {
+        const days = perModel[model] || {}
+        if (!out[model]) out[model] = {}
+        for (const ds of Object.keys(days)) {
+          if (!isSaneDay(new Date(ds).getTime())) continue
+          const src = days[ds] || {}
+          if (!out[model][ds]) {
+            out[model][ds] = { tokens: 0, tokens_in: 0, tokens_out: 0, messageCount: 0, sessions: 0, cost: 0 }
+          }
+          const dst = out[model][ds]
+          dst.tokens += Number(src.tokens) || 0
+          dst.tokens_in += Number(src.tokens_in) || 0
+          dst.tokens_out += Number(src.tokens_out) || 0
+          dst.messageCount += Number(src.messageCount) || 0
+          dst.sessions += Number(src.sessions) || 0
+          dst.cost += Number(src.cost) || 0
+        }
+      }
+    }
+    return out
+  }, [overview?.aiUsage?.byTool])
+
+  // Opening a different tool starts a fresh comparison around it. Without this
+  // the selection would silently carry over from whatever was viewed before.
+  useEffect(() => {
+    if (selectedAgent) {
+      setCompareDimension('tools')
+      setCompareSelection([selectedAgent])
+    }
+  }, [selectedAgent])
 
   const providerModelData = useMemo(() => {
     const ovByTool = overview?.aiUsage?.byTool || {}
@@ -949,41 +1516,83 @@ export default function AIToolsTab({
     }
   }
 
-  const handleHermesSetup = async () => {
-    setHermesLoading(true)
+  // Read every plugin's resolved storage locations from the main process. This
+  // is the same data the sync engine actually uses, so what the modal shows
+  // cannot drift from what gets parsed.
+  const loadAgentPaths = async () => {
+    const info = (await window.deskflowAPI!.debugAIAgents()) as any
+    const agents = info?.agents || {}
+    setAgentPaths(
+      Object.entries(AGENT_CONFIG).map(([id, cfg]) => {
+        const a = agents[id] || {}
+        return {
+          id,
+          name: cfg.name,
+          color: cfg.color,
+          detected: !!a.detected,
+          paths: Array.isArray(a.paths) ? a.paths : [],
+          totalFiles: typeof a.totalFiles === 'number' ? a.totalFiles : 0,
+        }
+      })
+    )
+  }
+
+  const handleToolsConfig = async () => {
+    setToolsLoading(true)
+    setPathMsg(null)
     try {
-      const info = (await window.deskflowAPI!.debugAIAgents()) as any
-      const hermesInfo = info?.agents?.hermes || null
-      const paths: string[] = []
-      if (hermesInfo?.paths) {
-        paths.push(...hermesInfo.paths)
-      }
-      if (hermesInfo?.detected) {
-        paths.push('Detected: hermes-agent at %LOCALAPPDATA%/hermes-agent')
-      }
-      setHermesDetectedPaths(paths.length > 0 ? paths : ['%LOCALAPPDATA%/hermes-agent', '~/.hermes/sessions', '~/.hermes/profiles'])
+      await loadAgentPaths()
     } catch (err) {
-      console.error('Hermes setup failed:', err)
-      setHermesDetectedPaths(['%LOCALAPPDATA%/hermes-agent', '~/.hermes/sessions', '~/.hermes/profiles'])
+      console.error('Tools config load failed:', err)
+      setPathMsg('Could not read agent storage locations.')
     } finally {
-      setHermesLoading(false)
-      setShowHermesSetup(true)
+      setToolsLoading(false)
+      setShowToolsConfig(true)
     }
   }
 
-  const handleHermesPathSelect = async () => {
+  // Point one tool at a different folder or database file. The main process
+  // invalidates that agent's cached path state and re-syncs just that agent
+  // before returning, so we refresh the cards afterwards — otherwise the
+  // numbers on screen still belong to the old location.
+  const handleAgentPathSelect = async (agentId: string, agentName: string) => {
     try {
       const result = await window.deskflowAPI!.showOpenDialog({
-        title: 'Select Hermes Sessions Directory',
-        properties: ['openDirectory'],
+        title: `Select ${agentName} storage location`,
+        properties: ['openDirectory', 'openFile'],
+        filters: [{ name: 'Databases', extensions: ['db', 'sqlite'] }],
       })
-      if (result && result.filePaths && result.filePaths.length > 0) {
-        setHermesCustomPath(result.filePaths[0])
-        await window.deskflowAPI!.setHermesSessionsPath(result.filePaths[0])
-        setHermesDetectedPaths([result.filePaths[0]])
+      if (!result?.filePaths?.length) return
+      const chosen = result.filePaths[0]
+      const res = (await window.deskflowAPI!.setAIAgentCustomPath(agentId, chosen)) as any
+      if (res?.success) {
+        setPathMsg(
+          typeof res.synced === 'number'
+            ? `${agentName}: re-synced \u2014 ${res.synced} session${res.synced === 1 ? '' : 's'} imported.`
+            : `${agentName}: storage location updated.`
+        )
+        setSyncVersion(v => v + 1)
+        await onDataRefresh()
+        await loadAgentPaths()
+      } else {
+        setPathMsg(`${agentName}: ${res?.error || res?.message || 'could not apply that path'}`)
       }
     } catch (err) {
-      console.error('Hermes path selection failed:', err)
+      console.error('Agent path selection failed:', err)
+    }
+  }
+
+  const handleAgentPathReset = async (agentId: string, agentName: string) => {
+    try {
+      const res = (await window.deskflowAPI!.setAIAgentCustomPath(agentId, '')) as any
+      if (res?.success) {
+        setPathMsg(`${agentName}: reset to automatic detection.`)
+        setSyncVersion(v => v + 1)
+        await onDataRefresh()
+        await loadAgentPaths()
+      }
+    } catch (err) {
+      console.error('Agent path reset failed:', err)
     }
   }
 
@@ -1072,12 +1681,12 @@ export default function AIToolsTab({
               {showAgentDebug ? 'Hide Details' : 'Details'}
             </button>
              <button
-               onClick={handleHermesSetup}
-               disabled={hermesLoading}
+               onClick={handleToolsConfig}
+               disabled={toolsLoading}
                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-violet-400 hover:text-violet-300 bg-violet-950/30 hover:bg-violet-900/40 rounded-lg ring-1 ring-violet-500/20 disabled:opacity-50 transition-colors duration-150"
              >
-               {hermesLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderOpen className="w-3 h-3" />}
-               Hermes Setup
+               {toolsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderOpen className="w-3 h-3" />}
+               Tools Config
              </button>
              <button
                onClick={() => {
@@ -1348,9 +1957,9 @@ export default function AIToolsTab({
         )}
       </AnimatePresence>
 
-      {/* ── Hermes Setup Modal ── */}
+      {/* ── Tools Config Modal ── */}
       <AnimatePresence>
-        {showHermesSetup && (
+        {showToolsConfig && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1358,9 +1967,9 @@ export default function AIToolsTab({
           >
             <GlassCard>
               <div className="flex items-center justify-between mb-4">
-                <SectionHeader title="Hermes Sessions Setup" icon={<FolderOpen />} />
+                <SectionHeader title="Tools Config" icon={<FolderOpen />} />
                 <button
-                  onClick={() => setShowHermesSetup(false)}
+                  onClick={() => setShowToolsConfig(false)}
                   className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800"
                 >
                   <X className="w-4 h-4" />
@@ -1369,31 +1978,86 @@ export default function AIToolsTab({
 
               <div className="space-y-4">
                 <p className="text-[11px] text-zinc-500 light:text-stone-500">
-                  Hermes agent sessions are automatically detected from the following directories. You can change the path to the JSON session files.
+                  Where each tool stores its sessions, exactly as the sync engine
+                  resolves it. Tools detected automatically need no setup —
+                  override a path only if the tool lives somewhere unusual.
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {hermesDetectedPaths.map((path, i) => (
-                    <div key={i} className="p-3 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 flex items-center gap-3">
-                      <FolderOpen className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[11px] text-zinc-400 light:text-stone-500 font-mono truncate">{path}</div>
-                        <div className="text-[10px] text-emerald-400/70">Detected</div>
+                <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
+                  {agentPaths.length === 0 && (
+                    <p className="text-[11px] text-zinc-500 light:text-stone-500">
+                      No agents found.
+                    </p>
+                  )}
+                  {agentPaths.map((agent) => (
+                    <div
+                      key={agent.id}
+                      className="p-3 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: agent.color }}
+                          />
+                          <span className="text-[12px] text-zinc-200 light:text-stone-800 truncate">
+                            {agent.name}
+                          </span>
+                          <span
+                            className={
+                              agent.detected
+                                ? 'text-[10px] text-emerald-400/70'
+                                : 'text-[10px] text-zinc-500'
+                            }
+                          >
+                            {agent.detected
+                              ? `Detected \u00b7 ${agent.totalFiles} file${agent.totalFiles === 1 ? '' : 's'}`
+                              : 'Not detected'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => handleAgentPathSelect(agent.id, agent.name)}
+                            className="px-2 py-1 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 rounded-lg text-[10px] ring-1 ring-violet-500/20 transition-colors duration-150"
+                          >
+                            Change Path
+                          </button>
+                          <button
+                            onClick={() => handleAgentPathReset(agent.id, agent.name)}
+                            className="px-2 py-1 bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-300 rounded-lg text-[10px] ring-1 ring-zinc-700/60 transition-colors duration-150"
+                          >
+                            Auto
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 space-y-1">
+                        {agent.paths.length === 0 ? (
+                          <div className="text-[10px] text-zinc-500 light:text-stone-500 font-mono truncate">
+                            No storage location resolved
+                          </div>
+                        ) : (
+                          agent.paths.map((p, i) => (
+                            <div
+                              key={i}
+                              className="text-[10px] text-zinc-400 light:text-stone-500 font-mono truncate"
+                            >
+                              {p}
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
 
+                {pathMsg && (
+                  <p className="text-[11px] text-zinc-400 light:text-stone-500">{pathMsg}</p>
+                )}
+
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleHermesPathSelect}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 rounded-lg text-xs ring-1 ring-violet-500/20 transition-colors duration-150"
-                  >
-                    <FolderOpen className="w-3 h-3" />
-                    Change Sessions Path
-                  </button>
-                  <button
-                    onClick={() => setShowHermesSetup(false)}
+                    onClick={() => setShowToolsConfig(false)}
                     className="px-3 py-1.5 bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-300 rounded-lg text-xs ring-1 ring-zinc-700/60 transition-colors duration-150"
                   >
                     Done
@@ -1889,9 +2553,57 @@ export default function AIToolsTab({
                     : 'Tokens'
                 : aiChartMode === 'messages'
                   ? 'Messages'
-                  : aiChartMode === 'sessions'
-                    ? 'Sessions'
-                    : 'Cost'
+                : aiChartMode === 'sessions'
+                  ? 'Sessions'
+                  : 'Cost'
+
+            // ── Comparison inputs ──
+            // Options are the full set of active tools, or every model seen
+            // across all tools. Selecting a subset narrows the chart; the chart
+            // itself is driven by the same aiChartMode the rest of the page uses,
+            // so the dropdown and the page-level metric selector can never
+            // disagree about what is being plotted.
+            const compareOptions: CompareOption[] =
+              compareDimension === 'tools'
+                ? aiAgents
+                    .filter((a) => a.status !== 'inactive')
+                    .map((a) => ({ id: a.id, name: a.name, color: a.color }))
+                : allModelData.map(([name], i) => ({
+                    id: name,
+                    name,
+                    color: MODEL_COLORS[i % MODEL_COLORS.length],
+                  }))
+
+            const compareGetDaily = (key: string): Record<string, any> =>
+              compareDimension === 'tools'
+                ? overview?.aiUsage?.byTool?.[key]?.daily || {}
+                : modelDailyTotals[key] || {}
+
+            // The comparison spans the union of the selected entries' own dates
+            // (not just the anchor tool's), so comparing two tools over "All"
+            // does not silently truncate to whichever one started later.
+            const compareKeys =
+              compareSelection.length > 0
+                ? compareSelection.filter((k) => compareOptions.some((o) => o.id === k))
+                : compareOptions.map((o) => o.id)
+            const compareDateKeys = new Set<string>()
+            for (const k of compareKeys) {
+              for (const ds of Object.keys(compareGetDaily(k))) {
+                if (isSaneDay(new Date(ds).getTime())) compareDateKeys.add(ds)
+              }
+            }
+            const compareSortedDates = [...compareDateKeys].sort()
+            const compareStart =
+              modalPeriod === 'all'
+                ? compareSortedDates.length > 0
+                  ? subDays(new Date(compareSortedDates[0]), 3)
+                  : subDays(new Date(), 60)
+                : subDays(new Date(), modalPeriod === 'week' ? 6 : 29)
+            const compareDays = eachDayOfInterval({ start: compareStart, end: new Date() })
+            const compareDayStrs = compareDays.map((d) => format(d, 'yyyy-MM-dd'))
+            const compareChartLabels = compareDays.map((d) =>
+              format(d, modalPeriod === 'week' ? 'EEE' : 'MMM dd')
+            )
 
             return detailViewMode === 'popup' ? (
               <motion.div
@@ -2342,7 +3054,7 @@ export default function AIToolsTab({
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 className="overflow-hidden"
               >
-                <div className="bg-zinc-900/80 light:bg-white backdrop-blur-xl border border-zinc-700 light:border-stone-400/50 rounded-xl p-5 space-y-4">
+                <div className="bg-zinc-900/80 light:bg-white border border-zinc-700 light:border-stone-400/50 rounded-xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div
@@ -2368,6 +3080,9 @@ export default function AIToolsTab({
                   </div>
                   {agent.status !== 'inactive' && (
                     <div className="space-y-4">
+                      {/* Period summary — deliberately metric-independent: these
+                          are the totals for the whole range, so they stay put
+                          while the chart below switches metric. */}
                       <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                         {[
                           { label: 'Tokens', comp: <TokenValue value={totalTokens} />, color: 'text-zinc-100' },
@@ -2383,42 +3098,41 @@ export default function AIToolsTab({
                           </div>
                         ))}
                       </div>
-                      <div className="h-48">
-                        <Line
-                          data={{
-                            labels: modalChartLabels,
-                            datasets: [{
-                              label: `${agent.name} - ${modalChartLabel}`,
-                              data: modalChartClean.map((v) => logScale && v === 0 ? null : v) as (number | null)[],
-                              borderColor: agent.color,
-                              backgroundColor: (ctx: any) => {
-                                const chart = ctx.chart
-                                const { ctx: canvasCtx, chartArea } = chart
-                                if (!chartArea) return agent.color + '20'
-                                const g = canvasCtx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
-                                g.addColorStop(0, agent.color + '30')
-                                g.addColorStop(1, agent.color + '00')
-                                return g
-                              },
-                              borderWidth: 2,
-                              pointRadius: (ctx: any) => ctx.raw !== null && ctx.raw !== 0 ? 2 : 0,
-                              pointBackgroundColor: agent.color,
-                              fill: true,
-                              tension: 0.35,
-                              spanGaps: false,
-                            }],
-                          }}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(20, 22, 30, 0.85)', titleColor: '#FFFFFF', bodyColor: '#8E95A5', borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1, cornerRadius: 10, padding: { top: 12, bottom: 12, left: 16, right: 16 }, usePointStyle: true } },
-                            scales: {
-                              x: { grid: { display: false }, border: { color: 'rgba(113,113,122,0.12)' }, ticks: { color: '#71717a', maxTicksLimit: 8, font: { size: 9 } } },
-                              y: { type: logScale ? ('logarithmic' as const) : ('linear' as const), grid: { color: 'rgba(113,113,122,0.06)' }, border: { color: 'rgba(113,113,122,0.12)' }, ticks: { color: '#71717a', font: { size: 9 }, padding: 6 }, ...(logScale ? {} : { beginAtZero: true }) },
-                            },
-                          }}
-                        />
-                      </div>
+
+                      <AgentComparePanel
+                        dayStrs={compareDayStrs}
+                        chartLabels={compareChartLabels}
+                        metricField={modalMetricField}
+                        metricLabel={modalChartLabel}
+                        getDaily={compareGetDaily}
+                        options={compareOptions}
+                        selection={compareSelection}
+                        dimension={compareDimension}
+                        onDimensionChange={setCompareDimension}
+                        layout={compareLayout}
+                        onLayoutChange={(l) => {
+                          setCompareLayout(l)
+                          try { localStorage.setItem('ai-compare-layout', l) } catch {}
+                        }}
+                        metric={aiChartMode}
+                        onMetricChange={setAiChartMode}
+                        tokenSub={tokenDisplayMode}
+                        onTokenSubChange={setTokenDisplayMode}
+                        chartType={chartType}
+                        logScale={logScale}
+                        excludeOutliers={excludeOutliers}
+                        isLoading={analyticsLoading}
+                        errorText={analyticsError}
+                        onRetry={onRetryAnalytics}
+                        onToggle={(k) =>
+                          setCompareSelection((prev) =>
+                            prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]
+                          )
+                        }
+                        onSelectAll={() => setCompareSelection([])}
+                        period={modalPeriod}
+                        onPeriodChange={setModalPeriod}
+                      />
                     </div>
                   )}
                 </div>

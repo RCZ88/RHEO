@@ -22,6 +22,8 @@ import { BorderBeam } from '../../../components/ui/border-beam';
 import { AnimatedCircularProgressBar } from '../../../components/ui/animated-circular-progress-bar';
 import { VoiceInputWrapper } from '../../../components/VoiceInputWrapper';
 import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
+import type { GoalStatus } from '../../../types/goals';
+import { Button } from '../../../components/ui/button';
 import { loadCompletions } from '../../covenant/storage';
 import { CalendarSidebar } from '../../../components/goals/CalendarSidebar';
 
@@ -774,6 +776,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const [newCriteria, setNewCriteria] = useState<CriteriaForm>(defaultCriteria);
   const [editCriteria, setEditCriteria] = useState<CriteriaForm>(defaultCriteria);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [showSuggested, setShowSuggested] = useState(false);
   const [showLangParser, setShowLangParser] = useState(false);
   // Schedule default = per-day (only the selected day's fixed blocks).
   // Toggle to show the whole week's fixed schedule at once.
@@ -944,6 +947,36 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   };
 
   /* toggle a habit instance on a specific day (WeekBoard) */
+  /* ── suggested-goal review queue ──
+     save-goal is INSERT OR REPLACE keyed on id, so accept/dismiss is a status
+     write on the existing row. Dismiss DELETES: a dismissed suggestion is not
+     work you declined, it is noise you asked to remove — and there is no
+     'dismissed' status in the goals vocabulary to fall back to. */
+  const handleAcceptSuggested = async (goal: Goal) => {
+    const previous = goal.status;
+    setGoals(prev => prev.map(g => (g.id === goal.id ? { ...g, status: 'active' as GoalStatus } : g)));
+    try {
+      const res = await api.saveGoal(goal.date || selectedDate, { ...goal, status: 'active' });
+      if (res?.success === false) throw new Error(res.error);
+      loadGoals(selectedDate); loadWeek(selectedDate);
+    } catch {
+      setGoals(prev => prev.map(g => (g.id === goal.id ? { ...g, status: previous } : g)));
+      setError(`Could not accept "${goal.title}". Try again.`);
+    }
+  };
+
+  const handleDismissSuggested = async (goal: Goal) => {
+    const snapshot = goals;
+    setGoals(prev => prev.filter(g => g.id !== goal.id));
+    try {
+      const res = await api.deleteGoal(goal.id);
+      if (res?.success === false) throw new Error(res.error);
+    } catch {
+      setGoals(snapshot); // restore — never lose the user's data on a failed write
+      setError(`Could not dismiss "${goal.title}". Try again.`);
+    }
+  };
+
   const handleToggleDay = async (goal: Goal) => {
     const newStatus = goal.status === 'done' ? 'active' : 'done';
     const completedAt = newStatus === 'done' ? new Date().toISOString() : undefined;
@@ -1006,9 +1039,21 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
 
   /* ── deadlines + reminders ── */
   /* ── derived ── */
-  const dailies = useMemo(() => goals.filter(g => !isWeeklyish(g) && g.status !== 'suggested'), [goals]);
+  /* The goals table still carries the legacy AI statuses ('suggested',
+     'pending') that the canonical GoalStatus union does not declare, so a
+     direct `g.status === 'suggested'` is a type error even though the value is
+     really in the DB. Widen locally rather than casting the whole goal away. */
+  type StoredGoalStatus = GoalStatus | 'suggested' | 'pending';
+  const storedStatus = (g: Goal): StoredGoalStatus => g.status as StoredGoalStatus;
+  const isSuggested = (g: Goal) => storedStatus(g) === 'suggested';
+
+  const dailies = useMemo(() => goals.filter(g => !isWeeklyish(g) && !isSuggested(g)), [goals]);
   const activeDailies = dailies.filter(g => g.status !== 'done');
   const completedDailies = dailies.filter(g => g.status === 'done');
+  /* AI-suggested goals used to be filtered out here with no way to reach them,
+     so 11 rows in the live DB were unreachable. They are a REVIEW QUEUE: the
+     point is to accept the ones you want and dismiss the rest. */
+  const suggestedGoals = useMemo(() => goals.filter(isSuggested), [goals]);
   const missedGoals = useMemo(() => getMissedGoals(goals, selectedDate), [goals, selectedDate]);
   const doneCount = goals.filter(g => g.status === 'done').length;
   const tracked = goals.reduce((s, g) => s + (g.progressSeconds || 0), 0);
@@ -1204,6 +1249,60 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Suggested goals — a review queue.
+              These used to be filtered out with no way to reach them. Empty state
+              says what WOULD be here rather than "No data" (P5). */}
+          {suggestedGoals.length > 0 && (
+            <div className="mt-3">
+              <button
+                onClick={() => setShowSuggested(v => !v)}
+                aria-expanded={showSuggested}
+                className="flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                {showSuggested ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                Suggested ({suggestedGoals.length})
+              </button>
+              {showSuggested && (
+                <div className="space-y-1.5 mt-2">
+                  {suggestedGoals.map(goal => (
+                    <div
+                      key={goal.id}
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-dashed border-zinc-700/70 bg-zinc-900/30"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] text-zinc-300 truncate">{goal.title}</p>
+                        <p className="text-[10px] text-zinc-600 truncate">
+                          {goal.category}{goal.deadline ? ` · due ${goal.deadline}` : ''}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDismissSuggested(goal)}
+                        className="text-zinc-500 hover:text-zinc-300"
+                      >
+                        Dismiss
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleAcceptSuggested(goal)}
+                        className="gap-1.5"
+                        style={{
+                          color: 'var(--page-accent)',
+                          backgroundColor: 'color-mix(in srgb, var(--page-accent) 15%, transparent)',
+                          borderColor: 'color-mix(in srgb, var(--page-accent) 28%, transparent)',
+                        }}
+                      >
+                        <CheckCircle2 size={12} aria-hidden />
+                        Accept
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

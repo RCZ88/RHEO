@@ -35,6 +35,18 @@ export default function TitleBar({
     }).catch(() => {});
   }, []);
 
+  // Apply mode changes made in Settings immediately. The mount effect above only
+  // reads once, so without this the title bar ignored the setting until restart.
+  useEffect(() => {
+    const a = api();
+    if (!a?.onTitleBarModeChange) return;
+    const unsub = a.onTitleBarModeChange((m: string) => {
+      if (m === 'always' || m === 'hover' || m === 'auto') setTbMode(m);
+      setHidden(false); // always unhide on an explicit change
+    });
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
+
   // Auto-hide timer for 'auto' mode (3s inactivity)
   const resetAutoTimer = useCallback(() => {
     if (tbMode !== 'auto' || hidden) return;
@@ -138,7 +150,7 @@ export default function TitleBar({
   // ── Original refresh logic ──
   const buildTitleBar = () => (
     <div
-      className="relative z-20 shrink-0 h-9 flex items-center justify-between select-none light:bg-stone-200/90"
+      className="relative z-20 shrink-0 h-7 flex items-center justify-between select-none light:bg-stone-200/90"
       style={{
         background: isFocused ? '#1a1a1a' : '#111111',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -153,11 +165,11 @@ export default function TitleBar({
       >
         <button
           onClick={handleNotifyClick}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 relative light:hover:bg-stone-300/50"
+          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 relative light:hover:bg-stone-300/50"
           title="Notifications"
         >
           <Bell
-            className="w-3.5 h-3.5 transition-colors"
+            className="w-3 h-3 transition-colors"
             style={{
               color: unreadCount > 0
                 ? (isFocused ? '#fbbf24' : '#d97706')
@@ -184,14 +196,14 @@ export default function TitleBar({
         </button>
         <button
           onClick={handleMinimize}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
+          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
           title="Minimize"
         >
-          <Minus className="w-3.5 h-3.5 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
+          <Minus className="w-3 h-3 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
         </button>
         <button
           onClick={handleMaximize}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
+          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
           title={isMaximized ? 'Restore' : 'Maximize'}
         >
           {isMaximized ? (
@@ -208,15 +220,15 @@ export default function TitleBar({
               />
             </span>
           ) : (
-            <Square className="w-3.5 h-3.5 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} fill="none" />
+            <Square className="w-3 h-3 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} fill="none" />
           )}
         </button>
         <button
           onClick={handleClose}
-          className="group h-full w-12 flex items-center justify-center transition-colors hover:bg-red-500/10 light:hover:bg-red-200/40"
+          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-red-500/10 light:hover:bg-red-200/40"
           title="Close"
         >
-          <X className="w-3.5 h-3.5 transition-colors group-hover:text-red-400 text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
+          <X className="w-3 h-3 transition-colors group-hover:text-red-400 text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
         </button>
       </div>
     </div>
@@ -238,7 +250,7 @@ export default function TitleBar({
     <div className="relative z-20">
       {/* Thin shelf strip that stays visible to catch hover */}
       <div
-        className="h-[3px] shrink-0 flex items-center justify-end pr-2 cursor-default transition"
+        className="h-[3px] shrink-0 flex items-center justify-end pr-2 cursor-default transition motion-reduce:transition-none"
         style={{ background: isFocused ? '#1a1a1a' : '#111111', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         onMouseEnter={onShelfEnter}
       >
@@ -246,13 +258,16 @@ export default function TitleBar({
           <MousePointer2 size={8} style={{ color: '#52525b', opacity: 0.4 }} />
         )}
       </div>
-      {/* Title bar — slides up/down */}
+      {/* Title bar — slides up/down AND releases its layout slot when hidden, so the
+          app below (flex-1) expands into the reclaimed space instead of leaving a
+          dead band. height snaps (no height animation — Gate E); the slide is
+          transform-only so it stays cheap. */}
       <div
-        className="shrink-0 overflow-hidden"
+        className="shrink-0 overflow-hidden motion-reduce:transition-none"
         style={{
           transform: hidden ? 'translateY(-100%)' : 'translateY(0)',
           transition: 'transform 0.15s ease',
-          height: '37px', // h-9 + border
+          height: hidden ? '0px' : '28px', // h-7, border-box incl. the 1px hairline
         }}
         onMouseLeave={onMouseLeave}
         onMouseEnter={onMouseEnter}

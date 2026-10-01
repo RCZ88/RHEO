@@ -57,7 +57,7 @@ export function ShareCard({ atom, width = 400, themeId }: ShareCardProps) {
       <div
         ref={cardRef}
         style={{ width, background: theme.bgHex, fontFamily: 'Inter, system-ui, sans-serif', borderColor: theme.borderHex } as React.CSSProperties}
-        className="rounded-2xl p-6 overflow-hidden relative border"
+        className="rounded-xl p-6 overflow-hidden relative border"
       >
         {/* Accent glow */}
         <div

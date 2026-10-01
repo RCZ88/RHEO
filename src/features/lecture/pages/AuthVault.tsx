@@ -27,7 +27,7 @@ export default function AuthVault() {
   return (
     <div className="space-y-5">
       <div><h1 className="font-display text-2xl font-bold text-white tracking-tight">Auth Vault — Playwright sessions</h1><p className="text-sm text-white/50 mt-1">University LMS pages, journals and some video transcripts sit behind logins. Store one profile per service, capture its session with Playwright, then reuse it for authenticated digests. Secrets never leave your machine.</p></div>
-      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-white"><Plus className="w-4 h-4 text-amber-300" /> New service profile</div>
         <div className="mt-3 grid sm:grid-cols-4 gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Service — e.g. Campus LMS" className="rounded-xl bg-black/30 border border-white/10 text-sm text-white p-2.5 outline-none focus:border-amber-300/40 placeholder:text-white/25" />
@@ -38,7 +38,7 @@ export default function AuthVault() {
       </div>
       <div className="grid lg:grid-cols-2 gap-3">
         {profiles.map(p => (
-          <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+          <div key={p.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500/40 to-violet-600/40 grid place-items-center shrink-0"><KeyRound className="w-4 h-4 text-white" /></div>
               <div className="min-w-0 flex-1">
@@ -57,9 +57,9 @@ export default function AuthVault() {
             {p.notes && <div className="mt-2 text-[11px] text-white/40">{p.notes}</div>}
           </div>
         ))}
-        {profiles.length === 0 && <div className="col-span-full text-sm text-white/35 rounded-2xl border border-white/5 p-6 text-center">No profiles yet — add your LMS, library proxy, or video platform above.</div>}
+        {profiles.length === 0 && <div className="col-span-full text-sm text-white/35 rounded-xl border border-white/5 p-6 text-center">No profiles yet — add your LMS, library proxy, or video platform above.</div>}
       </div>
-      <div className="rounded-2xl border border-amber-300/15 bg-amber-300/5 p-4 text-xs text-amber-100/80 leading-relaxed">Security notes: storage-state JSON contains live cookies — keep it git-ignored, rotate sessions weekly, and prefer university SSO on a private machine. SlideMind only stores the recipe + status, never your password.</div>
+      <div className="rounded-xl border border-amber-300/15 bg-amber-300/5 p-4 text-xs text-amber-100/80 leading-relaxed">Security notes: storage-state JSON contains live cookies — keep it git-ignored, rotate sessions weekly, and prefer university SSO on a private machine. SlideMind only stores the recipe + status, never your password.</div>
     </div>
   );
 }

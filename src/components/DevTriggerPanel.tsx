@@ -98,7 +98,7 @@ export default function DevTriggerPanel({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="bg-zinc-900/95 border border-zinc-700/50 rounded-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl"
+            className="bg-zinc-900/95 border border-zinc-700/50 rounded-xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}

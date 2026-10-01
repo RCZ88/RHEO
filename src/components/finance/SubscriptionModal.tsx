@@ -157,7 +157,7 @@ export function SubscriptionModal({ subscription, wallets, categories = [], disp
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92, y: 20 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-2xl"
+        className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

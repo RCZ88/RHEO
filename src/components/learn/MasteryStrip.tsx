@@ -25,7 +25,7 @@ export function MasteryStrip({ stats, onOpenNode, onOpenProfile }: Props) {
 
   if (stats.trackedNodes === 0 && stats.totalNodes === 0) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-[#1c1917]/60 backdrop-blur-sm px-6 py-5 mb-10 relative">
+      <div className="rounded-xl border border-white/10 bg-[#1c1917]/60 backdrop-blur-sm px-6 py-5 mb-10 relative">
         <p className="text-sm text-sage-400/70 italic font-serif text-center">
           Your mastery map fills in as you study — open a volume to begin.
         </p>
@@ -44,7 +44,7 @@ export function MasteryStrip({ stats, onOpenNode, onOpenProfile }: Props) {
   const modal = modalLevel(stats.distribution);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#1c1917]/60 backdrop-blur-sm px-6 py-5 mb-10 relative">
+    <div className="rounded-xl border border-white/10 bg-[#1c1917]/60 backdrop-blur-sm px-6 py-5 mb-10 relative">
       {/* subtle top sheen */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
       {onOpenProfile && (

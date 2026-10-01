@@ -34,7 +34,7 @@ export function CompositionRuleCard({ rule, status, isRunning, onEdit, onEvaluat
       variants={compositionExecuteVariants}
       initial="idle"
       animate={isRunning ? 'execute' : 'idle'}
-      className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-2xl p-5"
+      className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl p-5"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">

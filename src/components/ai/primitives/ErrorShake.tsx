@@ -27,7 +27,7 @@ export function ErrorShake({ trigger, onDone, className, children }: ErrorShakeP
         borderColor: ['rgba(63,63,70,0.5)', 'rgba(239,68,68,0.6)', 'rgba(239,68,68,0.3)', 'rgba(63,63,70,0.5)'],
       } : {}}
       transition={{ duration: 0.5, ease: 'easeInOut' }}
-      className={cn('border border-transparent rounded-2xl', className)}
+      className={cn('border border-transparent rounded-xl', className)}
     >
       {children}
     </motion.div>

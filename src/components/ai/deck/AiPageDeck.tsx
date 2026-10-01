@@ -256,7 +256,7 @@ function ExpandableCard({
             <div className="max-w-5xl mx-auto">
               {empty ? (
                 <div className="flex flex-col items-center gap-4 py-16 text-center">
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: ac.bg, border: `1px solid ${ac.border}` }}>
+                  <div className="w-16 h-16 rounded-xl flex items-center justify-center" style={{ background: ac.bg, border: `1px solid ${ac.border}` }}>
                     <Inbox size={28} className={ac.icon} style={{ opacity: 0.5 }} />
                   </div>
                   <p className="text-sm text-zinc-500 max-w-md">

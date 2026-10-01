@@ -69,7 +69,7 @@ export function AgentProviderPanel() {
 
       {editing && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-[480px] rounded-2xl bg-zinc-950 ring-1 ring-inset ring-zinc-800/70 shadow-2xl p-5">
+          <div className="w-[480px] rounded-xl bg-zinc-950 ring-1 ring-inset ring-zinc-800/70 shadow-2xl p-5">
             <h3 className="text-sm font-semibold text-zinc-100 mb-4">{editing.id?.startsWith('new-') ? 'Add Provider' : 'Edit Provider'}</h3>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-2">

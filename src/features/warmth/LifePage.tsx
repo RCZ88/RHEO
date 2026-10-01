@@ -1043,7 +1043,7 @@ export default function LifePage() {
           {/* Confirm Redirect Dialog */}
           {confirmRedirect && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setConfirmRedirect(null)}>
-              <div className="w-full max-w-sm bg-zinc-900/95 border border-zinc-700 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="w-full max-w-sm bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-base font-semibold text-zinc-100 mb-2">Switch to Pages mode?</h3>
                 <p className="text-[13px] text-zinc-400 mb-5">
                   Open the {confirmRedirect.label} page to create with all available fields.

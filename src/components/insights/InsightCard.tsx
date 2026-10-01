@@ -250,7 +250,7 @@ function ProgressBar({ ratio, theme }: { ratio: number; theme: RewindTheme }) {
 function SuperlativeFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
   const Icon = KIND_ICONS[atom.kind] || Zap;
   return (
-    <div className="relative rounded-2xl border p-8 text-center overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
+    <div className="relative rounded-xl border p-8 text-center overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
       <div className={`absolute inset-0 ${theme.glow}`} />
       <div className="relative z-10">
         <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${theme.accentBg} mb-5`}>
@@ -279,7 +279,7 @@ function SuperlativeFull({ atom, theme }: { atom: InsightAtom; theme: RewindThem
 function RecordFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
   const Icon = KIND_ICONS[atom.kind] || Award;
   return (
-    <div className="relative rounded-2xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
+    <div className="relative rounded-xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
       <div className={`absolute inset-0 ${theme.glow}`} />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
@@ -313,10 +313,10 @@ function RecordFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) 
 function StreakFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
   const Icon = KIND_ICONS[atom.kind] || Flame;
   return (
-    <div className="relative rounded-2xl border overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
+    <div className="relative rounded-xl border overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
       <div className={`absolute inset-0 ${theme.glow}`} />
       {/* Left accent bar */}
-      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-500 via-emerald-400 to-emerald-600 rounded-l-2xl" />
+      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-500 via-emerald-400 to-emerald-600 rounded-l-xl" />
       <div className="relative z-10 p-8 pl-10">
         <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${theme.accentBg} mb-5`}>
           <Icon className={`w-3.5 h-3.5 ${theme.accent}`} />
@@ -344,7 +344,7 @@ function StreakFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) 
 function AnomalyFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
   const Icon = KIND_ICONS[atom.kind] || Activity;
   return (
-    <div className="relative rounded-2xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
+    <div className="relative rounded-xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
       <div className={`absolute inset-0 ${theme.glow}`} />
       {/* Diagonal hatch */}
       <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 12px, ${theme.accentHex} 12px, ${theme.accentHex} 13px)` }} />
@@ -376,7 +376,7 @@ function RatioFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
   const Icon = KIND_ICONS[atom.kind] || BarChart3;
   const ratio = typeof atom.value === 'number' ? atom.value : 0;
   return (
-    <div className="relative rounded-2xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
+    <div className="relative rounded-xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
       <div className={`absolute inset-0 ${theme.glow}`} />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
@@ -405,7 +405,7 @@ function RatioFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
 function PatternFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
   const Icon = KIND_ICONS[atom.kind] || Target;
   return (
-    <div className="relative rounded-2xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
+    <div className="relative rounded-xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
       <div className={`absolute inset-0 ${theme.glow}`} />
       {/* Wave decoration */}
       <svg className="absolute bottom-0 left-0 right-0 h-20 opacity-[0.06]" viewBox="0 0 400 80" preserveAspectRatio="none">
@@ -438,7 +438,7 @@ function PatternFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme })
 function DeltaFull({ atom, theme }: { atom: InsightAtom; theme: RewindTheme }) {
   const Icon = KIND_ICONS[atom.kind] || Activity;
   return (
-    <div className="relative rounded-2xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
+    <div className="relative rounded-xl border p-8 overflow-hidden" style={{ borderColor: theme.borderHex, background: theme.bgHex }}>
       <div className={`absolute inset-0 ${theme.glow}`} />
       <div className="relative z-10">
         <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${theme.accentBg} mb-5`}>

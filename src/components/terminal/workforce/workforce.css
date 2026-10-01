@@ -1,0 +1,714 @@
+/* =====================================================================
+   workforce.css — Agent Workforce ambient scene
+   Terminal-themed micro-office: flat zinc surfaces, JetBrains Mono,
+   one restrained accent per agent. All continuous motion lives here as
+   CSS keyframes; framer-motion only handles event-driven transitions
+   (spawn / walk / exit / badge pops) on the outer slot elements.
+
+   Rules honored:
+   - transform + opacity only (no layout animation)
+   - 150 / 250 / 400ms for event-driven transitions
+   - no springs, no glow storms, no glass
+   - full prefers-reduced-motion degradation
+   - animation-play-state paused when scene is hidden (data-paused)
+   ===================================================================== */
+
+.wf-scene {
+  /* palette — existing RHEO zinc tokens */
+  --wf-bg: #18181b;          /* zinc-900 */
+  --wf-stage: #141416;
+  --wf-surface: #27272a;     /* zinc-800 */
+  --wf-line: #27272a;
+  --wf-line-soft: #1f1f23;
+  --wf-edge: #3f3f46;        /* zinc-700 */
+  --wf-text: #a1a1aa;        /* zinc-400 */
+  --wf-text-dim: #71717a;    /* zinc-500 */
+  --wf-text-faint: #52525b;  /* zinc-600 */
+  --wf-screen: #0c0c0e;
+  --wf-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  background: var(--wf-bg);
+  border: 1px solid var(--wf-line);
+  border-radius: 8px;
+  font-family: var(--wf-mono);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wf-scene *, .wf-scene *::before, .wf-scene *::after { box-sizing: border-box; }
+
+.wf-scene {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------- frame */
+
+.wf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px 5px;
+  border-bottom: 1px solid var(--wf-line-soft);
+}
+.wf-title {
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--wf-text-dim);
+  white-space: nowrap;
+}
+.wf-title i {
+  font-style: normal;
+  color: var(--wf-text-faint);
+  margin: 0 1px;
+}
+.wf-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  color: var(--wf-text-faint);
+  white-space: nowrap;
+}
+.wf-summary .wf-sum-dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: currentColor;
+}
+.wf-summary[data-active='1'] { color: #34d399; }
+.wf-summary[data-idle='1']  { color: var(--wf-text-dim); }
+.wf-overflow-chip {
+  font-size: 8px;
+  color: var(--wf-text-faint);
+  border: 1px solid var(--wf-line);
+  border-radius: 4px;
+  padding: 0 3px;
+  line-height: 11px;
+}
+
+/* ---------------------------------------------------------------- stage */
+
+.wf-stage {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background:
+    linear-gradient(var(--wf-stage), var(--wf-stage)); /* flat, no decorative gradient */
+}
+.wf-floor {
+  position: absolute;
+  left: 4%; right: 4%;
+  height: 1px;
+  background: var(--wf-line-soft);
+  pointer-events: none;
+}
+/* top offset comes from workforceLayout (FLOOR_BACK_Y / FLOOR_FRONT_Y) */
+.wf-floor-back  { opacity: 0.7; }
+
+.wf-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.wf-empty span {
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  color: var(--wf-text-faint);
+  opacity: 0.75;
+}
+
+/* ghost desks shown when the floor is empty */
+.wf-ghost {
+  position: absolute;
+  width: 52px; height: 34px;
+  transform: translate(-50%, -100%);
+  border: 1px dashed #232327;
+  border-radius: 4px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- slot  */
+
+.wf-slot {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.wf-anchor {
+  position: relative;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- unit  */
+
+.wf-unit {
+  --wf-accent: #a1a1aa;
+  --wf-blink: 0s;
+  --wf-breathe: 0s;
+  --wf-look: 0s;
+  --wf-tempo: 0.12s;
+  --wf-bardelay: 0s;
+  position: relative;
+  width: 58px;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+}
+.wf-figure {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* head — a tiny CRT whose screen is the agent's prompt glyph */
+.wf-headbox {
+  position: relative;
+  width: 34px; height: 22px;
+  background: var(--wf-screen);
+  border: 1px solid var(--wf-edge);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  gap: 1px;
+  z-index: 2;
+}
+.wf-headbox::before {
+  /* faint accent scanline at the top of the screen */
+  content: '';
+  position: absolute;
+  top: 2px; left: 3px; right: 3px;
+  height: 1px;
+  background: var(--wf-accent);
+  opacity: 0.28;
+}
+.wf-glyph {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--wf-accent);
+  margin-top: 3px;
+  white-space: pre;
+}
+.wf-cursor {
+  /* crisp CSS cursor block — immune to font glyph metrics */
+  width: 3px;
+  height: 8px;
+  margin-top: 4px;
+  background: var(--wf-accent);
+  opacity: 0.9;
+  animation: wf-blink 1.05s step-end infinite;
+  animation-delay: var(--wf-blink);
+}
+.wf-dots {
+  display: none;
+  margin-top: 3px;
+  gap: 1px;
+}
+.wf-dots i {
+  font-style: normal;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--wf-accent);
+  animation: wf-dotcycle 1.2s ease-in-out infinite;
+}
+.wf-dots i:nth-child(2) { animation-delay: 0.2s; }
+.wf-dots i:nth-child(3) { animation-delay: 0.4s; }
+
+/* neck + chair + torso + arms */
+.wf-neck {
+  width: 4px; height: 3px;
+  background: #52525b;
+}
+/* posture wrapper: leans the head per state (transition, not keyframe,
+   so it never fights the bob/tilt loops on .wf-headbox) */
+.wf-head-wrap {
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wf-state-busy .wf-head-wrap      { transform: translateY(1.5px); }  /* lean in */
+.wf-state-thinking .wf-head-wrap  { transform: translateY(-1px) rotate(-2deg); } /* look up */
+.wf-state-attention .wf-head-wrap { transform: translateY(-1.5px); } /* head up */
+.wf-state-error .wf-head-wrap     { transform: translateY(-0.5px) rotate(1.5deg); } /* recoil */
+.wf-body {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 1;
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wf-state-busy .wf-body { transform: translateY(1px); }
+.wf-chair {
+  position: absolute;
+  top: 4px; left: 50%;
+  transform: translateX(-50%);
+  width: 24px; height: 9px;
+  background: #232327;
+  border: 1px solid #2c2c31;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  z-index: 0;
+}
+.wf-torso {
+  width: 18px; height: 12px;
+  background: #3f3f46;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+.wf-scarf {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--wf-accent);
+  opacity: 0.85;
+}
+.wf-arm {
+  width: 3px; height: 10px;
+  background: #52525b;
+  border-radius: 1px;
+  margin-top: 2px;
+  z-index: 1;
+}
+.wf-arm-l { margin-right: 0; transform: rotate(8deg); }
+.wf-arm-r { margin-left: 0; transform: rotate(-8deg); }
+
+/* desk */
+.wf-desk { position: relative; width: 100%; }
+.wf-kbd {
+  position: relative;
+  width: 22px; height: 3px;
+  margin: 0 auto -1px;
+  background: #3f3f46;
+  border-radius: 1px;
+  z-index: 2;
+}
+.wf-hand {
+  position: absolute;
+  top: -2px;
+  width: 3px; height: 2px;
+  background: #8b8b94;
+  border-radius: 1px;
+}
+.wf-hand-l { left: 4px; }
+.wf-hand-r { right: 4px; }
+.wf-slab {
+  width: 58px; height: 4px;
+  background: var(--wf-surface);
+  border-top: 1px solid var(--wf-edge);
+  border-radius: 1px;
+}
+.wf-apron {
+  position: relative;
+  width: 50px; height: 7px;
+  margin: 0 auto;
+  background: #1c1c1f;
+  border: 1px solid #232327;
+  border-top: none;
+  border-radius: 0 0 2px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.wf-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 42px; height: 3px;
+}
+.wf-prefix {
+  font-size: 5.5px;
+  line-height: 1;
+  color: var(--wf-accent);
+  opacity: 0.8;
+  width: 4px;
+  text-align: center;
+}
+.wf-bars {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.wf-bars i {
+  display: block;
+  height: 1px;
+  background: #52525b;
+  transform-origin: left center;
+  transform: scaleX(0.35);
+}
+.wf-legs {
+  display: flex;
+  justify-content: space-between;
+  width: 50px;
+  margin: 0 auto;
+}
+.wf-legs i {
+  width: 2px; height: 5px;
+  background: #232327;
+}
+
+/* label */
+.wf-label {
+  margin-top: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+}
+.wf-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.wf-name {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--wf-text);
+}
+.wf-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--wf-dotcolor, #52525b);
+  flex: none;
+}
+.wf-word {
+  font-size: 7.5px;
+  letter-spacing: 0.06em;
+  color: var(--wf-text-faint);
+  white-space: nowrap;
+}
+/* restrained but obvious: the word itself carries the signal color */
+.wf-state-error .wf-word { color: #f87171; }
+.wf-state-attention .wf-word { color: #fbbf24; }
+
+/* badge (attention ! / error x / completed check) */
+.wf-badge {
+  position: absolute;
+  top: -7px; right: -8px;
+  width: 12px; height: 12px;
+  background: var(--wf-bg);
+  border: 1px solid var(--wf-badgecolor, #fbbf24);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--wf-badgecolor, #fbbf24);
+  z-index: 4;
+}
+
+/* hit target + tooltip */
+.wf-hit {
+  position: absolute;
+  inset: -4px -6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.wf-hit:focus-visible {
+  outline: 1px solid var(--wf-accent);
+  outline-offset: 1px;
+}
+.wf-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 96px;
+  max-width: 168px;
+  background: #18181b;
+  border: 1px solid var(--wf-edge);
+  border-radius: 6px;
+  padding: 5px 7px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+  z-index: 30;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  text-align: left;
+}
+.wf-tip-below { bottom: auto; top: calc(100% + 6px); }
+.wf-tip-start { left: -4px; transform: none; }
+.wf-tip-end { left: auto; right: -4px; transform: none; }
+.wf-unit:hover .wf-tip,
+.wf-unit:focus-within .wf-tip {
+  opacity: 1;
+}
+/* lift the whole slot above its row neighbors while its tooltip is open */
+.wf-slot:has(.wf-unit:hover),
+.wf-slot:has(.wf-hit:focus-visible) {
+  z-index: 200 !important;
+}
+.wf-tip-head {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: var(--wf-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wf-tip-head em {
+  font-style: normal;
+  color: var(--wf-text-faint);
+}
+.wf-tip-topic {
+  margin-top: 3px;
+  font-size: 8.5px;
+  line-height: 1.35;
+  color: var(--wf-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--wf-mono);
+}
+.wf-tip-meta {
+  margin-top: 3px;
+  font-size: 7.5px;
+  letter-spacing: 0.06em;
+  color: var(--wf-text-faint);
+}
+
+/* ------------------------------------------------------- state styling */
+
+/* quiet states: gentle breathing + rare glance (composed, not competing) */
+.wf-state-ready .wf-figure,
+.wf-state-idle .wf-figure,
+.wf-state-completed .wf-figure {
+  animation: wf-breathe 4.6s ease-in-out infinite;
+  animation-delay: var(--wf-breathe);
+}
+.wf-state-idle .wf-headbox {
+  animation: wf-look 7.5s ease-in-out infinite;
+  animation-delay: var(--wf-look);
+}
+
+/* busy: the important one — lean-in posture, typing hands, live strip,
+   fast cursor, small head bob */
+.wf-state-busy .wf-headbox {
+  animation: wf-headbob 0.32s ease-in-out infinite;
+}
+.wf-state-busy .wf-cursor { animation-duration: 0.55s; }
+.wf-state-busy .wf-hand-l {
+  animation: wf-typehand var(--wf-tempo) ease-in-out infinite alternate;
+}
+.wf-state-busy .wf-hand-r {
+  animation: wf-typehand var(--wf-tempo) ease-in-out infinite alternate;
+  animation-delay: calc(var(--wf-tempo) * -1);
+}
+.wf-state-busy .wf-bars i {
+  animation: wf-bar 1.15s ease-in-out infinite;
+  animation-delay: var(--wf-bardelay);
+}
+.wf-state-busy .wf-bars i:nth-child(2) { animation-duration: 0.95s; }
+.wf-state-busy .wf-bars i:nth-child(3) { animation-duration: 1.35s; }
+
+/* thinking: dots cycle, slow cursor, no typing */
+.wf-state-thinking .wf-cursor { display: none; }
+.wf-state-thinking .wf-dots { display: flex; }
+.wf-state-thinking .wf-headbox {
+  animation: wf-headbob 1.6s ease-in-out infinite;
+}
+.wf-state-thinking .wf-bars i { transform: scaleX(0.18); opacity: 0.5; }
+
+/* attention: badge bob + slight head tilt; restrained */
+.wf-state-attention .wf-headbox {
+  animation: wf-tilt 2.1s ease-in-out infinite;
+  border-color: #a16207; /* amber-700, muted */
+}
+.wf-state-attention .wf-bars i { transform: scaleX(0.3); opacity: 0.6; }
+
+/* error: head swaps to x_, red trim, rare subtle flicker — never a red scene */
+.wf-state-error .wf-headbox {
+  border-color: #7f1d1d; /* red-900 */
+  animation: wf-flicker 3.4s linear infinite;
+}
+.wf-state-error .wf-glyph { color: #f87171; }
+.wf-state-error .wf-cursor { color: #f87171; animation-duration: 0.8s; }
+.wf-state-error .wf-bars i { background: #7f1d1d; transform: scaleX(0.4); }
+.wf-state-error .wf-prefix { color: #f87171; }
+
+/* completed: calm, check badge, slow cursor */
+.wf-state-completed .wf-cursor { animation-duration: 1.8s; }
+.wf-state-completed .wf-bars i { transform: scaleX(0.5); opacity: 0.55; background: #34d399; }
+.wf-state-completed .wf-prefix { color: #34d399; }
+.wf-state-completed .wf-glyph { opacity: 0.85; }
+
+/* launching: screen booting, strip sweeps */
+.wf-state-launching .wf-glyph { opacity: 0.35; }
+.wf-state-launching .wf-bars i {
+  animation: wf-boot 1.1s ease-in-out infinite;
+  transform-origin: left center;
+}
+.wf-state-launching .wf-bars i:nth-child(2) { animation-delay: 0.15s; }
+.wf-state-launching .wf-bars i:nth-child(3) { animation-delay: 0.3s; }
+.wf-state-launching .wf-word { color: var(--wf-text-dim); }
+
+/* inactive: powered down */
+.wf-state-inactive .wf-unit-inner { opacity: 0.42; filter: saturate(0.25); }
+.wf-state-inactive .wf-cursor { animation-duration: 2.4s; opacity: 0.5; }
+.wf-state-inactive .wf-glyph { opacity: 0.5; }
+.wf-state-inactive .wf-bars i { transform: scaleX(0.1); opacity: 0.4; }
+
+/* walking (transient, set by the slot while a move transition runs) */
+.wf-walking .wf-figure {
+  animation: wf-walk 0.22s ease-in-out infinite;
+}
+
+/* selected worker: quiet accent ring on the head screen — the visual
+   echo of "this is the session your terminal is showing" */
+.wf-selected .wf-headbox { border-color: var(--wf-accent); }
+.wf-selected .wf-name { text-decoration: underline; text-underline-offset: 2px; }
+
+/* swarm floor: names carry the identity, words would be noise */
+.wf-scene[data-tier='swarm'] .wf-word { display: none; }
+.wf-scene[data-tier='swarm'] .wf-label { margin-top: 1px; }
+
+/* in-scene task line: shows what the selected / attention worker is doing
+   (event-driven, no looping). Lives in the header band so it never covers
+   the first row of workers. */
+.wf-taskchip {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0 8px 4px;
+  padding: 2px 6px 3px;
+  background: #1c1c1f;
+  border: 1px solid #2a2a2f;
+  border-radius: 4px;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  color: var(--wf-text);
+  pointer-events: none;
+}
+.wf-taskchip .wf-task-mark { color: var(--wf-taskcolor, #71717a); }
+.wf-taskchip .wf-task-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* status dot pulse — busy / attention only */
+.wf-state-busy .wf-dot,
+.wf-state-attention .wf-dot {
+  animation: wf-dotpulse 1.7s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------- keyframes */
+
+@keyframes wf-blink {
+  0%, 55% { opacity: 0.9; }
+  56%, 100% { opacity: 0; }
+}
+@keyframes wf-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.7px); }
+}
+@keyframes wf-headbob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+@keyframes wf-typearm {
+  from { transform: translateY(0); }
+  to { transform: translateY(1.6px); }
+}
+@keyframes wf-typehand {
+  from { transform: translateY(0); }
+  to { transform: translateY(1.4px); }
+}
+@keyframes wf-bar {
+  0%   { transform: scaleX(0.15); }
+  30%  { transform: scaleX(0.85); }
+  55%  { transform: scaleX(0.4); }
+  80%  { transform: scaleX(0.95); }
+  100% { transform: scaleX(0.25); }
+}
+@keyframes wf-boot {
+  0%   { transform: scaleX(0.08); opacity: 0.5; }
+  50%  { transform: scaleX(0.7);  opacity: 0.9; }
+  100% { transform: scaleX(0.15); opacity: 0.5; }
+}
+@keyframes wf-dotcycle {
+  0%, 80%, 100% { opacity: 0.15; }
+  40% { opacity: 1; }
+}
+@keyframes wf-look {
+  0%, 84%, 100% { transform: translateX(0); }
+  89% { transform: translateX(-1.2px); }
+  94% { transform: translateX(1.2px); }
+}
+@keyframes wf-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-2.5deg); }
+  70% { transform: rotate(2deg); }
+}
+@keyframes wf-flicker {
+  0%, 91%, 100% { opacity: 1; }
+  93% { opacity: 0.74; }
+  95% { opacity: 0.92; }
+  97% { opacity: 0.8; }
+}
+@keyframes wf-dotpulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+@keyframes wf-walk {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+/* -------------------------------------------------- paused (tab hidden) */
+
+.wf-scene[data-paused='true'] *,
+.wf-scene[data-paused='true'] *::before,
+.wf-scene[data-paused='true'] *::after {
+  animation-play-state: paused !important;
+}
+
+/* ------------------------------------------------------ reduced motion  */
+/* Same information, no continuous motion: cursors render solid, states  */
+/* remain readable via colors, glyphs, badges and words.                 */
+
+@media (prefers-reduced-motion: reduce) {
+  .wf-scene *, .wf-scene *::before, .wf-scene *::after {
+    animation: none !important;
+    transition-duration: 1ms !important;
+  }
+  .wf-cursor { opacity: 0.9; }
+  .wf-dots i { opacity: 0.9; }
+  .wf-state-busy .wf-bars i { transform: scaleX(0.7); }
+  .wf-state-thinking .wf-dots { display: flex; }
+  .wf-state-thinking .wf-cursor { display: none; }
+}
+.wf-scene[data-reduced='true'] *,
+.wf-scene[data-reduced='true'] *::before,
+.wf-scene[data-reduced='true'] *::after {
+  animation: none !important;
+  transition-duration: 1ms !important;
+}
+.wf-scene[data-reduced='true'] .wf-cursor { opacity: 0.9; }
+.wf-scene[data-reduced='true'] .wf-dots i { opacity: 0.9; }
+.wf-scene[data-reduced='true'] .wf-state-busy .wf-bars i { transform: scaleX(0.7); }

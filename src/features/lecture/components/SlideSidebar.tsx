@@ -14,7 +14,7 @@ export default function Sidebar() {
   return (
     <aside className="w-[248px] shrink-0 h-screen sticky top-0 hidden md:flex flex-col border-r border-white/10 bg-[#0b0d16]/90 backdrop-blur-xl">
       <div className="flex items-center gap-3 px-5 pt-6 pb-5">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-300 via-orange-500 to-violet-600 grid place-items-center shadow-lg shadow-orange-500/20">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-300 via-orange-500 to-violet-600 grid place-items-center shadow-lg shadow-orange-500/20">
           <BrainCircuit className="w-5 h-5 text-white" />
         </div>
         <div>
@@ -35,7 +35,7 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="p-4">
-        <div className="rounded-2xl p-4 bg-gradient-to-br from-violet-600/25 to-orange-500/15 border border-white/10">
+        <div className="rounded-xl p-4 bg-gradient-to-br from-violet-600/25 to-orange-500/15 border border-white/10">
           <div className="text-xs font-semibold text-white">Free-AI bridge</div>
           <div className="text-[11px] text-white/60 mt-1 leading-relaxed">Paste efficient prompts into ChatGPT, Gemini, Claude, Kimi, GLM</div>
         </div>

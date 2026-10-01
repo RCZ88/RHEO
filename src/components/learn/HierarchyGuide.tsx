@@ -136,7 +136,7 @@ function NodeCard({ title, mastery, example }: { title: string; mastery: string;
 
 export function HierarchyGuide({ showHeader = true }: { showHeader?: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-1">
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6 space-y-1">
       {showHeader && (
         <div className="flex items-center gap-2 mb-4">
           <Layers className="w-4 h-4 text-clay-400" />

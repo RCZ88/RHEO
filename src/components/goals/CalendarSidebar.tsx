@@ -107,14 +107,14 @@ export function CalendarSidebar({
           scene and wall), so MonthWall's preserve-3d subtree is never flattened. The inset
           padding reserves room for projected overflow (break-out is visual, never a scrollbar). */}
       <div ref={sceneRef} style={sceneStyle} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave}
-        className="relative overflow-visible rounded-[10px]">
+        className="relative overflow-visible rounded-lg">
         {/* One-shot specular sweep during the turn (translate only, ≤8% alpha band). */}
-        <div className="pointer-events-none absolute inset-0 rounded-[10px]" style={{
+        <div className="pointer-events-none absolute inset-0 rounded-lg" style={{
           background: 'linear-gradient(105deg, transparent 30%, rgba(250,250,250,0.08) 50%, transparent 70%)',
           animation: entering ? 'df-sheen 600ms cubic-bezier(0.16,1,0.3,1) forwards' : 'none',
         }} />
         {/* Floor reflection: gradient paint ≤6%, fades with the turn. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-[10px]" style={{
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-lg" style={{
           opacity: entering ? 0.06 : (reduce ? 0.06 : 0),
           background: 'radial-gradient(ellipse 100% 40% at 50% 100%, rgba(120,120,125,0.06), transparent 70%)',
           transition: 'opacity 520ms cubic-bezier(0.16,1,0.3,1) 80ms',

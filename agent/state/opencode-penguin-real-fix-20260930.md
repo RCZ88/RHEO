@@ -3,7 +3,7 @@
 
 # Agent State — opencode-penguin-real-fix-20260930
 
-> **STATUS:** completed | **UPDATED:** 2026-09-30T13:05:00.000Z
+> **STATUS:** completed | **UPDATED:** 2026-09-30T13:35:00.000Z
 
 ---
 
@@ -28,6 +28,12 @@
 - `scripts/zip-src.mjs` is PowerShell/Windows-only. On Linux: `zip -rq src.zip src scripts -x "*.map" "*/node_modules/*"` then add `agent` excluding `agent/backups` (4.1GB!), `agent/docs`, `agent/*.zip`.
 - Pre-existing, NOT mine: ~8.6k `tsc --noEmit` errors; main-process `[Migration] v2 failed` + `[GAS] setBrainDb is not a function`; `build.mjs` intermittently fails on `src/main/gas/client.ts` (passes standalone — re-run).
 - Probe uses a throwaway profile (`/tmp/probe-profile-*`): state resets each launch, test rows never touch the real DB.
+
+- **Cycle 4 — PAINT pass on the handbook panel.** Found 19 `.hb-*` classes defined in CSS but only 7 tokens actually applied — every structural signature class had gone onto the DEAD `HandbookWorkspace.tsx`, never the live `CommandNotesPanel.tsx`. Applied the HTML's full system: `.hb-cmd-row` (+ per-tier `acc-blu/grn/pur/amb/red`), `.hb-sec-head` with numbered sections, the 5 legend badge variants (core/daily/power/sudo/rescue), `.hb-detail`/`.hb-dt`/`.hb-dv`, `.hb-callout.danger` for gotcha+safety, `.hb-param` chips, `.hb-chips` for related. Static substrate (no infinite loop — LAMINAR §6), `--hb-accent` focus rings, `prefers-reduced-motion` block. 35 hb- classes now.
+- **Fixed 2 latent data bugs found by PAINT:** `key={c.id}` and `c.color` referenced fields that DO NOT EXIST on `HandbookCommand` — every React key was `undefined` and the tier dot always fell back to grey. Now keyed on `${section}:${command}`, and the `$`/`#` glyph uses the real `isRoot` + tier hue (root renders amber `rgb(251,191,36)`, normal pink `rgb(236,72,153)`).
+- **Fixed 61 double-escaped HTML entities.** `agent/docs/terminal-handbook-data.json` was scraped raw from the HTML, so "Files &amp; folders" rendered literally. Added a recursive `decodeEntities()` at the single load point in `handbook-data.ts` rather than editing 61 strings.
+- Wired the never-rendered `saving`/`savingLabel` props (a state that existed but was invisible) — spinner + label in the detail header.
+- Gate C clean: 0 raw hex in the panel. Removed `transition-all`, pruned 9 dead imports. Project tsc 8649 -> 8258.
 
 ---
 

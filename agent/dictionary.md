@@ -466,7 +466,15 @@
   in their own section ABOVE the group sections (pin beats group order). Auto-titles skip
   greetings ("hi"/"ok") and take the first substantive user turn. Auto-group classifies
   into Work/Learning/Creative/Life/Reference/Unsorted by keyword.
-- **Still dead:** the `Export` button (AiPage ~1636) downloads JSON that nothing reads back.
+- **Export is no longer a dead end** (2026-09-30). `src/components/ai/chat/ChatExportBridge.tsx`
+  (the AiPage **Export** button) now offers three actions: **Save to brain** (ingests the
+  thread into the library + brain, for threads that predate automatic ingest), **Download
+  JSON** (the original behaviour), and **Import a chat export** (ChatGPT / Claude /
+  Perplexity `conversations.json` → parsed, ingested, learned from).
+  ⚠ ChatGPT's `mapping` tree puts BOTH the role and the body under `node.message`
+  (`node.message.author.role`, `node.message.content`) — looking only at `node.role`
+  finds a body with no role and silently drops EVERY message. Caught only by driving the
+  real file input with a real fixture.
 
 ### External AI transport — extension vs gateway (2026-09-30)
 - **MEANS:** the seam every bridge "Send to AI" button uses.

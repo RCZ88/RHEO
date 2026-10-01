@@ -40,7 +40,7 @@ export default function Research() {
   return (
     <div className="space-y-5">
       <div><h1 className="font-display text-2xl font-bold text-white tracking-tight">Research and roadmap</h1><p className="text-sm text-white/50 mt-1">Technology picks, speech/vision trade-offs, and planned improvements — tracked as living data.</p></div>
-      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 overflow-x-auto">
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 overflow-x-auto">
         <h3 className="text-sm font-semibold text-white mb-3">Tooling decisions — why this stack</h3>
         <table className="w-full text-xs min-w-[560px]">
           <thead><tr className="text-left text-white/35 uppercase tracking-wider text-[10px]"><th className="pb-2 pr-3">Use</th><th className="pb-2 pr-3">Chosen</th><th className="pb-2 pr-3">Alternative</th><th className="pb-2">Why</th></tr></thead>
@@ -50,7 +50,7 @@ export default function Research() {
       <div className="flex gap-1.5 flex-wrap">{CATS.map(c => <button key={c.id} onClick={() => setCat(c.id)} className={'inline-flex items-center gap-1.5 text-xs font-semibold rounded-xl px-3 py-2 border transition-all ' + (cat === c.id ? 'border-amber-300/50 bg-amber-300/10 text-amber-100' : 'border-white/10 text-white/50 hover:text-white')}><c.icon className="w-3.5 h-3.5" />{c.label}</button>)}</div>
       <div className="grid lg:grid-cols-2 gap-3">
         {filtered.map(it => (
-          <div key={it.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+          <div key={it.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
             <div className="flex items-start gap-2">
               <span className="text-[10px] font-mono rounded-lg bg-violet-500/15 border border-violet-400/20 text-violet-200 px-2 py-1">{it.category}</span>
               <button onClick={() => cycle(it)} className="text-[10px] font-bold rounded-lg border border-white/15 px-2 py-1 text-white/60 hover:text-white uppercase">{it.status}</button>
@@ -61,9 +61,9 @@ export default function Research() {
             {it.tools && <div className="mt-2 text-[11px] font-mono text-sky-300">{it.tools}</div>}
           </div>
         ))}
-        {filtered.length === 0 && <div className="col-span-full text-sm text-white/35 rounded-2xl border border-white/5 p-6 text-center">Nothing here yet — log the next experiment below.</div>}
+        {filtered.length === 0 && <div className="col-span-full text-sm text-white/35 rounded-xl border border-white/5 p-6 text-center">Nothing here yet — log the next experiment below.</div>}
       </div>
-      <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+      <div className="rounded-xl border border-white/10 bg-black/30 p-4">
         <div className="text-sm font-semibold text-white">Log research / improvement</div>
         <div className="mt-2 grid sm:grid-cols-2 gap-2">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title — e.g. Whisper small-id fine-tune on math speech" className="rounded-xl bg-white/[0.04] border border-white/10 text-sm text-white p-2.5 outline-none focus:border-amber-300/40 placeholder:text-white/25 sm:col-span-2" />

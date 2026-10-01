@@ -112,6 +112,11 @@ export interface DeskflowAPI {
   // ── AI Agent Paths ──
   getAIAgentCustomPaths: () => Promise<any>
   setAIAgentCustomPath: (pluginId: string, dirPath: string) => Promise<any>
+  syncAIUsage: () => Promise<any>
+  // Full re-read of every agent, ignoring per-path change tracking.
+  forceSyncAIUsage: () => Promise<any>
+  getAISyncStatus: () => Promise<any>
+  clearAISyncState: () => Promise<any>
   getAiProviders: () => Promise<any>
   saveAiProviders: (state: any) => Promise<any>
   testAiProvider: (providerId: string) => Promise<any>

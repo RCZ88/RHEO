@@ -130,6 +130,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // Browser profile management
   getBrowserProfiles: () => ipcRenderer.invoke('get-browser-profiles'),
+  getExtensionStatus: () => ipcRenderer.invoke('get-extension-status'),
   toggleBrowserProfile: (args: { profileId: number; isActive: boolean }) => ipcRenderer.invoke('toggle-browser-profile', args),
   renameBrowserProfile: (args: { profileId: number; newName: string }) => ipcRenderer.invoke('rename-browser-profile', args),
   deleteBrowserProfile: (args: { profileId: number }) => ipcRenderer.invoke('delete-browser-profile', args),

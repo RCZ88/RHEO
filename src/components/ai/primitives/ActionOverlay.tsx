@@ -29,7 +29,7 @@ export function ActionOverlay({ status, actionType, label, className, children }
             key="action-spinner"
             variants={actionSpinnerVariants}
             initial="hidden" animate="show" exit="exit"
-            className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40 backdrop-blur-sm z-10"
+            className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 backdrop-blur-sm z-10"
           >
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900/90 border border-zinc-700/50">
               <Loader2 size={14} className="animate-spin" style={{ color: accentHex }} />
@@ -42,12 +42,12 @@ export function ActionOverlay({ status, actionType, label, className, children }
             key="action-complete"
             variants={completionBurstVariants}
             initial="hidden" animate="show" exit="exit"
-            className="absolute inset-0 flex items-center justify-center rounded-2xl z-10 pointer-events-none"
+            className="absolute inset-0 flex items-center justify-center rounded-xl z-10 pointer-events-none"
           >
             <motion.div
               variants={glowPulseVariants}
               initial="idle" animate="glow"
-              className="absolute inset-0 rounded-2xl"
+              className="absolute inset-0 rounded-xl"
             />
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
               <CheckDraw done={true} accent="emerald" size={16} reduce={reduce} />

@@ -30,7 +30,7 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
 
   if (loading) {
     return (
-      <div className="rounded-[10px] border border-[var(--ws-border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3 h-full">
+      <div className="rounded-lg border border-[var(--ws-border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3 h-full">
         <div className="h-4 w-24 rounded bg-zinc-800" />
         <div className="flex-1 grid grid-cols-2 gap-3">
           <div className="h-10 rounded bg-zinc-800" />
@@ -43,7 +43,7 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
 
   if (error) {
     return (
-      <div className="rounded-[10px] border border-[var(--ws-border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3 h-full">
+      <div className="rounded-lg border border-[var(--ws-border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3 h-full">
         <div className="flex items-center gap-2 text-[13px] text-zinc-400">
           <Moon size={14} />
           <span>Health</span>
@@ -56,9 +56,9 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
   }
 
   return (
-    <div className="rounded-[10px] border border-[var(--ws-border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3 h-full relative">
-      <div className="absolute top-0 left-[2px] right-[2px] h-[1px] -z-10 bg-gradient-to-r from-white/[0.06] via-white/[0.02] to-transparent rounded-t-[10px]" />
-      <div className="absolute inset-0 -z-10 rounded-[10px] pointer-events-none" style={{
+    <div className="rounded-lg border border-[var(--ws-border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3 h-full relative">
+      <div className="absolute top-0 left-[2px] right-[2px] h-[1px] -z-10 bg-gradient-to-r from-white/[0.06] via-white/[0.02] to-transparent rounded-t-lg" />
+      <div className="absolute inset-0 -z-10 rounded-lg pointer-events-none" style={{
         boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.03), inset 0 -1px 0 0 rgba(0,0,0,0.2)',
       }} />
 

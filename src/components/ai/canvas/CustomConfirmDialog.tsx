@@ -93,7 +93,7 @@ export function CustomConfirmDialog({
             className="fixed inset-0 z-[210] flex items-center justify-center p-4"
           >
             <div
-              className="w-full max-w-[380px] rounded-2xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden light:bg-white light:border-[var(--ws-border-strong)]"
+              className="w-full max-w-[380px] rounded-xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl overflow-hidden light:bg-white light:border-[var(--ws-border-strong)]"
               onClick={e => e.stopPropagation()}
             >
               {/* Header */}

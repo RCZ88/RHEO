@@ -15,7 +15,7 @@ const MotionBtn = motion(Button);
 // ── shadcn-style Card primitives (re-skin to RHEO tokens) ──
 const Card = ({ className = '', children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
     <div
-      className={`rounded-[10px] bg-[var(--color-card)] text-[var(--text-primary)] ${className}`}
+      className={`rounded-lg bg-[var(--color-card)] text-[var(--text-primary)] ${className}`}
       {...props}
     >
     {children}

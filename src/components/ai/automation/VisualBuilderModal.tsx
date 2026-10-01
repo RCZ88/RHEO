@@ -182,7 +182,7 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
 
   return (
     <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose} variants={dialogVariants} initial="hidden" animate="show" exit="exit">
-      <div className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-zinc-800 rounded-2xl w-[760px] max-h-[86vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-zinc-800 rounded-xl w-[760px] max-h-[86vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${ACCENT.dot}`} />

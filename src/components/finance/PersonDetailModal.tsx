@@ -187,7 +187,7 @@ export function PersonDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="relative w-full max-w-lg max-h-[85vh] overflow-hidden rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col" onClick={e => e.stopPropagation()}>
 
         {/* ── Header ── */}
         <div className="flex-shrink-0 p-5 border-b border-zinc-800/60">
@@ -494,7 +494,7 @@ export function PersonDetailModal({
       )}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-5 animate-in zoom-in-95">
+          <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl p-5 animate-in zoom-in-95">
             <h3 className="text-sm font-semibold text-zinc-100 mb-2">Delete Person</h3>
             <p className="text-xs text-zinc-400 mb-1">Are you sure you want to delete <span className="font-medium text-zinc-200">{person.name}</span>?</p>
             <p className="text-[11px] text-zinc-500 mb-4">All linked transactions will be unlinked. This cannot be undone.</p>

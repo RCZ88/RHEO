@@ -118,14 +118,32 @@ ipcMain.handle('goal:get-habits', async (_event, startDate: string, endDate: str
   }
 });
 
+/**
+ * Mint a goal id when the caller omitted one.
+ *
+ * `goals.id` is the PRIMARY KEY, so a NULL write is a schema violation that
+ * SQLite will happily accept in a legacy DB and that the renderer cannot
+ * recover from: `GoldPage.loadGoals` does `if (!g.id) continue`, so the row
+ * loads and is then silently dropped with no error. 21 of 27 rows in the live
+ * DB are NULL-id orphans written by exactly the two `save-goal*` paths below.
+ *
+ * Every writer MUST go through this. Format matches the existing
+ * sch_/dl_/rem_ id convention used elsewhere in this file.
+ */
+function ensureGoalId(raw: any): string {
+  const id = raw && String(raw).trim();
+  return id || ('goal_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10));
+}
+
 ipcMain.handle('save-goal', async (_event, date: string, goal: any) => {
   try {
     const { parentId, parentIdsJson } = goalParentIdsToColumns(goal);
+    const id = ensureGoalId(goal.id);
     db!.prepare(`
       INSERT OR REPLACE INTO goals (id, date, title, description, category, target_type, target_seconds, match_category, status, period, source, links, progress_seconds, completed_at, priority, parent_id, parent_ids, deadline)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      goal.id, date, goal.title, goal.description || null,
+      id, date, goal.title, goal.description || null,
       goal.category || 'work', goal.target?.type || 'time', goal.target?.targetSeconds || null, goal.target?.matchCategory || null,
       goal.status || 'pending', goal.period || 'daily', goal.source || 'manual',
       JSON.stringify(goal.links || []), goal.progressSeconds || 0, goal.completedAt || null,
@@ -133,11 +151,11 @@ ipcMain.handle('save-goal', async (_event, date: string, goal: any) => {
     );
     // Capture goal episode into context brain
     try {
-      const existing = db!.prepare('SELECT status FROM goals WHERE id = ?').get(goal.id) as any;
+      const existing = db!.prepare('SELECT status FROM goals WHERE id = ?').get(id) as any;
       const action = goal.status === 'done' ? 'completed' : (!existing ? 'created' : 'updated');
-      episodeWriters.writeGoalEpisode(goal, action);
+      episodeWriters.writeGoalEpisode({ ...goal, id }, action);
     } catch {}
-    return { success: true };
+    return { success: true, id };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -750,6 +768,10 @@ ipcMain.handle('save-goals-batch', async (_event, goals: any[]) => {
     const txn = db!.transaction((items: any[]) => {
       for (const g of items) {
         const { parentId, parentIdsJson } = goalParentIdsToColumns(g);
+        // This is the writer that produced the 9 NULL-id rows in the live DB:
+        // its default source is 'ai_assistant', and g.id was inserted raw.
+        // Report the minted ids back so the caller can reconcile its own state.
+        g.id = ensureGoalId(g.id);
         insert.run(
           g.id, g.date || '2000-01-01', g.title, g.description || null,
           g.category || 'work', g.target?.type || 'custom', g.target?.targetSeconds || null, g.target?.matchCategory || null,
@@ -766,7 +788,7 @@ ipcMain.handle('save-goals-batch', async (_event, goals: any[]) => {
         episodeWriters.writeGoalEpisode(g, g.status === 'done' ? 'completed' : 'created');
       }
     } catch {}
-    return { success: true, count: goals.length };
+    return { success: true, count: goals.length, ids: (goals || []).map((g: any) => g.id) };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -1444,6 +1466,124 @@ ipcMain.handle('connectors:remove', async (_event, id: string) => {
 
 // CalDAV URL normalizer — Google and Outlook require the user's email in the URL path.
 // If the URL is a known provider endpoint without an email suffix, append the username.
+/**
+ * Single CalDAV/HTTP request helper used by test / sync / create / update.
+ *
+ * WHY THIS EXISTS — three real bugs that made calendar connections fail while
+ * email worked fine:
+ *
+ * 1. `require('https')` was hardcoded in every calendar handler. A `http://`
+ *    CalDAV URL (self-hosted Nextcloud, Radicale, anything on a LAN, or a local
+ *    test server) therefore either threw or dialled port 443 with TLS against a
+ *    plaintext server. CalDAV is served over BOTH schemes.
+ * 2. NO REDIRECTS WERE FOLLOWED. Google and Microsoft both 301/302 the CalDAV
+ *    endpoint (apidata.googleusercontent.com -> a regional host, and the
+ *    /.well-known/caldav redirect). A single-hop request that treats anything
+ *    non-2xx as a hard failure therefore rejected on a redirect that would
+ *    have succeeded on the next hop. This is the single most likely reason
+ *    "calendar will not connect" for Google/Outlook.
+ * 3. `normalizeCalDavUrl()` was applied in `test` and `sync` but NOT in
+ *    `create-event` / `update-event`, so a connection could test green and then
+ *    fail to write with a 404 — the URL lost the trailing-slash + email shape.
+ *
+ * Redirects are followed up to MAX_CALDAV_REDIRECTS. Auth headers are stripped
+ * on cross-origin redirect so credentials are never replayed to a host the user
+ * did not configure (this would leak an app password).
+ */
+const MAX_CALDAV_REDIRECTS = 5;
+
+function calDavRequest(
+  rawUrl: string,
+  options: { method: string; username: string; password: string; headers?: Record<string, string>; body?: string; timeoutMs?: number; redirectsLeft?: number; originSeen?: string }
+): Promise<{ status: number; body: string }> {
+  const https = require('https');
+  const http = require('http');
+  const { method, username, password, headers = {}, body, timeoutMs = 15000 } = options;
+  const redirectsLeft = options.redirectsLeft ?? MAX_CALDAV_REDIRECTS;
+
+  return new Promise((resolve, reject) => {
+    let url: URL;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      reject(new Error(`Invalid CalDAV URL: ${rawUrl}. It must be a full URL including https:// or http://`));
+      return;
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      reject(new Error(`Unsupported protocol "${url.protocol}". CalDAV URLs must start with https:// or http://`));
+      return;
+    }
+    if (url.protocol === 'http:') {
+      // Plaintext CalDAV is legitimate for self-hosted servers, but the app
+      // password is about to go over it in the clear. Say so once, loudly.
+      console.warn('[connectors] CalDAV request over plaintext HTTP — credentials are unencrypted:', url.origin);
+    }
+
+    const isFirstHop = !options.originSeen;
+    const originSeen = options.originSeen ?? url.origin;
+    const crossOrigin = url.origin !== originSeen;
+
+    const agent = url.protocol === 'https:' ? https : http;
+    const path = url.pathname + (url.search || '');
+    const req = agent.request(
+      {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path,
+        method,
+        headers: {
+          ...(isFirstHop || !crossOrigin
+            ? { Authorization: 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64') }
+            : {}),
+          ...(body ? { 'Content-Length': Buffer.byteLength(body).toString() } : {}),
+          ...headers,
+        },
+        timeout: timeoutMs,
+        ...(url.protocol === 'https:' ? { rejectUnauthorized: false } : {}),
+      },
+      (res: any) => {
+        const status = res.statusCode || 0;
+        // Redirect: follow it, but only carry auth within the original origin.
+        if ([301, 302, 303, 307, 308].includes(status) && res.headers.location) {
+          res.resume();
+          if (redirectsLeft <= 0) {
+            reject(new Error(`Too many redirects while contacting the CalDAV server (last hop: ${res.headers.location})`));
+            return;
+          }
+          const next = new URL(res.headers.location, url).toString();
+          calDavRequest(next, { ...options, redirectsLeft: redirectsLeft - 1, originSeen })
+            .then(resolve, reject);
+          return;
+        }
+        let text = '';
+        res.on('data', (chunk: any) => { text += chunk.toString(); });
+        res.on('end', () => resolve({ status, body: text }));
+      }
+    );
+    req.once('error', (err: any) => reject(err));
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+/** Escape a value for use inside an iCalendar TEXT property. */
+function icalEscape(value: string): string {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r\n|\r|\n/g, '\\n');
+}
+
+/** iCal UTC timestamp: 2026-10-01T09:30:00Z -> 20261001T093000Z */
+function icalUtc(iso: string): string {
+  const d = new Date(iso);
+  const valid = !Number.isNaN(d.getTime());
+  if (!valid) throw new Error(`Invalid date "${iso}". Expected an ISO 8601 string.`);
+  return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
 function normalizeCalDavUrl(urlStr: string, username: string): string {
   if (!username || !urlStr) return urlStr;
   try {
@@ -1485,37 +1625,26 @@ ipcMain.handle('connectors:test', async (_event, id: string) => {
       db!.prepare("UPDATE connectors SET status = 'connected', error_message = NULL, updated_at = datetime('now') WHERE id = ?").run(id);
       return { success: true, message: 'Connected successfully', latencyMs: Date.now() - start };
     } else if (row.type === 'calendar' && row.provider === 'caldav') {
-      const https = require('https');
-      const normalizedUrl = normalizeCalDavUrl(config.url, config.username);
-      const url = new URL(normalizedUrl);
-      await new Promise<void>((resolve, reject) => {
-        const req = https.request({
-          hostname: url.hostname, port: url.port || 443, path: url.pathname, method: 'PROPFIND',
-          headers: {
-            'Depth': '0',
-            'Authorization': 'Basic ' + Buffer.from(`${config.username}:${config.password}`).toString('base64'),
-          },
-          timeout: 10000, rejectUnauthorized: false,
-        }, (res: any) => {
-          if (res.statusCode === 207 || res.statusCode === 200) { resolve(); return; }
-          let body = '';
-          res.on('data', (chunk: any) => { body += chunk.toString(); });
-          res.on('end', () => {
-            const code = res.statusCode;
-            let hint = '';
-            if (code === 401) hint = ' — Authentication failed. For Google CalDAV: (1) Generate an App Password at myaccount.google.com/apppasswords, (2) Use your full Gmail address as username, (3) URL must include your email like /caldav/v2/you@gmail.com/. For Outlook, enable "Less secure app access" or use an app password.';
-            else if (code === 403) hint = ' — Access denied. Check that CalDAV is enabled for this account and the URL is correct.';
-            else if (code === 404) hint = ' — Calendar not found. Check the CalDAV URL — it should point to your calendar root, not a specific calendar.';
-            else if (code === 405) hint = ' — Method not allowed. The server may not support CalDAV. Try a different URL.';
-            const detail = body.length < 200 ? body.replace(/<[^>]+>/g, '').trim().slice(0, 150) : '';
-            reject(new Error(`HTTP ${code}${hint}${detail ? ' — ' + detail : ''}`));
-          });
-        });
-        req.once('error', reject);
-        req.end();
+      const { status, body } = await calDavRequest(normalizeCalDavUrl(config.url, config.username), {
+        method: 'PROPFIND',
+        username: config.username,
+        password: config.password,
+        headers: { Depth: '0', 'Content-Type': 'application/xml; charset=utf-8' },
+        body: '<?xml version="1.0" encoding="utf-8" ?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>',
+        timeoutMs: 15000,
       });
-      db!.prepare("UPDATE connectors SET status = 'connected', error_message = NULL, updated_at = datetime('now') WHERE id = ?").run(id);
-      return { success: true, message: 'Connected successfully', latencyMs: Date.now() - start };
+      if (status === 207 || status === 200) {
+        db!.prepare("UPDATE connectors SET status = 'connected', error_message = NULL, updated_at = datetime('now') WHERE id = ?").run(id);
+        return { success: true, message: 'Connected successfully', latencyMs: Date.now() - start };
+      }
+      let hint = '';
+      if (status === 401) hint = ' — Authentication failed. For Google CalDAV: (1) Generate an App Password at myaccount.google.com/apppasswords, (2) Use your full Gmail address as username, (3) URL must include your email like /caldav/v2/you@gmail.com/. For Outlook, use an app password.';
+      else if (status === 403) hint = ' — Access denied. Check that CalDAV is enabled for this account and the URL is correct.';
+      else if (status === 404) hint = ' — Calendar not found. Check the CalDAV URL — it should point to your calendar root, not a specific calendar.';
+      else if (status === 405) hint = ' — Method not allowed. The server may not support CalDAV. Try a different URL.';
+      else if (status >= 500) hint = ' — The calendar server errored. It may be temporarily unavailable.';
+      const detail = body.length < 200 ? body.replace(/<[^>]+>/g, '').trim().slice(0, 150) : '';
+      throw new Error(`HTTP ${status}${hint}${detail ? ' — ' + detail : ''}`);
     }
     return { success: false, message: `Unsupported connector: ${row.type}/${row.provider}` };
   } catch (err: any) {
@@ -1572,32 +1701,40 @@ ipcMain.handle('connectors:sync', async (_event, id: string) => {
         } catch {}
       }
     } else if (row.type === 'calendar' && row.provider === 'caldav') {
-      const https = require('https');
-      const normalizedUrl = normalizeCalDavUrl(config.url, config.username);
-      const url = new URL(normalizedUrl);
       const now = new Date();
       const weekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const fmtDt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const fmtDt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
       const calBody = `<?xml version="1.0" encoding="utf-8"?><C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><D:getetag/><C:calendar-data/></D:prop><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="${fmtDt(now)}" end="${fmtDt(weekLater)}"/></C:comp-filter></C:comp-filter></C:filter></C:calendar-query>`;
-      const body = await new Promise<string>((resolve, reject) => {
-        const req = https.request({
-          hostname: url.hostname, port: url.port || 443, path: url.pathname, method: 'REPORT',
-          headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '1',
-            'Authorization': 'Basic ' + Buffer.from(`${config.username}:${config.password}`).toString('base64') },
-          timeout: 15000, rejectUnauthorized: false,
-        }, (res: any) => { let d = ''; res.on('data', (c: any) => { d += c.toString(); }); res.on('end', () => resolve(d)); });
-        req.once('error', reject); req.write(calBody); req.end();
+      // Same helper as test/create/update: http:// supported, redirects followed.
+      const report = await calDavRequest(normalizeCalDavUrl(config.url, config.username), {
+        method: 'REPORT',
+        username: config.username,
+        password: config.password,
+        headers: { 'Content-Type': 'application/xml; charset=utf-8', Depth: '1' },
+        body: calBody,
+        timeoutMs: 15000,
       });
+      if (report.status < 200 || report.status >= 300) {
+        const detail = report.body.length < 200 ? report.body.replace(/<[^>]+>/g, '').trim().slice(0, 150) : '';
+        throw new Error(`Calendar sync failed (HTTP ${report.status})${detail ? ' — ' + detail : ''}`);
+      }
+      const body = report.body;
+      // iCalendar folds long lines and escapes text; unfold (CRLF + space/tab)
+      // before matching, otherwise SUMMARY/DESCRIPTION spanning a fold boundary
+      // is silently truncated and the event shows half a title.
+      const unfolded = body.replace(/\r?\n[ \t]/g, '');
+      const icalUnescape = (s: string) => s.replace(/\\([\\;,nN])/g, (_m, c) => (c === 'n' || c === 'N' ? '\n' : c));
       const veventRegex = /BEGIN:VEVENT[\s\S]*?END:VEVENT/g;
-      const matches = body.match(veventRegex) || [];
+      const matches = unfolded.match(veventRegex) || [];
       const ins = db!.prepare(`INSERT OR REPLACE INTO connector_items (id, connector_id, item_type, subject, summary, date, is_read, metadata) VALUES (?, ?, 'event', ?, ?, ?, 1, ?)`);
       for (const ve of matches) {
         const uidMatch = ve.match(/UID:(.*)/);
-        const summaryMatch = ve.match(/SUMMARY:(.*)/);
+        const summaryMatch = ve.match(/SUMMARY[^:]*:(.*)/);
         const dtStartMatch = ve.match(/DTSTART[^:]*:(.*)/);
         const dtEndMatch = ve.match(/DTEND[^:]*:(.*)/);
         if (summaryMatch && dtStartMatch) {
-          ins.run(`ci_${id}_${uidMatch?.[1]?.trim() || Date.now()}`, id, summaryMatch[1].trim(), summaryMatch[1].trim(), dtStartMatch[1].trim(), JSON.stringify({ startTime: dtStartMatch[1]?.trim(), endTime: dtEndMatch?.[1]?.trim() }));
+          const summary = icalUnescape(summaryMatch[1].trim());
+          ins.run(`ci_${id}_${uidMatch?.[1]?.trim() || Date.now()}`, id, summary, summary, dtStartMatch[1].trim(), JSON.stringify({ startTime: dtStartMatch[1]?.trim(), endTime: dtEndMatch?.[1]?.trim() }));
           itemsAdded++;
         }
       }
@@ -1701,37 +1838,46 @@ ipcMain.handle('connectors:create-event', async (_event, data: { connectorId: st
     const row = db!.prepare('SELECT * FROM connectors WHERE id = ?').get(data.connectorId) as any;
     if (!row) return { success: false, error: 'Connector not found' };
     const config = JSON.parse(row.config);
-    const https = require('https');
-    const url = new URL(config.url);
     const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const dtStart = data.startTime.replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const dtEnd = data.endTime ? data.endTime.replace(/[-:]/g, '').split('.')[0] + 'Z' : dtStart;
-    const vevent = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//DeskFlow//EN\nBEGIN:VEVENT\nUID:${uid}\nDTSTAMP:${dtStart}\nDTSTART:${dtStart}\nDTEND:${dtEnd}\nSUMMARY:${data.title}\nDESCRIPTION:${data.description || ''}\nEND:VEVENT\nEND:VCALENDAR`;
+    const dtStart = icalUtc(data.startTime);
+    const dtEnd = data.endTime ? icalUtc(data.endTime) : dtStart;
+    // PROPER CRLF + escaping. The old body used bare \n and unescaped commas,
+    // semicolons and newlines in the title/description, which produces an
+    // invalid VCALENDAR that stricter servers (Google, iOS) reject with 400.
+    const vevent = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//DeskFlow//EN', 'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${dtStart}`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:${icalEscape(data.title)}`,
+      `DESCRIPTION:${icalEscape(data.description || '')}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n') + '\r\n';
 
-    await new Promise<void>((resolve, reject) => {
-      const req = https.request({
-        hostname: url.hostname, port: url.port || 443,
-        path: url.pathname + uid + '.ics',
+    // normalizeCalDavUrl was NOT applied here before — a connector could test
+    // green and then fail every write with 404. Now both paths agree.
+    const baseUrl = normalizeCalDavUrl(config.url, config.username);
+    const { status, body } = await calDavRequest(
+      (baseUrl.endsWith('/') ? baseUrl : baseUrl + '/') + encodeURIComponent(`${uid}.ics`),
+      {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'text/calendar; charset=utf-8',
-          'Authorization': 'Basic ' + Buffer.from(`${config.username}:${config.password}`).toString('base64'),
-        },
-        timeout: 15000, rejectUnauthorized: false,
-      }, (res: any) => {
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve();
-        else reject(new Error(`HTTP ${res.statusCode}`));
-        res.resume();
-      });
-      req.once('error', reject);
-      req.write(vevent);
-      req.end();
-    });
-
-    db!.prepare(`INSERT INTO connector_items (id, connector_id, item_type, subject, summary, date, is_read, metadata) VALUES (?, ?, 'event', ?, ?, ?, 1, ?)`)
-      .run(`ci_${data.connectorId}_${uid}`, data.connectorId, data.title, data.description || data.title, data.startTime, JSON.stringify({ startTime: data.startTime, endTime: data.endTime }));
-
-    return { success: true, eventId: uid };
+        username: config.username,
+        password: config.password,
+        headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'If-None-Match': '*' },
+        body: vevent,
+        timeoutMs: 15000,
+      }
+    );
+    if (status >= 200 && status < 300) {
+      db!.prepare(`INSERT INTO connector_items (id, connector_id, item_type, subject, summary, date, is_read, metadata) VALUES (?, ?, 'event', ?, ?, ?, 1, ?)`)
+        .run(`ci_${data.connectorId}_${uid}`, data.connectorId, data.title, data.description || data.title, data.startTime, JSON.stringify({ startTime: data.startTime, endTime: data.endTime }));
+      return { success: true, eventId: uid };
+    }
+    const detail = body.length < 200 ? body.replace(/<[^>]+>/g, '').trim().slice(0, 150) : '';
+    return { success: false, error: `Calendar rejected the event (HTTP ${status})${detail ? ' — ' + detail : ''}` };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -1751,32 +1897,34 @@ ipcMain.handle('connectors:update-event', async (_event, data: { connectorId: st
 
     const row = db!.prepare('SELECT * FROM connectors WHERE id = ?').get(data.connectorId) as any;
     const config = JSON.parse(row.config);
-    const https = require('https');
-    const url = new URL(config.url);
-    const dtStart = newStart.replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const dtEnd = newEnd ? newEnd.replace(/[-:]/g, '').split('.')[0] + 'Z' : dtStart;
-    const vevent = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//DeskFlow//EN\nBEGIN:VEVENT\nUID:${data.eventId}\nDTSTAMP:${dtStart}\nDTSTART:${dtStart}\nDTEND:${dtEnd}\nSUMMARY:${newTitle}\nDESCRIPTION:${newDesc}\nEND:VEVENT\nEND:VCALENDAR`;
+    const dtStart = icalUtc(newStart);
+    const dtEnd = newEnd ? icalUtc(newEnd) : dtStart;
+    const vevent = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//DeskFlow//EN', 'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:${data.eventId}`,
+      `DTSTAMP:${dtStart}`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:${icalEscape(newTitle)}`,
+      `DESCRIPTION:${icalEscape(newDesc || '')}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n') + '\r\n';
 
-    await new Promise<void>((resolve, reject) => {
-      const req = https.request({
-        hostname: url.hostname, port: url.port || 443,
-        path: url.pathname + data.eventId + '.ics',
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'text/calendar; charset=utf-8',
-          'Authorization': 'Basic ' + Buffer.from(`${config.username}:${config.password}`).toString('base64'),
-          'If-Match': '*',
-        },
-        timeout: 15000, rejectUnauthorized: false,
-      }, (res: any) => {
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve();
-        else reject(new Error(`HTTP ${res.statusCode}`));
-        res.resume();
-      });
-      req.once('error', reject);
-      req.write(vevent);
-      req.end();
+    const baseUrl = normalizeCalDavUrl(config.url, config.username);
+    const put = await calDavRequest((baseUrl.endsWith('/') ? baseUrl : baseUrl + '/') + encodeURIComponent(`${data.eventId}.ics`), {
+      method: 'PUT',
+      username: config.username,
+      password: config.password,
+      headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'If-Match': '*' },
+      body: vevent,
+      timeoutMs: 15000,
     });
+    if (put.status < 200 || put.status >= 300) {
+      const detail = put.body.length < 200 ? put.body.replace(/<[^>]+>/g, '').trim().slice(0, 150) : '';
+      return { success: false, error: `Calendar rejected the update (HTTP ${put.status})${detail ? ' — ' + detail : ''}` };
+    }
 
     db!.prepare('UPDATE connector_items SET subject = ?, summary = ?, date = ?, metadata = ? WHERE id = ?')
       .run(newTitle, newDesc, newStart, JSON.stringify({ startTime: newStart, endTime: newEnd }), `ci_${data.connectorId}_${data.eventId}`);
@@ -1793,26 +1941,18 @@ ipcMain.handle('connectors:delete-event', async (_event, data: { connectorId: st
     const row = db!.prepare('SELECT * FROM connectors WHERE id = ?').get(data.connectorId) as any;
     if (!row) return { success: false, error: 'Connector not found' };
     const config = JSON.parse(row.config);
-    const https = require('https');
-    const url = new URL(config.url);
-
-    await new Promise<void>((resolve, reject) => {
-      const req = https.request({
-        hostname: url.hostname, port: url.port || 443,
-        path: url.pathname + data.eventId + '.ics',
-        method: 'DELETE',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(`${config.username}:${config.password}`).toString('base64'),
-        },
-        timeout: 15000, rejectUnauthorized: false,
-      }, (res: any) => {
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve();
-        else reject(new Error(`HTTP ${res.statusCode}`));
-        res.resume();
-      });
-      req.once('error', reject);
-      req.end();
+    const baseUrl = normalizeCalDavUrl(config.url, config.username);
+    const del = await calDavRequest((baseUrl.endsWith('/') ? baseUrl : baseUrl + '/') + encodeURIComponent(`${data.eventId}.ics`), {
+      method: 'DELETE',
+      username: config.username,
+      password: config.password,
+      timeoutMs: 15000,
     });
+    // 404 means already gone — treat as success so a retry is idempotent.
+    if (!((del.status >= 200 && del.status < 300) || del.status === 404)) {
+      const detail = del.body.length < 200 ? del.body.replace(/<[^>]+>/g, '').trim().slice(0, 150) : '';
+      return { success: false, error: `Calendar rejected the delete (HTTP ${del.status})${detail ? ' — ' + detail : ''}` };
+    }
 
     db!.prepare('DELETE FROM connector_items WHERE id = ?').run(`ci_${data.connectorId}_${data.eventId}`);
     return { success: true };

@@ -290,7 +290,7 @@ const ModalShell: React.FC<{ onClose: () => void; children: React.ReactNode; tit
     <motion.div
       {...MODAL_PANEL}
       onClick={(e) => e.stopPropagation()}
-      className="w-full max-w-md max-h-[82vh] overflow-y-auto rounded-2xl bg-zinc-900/95 backdrop-blur-xl ring-1 ring-zinc-800 shadow-2xl shadow-black/50 p-5"
+      className="w-full max-w-md max-h-[82vh] overflow-y-auto rounded-xl bg-zinc-900/95 backdrop-blur-xl ring-1 ring-zinc-800 shadow-2xl shadow-black/50 p-5"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="min-w-0">{title}</div>

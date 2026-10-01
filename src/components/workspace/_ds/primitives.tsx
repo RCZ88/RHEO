@@ -96,7 +96,7 @@ export const EmptyState: React.FC<{ icon: React.ReactNode; title: string; hint?:
     initial={EMPTY_INIT} animate={EMPTY_SHOW} transition={EMPTY_TRANS}
     className="flex flex-col items-center justify-center py-12 text-center"
   >
-    <div className="mb-3 grid h-13 w-13 place-items-center rounded-2xl bg-zinc-800/80 text-zinc-500" style={SIZE_52}>
+    <div className="mb-3 grid h-13 w-13 place-items-center rounded-xl bg-zinc-800/80 text-zinc-500" style={SIZE_52}>
       {icon}
     </div>
     <p className="text-[13px] font-medium text-zinc-300">{title}</p>

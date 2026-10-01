@@ -60,7 +60,7 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
   }, [active]);
 
   return (
-    <Card className="rounded-[10px] h-full overflow-hidden">
+    <Card className="rounded-lg h-full overflow-hidden">
       <CardHeader className="px-5 pt-4 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

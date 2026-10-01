@@ -58,6 +58,16 @@ import { HandbookReference } from '../components/learn/HandbookReference';
 import '@xterm/xterm/css/xterm.css';
 import { SelectionProvider, SelectionOverlay, SelectionToolbar, SelectionResultPanel, SelectionEngineActivator } from '../features/selection-engine';
 import { MousePointer2 } from 'lucide-react';
+import { TerminalSwitcher } from '../components/workspace/TerminalSwitcher';
+import { AgentAmbientAnimation } from '../components/terminal/AgentAmbientAnimation';
+import {
+  buildWorkforceWorkers,
+  summarizeWorkforce,
+  conductorStatusWord,
+  type ConductorMissionInput,
+  type ConductorNodeInput,
+  type WorkforceWorker,
+} from '../components/terminal/workforce/conductorWorkforce';
 // ── Sub-components (extracted from this file) ──
 // NOTE: CategoryBadge/GroupPanel/ModelSwitcher/ConfigGenerator/Modal/SectionCard/
 // TabPanel/SessionResourceStats/StatusDot/Toggle/Pill/Badge/ToolbarButton are all
@@ -838,6 +848,105 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
   const [exitError, setExitError] = useState<string | null>(null);
   const showCloseWorkspaceDialogRef = useRef(showCloseWorkspaceDialog);
   showCloseWorkspaceDialogRef.current = showCloseWorkspaceDialog;
+
+  // ── Terminal switcher (Ctrl/Cmd+`) ──────────────────────────────────────────
+  // Ctrl+K is owned app-wide by App.tsx and Ctrl+F is the find bar, so the
+  // switcher takes the backtick. Bare backtick is free; a bare 'b' or 'k' would
+  // collide with the agent's own keystrokes inside a focused terminal.
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  // ── Agent workforce viz ────────────────────────────────────────────────────
+  // Feeds two live sources into one worker list: the terminal_sessions rows this
+  // page already loads, and the Conductor's coworkers (role / mission / autonomy).
+  // Conductor wins on state because it knows running-vs-blocked; a PTY with both
+  // a session row and a conductor node is drawn once, as the conductor version.
+  const [conductorNodes, setConductorNodes] = useState<ConductorNodeInput[]>([]);
+  const [conductorMissions, setConductorMissions] = useState<ConductorMissionInput[]>([]);
+
+  useEffect(() => {
+    const api = window.deskflowAPI as any;
+    if (!api?.conductorListMissions) return;
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await api.conductorListMissions();
+        if (cancelled) return;
+        const list = Array.isArray(res?.missions) ? res.missions
+          : Array.isArray(res?.data) ? res.data
+          : Array.isArray(res) ? res : [];
+        setConductorMissions(list as ConductorMissionInput[]);
+        // Fetch each mission's snapshot so we get its nodes (workers).
+        const snapshots = await Promise.all(
+          list.slice(0, 8).map((m: any) =>
+            api.conductorGetSnapshot?.(m.id).catch(() => null)
+          )
+        );
+        if (cancelled) return;
+        const nodes: ConductorNodeInput[] = [];
+        for (const snap of snapshots) {
+          const arr = (snap as any)?.data?.nodes ?? (snap as any)?.nodes ?? [];
+          if (Array.isArray(arr)) nodes.push(...(arr as ConductorNodeInput[]));
+        }
+        setConductorNodes(nodes);
+      } catch { /* conductor is optional — viz still works from sessions */ }
+    };
+    load();
+
+    // Live snapshot pushes keep the scene current while agents run.
+    let off: (() => void) | undefined;
+    try {
+      off = api.onConductorSnapshot?.(() => { load(); });
+    } catch { /* no listener */ }
+    return () => { cancelled = true; off?.(); };
+  }, []);
+
+  const workforceWorkers = useMemo<WorkforceWorker[]>(
+    () => buildWorkforceWorkers({
+      sessions: sessions.map(s => ({
+        id: s.id,
+        agent: s.agent,
+        status: s.status,
+        topic: s.topic,
+        terminal_id: s.terminal_id ?? null,
+      })),
+      nodes: conductorNodes,
+      missions: conductorMissions,
+      activeTerminalId,
+    }),
+    [sessions, conductorNodes, conductorMissions, activeTerminalId]
+  );
+
+  const workforceSummary = useMemo(
+    () => summarizeWorkforce(workforceWorkers),
+    [workforceWorkers]
+  );
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (e.code !== 'Backquote') return;
+      // Never steal the key from a focused terminal — that is the agent's input.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (t && t.closest('.xterm')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setSwitcherOpen(v => !v);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+
+  const switcherFocusTerminal = useCallback((terminalId: string) => {
+    setActiveTerminalId(terminalId);
+    window.dispatchEvent(new CustomEvent('focus-terminal', { detail: { terminalId } }));
+  }, []);
+
+  const switcherResumeSession = useCallback(async (row: any) => {
+    const full = sessions.find(s => s.id === row.id);
+    if (!full) { showError(`Session ${row.id} is no longer available`, 'warning'); return; }
+    await handleResumeSession(full);
+  }, [sessions, showError]);
 
   const performExit = useCallback(() => {
     if (onCloseWorkspaceRef.current) {
@@ -3123,6 +3232,14 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
           </button>
           <div className="flex-1" />
           <button
+            onClick={() => setSwitcherOpen(true)}
+            title="Jump to a terminal or session (Ctrl+`)"
+            aria-label="Jump to a terminal or session"
+            className="p-1.5 rounded-xl bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--page-accent)]/60 active:scale-95"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => window.dispatchEvent(new CustomEvent('selection-engine:toggle'))}
             title="Select screen element for AI context (Ctrl+Shift+S)"
             aria-label="Select screen element for AI context"
@@ -3155,6 +3272,90 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
         </div>
 
         <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+          {/* Agent workforce — ambient strip above the terminal panes. Hidden when
+              there is nothing to show so it never steals space from zero-terminals
+              empty state, and it is collapsible so it never fights the terminals
+              for vertical room on a short window. */}
+          {workforceSummary.total > 0 && (
+            <details
+              open={workforceSummary.total <= 6}
+              className="shrink-0 border-b border-zinc-800/60 bg-zinc-950"
+            >
+              <summary className="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none list-none hover:bg-zinc-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--page-accent)]/60">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                  Workforce
+                </span>
+                <span className="text-[10px] text-zinc-600 tabular-nums">
+                  {workforceSummary.total} agent{workforceSummary.total !== 1 ? 's' : ''}
+                </span>
+                {workforceSummary.working > 0 && (
+                  <span className="text-[10px] text-emerald-400 tabular-nums">
+                    {workforceSummary.working} working
+                  </span>
+                )}
+                {workforceSummary.needsHuman > 0 && (
+                  <span className="text-[10px] text-amber-400 tabular-nums">
+                    {workforceSummary.needsHuman} need you
+                  </span>
+                )}
+                {workforceSummary.conductor > 0 && (
+                  <span className="text-[10px] text-zinc-500 tabular-nums">
+                    {workforceSummary.conductor} coworkers · {workforceSummary.missions} mission{workforceSummary.missions !== 1 ? 's' : ''}
+                  </span>
+                )}
+                <div className="flex-1" />
+                <span className="text-[10px] text-zinc-700">collapse</span>
+              </summary>
+              <div className="px-3 pb-3">
+                <AgentAmbientAnimation
+                  sessions={sessions.map(s => ({
+                    id: s.id,
+                    agent: s.agent,
+                    status: s.status,
+                    topic: s.topic,
+                    terminalId: s.terminal_id ?? null,
+                  }))}
+                  phases={Object.fromEntries(
+                    workforceWorkers.map(w => [
+                      w.key,
+                      { phase: w.state, topic: w.topic ?? undefined },
+                    ])
+                  )}
+                  selectedSessionId={null}
+                  onSelectSession={(id) => {
+                    const w = workforceWorkers.find(x => x.key === id || x.sessionId === id);
+                    if (w?.terminalId) {
+                      setActiveTerminalId(w.terminalId);
+                      window.dispatchEvent(new CustomEvent('focus-terminal', { detail: { terminalId: w.terminalId } }));
+                    }
+                  }}
+                  density="compact"
+                />
+                {/* Conductor roles/statuses the generic scene cannot show. */}
+                {workforceWorkers.some(w => w.conductor) && (
+                  <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                    {workforceWorkers.filter(w => w.conductor).map(w => (
+                      <li key={w.key} className="text-[10px] text-zinc-500 flex items-center gap-1.5">
+                        <span className="text-zinc-300">{w.agent}</span>
+                        <span className="text-zinc-600">·</span>
+                        <span className="text-zinc-400">{w.role ?? 'worker'}</span>
+                        <span className="text-zinc-600">·</span>
+                        <span className={w.needsEscalation ? 'text-amber-400' : 'text-zinc-500'}>
+                          {w.needsEscalation ? 'needs approval' : conductorStatusWord(w.state)}
+                        </span>
+                        {typeof w.depth === 'number' && (
+                          <>
+                            <span className="text-zinc-600">·</span>
+                            <span className="text-zinc-600">depth {w.depth}</span>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </details>
+          )}
           {terminalError && (
             <div className={`px-4 py-2 text-xs border-b flex items-center justify-between ${
               terminalErrorType === 'error' ? 'bg-red-950/50 border-red-800/60 text-red-200' :
@@ -4827,6 +5028,20 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
       }>
         <p className="text-xs text-zinc-300">{confirmDialog.message}</p>
       </Modal>
+
+      {/* Terminal switcher — jump to a live terminal or resume a saved session */}
+      <TerminalSwitcher
+        isOpen={switcherOpen}
+        onClose={() => setSwitcherOpen(false)}
+        activeTerminalId={activeTerminalId}
+        tabs={Object.entries(terminalTabs).map(([id, t]) => ({ id, name: t.name, agent: t.agent, modelTier: t.modelTier }))}
+        sessions={sessions.map(s => ({
+          id: s.id, agent: s.agent, topic: s.topic, status: s.status,
+          category: s.category, terminal_id: s.terminal_id, created_at: s.created_at,
+        }))}
+        onFocusTerminal={switcherFocusTerminal}
+        onResumeSession={switcherResumeSession}
+      />
 
       {/* Session context menu */}
       {contextMenu && (

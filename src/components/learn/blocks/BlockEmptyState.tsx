@@ -10,7 +10,7 @@ interface BlockEmptyStateProps {
 export function BlockEmptyState({ icon, message, action }: BlockEmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-12">
-      <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 border border-zinc-700/30 flex items-center justify-center">
+      <div className="w-12 h-12 rounded-xl bg-zinc-800/60 border border-zinc-700/30 flex items-center justify-center">
         {icon || <Inbox className="w-5 h-5 text-zinc-600" />}
       </div>
       <p className="text-sm text-zinc-500">{message || 'No content to display'}</p>

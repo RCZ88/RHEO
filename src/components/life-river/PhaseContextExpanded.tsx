@@ -342,7 +342,7 @@ function MemoryPicker({ memories, phaseId, onSelect, onClose }: {
   const toggle = useCallback((id: string) => setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next }), [])
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">Attach memories</h3>
         <div className="grid grid-cols-4 gap-2 max-h-80 overflow-y-auto">
           {memories.slice(0, 20).map(m => (
@@ -370,7 +370,7 @@ function GoalPicker({ goals, phaseId, onSelect, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">Link goals to this chapter</h3>
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {goals.length === 0 ? (
@@ -410,7 +410,7 @@ function CovenantQuickCreate({ phaseId, onClose, onSave }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-sm bg-zinc-900/95 border border-zinc-700 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-sm bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">New commitment</h3>
         <div className="space-y-4">
           <div>

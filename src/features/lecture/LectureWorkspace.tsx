@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import SlideSidebar from './components/SlideSidebar';
 import Dashboard from './pages/Dashboard';
 import Decks from './pages/Decks';
@@ -10,7 +10,7 @@ import PromptForge from './pages/PromptForge';
 import AuthVault from './pages/AuthVault';
 import Research from './pages/Research';
 
-console.log('%c[LectureWorkspace] v1.0 loaded', 'color: #fbbf24; font-weight: bold');
+console.log('%c[LectureWorkspace] v2.0 loaded — local AI via main process, STT file + mic, deck notes/figures', 'color: #fbbf24; font-weight: bold');
 
 export default function LectureWorkspace() {
   return (
@@ -44,8 +44,9 @@ export default function LectureWorkspace() {
             <Route path="*" element={<Navigate to="/lecture" replace />} />
           </Routes>
         </main>
-        {/* Mobile bottom nav (from lecturer App.tsx) */}
-        <div className="md:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-8 border-t border-white/10 bg-[#0b0d16]/95 backdrop-blur-xl">
+        {/* Mobile bottom nav. These were <a href={'#'+to}>, which only set a URL
+            hash — tapping a tab did nothing and the active tab never highlighted. */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-8 border-t border-white/10 bg-[#0b0d16]/95 backdrop-blur-xl">
           {[
             { to: '/lecture', label: 'Home' },
             { to: '/lecture/decks', label: 'Decks' },
@@ -56,11 +57,16 @@ export default function LectureWorkspace() {
             { to: '/lecture/auth-vault', label: 'Vault' },
             { to: '/lecture/research', label: 'R&D' },
           ].map(it => (
-            <a key={it.to} href={'#' + it.to} className="py-2.5 text-center text-[9px] text-white/60 active:text-amber-300">
+            <NavLink
+              key={it.to}
+              to={it.to}
+              end={it.to === '/lecture'}
+              className={({ isActive }) => 'py-2.5 text-center text-[9px] transition-colors ' + (isActive ? 'text-amber-300' : 'text-white/60')}
+            >
               {it.label}
-            </a>
+            </NavLink>
           ))}
-        </div>
+        </nav>
       </div>
     </div>
   );

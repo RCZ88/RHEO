@@ -204,3 +204,6 @@ src.old/
 
 # Transient build lock (PID written by scripts/build.mjs)
 .build-lock
+
+# Extracted agent-visualization artifacts (11MB dump incl. workspace.tar.gz)
+workspace-agent-viz/

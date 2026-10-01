@@ -162,7 +162,7 @@ function StripedBarCard({
       initial={reduce ? undefined : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="relative overflow-hidden rounded-2xl p-5 min-h-[220px] flex flex-col"
+      className="relative overflow-hidden rounded-xl p-5 min-h-[220px] flex flex-col"
       style={{
         background: 'linear-gradient(135deg, rgba(20,22,30,0.9) 0%, rgba(11,12,16,0.95) 100%)',
         border: '1px solid rgba(255,255,255,0.08)',

@@ -69,7 +69,7 @@ export function MissionWizard({ projectId, repoPath, userBranch, onLaunch, onClo
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-md">
-      <div className="w-[720px] max-h-[90vh] rounded-2xl bg-zinc-950 ring-1 ring-inset ring-zinc-800/70 shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-[720px] max-h-[90vh] rounded-xl bg-zinc-950 ring-1 ring-inset ring-zinc-800/70 shadow-2xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/60">
           <div className="flex items-center gap-2">
             <Bot className="w-5 h-5 text-rose-400" />

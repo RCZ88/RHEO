@@ -232,7 +232,7 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
       {!data && !isScanning ? (
         <motion.div variants={riseItem}>
           <div className="flex flex-col items-center justify-center py-16 rounded-xl bg-[rgba(24,24,27,0.40)] border border-[rgba(63,63,70,0.30)]">
-            <div className="p-4 rounded-2xl bg-zinc-800/50 mb-4">
+            <div className="p-4 rounded-xl bg-zinc-800/50 mb-4">
               <FileCode className="w-10 h-10 text-zinc-600" />
             </div>
             <h3 className="text-sm font-semibold text-zinc-300 mb-1">No scan data yet</h3>

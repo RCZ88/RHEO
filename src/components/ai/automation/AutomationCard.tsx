@@ -151,7 +151,7 @@ export function AutomationCard({ rule, status, isRunning, onEdit, onEvaluate, on
 export function AutomationListEmpty({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center h-full text-zinc-500 light:text-stone-500 py-16">
-      <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 ring-1 ring-cyan-500/20 flex items-center justify-center mb-4">
+      <div className="w-14 h-14 rounded-xl bg-cyan-500/10 ring-1 ring-cyan-500/20 flex items-center justify-center mb-4">
         <Zap className="w-6 h-6 text-cyan-400" />
       </div>
       <p className="text-sm text-zinc-300 light:text-stone-400">No automations yet</p>

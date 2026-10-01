@@ -4270,7 +4270,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[var(--color-card)] border border-zinc-800 light:border-zinc-200 rounded-2xl w-full max-w-lg p-6 shadow-2xl"
+              className="bg-[var(--color-card)] border border-zinc-800 light:border-zinc-200 rounded-xl w-full max-w-lg p-6 shadow-2xl"
             >
               <div className="flex items-center justify-between mb-6">
                 <div>

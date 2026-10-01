@@ -195,8 +195,8 @@ export function LessonLibrary({ lessons, loading, onOpen, onInfo, onCompose, onI
         <LibrarySkeletons spine={viewMode === 'spines'} />
       ) : branchLessons.length === 0 ? (
         // ── Empty branch shelf ──
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-zinc-900/30 px-6 py-16 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-zinc-800/60" style={{ color: activeBranch.color }}>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-zinc-900/30 px-6 py-16 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-zinc-800/60" style={{ color: activeBranch.color }}>
             <LibraryBig className="h-7 w-7" />
           </div>
           <h3 className="font-serif text-xl text-zinc-200">

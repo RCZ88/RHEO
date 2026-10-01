@@ -306,7 +306,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
       <motion.button
         whileTap={{ scale: 0.95 }}
         onClick={() => openDay(key)}
-        className="relative h-11 rounded-[8px] border flex flex-col items-center justify-center cursor-pointer"
+        className="relative h-11 rounded-lg border flex flex-col items-center justify-center cursor-pointer"
         style={{ transition: reactiveTransition }}
         aria-label={day.toLocaleDateString()}
       >
@@ -328,13 +328,13 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
   return (
     <div
       data-monthwall="wall"
-      className="relative rounded-[12px] overflow-hidden border border-zinc-800/50 bg-zinc-900/30 p-5"
+      className="relative rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 p-5"
 
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-[8px] flex items-center justify-center" style={{ backgroundColor: 'var(--color-card)', border: '1px solid var(--page-accent)' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-card)', border: '1px solid var(--page-accent)' }}>
             <CalendarDays size={15} style={{ color: 'var(--page-accent)' }} />
           </div>
           <div>
@@ -344,15 +344,15 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
         </div>
         <div className="flex items-center gap-1">
           <motion.button whileTap={{ scale: 0.9 }} onClick={goToday}
-            className="h-8 px-2 rounded-[8px] bg-zinc-800/50 text-[11px] text-zinc-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600">
+            className="h-8 px-2 rounded-lg bg-zinc-800/50 text-[11px] text-zinc-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600">
             Today
           </motion.button>
           <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => nav(-1)}
-            className="w-8 h-8 rounded-[8px] bg-zinc-800/50 flex items-center justify-center text-zinc-400 hover:text-white border border-zinc-700/50" aria-label="Previous month">
+            className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-400 hover:text-white border border-zinc-700/50" aria-label="Previous month">
             <ChevronLeft size={14} />
           </motion.button>
           <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => nav(1)}
-            className="w-8 h-8 rounded-[8px] bg-zinc-800/50 flex items-center justify-center text-zinc-400 hover:text-white border border-zinc-700/50" aria-label="Next month">
+            className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-400 hover:text-white border border-zinc-700/50" aria-label="Next month">
             <ChevronRight size={14} />
           </motion.button>
 
@@ -384,7 +384,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
       {/* States */}
       {loading ? (
         <div className="space-y-1.5" data-monthwall-state="loading">
-          <div className="grid grid-cols-7 gap-[10px]">{Array.from({ length: 42 }).map((_, i) => <div key={i} className="h-11 rounded-[8px] bg-zinc-800/40" />)}</div>
+          <div className="grid grid-cols-7 gap-[10px]">{Array.from({ length: 42 }).map((_, i) => <div key={i} className="h-11 rounded-lg bg-zinc-800/40" />)}</div>
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-10 text-center" data-monthwall-state="error">
@@ -425,10 +425,10 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                           zIndex: Math.round(100 - Math.abs(rowOffset)),
                           transition: reactiveTransition,
                         }}
-                        className={`h-11 rounded-[8px] border cursor-pointer
+                        className={`h-11 rounded-lg border cursor-pointer
                           ${isToday ? 'border-zinc-700/60' : isPast ? 'border-zinc-800/50' : 'border-zinc-800/40'}`}
                       >
-                        <div className="relative h-full rounded-[8px] flex flex-col items-center justify-center p-1"
+                        <div className="relative h-full rounded-lg flex flex-col items-center justify-center p-1"
                           style={{
                             background: isPast ? 'var(--color-card)' : 'var(--color-background)',
                           }}>
@@ -461,7 +461,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
       {/* Empty CTA */}
       {!loading && !error && events.length === 0 && (
         <div className="mt-3 flex justify-center">
-          <button onClick={() => openDay(todayKey)} className="px-3 py-1.5 rounded-[8px] border border-zinc-700/50 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors text-[11px] font-medium flex items-center gap-1">
+          <button onClick={() => openDay(todayKey)} className="px-3 py-1.5 rounded-lg border border-zinc-700/50 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors text-[11px] font-medium flex items-center gap-1">
             <Plus size={11} /> Add today's event
           </button>
         </div>
@@ -471,7 +471,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
       <AnimatePresence>
         {undoId && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-3 py-2 rounded-[12px] bg-zinc-800 border border-zinc-700">
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700">
             <span className="text-[11px] text-zinc-300">Event deleted</span>
             <button onClick={undoDelete} className="text-[11px] font-medium text-zinc-200 hover:text-white">Undo</button>
             <button onClick={() => setUndoId(null)} className="text-zinc-500 hover:text-zinc-300"><X size={12} /></button>
@@ -507,14 +507,14 @@ function DayPanel({ date, events, hueFor, form, setForm, onSave, onDelete, input
           <p className="text-[13px] font-semibold text-zinc-100">{dayName}</p>
           <p className="text-[11px] text-zinc-500">{monthName} {date.getDate()}</p>
         </div>
-        {events.length > 0 && <span className="text-[10px] text-zinc-500 bg-zinc-800/60 px-1.5 py-0.5 rounded-[8px]">{events.length} event{events.length > 1 ? 's' : ''}</span>}
+        {events.length > 0 && <span className="text-[10px] text-zinc-500 bg-zinc-800/60 px-1.5 py-0.5 rounded-lg">{events.length} event{events.length > 1 ? 's' : ''}</span>}
       </div>
       {events.length === 0 ? (
         <div className="py-2 flex items-center justify-center"><div className="flex items-center gap-1.5 text-zinc-600 text-[11px]"><Sun size={12} /> No events — add one below</div></div>
       ) : (
         <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
           {events.map(e => (
-            <div key={e.id} className="group flex items-center gap-2 p-2 rounded-[8px] bg-zinc-900/60 border border-zinc-800/60">
+            <div key={e.id} className="group flex items-center gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: hueFor(e.category) }} />
               <span className="flex-1 min-w-0"><span className="block text-[12px] text-zinc-200 truncate">{e.title}</span>
                 <span className="text-[9px] text-zinc-500 uppercase">{e.source}</span>
@@ -529,14 +529,14 @@ function DayPanel({ date, events, hueFor, form, setForm, onSave, onDelete, input
         </div>
       )}
       <div className="pt-2 border-t border-zinc-800/60 space-y-2">
-        <input ref={inputRef} value={form.title} onChange={e => setForm((p: any) => ({ ...p, title: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') onSave(); }} placeholder="Event title" className="w-full h-8 px-2 rounded-[8px] bg-zinc-900/80 border border-zinc-700/50 focus:border-zinc-600 outline-none text-[12px] text-zinc-200 placeholder:text-zinc-600" />
+        <input ref={inputRef} value={form.title} onChange={e => setForm((p: any) => ({ ...p, title: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') onSave(); }} placeholder="Event title" className="w-full h-8 px-2 rounded-lg bg-zinc-900/80 border border-zinc-700/50 focus:border-zinc-600 outline-none text-[12px] text-zinc-200 placeholder:text-zinc-600" />
         <div className="flex items-center gap-2">
           <Select value={form.category} onValueChange={(v: any) => setForm((p: any) => ({ ...p, category: v }))} className="flex-1 h-8">
             {categoryKeys.map(cat => <SelectItem key={cat} value={cat}><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: hueFor(cat) }} />{cat}</span></SelectItem>)}
           </Select>
-          <input type="time" value={form.time || ''} onChange={e => setForm((p: any) => ({ ...p, time: e.target.value }))} className="h-8 px-2 rounded-[8px] bg-zinc-900/80 border border-zinc-700/50 outline-none text-[11px] text-zinc-300 w-[72px]" aria-label="Event time (optional)" />
+          <input type="time" value={form.time || ''} onChange={e => setForm((p: any) => ({ ...p, time: e.target.value }))} className="h-8 px-2 rounded-lg bg-zinc-900/80 border border-zinc-700/50 outline-none text-[11px] text-zinc-300 w-[72px]" aria-label="Event time (optional)" />
         </div>
-        <button onClick={onSave} disabled={!form.title.trim()} className="w-full h-8 rounded-[8px] flex items-center justify-center gap-1 text-[12px] font-medium disabled:opacity-40 bg-zinc-800 text-zinc-200 border border-zinc-700 hover:border-zinc-600">
+        <button onClick={onSave} disabled={!form.title.trim()} className="w-full h-8 rounded-lg flex items-center justify-center gap-1 text-[12px] font-medium disabled:opacity-40 bg-zinc-800 text-zinc-200 border border-zinc-700 hover:border-zinc-600">
           <Plus size={12} /> Add event
         </button>
       </div>

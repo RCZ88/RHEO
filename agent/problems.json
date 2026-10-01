@@ -1641,7 +1641,7 @@
   {
     "id": "188",
     "title": "Goal hub is unreachable: 5 root causes block Goal-as-the-hub",
-    "status": "NEW",
+    "status": "AI Attempted Fix",
     "priority": "critical",
     "category": "goals",
     "terminal_id": null,
@@ -1649,7 +1649,7 @@
     "session_name": null,
     "skill_used": "paint",
     "user_notes": "The Goal is supposed to be the modular hub of the Life page — link a goal to todolist, habits, schedule, learning, sleep, everything. The backend is ~90% built and completely unreachable in practice. DO THESE IN ORDER; each is a prerequisite for the next.",
-    "fix_description": null,
+    "fix_description": "Stage 1a: added ensureGoalId() in goal-handlers.ts; BOTH save-goal and save-goals-batch now mint an id when the caller omits one (AiPage apply-plan sends {title,category,priority} with no id — that was the leak). Both handlers now return the id. Stage 1b: BACKFILLED 21 NULL ids in deskflow-data.db (backup at agent/backups/20260930-234450-*). 0 NULL ids remain, 27 rows / 27 distinct ids, integrity ok. Stage 1c: added an Accept/Dismiss review queue on GoldPage for the 11 status='suggested' goals that were filtered out with no way to reach them; widened the status type locally because the DB carries legacy AI statuses the canonical GoalStatus union does not declare. Verified statically only — NOT clicked in the running app.",
     "files": [
       "src/infrastructure/ipc/goal-handlers.ts",
       "src/components/goals/ConnectionExplorer.tsx",
@@ -1685,7 +1685,7 @@
   {
     "id": "189",
     "title": "21 of 27 goals invisible: NULL primary key hides the whole feature",
-    "status": "NEW",
+    "status": "AI Attempted Fix",
     "priority": "critical",
     "category": "goals",
     "terminal_id": null,
@@ -1693,7 +1693,7 @@
     "session_name": null,
     "skill_used": "paint",
     "user_notes": "GoldPage.loadGoals does `if (!g.id) continue`, silently discarding 21 goals. Every NULL-id row came from an AI/assistant write path (source='ai' / 'ai_assistant'); save-goal has no id fallback so it inserts NULL directly. 11 'suggested' goals are ALSO invisible by design — GoldPage.tsx:1009 filters `status !== 'suggested'` with no 'N suggested' affordance to surface them.",
-    "fix_description": null,
+    "fix_description": "Stage 1a: save-goal + save-goals-batch now mint an id (closes the leak for NEW rows). Stage 1b: backfilled all 21 existing NULL ids; 27/27 goals now survive loadGoals' `if (!g.id) continue`. Stage 1c: the 11 status='suggested' goals are now a visible review queue with Accept (status -> active) and Dismiss (delete, with state restore on failure) instead of being filtered out forever. All 27 goals now render on Gold.",
     "files": [
       "src/infrastructure/ipc/goal-handlers.ts",
       "src/features/warmth/gold/GoldPage.tsx"

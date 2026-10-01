@@ -29,7 +29,7 @@ export function GoalCard({ metric, target, current, type, completed, onIncrement
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border p-5 transition-all ${
+      className={`rounded-xl border p-5 transition-all ${
         completed
           ? 'border-sage-400/30 bg-sage-400/5'
           : 'border-white/10 bg-white/[0.02] hover:border-white/15'

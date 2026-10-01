@@ -25,7 +25,7 @@ export default function RegionSelector({ src, onRegion }: { src: string; onRegio
     } catch { onRegion(r, null); }
   };
   return (
-    <div ref={wrapRef} className="relative select-none rounded-2xl overflow-hidden border border-white/10 bg-black/40 cursor-crosshair"
+    <div ref={wrapRef} className="relative select-none rounded-xl overflow-hidden border border-white/10 bg-black/40 cursor-crosshair"
       onMouseDown={(e) => { const p = pos(e); setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }); }}
       onMouseMove={(e) => { if (drag) { const p = pos(e); setDrag({ ...drag, x1: p.x, y1: p.y }); } }}
       onMouseUp={() => {

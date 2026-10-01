@@ -61,6 +61,7 @@ import NativeFindOverlay from './components/NativeFindOverlay';
 // inside NativeFindOverlay, on the same surface as the Ctrl+F shortcut that
 // people actually press. See NativeFindOverlay's header.
 import type { SearchHit } from './services/search/index';
+import { usePageSearchIndex } from './hooks/usePageSearchIndex';
 import MissedTimePanel from './components/MissedTimePanel';
 import { PairPhoneModal } from './components/PairPhoneModal';
 import { VoiceProvider } from './context/VoiceContext';
@@ -315,14 +316,18 @@ function App() {
   const currentPageId = location.pathname === '/' ? 'dashboard'
     : location.pathname.replace('/', '') || 'dashboard';
 
+  // Index the rendered page so the find bar's All / Section scopes have
+  // something real to search on every route, not just the dashboard.
+  usePageSearchIndex(currentPageId);
+
   // Find bar — one surface, two scopes (see NativeFindOverlay).
-  //   Ctrl+F            → 'page'  (live find-in-page, highlights + scrolls)
-  //   sidebar magnifier → 'all'   (indexed search across the app)
+  //   Ctrl+F            → 'subpage' (live find on what is on screen right now)
+  //   sidebar magnifier → 'app'     (indexed search across every route)
   // Ctrl+K is handled separately by GlobalSearchCommandPalette.
   const [nativeFindOpen, setNativeFindOpen] = useState(false);
-  const [findScope, setFindScope] = useState<'page' | 'all'>('page');
+  const [findScope, setFindScope] = useState<'subpage' | 'app'>('subpage');
 
-  const openFind = useCallback((scope: 'page' | 'all') => {
+  const openFind = useCallback((scope: 'subpage' | 'app') => {
     setFindScope(scope);
     setNativeFindOpen(true);
   }, []);
@@ -332,8 +337,8 @@ function App() {
   // useAppSmartSearch, which is never called — so those buttons were no-ops and
   // the All/Section scope feature had no reachable entry point at all.
   useEffect(() => {
-    const onSmart = () => openFind('all');
-    const onNative = () => openFind('page');
+    const onSmart = () => openFind('app');
+    const onNative = () => openFind('subpage');
     window.addEventListener('smart-search:open', onSmart);
     window.addEventListener('native-find:open', onNative);
     return () => {
@@ -386,7 +391,7 @@ function App() {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       if (e.key.toLowerCase() !== 'f') return;
       e.preventDefault();
-      openFind('page');
+      openFind('subpage');
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
@@ -408,6 +413,11 @@ function App() {
     const page = location.pathname === '/' ? 'dashboard'
       : location.pathname.replace('/', '') || 'dashboard';
     document.documentElement.setAttribute('data-page', page);
+    // The primary scroller is re-picked per route by components/ui/smooth-scroll.
+    // HashRouter fires no popstate for an in-app navigation, so the module needs
+    // this signal to hand the lerp to whichever pane the new page actually
+    // scrolls. Fired after paint so that pane exists.
+    window.dispatchEvent(new CustomEvent('deskflow:route', { detail: { page } }));
   }, [location.pathname]);
 
   useEffect(() => {
@@ -452,6 +462,19 @@ function App() {
       try { localStorage.setItem('df-sidebar-collapsed', String(next)); } catch {}
       return next;
     });
+  }, []);
+
+  // Sidebar width (persisted, ignored while collapsed). Clamp on read too — a
+  // hand-edited or stale localStorage value must not escape the range.
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const raw = Number(localStorage.getItem('df-sidebar-width'));
+      return Number.isFinite(raw) && raw >= 208 && raw <= 520 ? raw : 224;
+    } catch { return 224; }
+  });
+  const resizeSidebar = useCallback((w: number) => {
+    setSidebarWidth(w);
+    try { localStorage.setItem('df-sidebar-width', String(w)); } catch {}
   }, []);
 
   // Hide sidebar when solar overlay is active (fullscreen or modal)
@@ -2955,6 +2978,8 @@ const devFireSmartFill = async () => {
       {location.pathname !== '/terminal' && !solarOverlayActive && (
         <Sidebar
           collapsed={sidebarCollapsed}
+          width={sidebarWidth}
+          onResize={resizeSidebar}
           onToggle={toggleSidebar}
           pathname={location.pathname}
           isTracking={isTracking}
@@ -3187,8 +3212,9 @@ const devFireSmartFill = async () => {
          </div>
          )}
 
-        {/* Main Scroll Area */}
-        <div className={`flex-1 min-h-0 ${location.pathname === '/terminal' || location.pathname === '/database' ? 'flex flex-col overflow-hidden' : 'overflow-auto'}`}>
+        {/* Main Scroll Area — also the root the find bar's All/Section scopes
+            index, so that app-wide search covers whatever is actually rendered. */}
+        <div data-page-root className={`flex-1 min-h-0 ${location.pathname === '/terminal' || location.pathname === '/database' ? 'flex flex-col overflow-hidden' : 'overflow-auto'}`}>
           <ErrorBoundary key={location.pathname}>
             <Routes key={location.pathname}>
               {/* Dashboard */}
@@ -3270,7 +3296,7 @@ const devFireSmartFill = async () => {
               <Route path="/database" element={<DatabasePage />} />
               {/* Backup Center */}
               {/* Pricing Page */}
-              <Route path="/pricing" element={<div className="glass rounded-3xl p-8 flex items-center justify-center h-96"><div className="text-center text-zinc-400"><div className="text-4xl mb-4">!</div><div className="text-lg font-medium">Not Yet Added Feature</div><div className="text-sm text-zinc-500 mt-1">Pricing plans are coming soon</div></div></div>} />
+              <Route path="/pricing" element={<div className="glass rounded-xl p-8 flex items-center justify-center h-96"><div className="text-center text-zinc-400"><div className="text-4xl mb-4">!</div><div className="text-lg font-medium">Not Yet Added Feature</div><div className="text-sm text-zinc-500 mt-1">Pricing plans are coming soon</div></div></div>} />
               {/* Settings Page */}
 <Route path="/settings" element={<SettingsPage logs={logs} appStats={allTimeAppStats} websiteStats={allTimeWebsiteStats} onRegisterSave={handleRegisterSave} onReloadData={loadData} onCategoryOverridesChange={setCategoryOverrides} onHasChangesChange={setSettingsHasChanges} timerBehavior={timerBehavior} setTimerBehavior={setTimerBehavior} trackerAppMode={trackerAppMode} setTrackerAppMode={setTrackerAppMode} externalActivities={externalActivities} externalActivityTiers={externalActivityTiers} onExternalActivityTiersChange={setExternalActivityTiers} showGapBannerSetting={showGapBannerSetting} setShowGapBannerSetting={setShowGapBannerSetting} />} />
               {/* 404 catch-all */}
@@ -3286,7 +3312,7 @@ const devFireSmartFill = async () => {
                   initial={{ opacity: 0, scale: 0.92 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.92 }}
-                  className="glass rounded-3xl p-8 w-full max-w-sm"
+                  className="glass rounded-xl p-8 w-full max-w-sm"
                   onClick={e => e.stopPropagation()}
                 >
                   <div className="flex items-center gap-3 mb-4">
@@ -3421,7 +3447,7 @@ const devFireSmartFill = async () => {
                   initial={{ opacity: 0, scale: 0.92 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.92 }}
-                  className="glass rounded-3xl p-8 w-full max-w-sm"
+                  className="glass rounded-xl p-8 w-full max-w-sm"
                   onClick={e => e.stopPropagation()}
                 >
                   <div className="flex items-center gap-3 mb-4">
@@ -3470,7 +3496,7 @@ const devFireSmartFill = async () => {
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="glass rounded-3xl p-8 w-full max-w-4xl max-h-[85vh] flex flex-col"
+                  className="glass rounded-xl p-8 w-full max-w-4xl max-h-[85vh] flex flex-col"
                   onClick={e => e.stopPropagation()}
                 >
                   <div className="flex justify-between items-center mb-6">
@@ -3500,7 +3526,7 @@ const devFireSmartFill = async () => {
                   </div>
 
                   {/* Data Table */}
-                  <div className="flex-1 overflow-auto border border-zinc-800 rounded-2xl bg-zinc-950 light:bg-zinc-900/90 light:border-zinc-200">
+                  <div className="flex-1 overflow-auto border border-zinc-800 rounded-xl bg-zinc-950 light:bg-zinc-900/90 light:border-zinc-200">
                     <table className="w-full text-sm font-mono">
                       <thead className="sticky top-0 bg-zinc-900 z-10 light:bg-zinc-100">
                         <tr className="border-b border-zinc-800 text-left text-zinc-400 light:border-zinc-300 light:text-zinc-600">
@@ -3578,7 +3604,7 @@ const devFireSmartFill = async () => {
                   initial={{ opacity: 0, scale: 0.95, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className="glass rounded-3xl p-8 w-full max-w-xl"
+                  className="glass rounded-xl p-8 w-full max-w-xl"
                   onClick={e => e.stopPropagation()}
                 >
                   <div className="flex justify-between mb-6">
@@ -3594,7 +3620,7 @@ const devFireSmartFill = async () => {
                     <button onClick={() => setShowSummary(false)} className="text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700">?</button>
                   </div>
 
-                  <div className="font-mono text-sm whitespace-pre-wrap bg-zinc-950 p-6 rounded-2xl leading-relaxed border border-zinc-800 light:bg-zinc-900/90 light:border-zinc-200">
+                  <div className="font-mono text-sm whitespace-pre-wrap bg-zinc-950 p-6 rounded-xl leading-relaxed border border-zinc-800 light:bg-zinc-900/90 light:border-zinc-200">
                     {aiSummary}
                   </div>
 
@@ -3604,13 +3630,13 @@ const devFireSmartFill = async () => {
                         navigator.clipboard.writeText(aiSummary);
                         alert('Summary copied to clipboard');
                       }}
-                      className="flex-1 py-3 rounded-2xl border border-zinc-700 hover:bg-zinc-900 text-zinc-300 light:border-zinc-300 light:hover:bg-zinc-100 light:text-zinc-700"
+                      className="flex-1 py-3 rounded-xl border border-zinc-700 hover:bg-zinc-900 text-zinc-300 light:border-zinc-300 light:hover:bg-zinc-100 light:text-zinc-700"
                     >
                       Copy to Clipboard
                     </button>
                     <button
                       onClick={() => exportData('json')}
-                      className="flex-1 py-3 rounded-2xl bg-white text-black font-medium light:bg-zinc-100 light:text-zinc-900"
+                      className="flex-1 py-3 rounded-xl bg-white text-black font-medium light:bg-zinc-100 light:text-zinc-900"
                     >
                       Export Full Data
                     </button>

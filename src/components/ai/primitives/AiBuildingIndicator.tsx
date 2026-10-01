@@ -21,7 +21,7 @@ export function AiBuildingIndicator({ visible, label = 'AI is building...', prog
         <motion.div
           variants={aiBuildingVariants}
           initial="hidden" animate="building" exit="hidden"
-          className={cn('rounded-2xl bg-zinc-900/60 p-4 ring-1 ring-zinc-800/60', className)}
+          className={cn('rounded-xl bg-zinc-900/60 p-4 ring-1 ring-zinc-800/60', className)}
         >
           <div className="flex items-center gap-2 mb-2">
             <Sparkles size={14} className="text-violet-400 animate-pulse motion-reduce:animate-none" />

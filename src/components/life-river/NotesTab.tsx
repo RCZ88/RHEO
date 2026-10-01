@@ -124,7 +124,7 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-zinc-950/95 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-zinc-950/95 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 border-b border-zinc-800/60">
           <div className="flex items-center justify-between mb-4">
@@ -201,7 +201,7 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
       {/* In-app webview viewer */}
       {viewerUrl && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setViewerUrl(null)}>
-          <div className="w-full max-w-5xl h-[80vh] bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700 flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-5xl h-[80vh] bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700 flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800">
               <span className="text-[12px] text-zinc-400 truncate">{viewerUrl}</span>
               <button onClick={() => setViewerUrl(null)} className="text-zinc-500 hover:text-zinc-300"><X size={16} /></button>
@@ -325,7 +325,7 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
 
   return (
     <div className={cn("fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity", open ? "opacity-100" : "opacity-0 pointer-events-none")} onClick={() => handleClose(false)}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">{initial?.is_draft ? 'Resume draft' : initial ? 'Edit note' : 'New note'}</h3>
         <div className="space-y-3.5">
           <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title (optional)" className="text-[14px]" />

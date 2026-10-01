@@ -59,7 +59,7 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
   const color = topSession ? getSessionColor(topSession.durationSeconds) : '#34d399';
 
   return (
-    <Card className="rounded-[10px] h-full">
+    <Card className="rounded-lg h-full">
       <CardContent className="p-4 sm:p-5 h-full flex flex-col relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-3 shrink-0">

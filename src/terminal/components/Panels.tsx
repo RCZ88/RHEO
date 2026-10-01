@@ -18,7 +18,7 @@ import type { CommandNote } from "./CommandNotesPanel";
 
 function Section({ title, icon, right, children }: { title: string; icon?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border p-3.5" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
+    <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
       <div className="flex items-center gap-2 mb-3">
         {icon}<h3 className="display font-bold text-[12.5px] tracking-tight flex-1" style={{ color: "var(--t-fg)" }}>{title}</h3>{right}
       </div>
@@ -279,7 +279,7 @@ export function CommandsPanel({ store, notify }: { store: Store; notify: (m: str
         ))}
       </div>
       {execFor && (
-        <div className="rounded-2xl border p-3.5 anim-pop" style={{ borderColor: "var(--t-accent)", background: "color-mix(in srgb, var(--t-accent) 8%, var(--t-panel))" }}>
+        <div className="rounded-xl border p-3.5 anim-pop" style={{ borderColor: "var(--t-accent)", background: "color-mix(in srgb, var(--t-accent) 8%, var(--t-panel))" }}>
           <div className="flex items-center gap-2 mb-1">
             <Zap size={14} style={{ color: "var(--t-accent)" }} />
             <span className="text-[12.5px] font-bold" style={{ color: "var(--t-fg)" }}>{execFor.name}</span>
@@ -424,7 +424,7 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
           { v: `${s.okRate}%`, l: "Success rate", c: "#22d3ee", i: <Check size={14} /> },
           { v: formatDuration(s.avgMs), l: "Avg runtime", c: "#fbbf24", i: <Clock size={14} /> },
         ].map((k) => (
-          <div key={k.l} className="rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
+          <div key={k.l} className="rounded-xl border p-3" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
             <div className="flex items-center gap-1.5" style={{ color: k.c }}>{k.i}<span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{k.l}</span></div>
             <div className="display font-bold text-[24px] leading-tight" style={{ color: "var(--t-fg)" }}>{k.v}</div>
           </div>
@@ -432,7 +432,7 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
       </div>
       <div className="grid grid-cols-2 gap-2">
         {["7-day", "errors"].map((k) => (
-          <div key={k} className="rounded-2xl border px-3 py-2 flex items-center gap-2" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
+          <div key={k} className="rounded-xl border px-3 py-2 flex items-center gap-2" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
             <span className="display font-bold text-[18px]" style={{ color: k === "errors" ? "#fb7185" : "var(--t-fg)" }}>{k === "errors" ? s.errors : s.week}</span>
             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{k === "errors" ? "failed runs" : "last 7 days"}</span>
           </div>
@@ -541,7 +541,7 @@ export function KeysPanel({ store, notify }: { store: Store; notify: (m: string)
 
   return (
     <div className="space-y-3 anim-fadeUp">
-      <div className="rounded-2xl border p-3 text-[11.5px] leading-relaxed" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "color-mix(in srgb, var(--t-accent) 8%, transparent)" }}>
+      <div className="rounded-xl border p-3 text-[11.5px] leading-relaxed" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "color-mix(in srgb, var(--t-accent) 8%, transparent)" }}>
         <div className="flex items-center gap-1.5 font-bold mb-1" style={{ color: "var(--t-accent)" }}><Keyboard size={13} />Capture mode</div>
         <span style={{ color: "var(--t-muted)" }}>Click <b>Record</b>, press the combo — it saves instantly and works everywhere, even inside terminal inputs. <b>Esc</b> cancels.</span>
       </div>
@@ -587,7 +587,7 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
   };
   return (
     <div className="space-y-3 anim-fadeUp">
-      <div className="rounded-2xl border p-3.5" style={{ borderColor: "color-mix(in srgb, #34d399 40%, transparent)", background: "linear-gradient(135deg, rgba(52,211,153,.1), transparent)" }}>
+      <div className="rounded-xl border p-3.5" style={{ borderColor: "color-mix(in srgb, #34d399 40%, transparent)", background: "linear-gradient(135deg, rgba(52,211,153,.1), transparent)" }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0" style={{ background: "rgba(52,211,153,.16)", color: "#34d399" }}><Plug size={16} /></div>
           <div className="flex-1 min-w-0">
@@ -599,7 +599,7 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
         <p className="text-[11px] mt-2 leading-relaxed" style={{ color: "var(--t-muted)" }}>Model Context Protocol servers inject filesystem, shell, git, container and system context into every pane. Tools execute in the active pane and are logged below.</p>
       </div>
       {store.mcp.map((m: MCPServer) => (
-        <div key={m.id} className="rounded-2xl border p-3" style={{ borderColor: m.enabled ? "color-mix(in srgb, #34d399 35%, var(--t-border))" : "var(--t-border)", background: "var(--t-panel)" }}>
+        <div key={m.id} className="rounded-xl border p-3" style={{ borderColor: m.enabled ? "color-mix(in srgb, #34d399 35%, var(--t-border))" : "var(--t-border)", background: "var(--t-panel)" }}>
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: m.enabled ? "rgba(52,211,153,.14)" : "var(--t-bg)", color: m.enabled ? "#34d399" : "var(--t-muted)" }}><TabIcon name={m.icon} size={16} /></div>
             <div className="flex-1 min-w-0">
@@ -732,7 +732,7 @@ export function SysPanel({ store, notify }: { store: Store; notify: (m: string) 
   const overrides = (store.paneEnv[envKey] ?? {});
   return (
     <div className="space-y-3 anim-fadeUp">
-      <div className="rounded-2xl border p-3.5" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "linear-gradient(135deg, color-mix(in srgb, var(--t-accent) 12%, transparent), transparent)" }}>
+      <div className="rounded-xl border p-3.5" style={{ borderColor: "color-mix(in srgb, var(--t-accent) 40%, transparent)", background: "linear-gradient(135deg, color-mix(in srgb, var(--t-accent) 12%, transparent), transparent)" }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: "var(--t-accent)" }}><Monitor size={16} /></div>
           <div className="flex-1 min-w-0">

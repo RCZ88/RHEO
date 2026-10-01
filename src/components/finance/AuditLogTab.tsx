@@ -151,7 +151,7 @@ export function AuditLogTab({ displayCurrency }: { displayCurrency: string }) {
       {selectedLog && (
         <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setSelectedLog(null)}>
-          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-5 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
+          <div className="bg-zinc-900 border border-white/10 rounded-xl p-5 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm text-zinc-200 font-medium">{selectedLog.event_type}</span>

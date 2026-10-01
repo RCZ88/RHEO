@@ -131,7 +131,7 @@ function EntryForm({ open, onOpenChange, initial, onSave, goals }: {
 
   return (
     <div className={cn("fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity", open ? "opacity-100" : "opacity-0 pointer-events-none")} onClick={() => onOpenChange(false)}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">{initial ? 'Edit entry' : 'New entry'}</h3>
         <div className="space-y-3.5">
           <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" className="text-[14px]" />

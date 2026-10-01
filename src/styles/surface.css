@@ -1,0 +1,282 @@
+/* ============================================================================
+ * surface.css — THE ONE FILE that owns every scrollbar and every field in RHEO.
+ * ============================================================================
+ *
+ * WHY THIS FILE EXISTS
+ * --------------------
+ * The app had 65 hand-written `::-webkit-scrollbar` rules scattered across 6
+ * stylesheets plus a `.ws-scroll` opt-in class. Every `overflow-y-auto` element
+ * that did not carry that one class rendered Chromium's DEFAULT scrollbar:
+ * 15px wide, opaque grey track, square thumb. That is why the ugly scrollbar
+ * appeared "on some pages" and nowhere else — it was never a styling decision,
+ * it was the absence of one.
+ *
+ * The textbox was worse. `*:focus-visible` in index.css painted a
+ * box-shadow glow on EVERY focusable element, and a second rule added a
+ * 2px accent `outline` on inputs without clearing it — so a focused textbox
+ * showed its own border, a white gap, a cyan glow, AND a cyan outline. Three
+ * concentric rings. The box-shadow also wiped each component's resting shadow,
+ * so fields visibly "popped" on focus.
+ *
+ * THE CONTRACT (three rules, in this order)
+ * -----------------------------------------
+ *   1. SCROLL — one thin, transparent-track, pill-thumb scrollbar on EVERY
+ *      scroll container in the app. No opt-in class. No page excluded.
+ *   2. FIELD — a textbox has NO border by default. A border exists only where
+ *      a specific design asks for one. No imposed height, padding or radius,
+ *      because a search field, a chat composer and a settings row are not the
+ *      same box and the stylesheet must not pretend they are.
+ *   3. FOCUS — exactly ONE ring, drawn with `outline` OUTSIDE the box. Never
+ *      `box-shadow`, so a field's resting shadow survives focus. Never a glow.
+ *      Never more than one indicator.
+ *
+ * HOW TO CHANGE ANYTHING
+ * ----------------------
+ * Every value below is a token on :root. Change the token, the whole app
+ * changes. You should never need to edit a component to fix a scrollbar.
+ *   --sf-scroll-size / --sf-scroll-thumb / --sf-scroll-thumb-hover
+ *   --sf-focus-width / --sf-focus-offset
+ * ========================================================================== */
+
+:root {
+	/* ── Scrollbar geometry ────────────────────────────────────────────── */
+	--sf-scroll-size: 10px;          /* the track. one size, everywhere.     */
+	--sf-scroll-size-sm: 6px;        /* nested/inline panes, denser content  */
+
+	/* ── Scrollbar colour ──────────────────────────────────────────────── */
+	/* The track is TRANSPARENT, not a colour. A visible track reads as a
+	   grey slab sitting on top of the card it is scrolled inside, which is
+	   what made the old .ws-scroll rule look worse than the default.       */
+	--sf-scroll-track: transparent;
+	--sf-scroll-thumb: rgb(255 255 255 / 0.09);
+	--sf-scroll-thumb-hover: rgb(255 255 255 / 0.18);
+	--sf-scroll-thumb-active: rgb(255 255 255 / 0.26);
+
+	/* ── Focus ring ────────────────────────────────────────────────────── */
+	/* 1px, offset 1px: present enough to find with a keyboard, quiet enough
+	   that it is not a second border. A 2px ring at 2px offset reads as a
+	   separate object floating off the field.                               */
+	--sf-focus-width: 1px;
+	--sf-focus-offset: 1px;
+	--sf-focus-color: var(--page-accent, var(--color-ring, #fbbf24));
+}
+
+.light,
+[data-theme="light"] {
+	/* Light theme needs REAL ink, not a white-on-white thumb. Same geometry,
+	   inverted luminance, so the scrollbar is the same object in both themes. */
+	--sf-scroll-thumb: rgb(0 0 0 / 0.16);
+	--sf-scroll-thumb-hover: rgb(0 0 0 / 0.28);
+	--sf-scroll-thumb-active: rgb(0 0 0 / 0.38);
+}
+
+/* ============================================================================
+ * 1. SCROLL — applies to EVERY scroll container in the app.
+ * ============================================================================
+ * `:where()` gives this ZERO specificity, so a component that deliberately
+ * styles its own scrollbar (e.g. a 3D canvas viewport) still wins. The point
+ * is not to overrule intention — it is to supply a DEFAULT for everything
+ * that has no intention yet.
+ */
+
+:where(*) {
+	scrollbar-width: thin;
+	scrollbar-color: var(--sf-scroll-thumb) var(--sf-scroll-track);
+}
+
+:where(*)::-webkit-scrollbar {
+	width: var(--sf-scroll-size);
+	height: var(--sf-scroll-size);
+	background: var(--sf-scroll-track);
+}
+
+:where(*)::-webkit-scrollbar-track,
+:where(*)::-webkit-scrollbar-track:hover {
+	background: var(--sf-scroll-track);
+	border: 0;
+}
+
+/* The thumb is inset by 2px on every side. That inset is what turns a
+   rectangle into a pill AND keeps it clear of the container's own hairline,
+   so a scroller sitting inside a bordered card never looks like the border
+   doubled. Layer count stays constant between rest and hover — changing the
+   layer list on hover is what makes a sweep "pop" instead of animate.       */
+:where(*)::-webkit-scrollbar-thumb {
+	background: var(--sf-scroll-thumb);
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	border-radius: 9999px;
+	min-height: 32px;
+}
+
+:where(*)::-webkit-scrollbar-thumb:hover {
+	background: var(--sf-scroll-thumb-hover);
+	background-clip: padding-box;
+}
+
+:where(*)::-webkit-scrollbar-thumb:active {
+	background: var(--sf-scroll-thumb-active);
+	background-clip: padding-box;
+}
+
+/* The corner is the square grey box where a vertical and horizontal track
+   meet. It is pure noise on a dark UI — it gets no colour at all.          */
+:where(*)::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/* The button pair (the little arrows on Windows-classic scrollbars) is not a
+   control in this design language. It is removed, not restyled.             */
+:where(*)::-webkit-scrollbar-button {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
+/* Opt a pane into the denser 6px bar (tab strips, chip rails, code blocks). */
+@utility sf-scroll-dense {
+	scrollbar-width: thin;
+}
+
+.sf-scroll-dense::-webkit-scrollbar {
+	width: var(--sf-scroll-size-sm);
+	height: var(--sf-scroll-size-sm);
+}
+
+/* Opt a pane OUT of scrollbars entirely — carousels and rails that page
+   instead of scrolling. This is the ONLY sanctioned way to hide one, and it
+   replaces the old ad-hoc `hide-scrollbar` class so there is one name.     */
+@utility sf-scroll-none {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+
+.sf-scroll-none::-webkit-scrollbar {
+	display: none;
+}
+
+/* A page-level scroller reserves its gutter so that content does not jump
+   sideways the moment a pane becomes scrollable. Scoped to a class, NOT
+   global: reserving 10px on every overflow container in the app would eat
+   10px of every input, chart and table for no reason.                      */
+@utility sf-scroll-gutter {
+	scrollbar-gutter: stable;
+}
+
+/* ============================================================================
+ * 2. FIELD — a textbox has no border by default.
+ * ============================================================================
+ * Zero specificity, so:
+ *   • a field that already has `border border-zinc-800` KEEPS it — Tailwind
+ *     wins on specificity and the design asked for a border, so it gets one;
+ *   • a field with no border class becomes genuinely borderless, instead of
+ *     picking up the user-agent's inset border that most resets leave behind.
+ *
+ * Nothing here sets height, min-height, padding, font-size or width. Those
+ * are per-component decisions; a stylesheet that imposes them is the reason
+ * inputs end up different heights on the same screen.
+ */
+
+:where(input, textarea, select) {
+	/* The UA gives unstyled inputs a 2px inset border + a matching background.
+	   Neither is a design decision. */
+	border-width: 0;
+	border-style: none;
+}
+
+/* The one sanctioned way for a field to have a border. Gives it the shared
+   hairline + a resting surface without dictating geometry.                  */
+@utility sf-field {
+	border-width: 1px;
+	border-style: solid;
+	border-color: var(--input-border, var(--color-border));
+	background-color: var(--input-bg, var(--bg-elevated));
+	color: var(--text-primary);
+}
+
+/* ── Hover: the border is the only thing that moves. ---------------------- */
+@utility sf-field-hover {
+	transition: border-color var(--fast, 150ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.sf-field-hover:hover:not(:disabled):not(:focus-visible) {
+	border-color: var(--border-strong, var(--color-border));
+}
+
+/* ── Disabled: reads as disabled because it is DIM and FLAT, not because
+      it is grey. Never a hover state, never focusable feedback.             */
+@utility sf-field-disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.sf-field-disabled:disabled {
+	cursor: not-allowed;
+}
+
+/* ============================================================================
+ * 3. FOCUS — exactly one indicator, outside the box, never a glow.
+ * ============================================================================
+ * The old rule was:
+ *     *:focus-visible { outline: none;
+ *         box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px accent@50% }
+ * That painted a coloured halo around EVERY focusable element — including
+ * plain <div tabindex> layout containers — and it did so with `box-shadow`,
+ * which REPLACES a component's resting shadow. Focusing a field therefore
+ * deleted its shadow and grew a white gap. Both are gone.
+ *
+ * The new rule uses `outline`, which:
+ *   • does not affect layout, so nothing reflows or resizes on focus;
+ *   • does not paint over the element's own box-shadow, so the resting
+ *     shadow survives;
+ *   • cannot be layered with a second ring by accident, because this rule is
+ *     the only thing that paints a focus indicator in the app.
+ *
+ * `outline-offset` places it OUTSIDE the border, so a bordered field shows
+ * one hairline and one ring — not two edges fighting.
+ */
+
+/* Elements that are focusable and MEAN something get a ring. */
+:where(button, a, [role="button"], [role="tab"], [role="menuitem"],
+	[role="option"], [role="switch"], [role="checkbox"], [role="radio"],
+	summary, label, [tabindex]:not([tabindex="-1"])):focus-visible {
+	outline: var(--sf-focus-width) solid var(--sf-focus-color);
+	outline-offset: var(--sf-focus-offset);
+}
+
+/* Fields get the same single ring, and additionally suppress the UA caret
+   box entirely. Deliberately NOT `border-color: accent` — changing the border
+   colour on top of the outline would recreate the two-edge problem this
+   section exists to delete.                                                  */
+:where(input, textarea, select, [contenteditable]):focus-visible {
+	outline: var(--sf-focus-width) solid var(--sf-focus-color);
+	outline-offset: var(--sf-focus-offset);
+	/* No box-shadow here, on purpose. */
+}
+
+/* A field that has no border of its own still needs a keyboard target you can
+   find, and the outline alone provides it. This is the whole point of rule 2:
+   borderless is fine, undiscernible is not.                                 */
+:where(input, textarea, select):focus-visible::-webkit-input-placeholder {
+	color: var(--text-muted, var(--color-muted-foreground));
+}
+
+/* Checkboxes, radios and range inputs draw their own indicator. The native
+   control is the design there, so it gets the accent and nothing else.     */
+:where(input[type="checkbox"], input[type="radio"], input[type="range"]):focus-visible {
+	outline: var(--sf-focus-width) solid var(--sf-focus-color);
+	outline-offset: 2px;
+	accent-color: var(--sf-focus-color);
+}
+
+/* ============================================================================
+ * 4. REDUCED MOTION
+ * ============================================================================
+ * Smooth scrolling is opt-in at runtime (see smooth-scroll.tsx), but if the OS
+ * asks for less motion we make the DOM honest too: no smooth interpolation.
+ */
+@media (prefers-reduced-motion: reduce) {
+	:where(html[data-smooth-scroll="on"]) {
+		scroll-behavior: auto;
+	}
+}

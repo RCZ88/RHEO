@@ -311,6 +311,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // Browser profile management
   getBrowserProfiles: () => ipcRenderer.invoke('get-browser-profiles'),
+  getExtensionStatus: () => ipcRenderer.invoke('get-extension-status'),
   toggleBrowserProfile: (args: { profileId: number; isActive: boolean }) => ipcRenderer.invoke('toggle-browser-profile', args),
   renameBrowserProfile: (args: { profileId: number; newName: string }) => ipcRenderer.invoke('rename-browser-profile', args),
   deleteBrowserProfile: (args: { profileId: number }) => ipcRenderer.invoke('delete-browser-profile', args),
@@ -368,6 +369,11 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   // Title bar auto-hide mode
   getTitleBarMode: () => ipcRenderer.invoke('get-title-bar-mode'),
   setTitleBarMode: (mode: 'always' | 'hover' | 'auto') => ipcRenderer.invoke('set-title-bar-mode', mode),
+  onTitleBarModeChange: (callback: (mode: 'always' | 'hover' | 'auto') => void) => {
+    const handler = (_event: any, mode: any) => callback(mode);
+    ipcRenderer.on('title-bar-mode-changed', handler);
+    return () => ipcRenderer.removeListener('title-bar-mode-changed', handler);
+  },
   notifyClick: () => ipcRenderer.invoke('notification-click'),
   getAutoStartStatus: () => ipcRenderer.invoke('get-auto-start-status'),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('set-auto-start', enabled),
@@ -394,6 +400,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   // Locked items & AI change history
   getLockedItems: () => ipcRenderer.invoke('get-locked-items'),
   setLockedItems: (items: { lockedApps?: Record<string, boolean>; lockedDomains?: Record<string, boolean> }) => ipcRenderer.invoke('set-locked-items', items),
+  getUnlockedItems: (items: string[], isApp: boolean) => ipcRenderer.invoke('get-unlocked-items', items, isApp),
   getAiChangeHistory: () => ipcRenderer.invoke('get-ai-change-history'),
   addAiChangeHistory: (entry: { name: string; type: 'app' | 'domain'; previousCategory: string; newCategory: string; source: 'ai' | 'manual' }) => ipcRenderer.invoke('add-ai-change-history', entry),
   undoAiChange: (changeId: string) => ipcRenderer.invoke('undo-ai-change', changeId),
@@ -628,6 +635,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // AI Usage Sync
   syncAIUsage: () => ipcRenderer.invoke('sync-ai-usage'),
+  forceSyncAIUsage: () => ipcRenderer.invoke('force-sync-ai-usage'),
   getAISyncStatus: () => ipcRenderer.invoke('get-ai-sync-status'),
   clearAISyncState: () => ipcRenderer.invoke('clear-ai-sync-state'),
   getAISessionsPaginated: (tool: string, limit?: number, offset?: number) => ipcRenderer.invoke('get-ai-sessions-paginated', tool, limit, offset),
@@ -1971,6 +1979,13 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   // ── Lecture (SlideMind) ──
   lectureApi: (req: any) => ipcRenderer.invoke('lecture:api', req),
   lectureDigest: (url: string) => ipcRenderer.invoke('lecture:digest', url),
+  // Local AI runs in the MAIN process: a renderer fetch to localhost:11434 is
+  // subject to CORS preflight + CSP and fails silently. See services/lecture.
+  lectureLocalStatus: () => ipcRenderer.invoke('lecture:local-ai:status'),
+  lectureLocalVision: (opts: { model?: string; imageBase64?: string; prompt?: string; timeoutMs?: number }) =>
+    ipcRenderer.invoke('lecture:local-ai:vision', opts),
+  lectureLocalStt: (opts: { audioBase64?: string; mime?: string; filename?: string; language?: string; model?: string; endpoint?: string }) =>
+    ipcRenderer.invoke('lecture:local-ai:stt', opts),
 });
 
 // R-10: Splash renderer preload bridge (single IPC channel for splash↔main)

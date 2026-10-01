@@ -15,6 +15,7 @@ import './styles/lyceum-learn-features.css'
 import './styles/terminal-handbook.css'
 import './styles/signaling.css'
 import { applyTierColors, getTierColorOverrides } from './lib/tierColors'
+import { SmoothScrollProvider } from './components/ui/smooth-scroll'
 
 // Re-apply the user's saved tier colours BEFORE the first paint, so a
 // customised productive/neutral/distracting palette survives a reload
@@ -107,9 +108,11 @@ createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     <HashRouter>
       <NumberMaskProvider>
-        <BootGate>
-          <App />
-        </BootGate>
+        <SmoothScrollProvider>
+          <BootGate>
+            <App />
+          </BootGate>
+        </SmoothScrollProvider>
       </NumberMaskProvider>
     </HashRouter>
   </ErrorBoundary>

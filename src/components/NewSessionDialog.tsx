@@ -18,6 +18,9 @@ const SUPPORTED_AGENTS = [
   { id: 'aider', name: 'Aider' },
   { id: 'codex', name: 'Codex CLI' },
   { id: 'gemini', name: 'Gemini CLI' },
+  // AGENT_CONFIGS.hermes exists in the main process, so the binary, ready-regex
+  // and TUI mode are all wired — it was only missing from this picker.
+  { id: 'hermes', name: 'Hermes' },
 ];
 
 export interface SessionConfig {

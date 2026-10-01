@@ -1088,7 +1088,7 @@ function CryptoDetail({ metadata, onChange, wallet, displayCurrency, onTotalValu
       <div className="space-y-3">
         {/* Empty state — big, friendly, impossible to miss */}
         <div className="flex flex-col items-center py-14 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[#8B5CF6]/10 flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-xl bg-[#8B5CF6]/10 flex items-center justify-center mb-4">
             <Wallet className="w-8 h-8 text-[#8B5CF6]" />
           </div>
           <p className="text-base text-white font-semibold">This wallet is empty</p>

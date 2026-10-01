@@ -1,3 +1,4 @@
+import { getToastDurationMs, isSticky } from '../../../lib/toastDuration';
 import { useEffect, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { LoaderCircle, TriangleAlert, Check, X, ClipboardCopy } from 'lucide-react'
@@ -18,7 +19,8 @@ export function ToastHost() {
   useEffect(() => {
     const fn = (t: ToastMsg) => {
       setItems((prev) => [...prev.slice(-3), t])
-      window.setTimeout(() => setItems((prev) => prev.filter((x) => x.id !== t.id)), 3600)
+      const ms = getToastDurationMs()
+      if (!isSticky(ms)) window.setTimeout(() => setItems((prev) => prev.filter((x) => x.id !== t.id)), ms)
     }
     toastListeners.add(fn)
     return () => { toastListeners.delete(fn) }

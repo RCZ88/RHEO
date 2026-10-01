@@ -1,26 +1,19 @@
 {
   "version": 1,
   "agents": {
-    "build-64369": {
-      "id": "build-64369",
-      "startedAt": 1790783396544,
-      "task": "npm run build",
-      "pid": 64369,
-      "lastHeartbeat": 1790783456610
-    },
-    "build-64457": {
-      "id": "build-64457",
-      "startedAt": 1790783398116,
-      "task": "node scripts/build.mjs",
-      "pid": 64457,
-      "lastHeartbeat": 1790783398116
+    "build-31992": {
+      "id": "build-31992",
+      "startedAt": 1790855491271,
+      "task": "npx cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
+      "pid": 31992,
+      "lastHeartbeat": 1790855551345
     }
   },
   "leases": {},
   "locks": {
     "build": {
-      "agent": "build-64369",
-      "since": 1790783396544,
+      "agent": "build-31992",
+      "since": 1790855491271,
       "ttlMs": 1200000
     }
   }

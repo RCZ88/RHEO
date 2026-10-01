@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "./styles/finance-glass.css";
 @import "./components/ai/design-tokens.css";
+/* THE scrollbar + textbox contract. One file owns both — see surface.css. */
+@import "./styles/surface.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant light (&:is(.light *));
@@ -390,30 +392,12 @@ html[data-page="terminal"] {
 		cursor: pointer;
 	}
 
+	/* Scrollbars are owned by styles/surface.css, applied globally. This class
+	   is kept ONLY so existing call sites do not break — it now resolves to
+	   the same contract as every other scroller in the app. */
 	.ws-scroll {
 		scrollbar-width: thin;
-		scrollbar-color: var(--scrollbar-thumb, #3f3f46) transparent;
-	}
-
-	.ws-scroll::-webkit-scrollbar {
-		width: 8px;
-		height: 8px;
-	}
-
-	.ws-scroll::-webkit-scrollbar-thumb {
-		background: var(--scrollbar-thumb, #3f3f46);
-		border-radius: 9999px;
-		border: 2px solid transparent;
-		background-clip: content-box;
-	}
-
-	.ws-scroll::-webkit-scrollbar-thumb:hover {
-		background: var(--scrollbar-thumb-hover, #52525b);
-		background-clip: content-box;
-	}
-
-	.ws-scroll::-webkit-scrollbar-track {
-		background: var(--scrollbar-track, transparent);
+		scrollbar-color: var(--sf-scroll-thumb) var(--sf-scroll-track);
 	}
 
 	.ws-tip {
@@ -511,10 +495,10 @@ code, pre, .font-mono {
 	font-family: "JetBrains Mono", "Fira Code", monospace;
 }
 
-*:focus-visible {
-	outline: none;
-	box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px color-mix(in srgb, var(--page-accent) 50%, transparent);
-}
+/* Focus rings are owned by styles/surface.css. The old `*:focus-visible`
+   box-shadow glow lived here and is GONE — it painted a coloured halo around
+   every focusable element (including plain layout <div tabindex>) and, being
+   a box-shadow, it replaced each component's resting shadow on focus. */
 
 .glass {
 	background: var(--bg-glass);
@@ -526,9 +510,11 @@ code, pre, .font-mono {
 	border: 1px solid var(--border-glass);
 }
 
+/* Hiding a scrollbar is now one sanctioned name, owned by surface.css.
+   `.hide-scrollbar` stays as an alias so existing call sites keep working. */
 .hide-scrollbar {
-	-ms-overflow-style: none;
 	scrollbar-width: none;
+	-ms-overflow-style: none;
 }
 
 .hide-scrollbar::-webkit-scrollbar {
@@ -592,7 +578,12 @@ code, pre, .font-mono {
 	50% { opacity: 0.55; transform: translateY(-2px); }
 }
 
-/* ===== Sidebar Logo — image + animated glow/shine ===== */
+/* ===== Sidebar Logo — brushed-metal wordmark, brand scent, hover shine =====
+   LAMINAR: §3 display type (Space Grotesk) · §4 three slots only · §6 no
+   decorative infinite loops · §7.2 one signal hue · §7.6 no colored-halo neon.
+   The wordmark is type, so the "shine" is a background-clip gradient sweep that
+   runs ONCE on hover — not a looping overlay. The brand scent is a single
+   static hue read from the §2 clay token, never a hardcoded pink/cyan pair. */
 .sidebar-logo {
 	position: relative;
 	display: inline-flex;
@@ -600,71 +591,58 @@ code, pre, .font-mono {
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
 	text-decoration: none;
-	isolation: isolate;
 }
 
-.sidebar-logo__img {
-	position: relative;
-	z-index: 1;
-	display: block;
-	filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.35));
-}
-
-.light .sidebar-logo__img {
-	filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.12));
-}
-
-.sidebar-logo__glow {
-	position: absolute;
-	inset: -120% -35%;
-	z-index: 0;
-	pointer-events: none;
-	background: radial-gradient(55% 130% at 32% 50%, rgba(236, 72, 153, 0.55), transparent 70%),
-				radial-gradient(55% 130% at 70% 50%, rgba(34, 211, 238, 0.45), transparent 70%);
-	filter: blur(16px);
-	opacity: 0.28;
-	animation: sidebarLogoGlow 5s ease-in-out infinite;
-	will-change: opacity, transform;
-}
-
-.sidebar-logo__shine {
-	position: absolute;
-	inset: 0;
-	z-index: 2;
-	pointer-events: none;
-	background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.9) 50%, transparent 62%);
+.sidebar-logo__text {
+	font-family: var(--font-display);
+	font-size: 1.375rem;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	line-height: 1;
+	color: transparent;
+	background-clip: text;
+	-webkit-background-clip: text;
+/* THREE layers, ALWAYS the same three — a background-position transition cannot
+   interpolate between different layer counts, so the sweep layer must exist at rest
+   too (parked off the right edge, therefore invisible) and only MOVE on hover.
+   L1 brand scent (§2 clay token, one hue §7.2) · L2 sweep · L3 chrome face (§4). */
+	background-image:
+		radial-gradient(120% 160% at 50% 120%, var(--color-clay-400) 0%, transparent 62%),
+		linear-gradient(100deg, transparent 36%, #ffffff 50%, transparent 64%),
+		linear-gradient(180deg, #f4f5f7 0%, #d7dae0 34%, #b4b9c2 68%, #969ba5 100%);
+	background-size: 100% 100%, 220% 100%, 100% 100%;
 	background-repeat: no-repeat;
-	background-size: 220% 100%;
-	background-position: 180% 0;
-	-webkit-mask: url("/rheo-logo.png") center / contain no-repeat;
-	mask: url("/rheo-logo.png") center / contain no-repeat;
-	animation: sidebarLogoShine 5s ease-in-out infinite;
-	will-change: background-position;
+	/* L2 sits at 0% => its 220%-wide image spans 0..220%, putting the white band at
+	   ~110% of the element width — fully off the right edge, i.e. invisible at rest. */
+	background-position: 0 0, 0 0, 0 0;
+	transition: background-position 700ms var(--ease-out-expo, cubic-bezier(0.19, 1, 0.22, 1));
 }
 
-.sidebar-logo:hover .sidebar-logo__glow {
-	opacity: 0.7;
-	animation-duration: 3.2s;
+/* Hover = ONE finite sweep: band travels from off-right, across, to off-left. No loop (§6). */
+.sidebar-logo:hover .sidebar-logo__text {
+	/* 100% => image spans -120%..100%, band at ~-10% — off the left edge. */
+	background-position: 0 0, 100% 0, 0 0;
 }
 
-.sidebar-logo:hover .sidebar-logo__shine {
-	animation-duration: 2.6s;
-}
-
-@keyframes sidebarLogoGlow {
-	0%, 100% { opacity: 0.22; transform: scale(0.98); }
-	50% { opacity: 0.42; transform: scale(1.03); }
-}
-
-@keyframes sidebarLogoShine {
-	0% { background-position: 180% 0; }
-	16% { background-position: -60% 0; }
-	100% { background-position: -60% 0; }
+.sidebar-logo:focus-visible {
+	outline: 2px solid var(--page-accent);
+	outline-offset: 4px;
+	border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.sidebar-logo__glow { animation: none; opacity: 0.26; }
-	.sidebar-logo__shine { animation: none; background: none; }
+	/* No sweep, no scent pulse — the static chrome face still reads as brand.
+	   Keeps all THREE layers so the layer count never changes between states. */
+	.sidebar-logo__text,
+	.sidebar-logo:hover .sidebar-logo__text {
+		transition: none;
+		background-image:
+			radial-gradient(120% 160% at 50% 120%, var(--color-clay-400) 0%, transparent 62%),
+			linear-gradient(100deg, transparent 36%, #ffffff 50%, transparent 64%),
+			linear-gradient(180deg, #f4f5f7 0%, #d7dae0 34%, #b4b9c2 68%, #969ba5 100%);
+		background-size: 100% 100%, 220% 100%, 100% 100%;
+		background-position: 0 0, 0 0, 0 0;
+	}
 }
 
 /* PageTitle clip reveal — no blink (decorative loop removed) */
@@ -757,21 +735,11 @@ code, pre, .font-mono {
 	100% { background-position: 0% 50%; }
 }
 
-/* Restore visible focus for interactive elements that need it */
-button:focus-visible, [role="button"]:focus-visible,
-a:focus-visible, input[type="checkbox"]:focus-visible,
-input[type="radio"]:focus-visible, [tabindex]:focus-visible {
-	outline: 2px solid var(--page-accent, #8b5cf6);
-	outline-offset: 2px;
-}
-
-/* Visible focus for all interactive elements */
-button:focus-visible, [role="button"]:focus-visible,
-a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
-[contenteditable]:focus-visible, [tabindex]:focus-visible {
-	outline: 2px solid var(--page-accent);
-	outline-offset: 2px;
-}
+/* Focus indicators: see styles/surface.css. The two rules that used to live
+   here (a 2px accent outline on buttons/inputs, at a 2px offset) duplicated
+   the global ring AND composited with the glow above it — that is what gave
+   a focused textbox three concentric rings. There is now exactly one focus
+   contract, and it is one file. */
 
 /* Gap visualization styles */
 .gap-stripes {

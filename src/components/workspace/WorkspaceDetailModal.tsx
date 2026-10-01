@@ -70,7 +70,7 @@ export function WorkspaceDetailModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-[700px] max-h-[80vh] rounded-2xl bg-zinc-950 ring-1 ring-inset ring-zinc-800/70 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-[700px] max-h-[80vh] rounded-xl bg-zinc-950 ring-1 ring-inset ring-zinc-800/70 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
           <div className="flex items-center gap-2">
             <Save className="w-4 h-4 text-zinc-400" />

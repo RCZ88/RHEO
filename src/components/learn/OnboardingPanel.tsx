@@ -125,7 +125,7 @@ export function OnboardingPanel({ open, onClose }: { open: boolean; onClose: () 
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg mx-4 rounded-2xl border border-zinc-700/50 bg-zinc-900 shadow-2xl overflow-hidden"
+        className="w-full max-w-lg mx-4 rounded-xl border border-zinc-700/50 bg-zinc-900 shadow-2xl overflow-hidden"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">

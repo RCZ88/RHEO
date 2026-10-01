@@ -32,7 +32,6 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { icon: FileText, label: 'Resume', path: '/resume', group: 'CREATE' },
   { icon: HeartHandshake, label: 'Life', path: '/life', group: 'LIFE' },
   { icon: Wallet, label: 'Finance', path: '/finance', group: 'LIFE' },
-  
   { icon: BookOpen, label: 'Guide', path: '/guide', group: 'SYSTEM' },
   { icon: Settings, label: 'Settings', path: '/settings', group: 'SYSTEM' },
   { icon: Terminal, label: 'Penguin Console', path: '/penguin-console', group: 'SYSTEM' },
@@ -157,10 +156,91 @@ const NodeDot = memo(function NodeDot({
   );
 });
 
+// ── Width geometry ──────────────────────────────────────────────────────
+// The rail presents itself as a measuring instrument (24 ticks, a nav needle, a
+// mouse needle), so its width is adjusted by hand like a ruler. Clamped so the
+// group kickers never truncate and the work surface is never crowded out.
+export const SIDEBAR_MIN = 208;
+export const SIDEBAR_MAX = 520;
+export const SIDEBAR_DEFAULT = 224;
+export const SIDEBAR_RAIL = 64;
+
+const clampWidth = (n: number) => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(n)));
+
+/** Drag handle for the app sidebar. Drag + arrow keys + double-click to reset. */
+function SidebarResizer({
+  width,
+  onResize,
+  onResizingChange,
+}: {
+  width: number;
+  onResize: (w: number) => void;
+  onResizingChange: (active: boolean) => void;
+}) {
+  const onDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = width;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    onResizingChange(true);
+    // Coalesce to one state write per frame — otherwise every mousemove re-renders
+    // the whole nav tree and the handle lags behind the cursor.
+    let pending = startW;
+    let frame = 0;
+    const move = (ev: MouseEvent) => {
+      pending = clampWidth(startW + (ev.clientX - startX));
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        onResize(pending);
+      });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      if (frame) cancelAnimationFrame(frame);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      onResizingChange(false);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize sidebar, ${width} pixels`}
+      aria-valuenow={width}
+      aria-valuemin={SIDEBAR_MIN}
+      aria-valuemax={SIDEBAR_MAX}
+      tabIndex={0}
+      data-testid="sidebar-resizer"
+      onMouseDown={onDown}
+      onDoubleClick={() => onResize(SIDEBAR_DEFAULT)}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); onResize(clampWidth(width - 16)); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); onResize(clampWidth(width + 16)); }
+        if (e.key === 'Home') { e.preventDefault(); onResize(SIDEBAR_MIN); }
+        if (e.key === 'End') { e.preventDefault(); onResize(SIDEBAR_MAX); }
+      }}
+      title="Drag to resize · arrows nudge · double-click resets"
+      className="group/resizer absolute right-0 top-0 z-20 flex h-full w-1.5 cursor-col-resize items-center justify-center outline-none"
+    >
+      <span className="h-8 w-0.5 rounded-full bg-white/[0.08] transition-colors duration-150 group-hover/resizer:bg-white/25 group-focus-visible/resizer:bg-[var(--page-accent)]" />
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 export const Sidebar = memo(function SidebarComponent({
   collapsed,
   onToggle,
+  width = SIDEBAR_DEFAULT,
+  onResize,
   pathname,
   isTracking = false,
   elapsedTime = 0,
@@ -170,6 +250,8 @@ export const Sidebar = memo(function SidebarComponent({
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  width?: number;
+  onResize?: (w: number) => void;
   pathname?: string;
   isTracking?: boolean;
   elapsedTime?: number;
@@ -182,6 +264,7 @@ export const Sidebar = memo(function SidebarComponent({
   const activePath = pathname ?? location.pathname;
   const [phoneConnected, setPhoneConnected] = useState(false);
   const [mouseY, setMouseY] = useState(0);
+  const [resizing, setResizing] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -265,14 +348,23 @@ export const Sidebar = memo(function SidebarComponent({
     <div
       ref={sidebarRef}
       className={cn(
-        'flex h-full shrink-0 border-r border-zinc-800/60',
+        'relative flex h-full shrink-0 border-r border-zinc-800/60',
         'bg-[#0c0c0c]',
-        collapsed ? 'w-[64px]' : 'w-[224px]',
       )}
       style={{
-        transition: 'width 250ms cubic-bezier(0.16,1,0.3,1)',
+        width: collapsed ? SIDEBAR_RAIL : clampWidth(width),
+        // No width transition while dragging — a transitioning width makes the
+        // handle lag behind the cursor. Same 250ms LAMINAR easing otherwise.
+        transition: resizing ? 'none' : 'width 250ms cubic-bezier(0.16,1,0.3,1)',
         WebkitAppRegion: 'no-drag' as any,
       }}>
+      {!collapsed && onResize && (
+        <SidebarResizer
+          width={clampWidth(width)}
+          onResize={onResize}
+          onResizingChange={setResizing}
+        />
+      )}
       {/* ── Ruler strip (16px, left edge) ────────────────────────── */}
       <div className="relative w-4 shrink-0 flex flex-col items-center border-r border-zinc-800/40">
         {/* Spacer where logo lives in main pane */}

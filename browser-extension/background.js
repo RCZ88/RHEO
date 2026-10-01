@@ -108,6 +108,12 @@ function detectBrowserName() {
   if (ua.includes('Vivaldi')) return 'Vivaldi';
   // Firefox
   if (ua.includes('Firefox')) return 'Firefox';
+  // Zen Browser ships a near-stock Chrome UA, so the brand list is the only tell.
+  try {
+    const brands = navigator.userAgentData && navigator.userAgentData.brands
+      ? navigator.userAgentData.brands.map(b => b.brand).join(' ') : '';
+    if (/Zen/i.test(brands)) return 'Zen';
+  } catch (e) { /* userAgentData unavailable - fall through */ }
   // Chrome (generic - keep last since many browsers include Chrome)
   if (ua.includes('Chrome')) return 'Chrome';
   // Safari (keep last since some Chrome-based browsers may include Safari)
@@ -128,6 +134,7 @@ const BROWSER_PROCESS_NAMES = {
   'opera': ['opera'],
   'vivaldi': ['vivaldi'],
   'firefox': ['firefox'],
+  'zen': ['zen', 'zen-browser', 'zenbrowser'],
   'arc': ['arc'],
   'safari': ['safari'],
 };
@@ -150,10 +157,30 @@ async function identifyBrowser() {
       for (const n of names) allProcessNames.add(n);
     }
     const processNames = [...allProcessNames];
+    // A human-friendly label so the app can show "Chrome — Personal" instead of a
+    // bare browser name when a user runs two profiles of the same browser.
+    let profileName = BROWSER_NAME;
+    try {
+      const info = await chrome.runtime.getBrowserInfo?.();
+      if (info && info.name && info.version) {
+        profileName = `${BROWSER_NAME} ${info.version.split('.')[0]}`;
+      }
+    } catch (e) { /* getBrowserInfo unavailable in this browser */ }
     await fetch(`${DESKFLOW_SERVER}/browser-identify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ browser: BROWSER_NAME, processNames, profileId: state.profileId }),
+      body: JSON.stringify({
+        browser: BROWSER_NAME,
+        processNames,
+        profileId: state.profileId,
+        profileName,
+        browserVersion: (() => {
+          try {
+            const m = navigator.userAgent.match(/(?:Chrome|Firefox|Version)\/([\d.]+)/);
+            return m ? m[1] : '';
+          } catch (e) { return ''; }
+        })()
+      }),
       signal: AbortSignal.timeout(2000)
     });
     console.log('[DeskFlow] 🏷️ Identified as:', BROWSER_NAME, 'profileId:', state.profileId);
@@ -380,7 +407,10 @@ async function logPreviousSession(force = false) {
     is_periodic: false, // Important: this is a tab switch, NOT a periodic sync
     delta_ms: 0,
     is_browser_focused: state.isBrowserFocused, // Tell desktop app if browser was focused
-    profileId: state.profileId // Which browser profile is active
+    profileId: state.profileId,  // Which browser profile is active
+    browserName: BROWSER_NAME,  // WHICH browser sent this. Without it the app cannot
+                               // attribute a site to a browser, and two extensions
+                               // visiting the same domain collapse into one row.
   };
 
   await sendToDeskFlow(data);
@@ -420,7 +450,10 @@ async function periodicSync() {
     is_periodic: true,
     delta_ms: cappedDelta,                   // Explicit delta for desktop app
     is_browser_focused: state.isBrowserFocused, // Tell desktop app if browser is focused
-    profileId: state.profileId                // Which browser profile is active
+    profileId: state.profileId,               // Which browser profile is active
+    browserName: BROWSER_NAME,  // WHICH browser sent this. Without it the app cannot
+                               // attribute a site to a browser, and two extensions
+                               // visiting the same domain collapse into one row.
   };
 
   // Update last sync time after preparing data

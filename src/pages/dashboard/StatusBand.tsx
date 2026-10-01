@@ -399,7 +399,7 @@ export function StatusBand({
 
       {/* R-29 Lumen accent — hidden by default, one boolean flip to reveal */}
       {LOCKED_IN_LUMEN && currentTier === 'productive' && (
-        <div className="absolute inset-0 rounded-[10px] pointer-events-none" style={{
+        <div className="absolute inset-0 rounded-lg pointer-events-none" style={{
           background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.05))',
           border: '1px solid rgba(16,185,129,0.15)',
         }} />

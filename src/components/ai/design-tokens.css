@@ -237,15 +237,19 @@
   border: 1px solid var(--dk-border-subtle);
 }
 
-/* ═══ Scroll container ═══ */
+/* ═══ Scroll container ═══
+   Geometry and colour come from src/styles/surface.css — one file owns every
+   scrollbar in the app, and it inverts its own thumb for light mode so a
+   second light-mode rule here is no longer needed. All `.dk-scroll` does now
+   is opt into the DENSER 6px bar, because this class is used for tight inner
+   panes (rails, card bodies, suggestion lists) where a 10px bar is too loud. */
 .dk-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.10) transparent;
 }
-.dk-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-.dk-scroll::-webkit-scrollbar-track { background: transparent; }
-.dk-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 3px; }
-.dk-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+.dk-scroll::-webkit-scrollbar {
+  width: var(--sf-scroll-size-sm, 6px);
+  height: var(--sf-scroll-size-sm, 6px);
+}
 
 /* ═══ Accent wiring via data attributes ═══ */
 [data-card-type="focus"],       [data-type="focus"]       { --card-accent: var(--dk-type-focus); }
@@ -411,10 +415,8 @@ html.light .dk-btn--ghost:hover { background: rgba(28,25,23,0.06); }
 html.light .dk-icon-btn:hover { background: rgba(28,25,23,0.06); }
 html.light .dk-kbd { background: rgba(28,25,23,0.05); }
 
-/* Light-mode scrollbars */
-html.light .dk-scroll { scrollbar-color: rgba(28,25,23,0.18) transparent; }
-html.light .dk-scroll::-webkit-scrollbar-thumb { background: rgba(28,25,23,0.18); }
-html.light .dk-scroll::-webkit-scrollbar-thumb:hover { background: rgba(28,25,23,0.28); }
+/* Light-mode scrollbars: handled by the `--sf-scroll-*` token block in
+   src/styles/surface.css. Same geometry, inverted luminance. */
 
 @keyframes dk-dash {
   to { stroke-dashoffset: -24; }

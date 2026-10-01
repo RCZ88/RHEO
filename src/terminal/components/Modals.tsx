@@ -23,7 +23,7 @@ function Shell({ children, onClose, wide }: { children: React.ReactNode; onClose
         initial={{ scale: 0.96, y: 12, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.97, y: 8, opacity: 0 }}
         transition={{ type: "spring", damping: 26, stiffness: 380 }}
         onClick={(e) => e.stopPropagation()}
-        className={cx("w-full rounded-2xl border overflow-hidden shadow-2xl max-h-[86vh] flex flex-col", wide ? "max-w-3xl" : "max-w-xl")}
+        className={cx("w-full rounded-xl border overflow-hidden shadow-2xl max-h-[86vh] flex flex-col", wide ? "max-w-3xl" : "max-w-xl")}
         style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}
       >
         {children}
@@ -112,7 +112,7 @@ export function PresetsModal({ store, onClose, notify }: { store: Store; onClose
       </div>
       <div className="overflow-y-auto px-5 pb-5 grid sm:grid-cols-2 gap-2.5">
         {list.map((p: Preset) => (
-          <div key={p.id} className="rounded-2xl border p-3.5 transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)" }}>
+          <div key={p.id} className="rounded-xl border p-3.5 transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)" }}>
             <div className="flex items-center gap-2.5">
               <span className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={{ background: `${p.color}1a`, color: p.color }}><TabIcon name={p.icon} size={18} /></span>
               <div className="flex-1 min-w-0"><div className="font-bold text-[13.5px]" style={{ color: "var(--t-fg)" }}>{p.name}</div><div className="text-[11px] truncate" style={{ color: "var(--t-muted)" }}>{p.description}</div></div>
@@ -172,9 +172,9 @@ export function WorkspacesModal({ store, onClose, onSave, notify }: { store: Sto
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
       <div className="overflow-y-auto px-5 pb-5 space-y-2.5">
-        {!store.workspaces.length && <div className="text-center py-10 text-[13px] rounded-2xl border border-dashed" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>No workspaces yet. Arrange your tabs & splits, then hit <b>Save current</b>.</div>}
+        {!store.workspaces.length && <div className="text-center py-10 text-[13px] rounded-xl border border-dashed" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>No workspaces yet. Arrange your tabs & splits, then hit <b>Save current</b>.</div>}
         {store.workspaces.map((w) => (
-          <div key={w.id} className="rounded-2xl border p-4" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)" }}>
+          <div key={w.id} className="rounded-xl border p-4" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)" }}>
             <div className="flex items-center gap-2.5">
               <span className="w-3 h-3 rounded-full shrink-0" style={{ background: w.color }} />
               <div className="flex-1 min-w-0"><div className="font-bold text-[13.5px] truncate" style={{ color: "var(--t-fg)" }}>{w.name}</div><div className="text-[11px] truncate" style={{ color: "var(--t-muted)" }}>{w.description}</div></div>
@@ -193,7 +193,7 @@ export function WorkspacesModal({ store, onClose, onSave, notify }: { store: Sto
             </div>
           </div>
         ))}
-        <label className="flex items-center justify-center gap-2 h-11 rounded-2xl border border-dashed text-[12.5px] font-semibold cursor-pointer transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>
+        <label className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed text-[12.5px] font-semibold cursor-pointer transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>
           <Upload size={15} />Import workspace JSON
           <input type="file" accept=".json,application/json" className="hidden" onChange={(e) => {
             const f = e.target.files?.[0];

@@ -221,7 +221,7 @@ function AddPersonModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-5 animate-in zoom-in-95">
+      <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl p-5 animate-in zoom-in-95">
         <h3 className="text-sm font-semibold text-zinc-100 mb-4">Add New Person</h3>
         <div className="space-y-3">
           <div>

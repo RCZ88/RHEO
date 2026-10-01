@@ -51,13 +51,45 @@ export interface HandbookData {
 // Cache for loaded data
 let _cache: HandbookData | null = null;
 
+// The JSON was scraped straight out of terminal-handbook.html, so its strings
+// still carry raw HTML entities — "Files &amp; folders" rendered literally in
+// the panel. Decode once at load rather than editing 61 strings in the source.
+const ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…',
+  mdash: '—', ndash: '–', rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”',
+  times: '×', deg: '°', laquo: '«', raquo: '»',
+};
+function decodeEntities(input: unknown): unknown {
+  if (typeof input === 'string') {
+    return input.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, body: string) => {
+      if (body.startsWith('#x') || body.startsWith('#X')) {
+        const code = parseInt(body.slice(2), 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+      }
+      if (body.startsWith('#')) {
+        const code = parseInt(body.slice(1), 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+      }
+      const hit = ENTITIES[body.toLowerCase()];
+      return hit ?? m;
+    });
+  }
+  if (Array.isArray(input)) return input.map(decodeEntities);
+  if (input && typeof input === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input)) out[k] = decodeEntities(v);
+    return out;
+  }
+  return input;
+}
+
 /**
  * Lazy-load handbook data (dynamic import — only loaded when needed)
  */
 async function loadData(): Promise<HandbookData> {
   if (_cache) return _cache;
   const data = await import('../../../agent/docs/terminal-handbook-data.json');
-  _cache = data.default as unknown as HandbookData;
+  _cache = decodeEntities(data.default) as HandbookData;
   return _cache;
 }
 

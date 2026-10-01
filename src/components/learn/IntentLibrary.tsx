@@ -74,7 +74,7 @@ export function IntentLibrary({ onGenerateFromIntent }: Props) {
   if (intents.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6">
-        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
+        <div className="w-14 h-14 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
           <Lightbulb className="w-6 h-6 text-amber-400" />
         </div>
         <h3 className="text-lg font-semibold text-zinc-200 mb-1">No saved ideas yet</h3>

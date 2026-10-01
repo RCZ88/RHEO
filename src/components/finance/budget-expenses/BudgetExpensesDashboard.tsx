@@ -523,7 +523,7 @@ function AddItemModal({ type, item, onClose, onSave }: { type: 'expense' | 'inco
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-sm rounded-2xl bg-zinc-900/95 border border-zinc-800/80 shadow-2xl p-6 backdrop-blur-xl" onClick={e => e.stopPropagation()}>
+        className="w-full max-w-sm rounded-xl bg-zinc-900/95 border border-zinc-800/80 shadow-2xl p-6 backdrop-blur-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: accent.bg }}>
             {isIncome ? <ArrowUpRight className="w-5 h-5" style={{ color: accent.icon }} /> : <ArrowDownRight className="w-5 h-5" style={{ color: accent.icon }} />}
@@ -589,7 +589,7 @@ function AddBudgetModal({ budget, onClose, onSave }: { budget: any; onClose: () 
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-sm rounded-2xl bg-zinc-900/95 border border-zinc-800/80 shadow-2xl p-6 backdrop-blur-xl" onClick={e => e.stopPropagation()}>
+        className="w-full max-w-sm rounded-xl bg-zinc-900/95 border border-zinc-800/80 shadow-2xl p-6 backdrop-blur-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: ACCENT_COLORS.amber.bg }}>
             <Target className="w-5 h-5" style={{ color: ACCENT_COLORS.amber.icon }} />

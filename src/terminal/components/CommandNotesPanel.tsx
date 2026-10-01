@@ -1,13 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from "motion/react";
-import { Search, Copy, Check, Sparkles, BookOpen, AlertTriangle, Trash2, Plus, X, ChevronDown, ChevronRight, Clipboard, Loader2, Clock } from 'lucide-react';
+import { Search, Check, Sparkles, BookOpen, AlertTriangle, X, Clock, Loader2 } from 'lucide-react';
 import { getHandbookData, peekData, type HandbookSection } from '../../services/learn/handbook-data';
 import type { CommandNote } from './CommandNotesStore';
 export type { CommandNote };
 
 type Tab = 'browse' | 'saved' | 'history';
 
-const emptyTab: { tab: Tab; setTab: (t: Tab) => void } = { tab: 'browse', setTab: () => {} };
+// The handbook legend's five tiers -> the HTML's card accent + badge colour.
+const DEPTH_ACCENT: Record<string, string> = {
+  core: 'acc-blu',
+  daily: 'acc-grn',
+  power: 'acc-pur',
+  sudo: 'acc-amb',
+  rescue: 'acc-red',
+};
+const DEPTH_HUE: Record<string, string> = {
+  core: 'var(--hb-accent)',
+  daily: 'var(--hb-green)',
+  power: 'var(--hb-violet)',
+  sudo: 'var(--hb-amber)',
+  rescue: 'var(--hb-rose)',
+};
+const DEPTH_BADGE: Record<string, string> = {
+  core: 'hb-badge-core',
+  daily: 'hb-badge-daily',
+  power: 'hb-badge-power',
+  sudo: 'hb-badge-sudo',
+  rescue: 'hb-badge-rescue',
+};
 
 export function CommandNotesPanel({
   store,
@@ -58,7 +78,8 @@ export function CommandNotesPanel({
   const note = notes.find((n) => n.id === activeNoteId);
 
   return (
-    <div className="hb-scope flex flex-col h-full text-[13px] overflow-x-hidden" style={{ background: 'var(--hb-bg)' }}>
+    <div className="hb-scope relative flex flex-col h-full text-[13px] overflow-x-hidden" style={{ background: 'var(--hb-bg)' }}>
+      <div className="hb-substrate-static" aria-hidden="true" />
       {/* tab bar */}
       <div className="flex flex-wrap items-center gap-0.5 px-3 pt-3 pb-2 border-b shrink-0" style={{ borderColor: 'var(--hb-line)' }}>
         {(['browse', 'saved', 'history'] as Tab[]).map((t) => {
@@ -67,7 +88,7 @@ export function CommandNotesPanel({
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[12px] font-semibold transition-all duration-150 min-w-0 shrink ${
+              className={`relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[12px] font-semibold transition-colors duration-150 min-w-0 shrink ${
                 isActive
                   ? 'text-[var(--hb-accent)]'
                   : 'text-[var(--hb-dim)] hover:text-[var(--hb-txt)] hover:bg-[var(--hb-panel)]'
@@ -113,27 +134,26 @@ export function CommandNotesPanel({
             ) : data.length === 0 ? (
               <div className="text-center py-10 text-[12.5px]" style={{ color: 'var(--hb-dim)' }}>No commands match “{q}”.</div>
             ) : (
-              data.map((s) => (
+              data.map((s, idx) => (
                 <div key={s.title} className="mb-3 last:mb-0">
-                  <div className="flex items-center gap-2 px-2 py-2 rounded-lg" style={{ color: 'var(--hb-dim)' }}>
-                    <ChevronRight size={12} className="shrink-0" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider">{s.title}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--hb-bg)' }}>{s.commands.length}</span>
+                  <div className="hb-sec-head">
+                    <span className="hb-num">{s.number ?? String(idx + 1).padStart(2, '0')}</span>
+                    <span className="text-[12px] font-semibold" style={{ color: 'var(--hb-txt)' }}>{s.title}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded hb-badge ml-auto" style={{ background: 'var(--hb-panel)', color: 'var(--hb-dim)' }}>{s.commands.length}</span>
                   </div>
-                  <div className="space-y-1.5 pl-4">
+                  <div className="space-y-1.5 pl-1">
                     {s.commands.map((c) => (
                       <button
-                        key={c.id}
+                        key={`${s.title}:${c.command}`}
                         onClick={() => onOpenModal({ command: c.command, section: s.title, sectionTitle: s.title })}
-                        className="w-full text-left px-3 py-2.5 rounded-lg border text-[12.5px] transition hover:border-[var(--hb-accent)]"
-                        style={{ borderColor: 'var(--hb-line)', background: 'var(--hb-bg)' }}
+                        className={`hb-cmd-row ${DEPTH_ACCENT[c.depth] ?? ''}`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.color ?? 'var(--hb-dim)' }} />
-                          <span className="font-semibold truncate" style={{ color: 'var(--hb-txt)' }}>{c.command}</span>
-                          <span className="ml-auto shrink-0 text-[9.5px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider" style={{ background: 'var(--hb-panel)', color: 'var(--hb-dim)' }}>{c.depth}</span>
-                        </div>
-                        {c.description && <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--hb-dim)' }}>{c.description}</div>}
+                        <span className="hb-cmdline">
+                          <span className="hb-dollar" style={{ color: c.isRoot ? 'var(--hb-amber)' : (DEPTH_HUE[c.depth] ?? 'var(--hb-accent)') }}>{c.isRoot ? '#' : '$'}</span>
+                          <span className="hb-cmdname">{c.command}</span>
+                          <span className={`hb-badge ${DEPTH_BADGE[c.depth] ?? ''} ml-auto shrink-0`}>{c.depth}</span>
+                        </span>
+                        {c.description && <span className="hb-cmddesc block">{c.description}</span>}
                       </button>
                     ))}
                   </div>
@@ -149,7 +169,7 @@ export function CommandNotesPanel({
         <div className="flex-1 overflow-y-auto px-2 pb-3">
           {notes.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
-              <div className="w-12 h-12 rounded-2xl grid place-items-center mb-3" style={{ background: 'var(--hb-panel)' }}><BookOpen size={22} style={{ color: 'var(--hb-dim)' }} /></div>
+              <div className="w-12 h-12 rounded-xl grid place-items-center mb-3" style={{ background: 'var(--hb-panel)' }}><BookOpen size={22} style={{ color: 'var(--hb-dim)' }} /></div>
               <div className="text-[13px] font-semibold" style={{ color: 'var(--hb-dim)' }}>No saved notes yet</div>
               <div className="text-[11.5px] mt-1" style={{ color: 'var(--hb-dim)' }}>Generate a prompt from a command, paste the AI response, and save.</div>
             </div>
@@ -185,9 +205,12 @@ export function CommandNotesPanel({
         <div className="border-t flex flex-col" style={{ borderColor: 'var(--hb-line)' }}>
           <div className="flex items-center gap-2 px-3 py-2 shrink-0">
             <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hb-dim)' }}>{note.section}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded mono" style={{ background: 'var(--hb-panel)', color: 'var(--hb-dim)' }}>{note.command}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded mono hb-badge hb-badge-daily">{note.command}</span>
             <div className="flex-1" />
-            <span className="text-[10.5px]" style={{ color: 'var(--hb-dim)' }}>saved {new Date(note.savedAt).toLocaleString()}</span>
+            <span className="text-[10.5px] flex items-center gap-1" style={{ color: saving ? 'var(--hb-accent)' : 'var(--hb-dim)' }}>
+              {saving && <Loader2 size={11} className="animate-spin" />}
+              {saving ? (savingLabel || 'Saving…') : `saved ${new Date(note.savedAt).toLocaleString()}`}
+            </span>
           </div>
           <div className="flex gap-1 px-3 py-1.5 shrink-0 border-b" style={{ borderColor: 'var(--hb-line)' }}>
             {(['what', 'when', 'gotcha', 'params', 'safety', 'related'] as const).map((t) => (
@@ -200,29 +223,67 @@ export function CommandNotesPanel({
               </button>
             ))}
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-3">
-            {detailTab === 'what' && <div className="text-[12.5px] leading-relaxed" style={{ color: 'var(--hb-txt)' }}>{note.what}</div>}
-            {detailTab === 'when' && <div className="text-[12.5px] leading-relaxed" style={{ color: 'var(--hb-txt)' }}>{note.when}</div>}
-            {detailTab === 'gotcha' && (
-              <div className="rounded-lg p-3 border-l-2 text-[12.5px] leading-relaxed" style={{ borderColor: '#f87171', color: 'var(--hb-txt)', background: 'color-mix(in srgb, #f87171 8%, transparent)' }}>{note.gotcha}</div>
-            )}
-            {detailTab === 'params' && (
-              <div className="space-y-1.5">
-                {note.params.map((p) => (
-                  <div key={p.name} className="flex gap-2 text-[12px]">
-                    <span className="font-semibold shrink-0 px-1.5 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--hb-accent) 15%, transparent)', color: 'var(--hb-accent)' }}>{p.name}</span>
-                    <span style={{ color: 'var(--hb-txt)' }}>{p.meaning}</span>
-                  </div>
-                ))}
-                {note.params.length === 0 && <div className="text-[11.5px]" style={{ color: 'var(--hb-dim)' }}>No parameters.</div>}
+          <div className="hb-detail flex-1 overflow-y-auto">
+            {detailTab === 'what' && (
+              <div className="hb-field">
+                <div className="hb-dt">what it does</div>
+                <div className="hb-dv">{note.what || 'No description recorded.'}</div>
               </div>
             )}
-            {detailTab === 'safety' && <div className="flex gap-2 text-[12.5px] leading-relaxed items-start"><AlertTriangle size={14} style={{ color: '#f87171', flexShrink: 0, marginTop: 2 }} /><span style={{ color: 'var(--hb-txt)' }}>{note.safety}</span></div>}
+            {detailTab === 'when' && (
+              <div className="hb-field">
+                <div className="hb-dt">when to use it</div>
+                <div className="hb-dv">{note.when || 'No usage note recorded.'}</div>
+              </div>
+            )}
+            {detailTab === 'gotcha' && (
+              <div className="hb-field">
+                <div className="hb-dt">the gotcha</div>
+                <div className="hb-callout danger">
+                  <div className="hb-ttl">careful</div>
+                  {note.gotcha || 'No known gotcha recorded.'}
+                </div>
+              </div>
+            )}
+            {detailTab === 'params' && (
+              <div className="hb-field">
+                <div className="hb-dt">parameters</div>
+                {note.params.length === 0 ? (
+                  <div className="hb-dv">No parameters.</div>
+                ) : (
+                  note.params.map((p) => (
+                    <div key={p.name} className="hb-param">
+                      <span className="hb-param-flag">{p.name}</span>
+                      <span className="hb-param-meaning">{p.meaning}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+            {detailTab === 'safety' && (
+              <div className="hb-field">
+                <div className="hb-dt">safety</div>
+                <div className="hb-callout danger">
+                  <div className="hb-ttl">safety</div>
+                  <div className="flex gap-2 items-start">
+                    <AlertTriangle size={13} style={{ color: 'var(--hb-rose)', flexShrink: 0, marginTop: 2 }} />
+                    <span>{note.safety || 'No safety note recorded.'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
             {detailTab === 'related' && (
-              <div className="flex flex-wrap gap-1.5">
-                {note.related.map((r, i) => (
-                  <span key={i} className="text-[11px] px-2 py-0.5 rounded mono" style={{ background: 'var(--hb-panel)', color: 'var(--hb-dim)' }}>{r}</span>
-                ))}
+              <div className="hb-field">
+                <div className="hb-dt">related</div>
+                {note.related.length === 0 ? (
+                  <div className="hb-dv">No related commands.</div>
+                ) : (
+                  <div className="hb-chips">
+                    {note.related.map((r, i) => (
+                      <span key={i} className="hb-chip-sm">{r}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

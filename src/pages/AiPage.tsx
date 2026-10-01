@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { getToastDurationMs, isSticky } from '../lib/toastDuration';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Settings, BookOpen, Newspaper, Bell, History, Library, Brain, Sparkles, ListTodo, Bug, MessageSquare, Eye, Download } from 'lucide-react';
@@ -153,7 +154,9 @@ export function AiPage() {
   const showToast = useCallback((message: string, type: Toast['type'] = 'info') => {
     const id = `toast-${++toastCounter}`;
     setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+    const ms = getToastDurationMs();
+    // The max preset means "sticky": leave it up until dismissed.
+    if (!isSticky(ms)) setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ms);
   }, []);
   const dismissToast = useCallback((id: string) => setToasts(prev => prev.filter(t => t.id !== id)), []);
 

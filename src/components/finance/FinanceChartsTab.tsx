@@ -110,8 +110,8 @@ export function FinanceChartsTab({
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="animate-pulse bg-zinc-800/60 rounded-[20px] h-64" />
-        <div className="animate-pulse bg-zinc-800/60 rounded-[20px] h-64" />
+        <div className="animate-pulse bg-zinc-800/60 rounded-xl h-64" />
+        <div className="animate-pulse bg-zinc-800/60 rounded-xl h-64" />
       </div>
     );
   }
@@ -119,7 +119,7 @@ export function FinanceChartsTab({
   if (error) {
     return (
       <div className="p-5 space-y-4">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-[20px] p-5 text-center">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-center">
           <p className="text-sm text-red-400 mb-2">{error}</p>
           {onRetry && (
             <button onClick={onRetry} className="px-4 py-2 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 text-xs font-medium transition-colors">

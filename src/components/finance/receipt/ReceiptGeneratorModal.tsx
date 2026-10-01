@@ -137,7 +137,7 @@ export function ReceiptGeneratorModal({ open, onClose, person, transactions, dis
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative w-full max-w-[1100px] max-h-[92vh] overflow-hidden rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl flex flex-col"
+        className="relative w-full max-w-[1100px] max-h-[92vh] overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}

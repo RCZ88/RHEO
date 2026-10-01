@@ -1,3 +1,4 @@
+import { getToastDurationMs, isSticky } from '../lib/toastDuration';
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Sparkles } from 'lucide-react';
 import SkillDynamicForm from './SkillDynamicForm';
@@ -124,7 +125,8 @@ export const SkillsTab: React.FC<{
 
   const showNotify = (message: string, type: 'success' | 'error') => {
     setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
+    const ms = getToastDurationMs();
+    if (!isSticky(ms)) setTimeout(() => setNotification(null), ms);
   };
 
   const handleCreate = async () => {

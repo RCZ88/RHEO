@@ -5,6 +5,10 @@
 
 import { ipcMain, BrowserWindow } from 'electron';
 import Database from 'better-sqlite3';
+import * as crypto from 'crypto';
+
+// Must match main.ts exactly or previously-stored hashes become unverifiable.
+const PASSWORD_HASH_OPTS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 export interface FinanceHandlerDeps {
   db: Database.Database;
@@ -20,12 +24,63 @@ export interface FinanceHandlerDeps {
   getLocalDateStr: (d?: Date) => string;
   toInt: (v: unknown) => number;
   financeDisplayCurrency: string;
+  // Helpers that live at main.ts module scope. When this file was extracted the
+  // calls were left behind unqualified, so they were ReferenceErrors at runtime.
+  hashPassword: (password: string) => { hash: string; salt: string };
+  verifyPassword: (password: string) => boolean;
+  encryptField: (value: string, key: Buffer) => string;
+  decryptField: (value: string, key: Buffer) => string;
+  isEncrypted: (value: any) => boolean;
+  safeDecrypt: (value: any) => string;
+  logAuditEvent: (
+    eventType: string,
+    entityType: string,
+    entityId: number | null,
+    description: string,
+    sensitiveData?: Record<string, any> | null,
+  ) => void;
+  diffFields: (
+    oldRec: Record<string, any>,
+    newRec: Record<string, any>,
+    fields: string[],
+  ) => { field: string; label: string; old: any; new: any }[];
+  formatAuditChanges: (changes: { field: string; label: string; old: any; new: any }[]) => string;
+  decryptAuditData: (encrypted: Buffer, iv: Buffer, authTag: Buffer) => Record<string, any> | null;
+  deriveFinanceDataKey: (password: string, salt: string) => Buffer;
+  enc: (val: any) => string;
+  runWithFallback?: <T>(primary: () => Promise<T>, fallback: () => Promise<T>) => Promise<T>;
+  buildChain?: (...args: any[]) => any;
+  getOpenRouterApiKey?: () => string | null;
+  cleanRecapSummary?: (s: string) => string;
+  computeApexInsight?: (...args: any[]) => any;
+  episodeWriters?: any;
+  userDataPath?: string;
+  RecapStage?: Record<string, string>;
 }
 
 const MAX_FINANCE_ATTEMPTS = 5;
 
 export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
   const { db, mainWindow, userPreferences, getLocalDateStr, toInt } = deps;
+  // Helpers owned by main.ts. Fall back to safe no-ops so a missing injection
+  // degrades one feature instead of throwing ReferenceError inside a handler.
+  const {
+    hashPassword = (p: string) => ({ hash: '', salt: '' }),
+    verifyPassword = () => false,
+    encryptField = (v: string) => v,
+    decryptField = (v: string) => v,
+    isEncrypted = () => false,
+    safeDecrypt = (v: any) => (v == null ? '' : String(v)),
+    logAuditEvent = () => {},
+    diffFields = () => [],
+    formatAuditChanges = () => '',
+    decryptAuditData = () => null,
+    deriveFinanceDataKey = () => Buffer.alloc(32),
+    enc = (v: any) => String(v),
+    runWithFallback = async <T,>(p: () => Promise<T>, f: () => Promise<T>) => { try { return await p(); } catch { return f(); } },
+    getOpenRouterApiKey = () => null,
+    cleanRecapSummary = (s: string) => s,
+  } = deps;
   // These MUST be mutable locals, not `const` destructured from deps.
   // `ipcMain.handle` bodies assign to them (data-key derivation on unlock,
   // password re-hash, remember-device toggling). Assigning to a `const`
@@ -42,11 +97,73 @@ export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
   let financeLockTimeout = deps.financeLockTimeout;
   let financeAttemptsLeft = MAX_FINANCE_ATTEMPTS;
 
+  // These locals were seeded from deps at registration time and then diverged
+  // from the database: anything written here (set/change password, remember
+  // device, lock timeout, attempts) never round-trips back after a restart.
+  // Re-hydrate the security-critical ones from the DB on every use.
+  const hydrateFromDb = () => {
+    if (!db) return;
+    try {
+      const h = db.prepare("SELECT value FROM finance_settings WHERE key = 'password_hash'").get() as any;
+      const s = db.prepare("SELECT value FROM finance_settings WHERE key = 'password_salt'").get() as any;
+      if (h?.value && s?.value) {
+        financePasswordHash = h.value;
+        financePasswordSalt = s.value;
+      } else {
+        financePasswordHash = null;
+        financePasswordSalt = null;
+      }
+      const rem = db.prepare("SELECT value FROM finance_settings WHERE key = 'remember_device'").get() as any;
+      const exp = db.prepare("SELECT value FROM finance_settings WHERE key = 'remember_device_expiry'").get() as any;
+      financeRememberDevice = rem?.value === 'true';
+      financeRememberDeviceExpiry = exp?.value ? parseInt(exp.value, 10) : null;
+      const to = db.prepare("SELECT value FROM finance_settings WHERE key = 'lock_timeout'").get() as any;
+      if (to?.value) financeLockTimeout = parseInt(to.value, 10);
+      const att = db.prepare("SELECT value FROM finance_settings WHERE key = 'attempts_left'").get() as any;
+      if (att?.value) financeAttemptsLeft = parseInt(att.value, 10);
+      const cur = db.prepare("SELECT value FROM finance_settings WHERE key = 'display_currency'").get() as any;
+      if (cur?.value) financeDisplayCurrency = cur.value;
+
+      financeLocked = !!financePasswordHash;
+      if (financeRememberDevice && financeRememberDeviceExpiry && Date.now() > financeRememberDeviceExpiry) {
+        financeRememberDevice = false;
+        financeRememberDeviceExpiry = null;
+        financeLocked = true;
+      } else if (financeRememberDevice && !financeLocked) {
+        financeLocked = false;
+      }
+    } catch (e) {
+      console.error('[finance] hydrateFromDb failed:', (e as any)?.message || e);
+    }
+  };
+
+  hydrateFromDb();
+
+  // Password verification MUST read this module's own financePasswordHash /
+  // financePasswordSalt. The injected verifyPassword closes over main.ts's
+  // module-scope copies, which are never updated when a password is set or
+  // changed here — so every unlock compared against null and reported
+  // "Wrong password" even for the correct one.
+  const verifyPasswordLocal = (password: string): boolean => {
+    if (!financePasswordHash || !financePasswordSalt) return false;
+    try {
+      const computed = crypto.scryptSync(password, financePasswordSalt, 64, PASSWORD_HASH_OPTS).toString('hex');
+      const stored = Buffer.from(financePasswordHash, 'hex');
+      const calc = Buffer.from(computed, 'hex');
+      if (stored.length !== calc.length) return false;
+      return crypto.timingSafeEqual(stored, calc);
+    } catch {
+      return false;
+    }
+  };
+
 ipcMain.handle('finance:check-password-setup', async () => {
+  hydrateFromDb();
   return { hasPassword: !!financePasswordHash };
 });
 ipcMain.handle('finance:unlock', async (_event, password: string) => {
-  if (verifyPassword(password)) {
+  hydrateFromDb();
+  if (verifyPasswordLocal(password)) {
     financeLocked = false;
     financeAttemptsLeft = MAX_FINANCE_ATTEMPTS;
     // Derive encryption data key from password
@@ -114,10 +231,12 @@ ipcMain.handle('finance:unlock', async (_event, password: string) => {
 });
 
 ipcMain.handle('finance:verify-password', async (_event, password: string) => {
-  return { success: verifyPassword(password) };
+  hydrateFromDb();
+  return { success: verifyPasswordLocal(password) };
 });
 
 ipcMain.handle('finance:set-password', async (_event, password: string) => {
+  hydrateFromDb();
   if (!db) return { success: false };
   try {
     if (financePasswordHash) {
@@ -138,12 +257,13 @@ ipcMain.handle('finance:set-password', async (_event, password: string) => {
 });
 
 ipcMain.handle('finance:change-password', async (_event, currentPassword: string, nextPassword: string) => {
+  hydrateFromDb();
   if (!db) return { success: false };
   try {
     if (!financePasswordHash || !financePasswordSalt) {
       return { success: false, error: 'No password is set' };
     }
-    if (!verifyPassword(currentPassword)) {
+    if (!verifyPasswordLocal(currentPassword)) {
       return { success: false, error: 'Current password is incorrect' };
     }
     const { hash, salt } = hashPassword(nextPassword);
@@ -617,6 +737,7 @@ ipcMain.handle('finance:set-auto-recalc', async (_event, enabled: boolean) => {
 });
 
 ipcMain.handle('finance:get-security-settings', async () => {
+  hydrateFromDb();
   return {
     hasPassword: !!financePasswordHash,
     locked: financeLocked,
@@ -889,7 +1010,7 @@ ipcMain.handle('finance:adjust-balance', async (_event, { id, newBalance }: { id
 ipcMain.handle('finance:update-initial-balance', async (_event, { id, initialBalance, password }: { id: number; initialBalance: number; password: string }) => {
   if (!db) return { success: false, error: 'Database not ready' };
   try {
-    if (!verifyPassword(password)) return { success: false, error: 'Wrong password' };
+    if (!verifyPasswordLocal(password)) return { success: false, error: 'Wrong password' };
     const w = db.prepare('SELECT id, name, account_id, initial_balance, balance, metadata FROM finance_wallets WHERE id = ?').get(id) as any;
     if (!w) return { success: false, error: 'Wallet not found' };
     const oldInit = financeDataKey && isEncrypted(w.initial_balance) ? Number(decryptField(String(w.initial_balance), financeDataKey)) || 0 : (w.initial_balance || 0);

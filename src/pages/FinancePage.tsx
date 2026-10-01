@@ -1505,7 +1505,7 @@ export function FinancePage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-zinc-900 light:bg-white/95 backdrop-blur-xl border border-zinc-700 light:border-zinc-300/50 rounded-2xl p-4 w-full max-w-sm mx-4 shadow-2xl"
+            className="bg-zinc-900 light:bg-white/95 backdrop-blur-xl border border-zinc-700 light:border-zinc-300/50 rounded-xl p-4 w-full max-w-sm mx-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Quick Transaction</p>

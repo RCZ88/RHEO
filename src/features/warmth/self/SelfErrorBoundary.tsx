@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { StatusScreen } from '../../../components/StatusScreen'
 
 interface Props {
   children: ReactNode
@@ -20,18 +21,25 @@ export class SelfErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
+      // Same StatusScreen as the app-wide boundary and the 404 — one style.
       return (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-6 text-sm">
-          <div className="font-medium text-rose-300 mb-1">Self tab crashed</div>
-          <div className="text-zinc-400 font-mono text-[11px] whitespace-pre-wrap break-words">
-            {this.state.error.message}
-          </div>
-          <button
-            onClick={() => this.setState({ error: null })}
-            className="mt-3 px-3 py-1.5 rounded-md bg-zinc-800/80 text-zinc-200 text-[12px] hover:bg-zinc-700/80"
-          >
-            Retry
-          </button>
+        <div className="rounded-xl border border-white/10 bg-zinc-900/40">
+          <StatusScreen
+            tone="error"
+            eyebrow="Self tab"
+            title="This tab stopped responding"
+            description="The Self orchestrator hit an error while rendering. Retry re-mounts it; the rest of the app is unaffected."
+            detail={this.state.error.message}
+            detailLabel="Error message"
+            actions={[
+              {
+                label: 'Retry Self tab',
+                onClick: () => this.setState({ error: null }),
+                primary: true,
+              },
+            ]}
+            className="min-h-0 px-5 py-6"
+          />
         </div>
       )
     }

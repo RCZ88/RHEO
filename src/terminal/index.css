@@ -32,12 +32,11 @@ body {
 .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
 .display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
 
-/* scrollbars */
-*::-webkit-scrollbar { width: 9px; height: 9px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #3f3f46); border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
-*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover, #52525b); background-clip: content-box; border: 2px solid transparent; }
-* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, #3f3f46) transparent; }
+/* Scrollbars: NO RULES HERE, ON PURPOSE.
+   This file used to carry `*::-webkit-scrollbar` at 9px — a global rule
+   living inside the terminal stylesheet, which is how the app ended up with
+   4/5/6/8/9/10px bars and one untouched 15px native bar. Every scrollbar in
+   RHEO is now defined once in src/styles/surface.css. Do not add one back. */
 
 /* terminal cursor */
 @keyframes tblink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }

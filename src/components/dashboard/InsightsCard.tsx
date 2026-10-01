@@ -29,7 +29,7 @@ interface InsightsCardProps {
 export function InsightsCard({ insights, loading = false }: InsightsCardProps) {
   if (loading) {
     return (
-      <Card className="rounded-[10px] h-full">
+      <Card className="rounded-lg h-full">
         <CardContent className="p-5">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
           <div className="animate-pulse space-y-3">
@@ -51,7 +51,7 @@ export function InsightsCard({ insights, loading = false }: InsightsCardProps) {
   } = insights;
 
   return (
-    <Card className="rounded-[10px] h-full">
+    <Card className="rounded-lg h-full">
       <CardContent className="p-5">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-amber-500/30 via-amber-500/10 to-transparent" />
 

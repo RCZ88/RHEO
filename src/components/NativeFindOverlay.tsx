@@ -1,47 +1,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Search, X, ChevronUp, ChevronDown, Settings2, Globe, FileText, FolderOpen, GripHorizontal } from 'lucide-react';
+import { Search, X, ChevronUp, ChevronDown, Settings2, Globe, FileText, Layers } from 'lucide-react';
 import type { SearchHit } from '../services/search/index';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  * Find & Scope bar  (Ctrl+F / ⌘F)
  * ─────────────────────────────────────────────────────────────────────────────
- * ONE CONTROL, TWO CAPABILITIES — they are the same question asked at two
- * altitudes, so they live on one bar instead of fighting over one keybinding:
+ * THREE SCOPES — a strict containment hierarchy, narrow → wide. Each answers a
+ * different question, and the bar always shows WHICH one you are in, because
+ * "where am I looking" has to be answered before anything else can be:
  *
- *   Page     — the LIVE page is the text. DOM find: every match highlighted,
- *              the active one solid + scrolled to centre. Instant, zero latency.
- *   All      — the whole APP is the text. Indexed search across every page that
- *              registered segments; results list, click navigates + scrolls.
- *   Section  — this page's registered sections. Indexed, narrowed to here.
- *              Falls back to live Page find when the page has no index, so the
- *              control is never a dead end.
+ *   Subpage — the exact screen you are on RIGHT NOW. Live DOM find: instant,
+ *             every match highlighted, the active one scrolled to centre. Zero
+ *             latency because there is nothing to wait for — you are already
+ *             looking at the text.
+ *   Page    — every indexed section of the current route, including the tabs
+ *             you have not opened yet. Goes through the index.
+ *   App     — every indexed page in the application. Goes through the index.
  *
- * The scope was previously a separate overlay that could not be opened at all
- * (`setSmartSearchOpen(true)` existed nowhere), so it was invisible. It is here
- * now, on the same surface as the shortcut that people actually press.
+ * The previously-requested "Section" scope is gone as a name because it was
+ * ambiguous with "Page"; the two concepts are now Page vs Subpage, which is
+ * what people actually mean. Ctrl+F opens Subpage (that is what Ctrl+F has
+ * always meant in every browser); the sidebar magnifier opens App.
  *
- * PLACEMENT — the bar is yours to position. A hardcoded `right: 16` collided
- * with the title bar's window controls and the terminal's right-hand inspector.
- * Two mechanisms, one concept (a 3×3 anchor grid):
- *   1. drag the grip → snaps to whichever cell you release over
- *   2. ⚙ → click a cell in the 3×3 picker
- * Snapping (rather than free drag) is deliberate: free drag can strand the bar
- * off-screen or behind the sidebar with no way back. Persisted in localStorage —
- * it is a fact about your eyes and your monitor, not about the document.
+ * PLACEMENT — a hardcoded `right: 16` collided with the title bar's window
+ * controls and the terminal's right-hand inspector, so the bar is yours to
+ * place. A 3×3 anchor grid, reachable by dragging the bar or by clicking a cell
+ * in the position picker. Snapping (rather than free positioning) is deliberate:
+ * free drag can strand the bar off-screen or behind the sidebar with no way
+ * back. Persisted in localStorage — it is a fact about your eyes and your
+ * monitor, not about the document.
  *
  * DESIGN INTENT
  *   The bar is a LENS, not a curtain. No backdrop, no dim, no blur, no
  *   click-to-close scrim — the page stays lit, visible and interactive, because
- *   the page is the thing being searched and dimming it destroys the only
- *   context that makes a match meaningful.
+ *   the page is the thing being searched.
  *
  *   Signal hue: amber #fbbf24 — the SAME hue as the highlight it paints, so one
  *   rule is learned: amber means "match". Nothing else here is coloured.
  *
- * MOTION: L1. 120ms colour/mark transitions, one 1.1s ring pulse on active
- *   change, 100ms on placement snap, 1:1 while dragging. All off under
- *   prefers-reduced-motion.
+ * MOTION: L1. 120ms mark transitions, one 1.1s ring pulse on active change,
+ *   1:1 while dragging. All off under prefers-reduced-motion.
  *
  * KEYS: Enter / ↓ next · Shift+Enter / ↑ prev · Esc close · Ctrl+F refocus
  * ─────────────────────────────────────────────────────────────────────────────
@@ -73,9 +72,7 @@ mark[${MARK_ATTR}][${ACTIVE_ATTR}] {
   70%  { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0); }
   100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
 }
-mark[${MARK_ATTR}][${PULSE_ATTR}] {
-  animation: df-find-ring 1.1s ease-out 1;
-}
+mark[${MARK_ATTR}][${PULSE_ATTR}] { animation: df-find-ring 1.1s ease-out 1; }
 @media (prefers-reduced-motion: reduce) {
   mark[${MARK_ATTR}] { transition: none; }
   mark[${MARK_ATTR}][${PULSE_ATTR}] { animation: none; }
@@ -135,6 +132,34 @@ function anchorStyle(a: Anchor): React.CSSProperties {
 }
 
 const sameAnchor = (a: Anchor, b: Anchor) => a.v === b.v && a.h === b.h;
+
+const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+/**
+ * Name the subpage the user is currently inside, so the Subpage scope can say
+ * what it is scoped to. There is no single app-wide subpage registry (pages use
+ * `usePersistentSubTab` query params, `*-activeTab` localStorage, or plain
+ * component state), so we read the one signal they all end up rendering: the
+ * selected tab in the DOM.
+ */
+function detectSubpageName(): string | null {
+  const direct = [
+    '[role="tab"][aria-selected="true"]',
+    '[role="tablist"] [data-state="active"]',
+    'nav [data-active="true"]',
+    '[aria-current="page"]',
+  ];
+  for (const sel of direct) {
+    const t = clean(document.querySelector(sel)?.textContent || '');
+    if (t && t.length <= 48) return t;
+  }
+  for (const nav of Array.from(document.querySelectorAll('[role="tablist"], nav'))) {
+    const on = nav.querySelector('.active, [aria-selected="true"], [data-state="active"], [aria-current="page"]');
+    const t = clean(on?.textContent || '');
+    if (t && t.length <= 48) return t;
+  }
+  return null;
+}
 
 // ── DOM find primitives ──────────────────────────────────────────────────────
 
@@ -199,7 +224,6 @@ function highlightAll(query: string): HTMLModElement[] {
       if (parent.closest(SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
       const text = (node as Text).nodeValue;
       if (!text || !text.toLowerCase().includes(needle)) return NodeFilter.FILTER_REJECT;
-      // Zero-size nodes cannot be seen, so highlighting them is noise.
       if (parent.getClientRects().length === 0) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
@@ -220,8 +244,6 @@ function highlightAll(query: string): HTMLModElement[] {
 /** Scroll the active match into the middle of the content column. */
 function revealMatch(mark: HTMLElement): void {
   mark.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-  // scrollIntoView can miss inside custom scroll containers. Verify, then
-  // correct the nearest scrollable ancestor by hand.
   window.setTimeout(() => {
     const r = mark.getBoundingClientRect();
     const margin = 120;
@@ -258,7 +280,7 @@ function contextFor(mark: HTMLElement): string {
   let best = '';
   headings.forEach((h) => {
     if (mark.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) return;
-    const t = (h.textContent || '').replace(/\s+/g, ' ').trim();
+    const t = clean(h.textContent || '');
     if (t) best = t;
   });
   return best;
@@ -266,28 +288,27 @@ function contextFor(mark: HTMLElement): string {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-type Scope = 'page' | 'all' | 'section';
+type Scope = 'subpage' | 'page' | 'app';
 
 const SCOPES: { value: Scope; label: string; icon: typeof Globe; hint: string }[] = [
-  { value: 'page', label: 'Page', icon: FileText, hint: 'This screen only — highlights as you type' },
-  { value: 'all', label: 'All', icon: Globe, hint: 'Every indexed page in the app' },
-  { value: 'section', label: 'Section', icon: FolderOpen, hint: 'Indexed sections on this page' },
+  { value: 'subpage', label: 'Subpage', icon: Layers, hint: 'Just what is on screen right now — highlights as you type' },
+  { value: 'page', label: 'Page', icon: FileText, hint: 'Every indexed section of this route, including tabs you have not opened' },
+  { value: 'app', label: 'App', icon: Globe, hint: 'Every indexed page in the app' },
 ];
 
 interface NativeFindOverlayProps {
   open: boolean;
   onClose: () => void;
-  /** Scope to open with. 'page' is what Ctrl+F means; 'all' is what the sidebar button means. */
+  /** Scope to open with. Ctrl+F => 'subpage'; the sidebar magnifier => 'app'. */
   initialScope?: Scope;
   currentPageId?: string;
-  /** Called when the user picks a result in an indexed scope. */
   onSelect?: (hit: SearchHit) => void;
 }
 
 export function NativeFindOverlay({
   open,
   onClose,
-  initialScope = 'page',
+  initialScope = 'subpage',
   currentPageId,
   onSelect,
 }: NativeFindOverlayProps) {
@@ -301,37 +322,38 @@ export function NativeFindOverlay({
   const [anchorLoaded, setAnchorLoaded] = useState(false);
   const [placeOpen, setPlaceOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [dropCell, setDropCell] = useState<Anchor | null>(null);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [hitIdx, setHitIdx] = useState(0);
   const [searching, setSearching] = useState(false);
   const [indexed, setIndexed] = useState<number | null>(null);
   const [indexFailed, setIndexFailed] = useState(false);
+  const [subpageName, setSubpageName] = useState<string | null>(null);
+  // Page falls back to live find when the index has nothing for THIS route.
+  const [pageFallback, setPageFallback] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const marksRef = useRef<HTMLModElement[]>([]);
   const activeRef = useRef(0);
   const hitIdxRef = useRef(0);
   const suppressMutation = useRef(false);
   const queryRef = useRef('');
+  const dragRef = useRef<{ pointerId: number; dx: number; dy: number } | null>(null);
 
   activeRef.current = active;
   hitIdxRef.current = hitIdx;
   queryRef.current = query;
 
-  const live = scope === 'page';
-  // Section degrades to live find when this page has no index — a control that
-  // can produce nothing is worse than one that falls back.
-  const effectiveLive = live || (scope === 'section' && indexed === 0);
+  const live = scope === 'subpage';
+  const effectiveLive = live || (scope === 'page' && pageFallback);
 
   // ── Teardown: always hand the page back untouched ──
   useEffect(() => () => { clearHighlights(); }, []);
 
-  // ── Placement: load once, then keep it on-screen ──
-  useEffect(() => {
-    setAnchor(loadAnchor());
-    setAnchorLoaded(true);
-  }, []);
+  // ── Placement: load once, then keep it reachable ──
+  useEffect(() => { setAnchor(loadAnchor()); setAnchorLoaded(true); }, []);
 
   useEffect(() => {
     if (!anchorLoaded) return;
@@ -339,46 +361,43 @@ export function NativeFindOverlay({
       const el = rootRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      // If a window shrink pushed the card out of reach, fall back to the default
-      // corner rather than leaving the user with no way to grab it.
-      const off =
-        r.right > window.innerWidth + 1 || r.left < -1 ||
-        r.bottom > window.innerHeight + 1 || r.top < -1;
-      if (off) { setAnchor(DEFAULT_ANCHOR); saveAnchor(DEFAULT_ANCHOR); }
+      if (r.right > window.innerWidth + 1 || r.left < -1 ||
+          r.bottom > window.innerHeight + 1 || r.top < -1) {
+        setAnchor(DEFAULT_ANCHOR);
+        saveAnchor(DEFAULT_ANCHOR);
+      }
     };
     window.addEventListener('resize', keepOnScreen);
     return () => window.removeEventListener('resize', keepOnScreen);
   }, [anchorLoaded]);
 
-  const moveTo = useCallback((next: Anchor) => {
-    setAnchor(next);
-    saveAnchor(next);
-  }, []);
+  const moveTo = useCallback((next: Anchor) => { setAnchor(next); saveAnchor(next); }, []);
 
   // ── Open / close lifecycle ──
   useEffect(() => {
     if (!open) {
       clearHighlights();
       marksRef.current = [];
-      setCount(0);
-      setActive(0);
-      setWhere('');
-      setHits([]);
-      setHitIdx(0);
-      setQuery('');
-      setPlaceOpen(false);
+      setCount(0); setActive(0); setWhere('');
+      setHits([]); setHitIdx(0); setQuery('');
+      setPlaceOpen(false); setDropCell(null);
       return;
     }
     ensureFindStyles();
     setScope(initialScope);
-    const t = window.setTimeout(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }, 20);
+    setSubpageName(detectSubpageName());
+    const t = window.setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 20);
     return () => window.clearTimeout(t);
   }, [open, initialScope]);
 
-  // ── Indexed search (All / Section) ──
+  // Keep the subpage label fresh — the user can switch tabs while the bar is open.
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setInterval(() => setSubpageName(detectSubpageName()), 700);
+    return () => window.clearInterval(id);
+  }, [open]);
+
+  // ── Indexed search (Page / App) ──
   useEffect(() => {
     if (!open || live) return;
     const q = query.trim();
@@ -409,15 +428,33 @@ export function NativeFindOverlay({
       .catch(() => setIndexFailed(true));
   }, [open, live, scope]);
 
-  // Filter to the current page for Section scope.
+  // Page narrows to this route; App is everything. Dedupe so a curated segment
+  // and its auto-harvested twin never both show.
   const visibleHits = useMemo(() => {
-    if (scope !== 'section' || !currentPageId) return hits;
-    return hits.filter((h) => h.pageId === currentPageId);
+    let list = hits;
+    if (scope === 'page' && currentPageId) list = list.filter((h) => h.pageId === currentPageId);
+    const seen = new Set<string>();
+    const out: SearchHit[] = [];
+    for (const h of list) {
+      const key = `${h.pageId}|${(h.title || '').trim().toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(h);
+    }
+    return out;
   }, [hits, scope, currentPageId]);
 
+  // A completed Page search with nothing for this route means the index has no
+  // segments here — search what the user can see instead of a dead end.
+  useEffect(() => {
+    if (scope !== 'page') return;
+    if (searching || indexFailed) return;
+    if (!query.trim()) { setPageFallback(false); return; }
+    setPageFallback(visibleHits.length === 0);
+  }, [scope, searching, indexFailed, query, visibleHits.length]);
+
   // ── Build the mark set. Active is re-applied off `version`, never off
-  //    setCount(n): React bails out of a setState with an unchanged value, which
-  //    used to strand the page with no active match. ──
+  //    setCount(n): React bails out of a setState with an unchanged value. ──
   const build = useCallback((raw: string, keepIndex: number, useLive: boolean) => {
     suppressMutation.current = true;
     const marks = useLive ? highlightAll(raw) : [];
@@ -435,13 +472,11 @@ export function NativeFindOverlay({
     build(query, 0, true);
   }, [open, query, effectiveLive, build]);
 
-  // Clear the other scope's artefacts when leaving live find.
   useEffect(() => {
     if (open && effectiveLive) return;
     clearHighlights();
     marksRef.current = [];
-    setCount(0);
-    setActive(0);
+    setCount(0); setActive(0);
   }, [open, effectiveLive]);
 
   // ── Point at the active match ──
@@ -476,7 +511,7 @@ export function NativeFindOverlay({
     return () => { obs.disconnect(); window.clearTimeout(timer); };
   }, [open, query, effectiveLive, build]);
 
-  // ── Navigation, both scopes ──
+  // ── Navigation ──
   const step = useCallback((delta: number) => {
     if (!effectiveLive) {
       const total = visibleHits.length;
@@ -484,18 +519,13 @@ export function NativeFindOverlay({
       const next = (hitIdxRef.current + delta + total) % total;
       setHitIdx(next);
       const hit = visibleHits[next];
-      if (hit) {
-        setWhere(hit.title);
-        if (hit.section) {
-          const samePage = !currentPageId || hit.pageId === currentPageId;
-          if (samePage) {
-            // Land the user on the hit, not just on the page containing it.
-            window.setTimeout(() => {
-              const el = document.querySelector<HTMLElement>(`[data-section="${CSS.escape(hit.section!)}"]`);
-              (el ?? null)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 40);
-          }
-        }
+      if (!hit) return;
+      setWhere(hit.title);
+      if (hit.section && (!currentPageId || hit.pageId === currentPageId)) {
+        window.setTimeout(() => {
+          const el = document.querySelector<HTMLElement>(`[data-section="${CSS.escape(hit.section!)}"]`);
+          (el ?? null)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 40);
       }
       return;
     }
@@ -513,28 +543,92 @@ export function NativeFindOverlay({
     onClose();
   }, [effectiveLive, visibleHits, hitIdx, onSelect, onClose]);
 
-  // ── Drag to reposition (snaps to the nearest of the 9 cells) ──
+  // ── Dragging ───────────────────────────────────────────────────────────────
+  // Pointer events, and the move/up listeners are attached SYNCHRONOUSLY inside
+  // pointerdown. The earlier version flipped a `dragging` state and attached
+  // from a useEffect, which meant the first few pixels of a fast drag were
+  // missed and the bar felt glued in place — the listener did not exist yet.
+  const cellFor = (x: number, y: number): Anchor => ({
+    v: y < window.innerHeight / 2 ? 'top' : 'bottom',
+    h: x < window.innerWidth / 3 ? 'left'
+      : x > (window.innerWidth * 2) / 3 ? 'right' : 'center',
+  });
+
+  const endDrag = useCallback(() => {
+    dragRef.current = null;
+    setDragging(false);
+    const cell = dropCellRef.current;
+    setDropCell(null);
+    if (cell) { setAnchor(cell); saveAnchor(cell); }
+    // Clear the inline styles the drag wrote so the anchor takes over again.
+    const el = rootRef.current;
+    if (el) { el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = ''; el.style.transform = ''; }
+  }, []);
+
+  const dropCellRef = useRef<Anchor | null>(null);
+
   useEffect(() => {
     if (!dragging) return;
-    const onMove = (e: MouseEvent) => {
-      const x = e.clientX;
-      const y = e.clientY;
-      const h: AnchorH = x < window.innerWidth / 3 ? 'left' : x > (window.innerWidth * 2) / 3 ? 'right' : 'center';
-      const v: AnchorV = y < window.innerHeight / 2 ? 'top' : 'bottom';
-      const next = { v, h };
-      setAnchor((prev) => (sameAnchor(prev, next) ? prev : next));
+    const onMove = (e: PointerEvent) => {
+      const el = rootRef.current;
+      const d = dragRef.current;
+      if (!el || !d) return;
+      const w = el.offsetWidth || 360;
+      const h = el.offsetHeight || 76;
+      // Follow the pointer 1:1 so the bar feels attached to the cursor.
+      const x = Math.min(Math.max(e.clientX - d.dx, 4), window.innerWidth - w - 4);
+      const y = Math.min(Math.max(e.clientY - d.dy, 4), window.innerHeight - h - 4);
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      el.style.transform = 'none';
+      const cell = cellFor(e.clientX, e.clientY);
+      dropCellRef.current = cell;
+      setDropCell((prev) => (prev && sameAnchor(prev, cell) ? prev : cell));
     };
-    const onUp = () => {
-      setDragging(false);
-      setAnchor((a) => { saveAnchor(a); return a; });
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    const onUp = () => endDrag();
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
-  }, [dragging]);
+  }, [dragging, endDrag]);
+
+  const startDrag = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    // Never start a drag from something the user can operate.
+    if (target.closest('input, button, a, [role="button"]')) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    dragRef.current = { pointerId: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
+    dropCellRef.current = anchor;
+    setDropCell(anchor);
+    setDragging(true);
+    e.preventDefault();
+  };
+
+  // ── Wheel containment ──────────────────────────────────────────────────────
+  // Hovering the results must scroll the RESULTS. Without this the wheel event
+  // chains to the page behind and the list appears frozen while the page slides
+  // away underneath it. `overscroll-behavior: contain` stops the chaining at the
+  // boundary, and the listener is a belt-and-braces guard for Chromium builds
+  // that ignore the property on a non-root scroller.
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.stopPropagation();
+      if (el.scrollHeight <= el.clientHeight) e.preventDefault();
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [open, panelOpenish(query), searching, visibleHits.length, hitIdx]);
 
   // ── Keys ──
   useEffect(() => {
@@ -542,7 +636,6 @@ export function NativeFindOverlay({
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 'f') {
-        // Chrome behaviour: Ctrl+F while open re-focuses, it does not dismiss.
         e.preventDefault();
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -563,13 +656,22 @@ export function NativeFindOverlay({
     return () => window.removeEventListener('keydown', onKey, true);
   }, [open, onClose, step, commit, effectiveLive]);
 
+  const changeScope = useCallback((next: Scope) => {
+    setScope(next);
+    setPageFallback(false);
+    setHits([]);
+    setIndexFailed(false);
+    setWhere('');
+  }, []);
+
   // ── Derived readouts ──
   const total = effectiveLive ? count : visibleHits.length;
   const pos = effectiveLive ? active : hitIdx;
+  const panelBelow = anchor.v === 'top';
 
   const status = useMemo(() => {
     if (!query.trim()) return null;
-    if (indexFailed && !effectiveLive) return <span className="text-[10px] text-rose-400">index offline</span>;
+    if (indexFailed && !effectiveLive) return <span className="text-[10px] text-rose-400">offline</span>;
     if (total === 0) return <span className="text-[10px] text-zinc-500">0</span>;
     return (
       <span className="text-[11px] font-mono tabular-nums text-zinc-400">
@@ -578,236 +680,282 @@ export function NativeFindOverlay({
     );
   }, [query, total, pos, indexFailed, effectiveLive]);
 
+  // Always tell the user which of the three they are in.
+  const scopeLine = useMemo(() => {
+    if (scope === 'subpage') {
+      return effectiveLive ? (subpageName ? `Subpage · ${subpageName}` : 'Subpage · on screen') : 'Subpage';
+    }
+    if (scope === 'app') return `App · ${indexed === null ? '…' : `${indexed.toLocaleString()} indexed`}`;
+    return effectiveLive ? `Page · ${currentPageId ?? 'this route'} · not indexed, showing screen` : `Page · ${currentPageId ?? 'this route'}`;
+  }, [scope, effectiveLive, subpageName, indexed, currentPageId]);
+
   if (!open) return null;
 
   const panelOpen = !!query.trim();
-  const panelBelow = anchor.v === 'top';
 
   return (
-    <div ref={rootRef} data-df-find-bar style={anchorStyle(anchor)} className="w-fit max-w-[min(92vw,420px)]">
-      {/* ── The instrument ── */}
+    <>
+      {/* Where the bar will land. Shown only while dragging, and it is the reason
+          dragging feels responsive instead of teleporting between cells. */}
+      {dragging && dropCell && (
+        <DropPreview cell={dropCell} />
+      )}
+
       <div
-        role="search"
-        aria-label="Find in page"
-        className={`flex items-center gap-1.5 rounded-[12px] border border-white/10 bg-zinc-900/95 pl-1 pr-1.5 py-1.5 transition-shadow ${
-          dragging ? 'shadow-xl shadow-black/60' : 'shadow-lg shadow-black/40'
-        }`}
+        ref={rootRef}
+        data-df-find-bar
+        style={anchorStyle(anchor)}
+        onPointerDown={startDrag}
+        className="w-fit max-w-[min(92vw,420px)]"
       >
-        {/* Drag grip — the discoverable way to move the bar. Drag only; the
-            ⚙ beside it owns the click-to-place path, so neither control is a
-            two-in-one. */}
-        <button
-          type="button"
-          aria-label="Move find bar"
-          title="Drag to reposition"
-          onMouseDown={(e) => { e.preventDefault(); setDragging(true); }}
-          className="grid h-6 w-5 shrink-0 cursor-grab place-items-center rounded-[8px] text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300 active:cursor-grabbing"
-        >
-          <GripHorizontal size={14} />
-        </button>
-        <button
-          type="button"
-          aria-label="Find bar position"
-          title="Position"
-          aria-expanded={placeOpen}
-          onClick={() => setPlaceOpen((p) => !p)}
-          className={`grid h-6 w-5 shrink-0 place-items-center rounded-[8px] transition-colors ${
-            placeOpen ? 'bg-zinc-800 text-amber-200' : 'text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300'
-          }`}
-        >
-          <Settings2 size={13} />
-        </button>
-
-        <Search size={15} className="shrink-0 text-zinc-500" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={live ? 'Find in page' : `Search ${scope === 'all' ? 'the whole app' : 'this page'}`}
-          aria-label={live ? 'Find in page' : 'Search indexed content'}
-          className="w-[132px] bg-transparent text-[13px] text-zinc-100 outline-none placeholder:text-zinc-600"
-        />
-
-        <div className="w-[46px] shrink-0 text-right">{status}</div>
-
-        <button
-          type="button"
-          aria-label="Previous match"
-          disabled={total === 0}
-          onClick={() => step(-1)}
-          className="grid h-6 w-6 place-items-center rounded-[8px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronUp size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label="Next match"
-          disabled={total === 0}
-          onClick={() => step(1)}
-          className="grid h-6 w-6 place-items-center rounded-[8px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronDown size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label="Close find"
-          onClick={onClose}
-          className="grid h-6 w-6 place-items-center rounded-[8px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-        >
-          <X size={15} />
-        </button>
-      </div>
-
-      {/* ── Scope row (progressive disclosure: always visible, one tap) ── */}
-      <div
-        className={`mt-1 flex items-center gap-1 rounded-[8px] border border-white/5 bg-zinc-900/95 p-0.5 ${
-          panelBelow ? '' : 'flex-row-reverse'
-        }`}
-      >
-        {SCOPES.map((s) => {
-          const Icon = s.icon;
-          const on = scope === s.value;
-          return (
-            <button
-              key={s.value}
-              type="button"
-              title={s.hint}
-              aria-pressed={on}
-              onClick={() => setScope(s.value)}
-              className={`flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-medium transition-colors ${
-                on
-                  ? 'bg-amber-400/15 text-amber-200 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.28)]'
-                  : 'text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-300'
-              }`}
-            >
-              <Icon size={12} />
-              {s.label}
-            </button>
-          );
-        })}
-        <span className="ml-auto pr-1 text-[10px] text-zinc-600">
-          {indexed === null ? '' : `${indexed.toLocaleString()} indexed`}
-        </span>
-      </div>
-
-      {/* ── Placement picker (only when asked for) ── */}
-      {placeOpen && (
+        {/* ── The instrument ── */}
         <div
-          className={`absolute z-10 rounded-[12px] border border-white/10 bg-zinc-900/97 p-2.5 shadow-xl shadow-black/50 ${
-            panelBelow ? 'left-0 top-full mt-1.5' : 'left-0 bottom-full mb-1.5'
+          role="search"
+          aria-label="Find in page"
+          style={{ userSelect: 'none', touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
+          className={`flex items-center gap-1.5 rounded-[12px] border border-white/10 bg-zinc-900/95 pl-1 pr-1.5 py-1.5 transition-shadow ${
+            dragging ? 'shadow-xl shadow-black/60' : 'shadow-lg shadow-black/40'
           }`}
         >
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Position</p>
-          <div className="grid grid-cols-3 gap-1">
-            {ANCHOR_CELLS.map((cell) => {
-              const on = sameAnchor(anchor, cell);
-              return (
-                <button
-                  key={`${cell.v}-${cell.h}`}
-                  type="button"
-                  aria-label={`${cell.v} ${cell.h}`}
-                  aria-pressed={on}
-                  onClick={() => { moveTo(cell); setPlaceOpen(false); }}
-                  className={`grid h-7 w-12 place-items-center rounded-[8px] border transition-colors ${
-                    on
-                      ? 'border-amber-400/50 bg-amber-400/15'
-                      : 'border-white/10 bg-zinc-800/40 hover:border-white/20 hover:bg-zinc-800'
-                  }`}
-                >
-                  <span className={`block rounded-[2px] ${on ? 'bg-amber-300' : 'bg-zinc-600'}`}
-                        style={{ width: cell.h === 'center' ? 16 : 9, height: 5 }} />
-                </button>
-              );
-            })}
+          <Search size={15} className="shrink-0 text-zinc-500" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setQuery(e.target.value)}
+            onPointerDown={(e) => e.stopPropagation()}
+            placeholder={live ? 'Find on this screen' : `Search ${scope === 'app' ? 'the whole app' : 'this page'}`}
+            aria-label={live ? 'Find on this screen' : 'Search indexed content'}
+            className="w-[140px] bg-transparent text-[13px] text-zinc-100 outline-none placeholder:text-zinc-600"
+            style={{ touchAction: 'auto' }}
+          />
+
+          <div className="w-[46px] shrink-0 text-right">{status}</div>
+
+          <button
+            type="button"
+            aria-label="Previous match"
+            disabled={total === 0}
+            onClick={() => step(-1)}
+            className="grid h-6 w-6 place-items-center rounded-[8px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronUp size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="Next match"
+            disabled={total === 0}
+            onClick={() => step(1)}
+            className="grid h-6 w-6 place-items-center rounded-[8px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronDown size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="Position and scope help"
+            title="Position"
+            aria-expanded={placeOpen}
+            onClick={() => setPlaceOpen((p) => !p)}
+            className={`grid h-6 w-5 shrink-0 place-items-center rounded-[8px] transition-colors ${
+              placeOpen ? 'bg-zinc-800 text-amber-200' : 'text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300'
+            }`}
+          >
+            <Settings2 size={13} />
+          </button>
+          <button
+            type="button"
+            aria-label="Close find"
+            onClick={onClose}
+            className="grid h-6 w-6 place-items-center rounded-[8px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* ── Scope row: Subpage · Page · App ── */}
+        <div
+          onPointerDown={startDrag}
+          style={{ userSelect: 'none', touchAction: 'none' }}
+          className={`mt-1 flex items-center gap-1 rounded-[8px] border border-white/5 bg-zinc-900/95 p-0.5 ${
+            panelBelow ? '' : 'flex-row-reverse'
+          }`}
+        >
+          {SCOPES.map((s) => {
+            const Icon = s.icon;
+            const on = scope === s.value;
+            return (
+              <button
+                key={s.value}
+                type="button"
+                title={s.hint}
+                aria-pressed={on}
+                onClick={() => changeScope(s.value)}
+                className={`flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-medium transition-colors ${
+                  on
+                    ? 'bg-amber-400/15 text-amber-200 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.28)]'
+                    : 'text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-300'
+                }`}
+              >
+                <Icon size={12} />
+                {s.label}
+              </button>
+            );
+          })}
+          <span className="ml-auto truncate pr-1 text-[10px] text-zinc-600">{scopeLine}</span>
+        </div>
+
+        {/* ── Placement picker ── */}
+        {placeOpen && (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            className={`absolute z-20 rounded-[12px] border border-white/10 bg-zinc-900/97 p-2.5 shadow-xl shadow-black/50 ${
+              panelBelow ? 'left-0 top-full mt-1.5' : 'left-0 bottom-full mb-1.5'
+            }`}
+          >
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Position</p>
+            <div className="grid grid-cols-3 gap-1">
+              {ANCHOR_CELLS.map((cell) => {
+                const on = sameAnchor(anchor, cell);
+                return (
+                  <button
+                    key={`${cell.v}-${cell.h}`}
+                    type="button"
+                    aria-label={`${cell.v} ${cell.h}`}
+                    aria-pressed={on}
+                    onClick={() => { moveTo(cell); setPlaceOpen(false); }}
+                    className={`grid h-7 w-12 place-items-center rounded-[8px] border transition-colors ${
+                      on
+                        ? 'border-amber-400/50 bg-amber-400/15'
+                        : 'border-white/10 bg-zinc-800/40 hover:border-white/20 hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span className={`block rounded-[2px] ${on ? 'bg-amber-300' : 'bg-zinc-600'}`}
+                          style={{ width: cell.h === 'center' ? 16 : 9, height: 5 }} />
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 max-w-[220px] text-[10px] leading-relaxed text-zinc-600">
+              Or drag the bar anywhere. Saved for this machine.
+            </p>
           </div>
-          <p className="mt-2 max-w-[220px] text-[10px] leading-relaxed text-zinc-600">
-            Or drag the grip. Saved for this machine.
-          </p>
-        </div>
-      )}
+        )}
 
-      {/* ── Results / context panel ── */}
-      {panelOpen && (
-        <div
-          className={`absolute left-0 right-0 overflow-hidden rounded-[12px] border border-white/10 bg-zinc-900/97 shadow-xl shadow-black/50 ${
-            panelBelow ? 'top-full mt-1.5' : 'bottom-full mb-1.5'
-          }`}
-        >
-          {/* Live find: where the active match actually is. */}
-          {effectiveLive && (
-            <div className="px-2.5 py-1.5 text-[10px]">
-              {where ? (
-                <span className="text-zinc-600">in <span className="text-zinc-400">{where}</span></span>
-              ) : total === 0 ? (
-                <span className="text-zinc-500">No matches on this page.</span>
-              ) : (
-                <span className="text-zinc-600">Enter next · Shift+Enter previous</span>
-              )}
-            </div>
-          )}
+        {/* ── Results / context panel ── */}
+        {panelOpen && (
+          <div
+            ref={panelRef}
+            style={{ overscrollBehavior: 'contain' }}
+            className={`absolute left-0 right-0 overflow-hidden rounded-[12px] border border-white/10 bg-zinc-900/97 shadow-xl shadow-black/50 ${
+              panelBelow ? 'top-full mt-1.5' : 'bottom-full mb-1.5'
+            }`}
+          >
+            {/* Live find: where the active match actually is. */}
+            {effectiveLive && (
+              <div className="px-2.5 py-1.5 text-[10px]">
+                {where ? (
+                  <span className="text-zinc-600">in <span className="text-zinc-400">{where}</span></span>
+                ) : total === 0 ? (
+                  <span className="text-zinc-500">No matches here.</span>
+                ) : (
+                  <span className="text-zinc-600">Enter next · Shift+Enter previous</span>
+                )}
+              </div>
+            )}
 
-          {/* Indexed scopes: the result list. */}
-          {!effectiveLive && (
-            <div className="max-h-[340px] overflow-y-auto">
-              {searching && (
-                <div className="px-3 py-3 text-center text-[11px] text-zinc-600">Searching…</div>
-              )}
+            {/* Indexed scopes: the result list. */}
+            {!effectiveLive && (
+              <div className="max-h-[340px] overflow-y-auto overscroll-contain">
+                {searching && (
+                  <div className="px-3 py-3 text-center text-[11px] text-zinc-600">Searching…</div>
+                )}
 
-              {!searching && indexFailed && (
-                <div className="px-3 py-3 text-center text-[11px] text-rose-400">
-                  Search index unavailable.
-                </div>
-              )}
+                {!searching && indexFailed && (
+                  <div className="px-3 py-3 text-center text-[11px] text-rose-400">
+                    Search index unavailable.
+                  </div>
+                )}
 
-              {!searching && !indexFailed && visibleHits.length === 0 && (
-                <div className="px-3 py-4 text-center">
-                  <Search size={18} className="mx-auto mb-1.5 text-zinc-700" />
-                  <p className="text-[11px] text-zinc-500">
-                    No indexed results for <span className="text-zinc-400">“{query.trim()}”</span>
-                  </p>
-                  <p className="mt-1 text-[10px] text-zinc-600">
-                    {scope === 'section' ? 'Try the Page scope to search what you can see.' : 'Only pages that registered content are indexed.'}
-                  </p>
-                </div>
-              )}
+                {!searching && !indexFailed && visibleHits.length === 0 && (
+                  <div className="px-3 py-4 text-center">
+                    <Search size={18} className="mx-auto mb-1.5 text-zinc-700" />
+                    <p className="text-[11px] text-zinc-500">
+                      No indexed results for <span className="text-zinc-400">“{query.trim()}”</span>
+                    </p>
+                    <p className="mt-1 text-[10px] text-zinc-600">
+                      {scope === 'page'
+                        ? 'Try Subpage to search what you can see.'
+                        : 'Only routes you have visited get indexed.'}
+                    </p>
+                  </div>
+                )}
 
-              {!searching && visibleHits.length > 0 && (
-                <div className="p-1">
-                  {visibleHits.map((hit, i) => (
-                    <button
-                      key={hit.id}
-                      type="button"
-                      onMouseEnter={() => setHitIdx(i)}
-                      onClick={() => { setHitIdx(i); onSelect?.(hit); onClose(); }}
-                      className={`w-full rounded-[8px] px-2 py-1.5 text-left transition-colors ${
-                        i === hitIdx ? 'bg-zinc-800/80' : 'hover:bg-zinc-800/40'
-                      }`}
-                    >
-                      <div className="mb-0.5 flex items-center gap-1.5">
-                        <span className="max-w-[120px] truncate rounded-[4px] border border-white/5 bg-zinc-800 px-1 py-px text-[9px] font-medium text-zinc-500">
-                          {hit.section || hit.pageId}
-                        </span>
-                        {hit.pageId !== currentPageId && (
-                          <span className="truncate text-[9px] text-zinc-600">↗ {hit.pageId}</span>
+                {!searching && visibleHits.length > 0 && (
+                  <div className="p-1">
+                    {visibleHits.map((hit, i) => (
+                      <button
+                        key={hit.id}
+                        type="button"
+                        onMouseEnter={() => setHitIdx(i)}
+                        onClick={() => { setHitIdx(i); onSelect?.(hit); onClose(); }}
+                        className={`w-full rounded-[8px] px-2 py-1.5 text-left transition-colors ${
+                          i === hitIdx ? 'bg-zinc-800/80' : 'hover:bg-zinc-800/40'
+                        }`}
+                      >
+                        <div className="mb-0.5 flex items-center gap-1.5">
+                          <span className="max-w-[120px] truncate rounded-[4px] border border-white/5 bg-zinc-800 px-1 py-px text-[9px] font-medium text-zinc-500">
+                            {hit.section || hit.pageId}
+                          </span>
+                          {hit.pageId !== currentPageId && (
+                            <span className="truncate text-[9px] text-zinc-600">↗ {hit.pageId}</span>
+                          )}
+                        </div>
+                        <div className="truncate text-[12px] font-medium text-zinc-200">{hit.title}</div>
+                        {hit.snippet && (
+                          <div className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-zinc-500">{hit.snippet}</div>
                         )}
-                      </div>
-                      <div className="truncate text-[12px] font-medium text-zinc-200">{hit.title}</div>
-                      {hit.snippet && (
-                        <div className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-zinc-500">{hit.snippet}</div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** A ghost of the bar at the cell it will snap into. */
+function DropPreview({ cell }: { cell: Anchor }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ w: number; h: number }>({ w: 360, h: 76 });
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>('[data-df-find-bar]');
+    if (el) setBox({ w: el.offsetWidth || 360, h: el.offsetHeight || 76 });
+  }, []);
+  const style: React.CSSProperties = { position: 'fixed', zIndex: 9998, pointerEvents: 'none', width: box.w, height: box.h };
+  if (cell.v === 'top') style.top = GAP; else style.bottom = GAP;
+  if (cell.h === 'left') style.left = GAP;
+  else if (cell.h === 'right') style.right = GAP;
+  else { style.left = '50%'; style.transform = 'translateX(-50%)'; }
+  return (
+    <div
+      ref={ref}
+      style={style}
+      className="flex items-center justify-center rounded-[12px] border-2 border-dashed border-amber-400/50 bg-amber-400/5"
+    >
+      <span className="text-[10px] font-medium text-amber-300/80">
+        {cell.v} {cell.h}
+      </span>
     </div>
   );
 }
+
+/** Tiny helper so the wheel listener re-binds when the list content changes. */
+function panelOpenish(q: string) { return q.trim().length > 0; }
 
 export default NativeFindOverlay;

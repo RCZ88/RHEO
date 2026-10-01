@@ -41,7 +41,7 @@ function triggerMeta(t?: string) {
 
 function StatTile({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: string }) {
   return (
-    <div className="rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-4 flex items-start gap-3">
+    <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-4 flex items-start gap-3">
       <div className="w-9 h-9 rounded-xl bg-zinc-800/70 flex items-center justify-center text-zinc-300 shrink-0">{icon}</div>
       <div className="min-w-0">
         <div className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium">{label}</div>
@@ -154,7 +154,7 @@ export default function BackupCenterPage() {
     <div className="h-full overflow-y-auto ws-scroll">
       <div className="relative z-10 p-6 space-y-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/30 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/30 flex items-center justify-center">
             <DatabaseBackup className="w-5 h-5 text-emerald-300" />
           </div>
           <div>
@@ -190,7 +190,7 @@ export default function BackupCenterPage() {
                 <StatTile icon={<FolderOpen className="w-4 h-4" />} label="Mirror" value={status?.settings?.mirrorDir ? 'Active' : 'None'} sub={status?.settings?.mirrorDir || 'setup in Setup tab'} />
               </div>
             )}
-            <div className="rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
+            <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
               <BackupPanel />
             </div>
           </div>
@@ -199,7 +199,7 @@ export default function BackupCenterPage() {
         {tab === 'projects' && (
           <div className="space-y-4">
             {projects.length === 0 ? (
-              <div className="rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-8 text-center text-sm text-zinc-500">
+              <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-8 text-center text-sm text-zinc-500">
                 No IDE projects detected yet. Open the IDE Projects page so a project is registered, then come back.
               </div>
             ) : (
@@ -224,7 +224,7 @@ export default function BackupCenterPage() {
 
                 {selectedProject && selectedProjectPath && (
                   <>
-                    <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-4">
+                    <div className="flex flex-wrap items-center gap-3 rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-4">
                       <div className="text-xs text-zinc-500">
                         Auto-backup:{' '}
                         <span className={activeSchedule?.enabled ? 'text-emerald-400 font-medium' : 'text-zinc-400'}>
@@ -256,7 +256,7 @@ export default function BackupCenterPage() {
                         <span className="text-[11px] text-zinc-600">last run {fmtWhen(activeSchedule.lastRunAt)}</span>
                       )}
                     </div>
-                    <div className="rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
+                    <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
                       <BackupTabPanel projectId={selectedProject} projectPath={selectedProjectPath} />
                     </div>
                   </>
@@ -267,7 +267,7 @@ export default function BackupCenterPage() {
         )}
 
         {tab === 'agents' && (
-          <div className="rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5 space-y-4">
+          <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5 space-y-4">
             <div>
               <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
                 <Bot className="w-4 h-4 text-violet-400" /> Agent session snapshots
@@ -377,7 +377,7 @@ function SetupTab({ status }: { status: any }) {
 
   return (
     <div className="grid md:grid-cols-2 gap-4">
-      <div className="rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5 space-y-4">
+      <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5 space-y-4">
         <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
           <HardDrive className="w-4 h-4 text-emerald-300" /> Mirror location
         </h2>
@@ -405,7 +405,7 @@ function SetupTab({ status }: { status: any }) {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5 space-y-4">
+      <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5 space-y-4">
         <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
           <Clock className="w-4 h-4 text-blue-300" /> Retention &amp; automation
         </h2>
@@ -457,7 +457,7 @@ function SetupTab({ status }: { status: any }) {
         )}
       </div>
 
-      <div className="md:col-span-2 rounded-2xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5">
+      <div className="md:col-span-2 rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-5">
         <h2 className="text-sm font-semibold text-zinc-200 mb-2">Agent context protocol</h2>
         <p className="text-xs text-zinc-500 leading-relaxed">
           Every agent session receives the <span className="text-violet-300 font-medium">Backup &amp; Safety Protocol</span> in its

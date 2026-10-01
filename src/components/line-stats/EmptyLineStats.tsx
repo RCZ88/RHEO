@@ -7,7 +7,7 @@ interface Props {
 export default function EmptyLineStats({ onScan }: Props) {
   return (
     <div className="flex flex-col items-center justify-center py-16 rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70">
-      <div className="p-4 rounded-2xl bg-zinc-800/50 mb-4">
+      <div className="p-4 rounded-xl bg-zinc-800/50 mb-4">
         <FileCode className="w-10 h-10 text-zinc-600" />
       </div>
       <h3 className="text-sm font-semibold text-zinc-300 mb-1">No scan data yet</h3>

@@ -117,7 +117,7 @@ export default function TransferSessionModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-md bg-zinc-900 rounded-2xl border border-zinc-700/50 shadow-2xl overflow-hidden"
+            className="relative w-full max-w-md bg-zinc-900 rounded-xl border border-zinc-700/50 shadow-2xl overflow-hidden"
           >
             {/* Gradient accent */}
             <div className="h-[2px] w-full bg-gradient-to-r from-amber-500/40 via-emerald-500/40 to-amber-500/40" />

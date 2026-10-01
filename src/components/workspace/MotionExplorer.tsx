@@ -111,7 +111,7 @@ export function MotionExplorer({ onAddMotionSnippet, onClose }: MotionExplorerPr
           transition={{ duration: 0.5 }}
           className="text-center max-w-md"
         >
-          <div className="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center mx-auto mb-6">
+          <div className="w-16 h-16 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center mx-auto mb-6">
             <Wind className="w-8 h-8 text-pink-400" />
           </div>
           <h2 className="text-xl font-semibold text-white mb-2">Motion Explorer</h2>

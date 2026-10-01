@@ -133,7 +133,7 @@ export function AddPromptModal({
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.97, y: 8, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-2xl border overflow-hidden shadow-2xl max-h-[86vh] flex flex-col"
+        className="w-full max-w-2xl rounded-xl border overflow-hidden shadow-2xl max-h-[86vh] flex flex-col"
         style={{ background: 'var(--t-panel)', borderColor: 'var(--t-border)' }}
       >
         {/* header */}

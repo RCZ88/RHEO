@@ -68,7 +68,7 @@ export const ModalShell: React.FC<{
     <motion.div
       initial={PANEL_INIT} animate={PANEL_SHOW} exit={PANEL_EXIT} transition={PANEL_TRANS}
       onClick={(e) => e.stopPropagation()}
-      className={`w-full ${maxWidth} max-h-[82vh] overflow-y-auto rounded-2xl bg-zinc-900/95 backdrop-blur-xl ring-1 ring-zinc-800 shadow-2xl shadow-black/50 p-5`}
+      className={`w-full ${maxWidth} max-h-[82vh] overflow-y-auto rounded-xl bg-zinc-900/95 backdrop-blur-xl ring-1 ring-zinc-800 shadow-2xl shadow-black/50 p-5`}
     >
       <div className="flex items-center justify-between mb-4">
         <div className="min-w-0">{title}</div>

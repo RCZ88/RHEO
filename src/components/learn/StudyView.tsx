@@ -191,7 +191,7 @@ export function StudyView({ onBack }: Props) {
         /* Done state */
         <BlurFade delay={0.1}>
           <div className="text-center py-16">
-            <div className="w-16 h-16 rounded-2xl bg-sage-400/10 border border-sage-400/20 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-xl bg-sage-400/10 border border-sage-400/20 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8 text-sage-400" />
             </div>
             <h3 className="text-lg font-semibold text-zinc-100 mb-2">Session Complete</h3>

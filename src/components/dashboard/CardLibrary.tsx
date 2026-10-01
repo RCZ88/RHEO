@@ -1096,7 +1096,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
         onClick={() => setPreviewId(null)}
       >
         <motion.div
-          className="relative w-full max-w-[640px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--color-card)] overflow-hidden shadow-2xl"
+          className="relative w-full max-w-[640px] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] overflow-hidden shadow-2xl"
           initial={{ opacity: 0, scale: 0.95, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 16 }}
@@ -1289,7 +1289,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
 
   const innerContent = (
     <div
-      className="relative w-full max-w-[1600px] max-h-[92vh] rounded-2xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col"
+      className="relative w-full max-w-[1600px] max-h-[92vh] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col"
       onClick={e => e.stopPropagation()}
     >
       {/* Header */}

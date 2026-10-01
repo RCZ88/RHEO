@@ -128,7 +128,7 @@ export default function BrowserProfileSettings() {
           </svg>
         </div>
         <p className="text-sm text-zinc-400 mb-1">No browser profiles detected yet</p>
-        <p className="text-xs text-zinc-500">Install the DeskFlow Browser Tracker extension in Chrome, Firefox, Edge, or Brave to start tracking per-profile activity.</p>
+        <p className="text-xs text-zinc-500">Install the DeskFlow Browser Bridge extension in Chrome, Brave, Edge, or Firefox. Each browser and profile appears here automatically once it starts reporting.</p>
       </div>
     );
   }
@@ -221,7 +221,12 @@ export default function BrowserProfileSettings() {
           {/* Status + duration */}
           <div className="text-right flex-shrink-0">
             <div className="flex items-center gap-1.5 justify-end">
-              <span className={`w-1.5 h-1.5 rounded-full ${profile.is_connected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+              <span className="relative flex w-1.5 h-1.5">
+                <span className={`absolute inset-0 rounded-full ${profile.is_connected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                {profile.is_connected && (
+                  <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60 motion-reduce:hidden" />
+                )}
+              </span>
               <span className="text-xs text-zinc-500">
                 {profile.is_connected ? 'connected' : `last seen ${relativeTime(profile.last_seen_at)}`}
               </span>

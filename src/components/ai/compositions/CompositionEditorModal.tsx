@@ -38,7 +38,7 @@ export function CompositionEditorModal({ rule, onClose, onSaved }: CompositionEd
 
   return (
     <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose} variants={dialogVariants} initial="hidden" animate="show" exit="exit">
-      <div className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-2xl w-[680px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl w-[680px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
           <h2 className="text-sm font-medium text-white">{rule ? 'Edit Rule' : 'New Rule'}</h2>
           <button onClick={onClose} className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"><X className="w-4 h-4" /></button>

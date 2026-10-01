@@ -566,7 +566,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
                       </div>
                     ) : (
                       <div className="text-center py-12">
-                        <div className="w-14 h-14 rounded-2xl bg-sage-400/10 border border-sage-400/20 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-14 h-14 rounded-xl bg-sage-400/10 border border-sage-400/20 flex items-center justify-center mx-auto mb-3">
                           <RotateCcw className="w-6 h-6 text-sage-400" />
                         </div>
                         <p className="text-sm text-zinc-400">No cards due for review</p>
@@ -673,7 +673,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
         {/* Explain with Image Modal */}
         {(explainImage.loading || explainImage.result || explainImage.error) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setExplainImage({ loading: false })}>
-            <div className="bg-zinc-900 border border-zinc-700/50 rounded-2xl max-w-lg w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-zinc-900 border border-zinc-700/50 rounded-xl max-w-lg w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
                 <div className="flex items-center gap-2">

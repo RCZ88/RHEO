@@ -536,7 +536,7 @@ export function CanvasContainer({
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             className="fixed inset-0 z-[210] flex items-center justify-center p-4"
           >
-            <div className="w-full max-w-[380px] rounded-2xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl p-5 light:bg-white light:border-[var(--ws-border-strong)]" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-[380px] rounded-xl border border-zinc-700/50 bg-[rgba(18,18,18,0.98)] backdrop-blur-xl shadow-2xl p-5 light:bg-white light:border-[var(--ws-border-strong)]" onClick={e => e.stopPropagation()}>
               <h3 className="text-[14px] font-semibold text-white mb-1 light:text-stone-900">Save Canvas As</h3>
               <p className="text-[12px] text-zinc-400 mb-4 light:text-stone-500">Create a new canvas with this layout.</p>
               <input

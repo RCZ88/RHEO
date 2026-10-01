@@ -15,7 +15,7 @@ export function TitleBar({ store, onPalette, onSaveWs, onWorkspaces, onPresets, 
     <div className="h-12 shrink-0 flex items-center gap-3 px-3 border-b relative z-30" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
       <div className="w-px h-6" style={{ background: "var(--t-border)" }} />
       <div className="flex items-center gap-2.5 select-none">
-        <div className="w-8 h-8 rounded-[10px] grid place-items-center shadow-lg" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", boxShadow: "0 4px 18px -4px var(--t-accent)" }}>
+        <div className="w-8 h-8 rounded-lg grid place-items-center shadow-lg" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", boxShadow: "0 4px 18px -4px var(--t-accent)" }}>
           <AppWindow size={17} className="text-white" />
         </div>
         <div className="leading-none">

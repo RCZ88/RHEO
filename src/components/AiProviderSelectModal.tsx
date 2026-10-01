@@ -142,7 +142,7 @@ export function AiProviderSelectModal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 10 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="w-full max-w-md mx-4 bg-zinc-950 border border-zinc-800/60 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden"
+            className="w-full max-w-md mx-4 bg-zinc-950 border border-zinc-800/60 rounded-xl shadow-2xl shadow-black/50 overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">

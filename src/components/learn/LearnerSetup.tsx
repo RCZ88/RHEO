@@ -97,7 +97,7 @@ export function LearnerSetup({ open, onClose }: Props) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg mx-4 rounded-2xl border border-zinc-700/50 bg-zinc-900 shadow-2xl overflow-hidden"
+        className="w-full max-w-lg mx-4 rounded-xl border border-zinc-700/50 bg-zinc-900 shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-800">
