@@ -7,6 +7,14 @@ import { useTutorialContext } from '../contexts/TutorialContext';
 const SPOTLIGHT_PAD = 16;
 const SPOTLIGHT_MIN = 80;
 
+// How long we keep hunting for a step's DOM target before admitting it is gone.
+// Kept short on purpose: a target that existed when the step was authored but has
+// been deleted by a refactor will NEVER appear, and sitting on a fake "found" state
+// (progress bar + pulsing ring) for 4.5s before flipping is worse than telling the
+// truth quickly. 1.2s is still plenty for a lazily-mounted target to arrive.
+const TARGET_RETRY_INTERVAL = 150;
+const TARGET_MAX_RETRIES = 8;
+
 function getCardStyle(rect: DOMRect | null, position: string): React.CSSProperties {
   if (!rect) {
     return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
@@ -69,6 +77,10 @@ export default function TutorialOverlay() {
 
   useEffect(() => {
     if (!isVisible || !step) return;
+    // Optimistic reset: assume the target is missing until proven otherwise, so a
+    // step that can never resolve never renders a lie for even one frame.
+    setSpotlightRect(null);
+    setTargetFound(false);
     updatePosition();
     const handleScroll = () => requestAnimationFrame(updatePosition);
     const handleResize = () => requestAnimationFrame(updatePosition);
@@ -78,7 +90,6 @@ export default function TutorialOverlay() {
     let observer: ResizeObserver | null = null;
     let retryTimer: ReturnType<typeof setInterval> | null = null;
     let retryCount = 0;
-    const MAX_RETRIES = 30;
 
     const tryObserve = () => {
       if (step.target) {
@@ -101,12 +112,12 @@ export default function TutorialOverlay() {
           setTargetFound(true);
           tryObserve();
           if (retryTimer) clearInterval(retryTimer);
-        } else if (retryCount >= MAX_RETRIES) {
+        } else if (retryCount >= TARGET_MAX_RETRIES) {
           if (retryTimer) clearInterval(retryTimer);
           setSpotlightRect(null);
           setTargetFound(false);
         }
-      }, 150);
+      }, TARGET_RETRY_INTERVAL);
     }
 
     return () => {
@@ -120,17 +131,19 @@ export default function TutorialOverlay() {
   const isAction = step?.type === 'action';
 
   useEffect(() => {
-    if (!isVisible || !isAction || !step) return;
+    if (!isVisible || !isAction || !step || !targetFound) return;
     const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const match = target.closest(step.target);
-      if (match) {
+      const target = e.target;
+      // e.target is not always an Element (it can be the document, or a text node),
+      // and Element.closest() does not exist on those — calling it blindly throws.
+      if (!(target instanceof Element)) return;
+      if (target.closest(step.target)) {
         nextStep();
       }
     };
     document.addEventListener('click', handler, true);
     return () => document.removeEventListener('click', handler, true);
-  }, [isVisible, isAction, step, nextStep]);
+  }, [isVisible, isAction, step, nextStep, targetFound]);
 
   useEffect(() => {
     console.log('[TutorialOverlay] Spotlight effect:', {
@@ -168,7 +181,11 @@ export default function TutorialOverlay() {
   }, [isVisible, closeTutorial, nextStep, prevStep]);
 
   useEffect(() => {
-    if (!isVisible || !step || isAction || !targetFound) return;
+    // Auto-advance when this step can carry itself. An `action` step normally waits for
+    // a real click on its target — but if the target does not exist there is nothing to
+    // click, so it would otherwise sit on screen forever. Fall back to timed advance.
+    const canAutoAdvance = !isAction || !targetFound;
+    if (!isVisible || !step || !canAutoAdvance) return;
     if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
     autoTimerRef.current = setTimeout(() => {
       if (!hoveredRef.current) nextStep();
@@ -194,7 +211,7 @@ export default function TutorialOverlay() {
           {spotlightRect ? (
             <>
               <div
-                className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm pointer-events-none"
                 style={{
                   maskImage: `radial-gradient(circle ${spotSize / 2}px at ${spotlightRect.left + spotSize / 2}px ${spotlightRect.top + spotSize / 2}px, transparent 0px, black ${spotSize / 2 + 4}px)`,
                   WebkitMaskImage: `radial-gradient(circle ${spotSize / 2}px at ${spotlightRect.left + spotSize / 2}px ${spotlightRect.top + spotSize / 2}px, transparent 0px, black ${spotSize / 2 + 4}px)`,
@@ -226,7 +243,11 @@ export default function TutorialOverlay() {
               </motion.div>
             </>
           ) : (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" />
+            // No target: dim rather than black out. A full black/70 + blur scrim makes
+            // the app look crashed, and hides the very page the user is meant to be
+            // looking at while reading the instruction. With nothing to spotlight we
+            // just want the page legible and the card readable.
+            <div className="fixed inset-0 bg-black/45 pointer-events-none" />
           )}
 
           <motion.div
@@ -256,24 +277,29 @@ export default function TutorialOverlay() {
               <div className="px-4 pb-2">
                 <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-line">
                   {step.instruction}
-                  {isAction && !step.instruction.includes('• Click') && !step.instruction.includes('• Tap') && (
+                  {isAction && targetFound && !step.instruction.includes('• Click') && !step.instruction.includes('• Tap') && (
                     <span className="block mt-1.5 text-amber-400/80 font-medium">Click the highlighted element to continue</span>
+                  )}
+                  {isAction && !targetFound && (
+                    <span className="block mt-1.5 text-zinc-500 font-medium">
+                      This step's highlight is missing from the page — read the note, then continue
+                    </span>
                   )}
                 </p>
               </div>
 
-              {!isAction && (
-                <div className="px-4 pb-1.5">
-                  <div className="h-0.5 bg-zinc-700 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: '0%' }}
-                      animate={{ width: '100%' }}
-                      transition={{ duration: 5, ease: 'linear' }}
-                      className="h-full bg-amber-400/60 rounded-full"
-                    />
+{(!isAction || !targetFound) && (
+                  <div className="px-4 pb-1.5">
+                    <div className="h-0.5 bg-zinc-700 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: '0%' }}
+                        animate={{ width: '100%' }}
+                        transition={{ duration: 5, ease: 'linear' }}
+                        className="h-full bg-amber-400/60 rounded-full"
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="px-4 pb-2.5 flex items-center gap-1">
                 {Array.from({ length: totalSteps }).map((_, i) => (

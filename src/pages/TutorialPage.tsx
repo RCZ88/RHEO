@@ -26,6 +26,14 @@ interface Feature {
   whatYouCanDo: string[];
   visualIcons: any[];
   route: string;
+  /**
+   * Optional react-router `location.state` handed to `navigate()` when the tutorial
+   * starts. The Terminal Workspace keeps its panels behind an `activeGroup`
+   * (setup | work | insights | studio | conductor | ai-gateway | context | handbook),
+   * so a feature pointing at `/terminal` must also say which group to open —
+   * otherwise the spotlight lands on whatever pane was open last.
+   */
+  navState?: Record<string, unknown>;
 }
 
 const FEATURES: Feature[] = [
@@ -198,7 +206,8 @@ const FEATURES: Feature[] = [
       'Assign agents to tasks from 5 available types',
     ],
     visualIcons: [Code2, Users, Zap],
-    route: '/ide',
+    route: '/terminal',
+    navState: { group: 'work' },
   },
   {
     id: 'context', name: 'Context Management', icon: BookOpen,
@@ -217,7 +226,8 @@ const FEATURES: Feature[] = [
       'Preview assembled context before sending to agents',
     ],
     visualIcons: [FileText, Layers, Sliders],
-    route: '/ide',
+    route: '/terminal',
+    navState: { group: 'context' },
   },
   {
     id: 'problems', name: 'Problems & Requests', icon: AlertTriangle,
@@ -236,7 +246,8 @@ const FEATURES: Feature[] = [
       'Assign problems directly to terminal sessions',
     ],
     visualIcons: [AlertTriangle, Check, FileText],
-    route: '/ide',
+    route: '/terminal',
+    navState: { group: 'insights' },
   },
   {
     id: 'design', name: 'Design Skills System', icon: Palette,
@@ -255,7 +266,8 @@ const FEATURES: Feature[] = [
       'Generate screens directly via Stitch integration',
     ],
     visualIcons: [Palette, Layout, Settings],
-    route: '/ide',
+    route: '/terminal',
+    navState: { group: 'studio' },
   },
   {
     id: 'skills', name: 'Skills Framework', icon: Sparkles,
@@ -274,7 +286,8 @@ const FEATURES: Feature[] = [
       'Create new skill definitions for custom agents',
     ],
     visualIcons: [Sparkles, Layers, Grip],
-    route: '/ide',
+    route: '/terminal',
+    navState: { group: 'studio' },
   },
   {
     id: 'graphify', name: 'Knowledge Graph', icon: Network,
@@ -293,7 +306,8 @@ const FEATURES: Feature[] = [
       'Sync knowledge graphs to your Obsidian vault',
     ],
     visualIcons: [Network, Search, Layers],
-    route: '/ide',
+    route: '/terminal',
+    navState: { group: 'context' },
   },
   {
     id: 'ide-projects', name: 'IDE Projects', icon: Code2,
@@ -348,7 +362,8 @@ const FEATURES: Feature[] = [
       'Copy specs to paste into AI context',
     ],
     visualIcons: [FileText, Search, Layers],
-    route: '/ide',
+    route: '/guide',
+    navState: { guideTab: 'specs' },
   },
   // ───────────────────────────────────────────────────
   // Resume Builder
@@ -472,7 +487,11 @@ function loadProgress(): GuideProgress {
 }
 
 function saveProgress(progress: GuideProgress) {
-  localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  } catch {
+    // Private-mode / quota / disabled storage must never break the Guide page.
+  }
 }
 
 export default function TutorialPage({ noShell }: { noShell?: boolean }) {
@@ -488,7 +507,7 @@ export default function TutorialPage({ noShell }: { noShell?: boolean }) {
   const openFeature = useCallback((feature: Feature) => {
     const steps = TUTORIAL_STEPS[feature.id];
     if (!steps) return;
-    tutorial.startTutorial(feature.id, steps, feature.name, feature.route);
+    tutorial.startTutorial(feature.id, steps, feature.name, feature.route, feature.navState);
   }, [tutorial]);
 
   const resetProgress = useCallback(() => {

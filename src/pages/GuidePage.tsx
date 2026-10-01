@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { PageShell } from '../components/PageShell';
 import TutorialPage from './TutorialPage';
 import FeatureSpecViewer from '../components/FeatureSpecViewer';
@@ -8,7 +9,33 @@ import { motion, AnimatePresence } from 'framer-motion';
 type GuideTab = 'tutorial' | 'specs';
 
 export default function GuidePage() {
-  const [activeTab, setActiveTab] = useState<GuideTab>('tutorial');
+  const location = useLocation();
+  // The Feature Specs tutorial and the ⌘K palette both deep-link to a specific tab.
+  // Honour it on arrival, otherwise "Guide — Feature Specs" silently opens Tutorial.
+  const [activeTab, setActiveTab] = useState<GuideTab>(() => {
+    const stateTab = (location.state as { guideTab?: GuideTab } | null)?.guideTab;
+    if (stateTab === 'tutorial' || stateTab === 'specs') return stateTab;
+    try {
+      if (localStorage.getItem('guide-activeTab') === 'specs') return 'specs';
+    } catch {
+      // storage unavailable — fall through to the default tab
+    }
+    return 'tutorial';
+  });
+
+  useEffect(() => {
+    const stateTab = (location.state as { guideTab?: GuideTab } | null)?.guideTab;
+    if (stateTab === 'tutorial' || stateTab === 'specs') setActiveTab(stateTab);
+  }, [location.state]);
+
+  const switchTab = (tab: GuideTab) => {
+    setActiveTab(tab);
+    try {
+      localStorage.setItem('guide-activeTab', tab);
+    } catch {
+      // storage unavailable — the tab still switches for this session
+    }
+  };
 
   return (
     <PageShell page="guide" variant="sticky-header">
@@ -16,7 +43,7 @@ export default function GuidePage() {
         {/* Tab Switcher Header */}
         <div className="flex items-center gap-1 p-2 bg-zinc-900/30 border-b border-zinc-800/60 shrink-0">
           <button
-            onClick={() => setActiveTab('tutorial')}
+            onClick={() => switchTab('tutorial')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
               activeTab === 'tutorial'
                 ? 'bg-zinc-800 text-white shadow-lg shadow-black/40 border border-zinc-700/50'
@@ -27,7 +54,7 @@ export default function GuidePage() {
             Tutorial
           </button>
           <button
-            onClick={() => setActiveTab('specs')}
+            onClick={() => switchTab('specs')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
               activeTab === 'specs'
                 ? 'bg-zinc-800 text-white shadow-lg shadow-black/40 border border-zinc-700/50'

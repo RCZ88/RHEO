@@ -29,7 +29,7 @@ interface TutorialContextValue {
   activeFeatureId: string | null;
   activeFeatureName: string;
   steps: TutorialStep[];
-  startTutorial: (featureId: string, steps: TutorialStep[], featureName: string, route: string) => void;
+  startTutorial: (featureId: string, steps: TutorialStep[], featureName: string, route: string, navState?: Record<string, unknown>) => void;
   nextStep: () => void;
   prevStep: () => void;
   closeTutorial: () => void;
@@ -54,14 +54,24 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   const totalSteps = steps.length;
   const currentStep = totalSteps > 0 && stepIndex >= 0 && stepIndex < totalSteps ? steps[stepIndex] : null;
 
-  const startTutorial = useCallback((featureId: string, tutorialSteps: TutorialStep[], featureName: string, route: string) => {
+  const startTutorial = useCallback((
+    featureId: string,
+    tutorialSteps: TutorialStep[],
+    featureName: string,
+    route: string,
+    // Optional react-router location state. Several Guide features point at /terminal,
+    // where the panel to spotlight lives behind an `activeGroup` (and sometimes a
+    // sub-tab). Passing state lets us open the right pane instead of spotlighting
+    // whatever pane happened to be open last.
+    navState?: Record<string, unknown>,
+  ) => {
     if (showTimerRef.current) clearTimeout(showTimerRef.current);
     setActiveFeatureId(featureId);
     setActiveFeatureName(featureName);
     setSteps(tutorialSteps);
     setStepIndex(0);
     setVisible(false);
-    navigate(route);
+    navigate(route, navState ? { state: navState } : undefined);
     showTimerRef.current = setTimeout(() => {
       setVisible(true);
     }, 500);
