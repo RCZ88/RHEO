@@ -59,7 +59,7 @@ const grainStyle: React.CSSProperties = {
 };
 
 export const AppBackground = memo(function AppBackground({
-  pathname: _pathname = '/',
+  pathname = '/',
 }: {
   pathname?: string;
 }) {
@@ -68,12 +68,18 @@ export const AppBackground = memo(function AppBackground({
 
   // The hue comes from whichever [data-page] element is mounted, so it has to
   // be re-read after every navigation rather than captured once on mount.
+  // `pathname` is the re-sync trigger. Without it this component is memoised,
+  // receives no changing props, and nothing re-runs on navigation — so the tint
+  // would stay frozen on whichever page happened to mount first, which is the
+  // whole point of a per-page accent. App.tsx must therefore pass `pathname`.
   useEffect(() => {
     const sync = () => setAccent(getPageAccent());
     sync();
+    // data-page is set on <html> by an effect that runs after this one, so read
+    // it once more on the next tick rather than capturing a stale value.
     const t = window.setTimeout(sync, 0);
     return () => window.clearTimeout(t);
-  }, [prefs.enabled, prefs.intensity, prefs.spread]);
+  }, [pathname, prefs.enabled, prefs.intensity, prefs.spread]);
 
   useEffect(() => {
     const onChange = () => setPrefs(getAmbientPrefs());
@@ -85,11 +91,6 @@ export const AppBackground = memo(function AppBackground({
 
   return (
     <div className="fixed inset-0 z-[0] overflow-hidden pointer-events-none" aria-hidden="true">
-      {/* ── Layer 2: ambient tinted wash, per-page hue, user-tunable ───────── */}
-      {ambient && ambient !== 'none' && (
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: ambient }} />
-      )}
-
       {/* ── Layer 3: radial luminance wash (CSS only, zero cost) ──────────── */}
       <div style={washStyle} aria-hidden="true" className="light:opacity-0"/>
 
@@ -101,6 +102,24 @@ export const AppBackground = memo(function AppBackground({
 
       {/* ── Readability overlay — dark-mode only; dissolve on light ───────── */}
       <div className="absolute inset-0 bg-black/60 light:bg-transparent" />
+      {/* ── Layer 6: ambient tinted wash, per-page hue, user-tunable ──────────
+          LAST in this stack, and that is load-bearing rather than cosmetic.
+
+          The wash is deliberately subtle (7-8% alpha). Painted *underneath* the
+          bg-black/60 readability overlay it was multiplied down to roughly a
+          third of that — around 3% — so it read as though the feature were off.
+          It has to sit on top of the darkened base for the alpha the user
+          dialled in to be the alpha they actually get.
+
+          It stays inside this fixed z-0 layer, so page content (z-10 and above)
+          is untouched and legibility still comes from the overlay beneath it.
+
+          `light:opacity-0` is deliberate: every decorative layer dissolves on
+          light per design.md §6, so the app background is plain
+          `--ws-surface` paper rather than a tinted field. */}
+      {ambient && ambient !== 'none' && (
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: ambient }} className="light:opacity-0" />
+      )}
     </div>
   );
 });
