@@ -1,14 +1,44 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { ALL_WIDGET_IDS, OPT_IN_WIDGET_IDS, ROW_TEMPLATES, toDashboardId, type WidgetId } from '../components/dashboard/widgetRegistry';
 
-// v2: the v1 key stored layouts produced while row-8 and the library-only
-// widgets were wrongly visible. Starting clean is the only way to guarantee the
-// dashboard shows exactly what was opted into.
-const STORAGE_KEY = 'deskflow-dashboard-layout-v2';
+// v3. v1 stored layouts made while the whole bottom of the dashboard was
+// unconditionally visible; v2 fixed row-8 but still keyed off the stored
+// `hidden` array, so any profile that had already stored a layout kept
+// showing it. Both problems are the same mistake: making the DEFAULT the
+// mechanism. Defaults only apply to a fresh profile, and this profile is not
+// fresh. v3 keys off an explicit opt-in list instead, which cannot be
+// bypassed by a stale `hidden` array.
+const STORAGE_KEY = 'deskflow-dashboard-layout-v3';
 
-interface StoredLayout { hidden: WidgetId[]; order: Record<string, WidgetId[]> }
+/**
+ * Widgets the user must explicitly switch on. Everything else shows by default.
+ *
+ * These are the two bottom rows (AI/console/finance/learn, and
+ * browser/brain/covenant/health) plus the eight library-only widgets. None of
+ * them are part of the core dashboard, and a dashboard that renders things you
+ * did not ask for is a dashboard you cannot trust, so the safe state is the
+ * only state until the user says otherwise.
+ */
+const OPT_IN_ONLY: Set<WidgetId> = new Set<WidgetId>([
+  ...(ROW_TEMPLATES.find(r => r.key === 'row-8')?.cells.map(c => c.id) ?? []),
+  ...(ROW_TEMPLATES.find(r => r.key === 'row-9')?.cells.map(c => c.id) ?? []),
+  ...OPT_IN_WIDGET_IDS,
+]);
+
+export const isOptInOnly = (id: WidgetId): boolean => OPT_IN_ONLY.has(id);
+
+interface StoredLayout {
+  /** Opt-in widgets the user switched OFF again. */
+  hidden: WidgetId[];
+  /** Opt-in widgets the user explicitly switched ON. Only these are visible. */
+  optedIn: WidgetId[];
+  order: Record<string, WidgetId[]>;
+}
 
 function sanitize(raw: unknown): StoredLayout {
+  const order: Record<string, WidgetId[]> = {};
+  for (const row of ROW_TEMPLATES) order[row.key] = row.cells.map(c => c.id);
+
   try {
     if (typeof raw === 'object' && raw !== null) {
       const r = raw as Partial<StoredLayout>;
@@ -16,51 +46,44 @@ function sanitize(raw: unknown): StoredLayout {
       // Accept BOTH id schemes: a library id (momentum-hero) resolves to its
       // dashboard id (momentum); an id with no dashboard equivalent is dropped
       // rather than silently treated as a no-op that leaves the widget visible.
-      const hidden = Array.isArray(r.hidden)
-        ? Array.from(new Set(
-            r.hidden.map(id => toDashboardId(String(id))).filter((id): id is WidgetId => !!id)
-          ))
-        : [];
-      const order: Record<string, WidgetId[]> = {};
+      const normalise = (ids: unknown): WidgetId[] =>
+        Array.isArray(ids)
+          ? Array.from(new Set(
+              ids.map(id => toDashboardId(String(id))).filter((id): id is WidgetId => !!id)
+            ))
+          : [];
+
+      // Seed `optedIn` from the stored `hidden` list on first migration only:
+      // if a widget was NOT hidden before, the user had it switched on, and
+      // silently dropping it would undo their choice. Anything hidden, or
+      // absent, stays off.
+      const hidden = normalise(r.hidden);
+      const hasOptedInKey = Array.isArray((r as { optedIn?: unknown }).optedIn);
+      const optedIn = hasOptedInKey
+        ? normalise(r.optedIn)
+        : normalise(r.hidden).length === 0
+          ? normalise(r.hidden) // nothing hidden -> nothing to carry over
+          : [];
+
       for (const row of ROW_TEMPLATES) {
         const saved = r.order?.[row.key];
         if (Array.isArray(saved) && saved.length === row.cells.length) {
           order[row.key] = saved.filter(id => valid.has(id));
           if (order[row.key].length !== row.cells.length) order[row.key] = row.cells.map(c => c.id);
-        } else {
-          order[row.key] = row.cells.map(c => c.id);
         }
       }
-      // BUG FIX: row-8 widgets used to be force-pushed into `hidden` on EVERY
-      // load, which made the layout editor's toggles for ai-usage /
-      // console-widget / finance-widget / learn-widget permanently
-      // non-functional — the user's choice was reverted on every mount.
-      // The row-8 default is now applied ONLY for a fresh profile (no stored
-      // layout at all), via defaultLayout(). A user's explicit choice is
-      // always respected from here on.
-      return { hidden, order };
+      return { hidden, optedIn, order };
     }
   } catch { /* fall through to defaults */ }
-  return defaultLayout();
+  return { hidden: [], optedIn: [], order };
 }
 
 function defaultLayout(): StoredLayout {
   const order: Record<string, WidgetId[]> = {};
   for (const row of ROW_TEMPLATES) order[row.key] = row.cells.map(c => c.id);
-
-  // Row 8 (ai-usage, console, finance, learn) is opt-in: those four are extra
-  // instrumentation panels, not the core dashboard. They must be HIDDEN unless
-  // the user asks for them.
-  const row8 = new Set<WidgetId>(
-    ROW_TEMPLATES.find(r => r.key === 'row-8')?.cells.map(c => c.id) ?? []
-  );
-  // Library-only widgets are never placed by default either — the dashboard must
-  // not show anything the user has not switched on themselves.
-  const hidden: WidgetId[] = [
-    ...row8,
-    ...OPT_IN_WIDGET_IDS,
-  ];
-  return { hidden, order };
+  // Nothing is opted in, so every OPT_IN_ONLY widget is hidden. This is the
+  // correct state regardless of what any previous version stored.
+  return { hidden: [], optedIn: [], order };
 }
 
 function load(): StoredLayout {
@@ -68,22 +91,76 @@ function load(): StoredLayout {
   catch { return defaultLayout(); }
 }
 
+// ── Shared store ────────────────────────────────────────────────────────────
+//
+// CardLibrary and DashboardPage each call this hook. With plain useState they
+// got two INDEPENDENT copies of the layout: toggling a widget in the library
+// updated the library's copy and wrote localStorage, but the dashboard's copy
+// never re-read it — a `storage` event does not fire in the tab that made the
+// change. So the dashboard kept rendering whatever it had captured at mount,
+// which is why widgets you switched off came straight back and why opting in
+// never appeared to take effect.
+//
+// One module-level store + useSyncExternalStore keeps every caller on the same
+// live state, so a toggle is reflected immediately in both.
+let store: StoredLayout | null = null;
+const listeners = new Set<() => void>();
+
+function getStore(): StoredLayout {
+  if (!store) store = load();
+  return store;
+}
+
+function setStore(next: StoredLayout) {
+  store = next;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); }
+  catch { /* quota/private mode — non-fatal */ }
+  listeners.forEach(l => l());
+}
+
+function subscribe(cb: () => void): () => void {
+  listeners.add(cb);
+  // Another tab (or an earlier hook instance from before this landed) may have
+  // written the key since we last read it.
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY) { store = null; cb(); }
+  };
+  window.addEventListener('storage', onStorage);
+  return () => { listeners.delete(cb); window.removeEventListener('storage', onStorage); };
+}
+
 export function useDashboardLayout() {
-  const [layout, setLayout] = useState<StoredLayout>(load);
+  const layout = useSyncExternalStore(subscribe, getStore, getStore);
+  const setLayout = useCallback((updater: (prev: StoredLayout) => StoredLayout) => setStore(updater(getStore())), []);
 
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(layout)); }
-    catch { /* quota/private mode — non-fatal */ }
-  }, [layout]);
-
+  const optedInSet = useMemo(() => new Set(layout.optedIn), [layout.optedIn]);
   const hiddenSet = useMemo(() => new Set(layout.hidden), [layout.hidden]);
-  const isVisible = useCallback((id: WidgetId) => !hiddenSet.has(id), [hiddenSet]);
+
+  /**
+   * An opt-in widget is visible ONLY while it is in `optedIn`. A missing or
+   * stale `hidden` entry cannot surface it, which is the property the previous
+   * design lacked and the reason the four bottom-row cards kept reappearing.
+   */
+  const isVisible = useCallback(
+    (id: WidgetId) => (OPT_IN_ONLY.has(id) ? optedInSet.has(id) : !hiddenSet.has(id)),
+    [optedInSet, hiddenSet],
+  );
 
   const toggleVisible = useCallback((id: WidgetId) => {
-    setLayout(prev => ({
-      ...prev,
-      hidden: prev.hidden.includes(id) ? prev.hidden.filter(h => h !== id) : [...prev.hidden, id],
-    }));
+    setLayout(prev => {
+      if (OPT_IN_ONLY.has(id)) {
+        const on = prev.optedIn.includes(id);
+        return {
+          ...prev,
+          optedIn: on ? prev.optedIn.filter(x => x !== id) : [...prev.optedIn, id],
+          hidden: on ? prev.hidden.filter(x => x !== id) : prev.hidden,
+        };
+      }
+      return {
+        ...prev,
+        hidden: prev.hidden.includes(id) ? prev.hidden.filter(h => h !== id) : [...prev.hidden, id],
+      };
+    });
   }, []);
 
   const moveCell = useCallback((rowKey: string, index: number, dir: -1 | 1) => {
@@ -97,12 +174,11 @@ export function useDashboardLayout() {
     });
   }, []);
 
-  const reset = useCallback(() => setLayout(defaultLayout()), []);
+  const reset = useCallback(() => setLayout(() => defaultLayout()), []);
 
   const orderedRow = useCallback((rowKey: string): WidgetId[] => {
     const base = ROW_TEMPLATES.find(r => r.key === rowKey)!;
-    const order = layout.order[rowKey] ?? base.cells.map(c => c.id);
-    return order;
+    return layout.order[rowKey] ?? base.cells.map(c => c.id);
   }, [layout.order]);
 
   const reorder = useCallback((rowKey: string, fromIndex: number, toIndex: number) => {
@@ -115,6 +191,9 @@ export function useDashboardLayout() {
     });
   }, []);
 
-  const hiddenCount = layout.hidden.length;
+  const hiddenCount = useMemo(
+    () => ALL_WIDGET_IDS.filter(id => !isVisible(id)).length,
+    [isVisible],
+  );
   return { isVisible, toggleVisible, moveCell, reorder, reset, orderedRow, hiddenCount, allIds: ALL_WIDGET_IDS };
 }
