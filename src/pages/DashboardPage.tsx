@@ -609,6 +609,55 @@ export default function DashboardPage({
     return { ms: currentProductiveMs, label: isPaused ? 'Paused' : 'Idle' };
   }, [externalSessionRunning, externalElapsedMs, currentProductiveMs, currentDistractingMs, selectedExternalActivity, lastTier, isPaused, currentApp, currentWebsite]);
 
+  // ── Live focus session for the Longest Focus widget ──────────────────────
+  //
+  // `get-longest-focus` derives sessions from `logs` rows, and a row is only
+  // written once its window closes. So the session you are IN right now was
+  // never in the data: the widget could never show it, and — the actual bug —
+  // it could never overtake the day's stored best even after running past it.
+  // That is why "max focus session of the day" looked wrong while productive.
+  //
+  // The live session is therefore built here from timer state and merged into
+  // the fetched lists, where it competes on equal terms by duration. It is
+  // flagged `live` so the card can mark it as still-running rather than
+  // presenting an unfinished session as a completed record.
+  const liveFocusSession = useMemo(() => {
+    if (lastTier !== 'productive' || isPaused) return null;
+    if (!currentProductiveMs || currentProductiveMs < 1000) return null;
+    const isWeb = isInBrowser;
+    const name = isWeb
+      ? (currentWebsite?.title || currentWebsite?.domain || 'Browser')
+      : (currentApp?.app || currentApp?.title || 'Current session');
+    const endMs = Date.now();
+    const startMs = persistedTimer.startTime || (endMs - currentProductiveMs);
+    return {
+      apps: [name],
+      app: name,
+      category: (isWeb ? currentWebsite?.category : currentApp?.category) || 'Other',
+      title: isWeb ? (currentWebsite?.title || '') : '',
+      durationSeconds: Math.floor(currentProductiveMs / 1000),
+      startTime: new Date(startMs).toISOString(),
+      endTime: new Date(endMs).toISOString(),
+      live: true,
+    };
+    // currentProductiveMs ticks each second, so this recomputes each second —
+    // which is what makes the widget climb in real time.
+  }, [lastTier, isPaused, currentProductiveMs, isInBrowser, currentApp, currentWebsite, persistedTimer.startTime]);
+
+  // Merge the live session into today's and this week's lists, re-sorted so a
+  // running session that has passed the stored best becomes the new #1.
+  const longestFocusWithLive = useMemo(() => {
+    if (!liveFocusSession) return longestFocus;
+    const merge = (list: any[]) =>
+      [...(Array.isArray(list) ? list : []), liveFocusSession]
+        .sort((a: any, b: any) => (b?.durationSeconds || 0) - (a?.durationSeconds || 0));
+    return {
+      ...longestFocus,
+      today: merge(longestFocus?.today),
+      week: merge(longestFocus?.week),
+    };
+  }, [longestFocus, liveFocusSession]);
+
   // ── Widget Data (collected for widget system) ──
   // Real data for the 8 stat widgets. Each fetch is independently guarded inside
   // the hook, so one failing endpoint never blanks another widget.
@@ -751,10 +800,21 @@ export default function DashboardPage({
     return () => { cancelled = true; };
   }, [fetchPeriod, dateOffset, weekOffset]);
 
-  // Fetch longest focus data
+  // Fetch longest focus data.
+  //
+  // This used to run ONCE on mount (`[]`), so the widget was frozen for as long
+  // as the dashboard stayed open: a session that overtook the day's best after
+  // mount could never appear, and a session that closed was never picked up.
+  // It now re-polls.
+  //
+  // 60s rather than anything tighter because get-longest-focus scans the whole
+  // `logs` table with no LIMIT (this box has ~30k rows) to compute the all-time
+  // top 3. The part the user actually watches — the running session — is
+  // computed locally from the timer below, so it ticks every second regardless
+  // of this poll; the poll only refreshes what has been persisted.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       try {
         const api = await awaitApi();
         const data = await api.getLongestFocus();
@@ -765,8 +825,10 @@ export default function DashboardPage({
       } catch (_e) {
         if (!cancelled) setLongestFocusLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    load();
+    const id = window.setInterval(load, 60_000);
+    return () => { cancelled = true; window.clearInterval(id); };
   }, []);
 
   // Fetch today's gap data for unfilled time indicator
@@ -3008,7 +3070,7 @@ export default function DashboardPage({
 {isVisible('longest-focus') && (
                <div data-section="Longest Focus" className="relative w-full">
                 <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="longest-focus" iconOnly /></div>
-               <LongestFocusCard data={longestFocus} loading={longestFocusLoading} />
+               <LongestFocusCard data={longestFocusWithLive} loading={longestFocusLoading} />
               </div>
               )}
               </div>

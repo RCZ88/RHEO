@@ -23234,9 +23234,21 @@ electron_1.ipcMain.handle('get-longest-focus', async () => {
             return sessions.slice(0, limit);
         }
 
+        // Day/week cutoffs must be LOCAL, not UTC.
+        //
+        // `toISOString().split('T')[0]` yields the UTC day, and `timestamp` is a
+        // UTC ISO string, so the two agreed — but the USER'S day is local. On this
+        // box (UTC+7) between local 00:00 and 07:00 the UTC date is still
+        // yesterday, so "Longest Focus today" silently showed yesterday's best for
+        // seven hours a day. (Same class of bug as every other toISOString().split
+        // in this file — see MEMORY.md.)
+        //
+        // Fixed by comparing real epoch millis against a LOCAL midnight boundary
+        // instead of comparing date strings, which also avoids lexicographic
+        // string comparison of ISO timestamps entirely.
         const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const startOfWeekAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
 
         const allLogs = db.prepare(`
             SELECT id, timestamp, app, title, duration_ms, category, is_browser_tracking, domain, url
@@ -23244,8 +23256,12 @@ electron_1.ipcMain.handle('get-longest-focus', async () => {
             ORDER BY timestamp ASC
         `).all() as any[];
 
-        const todayLogs = allLogs.filter((l: any) => l.timestamp >= todayStr);
-        const weekLogs = allLogs.filter((l: any) => l.timestamp >= weekAgo);
+        const logEpoch = (l: any) => {
+            const t = new Date(l.timestamp).getTime();
+            return Number.isFinite(t) ? t : 0;
+        };
+        const todayLogs = allLogs.filter((l: any) => logEpoch(l) >= startOfToday);
+        const weekLogs = allLogs.filter((l: any) => logEpoch(l) >= startOfWeekAgo);
 
         const todayTop = findTopSessions(todayLogs);
         const weekTop = findTopSessions(weekLogs);

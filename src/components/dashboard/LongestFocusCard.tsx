@@ -12,6 +12,12 @@ interface FocusSession {
   durationSeconds: number;
   startTime: string;
   endTime: string;
+  /**
+   * Set by DashboardPage on the in-progress session, which has no `logs` row
+   * yet. It competes with the stored sessions on duration but must not be
+   * presented as a finished record.
+   */
+  live?: boolean;
 }
 
 interface LongestFocusData {
@@ -121,6 +127,14 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
                 {topSession!.durationSeconds >= 3600 && (
                   <span className="text-xs light:text-stone-400 ml-1">
                     ({formatDuration(topSession!.durationSeconds)})
+                  </span>
+                )}
+                {/* The number below is still counting up. Without this the card
+                    showed a moving value that looked like a finished record. */}
+                {topSession!.live && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/25 align-middle">
+                    <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                    Live
                   </span>
                 )}
               </motion.div>
