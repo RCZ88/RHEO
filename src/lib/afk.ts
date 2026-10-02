@@ -85,6 +85,19 @@ export function setAfkPrefs(patch: Partial<AfkPrefs>): AfkPrefs {
   next.enabled = !!next.enabled;
   if (!AFK_ACTIONS.some(a => a.value === next.action)) next.action = AFK_DEFAULTS.action;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+
+  // Mirror into userPreferences so the MAIN process can read it too. It cannot see
+  // localStorage, and it had its own inline `300` (5 min) in the sleep-gap guard,
+  // which meant AFK had two different definitions across the process boundary.
+  // Fire-and-forget: a failure here must never block the local update.
+  try {
+    const api = (window as any).deskflowAPI;
+    if (api?.setPreference) {
+      Promise.resolve(api.setPreference('afkThresholdMinutes', next.enabled ? next.thresholdMinutes : 0))
+        .catch(() => { /* main-side mirror is best-effort */ });
+    }
+  } catch { /* not fatal */ }
+
   try { window.dispatchEvent(new CustomEvent('afk-prefs-changed', { detail: next })); } catch { /* non-fatal */ }
   return next;
 }
