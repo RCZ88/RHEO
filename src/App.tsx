@@ -2971,7 +2971,7 @@ const devFireSmartFill = async () => {
     <TutorialProvider>
     <div className="flex flex-col h-screen overflow-hidden bg-[#121212] text-white">
       <TitleBar />
-      <AppBackground />
+      <AppBackground pathname={location.pathname} />
       <ServerErrorBanner />
       <div className="flex flex-1 min-h-0 relative">
       {/* Sidebar hidden on workspace (/terminal) and during solar overlay */}
