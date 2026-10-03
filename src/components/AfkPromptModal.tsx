@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { stopwatch } from '../lib/stopwatchStore';
 import { Activity, AlertCircle, BookOpen, Brain, Check, ChevronDown, Clock, Coffee, Dumbbell, Loader2, Lock, Minus, Moon, Plus, Sparkles, Sun, Tv, Unlock, X } from 'lucide-react';
 
 interface ExternalActivity {
@@ -274,8 +275,16 @@ export default function AfkPromptModal({
     // false when the batch insert was rejected — previously the modal showed
     // "Saved" regardless, so a failed write was indistinguishable from a good one
     // and the user reasonably concluded the app had lost their answer.
-    if (ok) setSaved(true);
-    else setSaveError("Couldn't save. Your answer was not recorded — try again.");
+    if (ok) {
+      // The gap has now been re-attributed to the activities the user picked,
+      // so the day's unfilled total must stop being counted. Gated on `ok` for
+      // the same reason `setSaved` is: resetting after a REJECTED write would
+      // discard the very time the user is still trying to account for.
+      stopwatch.resetAfterAfkFill();
+      setSaved(true);
+    } else {
+      setSaveError("Couldn't save. Your answer was not recorded — try again.");
+    }
   }
 
   const totalFormatted = formatElapsed(totalDurationSeconds);
@@ -294,7 +303,7 @@ export default function AfkPromptModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.92, opacity: 0, y: 10 }}
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-zinc-900/80 border border-white/10 rounded-xl w-full max-w-xl max-h-[min(640px,85vh)] overflow-y-auto"
+        className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-xl w-full max-w-xl max-h-[min(640px,85vh)] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         {/* Decorative gradient bar removed — single signal hue only */}
@@ -422,7 +431,7 @@ export default function AfkPromptModal({
                               const mins = parseInt(e.target.value) || 1;
                               setSegmentDuration(seg.id, mins * 60);
                             }}
-                            className="w-14 text-center text-xs text-zinc-300 font-mono tabular-nums bg-zinc-900/60 border border-zinc-700/30 rounded-lg px-1 py-1 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-14 text-center text-xs text-zinc-300 font-mono tabular-nums bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/30 rounded-lg px-1 py-1 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                           <span className="text-[10px] text-zinc-600 w-4">min</span>
                           <button
@@ -454,7 +463,7 @@ export default function AfkPromptModal({
                         {/* Activity picker trigger */}
                         <button
                           onClick={() => setPickingId(isPicking ? null : seg.id)}
-                          className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-900/60 hover:bg-zinc-800 transition-colors text-left border border-transparent hover:border-zinc-600/30"
+                          className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-800 transition-colors text-left border border-transparent hover:border-zinc-600/30"
                         >
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: act?.color || 'var(--color-card-sunken)' }} />
                           <span className={`text-xs ${act ? 'text-zinc-200 font-medium' : 'text-zinc-500 italic'}`}>
