@@ -303,21 +303,21 @@ export default function AfkPromptModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.92, opacity: 0, y: 10 }}
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-xl w-full max-w-xl max-h-[min(640px,85vh)] overflow-y-auto"
+        className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-white/[0.08] rounded-2xl w-full max-w-2xl max-h-[min(680px,85vh)] overflow-y-auto shadow-2xl shadow-black/40"
         onClick={e => e.stopPropagation()}
       >
         {/* Decorative gradient bar removed — single signal hue only */}
 
         <div className="p-5">
           {/* ── Header ── */}
-          <div className="flex items-start justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 ring-1 ring-amber-500/20">
-                <Clock className="w-5 h-5 text-amber-400" />
+          <div className="flex items-start justify-between mb-6">
+            <div className="flex items-center gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 ring-1 ring-amber-500/20">
+                <Clock className="w-4 h-4 text-amber-400" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-zinc-100">Back from a break?</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">
+                <h3 className="text-[15px] font-semibold text-zinc-100 tracking-[-0.01em]">While you were away</h3>
+                <p className="text-[11px] text-zinc-500 mt-1 font-mono tabular-nums">
                   {idleStartMs ? (
                     <>{formatTime(idleStartMs)} <span className="text-zinc-600">→</span> {formatTime(returnMs)}</>
                   ) : (
@@ -410,77 +410,110 @@ export default function AfkPromptModal({
                   const isPicking = pickingId === seg.id;
                   return (
                     <motion.div key={seg.id} layout initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-                      <div className="flex items-center gap-2 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/30 hover:border-zinc-600/40 transition-colors">
-                        {/* Color indicator */}
-                        <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: act?.color || 'var(--color-muted)' }} />
-                        {/* Duration controls */}
-                        <div className={`flex items-center gap-1 shrink-0 ${seg.locked ? 'opacity-40 pointer-events-none' : ''}`}>
-                          <button
-                            aria-label="Decrease by a minute"
-                            onClick={() => setSegmentDuration(seg.id, seg.durationSeconds - 60)}
-                            className="p-1 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={Math.floor(totalDurationSeconds / 60)}
-                            value={Math.round(seg.durationSeconds / 60)}
-                            onChange={e => {
-                              const mins = parseInt(e.target.value) || 1;
-                              setSegmentDuration(seg.id, mins * 60);
-                            }}
-                            className="w-14 text-center text-xs text-zinc-300 font-mono tabular-nums bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/30 rounded-lg px-1 py-1 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          />
-                          <span className="text-[10px] text-zinc-600 w-4">min</span>
-                          <button
-                            aria-label="Increase by a minute"
-                            onClick={() => setSegmentDuration(seg.id, seg.durationSeconds + 60)}
-                            className="p-1 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
+                      {/* A slot is one decision, not five controls side by side.
+                          The old row laid [ - 30 min + ] and [ Choose activity ]
+                          on one line at equal weight, so the number that people
+                          fiddle with competed with the choice they actually came
+                          to make. The activity is now the hero; duration and lock
+                          sit underneath it as a secondary toolbar. */}
+                      <div
+                        className={`relative rounded-xl border overflow-hidden transition-colors duration-150 ${
+                          seg.locked
+                            ? 'bg-amber-500/[0.07] border-amber-500/25'
+                            : isPicking
+                              ? 'bg-zinc-800/70 border-zinc-600/50'
+                              : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border-white/[0.06] hover:border-white/[0.12]'
+                        }`}
+                      >
+                        {/* activity colour rail */}
+                        <div
+                          className="absolute inset-y-0 left-0 w-[3px] transition-opacity"
+                          style={{ backgroundColor: act?.color || 'transparent', opacity: act ? 1 : 0 }}
+                        />
 
-                        {/* Pin this slot's duration. Adding or removing a slot
-                            redistributes the gap again; a locked slot keeps its
-                            length and the rest share out whatever is left. */}
-                        <button
-                          onClick={() => toggleLock(seg.id)}
-                          role="switch"
-                          aria-checked={!!seg.locked}
-                          title={seg.locked ? 'Locked - duration is pinned' : 'Lock this duration'}
-                          className={`shrink-0 p-1 rounded-md transition-colors duration-150 ${
-                            seg.locked
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                              : 'text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700 border border-transparent'
-                          }`}
-                        >
-                          {seg.locked ? <Lock size={11} /> : <Unlock size={11} />}
-                        </button>
-
-                        {/* Activity picker trigger */}
+                        {/* ── hero: what were you doing? ── */}
                         <button
                           onClick={() => setPickingId(isPicking ? null : seg.id)}
-                          className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-800 transition-colors text-left border border-transparent hover:border-zinc-600/30"
+                          className="w-full flex items-center gap-3 pl-5 pr-3.5 py-3 text-left group"
                         >
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: act?.color || 'var(--color-card-sunken)' }} />
-                          <span className={`text-xs ${act ? 'text-zinc-200 font-medium' : 'text-zinc-500 italic'}`}>
-                            {act ? act.name : 'Choose activity'}
+                          <div
+                            className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white/10"
+                            style={{ backgroundColor: act?.color || 'var(--color-card-sunken)' }}
+                          />
+                          <span
+                            className={`text-sm truncate transition-colors ${
+                              act ? 'text-zinc-100 font-medium' : 'text-zinc-500'
+                            }`}
+                          >
+                            {act ? act.name : 'What were you doing?'}
                           </span>
-                          <ChevronDown className={`w-3 h-3 ml-auto text-zinc-600 transition-transform ${isPicking ? 'rotate-180' : ''}`} />
+                          <ChevronDown
+                            className={`w-4 h-4 ml-auto shrink-0 text-zinc-600 transition-transform duration-200 group-hover:text-zinc-400 ${
+                              isPicking ? 'rotate-180' : ''
+                            }`}
+                          />
                         </button>
 
-                        {/* Remove segment */}
-                        {segments.length > 1 && (
+                        {/* ── secondary: how long, and is it pinned? ── */}
+                        <div className="flex items-center gap-1 pl-5 pr-3 pb-2.5">
+                          <div className={`flex items-center gap-0.5 ${seg.locked ? 'opacity-40 pointer-events-none' : ''}`}>
+                            <button
+                              aria-label="Decrease by a minute"
+                              onClick={() => setSegmentDuration(seg.id, seg.durationSeconds - 60)}
+                              className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <div className="flex items-baseline gap-1 px-2 py-1 rounded-lg bg-black/25 light:bg-black/[0.03] border border-white/[0.05]">
+                              <input
+                                type="number"
+                                min={1}
+                                max={Math.floor(totalDurationSeconds / 60)}
+                                value={Math.round(seg.durationSeconds / 60)}
+                                onChange={e => {
+                                  const mins = parseInt(e.target.value) || 1;
+                                  setSegmentDuration(seg.id, mins * 60);
+                                }}
+                                className="w-8 text-center text-xs text-zinc-200 font-mono tabular-nums bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                              <span className="text-[10px] text-zinc-600">min</span>
+                            </div>
+                            <button
+                              aria-label="Increase by a minute"
+                              onClick={() => setSegmentDuration(seg.id, seg.durationSeconds + 60)}
+                              className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          {/* Pin this slot's duration. Adding or removing a slot
+                              redistributes the gap again; a locked slot keeps its
+                              length and the rest share out whatever is left. */}
                           <button
-                            onClick={() => removeSegment(seg.id)}
-                            className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-500 hover:text-red-400 transition-colors shrink-0"
+                            onClick={() => toggleLock(seg.id)}
+                            role="switch"
+                            aria-checked={!!seg.locked}
+                            className={`ml-1 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                              seg.locked
+                                ? 'bg-amber-500/15 text-amber-300'
+                                : 'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'
+                            }`}
                           >
-                            <X className="w-3.5 h-3.5" />
+                            {seg.locked ? <Lock size={11} /> : <Unlock size={11} />}
+                            {seg.locked ? 'Pinned' : 'Pin'}
                           </button>
-                        )}
+
+                          {segments.length > 1 && (
+                            <button
+                              onClick={() => removeSegment(seg.id)}
+                              aria-label="Remove this slot"
+                              className="ml-auto p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Inline activity picker */}

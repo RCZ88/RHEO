@@ -101,108 +101,123 @@ export default function SleepDetectionModal({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.92, opacity: 0, y: 10 }}
           transition={{ type: 'spring', duration: 0.4, bounce: 0.25 }}
-          className="bg-zinc-900/95 border border-zinc-700/50 rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl"
+          className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl"
         >
-          <div className="h-1 bg-gradient-to-r from-emerald-500/40 via-teal-500/40 to-emerald-500/40" />
-
-          <div className="p-5">
+          <div className="p-5 sm:p-6">
             {/* Header */}
-            <div className="flex items-start justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 ring-1 ring-emerald-500/20">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex items-center gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 ring-1 ring-emerald-500/20">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-zinc-100">Sleep saved</h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {allFilled
-                      ? 'All gaps filled'
-                      : adjacentGaps.length > 0
-                        ? 'Fill untracked time before & after sleep'
-                        : 'No untracked time found'}
+                  <h3 className="text-[15px] font-semibold text-zinc-100 tracking-[-0.01em]">
+                    {allFilled ? 'All gaps accounted for' : adjacentGaps.length > 0 ? 'Fill in the gaps' : 'Nothing untracked'}
+                  </h3>
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    {adjacentGaps.length > 0
+                      ? 'Time around your sleep that wasn\u2019t tracked'
+                      : 'No untracked time around this sleep'}
                   </p>
                 </div>
               </div>
-              <button onClick={handleDone} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors">
+              <button onClick={handleDone} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-200 transition-colors">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
               </button>
             </div>
 
             {adjacentGaps.length === 0 ? (
-              <div className="p-4 rounded-xl bg-zinc-800/40 border border-zinc-700/30 text-center text-sm text-zinc-400">
-                No untracked gaps found around this sleep period.
+              <div className="py-8 rounded-xl border border-dashed border-white/[0.08] text-center">
+                <Moon className="w-6 h-6 mx-auto mb-2.5 text-zinc-700" />
+                <p className="text-[13px] text-zinc-400">No untracked gaps around this sleep</p>
+                <p className="text-[11px] text-zinc-600 mt-1">Everything either side was already logged</p>
               </div>
             ) : (
               <>
-              <div className="flex flex-col gap-3 mb-5">
-                {adjacentGaps.map((g) => {
-                  const isFilled = filledGapStarts?.includes(g.start);
-                  const durMin = Math.round(g.durationSeconds / 60);
-                  const h = Math.floor(durMin / 60);
-                  const m = durMin % 60;
-                  const durStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
-                  return (
-                    <div key={g.start} className={`rounded-xl border p-3 transition-colors ${
-                      isFilled
-                        ? 'border-emerald-500/20 bg-emerald-500/5'
-                        : 'border-zinc-700/30 bg-zinc-800/40'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                          g.relation === 'before' ? 'bg-amber-500/10' : 'bg-emerald-500/10'
-                        }`}>
-                          {g.relation === 'before' ? (
-                            <Sunset className="w-4 h-4 text-amber-400" />
-                          ) : (
-                            <Sunrise className="w-4 h-4 text-emerald-400" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-medium text-zinc-200">
-                            {g.relation === 'before' ? 'Before sleep' : 'After wake'}
-                          </div>
-                          <div className="text-[11px] text-zinc-500 font-mono tabular-nums">
-                            {fmtGapRange(g.start, g.end)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                            g.relation === 'before' ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'
+                {/* The two gaps only make sense as two sides of one night, so this
+                    is drawn as a timeline with the sleep itself in the middle
+                    rather than as a flat list of two unrelated-looking cards. */}
+                <div className="relative pl-10">
+                  <div className="absolute left-[13px] top-3 bottom-3 w-px bg-white/[0.07]" />
+
+                  {adjacentGaps.map((g, i) => {
+                    const isFilled = filledGapStarts?.includes(g.start);
+                    const before = g.relation === 'before';
+                    const durMin = Math.round(g.durationSeconds / 60);
+                    const h = Math.floor(durMin / 60);
+                    const m = durMin % 60;
+                    const durStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                    const Node = before ? Sunset : Sunrise;
+                    return (
+                      <div key={g.start}>
+                        <div className={`relative flex items-start gap-3 pb-3 ${isFilled ? 'opacity-55' : ''}`}>
+                          <div className={`absolute -left-10 top-0.5 w-[27px] h-[27px] rounded-full flex items-center justify-center ring-4 ring-zinc-900/95 ${
+                            isFilled
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : before
+                                ? 'bg-amber-500/15 text-amber-400'
+                                : 'bg-emerald-500/15 text-emerald-400'
                           }`}>
-                            {durStr}
-                          </span>
-                          {isFilled && (
-                            <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Filled
-                            </span>
-                          )}
+                            <Node className="w-3.5 h-3.5" />
+                          </div>
+                          <div className={`flex-1 min-w-0 rounded-xl border px-3.5 py-3 transition-colors ${
+                            isFilled ? 'border-emerald-500/20 bg-emerald-500/[0.04]' : 'border-white/[0.07] bg-white/[0.02]'
+                          }`}>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[13px] font-medium text-zinc-200">
+                                {before ? 'Before you slept' : 'After you woke'}
+                              </span>
+                              <span className={`text-[11px] font-mono tabular-nums px-1.5 py-0.5 rounded-md ${
+                                before ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'
+                              }`}>
+                                {durStr}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-zinc-500 font-mono tabular-nums mt-1">{fmtGapRange(g.start, g.end)}</div>
+                            {isFilled && (
+                              <div className="flex items-center gap-1 text-[11px] text-emerald-400 mt-1.5">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Filled
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* the sleep block sits between the two flanks */}
+                        {i === 0 && adjacentGaps.length > 1 && adjacentGaps[1].relation === 'after' && (
+                          <div className="relative flex items-center gap-3 pb-3">
+                            <div className="absolute -left-10 top-0.5 w-[27px] h-[27px] rounded-full bg-violet-500/15 text-violet-300 flex items-center justify-center ring-4 ring-zinc-900/95">
+                              <Moon className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-white/[0.05] bg-black/20">
+                              <span className="text-[13px] text-zinc-300">Asleep</span>
+                              <span className="text-[11px] text-zinc-600 font-mono tabular-nums ml-auto">logged</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {adjacentGaps.some(g => !filledGapStarts?.includes(g.start)) && (
-                <button
-                  onClick={() => {
-                    const unfilled = adjacentGaps
-                      .filter(g => !filledGapStarts?.includes(g.start))
-                      .map(g => ({ start: g.start, end: g.end, duration_seconds: g.durationSeconds }));
-                    onFillGapRequest?.(unfilled);
-                  }}
-                  className="w-full px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-all mb-3"
-                >
-                  Fill all {adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length} gaps
-                </button>
-              )}
+                    );
+                  })}
+                </div>
+
+                {adjacentGaps.some(g => !filledGapStarts?.includes(g.start)) && (
+                  <button
+                    onClick={() => {
+                      const unfilled = adjacentGaps
+                        .filter(g => !filledGapStarts?.includes(g.start))
+                        .map(g => ({ start: g.start, end: g.end, duration_seconds: g.durationSeconds }));
+                      onFillGapRequest?.(unfilled);
+                    }}
+                    className="w-full mt-1 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-900 bg-zinc-100 hover:bg-white active:scale-[0.99] transition-all"
+                  >
+                    Fill {adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length === 1 ? 'this gap' : `all ${adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length} gaps`}
+                  </button>
+                )}
               </>
             )}
-
-            {/* Done button */}
             <button
               onClick={handleDone}
-              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 transition-all shadow-lg shadow-emerald-600/20"
+              className="w-full mt-2 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] border border-white/[0.07] transition-colors"
             >
               {allFilled ? 'Done' : 'Skip — fill later from External page'}
             </button>
@@ -279,7 +294,7 @@ export default function SleepDetectionModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.92, opacity: 0, y: 10 }}
         transition={{ type: 'spring', duration: 0.4, bounce: 0.25 }}
-        className="bg-zinc-900/95 border border-zinc-700/50 rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl"
+        className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl"
       >
         {/* Decorative bar */}
         <div className="h-1 bg-gradient-to-r from-indigo-500/40 via-violet-500/40 to-indigo-500/40" />
