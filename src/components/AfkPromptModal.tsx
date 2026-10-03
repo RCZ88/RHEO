@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Plus, X, Check, Minus, ChevronDown, Activity, Moon, Sun, Brain, Coffee, Tv, BookOpen, Dumbbell, Sparkles, Loader2 } from 'lucide-react';
+import { Activity, AlertCircle, BookOpen, Brain, Check, ChevronDown, Clock, Coffee, Dumbbell, Loader2, Lock, Minus, Moon, Plus, Sparkles, Sun, Tv, Unlock, X } from 'lucide-react';
 
 interface ExternalActivity {
   id: number;
@@ -14,6 +14,14 @@ interface Segment {
   id: number;
   activityId: string | null;
   durationSeconds: number;
+  /**
+   * A locked slot keeps its exact duration. Adding or removing a slot
+   * redistributes the gap again, and that used to overwrite EVERY duration, so a
+   * carefully built 30m/45m split collapsed back to even shares the moment you
+   * added a third slot. Locking pins the slots you have already decided and lets
+   * the remainder be shared out around them.
+   */
+  locked?: boolean;
 }
 
 const ACTIVITY_ICONS: Record<string, typeof Moon> = {
@@ -64,7 +72,8 @@ export default function AfkPromptModal({
   idleStartMs: number | null;
   returnMs: number;
   queueRemaining: number;
-  onConfirm: (segments: { activityId: string; startedAt: string; endedAt: string }[]) => void;
+  /** Resolves true only when the rows were actually written. */
+  onConfirm: (segments: { activityId: string; startedAt: string; endedAt: string }[]) => boolean | Promise<boolean>;
   onDismiss: () => void;
   onNotAfk: () => void;
   defaultNotAfk?: boolean;
@@ -86,6 +95,7 @@ export default function AfkPromptModal({
   const barRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const minPerSegment = 60;
 
@@ -104,12 +114,18 @@ export default function AfkPromptModal({
     const bar = barRef.current;
     if (!bar) return;
 
-    function onMouseMove(ev: MouseEvent) {
+    // Arrow, not a `function` declaration: a hoisted declaration can be called
+    // before the `if (!bar) return` above, so TypeScript conservatively discards
+    // the narrowing and reports `bar` as possibly null inside the closure.
+    const onMouseMove = (ev: MouseEvent) => {
       const rect = bar.getBoundingClientRect();
       const pct = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
 
       setSegments(prev => {
         if (idx >= prev.length - 1) return prev;
+        // A locked slot is pinned: dragging its edge would move it, so the drag
+        // is refused rather than silently overwriting the lock.
+        if (prev[idx]?.locked || prev[idx + 1]?.locked) return prev;
         const sumPrev = prev.slice(0, idx).reduce((s, seg) => s + seg.durationSeconds, 0);
         const pairTotal = prev[idx].durationSeconds + prev[idx + 1].durationSeconds;
         const midRaw = Math.round(pct * totalDurationSeconds - sumPrev);
@@ -120,28 +136,62 @@ export default function AfkPromptModal({
           return seg;
         });
       });
-    }
+    };
 
-    function onMouseUp() {
+    const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-    }
+    };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   }
 
-  function redistributeEven(count: number): Omit<Segment, 'activityId'>[] {
+  /**
+   * Share `totalDurationSeconds` across `count` slots, leaving locked ones alone.
+   *
+   * Replaces the old `redistributeEven`, which recomputed every slot from
+   * scratch and so silently discarded the user's split whenever the number of
+   * slots changed. Locked durations are subtracted first and the remainder is
+   * divided only among the unlocked slots, so pinning one slot never moves it.
+   *
+   * If the locks leave too little for a legal minimum on the rest, the locks are
+   * trimmed from the end rather than emitting a negative or zero-length slot.
+   */
+  function redistribute(count: number, current: Segment[]): number[] {
     if (count === 0) return [];
-    const per = Math.floor(totalDurationSeconds / count);
-    const rem = totalDurationSeconds - per * count;
-    return Array.from({ length: count }, (_, i) => ({
-      durationSeconds: per + (i === count - 1 ? rem : 0),
-    }));
+    const lockedDurations = current.filter(s => s.locked).map(s => s.durationSeconds);
+    const unlockedCount = count - lockedDurations.length;
+    if (unlockedCount <= 0) {
+      return [...lockedDurations, ...Array.from({ length: count - lockedDurations.length }, () => 0)];
+    }
+
+    let lockedTotal = lockedDurations.reduce((s, d) => s + d, 0);
+    let unlockedTotal = totalDurationSeconds - lockedTotal;
+    if (unlockedTotal < unlockedCount * minPerSegment) {
+      let deficit = unlockedCount * minPerSegment - unlockedTotal;
+      for (let i = lockedDurations.length - 1; i >= 0 && deficit > 0; i--) {
+        const take = Math.min(deficit, Math.max(0, lockedDurations[i] - minPerSegment));
+        lockedDurations[i] -= take;
+        deficit -= take;
+      }
+      lockedTotal = lockedDurations.reduce((s, d) => s + d, 0);
+      unlockedTotal = totalDurationSeconds - lockedTotal;
+    }
+
+    const per = Math.floor(unlockedTotal / unlockedCount);
+    const rem = unlockedTotal - per * unlockedCount;
+    const shares = Array.from({ length: unlockedCount }, (_, i) => per + (i === unlockedCount - 1 ? rem : 0));
+
+    const out: number[] = [];
+    let k = 0;
+    for (const seg of current) out.push(seg.locked ? lockedDurations.shift()! : shares[k++]);
+    return out;
   }
 
   function setSegmentDuration(id: number, newSeconds: number) {
     setSegments(prev => {
+      if (prev.find(s => s.id === id)?.locked) return prev;
       const otherCount = prev.length - 1;
       if (otherCount === 0) {
         return prev.map(s => s.id === id ? { ...s, durationSeconds: newSeconds } : s);
@@ -166,11 +216,11 @@ export default function AfkPromptModal({
   function addSegment() {
     segCounter.current += 1;
     setSegments(prev => {
-      const even = redistributeEven(prev.length + 1);
-      return [...prev, { id: segCounter.current, activityId: null, durationSeconds: 0 }].map((s, i) => ({
-        ...s,
-        durationSeconds: even[i].durationSeconds,
-      }));
+      const next = [...prev, { id: segCounter.current, activityId: null, durationSeconds: 0 }];
+      // Distribute against the PREVIOUS segments: those are the ones carrying the
+      // `locked` flags, and the newly appended slot has none.
+      const shares = redistribute(next.length, prev);
+      return next.map((seg, i) => ({ ...seg, durationSeconds: shares[i] ?? 0 }));
     });
   }
 
@@ -178,9 +228,14 @@ export default function AfkPromptModal({
     setSegments(prev => {
       const filtered = prev.filter(s => s.id !== id);
       if (filtered.length === 0) return filtered;
-      const even = redistributeEven(filtered.length);
-      return filtered.map((s, i) => ({ ...s, durationSeconds: even[i].durationSeconds }));
+      const shares = redistribute(filtered.length, filtered);
+      return filtered.map((s, i) => ({ ...s, durationSeconds: shares[i] ?? s.durationSeconds }));
     });
+  }
+
+  /** Pin or unpin a slot so redistribution leaves its duration alone. */
+  function toggleLock(id: number) {
+    setSegments(prev => prev.map(s => (s.id === id ? { ...s, locked: !s.locked } : s)));
   }
 
   function pickActivity(id: number, activityId: string) {
@@ -192,15 +247,35 @@ export default function AfkPromptModal({
     const filled = segments.filter(s => s.activityId);
     if (filled.length === 0) return;
     setIsSaving(true);
+    setSaveError(null);
+
+    // Walk the cursor across EVERY segment, not just the filled ones.
+    //
+    // This used to iterate `filled` only, so leaving the middle segment blank
+    // made the third segment inherit the second one's slot: it was written with
+    // timestamps overlapping segment one and with segment two's window silently
+    // missing from external_sessions. Skipping a middle segment is a normal thing
+    // to do ("I was in a meeting for the first half"), so this corrupted the
+    // timeline exactly when the user was being selective. The cursor must track
+    // wall-clock position regardless of whether a segment gets written.
     const cursor = new Date(periodStart);
-    const result = filled.map(seg => {
+    const result: { activityId: string; startedAt: string; endedAt: string }[] = [];
+    for (const seg of segments) {
       const segStart = cursor.toISOString();
       cursor.setTime(cursor.getTime() + seg.durationSeconds * 1000);
-      return { activityId: seg.activityId!, startedAt: segStart, endedAt: cursor.toISOString() };
-    });
-    await onConfirm(result);
+      if (seg.activityId) {
+        result.push({ activityId: seg.activityId, startedAt: segStart, endedAt: cursor.toISOString() });
+      }
+    }
+
+    const ok = await onConfirm(result);
     setIsSaving(false);
-    setSaved(true);
+    // Only claim success when the write actually succeeded. `onConfirm` resolves
+    // false when the batch insert was rejected — previously the modal showed
+    // "Saved" regardless, so a failed write was indistinguishable from a good one
+    // and the user reasonably concluded the app had lost their answer.
+    if (ok) setSaved(true);
+    else setSaveError("Couldn't save. Your answer was not recorded — try again.");
   }
 
   const totalFormatted = formatElapsed(totalDurationSeconds);
@@ -274,7 +349,7 @@ export default function AfkPromptModal({
                     key={seg.id}
                     layout
                     className="h-full flex items-center justify-center text-[11px] font-medium text-white/80 truncate px-1 transition-colors relative"
-                    style={{ flex: `${pct} 1 0%`, backgroundColor: act?.color || '#52525b' }}
+                    style={{ flex: `${pct} 1 0%`, backgroundColor: act?.color || 'var(--color-card-sunken)' }}
                   >
                     <span className="truncate drop-shadow-sm">{pct > 0.1 ? formatElapsed(seg.durationSeconds) : ''}</span>
                   </motion.div>,
@@ -328,10 +403,11 @@ export default function AfkPromptModal({
                     <motion.div key={seg.id} layout initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
                       <div className="flex items-center gap-2 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/30 hover:border-zinc-600/40 transition-colors">
                         {/* Color indicator */}
-                        <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: act?.color || '#3f3f46' }} />
+                        <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: act?.color || 'var(--color-muted)' }} />
                         {/* Duration controls */}
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className={`flex items-center gap-1 shrink-0 ${seg.locked ? 'opacity-40 pointer-events-none' : ''}`}>
                           <button
+                            aria-label="Decrease by a minute"
                             onClick={() => setSegmentDuration(seg.id, seg.durationSeconds - 60)}
                             className="p-1 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
                           >
@@ -350,6 +426,7 @@ export default function AfkPromptModal({
                           />
                           <span className="text-[10px] text-zinc-600 w-4">min</span>
                           <button
+                            aria-label="Increase by a minute"
                             onClick={() => setSegmentDuration(seg.id, seg.durationSeconds + 60)}
                             className="p-1 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
                           >
@@ -357,12 +434,29 @@ export default function AfkPromptModal({
                           </button>
                         </div>
 
+                        {/* Pin this slot's duration. Adding or removing a slot
+                            redistributes the gap again; a locked slot keeps its
+                            length and the rest share out whatever is left. */}
+                        <button
+                          onClick={() => toggleLock(seg.id)}
+                          role="switch"
+                          aria-checked={!!seg.locked}
+                          title={seg.locked ? 'Locked - duration is pinned' : 'Lock this duration'}
+                          className={`shrink-0 p-1 rounded-md transition-colors duration-150 ${
+                            seg.locked
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              : 'text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700 border border-transparent'
+                          }`}
+                        >
+                          {seg.locked ? <Lock size={11} /> : <Unlock size={11} />}
+                        </button>
+
                         {/* Activity picker trigger */}
                         <button
                           onClick={() => setPickingId(isPicking ? null : seg.id)}
                           className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-900/60 hover:bg-zinc-800 transition-colors text-left border border-transparent hover:border-zinc-600/30"
                         >
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: act?.color || '#52525b' }} />
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: act?.color || 'var(--color-card-sunken)' }} />
                           <span className={`text-xs ${act ? 'text-zinc-200 font-medium' : 'text-zinc-500 italic'}`}>
                             {act ? act.name : 'Choose activity'}
                           </span>
@@ -533,8 +627,8 @@ export default function AfkPromptModal({
               whileTap={{ scale: 0.98 }}
               onClick={onNotAfk}
               className={`px-4 py-2 rounded-xl text-xs font-medium transition-colors ${
-                defaultNotAfk
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
+                defaultNotAfk
+                  ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-100'
                   : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700/30'
               }`}
             >
@@ -546,20 +640,18 @@ export default function AfkPromptModal({
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="px-5 py-2 rounded-xl text-xs font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-2"
+                className="px-5 py-2 rounded-xl text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-2"
               >
                 <Check className="w-3.5 h-3.5" />
                 Saved
               </motion.div>
             ) : (
               <motion.button
-                whileHover={hasAnyActivity && !isSaving ? { scale: 1.02 } : {}}
-                whileTap={hasAnyActivity && !isSaving ? { scale: 0.98 } : {}}
-                onClick={handleSave}
+                onClick={handleSave}
                 disabled={!hasAnyActivity || isSaving}
                 className={`px-5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 ${
                   hasAnyActivity && !isSaving
-                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+                    ? 'bg-amber-500 hover:bg-amber-400 text-zinc-950'
                     : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
                 }`}
               >
@@ -571,9 +663,15 @@ export default function AfkPromptModal({
                 {isSaving ? 'Saving...' : `Save${filledCount > 0 ? ` (${filledCount})` : ''}`}
               </motion.button>
             )}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
+            {saveError && (
+              <div className='flex items-start gap-2 px-4 pb-3'>
+                <AlertCircle className='h-3.5 w-3.5 shrink-0 text-red-400 mt-px' />
+                <span className='text-[11px] text-red-300'>{saveError}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
 }
