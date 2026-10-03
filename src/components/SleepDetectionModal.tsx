@@ -58,6 +58,7 @@ export default function SleepDetectionModal({
   activities = [],
   sessions = [],
   onFillGapRequest,
+  onFillGap,
   filledGapStarts = [],
 }: {
   data: { gapMinutes: number; suggestedBedtime: string; suggestedWakeTime: string };
@@ -79,6 +80,8 @@ export default function SleepDetectionModal({
   activities?: Array<{ id: string | number; name: string; category?: string }>;
   sessions?: Array<{ app?: string; activity?: string; [k: string]: unknown }>;
   onFillGapRequest?: (gaps: Array<{ start: string; end: string; duration_seconds: number }>) => void;
+  /** Open the splitter for ONE named gap, so before/after can be done separately. */
+  onFillGap?: (gap: { start: string; end: string; duration_seconds: number }) => void;
   filledGapStarts?: string[];
 }) {
   console.log('%c[SleepDetectionModal] v1.4 date picker + GapFillModal integration', 'color: #fbbf24; font-weight: bold');
@@ -174,12 +177,25 @@ export default function SleepDetectionModal({
                               </span>
                             </div>
                             <div className="text-[11px] text-zinc-500 font-mono tabular-nums mt-1">{fmtGapRange(g.start, g.end)}</div>
-                            {isFilled && (
-                              <div className="flex items-center gap-1 text-[11px] text-emerald-400 mt-1.5">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Filled
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 mt-2">
+                              {isFilled ? (
+                                <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Filled
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => onFillGap?.({ start: g.start, end: g.end, duration_seconds: g.durationSeconds })}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                                    before
+                                      ? 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/25'
+                                      : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+                                  }`}
+                                >
+                                  Fill this gap
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -210,7 +226,7 @@ export default function SleepDetectionModal({
                     }}
                     className="w-full mt-1 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-900 bg-zinc-100 hover:bg-white active:scale-[0.99] transition-all"
                   >
-                    Fill {adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length === 1 ? 'this gap' : `all ${adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length} gaps`}
+                    Fill {adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length === 1 ? 'this gap' : 'next gap'}
                   </button>
                 )}
               </>

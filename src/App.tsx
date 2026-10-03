@@ -3389,6 +3389,13 @@ const devFireSmartFill = async () => {
                     setSmartFillSessions(sleepFillSessions || []);
                   }
                 }}
+onFillGap={(gap) => {
+                  // Open the splitter for exactly the gap that was clicked.
+                  // GapFillModal takes a single `gap` as well as `multiGaps`, so
+                  // a named gap needs no new code path — just pass that one.
+                  setSleepGapFillTarget(gap);
+                  setSleepGapQueue([]);
+                }}
                 filledGapStarts={sleepFilledGapStarts}
               />
             )}
