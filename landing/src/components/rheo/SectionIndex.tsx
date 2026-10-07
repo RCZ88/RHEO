@@ -2,18 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 
+/**
+ * The five sections of the page, in order.
+ *
+ * WAS eleven entries; six were removed when the architecture was restructured
+ * (RESULT.md §1). This list must match the mount chain in `app/page.tsx` exactly,
+ * or the dot rail links to ids that no longer exist.
+ */
 const SECTIONS = [
-  { id: "hero", label: "Hero" },
-  { id: "manifesto", label: "Observe" },
+  { id: "hero", label: "Claim" },
   { id: "act-record", label: "Record" },
-  { id: "capabilities", label: "Capabilities" },
-  { id: "understand", label: "Understand" },
-  { id: "learn", label: "Learn" },
-  { id: "atlas", label: "Atlas" },
-  { id: "flow", label: "Flow" },
-  { id: "gallery", label: "Surfaces" },
-  { id: "instruments", label: "Ring" },
-  { id: "download", label: "Download" },
+  { id: "gallery", label: "App" },
+  { id: "understand", label: "Mind" },
+  { id: "download", label: "Get it" },
 ];
 
 const RING_R = 11;

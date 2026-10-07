@@ -82,6 +82,13 @@ export default function Download() {
           the day it leaves preview.
         </motion.p>
 
+          {/*
+            REMOVED 2026-10-07 — this section rendered a Finance screenshot under
+            the headline "OWN YOUR HOURS.": a banking capture sitting on the
+            download CTA, wired to nothing. Finance is one screen of the app, so
+            #gallery owns it and shows it among the other 16.
+          } satisfies null}
+
         {/* Three OS cards — shadcn Card primitives */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

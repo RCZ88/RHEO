@@ -81,10 +81,18 @@ export function RealClip({
   poster,
   className = "",
   ratio,
-}: Base & { poster?: string }) {
+  /**
+   * Show a play/pause control. WCAG 2.2.2: any media that moves for more than
+   * 5 seconds must offer a way to stop it. Default OFF because the loops that
+   * autoplay on intersection are decorative and generally paired with a static
+   * alternative somewhere else on the page.
+   */
+  pauseControl = false,
+}: Base & { poster?: string; pauseControl?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [reduced, setReduced] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -94,10 +102,12 @@ export function RealClip({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  // A user-paused video must STAY paused even if it scrolls back into view,
+  // otherwise the IntersectionObserver autoplay overrides the user's decision.
   useEffect(() => {
     const el = ref.current;
     const video = videoRef.current;
-    if (!el || !video || reduced) return;
+    if (!el || !video || reduced || paused) return;
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -109,7 +119,7 @@ export function RealClip({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [reduced]);
+  }, [reduced, paused]);
 
   return (
     <figure className={className} style={{ margin: 0 }}>
@@ -135,7 +145,7 @@ export function RealClip({
           }}
         />
       </div>
-      {caption ? (
+      {caption || pauseControl ? (
         <figcaption
           className="mono"
           style={{
@@ -144,9 +154,32 @@ export function RealClip({
             letterSpacing: "0.14em",
             textTransform: "uppercase",
             marginTop: 18,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
           }}
         >
-          {caption}
+          {caption ? <span>{caption}</span> : null}
+          {pauseControl ? (
+            <button
+              type="button"
+              className="clip-pause"
+              aria-label={paused ? `Play ${alt}` : `Pause ${alt}`}
+              onClick={() => {
+                const v = videoRef.current;
+                if (!v) return;
+                if (v.paused) {
+                  void v.play().catch(() => {});
+                  setPaused(false);
+                } else {
+                  v.pause();
+                  setPaused(true);
+                }
+              }}
+            >
+              {paused ? "PLAY" : "PAUSE"}
+            </button>
+          ) : null}
         </figcaption>
       ) : null}
     </figure>

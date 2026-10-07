@@ -1764,3 +1764,152 @@ section[id] {
     opacity: 0;
   }
 }
+
+/* ===================================================================
+   GALLERY — segmented control (still / motion), thumbnail index,
+   clip pause button. Additive only; the snap rail above is untouched.
+   =================================================================== */
+
+/* segmented radiogroup: STILL | MOTION. Renders ONLY on screens that
+   have a recording, so a screen without one shows no dead control. */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.seg-btn {
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: #63636b;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.seg-btn:hover {
+  color: #a1a1aa;
+}
+.seg-btn[data-selected="true"] {
+  color: #050506;
+  background: #f4f4f5;
+}
+.seg-btn:active {
+  transform: scale(0.97);
+}
+.seg-btn:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* WCAG 2.2.2 pause control on looping clips */
+.clip-pause {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: transparent;
+  color: #a1a1aa;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.clip-pause:hover {
+  color: #f4f4f5;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.clip-pause:active {
+  transform: scale(0.97);
+}
+.clip-pause:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* the index: every screen at a glance. NOT a carousel — no drag, no 3D,
+   no second navigator. It is the "whole app" claim made visible. */
+.thumb-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+.thumb {
+  position: relative;
+  width: 100%;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #050506;
+  cursor: pointer;
+  opacity: 0.62;
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.thumb:hover {
+  opacity: 0.88;
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.thumb:active {
+  transform: scale(0.98);
+}
+.thumb[data-active="true"] {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.thumb:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 3px;
+}
+.thumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+.thumb span {
+  display: block;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: #8a8a94;
+  padding: 7px 8px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* a dot, not a ▶ glyph: this screen has a recording */
+.thumb-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg-btn,
+  .clip-pause,
+  .thumb {
+    transition: none;
+  }
+}
