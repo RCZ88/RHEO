@@ -32,7 +32,6 @@
 [build]
   base    = "landing"
   command = "npm run build"
-  publish = ".next"
 
 [build.environment]
   # Pin Node. With no .nvmrc and no "engines", Netlify picks its own default,
