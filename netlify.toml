@@ -3,10 +3,10 @@
 # WHY BASE = "landing" INSTEAD OF SPLITTING THE REPO
 # ----------------------------------------------------
 # Measured 2026-10-06: the whole git-tracked repo is 21 MB / 5582 files, of
-# which `landing/` is 11 MB. `du` reports 1.2 GB for `landing/` but that is a
-# STALE GITLINK (mode 160000, no .gitmodules) pointing at `prev-ver-backup/`,
-# which contains a nested .git and node_modules. It is 1 tracked pointer, not
-# 1.2 GB of content.
+# which `landing/` is 11 MB. `du` reports 1.2 GB for `landing/prev-ver-backup`
+# because it is a stale backup directory holding a nested .git and its own
+# node_modules — it is untracked (tsconfig excludes it too) and no longer has
+# the orphaned gitlink that used to break `git submodule update` here.
 #
 # So the clone Netlify already does is ~21 MB and completes in seconds. That is
 # NOT billed against the 300 build-minute free tier and it is NOT the problem to
@@ -21,6 +21,13 @@
 # never installed, never compiled, and never uploaded as build output. The app
 # is built and shipped by CZ locally (AGENTS.md §0-0) and is not this site's
 # job.
+#
+# `publish` is RELATIVE TO `base`. Writing "landing/.next" here resolves to
+# /landing/landing/.next and silently publishes nothing.
+#
+# There are two lockfiles in this repo (root + landing/), which makes Next 16's
+# Turbopack guess the workspace root from the repo root. Harmless, but noisy —
+# `turbopack.root` in landing/next.config.ts silences it if it ever matters.
 
 [build]
   base    = "landing"
