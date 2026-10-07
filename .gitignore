@@ -12,6 +12,7 @@ dist
 dist-ssr
 dist-electron
 dist-tmp
+dist-prev
 *.local
 
 # Release builds (too large for GitHub)
@@ -139,6 +140,17 @@ CZVault/
 !design/media/clips/
 !design/media/context/
 
+# The landing page's real captures MUST be tracked. Measured 2026-10-06: 25
+# files, 18 MB, largest single file 1.80 MB — far under GitHub's 100 MB block
+# and its 50 MB warning, so plain git is correct here and Git LFS is not needed.
+#
+# Without these lines the `*.png` / `*.mp4` rules above ignore every capture,
+# `git ls-files landing/public` returns 4, and a GitHub-connected Netlify build
+# deploys the entire site with NO imagery — empty hero, empty gallery, empty
+# bento. The page still "builds fine", which is what makes it easy to miss.
+!landing/public/media/
+!landing/public/media/**
+
 # Backup files
 *.bak
 *.bak.*
@@ -207,3 +219,4 @@ src.old/
 
 # Extracted agent-visualization artifacts (11MB dump incl. workspace.tar.gz)
 workspace-agent-viz/
+landing/dev.log*

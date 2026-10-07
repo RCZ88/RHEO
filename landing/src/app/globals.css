@@ -581,6 +581,442 @@ section[id] {
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* ===================================================================
+   GALLERY FILMSTRIP
+   A user-driven scroll-snap rail. Deliberately NOT an autoplay carousel:
+   content moving for >5s without a pause control is a WCAG 2.2.2 failure,
+   and one-slide-at-a-time hides 23 of 24 items. Peeking ~35% of the next
+   slide is the affordance that a wrap-around carousel destroys.
+   =================================================================== */
+.gallery-rail {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  /* let the rail bleed to the viewport edge so the cut-off slide reads as
+     "continues past here" rather than "clipped by the container" */
+  margin-right: calc(-1 * clamp(20px, 4vw, 64px));
+  padding-right: clamp(20px, 4vw, 64px);
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  cursor: grab;
+}
+.gallery-rail::-webkit-scrollbar {
+  display: none;
+}
+.gallery-rail:active {
+  cursor: grabbing;
+}
+/* The rail is a keyboard control (arrow/Home/End), so it must show focus. */
+.gallery-rail:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+
+.gallery-slide {
+  flex: 0 0 min(88%, 760px);
+  scroll-snap-align: start;
+  /* opacity only — a width/height transition here would fight scroll-snap */
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0.45;
+}
+.gallery-slide[data-active="true"] {
+  opacity: 1;
+}
+@media (min-width: 640px) {
+  .gallery-slide {
+    flex-basis: min(70%, 820px);
+  }
+}
+@media (min-width: 1024px) {
+  .gallery-slide {
+    flex-basis: min(62%, 860px);
+  }
+}
+
+/* drag vs. click: a drag must not select the slide text underneath */
+.gallery-slide,
+.gallery-slide * {
+  user-select: none;
+}
+
+/* hairline that drains as you move through the rail */
+.gallery-progress {
+  margin-top: 26px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.gallery-progress-fill {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.5);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.gallery-arrow {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: transparent;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.gallery-arrow:hover:not([data-disabled="true"]) {
+  color: #f4f4f5;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+/* press feedback — never a spring */
+.gallery-arrow:active:not([data-disabled="true"]) {
+  transform: scale(0.96);
+}
+.gallery-arrow[data-disabled="true"] {
+  color: #3f3f46;
+  border-color: rgba(255, 255, 255, 0.06);
+  cursor: not-allowed;
+}
+
+/* ===================================================================
+   SURFACE ORBIT — the whole app as a ring, plus the one card you read
+   ===================================================================
+   Ring geometry is computed in JS (orbit-layout.ts) and written to transforms,
+   so there is NO transition here: a CSS transition on transform would fight
+   the per-frame rAF settle and lag the pointer. Only opacity transitions here.
+   Radii 12/8 only (LAMINAR). No backdrop-blur on chrome. */
+.orbit-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.orbit-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.orbit-modes,
+.orbit-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.orbit-meta {
+  gap: 14px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #8a8a94;
+}
+
+.orbit-mode {
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: #63636b;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.orbit-mode:hover {
+  color: #a1a1aa;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.orbit-mode[data-active="true"] {
+  color: #f4f4f5;
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.04);
+}
+.orbit-mode:active {
+  transform: scale(0.97);
+}
+.orbit-mode:focus-visible,
+.orbit-card:focus-visible,
+.orbit-grid-item:focus-visible,
+.orbit-stage:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 3px;
+}
+
+/* ---- the big readable card ---- */
+.orbit-front {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #050506;
+}
+.orbit-front-media {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+.orbit-front-caption {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: #a1a1aa;
+  background: rgba(5, 5, 6, 0.7);
+  padding: 5px 9px;
+  border-radius: 8px;
+}
+.orbit-clip {
+  display: inline-flex;
+  gap: 6px;
+}
+.orbit-clip[data-big="true"] {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 2;
+}
+.orbit-clip[data-big="true"] .orbit-mode {
+  background: rgba(5, 5, 6, 0.72);
+}
+
+/* ---- the ring itself ---- */
+.orbit-stage {
+  position: relative;
+  height: clamp(300px, 42vw, 620px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  background: #050506;
+  overflow: hidden;
+  touch-action: pan-y;
+  cursor: grab;
+}
+.orbit-stage[data-dragging="true"] {
+  cursor: grabbing;
+}
+.orbit-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #050506;
+  cursor: pointer;
+  will-change: transform;
+  opacity: 0.42;
+  /* opacity only — transform is driven per-frame by rAF, never transitioned */
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.orbit-card[data-front="true"] {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.orbit-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.orbit-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: #52525b;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ---- grid fallback: when a 17-card ring cannot close on this stage ---- */
+.orbit-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--orbit-cols, 4), minmax(0, 1fr));
+  gap: 10px;
+}
+.orbit-grid-item {
+  width: 100%;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #050506;
+  cursor: pointer;
+  transition: border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0.6;
+}
+.orbit-grid-item[data-active="true"] {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.orbit-grid-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+.orbit-grid-item span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #8a8a94;
+  padding: 7px 8px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-card,
+  .orbit-mode,
+  .orbit-grid-item {
+    transition: none;
+  }
+}
+
+/* ===================================================================
+   ASCII SURFACE — photo <-> characters, same pixels both sides
+   =================================================================== */
+.ascii-surface {
+  position: relative;
+  overflow: hidden;
+  cursor: ew-resize;
+  touch-action: pan-y;
+}
+.ascii-half {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ascii-photo {
+  object-fit: cover;
+  /* clip-path is animated by React state, not a CSS transition, so it tracks
+     the pointer 1:1 with no easing lag behind the cursor */
+}
+.ascii-glyphs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #050506;
+  overflow: hidden;
+}
+.ascii-grid {
+  margin: 0;
+  color: #f4f4f5;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  line-height: 1.02;
+  letter-spacing: 0;
+  white-space: pre;
+  /* 132 columns must never wrap or the field shears */
+  width: 100%;
+  text-align: center;
+  opacity: 0.92;
+  user-select: none;
+}
+
+.ascii-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.7);
+  transform: translateX(-0.5px);
+  pointer-events: none;
+}
+/* the grab handle — 44px tall hit target even though the line is 1px */
+.ascii-handle {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(5, 5, 6, 0.55);
+  cursor: ew-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ascii-handle::after {
+  content: "↔";
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: #f4f4f5;
+}
+.ascii-handle:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.ascii-tag {
+  position: absolute;
+  bottom: 12px;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: #a1a1aa;
+  background: rgba(5, 5, 6, 0.7);
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* honest failure: says it could not read, never fakes a field */
+.ascii-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: #8a8a94;
+  background: rgba(5, 5, 6, 0.9);
+  padding: 0 24px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-slide {
+    transition: none;
+  }
+  .gallery-arrow {
+    transition: none;
+  }
+  .gallery-arrow:active:not([data-disabled="true"]) {
+    transform: none;
+  }
+  .gallery-progress-fill {
+    transition: none !important;
+  }
+}
+
 /* ---- Keyboard shortcut hint button (always visible, bottom-left) ---- */
 .kbd-hint {
   position: fixed;

@@ -18,6 +18,8 @@ import ActUnderstand from "@/components/rheo/ActUnderstand";
 import LearnVignette from "@/components/rheo/LearnVignette";
 import AtlasSection from "@/components/rheo/AtlasSection";
 import ActFlow from "@/components/rheo/ActFlow";
+import Gallery from "@/components/rheo/Gallery";
+import Instruments from "@/components/rheo/Instruments";
 import Download from "@/components/rheo/Download";
 
 export default function Home() {
@@ -42,6 +44,8 @@ export default function Home() {
           <LearnVignette />
           <AtlasSection />
           <ActFlow />
+          <Gallery />
+          <Instruments />
           <Download />
         </main>
         <Footer />

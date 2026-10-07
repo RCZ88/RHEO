@@ -11,6 +11,8 @@ const SECTIONS = [
   { id: "learn", label: "Learn" },
   { id: "atlas", label: "Atlas" },
   { id: "flow", label: "Flow" },
+  { id: "gallery", label: "Surfaces" },
+  { id: "instruments", label: "Ring" },
   { id: "download", label: "Download" },
 ];
 

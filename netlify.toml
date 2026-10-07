@@ -1,0 +1,60 @@
+# Netlify — RHEO landing site ONLY.
+#
+# WHY BASE = "landing" INSTEAD OF SPLITTING THE REPO
+# ----------------------------------------------------
+# Measured 2026-10-06: the whole git-tracked repo is 21 MB / 5582 files, of
+# which `landing/` is 11 MB. `du` reports 1.2 GB for `landing/` but that is a
+# STALE GITLINK (mode 160000, no .gitmodules) pointing at `prev-ver-backup/`,
+# which contains a nested .git and node_modules. It is 1 tracked pointer, not
+# 1.2 GB of content.
+#
+# So the clone Netlify already does is ~21 MB and completes in seconds. That is
+# NOT billed against the 300 build-minute free tier and it is NOT the problem to
+# solve. Splitting the repo to avoid it would be a REGRESSION: this landing page
+# documents an app that lives in the same repo, and every feature list, capture
+# and changelog entry is written against src/. Move it out and it silently
+# drifts from the thing it describes.
+#
+# `base` scopes the BUILD, which is what actually matters: with base = "landing"
+# Netlify runs npm install / next build inside landing/ only. The Electron app's
+# src/ (21 MB), its public/ (385 MB on disk, 38 MB tracked) and its dist/ are
+# never installed, never compiled, and never uploaded as build output. The app
+# is built and shipped by CZ locally (AGENTS.md §0-0) and is not this site's
+# job.
+
+[build]
+  base    = "landing"
+  command = "npm run build"
+  publish = "landing/.next"
+
+[build.environment]
+  # Pin Node. With no .nvmrc and no "engines", Netlify picks its own default,
+  # which is not reproducible and is the usual cause of "works locally, fails on
+  # the build server". Next 16 requires Node >= 20.9.
+  NODE_VERSION = "22"
+
+# Do NOT add [[plugins]] package = "@netlify/plugin-nextjs" here.
+# Netlify auto-installs the OpenNext adapter per release (currently >= 5.16.1,
+# required by the Sept 2026 Next security advisory). Pinning it here opts you
+# OUT of those automatic security updates. See LAYER 3 of AGENTS.md: agents ship
+# the correct adapter update by not fighting it.
+#
+# NOT PINNED ON PURPOSE. Do not add a version to that line.
+
+# ---- redirects -------------------------------------------------------------
+# `rheo.app` is referenced in landing/src. Canonical host enforced in the UI.
+
+[[headers]]
+  for = "/media/*"
+  [headers.values]
+    # Captures are content-addressed by name (app-dashboard.png) and never
+    # change contents, so they can be cached hard. mp4 additionally gets
+    # Range support from Netlify by default; do not set Accept-Ranges here.
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"
+    X-Frame-Options        = "SAMEORIGIN"
