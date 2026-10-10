@@ -1,0 +1,309 @@
+/* =====================================================================
+   workforce-iso.css — the isometric office scene.
+
+   SEPARATE from workforce.css on purpose. workforce.css styles the older
+   2D DOM scene (WorkforceScene / AgentAmbientAnimation), which is still
+   mounted in the terminal workspace. Merging these two would mean every
+   class here could collide with a live selector there, and `.bx`, `.st`,
+   `.worker` and `.ring` are all short, generic names.
+
+   Ported from the RHEO Workforce visual reference. The palette is scoped to
+   .wf-iso and derives from the app's zinc tokens, so the scene reads as part
+   of DeskFlow rather than pasted in from a prototype.
+
+   Motion rules honored:
+   - transform + opacity only
+   - reduced-motion kills EVERY animation, including the ones the JS
+     animation machine would otherwise still advance
+   ===================================================================== */
+
+.wf-iso {
+  --bg: #18181b;
+  --floor: #1e1f23;
+  --ink: #e6e9ee;
+  --surf: #27272a;
+  --line: #3f3f46;
+  --sig: #3ddc97;
+  --warn: #f2b441;
+  --err: #f06a6f;
+  --a1: #4fc3e8;
+  --a2: #e8b04f;
+  --a3: #3ddc97;
+  --a4: #9a8cf0;
+  --a5: #ee8fb0;
+  --deep: #090a0c;
+  --paper: #f2f4f7;
+
+  --wf-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.wf-iso-empty {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  font: 12px var(--wf-mono);
+  opacity: 0.6;
+}
+
+/* ── header / footer ─────────────────────────────────────────────── */
+.wf-iso-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font: 600 11px var(--wf-mono);
+  letter-spacing: 0.06em;
+  flex-wrap: wrap;
+}
+.wf-iso-bar b { font-weight: 600; }
+.wf-iso-bar .pill {
+  font: 400 11px var(--wf-mono);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  opacity: 0.85;
+}
+.wf-iso-bar .pill.warn { border-color: var(--warn); color: var(--warn); opacity: 1; }
+.wf-iso-foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  font: 11px var(--wf-mono);
+  opacity: 0.7;
+}
+.wf-iso-svg { display: block; width: 100%; height: auto; }
+
+/* ── floor, walls, decor ─────────────────────────────────────────── */
+.fl { fill: var(--floor); stroke: color-mix(in srgb, var(--ink) 9%, var(--floor)); stroke-width: 0.6; }
+.fl.b { fill: color-mix(in srgb, var(--ink) 3%, var(--floor)); }
+.slab { fill: color-mix(in srgb, var(--ink) 16%, var(--floor)); }
+.edge { fill: none; stroke: color-mix(in srgb, var(--ink) 30%, var(--floor)); stroke-width: 1; }
+.wallR { fill: color-mix(in srgb, var(--ink) 10%, var(--floor)); }
+.wallL { fill: color-mix(in srgb, var(--ink) 6%, var(--floor)); }
+.base { fill: color-mix(in srgb, var(--ink) 20%, var(--floor)); }
+
+/* The corridors pathfinding actually uses, drawn faintly. Making the rule
+   visible is the difference between "workers avoid the furniture" and
+   "workers teleported". */
+.wf-corridor { fill: color-mix(in srgb, var(--ink) 2.5%, var(--floor)); pointer-events: none; }
+
+/* ── isometric boxes ─────────────────────────────────────────────── */
+.bx .t { fill: color-mix(in srgb, var(--ink) 40%, var(--floor)); stroke: color-mix(in srgb, var(--ink) 55%, var(--floor)); stroke-width: 0.6; }
+.bx .l { fill: color-mix(in srgb, var(--ink) 25%, var(--floor)); }
+.bx .r { fill: color-mix(in srgb, var(--ink) 14%, var(--floor)); }
+.bx.lt .t { fill: color-mix(in srgb, var(--ink) 55%, var(--floor)); }
+.bx.bz .t { fill: color-mix(in srgb, var(--deep) 70%, var(--floor)); }
+.bx.bz .l { fill: color-mix(in srgb, var(--deep) 84%, var(--floor)); }
+.bx.bz .r { fill: var(--deep); }
+.bx.pa .t { fill: var(--paper); }
+.bx.pa .l { fill: color-mix(in srgb, var(--paper) 86%, var(--floor)); }
+.bx.pa .r { fill: color-mix(in srgb, var(--paper) 74%, var(--floor)); }
+.bx.gl2 { opacity: 0.4; }
+.bx.gl2 .t, .bx.gl2 .l, .bx.gl2 .r { fill: var(--sig); }
+.st.on .bx.gl2 { opacity: 0.95; }
+
+/* ── per-station detail ──────────────────────────────────────────── */
+.scr { fill: var(--deep); }
+.dk.on .scr { fill: color-mix(in srgb, var(--sig) 16%, var(--deep)); }
+.cl { fill: var(--sig); opacity: 0.18; transform-box: fill-box; transform-origin: 0 50%; }
+.dk.on .cl { opacity: 0.95; animation: wf-typ 1.4s steps(5) infinite alternate; animation-delay: var(--d, 0s); }
+@keyframes wf-typ { from { transform: scaleX(0.15); } to { transform: scaleX(1); } }
+
+.dl { fill: none; stroke: var(--deep); stroke-width: 0.7; opacity: 0.55; }
+.hn { fill: var(--deep); opacity: 0.7; }
+.dr { opacity: 0; }
+.st.on .dr { opacity: 1; }
+.cav { fill: var(--deep); }
+.b0 { fill: color-mix(in srgb, var(--ink) 55%, var(--floor)); }
+.b1 { fill: color-mix(in srgb, var(--ink) 34%, var(--floor)); }
+.b2 { fill: color-mix(in srgb, var(--ink) 20%, var(--floor)); }
+.bd { fill: color-mix(in srgb, var(--ink) 40%, var(--floor)); }
+.pop { fill: var(--sig); transition: transform 0.4s; }
+.st.on .pop { transform: translateY(-3px); }
+.tl { fill: color-mix(in srgb, var(--paper) 70%, var(--deep)); }
+.led { fill: color-mix(in srgb, var(--ink) 30%, var(--floor)); }
+.st.on .led { fill: var(--sig); animation: wf-blink 0.7s steps(1) infinite; animation-delay: var(--d, 0s); }
+@keyframes wf-blink { 50% { opacity: 0.25; } }
+.cd { fill: none; stroke: color-mix(in srgb, var(--paper) 55%, var(--deep)); stroke-width: 1.1; }
+.st.on .cd { stroke: var(--sig); }
+.lit { fill: var(--sig); opacity: 0; }
+.st.on .lit { opacity: 0.35; }
+.lf { transform-box: fill-box; transform-origin: 0 50%; transition: transform 0.5s; }
+.st.on .lf { transform: scaleX(0.2); }
+.lfr { fill: color-mix(in srgb, var(--ink) 38%, var(--floor)); }
+.unit { fill: color-mix(in srgb, var(--ink) 14%, var(--deep)); }
+.ck { fill: none; stroke: var(--sig); stroke-width: 1.4; stroke-linecap: round; opacity: 0; }
+.st.on .ck { animation: wf-ck 2.4s steps(1) infinite; animation-delay: var(--d, 0s); }
+@keyframes wf-ck { 0% { opacity: 0; } 33%, 100% { opacity: 1; } }
+.wh { fill: none; stroke: var(--paper); stroke-width: 1.2; transform-box: fill-box; transform-origin: 50% 50%; }
+.st.on .wh { animation: wf-rot 1.2s linear infinite; }
+@keyframes wf-rot { to { transform: rotate(360deg); } }
+.vd { fill: color-mix(in srgb, var(--ink) 28%, var(--floor)); }
+.pp { fill: var(--paper); }
+.hl { fill: var(--deep); opacity: 0.5; }
+.sun { fill: var(--sig); }
+.brush { fill: none; stroke: var(--sig); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 1; }
+.st.on .brush { animation: wf-draw 1.6s ease-in-out infinite; }
+@keyframes wf-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.dome { fill: color-mix(in srgb, var(--ink) 70%, var(--floor)); }
+.s-bell.on .dome { fill: var(--warn); }
+.bellg { transform-box: fill-box; transform-origin: 50% 100%; }
+.s-bell.on .bellg { animation: wf-shake 0.25s ease-in-out infinite alternate; }
+@keyframes wf-shake { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+.spark { fill: var(--warn); opacity: 0; }
+.st.on .spark { animation: wf-spark 0.5s linear infinite; }
+.st.on .spark:nth-of-type(2) { animation-delay: 0.17s; }
+.st.on .spark:nth-of-type(3) { animation-delay: 0.33s; }
+@keyframes wf-spark {
+  0% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(6px, -12px); }
+}
+
+/* ── station sigil + state ───────────────────────────────────────── */
+.sgbg { fill: var(--surf); stroke: var(--line); stroke-width: 1; }
+.st.on .sgbg { stroke: var(--sig); }
+.st.fail .sgbg { stroke: var(--err); }
+.s-bell.on .sgbg { stroke: var(--warn); }
+.st { cursor: pointer; }
+.st:hover .sgbg { stroke: var(--ink); }
+.st.vsel .sgbg { stroke: var(--sig); stroke-width: 2.4; }
+.st:focus { outline: none; }
+.st:focus-visible .sgbg { stroke: var(--ink); stroke-width: 3; }
+.gl { color: var(--ink); opacity: 0.55; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.st.on .gl { color: var(--sig); opacity: 1; }
+.lamp { fill: color-mix(in srgb, var(--ink) 30%, var(--floor)); }
+.st.on .lamp { fill: var(--sig); }
+.st.fail .lamp { fill: var(--err); }
+.st.fail .gl { color: var(--err); opacity: 1; }
+.win { fill: color-mix(in srgb, var(--sig) 8%, var(--deep)); }
+.wfr { fill: none; stroke: color-mix(in srgb, var(--ink) 35%, var(--floor)); stroke-width: 2; }
+.clk { fill: var(--paper); stroke: color-mix(in srgb, var(--ink) 40%, var(--floor)); stroke-width: 1.5; }
+.hand { stroke: var(--deep); stroke-width: 1.2; stroke-linecap: round; transform-box: fill-box; transform-origin: 50% 100%; }
+.hand.sec { stroke: var(--sig); animation: wf-rot 60s linear infinite; }
+
+/* ── the worker ──────────────────────────────────────────────────── */
+.worker { cursor: pointer; }
+.sh { fill: var(--ink); opacity: 0.22; }
+.ring { fill: none; stroke-width: 2; stroke: color-mix(in srgb, var(--ink) 25%, var(--floor)); }
+.worker[data-s='working'] .ring { stroke: var(--sig); }
+.worker[data-s='thinking'] .ring { stroke: var(--sig); stroke-dasharray: 5 4; animation: wf-spin 6s linear infinite; }
+@keyframes wf-spin { to { stroke-dashoffset: -18; } }
+.worker[data-s='idle'] { opacity: 0.78; }
+.worker[data-s='booting'] { opacity: 0.6; }
+.worker[data-s='saved'] { opacity: 0.4; }
+.worker[data-s='saved'] .ring { stroke-dasharray: 2 4; }
+.worker[data-s='blocked'] .ring { stroke: var(--warn); stroke-width: 3; animation: wf-pulse 1s ease-in-out infinite; }
+.worker[data-s='error'] .ring { stroke: var(--err); stroke-width: 3; }
+.worker.sel .ring { stroke-width: 3; }
+@keyframes wf-pulse { 50% { rx: 24; ry: 11; } }
+
+.torso, .hd { fill: color-mix(in srgb, var(--ink) 88%, var(--floor)); }
+.hi { fill: #fff; opacity: 0.16; }
+.arm rect, .arm circle, .leg { fill: color-mix(in srgb, var(--ink) 68%, var(--floor)); }
+.vis { fill: var(--floor); }
+.eye { fill: var(--sig); animation: wf-blink4 4s infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+.worker[data-s='blocked'] .eye { fill: var(--warn); }
+.worker[data-s='error'] .eye { fill: var(--err); }
+@keyframes wf-blink4 { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
+
+.eye, .arm, .leg, .head { transform-box: fill-box; }
+.arm { transform-origin: 50% 0; transform: rotate(var(--a0, 0deg)); }
+.arm.sw { animation: wf-swing var(--dur, 0.5s) ease-in-out infinite alternate; }
+@keyframes wf-swing { from { transform: rotate(var(--a0)); } to { transform: rotate(var(--a1)); } }
+.leg { transform-origin: 50% 0; }
+.worker.walk .ll { animation: wf-step 0.4s ease-in-out infinite alternate; }
+.worker.walk .lr { animation: wf-step 0.4s ease-in-out infinite alternate-reverse; }
+@keyframes wf-step { from { transform: rotate(-22deg); } to { transform: rotate(22deg); } }
+.bob { animation: wf-bob 1.8s ease-in-out infinite; }
+.worker.walk .bob { animation-duration: 0.4s; }
+@keyframes wf-bob { 50% { transform: translateY(-1.5px); } }
+.head { transform-origin: 50% 100%; }
+.worker.think .head { transform: rotate(7deg); }
+.stripe { opacity: 0.95; }
+
+.badge { display: none; color: var(--sig); }
+.worker.has .badge { display: block; }
+.badge .bg { fill: var(--surf); stroke: currentColor; stroke-width: 1.2; }
+.badge .g2 { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.worker[data-s='blocked'] .badge { color: var(--warn); }
+.worker[data-s='error'] .badge { color: var(--err); }
+.tag { font: 600 9px var(--wf-mono); fill: var(--ink); opacity: 0.6; text-anchor: middle; }
+.worker.sel .tag { opacity: 1; }
+.worker:focus { outline: none; }
+.worker:focus-visible .ring { stroke: var(--ink); stroke-width: 3; }
+.worker:hover .ring { stroke-width: 3; }
+
+/* ── inspector ───────────────────────────────────────────────────── */
+.wf-insp { padding: 0 14px 14px; font-size: 13px; }
+.wf-ih { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.wf-ih b { font-size: 15px; margin-right: 4px; }
+.wf-ih .pill { font: 400 11px var(--wf-mono); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.wf-obj { margin: 0 0 6px; }
+.wf-mu { margin: 2px 0; opacity: 0.6; font-size: 12px; }
+
+.wf-kv, .wf-kv-flat { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0; font-size: 12px; }
+.wf-kv-flat { grid-template-columns: 1fr; }
+.wf-kv dt, .wf-kv-flat dt { opacity: 0.6; }
+.wf-kv dd, .wf-kv-flat dd { margin: 0; font-family: var(--wf-mono); word-break: break-word; }
+
+/* The single most important distinction in this file. A real value and an
+   absent value must never look alike, or "we were never told" reads as
+   "it is zero" — which is the exact lie this panel used to tell. */
+.wf-unknown {
+  opacity: 0.75;
+  color: var(--warn);
+  font-style: italic;
+  cursor: help;
+}
+.wf-known { color: var(--ink); }
+.wf-sub { opacity: 0.45 !important; padding-left: 8px; }
+.wf-pill { border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; display: inline-block; }
+.wf-pill.err { border-color: var(--err); color: var(--err); }
+.wf-locks { list-style: none; margin: 0; padding: 0; }
+
+.wf-insp h3 { font-size: 12px; margin: 12px 0 4px; font-weight: 600; }
+.wf-br { display: grid; grid-template-columns: minmax(0, 1.3fr) 1fr auto; gap: 8px; align-items: center; font: 12px var(--wf-mono); padding: 2px 0; }
+.wf-br span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-br i { height: 6px; border-radius: 999px; background: var(--line); position: relative; }
+.wf-br i::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 999px; background: var(--sig); }
+.wf-br.f { grid-template-columns: minmax(0, 1fr) auto auto; }
+.wf-br .add { color: var(--sig); }
+.wf-br .del { color: var(--err); }
+.wf-touches { opacity: 0.6; }
+.wf-skills { display: flex; flex-wrap: wrap; }
+.wf-sk { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin: 2px 4px 2px 0; font: 12px var(--wf-mono); }
+.wf-insp code { font: 12px var(--wf-mono); background: var(--bg); padding: 2px 6px; border-radius: 6px; word-break: break-all; }
+
+.wf-btns { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+.wf-insp .btn { border: 1px solid var(--line); background: none; color: inherit; border-radius: 8px; padding: 6px 12px; font: 12px inherit; cursor: pointer; }
+.wf-insp .btn:hover, .wf-insp .btn:focus-visible { border-color: var(--sig); outline: none; }
+.wf-insp .btn.dg { border-color: var(--err); color: var(--err); }
+
+/* ── reduced motion ──────────────────────────────────────────────── */
+/* Kills EVERY animation including the JS-driven bob, which is why the
+   component also passes reducedMotion to skip the pose swing. */
+@media (prefers-reduced-motion: reduce) {
+  .wf-iso * { animation: none !important; }
+}
+.wf-iso[data-reduced='true'] * { animation: none !important; }
+.wf-iso[data-reduced='true'] .ring { animation: none !important; }
+/* A failed close must be VISIBLE. The button used to fail silently, which is
+   indistinguishable from a dead button. */
+.wf-err {
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  border: 1px solid var(--err);
+  border-radius: 8px;
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+  font: 12px var(--wf-mono);
+}

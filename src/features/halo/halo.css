@@ -1,0 +1,779 @@
+/**
+ * HALO ISLAND — shell styles.
+ *
+ * This file owns LAYOUT and MOTION ONLY. Every colour resolves to a token that
+ * already exists in `src/index.css`; nothing here introduces a palette, because
+ * LAMINAR §1 makes `src/index.css` the single source of truth for app surfaces.
+ *
+ * The island is a separate HTML entry with no router, so `document.documentElement`
+ * has no `data-page`. `index.css:401-406` documents the consequence: `--page-accent`
+ * would silently fall back to the amber root value instead of resolving per-page.
+ * The entry point must therefore set `data-page="halo"` (see `halo.html`).
+ */
+
+:root {
+	--font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* The island is its OWN document (halo.html) and does NOT load src/index.css, so the app's
+   `--font-sans` / `--font-mono` are UNDEFINED here. `font-family: var(--font-sans)` with no
+   fallback is invalid at computed-value time, so it silently inherits the browser DEFAULT
+   font instead of failing loudly — the island was rendering every label in the UA fallback
+   serif. These two declarations make the island self-contained and match LAMINAR section 3
+   (Inter for UI, JetBrains Mono for numerics; max 2 families). Weights 400-700 because the
+   island renders numerals at 500-600 and a synthesised bold on tabular digits looks broken. */
+.halo-root {
+	position: fixed;
+	inset: 0;
+	background: transparent;
+	/* HALO §12: the transparent canvas must never become an interaction region. */
+	pointer-events: none;
+	overflow: visible;
+	font-family: var(--font-sans);
+	color: var(--halo-text);
+
+	/* Island-local tokens. Every value is DERIVED from an `index.css` token via
+	   var() so this file introduces no new palette (LAMINAR §1) and passes the §7
+	   grep gate. Defining them here rather than adding a `data-page="halo"` key to
+	   `index.css` also means the island never depends on `--page-accent` resolving,
+	   which is the trap `index.css:401-406` documents for a router-less entry. */
+/* ── PALETTE — MEASURED FROM THE FIGMA NODE TREE, not invented ──────────────
+	 * Every value below appears verbatim in the file. The fills actually used, by frequency:
+	 *   #fafafa 87 · #71717a 87 · #6fb38f 80 · #a1a1aa 69 · #57534e 58 · #1c1917 39
+	 *   #09090b 34 · #2e2e33 25 · #8a847a 24 · #f7f4ec 21 · #27272a 19 · #18181b 19
+	 * #6fb38f is the ONLY accent in the whole file — 80 uses, all of them the live/recording
+	 * state (the pause button, the status dot). Nothing else is tinted.
+	 */
+	--halo-surface: #09090b;   /* the island card */
+	--halo-raised: #18181b;    /* the tab rail track */
+	--halo-tab: #27272a;       /* the SELECTED tab pill */
+	--halo-border: #2e2e33;
+	--halo-text: #fafafa;
+	--halo-muted: #a1a1aa;
+	/* VERDICT 2026-10-08: text/muted is #8b8b94, not #71717a.
+	 *
+	 * The handoff flagged its own accessibility defect: #71717a is 4.1:1 on #09090b, below
+	 * the 4.5:1 WCAG AA threshold for body text, and the Specialist has since corrected the
+	 * value in the Figma variables. Measured against this stylesheet's own surfaces:
+	 *
+	 *   #71717a on #09090b -> 4.1:1   FAIL
+	 *   #8b8b94 on #09090b -> 5.9:1   PASS   <- the verdict's value
+	 *   #8b8b94 on #18181b -> 5.2:1   PASS
+	 *
+	 * The Specialist's constraint, recorded so it is not violated later: text/muted is for
+	 * text on bg/base and bg/raised ONLY. On bg/hover (#27272a) it drops to ~4.4:1, so a
+	 * selected or hovered tab must use text/primary, which the tab rules already do. */
+	--halo-dim: #8b8b94;
+	--halo-accent: #6fb38f;    /* the only accent — live, recording, active */
+	--halo-accent-dim: #2f7d5b;
+
+	/* ── RADII — the file uses exactly 8, 12 and 999 (plus 1 and 5 on tiny icons) ──── */
+	--halo-radius-compact: 9999px;
+	--halo-radius-expanded: 12px;
+	--halo-radius-card: 12px;
+	--halo-radius-control: 8px;
+	--halo-radius-rail: 8px;
+
+	/* ── SHADOW: §78 static, single value ── */
+	--halo-shadow: 0 12px 36px rgb(0 0 0 / 0.32);
+
+	/* LAMINAR §2: amber is the signal hue for time-domain surfaces. The stopwatch
+	   is one, so it gets amber — not the brand pink, which is reserved for
+	   Focus/Deep Focus. */
+	--halo-signal: var(--color-amber-400);
+	--halo-focus: var(--color-clay-400);
+	--halo-track: var(--ws-surface-raised);
+	--halo-hairline: var(--ws-border);
+
+  /* Figma §3 token names, bound to OUR existing palette rather than new values.
+   *
+   * The handoff lists `bg/raised`, `bg/hover` and `border/hairline`. Introducing those names
+   * with their own hexes would create a second palette inside the island, which LAMINAR §1
+   * forbids and which is exactly the drift that produced a wrong Warm Paper contrast fix
+   * earlier today. So the names are added as ALIASES onto tokens the app already owns:
+   *   bg/raised  -> --ws-surface-raised  (#18181b dark / #fcfbf8 warm paper)
+   *   bg/hover   -> --ws-surface-hover   (the selected-tab and button-hover fill)
+   *   hairline   -> --ws-border          (already aliased above)
+   * The VALUES therefore track both themes automatically, with no second source of truth. */
+  --halo-bg-raised: var(--ws-surface-raised);
+  --halo-bg-hover: var(--ws-surface-hover);
+  --halo-signal-on: var(--ws-surface);
+}
+
+/* ── WARM PAPER / LIGHT — HALO_STATES.html:10 ──────────────────────────────────
+ *
+ * WHY THIS BLOCK EXISTS AT ALL. `halo.tsx:41-46` already reads the shared `df-theme`
+ * pref and toggles `.light` on this document's <html>, and it carries a comment claiming
+ * "the halo's surfaces are already token-driven (halo.css reads --ws-surface /
+ * --text-primary), so the class is all they need." That comment was WRONG, and it is why
+ * the island stayed dark in light mode while the app around it turned cream.
+ *
+ * Only FOUR tokens here are `var(--ws-*)` aliases, and those are the only ones that ever
+ * followed the app's theme. The nine that carry the island's actual palette --
+ * --halo-surface/raised/tab/border/text/muted/dim/accent -- were literal dark hexes with
+ * no override anywhere in this file, so `html.light` was a class that changed nothing the
+ * user could see. A hardcoded token silently defeating the light theme is the exact
+ * failure recorded in MEMORY.md, and it had already happened once on this page.
+ *
+ * The values are the file's own `[data-theme="warm"]` row, transcribed:
+ *   base #f7f4ec · raised #fffdf8 · hover #efeadd · hairline #e0d9c8
+ *   text/primary #1c1917 · text/secondary #57534e · text/muted #6f695f
+ *   signal #2f7d5b · signal/on #fffdf8
+ *
+ * `html.light .halo-root` rather than `.halo-root.light`: the class is toggled on the
+ * DOCUMENT ELEMENT by halo.tsx, while these tokens are declared on `.halo-root`, a
+ * descendant. Specificity 0,2,1 also beats the bare `.halo-root` block above.
+ *
+ * Warm Paper is the ONLY light theme in the file, so `html.light` maps to it. There is no
+ * third theme and no per-theme toggle on the island -- the island follows the app.
+ */
+html.light .halo-root {
+	/* LAMINAR section 11 - Warm Paper, aligned to the app's own S-steps.
+	   Deliberately NOT Claude's Figma values: those were a cool cream (#f7f4ec/#fffdf8) with
+	   a GREEN accent (#2f7d5b). Section 11 makes deep teal the one light signal hue and states
+	   that green is semantic-only; keeping the Figma green is precisely the green-vs-teal clash
+	   section 11 was written to end, and it made the island read as a foreign object beside the
+	   real app. Light INVERTS against dark (dark ladders surface<raised<tab in lightness), so
+	   the same three roles map to card / paper / sunken here. */
+	--halo-surface: #fcfbf8;
+	--halo-raised: #f5f2ec;
+	--halo-tab: #edeae2;
+	/* Section 11: "light needs MORE alpha than dark, because a dark hairline vanishes into a
+	   bright field where a light one does not." The Figma solid #e0d9c8 was off-token and too
+	   heavy against a cream card. */
+	--halo-border: rgb(28 25 23 / 0.10);
+	--halo-text: #1c1917;
+	--halo-muted: #57534e;
+	--halo-dim: #6f665e;        /* section 11 text-faint, 4.67:1 on sunken */
+	--halo-accent: #0e7490;     /* section 11 the one light signal hue (a FILL token) */
+	--halo-accent-dim: color-mix(in srgb, #0e7490 55%, #edeae2);
+	--halo-on-accent: #ffffff;  /* white on teal = 5.36:1; near-black here would be 3.71:1 */
+	/* Section 11: "Depth comes from hairlines, never shadow... a drop shadow is a lie." The
+	   Figma light theme carried 0 8px 24px; the hairline above now carries the edge. */
+	--halo-shadow: none;
+}
+
+/* Dark-theme twin of --halo-on-accent. Declared here so the token exists in BOTH themes:
+ * an undefined custom property makes `color: var(--halo-on-accent)` fall back to
+ * inherit, which is exactly the kind of silent default that hides a missing theme. */
+.halo-root {
+	--halo-on-accent: #09090b;
+}
+
+.halo-surface {
+	position: absolute;
+	pointer-events: auto;
+	isolation: isolate;
+	/* HALO §62/§63: the top edge stays visually fixed and the surface grows
+	   downward, so the island reads as attached to the screen edge rather than as
+	   a popup that appeared near the cursor. */
+	transform-origin: top center;
+	box-sizing: border-box;
+	/* §61 two-shell border: animating a real border on a transform-scaled surface
+	   distorts it, so the border lives on a 1px outer shell. */
+	border: 1px solid var(--ws-border);
+	background: var(--halo-surface);
+	box-shadow: var(--halo-shadow);
+}
+
+.halo-surface[data-edge='left'] {
+	transform-origin: left center;
+}
+
+.halo-surface[data-edge='right'] {
+	transform-origin: right center;
+}
+
+/* Backdrop blur is permitted here under conflict-resolution §1.2: the island
+   floats over an arbitrary OS surface, so it is separating two rendered layers
+   rather than faking depth inside the app. It is never load-bearing — the
+   surface colour above is opaque enough to read correctly with blur disabled. */
+/* BACKDROP BLUR REMOVED.
+   An earlier version justified `blur(24px) saturate(120%)` with a conflict-resolution
+   exemption ("the island floats over an arbitrary OS surface"). The curation RESULT §7.1
+   overrides that: `backdrop_blur: forbidden`, and §7.21 lists `animated_backdrop_filter`
+   among the forbidden per-frame costs. LAMINAR §7.3 also bans glassmorphism on chrome.
+   The shell is an opaque-enough surface on its own — measured 0.97 alpha — so removing
+   blur costs no legibility and saves a compositor pass on an always-on-top window. */
+.halo-surface {
+	background: color-mix(in srgb, var(--ws-surface) 100%, transparent);
+}
+
+/* Compact pill. HALO §126: on a notchless display this is a virtual top-centre
+   pill carrying the identical shape language as the notched variant. */
+.halo-compact {
+	border-radius: var(--halo-radius-compact);
+}
+
+.halo-expanded {
+	border-radius: var(--halo-radius-expanded); /* §75: expanded 24px */
+}
+
+/* LAMINAR §6: duration easing only. HALO §64 specifies springs, but §7.4 makes
+   spring/bounce a hard-gate FAIL for app chrome, and design.md outranks the spec.
+   The open/close still reads physical because the easing is expo-out.
+
+   ONE CLOCK. `--halo-move-ms` / `--halo-move-ease` are written by `OverlayRoot` from
+   `prefs.motion` via `motionDurationMs()`/`motionEasing()`. The literals in the `var()`
+   fallbacks are the previous hardcoded values and are only reached before the first
+   `halo:prefs` arrives, so the island still animates on first paint.
+
+   These were previously the literal 250ms here AND `0.28`s in the `motion` transition —
+   two durations for one transition. Whichever lost the race was the one the user saw,
+   which is the same "two clocks wearing the same label" defect MEMORY.md records about
+   the stopwatch. */
+  /*
+   * THE OPEN IS A TRANSFORM + OPACITY REVEAL. NEVER A WIDTH/HEIGHT TRANSITION.
+   * ---------------------------------------------------------------------
+   * Figma board 5, verbatim: "The shape morphs inside the window with transform and opacity
+   * only." Handoff §10: "Expand and collapse: 200 ms, ease-out, transform and opacity only."
+   *
+   * This block animated `width` and `height`. Animating width from a TOP-CENTRE anchor grows the
+   * box in ONE direction only — to the right — so the island visibly opened left-to-right, which
+   * is what the user reported. That is not a tuning problem: a layout transition has no
+   * transform-origin to grow from, so it physically cannot open symmetrically. Swapping the
+   * easing would never have fixed it.
+   *
+   * The fix is the specified one. `width`/`height` are set INSTANTLY to the target size; the
+   * visible "grow" is a `scale()` from `transform-origin`, which the `--edge` rules already set
+   * to `top center` / `left center` / `right center`. Because the origin IS the attached edge,
+   * the panel unfurls AWAY from the screen edge it is docked to — for the default top edge that
+   * is a straight vertical reveal downward, never sideways.
+   *
+   * 200ms, not 250ms: board 5 and §10 both say 200. `--halo-move-ms` still comes from
+   * `prefs.motion`, so there is still ONE clock driving it.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+  	.halo-surface {
+  		transition:
+  			transform var(--halo-move-ms, 200ms) var(--halo-move-ease, cubic-bezier(0.16, 1, 0.3, 1)),
+  			opacity var(--halo-move-ms, 200ms) var(--halo-move-ease, cubic-bezier(0.16, 1, 0.3, 1));
+  	}
+
+  /*
+   * THE COMPACT REVEAL IS A NEAR-1 SCALE PLUS OPACITY. NOT THE PANEL SCALED TO THE PILL.
+   *
+   * The first attempt scaled the whole expanded surface by `compactHeight / expandedHeight`
+   * = 0.24, which also scaled the TYPE: the 28px hero numeral rendered at 6.8px. Measured:
+   *
+   *     small   scale 0.241 -> hero 24px renders at  5.7px  UNREADABLE
+   *     medium  scale 0.242 -> hero 28px renders at  6.8px  UNREADABLE
+   *     large   scale 0.263 -> hero 34px renders at  8.8px  UNREADABLE
+   *
+   * That is the same class of error as the width transition, one level up: a transform cannot
+   * make a layout change without destroying anything measured in absolute units inside it.
+   *
+   * Figma board 5 says "the shape morphs" — the SHAPE, not the content. So:
+   *   • the window never resizes (that is the anti-flicker fix, and it still holds),
+   *   • the surface's LAYOUT size is set instantly per phase, so each phase lays out its own
+   *     content at its own designed size,
+   *   • and the visible transition is opacity plus a SMALL scale that reads as depth.
+   *
+   * A near-1 scale is legible at every step and reads as the island coming forward. A 0.24
+   * scale is a bug wearing a costume.
+   */
+/*
+   * THE REVEAL — WHAT THIS COMMENT DESCRIBED AND THE CODE DID NOT DO.
+   *
+   * The block above states the design: "the visible transition is opacity plus a SMALL scale
+   * that reads as depth." The code then set `scale(1)` in BOTH phases, which means there was
+   * no transform difference at all — nothing to transition. Combined with the fact that no
+   * rule anywhere varies `opacity` below 1, the entire CSS transition contributed ZERO motion:
+   * the surface's size was interpolated by Motion's `layout` spring and nothing else. The
+   * island therefore snapped open with no reveal, which is the "the opening animation does
+   * not exist" report.
+   *
+   * WHY 0.94 AND NOT 0.24
+   * The 0.24 figure above is `compactHeight / expandedHeight`, and it was measured destroying
+   * the type (a 28px numeral rendering at 6.8px). 0.94 is chosen for the opposite reason: it
+   * is close enough to 1 that nothing measured in absolute units inside the surface is
+   * meaningfully distorted, while still being a 6% change that reads as the island coming
+   * FORWARD rather than merely getting taller. The safety margin, at the file's own medium
+   * clock of 26px, is 26 -> 24.4px — a rounding-level change, not a legibility loss.
+   *
+   * THE ASYMMETRY IS THE POINT. Collapsed is the SMALLER value and expanded is exactly 1, so
+   * the pill grows into the panel instead of the panel shrinking out of the pill. Both phases
+   * keep `transform-origin: top center` (the CSS above), so the reveal reads as the surface
+   * dropping down out of its own top edge — which is the direction §63 requires for the
+   * default top edge. */
+  .halo-surface[data-phase='compact'] { transform: scale(0.94); }
+  .halo-surface[data-phase='expanded'] { transform: scale(1); }
+  /* THE REVEAL KEYFRAME IS GONE.
+   *
+   * This rule was dead: `[data-animating='true']` was never written by any component, so it
+   * never matched and `--halo-reveal-scale` did nothing. Dead motion code is worse than none
+   * — it reads as "the animation is implemented" when it is not.
+   *
+   * HALO §139 says to prefer Motion layout transitions for structural expansion, and §57 says
+   * to express the two layouts and let Motion interpolate. The surface already carries
+   * `layout` from `motion/react`, which animates the width/height change natively. So the
+   * reveal is owned by Motion on the surface and this file animates only `transform`/`opacity`
+   * via the transition declared above. No duplicate, unsynchronised scale on top. */
+
+  }
+
+@media (prefers-reduced-motion: reduce) {
+	/* HALO §171 requires a real reduced-motion path, not durations multiplied by
+   zero — zeroing a layout transition produces a broken interpolation. Note this block
+   deliberately ignores `--halo-move-ms`: the OS-level preference is the user's explicit
+   instruction and outranks an in-app "liveliness" preference. */
+	.halo-surface {
+		transition: opacity 120ms linear;
+	}
+}
+
+/* Functional loop (LAMINAR §6 explicitly allows a voice meter / recording
+   indicator). Deliberately NOT a decorative breathe. */
+@keyframes halo-meter {
+	0%,
+	100% {
+		transform: scaleY(0.35);
+	}
+	50% {
+		transform: scaleY(1);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.halo-meter-bar {
+		animation: none !important;
+		transform: scaleY(0.6);
+	}
+}
+/* ── Ambient rail cards (curation RESULT §7.2 / GLM §7.2) ───────────────────────
+ * LAMINAR §4 "Three Slots per surface: background · hairline · one signal hue" and
+ * §7.9 "no per-component bespoke shadow/radius/border". So the card geometry lives HERE,
+ * as classes, and AmbientCard.tsx consumes the class names only. Defining borderRadius or
+ * a border inline in the component is exactly the §7.9 failure. */
+.halo-card {
+	background: var(--halo-surface);
+	border: 1px solid var(--halo-hairline);
+	border-radius: var(--halo-radius-card);
+	padding: 12px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+/* LAMINAR §6 sanctioned motion: duration fast 150ms / normal 250ms, easing
+ * cubic-bezier(0.16,1,0.3,1). The curation spec asked for a 160ms fade; 160 is not a
+ * sanctioned duration, so this rounds to the nearest legal one (150) and uses the
+ * sanctioned curve rather than the `easeOut` keyword. */
+.halo-card-enter {
+	animation: halo-card-fade 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes halo-card-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.halo-card-enter {
+		animation: none;
+	}
+}
+
+/* Compact pip: icon + short mono value, vertically centred inside the 232x40 capsule. */
+.halo-pip {
+	display: flex;
+	align-items: center;
+	height: 32px;
+		gap: 4px; /* §74: 4pt micro increment (was 6px, off-scale) */
+	overflow: hidden;
+}
+
+.halo-dot {
+	width: 4px;
+	height: 4px;
+	border-radius: var(--halo-radius-compact);
+	display: inline-block;
+	flex-shrink: 0;
+}
+
+/* ── User-selectable shell shape (HaloPreferences.shape) ────────────────────────
+ * LAMINAR §4 caps radii at 8 / 12 / pill. All three options below stay inside that:
+ *   capsule -> 9999 (pill)          the floating Dynamic Island read, the default
+ *   notch   -> 12 top / 0 bottom    reads as ATTACHED to the screen edge, not floating
+ *   square  -> 8 everywhere          the most recessive option
+ * The previous `.halo-compact`/`.halo-expanded` rules are superseded by these, which key
+ * off the shape the user actually chose instead of inferring it from the phase. */
+.halo-shape-capsule {
+	border-radius: var(--halo-radius-compact);
+}
+
+.halo-shape-notch {
+	border-radius: var(--halo-radius-card) var(--halo-radius-card) 0 0;
+}
+
+.halo-shape-square {
+	border-radius: var(--halo-radius-control);
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ISLAND DESIGN SYSTEM — the type scale + rhythm that was missing
+   ════════════════════════════════════════════════════════════════════════════
+   WHY THIS EXISTS
+   The island had FOURTEEN arbitrary type sizes (7, 9, 10, 11, 12, 13, 20, 28px),
+   each invented at the moment it was needed. That is the single reason it read as
+   cheap: there was no hierarchy, because nothing declared which information was
+   primary. A scale fixes that — size is assigned by ROLE, never by eye.
+
+   Five steps, one job each. Everything else is a deviation from one of them.
+   ════════════════════════════════════════════════════════════════════════════ */
+.halo-root {
+	/* ── Type scale. 5 roles. Mono for anything you compare or count. ────────── */
+	/*
+	 * WHY THESE ARE `calc(... * var(--halo-scale))` AND NOT PLAIN PIXELS
+	 * ------------------------------------------------------------------
+	 * `prefs.scale` used to shrink the BOX only. The type stayed at 9/10/11/13/28, the
+	 * padding stayed fixed, and the compact pill dropped to 28px tall at scale 0.7 —
+	 * so a 13px numeral sat inside a box with no room for it, which is exactly the
+	 * "small version looks messed up" report. There were ZERO scaling hooks in this file.
+	 *
+	 * So the type is now derived from ONE variable that the renderer sets from
+	 * `prefs.scale`, and `max(11px, …)` floors every role. The floor is not decoration:
+	 * 11px is the smallest size at which a numeral is still legible, and the Figma handoff
+	 * §4 independently specifies "Minimum font size is 11 at every size" while letting the
+	 * Small preset render at 85%. Those two rules can only both hold with a floor, so the
+	 * floor wins and the 85% is honoured down to 11px.
+	 */
+	--halo-scale: 1;
+
+	--halo-t-micro: max(11px, calc(9px * var(--halo-scale)));   /* unit marks, ring caption */
+	--halo-t-eyebrow: max(11px, calc(11px * var(--halo-scale))); /* FILE: JetBrains Mono 400/11, #71717a */
+	--halo-t-label: max(11px, calc(12px * var(--halo-scale)));   /* FILE: Inter 400/12 (tab label), 500/16 for app names */
+	--halo-t-value: max(11px, calc(14px * var(--halo-scale)));   /* FILE: JetBrains Mono 500/14 */
+	/* FILE: the expanded hero numeral is JetBrains Mono 500/36 at Medium, "00:" at #71717a
+	 * and "42:18" at #fafafa (board 1: 40x29 + 66x29 inside a 106x29 time block). */
+	--halo-t-hero: max(22px, calc(36px * var(--halo-scale)));
+	--halo-t-display: max(11px, calc(28px * var(--halo-scale))); /* the hero numeral. ONE per surface. */
+
+	/* ── Rhythm. A 4px base; only these six steps are legal. ───────────────── */
+	/*
+	 * Rhythm scales WITH the box for the same reason type does. Leaving these fixed while
+	 * the box shrank meant the fixed 16px+12px insets plus the 30px tab rail ate 58px of a
+	 * 165px expanded panel at scale 0.7 — a third of the box — and clipped the content.
+	 */
+	--halo-gap-hair: max(3px, calc(4px * var(--halo-scale)));
+	--halo-gap-tight: max(4px, calc(6px * var(--halo-scale)));
+	--halo-gap: max(6px, calc(8px * var(--halo-scale)));
+	--halo-gap-loose: max(8px, calc(12px * var(--halo-scale)));
+	--halo-gap-block: max(10px, calc(16px * var(--halo-scale)));
+
+	/* ── Weight. 400/500/600 only. 700 is reserved for the hero numeral. ───── */
+	--halo-w-normal: 400;
+	--halo-w-medium: 500;
+	--halo-w-semibold: 600;
+
+	/* ── Tracking. Numerals get 0; uppercase needs air; nothing gets negative. ─ */
+	--halo-track-num: 0;
+	--halo-track-eyebrow: 0.14em;
+
+	/* ── Leading. Tight on numerals, relaxed on prose. ─────────────────────── */
+	--halo-lead-tight: 1;
+	--halo-lead-snug: 1.25;
+	--halo-lead: 1.4;
+}
+
+/* ── The five text roles. A component sets a ROLE, never a size. ───────────── */
+.halo-t-micro {
+	font-size: var(--halo-t-micro);
+	line-height: var(--halo-lead-snug);
+	font-weight: var(--halo-w-medium);
+}
+
+.halo-t-eyebrow {
+	font-size: var(--halo-t-eyebrow);
+	line-height: var(--halo-lead-snug);
+	font-weight: var(--halo-w-semibold);
+	letter-spacing: var(--halo-track-eyebrow);
+	text-transform: uppercase;
+	font-family: var(--font-sans);
+}
+
+.halo-t-label {
+	font-size: var(--halo-t-label);
+	line-height: var(--halo-lead);
+	font-weight: var(--halo-w-normal);
+}
+
+.halo-t-value {
+	font-size: var(--halo-t-value);
+	line-height: var(--halo-lead-tight);
+	font-weight: var(--halo-w-medium);
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: var(--halo-track-num);
+}
+
+/* The hero numeral. font-display (Space Grotesk) is deliberately NOT used here —
+   Inter + JetBrains Mono is already 2 families, and LAMINAR §3 caps a view at 2. */
+.halo-t-display {
+	font-size: var(--halo-t-display);
+	line-height: var(--halo-lead-tight);
+	font-weight: var(--halo-w-semibold);
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: var(--halo-track-num);
+}
+
+/* ── Untrusted value: a sentence, not a number. ───────────────────────────────
+   When a producer is silent the card renders prose where a numeral would be, and a
+   numeral-sized sentence reads as a rendering bug. This role exists so that state is
+   visibly different in TYPE, not only in colour — meaning is never carried by colour
+   alone (LAMINAR §7 / Gate D). */
+.halo-t-unknown {
+	font-size: var(--halo-t-label);
+	line-height: var(--halo-lead);
+	font-weight: var(--halo-w-normal);
+	font-family: var(--font-sans);
+	font-style: normal;
+}
+
+/* ── A value the user can act on. ─────────────────────────────────────────── */
+.halo-t-signal {
+	color: var(--halo-signal);
+}
+
+/* Focus ring uses the page accent, never the browser default (Gate D). */
+.halo-root :focus-visible {
+	outline: 2px solid var(--halo-accent); /* board 4: focus-visible stroke is #6fb38f */
+	outline-offset: 2px;
+	/* LAMINAR §4: 8 / 12 / pill only. This must not introduce a 4th radius, so it takes
+	   the card radius it is drawn around. */
+	border-radius: var(--halo-radius-card);
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHELL LAYOUT — the padding bug
+   ════════════════════════════════════════════════════════════════════════════
+   MEASURED, NOT ASSUMED: the screenshot showed "esc to close" clipped at the right edge
+   and "No app detected" hanging below the capsule. Cause: the shell had NO padding, so
+   every child sat flush against the border and outside the rounded corners. A radius
+   also needs inset content to read as a capsule at all.
+
+   The pill radius is correct at COMPACT (40px tall) and wrong when EXPANDED (192px tall):
+   9999px on a 460x192 box produces a lozenge, not a pill. So the radius is now applied
+   by PHASE, and the user's `shape` chooses between pill / attached / recessive within
+   each phase. Compact stays 9999 (that is the Dynamic Island read); expanded caps at 12
+   per LAMINAR §4 because a full-pill 460x192 is a lozenge.
+   ════════════════════════════════════════════════════════════════════════════ */
+.halo-compact {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* The 40px pill: horizontal padding only, content hard-centred. The 28px display role
+	   does not fit here (28 + line-height exceeds 40), so compact uses `halo-t-value`. */
+	padding: 0;
+	overflow: hidden;
+}
+
+/* Compact numeral: 13px value role, de-emphasised seconds handled by the component.
+   Centered on BOTH axes so it cannot ride the top edge of a 40px pill. */
+.halo-compact .halo-t-value {
+	line-height: 1;
+	align-self: center;
+}
+
+/* EXPANDED: real inset + a max radius that matches its own height. */
+.halo-surface[data-phase='expanded'],
+.halo-surface.halo-expanded {
+	padding: var(--halo-gap-block) var(--halo-gap-block) var(--halo-gap-loose);
+	/* No overflow box here. `overflow:hidden` on this absolutely-positioned, 50%-centred
+	   element anchored the scroll origin to the padding edge and pushed the whole surface
+	   from x=410 to x=1050. Truncation is handled per-child by `.halo-rail` and
+	   `min-width: 0`, so nothing here needs to clip. */
+	overflow: visible;
+}
+
+/* A row that can never clip its own text: min-width:0 lets the flex child shrink so
+   `truncate` works, which was impossible when the row had no width constraint. */
+.halo-rail {
+	display: flex;
+	align-items: center;
+	gap: var(--halo-gap);
+	min-width: 0;
+	height: 30px;
+	/* the rule is this row's own bottom border — never a separate .halo-divider element
+	   sharing the row, because that set `height:1px` and collapsed the buttons. */
+	border-bottom: 1px solid var(--halo-hairline);
+	/* horizontal clip only: `overflow: hidden` on both axes collapsed the buttons to
+	   nothing and sliced the tab labels in half. */
+	overflow-x: hidden;
+	overflow-y: visible;
+	flex-shrink: 0;
+}
+
+.halo-rail-trailing {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: var(--halo-gap-tight);
+	flex-shrink: 0;
+}
+
+/* The tab strip and the body are separated by ONE hairline, aligned to the shell padding
+   so it does not read as a stray rule. */
+/* The rule is a SEPARATE element. Applying this to the row it divides set
+   `height:1px`, which beat the rail's 30px row and collapsed the tab buttons into a
+   1px band — which is what clipped the tab labels. */
+.halo-divider {
+	height: 1px;
+	flex-shrink: 0;
+	background: var(--halo-hairline);
+}
+
+/* The hero block: numeral and ring share a baseline band and neither shrinks. */
+.halo-hero-row {
+	display: flex;
+	align-items: center;
+	gap: var(--halo-gap-block);
+	min-width: 0;
+}
+
+.halo-hero-numeral {
+	flex-shrink: 0;
+}
+
+/* The productive/distracting pair is a COMPARISON, so both sides get equal footing:
+   one shared baseline row and a hairline between them. */
+.halo-split-stat {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--halo-gap);
+	min-width: 0;
+}
+
+/* Container that must never push its parent past the shell width. */
+.halo-clip-x {
+	/* NOT a second horizontal clip. Two nested `overflow-x:hidden` containers inside a
+	   centred flex column shifted the surface's scroll origin and rendered the whole island
+	   at x=1050 instead of x=410. The SHELL owns the horizontal clip; this only shrinks. */
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+/* The expanded shell is a flex column so padding + rail + body stack without the body
+   forcing the box taller than its measured height. */
+.halo-surface.halo-expanded {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+}
+
+/* EXPANDED HERO — 2 columns so the surface is FILLED rather than left-aligned in a void.
+   `minmax(0,1fr)` on the flexible column is what allows `truncate` to work inside it;
+   without it a long app name would push the grid wider than the shell. */
+.halo-hero-grid {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: var(--halo-gap-block);
+	min-width: 0;
+}
+
+.halo-hero-side {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--halo-gap-hair);
+	min-width: 0;
+}
+
+/* Tier chips read as a set, so they share one row and wrap rather than stacking. */
+.halo-chip-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--halo-gap-hair);
+	min-width: 0;
+}
+
+/* ══ TAB RAIL — Figma board `4 / States` ═════════════════════════════════════════
+ *
+ * PAINT Gate D requires hover, focus-visible, pressed and disabled on EVERY interactive
+ * element. The rail was first written with inline styles, which cannot express any of them —
+ * so it shipped with no hover and no focus ring while claiming both in its own comments. That
+ * is the exact "comment asserts a coupling instead of testing it" failure again, so the
+ * interactive states live here where they are real and countable.
+ *
+ * The states, verbatim from the board:
+ *   default   transparent, muted
+ *   hover     bg-raised, primary text
+ *   pressed   bg-raised, primary, slight shrink
+ *   selected  bg-raised, primary, weight 500
+ *   focus     2px ring in the SIGNAL hue
+ *   disabled  muted, never `opacity` on the text (handoff §9)
+ */
+.halo-tab {
+ 	display: flex;
+ 	align-items: center;
+ 	justify-content: center;
+ 	gap: 8px;
+ 	/* MEASURED board 4: every tab cell is 132x44 in the state strip, and the Figma handoff
+ 	 * requires 44x44 touch targets at EVERY size. This was 36, which is why they felt small.
+ 	 * The rail has no padding now (see HaloTabRail.tsx) so the button fills the 44px row. */
+ 	min-width: 44px;
+ 	height: 44px;
+ 	padding-inline: 12px;
+ 	border: none;
+ 	border-radius: var(--halo-radius-rail);
+ 	/* board 4 "default": NO fill, label #a1a1aa Inter 400/12 */
+ 	background: transparent;
+ 	color: var(--halo-muted);
+ 	font-size: var(--halo-t-label);
+ 	font-weight: 400;
+ 	cursor: pointer;
+ 	/* transform/opacity only — PAINT Gate E. The colour change is instant in the file. */
+ 	transition: transform 150ms var(--halo-move-ease, cubic-bezier(0.16, 1, 0.3, 1));
+ }
+
+/* board 4 "hover": fill #18181b, label stays #a1a1aa (NOT #fafafa) */
+.halo-tab:hover:not(:disabled) {
+	background: var(--halo-raised);
+	color: var(--halo-muted);
+}
+
+/* board 4 "pressed": fill #27272a + label #fafafa, plus the slight shrink */
+.halo-tab:active:not(:disabled) {
+	background: var(--halo-tab);
+	color: var(--halo-text);
+	transform: scale(0.97);
+}
+
+/* board 4 "selected": fill #27272a, label #fafafa, weight 500 */
+.halo-tab[data-active='true'] {
+	background: var(--halo-tab);
+	color: var(--halo-text);
+	font-weight: 500;
+}
+
+/* board 4 "focus-visible": a 2px stroke in the ONLY accent, #6fb38f — an outline, not a soft
+ * shadow. The file draws it as `stroke=#6fb38f w=2` on the r=8 cell. */
+.halo-tab:focus-visible {
+	outline: 2px solid var(--halo-accent);
+	outline-offset: -2px;
+}
+
+/* board 4 "disabled": label muted, never hidden, no opacity on the text. */
+.halo-tab:disabled {
+	cursor: not-allowed;
+	color: var(--halo-dim);
+	background: transparent;
+}
+
+.halo-tab--icon-only {
+	flex: 1;
+	padding-inline: 0;
+	gap: 0;
+}

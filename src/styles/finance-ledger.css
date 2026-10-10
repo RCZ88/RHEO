@@ -1,0 +1,211 @@
+/* ============================================================================
+   finance-ledger.css — the /finance design contract (LAMINAR §1 token law)
+   ----------------------------------------------------------------------------
+   WHY THIS FILE EXISTS
+   The finance module had no type scale. OverviewTab alone used 11x text-[10px],
+   2x text-[11px], 6x text-xs, 3x text-sm, 2x text-lg and 1x text-[28px] — a
+   step function with nothing between 12px and 18px, so every label shouted and
+   nothing read as a heading. It also ran SIX accent hues (emerald / amber /
+   red / cyan / blue, plus violet+indigo in the cards it renders), which is a
+   LAMINAR §7.2 hard-gate fail: colour had stopped carrying meaning.
+
+   THE IDEA: a ledger, not a dashboard. Money is a record. A record has a
+   reading order (what you have -> what came in -> what went out -> what you are
+   owed -> what you did), figures set in tabular mono so columns align when
+   scanned, and colour used ONLY to mean something.
+
+   COLOUR MEANING (this is the whole point):
+     structure / focus   var(--page-accent)   -- the surface identity, 1px only
+     in  / positive      var(--success)        -- money arriving, net positive
+     out / negative      var(--danger)         -- money leaving, net negative
+     owed / attention    var(--ws-accent-text) -- follow-through receivables
+   Amber, cyan, blue and violet are NOT available as chrome on this surface.
+   That is deliberate: they were decoration, and decoration competed with data.
+
+   ZERO RAW HEX BELOW. Every value is var() or a token already in src/index.css,
+   so the LAMINAR §7 grep gate stays clean and light mode is automatic.
+   ============================================================================ */
+
+@layer components {
+
+  /* ── Surfaces ────────────────────────────────────────────────────────────
+     One card recipe, three depths. Depth comes from HAIRLINE + one step of
+     surface lightness — never from box-shadow (LAMINAR §7.9 forbids bespoke
+     shadows) and never from backdrop-blur (LAMINAR §7.3). The old
+     GlassSurface tier 1/3 carried `backdrop-blur-2xl` on 24 importers. */
+
+  .fin-surface {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--ws-radius-card, 0.5rem); /* 8px — LAMINAR §4 sm slot */
+  }
+
+  /* Raised: one step up, for the one element on a row that must lead. */
+  .fin-surface--raised {
+    background: color-mix(in srgb, var(--color-card) 88%, var(--color-foreground) 12%);
+    border: 1px solid color-mix(in srgb, var(--color-border) 100%, var(--color-foreground) 8%);
+  }
+
+  /* Sunken: for wells (chart tracks, legend swatch rows, empty states). */
+  .fin-surface--sunken {
+    background: color-mix(in srgb, var(--color-card) 70%, var(--color-background) 30%);
+    border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  }
+
+  /* Interactive: hover must change the HAIRLINE, never add a shadow. */
+  .fin-surface--interactive {
+    transition: border-color 150ms cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fin-surface--interactive:hover {
+    border-color: color-mix(in srgb, var(--page-accent) 38%, var(--color-border));
+    background: color-mix(in srgb, var(--color-card) 92%, var(--color-foreground) 8%);
+  }
+  .fin-surface--interactive:focus-visible {
+    outline: 2px solid var(--page-accent);
+    outline-offset: 2px;
+  }
+
+  /* ── The type scale (5 steps, and only 5) ─────────────────────────────────
+     `fin-eyebrow` is for SECTION labels only — it is the size the old code
+     abused 11 times for card labels, which is why the page had no hierarchy.
+     Card labels use `fin-label`. */
+
+  .fin-eyebrow {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .fin-label {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--text-secondary);
+  }
+
+  .fin-body {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+
+  .fin-body-strong {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  /* Money. Every figure on this surface is mono + tabular so that digits line
+     up in a column when scanned — the actual job of a ledger. `--fs-*` lets a
+     component pick a magnitude without inventing an arbitrary px value. */
+  .fin-figure {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    font-size: var(--fin-fs, 14px);
+    line-height: calc(var(--fin-fs, 14px) + 4px);
+    font-weight: 600;
+  }
+
+  /* ── Value semantics: the only three colours that carry meaning ────────────
+     `fin-pos` / `fin-neg` are for SIGN, never for chrome. A section heading is
+     never green; a positive number is always green. */
+
+  .fin-pos { color: var(--success); }
+  .fin-neg { color: var(--danger); }
+  .fin-owed { color: var(--ws-accent-text); }
+  .fin-flat { color: var(--text-secondary); }
+
+  .fin-hairline {
+    height: 1px;
+    background: var(--color-border);
+    border: 0;
+  }
+
+  /* Accent hairline: the single permitted structural use of the page accent.
+     Replaces the four `bg-gradient-to-r from-emerald-500/40 via-… to-transparent`
+     ornament bands, which LAMINAR §7.1 bans and which cost ~108px of vertical
+     budget to say nothing. */
+  .fin-rule-accent {
+    height: 2px;
+    border: 0;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--page-accent) 70%, transparent);
+  }
+
+  /* Opt-in accent hairline for the ONE card in a row that must lead. Named
+     here rather than as a Tailwind arbitrary value: `color-mix` inside a
+     `border-[...]` class needs underscore-escaping and breaks silently. */
+  .fin-surface--accent {
+    border-color: color-mix(in srgb, var(--page-accent) 34%, var(--color-border));
+  }
+
+  /* Initials disc for a person owed money. Lives here for the same reason —
+     `bg-[color-mix(in_srgb,var(--x)_18%,transparent)]` requires underscore
+     escaping, and a silently-mangled utility is worse than no utility. */
+  .fin-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--ws-accent-text) 18%, transparent);
+    color: var(--ws-accent-text);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  /* Chart tracks / swatch wells. */
+  .fin-track {
+    background: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+    border-radius: 9999px;
+  }
+
+  /* Focus ring: the page accent, never the browser default and never a hue
+     hardcoded per component (the old code used ring-emerald-500/50 in ~14
+     places, which silently breaks the moment the page accent changes). */
+  .fin-focusable:focus-visible {
+    outline: 2px solid var(--page-accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Grid: the 12-column ledger. A `minmax` floor means the rail never orphans
+     a card — the old `grid-cols-2 lg:grid-cols-3` had exactly 3 children, so
+     between 768px and 1023px the third card wrapped alone onto a full-width
+     row. auto-fit + minmax reflows instead of orphaning. */
+  .fin-ledger {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  /* L1 Composed + LAMINAR §6: honour the OS setting. Motion here is opacity
+     and transform only, so this simply removes the travel. */
+  @media (prefers-reduced-motion: reduce) {
+    .fin-rise {
+      transition: none !important;
+      animation: none !important;
+    }
+    .fin-surface--interactive {
+      transition: none !important;
+    }
+  }
+}

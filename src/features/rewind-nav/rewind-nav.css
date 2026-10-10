@@ -1,0 +1,161 @@
+/**
+ * rewind-nav.css — keyframes and the film strip.
+ *
+ * Two animations only, both transform-based (LAMINAR §7.9, spec §5):
+ *   rewind-reel-spin  the reels, backward, only while traveling
+ *   rewind-zoom       the frame-to-page expansion
+ *
+ * The frame-to-page fade-out that spec §5 asks for is handled by React state in
+ * `RewindNav`: the route change happens while the proxy covers the screen, then
+ * the proxy unmounts and the real page is revealed. Doing it in CSS with a
+ * `forwards` fill would leave a stuck overlay after any cancellation.
+ */
+
+@keyframes rewind-reel-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-1080deg); }
+}
+
+@keyframes rewind-zoom {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    border-radius: 3px;
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(60);
+    border-radius: 0px;
+  }
+}
+
+/*
+ * ── The film strip ─────────────────────────────────────────────────────────
+ * Matte black base with sprocket holes along both edges, plus quiet edge print.
+ *
+ * The sprockets are a repeating-linear-gradient on the WRAPPER, never drawn per
+ * frame. Per-frame holes make the pitch visibly wrong at the seams, because each
+ * frame would restart the pattern and you get a doubled hole at every boundary.
+ *
+ * The wrapper is the OUTER container — the fixed viewport — not the scrolling
+ * row. That is deliberate: the holes must stay put while the frames slide
+ * underneath them, which is what film actually looks like. On the scrolling row
+ * the sprockets would race across the screen with the content, which reads as a
+ * glitch rather than as film.
+ */
+.rewind-strip {
+  background: var(--rewind-field);
+  border-top: 1px solid var(--rewind-hairline);
+  border-bottom: 1px solid var(--rewind-hairline);
+  /* --rewind-field / --rewind-hairline carry a light override; see WARM PAPER below. */
+  position: relative;
+  padding: 4px 0;
+  isolation: isolate;
+}
+
+/* Sprocket rows: 8px tall, hard against both strip edges. */
+.rewind-strip::before,
+.rewind-strip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  z-index: 2;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 6px,
+    var(--rewind-sprocket) 6px 13px,
+    transparent 13px 22px
+  );
+}
+
+.rewind-strip::before { top: 3px; }
+.rewind-strip::after { bottom: 3px; }
+
+/*
+ * Edge print: the reel name on one side, a frame counter on the other, sitting
+ * between the sprocket row and the image exactly as it does on real stock.
+ *
+ * Opacity is 0.22 and no more. Spec §3 says keep it quiet; past roughly 0.35 it
+ * stops reading as film stock and starts reading as a caption you are meant to
+ * read, which then competes with the frame titles for the same attention.
+ */
+.rewind-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 14px;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rewind-ink);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ── WARM PAPER ───────────────────────────────────────────────────────────────
+ *
+ * This file was hardcoded dark end to end: `background: #09090b`, three
+ * `rgba(255,255,255,·)` values, and NOT ONE occurrence of `light` anywhere in
+ * the stylesheet. The whole filmstrip therefore rendered near-black on cream
+ * paper — the "you missed the rewind thing" report.
+ *
+ * Rather than restate the ramp per rule, the two ink values and the three
+ * hairlines are re-bound to tokens and overridden once for light. That keeps ONE
+ * source of truth: if a value ever needs changing it changes in index.css, not in
+ * two places that can drift.
+ *
+ * The sprocket and edge-print alphas are preserved exactly (0.11 / 0.22). Film
+ * stock is translucent by nature; the density was already chosen deliberately
+ * against Spec §3 ("keep it quiet; past roughly 0.35 it stops reading as film
+ * stock") and light mode must not silently re-tune it. Only the INK flips —
+ * white ink on cream paper is invisible, warm ink is not.
+ *
+ * Warm, not grey: these are the design.md §11 S0/S1 ladder plus the ink tokens,
+ * never a substituted neutral. */
+.rewind-strip {
+  --rewind-ink: rgb(255 255 255 / 0.22);
+  --rewind-sprocket: rgb(255 255 255 / 0.11);
+  --rewind-hairline: rgb(255 255 255 / 0.04);
+  --rewind-field: #09090b;
+}
+
+html.light .rewind-strip {
+  --rewind-ink: var(--text-muted);
+  --rewind-sprocket: color-mix(in srgb, var(--text-primary) 18%, transparent);
+  --rewind-hairline: var(--ws-border);
+  /* S0 paper. `--ws-surface` is bone #f5f2ec — the field the strip sits on, not
+     a card, so it takes the base of the ladder rather than S1 raised. */
+  --rewind-field: var(--ws-surface);
+}
+
+.rewind-edge--top { top: 15px; }
+.rewind-edge--bottom { bottom: 15px; }
+
+/* Print sits inside the strip's mask fade, so pad it clear of the fade or the
+   first characters get eaten ("ASHBOARD"). */
+.rewind-edge { padding: 0 9%; }
+
+.rewind-edge > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Reduced motion: the reels stop entirely rather than merely shortening. Spec §5
+ * says every animation needs a no-motion fallback, and a spinning reel is the most
+ * motion-sensitive thing on screen.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .rewind-strip::before,
+  .rewind-strip::after {
+    /* Holes stay; only the travel animation is removed. The strip is static. */
+    animation: none;
+  }
+}
