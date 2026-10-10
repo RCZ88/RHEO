@@ -15,10 +15,10 @@ export function OnThisDayCard({ items, onOpen }: OnThisDayCardProps) {
     <motion.div
       initial={cardMotion.initial}
       animate={cardMotion.animate}
-      className="relative overflow-hidden rounded-xl border border-[#6fb38f]/25 bg-[#6fb38f]/[0.06] p-3"
+      className="relative overflow-hidden rounded-xl border border-[var(--color-mem-400)]/25 bg-[var(--color-mem-400)]/[0.06] p-3"
     >
       <div className="warmth-aurora" />
-      <div className="relative z-10 flex items-center gap-2 mb-2 text-[11px] uppercase tracking-wider text-[#6fb38f]">
+      <div className="relative z-10 flex items-center gap-2 mb-2 text-[11px] uppercase tracking-wider text-[var(--color-mem-400)]">
         <Clock className="w-3.5 h-3.5" /> On this day
       </div>
       <div className="relative z-10 flex gap-2 overflow-x-auto ws-scroll pb-1">

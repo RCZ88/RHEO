@@ -13,11 +13,6 @@ import {
 import { Button } from '../ui/button';
 import { Tooltip } from '../ui/tooltip';
 
-const ACCENT_HEX: Record<string, string> = {
-  green: '#22c55e', emerald: '#34d399', cyan: '#22d3ee',
-  indigo: '#818cf8', rose: '#fb7185', amber: '#fbbf24',
-};
-
 interface TerminalTab {
   id: string;
   name: string;
@@ -71,7 +66,7 @@ export function WorkspaceCommandBar({
   const currentProject = projects.find(p => p.id === selectedProject);
 
   return (
-    <div className="flex items-center h-11 px-3 bg-zinc-950 border-b border-zinc-800/60 shrink-0 gap-2">
+    <div className="flex items-center h-11 px-3 bg-zinc-950 light:bg-[var(--ws-surface)] border-b border-zinc-800/60 shrink-0 gap-2">
       {/* ── Left: Exit + Project ── */}
       <div className="flex items-center gap-1.5 shrink-0">
         <Tooltip content="Exit workspace">
@@ -101,7 +96,7 @@ export function WorkspaceCommandBar({
           <select
             value={selectedProject}
             onChange={(e) => onProjectChange(e.target.value)}
-            className="h-6 w-auto max-w-[120px] rounded-md bg-zinc-900/60 border border-zinc-800 px-1.5 text-[10px] text-zinc-300 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-700"
+            className="h-6 w-auto max-w-[120px] rounded-md bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 px-1.5 text-[10px] text-zinc-300 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-700"
           >
             {projects.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>

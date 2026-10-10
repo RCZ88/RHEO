@@ -148,41 +148,147 @@ export function CanvasGrid({
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* ignore */ }
   }, [setIsPanning])
 
+  // Panning is by far the hottest path: a trackpad drag fires pointermove far
+  // faster than the display refreshes. Calling onPanChange directly on every
+  // event meant one React state update PER EVENT, each re-rendering the whole
+  // canvas (toolbar, panels and every card) through CanvasContainer, which
+  // memoises almost nothing. That is the "laggy with only 20 cards" symptom —
+  // cost scaled with pointer rate, not card count.
+  //
+  // Fix: coalesce to one update per animation frame, and write the transform
+  // straight to the DOM on every event so motion stays at display rate. React
+  // state catches up once per frame, which is all persistence/auto-centre needs.
+  const panRafRef = useRef(0)
+  const pendingPanRef = useRef<{ x: number; y: number } | null>(null)
+
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isPanning) return
     const dx = e.clientX - panStart.current.x
     const dy = e.clientY - panStart.current.y
     const newPan = { x: panStart.current.panX + dx, y: panStart.current.panY + dy }
-    onPanChange(newPan)
+
+    // 1) Immediate visual feedback, bypassing React entirely.
+    const layer = gridLayerRef.current
+    if (layer) {
+      layer.style.transform = `translate(${newPan.x}px, ${newPan.y}px) scale(${zoomRef.current})`
+    }
+
+    // 2) React state at most once per frame.
+    pendingPanRef.current = newPan
+    if (panRafRef.current) return
+    panRafRef.current = requestAnimationFrame(() => {
+      panRafRef.current = 0
+      const pending = pendingPanRef.current
+      if (pending) onPanChange(pending)
+    })
   }, [isPanning, onPanChange])
+
+  // Cancel any in-flight frame on unmount so no setState-after-unmount warning.
+  useEffect(() => () => { if (panRafRef.current) cancelAnimationFrame(panRafRef.current) }, [])
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     setIsPanning(false)
     try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* ignore */ }
   }, [setIsPanning])
 
-  // Native wheel listener with { passive: false } to allow preventDefault
+  // Native wheel listener with { passive: false } so preventDefault works.
+  //
+  // GESTURE SUPPORT:
+  //  - Plain wheel/trackpad scroll ZOOMS (this is a spatial canvas, not a
+  //    scrolling document, so vertical scroll has no other meaning here).
+  //  - Ctrl+wheel is the browser pinch-zoom gesture on macOS/Windows/Linux
+  //    trackpads, and arrives as deltaY with ctrlKey=true. It must be handled
+  //    or pinch does nothing. We do not let the browser zoom the page.
+  //  - deltaMode 1 = lines, 2 = pages. Normalising matters: Firefox reports
+  //    line-mode deltas that are ~3x larger, which made zoom feel violent there.
+  //
+  // The frame transform is written directly (so zoom tracks the gesture at
+  // display rate) and state is committed once per rAF, same as panning.
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
+    let rafId = 0
+    let pending: { zoom: number; pan: { x: number; y: number } } | null = null
+
+    // Which gesture is this?
+    //   ctrl/meta/alt  -> PINCH (trackpad pinch always arrives as ctrl+wheel)
+    //   otherwise      -> TWO-FINGER SCROLL, which on a spatial canvas must PAN.
+    // The old handler zoomed on EVERY wheel event, so a trackpad two-finger
+    // swipe zoomed the canvas instead of moving it — that is why the canvas
+    // "wasn't navigatable by trackpad".
+    const isZoom = (e: WheelEvent) => e.ctrlKey || e.metaKey || e.altKey;
+
     const handler = (e: WheelEvent) => {
+      // A wheel event inside a card's own scroller belongs to the card. It
+      // bubbles up to here, so without this the canvas panned whenever you
+      // scrolled any content inside a card.
+      const target = e.target as HTMLElement | null
+      const inCardScroller = !!target?.closest?.('.dk-canvas-card-body')
+
+      const zooming = isZoom(e)
+      // Mouse users have no pinch: alt+wheel still zooms. A trackpad
+      // two-finger swipe over a card scrolls that card and nothing else.
+      if (!zooming && inCardScroller) return
       e.preventDefault()
+
       const rect = el.getBoundingClientRect()
       const cursorX = e.clientX - rect.left
       const cursorY = e.clientY - rect.top
       const p = panRef.current
       const z = zoomRef.current
+
+      // Keep the point under the cursor/fingers fixed while scaling.
       const gridX = (cursorX - p.x) / z
       const gridY = (cursorY - p.y) / z
-      const direction = e.deltaY < 0 ? 1 : -1
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z + direction * ZOOM_STEP * z))
-      const newPanX = cursorX - gridX * newZoom
-      const newPanY = cursorY - gridY * newZoom
-      onZoomChange(newZoom, { x: newPanX, y: newPanY })
-    }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [onZoomChange])
+
+      // Normalise line/page deltas into pixel-ish units.
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1
+      const rawY = e.deltaY * unit
+      const rawX = e.deltaX * unit
+
+      let newZoom = z
+      let newPanX = p.x
+      let newPanY = p.y
+
+      if (zooming) {
+        // Exponential scale: constant zoom rate regardless of delta magnitude,
+        // so a slow pinch and a fast flick both feel linear.
+        const factor = Math.exp(-rawY * 0.0015)
+        newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * factor))
+        newPanX = cursorX - gridX * newZoom
+        newPanY = cursorY - gridY * newZoom
+      } else {
+        // TWO-FINGER SCROLL -> PAN. Natural direction: swiping up (negative
+        // deltaY) moves the board down, so subtract. shift+wheel pans
+        // horizontally from deltaY, which is what browsers emit for a
+        // horizontal swipe without deltaX support.
+        newPanX = p.x - rawX - (e.shiftKey ? rawY : 0)
+        newPanY = p.y - rawY
+      }
+
+      // Immediate paint, no React.
+      const layer = gridLayerRef.current;
+      if (layer) {
+        layer.style.transform = `translate(${newPanX}px, ${newPanY}px) scale(${newZoom})`;
+      }
+      panRef.current = { x: newPanX, y: newPanY };
+      zoomRef.current = newZoom;
+
+      pending = { zoom: newZoom, pan: { x: newPanX, y: newPanY } };
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        const p2 = pending;
+        if (p2) onZoomChange(p2.zoom, p2.pan);
+      });
+    };
+
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handler);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [onZoomChange]);
 
   const bgStyle = {
     backgroundPosition: `${pan.x}px ${pan.y}px`,

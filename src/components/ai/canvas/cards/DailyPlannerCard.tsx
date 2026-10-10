@@ -176,7 +176,7 @@ export function DailyPlannerCard({ date = new Date().toISOString().slice(0, 10) 
           <span>Goals</span>
           <button
             onClick={() => setShowAddGoal(!showAddGoal)}
-            style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 4, fontSize: 10, color: showAddGoal ? '#22d3ee' : '#52525b', background: showAddGoal ? 'rgba(34,211,238,0.1)' : 'transparent', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', transition: 'all 0.15s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 4, fontSize: 10, color: showAddGoal ? '#22d3ee' : '#52525b', background: showAddGoal ? 'rgba(34,211,238,0.1)' : 'transparent', border: '1px solid var(--dk-chip-edge)', cursor: 'pointer', transition: 'all 0.15s' }}
           >
             {showAddGoal ? <X size={10} /> : <Plus size={10} />}
             {showAddGoal ? 'Cancel' : 'Add Goal'}
@@ -184,14 +184,14 @@ export function DailyPlannerCard({ date = new Date().toISOString().slice(0, 10) 
         </div>
 
         {showAddGoal && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0', marginBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0', marginBottom: 8, borderBottom: '1px solid var(--dk-chip)' }}>
             <input
               value={newGoalTitle}
               onChange={e => setNewGoalTitle(e.target.value)}
               placeholder="What do you want to accomplish?"
               autoFocus
               onKeyDown={e => { if (e.key === 'Enter') handleAddManualGoal(); if (e.key === 'Escape') setShowAddGoal(false) }}
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#e4e4e7', outline: 'none', width: '100%' }}
+              style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#e4e4e7', outline: 'none', width: '100%' }}
             />
             <ExternalAIBridgeField
               fieldName="title"
@@ -206,7 +206,7 @@ export function DailyPlannerCard({ date = new Date().toISOString().slice(0, 10) 
               <select
                 value={newGoalCategory}
                 onChange={e => setNewGoalCategory(e.target.value)}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none' }}
+                style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none' }}
               >
                 <option value="work">Work</option>
                 <option value="learning">Learning</option>
@@ -221,14 +221,14 @@ export function DailyPlannerCard({ date = new Date().toISOString().slice(0, 10) 
                   step={5}
                   value={newGoalTargetMinutes}
                   onChange={e => setNewGoalTargetMinutes(Number(e.target.value))}
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '4px 6px', fontSize: 11, color: '#a1a1aa', outline: 'none', width: 50 }}
+                  style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '4px 6px', fontSize: 11, color: '#a1a1aa', outline: 'none', width: 50 }}
                 />
                 <span style={{ fontSize: 10, color: '#52525b' }}>min</span>
               </div>
               <button
                 onClick={handleAddManualGoal}
                 disabled={!newGoalTitle.trim()}
-                style={{ marginLeft: 'auto', padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: newGoalTitle.trim() ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: newGoalTitle.trim() ? '#22d3ee' : '#52525b', border: 'none', cursor: newGoalTitle.trim() ? 'pointer' : 'default', transition: 'all 0.15s' }}
+                style={{ marginLeft: 'auto', padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: newGoalTitle.trim() ? 'rgba(34,211,238,0.15)' : 'var(--dk-chip-edge)', color: newGoalTitle.trim() ? '#22d3ee' : '#52525b', border: 'none', cursor: newGoalTitle.trim() ? 'pointer' : 'default', transition: 'all 0.15s' }}
               >
                 Add
               </button>

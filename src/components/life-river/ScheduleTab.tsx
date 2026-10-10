@@ -131,7 +131,7 @@ function EntryForm({ open, onOpenChange, initial, onSave, goals }: {
 
   return (
     <div className={cn("fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity", open ? "opacity-100" : "opacity-0 pointer-events-none")} onClick={() => onOpenChange(false)}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">{initial ? 'Edit entry' : 'New entry'}</h3>
         <div className="space-y-3.5">
           <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" className="text-[14px]" />
@@ -398,7 +398,7 @@ export function ScheduleTab() {
           const dayCount = entries.filter(e => e.day_of_week === i).length
           const isToday = i === new Date().getDay()
           return (
-            <button key={i} onClick={() => setSelectedDay(i)} className={cn("flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-[11px] font-medium transition-all border", selectedDay === i ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "border-zinc-700/30 bg-zinc-900/30 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30")}>
+            <button key={i} onClick={() => setSelectedDay(i)} className={cn("flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-[11px] font-medium transition-all border", selectedDay === i ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "border-zinc-700/30 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30")}>
               <span className={cn("text-[10px]", isToday && "text-amber-400")}>{DAY_SHORT[i]}</span>
               <span className="text-[18px] font-semibold leading-none">{i === new Date().getDay() ? new Date().getDate() : '·'}</span>
               {dayCount > 0 && <span className="text-[9px] text-zinc-600">{dayCount}</span>}
@@ -423,7 +423,7 @@ export function ScheduleTab() {
 
       {/* Calendar */}
       {loading ? (
-        <div className="space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 animate-pulse rounded-lg border border-zinc-800/50 bg-zinc-900/40" />)}</div>
+        <div className="space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 animate-pulse rounded-lg border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]" />)}</div>
       ) : entries.length === 0 ? (
         <div className="text-center py-12">
           <Calendar size={32} className="mx-auto text-zinc-700 mb-3" />
@@ -440,7 +440,7 @@ export function ScheduleTab() {
             if (dayEntries.length === 0) return null
             const isToday = i === new Date().getDay()
             return (
-              <div key={i} className={cn("rounded-xl border p-3", isToday ? "border-amber-500/30 bg-amber-500/5" : "border-zinc-800/40 bg-zinc-900/20")}>
+              <div key={i} className={cn("rounded-xl border p-3", isToday ? "border-amber-500/30 bg-amber-500/5" : "border-zinc-800/40 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)]")}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className={cn("text-[12px] font-medium", isToday ? "text-amber-300" : "text-zinc-300")}>{d}</span>
                   <span className="text-[10px] text-zinc-600">{dayEntries.length} entries</span>

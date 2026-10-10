@@ -61,7 +61,7 @@ export function RecentTxnsCard({
 
       {/* Follow Through filter toggle */}
       {followThroughCount > 0 && (
-        <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl mb-1">
+        <div className="flex items-center gap-1 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-1 rounded-xl mb-1">
           {([
             { key: 'personal' as TxFilter, label: 'Personal' },
             { key: 'follow-through' as TxFilter, label: 'Follow Through' },

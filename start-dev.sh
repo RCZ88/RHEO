@@ -367,11 +367,18 @@ if ! $NO_DESKTOP; then
   if ! $IS_WIN && [ "${ELECTRON_OZONE_PLATFORM:-}" != "wayland" ]; then
     ELECTRON_ARGS_ARR+=(--ozone-platform=x11)
   fi
-  # user data dir — override Electron's default so Windows and Linux share the NTFS path
+  # user data dir
+  #
+  # Was: forced onto the Windows NTFS mount so Windows and Linux shared one
+  # profile. That made the app itself depend on that mount — udisks automount, not
+  # in /etc/fstab — so a missing mount meant no app and no tracking, which is the
+  # thing this change exists to fix.
+  #
+  # Order: explicit ELECTRON_USER_DATA_DIR, then the Linux profile. The NTFS path
+  # is deliberately NOT probed. Set ELECTRON_USER_DATA_DIR yourself if you want
+  # the shared profile back.
   if [ -z "${ELECTRON_USER_DATA_DIR:-}" ]; then
-    if [ -d "/run/media/clementzhao/78FADEEEFADEA820/Users/cleme/Application Data/RHEO" ]; then
-      ELECTRON_USER_DATA_DIR="/run/media/clementzhao/78FADEEEFADEA820/Users/cleme/Application Data/RHEO"
-    fi
+    ELECTRON_USER_DATA_DIR="$HOME/.config/RHEO"
   fi
   if [ -n "${ELECTRON_USER_DATA_DIR:-}" ]; then
     ELECTRON_ARGS_ARR+=(--user-data-dir="$ELECTRON_USER_DATA_DIR" ".")

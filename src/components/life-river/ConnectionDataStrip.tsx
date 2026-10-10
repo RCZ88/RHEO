@@ -86,7 +86,7 @@ export function ConnectionDataStrip({ phaseId, startYear, endYear, memories }: C
   const maxFocusMs = Math.max(1, ...(ctx?.focusGroups || []).map(f => f.totalMs))
 
   return (
-    <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/30" data-lifephase="connection-strip">
+    <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]" data-lifephase="connection-strip">
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-zinc-800/30"

@@ -147,10 +147,10 @@ export function FinanceChartsTab({
       >
         {/* Net Worth Trend */}
         <motion.div variants={riseItem}>
-          <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/50 p-5 h-full hover:border-zinc-600/30 transition-colors">
+          <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-5 h-full hover:border-zinc-600/30 transition-colors">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[10px] font-semibold tracking-[0.08em] uppercase text-zinc-500">Net worth trend</span>
-              <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-full">
+              <div className="flex items-center gap-0.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-0.5 rounded-full">
                 {(['day', 'month', 'auto'] as const).map(p => (
                   <button
                     key={p}
@@ -190,7 +190,7 @@ export function FinanceChartsTab({
 
         {/* Cashflow Bar Chart */}
         <motion.div variants={riseItem} className="lg:col-span-2">
-          <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/50 p-5 h-full hover:border-zinc-600/30 transition-colors">
+          <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-5 h-full hover:border-zinc-600/30 transition-colors">
             <span className="text-[10px] font-semibold tracking-[0.08em] uppercase text-zinc-500">Cashflow · last 6 months</span>
             <div className="mt-3">
               {monthlyTrends.length > 0 ? (

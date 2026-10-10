@@ -172,7 +172,7 @@ export function ColorPicker({ colors, onChange }: ColorPickerProps) {
   };
 
   return (
-    <div className="p-4 bg-zinc-900/50 border border-zinc-800/50 rounded-lg space-y-3">
+    <div className="p-4 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 rounded-lg space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Color Scheme</h3>
@@ -191,12 +191,12 @@ export function ColorPicker({ colors, onChange }: ColorPickerProps) {
 
       {/* Presets Panel */}
       {showPresets && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-zinc-950/50 border border-zinc-800/40 rounded-lg">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg">
           {COLOR_SCHEMES.map(scheme => (
             <button
               key={scheme.name}
               onClick={() => applyScheme(scheme)}
-              className="p-2 rounded-lg bg-zinc-900/80 border border-zinc-800/40 hover:border-zinc-700/60 transition-all text-left group"
+              className="p-2 rounded-lg bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 hover:border-zinc-700/60 transition-all text-left group"
             >
               {/* Swatch row */}
               <div className="flex gap-0.5 mb-1.5 overflow-hidden rounded-md">
@@ -213,7 +213,7 @@ export function ColorPicker({ colors, onChange }: ColorPickerProps) {
 
       {/* Import Panel */}
       {showImport && (
-        <div className="p-3 bg-zinc-950/50 border border-zinc-800/40 rounded-lg space-y-2">
+        <div className="p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg space-y-2">
           <div className="text-[9px] text-zinc-500">
             Paste a JSON color scheme. Formats: <code className="text-zinc-400">[{'{'}"role":"primary","color":"#..."{'}'}]</code> or <code className="text-zinc-400">{'{'}"primary":"#..."{'}'}</code>
           </div>
@@ -222,7 +222,7 @@ export function ColorPicker({ colors, onChange }: ColorPickerProps) {
             onChange={e => { setImportText(e.target.value); setImportError(''); }}
             placeholder='[{"role":"primary","color":"#ec4899","label":"Pink"}]'
             rows={3}
-            className="w-full px-2.5 py-1.5 text-[10px] font-mono bg-zinc-900 border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
+            className="w-full px-2.5 py-1.5 text-[10px] font-mono bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
           />
           {importError && <div className="text-[8px] text-red-400">{importError}</div>}
           <div className="flex gap-2 justify-end">
@@ -261,13 +261,13 @@ export function ColorPicker({ colors, onChange }: ColorPickerProps) {
               <span className="text-[9px] text-zinc-500 font-mono">{hexInput.startsWith('#') ? hexInput : `#${hexInput}`}</span>
             </div>
           )}
-          <input type="text" value={hexInput} onChange={e => { setHexInput(e.target.value); setHexError(''); }} onKeyDown={handleKeyDown} placeholder="#ec4899" className="w-full px-2.5 py-1.5 text-[10px] font-mono bg-zinc-950 border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
+          <input type="text" value={hexInput} onChange={e => { setHexInput(e.target.value); setHexError(''); }} onKeyDown={handleKeyDown} placeholder="#ec4899" className="w-full px-2.5 py-1.5 text-[10px] font-mono bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
           {hexError && <div className="text-[8px] text-red-400 mt-0.5">{hexError}</div>}
         </div>
-        <select value={roleInput} onChange={e => setRoleInput(e.target.value)} className="px-2 py-1.5 text-[9px] bg-zinc-950 border border-zinc-700/50 rounded text-zinc-300 focus:outline-none focus:border-pink-500/50">
+        <select value={roleInput} onChange={e => setRoleInput(e.target.value)} className="px-2 py-1.5 text-[9px] bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded text-zinc-300 focus:outline-none focus:border-pink-500/50">
           {COLOR_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
-        <input type="text" value={labelInput} onChange={e => setLabelInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="label" className="w-16 px-2 py-1.5 text-[9px] bg-zinc-950 border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
+        <input type="text" value={labelInput} onChange={e => setLabelInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="label" className="w-16 px-2 py-1.5 text-[9px] bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
         <button onClick={handleAdd} disabled={!hexInput.trim()} className="px-3 py-1.5 text-[9px] font-medium bg-pink-600 hover:bg-pink-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded transition-colors flex-shrink-0 inline-flex items-center gap-1">
           <Plus className="w-3 h-3" />
           Add

@@ -42,7 +42,7 @@ const PRIORITY_RAIL: Record<string, string> = {
 
 // ---- Shared control styles (one design language) ---------------------------
 const INPUT_CLS =
-  'w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors';
+  'w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors';
 const BTN_PRIMARY =
   'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-950 bg-[color:var(--page-accent)] hover:brightness-110 transition active:scale-95 disabled:opacity-50 disabled:pointer-events-none';
 const BTN_GHOST =
@@ -188,7 +188,7 @@ const ProblemsTab: React.FC<{
 
       {/* Project context strip */}
       {computedProjectPath ? (
-        <div className="rounded-lg bg-zinc-900/50 ring-1 ring-zinc-800/60 px-3 py-2">
+        <div className="rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 px-3 py-2">
           <div className="text-[11px] text-zinc-300 truncate font-medium" title={computedProjectPath}>
             {resolvedProject?.name || 'Project'}
           </div>
@@ -238,7 +238,7 @@ const ProblemsTab: React.FC<{
                     key={problem.id}
                     variants={riseItem}
                     onClick={() => setSelectedProblem(problem)}
-                    className={`group relative w-full text-left rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800/60 hover:ring-zinc-700 hover:bg-zinc-900/80 transition-all duration-200 p-3 pl-4 overflow-hidden before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${PRIORITY_RAIL[problem.priority] || 'before:bg-zinc-600'}`}
+                    className={`group relative w-full text-left rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:ring-zinc-700 hover:bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] transition-all duration-200 p-3 pl-4 overflow-hidden before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${PRIORITY_RAIL[problem.priority] || 'before:bg-zinc-600'}`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-mono text-zinc-500">{problem.id}</span>
@@ -290,7 +290,7 @@ const ModalShell: React.FC<{ onClose: () => void; children: React.ReactNode; tit
     <motion.div
       {...MODAL_PANEL}
       onClick={(e) => e.stopPropagation()}
-      className="w-full max-w-md max-h-[82vh] overflow-y-auto rounded-xl bg-zinc-900/95 backdrop-blur-xl ring-1 ring-zinc-800 shadow-2xl shadow-black/50 p-5"
+      className="w-full max-w-md max-h-[82vh] overflow-y-auto rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl ring-1 ring-zinc-800 shadow-2xl shadow-black/50 p-5"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="min-w-0">{title}</div>
@@ -399,7 +399,7 @@ const ProblemDetailModal: React.FC<{
       {problem.user_notes && (
         <div className="mb-4">
           <div className="text-[11px] font-medium text-zinc-500 mb-1">Notes</div>
-          <div className="text-[13px] text-zinc-300 bg-zinc-950/60 ring-1 ring-zinc-800/60 p-2.5 rounded-lg">{problem.user_notes}</div>
+          <div className="text-[13px] text-zinc-300 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-2.5 rounded-lg">{problem.user_notes}</div>
         </div>
       )}
 

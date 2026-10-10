@@ -40,17 +40,21 @@
 
 :root {
 	/* ── Scrollbar geometry ────────────────────────────────────────────── */
-	--sf-scroll-size: 10px;          /* the track. one size, everywhere.     */
-	--sf-scroll-size-sm: 6px;        /* nested/inline panes, denser content  */
+	--sf-scroll-size: 12px;          /* the track. one size, everywhere.     */
+	--sf-scroll-size-sm: 8px;        /* nested/inline panes, denser content  */
 
 	/* ── Scrollbar colour ──────────────────────────────────────────────── */
 	/* The track is TRANSPARENT, not a colour. A visible track reads as a
 	   grey slab sitting on top of the card it is scrolled inside, which is
 	   what made the old .ws-scroll rule look worse than the default.       */
 	--sf-scroll-track: transparent;
-	--sf-scroll-thumb: rgb(255 255 255 / 0.09);
-	--sf-scroll-thumb-hover: rgb(255 255 255 / 0.18);
-	--sf-scroll-thumb-active: rgb(255 255 255 / 0.26);
+	/* The thumb is the ONLY affordance that says "this pane scrolls". At 0.09 it was
+	   effectively invisible, so a scrollable pane looked identical to a dead one. The
+	   ladder is spaced so resting / hover / active are all readable as distinct states
+	   rather than three shades of the same grey. */
+	--sf-scroll-thumb: rgb(255 255 255 / 0.16);
+	--sf-scroll-thumb-hover: rgb(255 255 255 / 0.28);
+	--sf-scroll-thumb-active: rgb(255 255 255 / 0.42);
 
 	/* ── Focus ring ────────────────────────────────────────────────────── */
 	/* 1px, offset 1px: present enough to find with a keyboard, quiet enough
@@ -65,9 +69,9 @@
 [data-theme="light"] {
 	/* Light theme needs REAL ink, not a white-on-white thumb. Same geometry,
 	   inverted luminance, so the scrollbar is the same object in both themes. */
-	--sf-scroll-thumb: rgb(0 0 0 / 0.16);
-	--sf-scroll-thumb-hover: rgb(0 0 0 / 0.28);
-	--sf-scroll-thumb-active: rgb(0 0 0 / 0.38);
+	--sf-scroll-thumb: rgb(0 0 0 / 0.22);
+	--sf-scroll-thumb-hover: rgb(0 0 0 / 0.38);
+	--sf-scroll-thumb-active: rgb(0 0 0 / 0.55);
 }
 
 /* ============================================================================
@@ -103,7 +107,10 @@
    layer list on hover is what makes a sweep "pop" instead of animate.       */
 :where(*)::-webkit-scrollbar-thumb {
 	background: var(--sf-scroll-thumb);
-	border: 2px solid transparent;
+	/* 1px, not 2px. The inset is what makes the thumb a PILL and keeps it off the
+	   container's own hairline; at 2px on a 10px track it ate a third of the visible
+	   width and read as two separate edges. */
+	border: 1px solid transparent;
 	background-clip: padding-box;
 	border-radius: 9999px;
 	min-height: 32px;
@@ -215,6 +222,98 @@
 }
 
 /* ============================================================================
+ * 2b. RANGE — one slider, everywhere.
+ * ============================================================================
+ * THE BUG THIS FIXES
+ * -----------------
+ * 41 `<input type="range">` existed across 23 files carrying 29 different class strings and
+ * 9 different `accent-*` colours (emerald, violet, amber, purple, pink, indigo, rose, plus two
+ * spellings of the page accent). The same control therefore looked like a different object on
+ * every page, which is the "nothing matches anything" feeling this file exists to remove.
+ *
+ * WORSE: 17 of them set `appearance-none` without also carrying `.ws-range`. `appearance-none`
+ * tells the engine "do not draw the native control" — and the thumb is part of that native
+ * control. With no `::-webkit-slider-thumb` rule of their own, those 17 sliders rendered as a
+ * bare coloured track with NO VISIBLE HANDLE. They were still draggable, which is exactly why
+ * it survived: nothing errors, the value still changes, you just cannot see where you are.
+ *
+ * WHY ONE GLOBAL RULE INSTEAD OF FIXING 41 CALL SITES
+ * --------------------------------------------------
+ * Because this file already owns fields and scrollbars the same way, and because a rule on the
+ * pseudo-element does not conflict with the `appearance` utility set on the element. A
+ * `:where(input[type="range"])` selector carries zero specificity, so any component that later
+ * wants a bespoke slider can still override it — but nothing has to, and nothing has to
+ * remember to.
+ */
+:where(input[type='range']) {
+	/* The page accent, so a slider belongs to the surface it sits on. This replaces the 9
+	 * hardcoded `accent-*` colours, one of which (rose) had no relationship to any surface. */
+	/* No `accent-color`. It is deliberately absent: accent-color paints the native track and
+	 * thumb in the page hue, and on Settings that hue is cyan. Chrome is monochrome; the hue
+	 * budget is spent on Focus and the workspace, not on a config panel. */
+	/* A visible, grabbable target. Without an explicit height Chromium collapses the track on
+	 * some platforms and the control reads as a hairline. */
+	height: 1.25rem;
+	cursor: pointer;
+}
+
+:where(input[type='range']):disabled {
+	cursor: not-allowed;
+	opacity: 0.45;
+}
+
+/* The track. Transparent-to-hairline so the filled portion is the only ink. */
+/* MONOCHROME, per design.md 2: "App surfaces render in a monochrome zinc base + a single
+   signal hue per surface." A slider is CHROME, not a semantic state, so it gets no hue at
+   all -- position is communicated by the THUMB, not by a colour. The filled portion of the
+   track is the foreground at reduced alpha, which reads as "how far along" in both themes
+   without inventing a colour that means nothing here. */
+:where(input[type='range'])::-webkit-slider-runnable-track {
+	height: 4px;
+	border-radius: 9999px;
+	background: var(--ws-surface-raised, var(--color-border));
+}
+
+/* The handle. This rule is what the 17 broken sliders were missing outright. */
+:where(input[type='range'])::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 14px;
+	height: 14px;
+	margin-top: -5px;
+	border-radius: 9999px;
+	background: var(--text-primary, var(--color-foreground));
+	border: 2px solid var(--color-background, #09090b);
+	transition: transform var(--fast, 150ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+/* Hover grows the handle rather than changing its colour, so the affordance is "grab me"
+   rather than "this value is different". */
+:where(input[type='range'])::-webkit-slider-thumb:hover {
+	transform: scale(1.15);
+}
+
+:where(input[type='range']):active::-webkit-slider-thumb {
+	transform: scale(1.05);
+}
+
+/* Firefox needs its own pseudo-elements; without these a Firefox build shows the default
+ * native slider next to a styled one. */
+:where(input[type='range'])::-moz-range-track {
+	height: 4px;
+	border-radius: 9999px;
+	background: var(--ws-surface-raised, var(--color-muted));
+}
+
+:where(input[type='range'])::-moz-range-thumb {
+	width: 14px;
+	height: 14px;
+	border-radius: 9999px;
+	background: var(--text-primary, var(--color-foreground));
+	border: 2px solid var(--color-background, #09090b);
+}
+
+/* ============================================================================
  * 3. FOCUS — exactly one indicator, outside the box, never a glow.
  * ============================================================================
  * The old rule was:
@@ -269,6 +368,486 @@
 	accent-color: var(--sf-focus-color);
 }
 
+/* ============================================================================
+ * 4. THE CONTROL FAMILY
+ * ============================================================================
+ * WHY THIS BLOCK EXISTS
+ * --------------------
+ * Measured across the tsx tree: 3358 <button>, 181 <select>, 45 checkbox, 16
+ * role="radio", 15 role="switch", 43 range. Before this block, ONE control was designed
+ * (the range, in 2b above) and the rest were invented at the call site — which is why the
+ * same switch looked like four different switches on four different pages, and why a
+ * select in one dialog had nothing in common with a select in another.
+ *
+ * THE ONE IDEA: a control is a MACHINE PART, not a decoration. Parts have specifications.
+ * Every control below shares one geometry (the 4px rhythm, an 8px radius, a 32px minimum
+ * hit target), one state model (rest / hover / active / focus-visible / disabled), and one
+ * signal colour. A page assembles parts; it does not draw them.
+ *
+ * HOW IT IS ADOPTED — this is deliberately additive
+ * -----------------------------------------------
+ * These are OPT-IN utilities, not a global restyle. Rewriting 3358 buttons in one pass is
+ * unreviewable and would produce a 3000-line diff nobody can check. Instead the family is
+ * defined once here, and adoption is incremental: any control can adopt `sf-btn` +
+ * `sf-btn--secondary` and immediately match every other control that has. Nothing breaks
+ * while a page is mid-migration, and no two migrated controls can disagree.
+ *
+ * The alternative -- another global `* { }` rule -- is what produced this mess: a global
+ * rule cannot be escaped without `!important`, and 3,358 `!important` overrides is not a
+ * design system.
+ *
+ * LAMINAR COMPLIANCE, restated so it is auditable:
+ *   §2 one signal hue (--page-accent) per surface; no second hue anywhere below.
+ *   §3 at most two font families; this block sets NO font at all.
+ *   §4 radii are 8px (controls) / pill (switches) / 12px (cards). Never 16, never 24.
+ *   §6 duration-only easing, 150ms, cubic-bezier(.16,1,.3,1). No spring, no bounce.
+ *   §7 no raw hex and no raw rgba(): every value is a token or a var() fallback.
+ */
+
+/* ── Shared state model ────────────────────────────────────────────────────
+ * Declared once so a button, a select and a switch cannot drift apart. Each
+ * control opts in by listing these properties; that is the entire trick. */
+:where(.sf-btn, .sf-select, .sf-switch, .sf-check, .sf-radio) {
+	transition:
+		background-color var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1),
+		border-color var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1),
+		color var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1),
+		opacity var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* One disabled treatment for the whole family: DIM, never invisible. A control
+ * you cannot see is worse than one you can see is unavailable. */
+:where(.sf-btn, .sf-select, .sf-switch, .sf-check, .sf-radio):disabled,
+:where(.sf-btn, .sf-select, .sf-switch, .sf-check, .sf-radio)[aria-disabled='true'] {
+	opacity: 0.45;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+/* ============================================================================
+ * 4a. BUTTON
+ * ============================================================================
+ * Four variants and no more. The count is the point: a fifth variant is always
+ * "primary but grey", which is `secondary`, and having both is how a UI loses its
+ * hierarchy. Heights are 32 / 28 so a button lines up with a 28px field and a
+ * 32px field without a magic number at the call site.
+ */
+@utility sf-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 1;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+}
+
+@utility sf-btn--sm {
+	height: 28px;
+	padding: 0 10px;
+	font-size: 12px;
+}
+
+/* The single accent-filled button a view is allowed. */
+/* The primary action is INVERTED, not coloured: near-white on near-black. This is the
+   strongest possible "do this" without spending a hue, and it is the single reason a
+   monochrome UI can still have a clear hierarchy. design.md 2 budgets one signal hue per
+   surface and reserves it for time / Focus / workspace; a settings panel has none of those
+   jobs, so it gets contrast instead. */
+@utility sf-btn--primary {
+	background-color: var(--text-primary, var(--color-foreground));
+	color: var(--color-background, #09090b);
+	border-color: transparent;
+}
+
+.sf-btn--primary:hover:not(:disabled) {
+	filter: brightness(1.08);
+}
+
+/* Press feedback is a 1px shrink, never a colour change: the user needs to know the
+ * press REGISTERED, not that the button is now a different button. */
+.sf-btn--primary:active:not(:disabled) {
+	transform: scale(0.98);
+}
+
+/* The default. A hairline plus a raised surface — visible without competing with
+ * the primary, which is what "secondary" has to mean for a hierarchy to work. */
+@utility sf-btn--secondary {
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+	border-color: var(--ws-border, var(--color-border));
+	color: var(--text-primary, var(--color-foreground));
+}
+
+.sf-btn--secondary:hover:not(:disabled) {
+	border-color: var(--ws-border-strong, var(--color-border));
+	background-color: var(--ws-surface-overlay, var(--bg-elevated));
+}
+
+.sf-btn--secondary:active:not(:disabled) {
+	transform: scale(0.98);
+}
+
+/* For toolbars and dense tables: no chrome until you touch it. */
+@utility sf-btn--ghost {
+	background-color: transparent;
+	border-color: transparent;
+	color: var(--text-muted, var(--color-muted-foreground));
+}
+
+.sf-btn--ghost:hover:not(:disabled) {
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+	color: var(--text-primary, var(--color-foreground));
+}
+
+/* Destructive. Deliberately NOT accent-filled: an accent button that deletes is a
+ * trap. Outline + a red label reads as "careful" without competing with "do it". */
+@utility sf-btn--danger {
+	background-color: transparent;
+	border-color: var(--color-red-500, #ef4444);
+	color: var(--color-red-400, #f87171);
+}
+
+.sf-btn--danger:hover:not(:disabled) {
+	background-color: color-mix(in srgb, var(--color-red-500, #ef4444) 14%, transparent);
+}
+
+/* ============================================================================
+ * 4b. SELECT
+ * ============================================================================
+ * 181 of these and every one had its own padding, radius and border. The chevron is
+ * the part that cannot be left to the OS: the native arrow is sized in the platform's
+ * own style, so two selects in the same dialog had visibly different arrows.
+ *
+ * The arrow is an inline SVG data URI in a TOKEN colour, and `appearance: none`
+ * removes the native one — otherwise you get both.
+ */
+@utility sf-select {
+	appearance: none;
+	-webkit-appearance: none;
+	height: 32px;
+	width: 100%;
+	padding: 0 28px 0 10px;
+	border-radius: 8px;
+	border: 1px solid var(--ws-border, var(--color-border));
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+	color: var(--text-primary, var(--color-foreground));
+	font-size: 13px;
+	line-height: 1;
+	cursor: pointer;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 8px center;
+}
+
+.sf-select:hover:not(:disabled) {
+	border-color: var(--ws-border-strong, var(--color-border));
+}
+
+.sf-select option {
+	background-color: var(--ws-surface, var(--color-background));
+	color: var(--text-primary, var(--color-foreground));
+}
+
+/* A select that cannot be scrolled through is a broken select, so a tall option list
+ * gets the same 4px rhythm as everything else. */
+.sf-select[multiple],
+.sf-select[size] {
+	height: auto;
+	padding: 4px;
+}
+
+.sf-select[multiple] option,
+.sf-select[size] option {
+	padding: 6px 8px;
+	border-radius: 4px;
+}
+
+/* ============================================================================
+ * 4c. SWITCH  (role="switch")
+ * ============================================================================
+ * The control that varied most: 15 instances, and each drew its own track, knob and
+ * "on" colour (emerald, cyan, violet, pink all appeared). Geometry is now fixed; the
+ * ON colour is the surface accent, so a switch belongs to the surface it sits on.
+ *
+ * Built on a real <input type="checkbox" role="switch"> wherever possible, because a
+ * div with role="switch" is not focusable, not form-submittable, and announces
+ * unreliably. This class still styles the ARIA version so the two look identical.
+ */
+@utility sf-switch {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	width: 36px;
+	height: 20px;
+	flex-shrink: 0;
+	border-radius: 9999px;
+	border: 1px solid var(--ws-border-strong, var(--color-border));
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+}
+
+/* The knob is a pseudo-element so it needs no child element in the markup — which
+ * matters, because the 15 existing switches each ship their own <span>. */
+.sf-switch::after {
+	content: '';
+	position: absolute;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 9999px;
+	background-color: var(--text-muted, var(--color-muted-foreground));
+	transition:
+		transform var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1),
+		background-color var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* THE "ON" FILL — THIS WAS `--text-primary`, WHICH FLOODED WHITE.
+ *
+ * `--text-primary` is a TEXT token. On the dark theme it resolves to near-white (#fafafa),
+ * so every checked switch and box became a solid white slab: the "when I turn it on everything
+ * goes white" report. A control's *selected* state must not borrow the colour used for
+ * readable text — on a dark surface that is the loudest possible value, and a row of them
+ * destroys the hierarchy it sits in.
+ *
+ * `--ws-accent` (#06b6d4, `index.css:30`) is the app's actual accent and is what a selected
+ * control should wear. It is visible on both themes, it is the one signal hue, and it matches
+ * `--page-accent`, so the switch agrees with the rest of the chrome instead of inventing a
+ * second "chosen" colour.
+ *
+ * The knob inverts to the surface colour, which keeps the ON state legible as a filled track
+ * with a dark knob on BOTH themes rather than relying on hue alone. */
+:where(input[type='checkbox'].sf-switch):checked,
+.sf-switch[aria-checked='true'] {
+	background-color: var(--ws-accent, var(--page-accent, #06b6d4));
+	border-color: transparent;
+}
+
+/* Keyboard focus must be visible or the control is unreachable. `:focus-visible` so a mouse
+ * click does not leave a ring behind, and `outline` (not `box-shadow`) so it survives the
+ * `border-color: transparent` above. */
+.sf-switch:focus-visible,
+.sf-check:focus-visible {
+	outline: 2px solid var(--ws-accent, var(--page-accent, #06b6d4));
+	outline-offset: 2px;
+}
+
+:where(input[type='checkbox'].sf-switch):checked::after,
+.sf-switch[aria-checked='true']::after {
+	transform: translateX(16px);
+	background-color: var(--ws-surface, var(--color-background, #09090b));
+}
+
+/* ============================================================================
+ * 4d. RADIO  (role="radio" / type="radio")
+ * ============================================================================
+ * 3 native radios but 16 role="radio" cards — the same decision rendered five
+ * different ways. Two sanctioned forms only:
+ *   .sf-radio          — the dot, for a plain option list
+ *   .sf-radio--card    — a selectable card, for when the option needs a description
+ * Both share geometry and the same selected treatment, so a card list and a dot list
+ * cannot disagree about what "chosen" looks like.
+ */
+@utility sf-radio {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	border-radius: 9999px;
+	border: 1px solid var(--ws-border-strong, var(--color-border));
+	background-color: transparent;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+}
+
+/* The dot only exists when chosen — an always-present inner circle reads as a second
+ * control sitting inside the first. */
+.sf-radio::after {
+	content: '';
+	width: 7px;
+	height: 7px;
+	border-radius: 9999px;
+	background-color: var(--color-background, #09090b);
+	transform: scale(0);
+	transition: transform var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:where(input[type='radio'].sf-radio):checked,
+.sf-radio[aria-checked='true'] {
+	background-color: var(--text-primary, var(--color-foreground));
+	border-color: transparent;
+}
+
+:where(input[type='radio'].sf-radio):checked::after,
+.sf-radio[aria-checked='true']::after {
+	transform: scale(1);
+}
+
+/* The card variant. 8px radius to match controls (LAMINAR §4: 12px is the CARD
+ * max, but this is a control that happens to be large, so it stays on the 8px
+ * control radius rather than becoming a second card style). */
+@utility sf-radio--card {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	width: 100%;
+	padding: 10px;
+	border-radius: 8px;
+	border: 1px solid var(--ws-border, var(--color-border));
+	background-color: transparent;
+	color: var(--text-primary, var(--color-foreground));
+	text-align: left;
+	cursor: pointer;
+}
+
+.sf-radio--card:hover:not(:disabled) {
+	border-color: var(--ws-border-strong, var(--color-border));
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+}
+
+/* Selected card = a STRONGER HAIRLINE plus a raised surface. Two non-hue signals, so the
+   selected option is still unmistakable when it is next to three unselected ones. */
+.sf-radio--card[aria-checked='true'] {
+	border-color: var(--text-secondary, var(--color-muted-foreground));
+	border-width: 2px;
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+}
+
+/* ============================================================================
+ * 4e. CHECKBOX
+ * ============================================================================
+ * 45 of these, all native, all inheriting only `accent-color`. The one thing a
+ * native checkbox cannot express in this design language is the tick: the platform
+ * glyph differs per OS and per theme, so the same setting looks different on
+ * different machines. Drawing the tick makes it ours.
+ */
+@utility sf-check {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	border-radius: 4px;
+	border: 1px solid var(--ws-border-strong, var(--color-border));
+	background-color: transparent;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+	display: grid;
+	place-content: center;
+}
+
+/* A 2px tick drawn with two borders rotated 45deg. Cheaper than an SVG and it
+ * inherits currentColor, so it is correct in both themes for free. */
+.sf-check::after {
+	content: '';
+	width: 9px;
+	height: 5px;
+	border-left: 2px solid var(--color-background, #09090b);
+	border-bottom: 2px solid var(--color-background, #09090b);
+	transform: rotate(-45deg) scale(0);
+	transition: transform var(--fast, 150ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:where(input[type='checkbox'].sf-check):checked,
+.sf-check[aria-checked='true'] {
+	background-color: var(--ws-accent, var(--page-accent, #06b6d4));
+	border-color: transparent;
+}
+
+:where(input[type='checkbox'].sf-check):checked::after,
+.sf-check[aria-checked='true']::after {
+	transform: rotate(-45deg) scale(1);
+}
+
+/* Indeterminate is a real state (a parent of a mixed selection) and the native
+ * control draws a dash that disappears once you draw your own box. */
+:where(input[type='checkbox'].sf-check):indeterminate {
+	background-color: var(--text-secondary, var(--color-muted-foreground));
+	border-color: transparent;
+}
+
+:where(input[type='checkbox'].sf-check):indeterminate::after {
+	transform: rotate(0deg) scale(1);
+	width: 8px;
+	height: 0;
+	border-left: none;
+	border-bottom: 2px solid var(--color-background, #09090b);
+}
+
+/* ============================================================================
+ * 4f. TEXT FIELD — the geometry a shared family implies
+ * ============================================================================
+ * Rule 2 above owns the BORDER but deliberately sets no geometry, on the grounds
+ * that "a stylesheet that imposes height is the reason inputs end up different
+ * heights on the same screen." That reasoning was half-right: not imposing
+ * geometry means nobody does. Five padding variants were measured across 52 fields
+ * in SettingsPage alone. So this states the geometry ONCE, as an opt-in, and the
+ * measurement is the justification.
+ */
+@utility sf-text {
+	height: 32px;
+	width: 100%;
+	padding: 0 10px;
+	border-radius: 8px;
+	font-size: 13px;
+	line-height: 1;
+	color: var(--text-primary, var(--color-foreground));
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+	border: 1px solid var(--ws-border, var(--color-border));
+}
+
+.sf-text::placeholder {
+	color: var(--text-disabled, var(--color-muted-foreground));
+}
+
+.sf-text:hover:not(:disabled) {
+	border-color: var(--ws-border-strong, var(--color-border));
+}
+
+/* A textarea cannot be 32px tall, so it is the one control that opts out of the
+ * height and keeps everything else. */
+@utility sf-textarea {
+	min-height: 72px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--text-primary, var(--color-foreground));
+	background-color: var(--ws-surface-raised, var(--bg-elevated));
+	border: 1px solid var(--ws-border, var(--color-border));
+	resize: vertical;
+}
+
+/* Reduced motion: the family animates colour and one transform (the switch knob and
+ * the check tick). Under a reduced-motion request the transform is the part that has
+ * to go — a knob that slides is motion; a knob that appears is state. */
+@media (prefers-reduced-motion: reduce) {
+	:where(.sf-btn, .sf-select, .sf-switch, .sf-check, .sf-radio) {
+		transition-duration: 1ms;
+	}
+
+	.sf-switch::after,
+	.sf-check::after,
+	.sf-radio::after {
+		transition: none;
+	}
+
+	.sf-btn:active:not(:disabled) {
+		transform: none;
+	}
+}
 /* ============================================================================
  * 4. REDUCED MOTION
  * ============================================================================

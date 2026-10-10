@@ -103,7 +103,7 @@ export function TransferWalletSelect({
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div
-            className={`absolute left-0 right-0 z-20 bg-zinc-900 border border-zinc-700/50 rounded-xl shadow-xl overflow-hidden max-h-60 ${
+            className={`absolute left-0 right-0 z-20 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl shadow-xl overflow-hidden max-h-60 ${
               dropAbove ? 'bottom-full mb-1' : 'top-full mt-1'
             }`}
           >
@@ -128,7 +128,7 @@ export function TransferWalletSelect({
               ) : (
                 grouped.map(({ account, wallets: sectionWallets }) => (
                   <div key={account.id}>
-                    <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider bg-zinc-900/80">
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]">
                       {account.name}
                     </div>
                     {sectionWallets.map(w => {

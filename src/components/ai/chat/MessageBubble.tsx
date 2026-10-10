@@ -38,7 +38,7 @@ export function MessageBubble(props: MessageBubbleProps) {
     // For assistant messages: show content even if empty (card-only message)
     if (!cleanContent && hasCard) return null
     if (streaming) return <TypewriterText text={cleanContent} />
-    return <MarkdownRenderer content={cleanContent} />
+    return <MarkdownRenderer content={cleanContent} settled={!streaming} />
   }, [cleanContent, isUser, isSystem, isTool, streaming, hasCard])
 
   if (isSystem) {

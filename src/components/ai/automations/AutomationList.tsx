@@ -37,7 +37,7 @@ export function AutomationList({ showHeader = true, className }: AutomationListP
     return (
       <div className={cn("flex flex-col items-center py-6 text-zinc-600", className)}>
         <Zap size={20} className="mb-2 opacity-30" />
-        <p className="text-[10px]">No automations yet</p>
+        <p className="text-[10px]">Nothing here yet — an automation runs itself when you set one up, so add one and it starts on its own.</p>
       </div>
     )
   }

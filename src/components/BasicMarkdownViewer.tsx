@@ -36,7 +36,7 @@ export const BasicMarkdownViewer: React.FC<BasicMarkdownViewerProps> = ({
         } else {
           inCodeBlock = false;
           result.push(
-            <div key={`code-${i}`} className="my-2 bg-zinc-900/80 rounded border border-zinc-700 overflow-hidden">
+            <div key={`code-${i}`} className="my-2 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-700 overflow-hidden">
               {codeBlockLanguage && (
                 <div className="px-3 py-1 bg-zinc-800 text-[9px] text-zinc-500 font-mono border-b border-zinc-700">
                   {codeBlockLanguage}
@@ -142,7 +142,7 @@ export const BasicMarkdownViewer: React.FC<BasicMarkdownViewerProps> = ({
     // Handle unclosed code block
     if (inCodeBlock && codeBlockContent.length > 0) {
       result.push(
-        <div key="code-unclosed" className="my-2 bg-zinc-900/80 rounded border border-zinc-700 overflow-hidden">
+        <div key="code-unclosed" className="my-2 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-700 overflow-hidden">
           <pre className="px-3 py-2 text-[9px] text-amber-200 font-mono whitespace-pre-wrap break-words overflow-x-auto">
             {codeBlockContent.join('\n')}
           </pre>
@@ -154,7 +154,7 @@ export const BasicMarkdownViewer: React.FC<BasicMarkdownViewerProps> = ({
   }, [content]);
 
   return (
-    <div className={`${maxHeight} overflow-y-auto bg-zinc-900/50 rounded border border-zinc-700/50 p-3 space-y-0.5`}>
+    <div className={`${maxHeight} overflow-y-auto bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-700/50 p-3 space-y-0.5`}>
       {fileName && (
         <div className="text-[9px] text-zinc-500 font-mono mb-2 pb-2 border-b border-zinc-700/50">
           📄 {fileName}

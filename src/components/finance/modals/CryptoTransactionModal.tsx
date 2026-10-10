@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { Wallet, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react'
 import { TransactionModalShell } from './TransactionModalShell'
+import { SubmitGate } from './SubmitGate'
 import { useTransactionForm } from './useTransactionForm'
 import { ContextBand, TypeToggle, AdvancedToggle, OnBehalfOfSection, HistoricalToggle } from './modalParts'
 import { TransferWalletSelect } from './TransferWalletSelect'
@@ -82,7 +83,7 @@ export const CryptoTransactionModal: React.FC<TxModalProps> = (props) => {
 			<TransactionModalShell accent={ACCENT} icon={<Wallet size={18} />} typeBadge="Crypto"
 				title={props.wallet.name} onClose={props.onClose} onSubmit={async () => false}>
 				{({ setCanSubmit }) => {
-					useEffect(() => setCanSubmit(false), [setCanSubmit])
+					<SubmitGate valid={false} setCanSubmit={setCanSubmit} />
 					return (
 						<div className="py-6 text-center">
 							<p className="text-sm text-zinc-300">No assets tracked yet</p>
@@ -168,7 +169,8 @@ export const CryptoTransactionModal: React.FC<TxModalProps> = (props) => {
 			}}
 		>
 			{({ setCanSubmit }) => {
-				useEffect(() => setCanSubmit(valid), [valid, setCanSubmit])
+				<SubmitGate valid={valid} setCanSubmit={setCanSubmit} />
+
 				return (
 					<>
 						{!(f.type === 'transfer' && isDestFiat) && (

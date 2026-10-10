@@ -66,6 +66,19 @@ export function EasingCurveBrowser({ selectedEasing, onSelectEasing }: EasingCur
     return `ease: [${v[0]}, ${v[1]}, ${v[2]}, ${v[3]}]`;
   };
 
+  // Curve geometry is derived from a MODULE CONSTANT list, so it is computed once
+  // for the whole component — never inside the .map() below. A hook inside a map
+  // callback is a hook whose COUNT depends on the array length; that is React's
+  // "rendered more/fewer hooks than expected" crash waiting for the list to change.
+  const CURVES = useMemo(
+    () => EASING_PRESETS.map((preset) => ({
+      preset,
+      pathD: renderCurve(preset),
+      formula: renderFormula(preset),
+    })),
+    [],
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
@@ -73,10 +86,8 @@ export function EasingCurveBrowser({ selectedEasing, onSelectEasing }: EasingCur
         <h3 className="text-sm font-semibold text-zinc-200">Easing Curves</h3>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {EASING_PRESETS.map((preset) => {
+        {CURVES.map(({ preset, pathD, formula }) => {
           const isSelected = selectedEasing === preset.name;
-          const pathD = useMemo(() => renderCurve(preset), [preset]);
-          const formula = renderFormula(preset);
           return (
             <motion.button
               key={preset.name}
@@ -87,10 +98,10 @@ export function EasingCurveBrowser({ selectedEasing, onSelectEasing }: EasingCur
                 relative flex flex-col gap-2 p-3 rounded-xl border text-left transition-colors
                 ${isSelected
                   ? 'bg-pink-500/10 border-pink-500/40 shadow-[0_0_20px_rgba(244,114,182,0.1)]'
-                  : 'bg-zinc-900/60 border-zinc-800/60 hover:border-zinc-700/80'}
+                  : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border-zinc-800/60 hover:border-zinc-700/80'}
               `}
             >
-              <svg viewBox="0 0 220 220" className="w-full h-24 rounded-lg bg-zinc-950/50">
+              <svg viewBox="0 0 220 220" className="w-full h-24 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50">
                 <line x1="20" y1="200" x2="200" y2="200" stroke="#3f3f46" strokeWidth="1" />
                 <line x1="20" y1="20" x2="20" y2="200" stroke="#3f3f46" strokeWidth="1" />
                 <motion.path

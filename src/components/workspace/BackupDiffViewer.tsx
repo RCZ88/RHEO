@@ -60,7 +60,7 @@ export function BackupDiffViewer({ diff, isLoading }: BackupDiffViewerProps) {
         <div key={section.key} className="rounded-lg border border-zinc-800/40 overflow-hidden">
           <button
             onClick={() => setExpandedSections(prev => ({ ...prev, [section.key]: !prev[section.key] }))}
-            className="w-full flex items-center gap-2 px-3 py-2 bg-zinc-900/40 hover:bg-zinc-800/40 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-800/40 transition-colors"
           >
             {expandedSections[section.key] ? <ChevronDown className="w-3.5 h-3.5 text-zinc-500" /> : <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />}
             <span className={`flex items-center gap-1.5 text-xs font-medium ${section.color}`}>

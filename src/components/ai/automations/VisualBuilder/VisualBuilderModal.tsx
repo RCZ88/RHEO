@@ -111,7 +111,7 @@ export function VisualBuilderModal({ onClose, onSaved, initialConfig }: VisualBu
             <Sparkles size={16} className="text-violet-400" />
             <h2 className={cn("text-[14px] font-semibold", TEXT.primary)}>Create Automation</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:text-stone-400 hover:bg-zinc-800 light:bg-stone-200 transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:text-[var(--text-secondary)] hover:bg-zinc-800 light:bg-[var(--ws-surface-sunken)] transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -174,13 +174,13 @@ export function VisualBuilderModal({ onClose, onSaved, initialConfig }: VisualBu
         <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-800/60 light:border-[var(--ws-border)]">
           <div className="flex items-center gap-2">
             {step > 1 && (
-              <button onClick={() => setStep(s => s - 1)} className="flex items-center gap-1 rounded-lg px-3 py-2 text-[12px] text-zinc-400 light:text-stone-500 hover:text-zinc-200 hover:bg-zinc-800 light:bg-stone-200 transition-colors">
+              <button onClick={() => setStep(s => s - 1)} className="flex items-center gap-1 rounded-lg px-3 py-2 text-[12px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-200 hover:bg-zinc-800 light:bg-[var(--ws-surface-sunken)] transition-colors">
                 <ChevronLeft size={14} /> Back
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="rounded-lg px-4 py-2 text-[12px] text-zinc-400 light:text-stone-500 hover:text-zinc-200 hover:bg-zinc-800 light:bg-stone-200 transition-colors">
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-[12px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-200 hover:bg-zinc-800 light:bg-[var(--ws-surface-sunken)] transition-colors">
               Cancel
             </button>
             {step < 5 ? (

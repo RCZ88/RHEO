@@ -27,6 +27,7 @@ process.on('unhandledRejection', (reason: any) => {
 });
 // SECURITY: Global input validation middleware registration
 import { sanitizeString, validateNonEmptyString, validatePositiveInt } from './infrastructure/ipc/validation';
+import { debounce } from './lib/debounce';
  var __importDefault = function (mod) {
         return (mod && mod.__importDefault) ? mod : { "default": mod };
     };
@@ -51,6 +52,18 @@ const RequestsService = RequestsServiceModule.RequestsService || RequestsService
 const RecapSharedModule = require("./shared/recap");
 const { cleanRecapSummary, computeApexInsight } = RecapSharedModule;
 import type { RecapStage } from "./shared/recap";
+/**
+ * Sleep-window classification. The arithmetic lives in `src/shared/` precisely so
+ * it can be imported HERE and in the renderer from one implementation — the two
+ * halves of this feature disagreed for months because each had its own copy of
+ * "when is it bedtime", and neither could see the other's.
+ */
+import {
+    MIN_SLEEP_OVERLAP_MINUTES,
+    clampHour,
+    classifyGap,
+    hourInSleepWindow,
+} from "./shared/sleepWindow";
 const SkillsServiceModule = require("./services/SkillsService");
 const SkillsService = SkillsServiceModule.SkillsService || SkillsServiceModule;
 const AgentHostServiceModule = require("./services/AgentHostService");
@@ -75,14 +88,113 @@ const { registerSearchIpc } = SearchIndexModule;
 import { SyncAgent } from "./main/syncAgent";
 import { startTerminalRelay, issueRelayTicket } from "./main/terminalRelay";
 import { parseAgentOutput, ParsedAgentOutput } from "./main/agentOutput";
+import { createWorkforceIngest, createWorkforceBatcher, createWorkforceRecorder } from "./main/workforceAdapters";
+import type { ActionEvent } from "./shared/workforceActivity";
 import { registerCategoryHandlers } from "./infrastructure/ipc/category-handlers";
 import { registerGoalHandlers } from "./infrastructure/ipc/goal-handlers";
-import { registerFinanceHandlers } from "./infrastructure/ipc/finance-handlers";
+import { registerFinanceHandlers, checkMonthlyRecaps } from "./infrastructure/ipc/finance-handlers";
+import { registerAirRouterHandlers } from "./infrastructure/ipc/airouter-handlers";
+import { registerAiEvalHandlers } from "./infrastructure/ipc/aiEval-handlers";
 import { registerSessionHandlers } from "./infrastructure/ipc/session-handlers";
 import { registerTrackingHandlers } from "./infrastructure/ipc/tracking-handlers";
 import { registerGasHandlers } from "./main/gas/ipc";
 import { registerLectureHandlers } from "./services/lecture/index";
 import { StateCoordinator } from "./main/stateCoordinator";
+import { initAutoUpdate } from "./main/autoUpdate";
+// listCases + runEval are for the scheduled baseline (see scheduleEvalBaselines).
+import { initEval, listCases, runEval } from "./services/aiEval";
+// ── AUTOMATIONS (RESULT.md, P0) ──────────────────────────────────────────
+// The rule runner. Phase 1 ships the spine + ONE executor (`notify`, which is
+// category ii — Electron-native, no IPC counterpart, nothing to extract), so the
+// whole path can be proven end-to-end with zero closure risk.
+import { AutomationBus, setAutomationPublisher, type AutomationRow } from "./services/automation/AutomationBus";
+import { AutomationRunner, createAutomationRunner } from "./services/automation/AutomationRunner";
+import { buildExecutors, liveExecutors, bindGoalBehavior } from "./services/automation/executors";
+import {
+    CATALOGUE_VERSION, capabilities, getTrigger, getAction, isValidAutomation, matches,
+} from "./shared/automationCatalogue";
+import { createHaloIsland, registerHaloIpc, reconcileHaloGeometry, toggleHaloIsland, sendHaloCommand, configureHaloPrefs, destroyHaloIsland } from "./main/halo/haloIsland";
+import { HALO_PREFS_KEY } from "./features/halo/HaloPreferences";
+
+/**
+ * Halo stream cache.
+ *
+ * The stopwatch and dictation engines live in the RENDERER (`src/lib/stopwatchStore.ts` is a
+ * module singleton, and dictation owns a mic stream), so main genuinely cannot compute them.
+ * It used to publish `stopwatch: null` and `dictation: null`, which meant the island ran its
+ * own second copy of the stopwatch store - two module instances, two `runningSinceMs`, both
+ * persisting to `rheo-stopwatch-v1`, drifting apart and overwriting each other.
+ *
+ * The renderer (whichever window owns the clock) now REPORTS its payload up here and main
+ * republishes it. `null` therefore means "not reported yet", which is honest and distinct from
+ * a zeroed stopwatch - `unknown != 0`.
+ */
+let haloStopwatchPayload: any = null;
+let haloDictationPayload: any = null;
+/* The extension has sent `isPrivate` in BOTH /browser-data payloads since 2026-10-08
+ * (background.js:436,480, set from tab.incognito / tab.private at :571) but main never read
+ * the field, so it arrived on every heartbeat and was discarded. Paired with the domain and
+ * carrying the same timestamp so the two can never disagree about which tab they describe. */
+let lastActiveBrowserIsPrivate = false;
+
+const HALO_DOMAIN_STALE_MS = 90_000;
+
+function isBrowserAppName(name) {
+    if (!name) return false;
+    const lower = String(name).toLowerCase();
+    if (KNOWN_BROWSERS.some((b) => lower.includes(b))) return true;
+    const configured = userPreferences?.browserProcessNames;
+    return Array.isArray(configured) && configured.some((b) => b && lower.includes(String(b).toLowerCase()));
+}
+
+/**
+ * The Halo island's `Now` block needs the SITE the user is on, and whether that window is
+ * private. Two rules keep it honest, and both matter because `lastActiveBrowserDomain` is
+ * deliberately global and NEVER expires - it is a diagnostics counter, not a live value.
+ *
+ *  1. Only report a domain when the FOREGROUND app is a browser; otherwise the user switched
+ *     to their editor and the island would still claim they are on github.com.
+ *  2. Only report it while the extension is still talking, or a browser that quit reads as
+ *     "unknown" rather than as the last site seen minutes ago.
+ *
+ * A private window NEVER carries its domain onward - that is the whole point of the state.
+ */
+function haloCurrentAppSnapshot() {
+    if (typeof currentApp === 'undefined' || !currentApp) return null;
+    const app = currentApp.app ?? currentApp.name ?? 'Unknown';
+    const base = {
+        app,
+        category: currentApp.category ?? 'Uncategorized',
+        tier: currentApp.tier ?? 'neutral',
+    };
+    const name = typeof currentApp === 'string' ? currentApp : app;
+    if (!isBrowserAppName(name)) return base;
+    const fresh = Date.now() - lastActiveBrowserTimestamp < HALO_DOMAIN_STALE_MS;
+    if (!fresh || !lastActiveBrowserDomain) return { ...base, domain: null };
+    return {
+        ...base,
+        isPrivate: lastActiveBrowserIsPrivate,
+        domain: lastActiveBrowserIsPrivate ? null : lastActiveBrowserDomain,
+    };
+}
+
+// ── HALO ISLAND / XWayland ──────────────────────────────────────────────────
+// THIS MACHINE RUNS NATIVE WAYLAND (`XDG_SESSION_TYPE=wayland`, KDE Plasma), where
+// Electron does not reliably honour programmatic window position, always-on-top,
+// or screen-cursor position. DISPLAY=:0 exists, so XWayland is available and is
+// the supported path: force the x11 ozone backend BEFORE the app becomes ready.
+// Without this the island cannot be placed, raised, or hover-detected here.
+// Force x11 whenever the session is Wayland. The previous form only set it when the var was
+  // UNSET, which meant anything that had already exported a wayland/x11 hint (a packaged launch,
+  // a .desktop file, an inherited shell env) kept whatever it had — and on native Wayland
+  // Electron silently IGNORES programmatic window position, so `getBounds()` comes back wrong
+  // and `createHaloIsland` DESTROYS the window at startup. The island then never appears, with
+  // no error. XWayland is present (`DISPLAY=:0`), so x11 is the supported path (HALO §37 tier B).
+  if (process.platform === 'linux' && process.env.XDG_SESSION_TYPE === 'wayland') {
+    process.env.ELECTRON_OZONE_PLATFORM_HINT = 'x11';
+  } else if (process.platform === 'linux' && !process.env.ELECTRON_OZONE_PLATFORM_HINT) {
+    process.env.ELECTRON_OZONE_PLATFORM_HINT = 'x11';
+  }
 
 // --- Global shortcut for DevTools ---
 const { globalShortcut } = require('electron');
@@ -111,6 +223,39 @@ let closeSplash: (() => void) | null = null;
 // Set when the OS reports >= SLEEP_DETECTION_MIN_GAP_MS of no input; cleared
 // when the user becomes active again and checkSleepGap() runs.
 let idleDetectionStartMs: number | null = null;
+/**
+ * When the foreground window last CHANGED. Linux fallback for OS idle time:
+ * `powerMonitor.getSystemIdleTime()` is dead there (see isIdleApiUsable), and an
+ * active user switches what is in front of them, so "nothing has changed for N
+ * minutes" is a usable stand-in. Set wherever `currentApp` is assigned.
+ */
+let lastForegroundChangeMs: number = Date.now();
+/**
+ * Title of the foreground window, published in the heartbeat.
+ *
+ * This is the ONLY system-wide "the user is still typing" signal available on
+ * Linux, where `powerMonitor.getSystemIdleTime()` is dead. The renderer can only
+ * see input addressed to its own window, so without this it concludes "AFK"
+ * the moment you switch to another app — which is precisely the false positive
+ * that made the prompt fire constantly. A window title changes as you type in a
+ * browser, editor or terminal, so a title change is a good proxy for activity.
+ */
+let lastForegroundTitle: string = '';
+/**
+ * When the foreground window last showed SIGNS OF ACTIVITY — an app switch OR a
+ * title change.
+ *
+ * Distinct from `lastForegroundChangeMs` (app switches only) on purpose. The
+ * renderer needs both strengths of signal:
+ *   - `foregroundIdleSeconds`      -> quiet for a LONG time  = probably away
+ *   - `foregroundActiveIdleSeconds` -> showed activity at all  = not away
+ *
+ * Title changes are a WEAK activity signal: a chat app or music player rewrites
+ * its title constantly without a human touching anything, so it must never be
+ * allowed to reset the real input clock — doing exactly that made AFK silently
+ * stop firing, which is the exact inversion being fixed here.
+ */
+let lastForegroundActivityMs: number = Date.now();
 
 interface SleepPatternEntry {
   date: string;
@@ -139,12 +284,42 @@ function saveSleepPattern(entry: SleepPatternEntry) {
 }
 
 const SLEEP_DETECTION_MIN_GAP_MS = 45 * 60 * 1000; // 45 min gap to trigger detection
-const SLEEP_HOUR_START = 21; // 9 PM
-const SLEEP_HOUR_END = 10; // 10 AM next day
 
+/**
+ * Bedtime is a USER SETTING, mirrored here from the renderer.
+ *
+ * This was `const SLEEP_HOUR_START = 21; const SLEEP_HOUR_END = 10;` — hardcoded,
+ * unreachable from Settings, and wrong at the edges. The old test was
+ * `h >= 21 || h <= 10` evaluated on each gap ENDPOINT, which meant:
+ *
+ *   - `h <= 10` swallowed the whole 10 o'clock hour, so a 10:15am coffee break
+ *     counted as "sleep hours" and raised the sleep popup in broad daylight;
+ *   - only TOUCHING the window was required, so a 20:00 → 21:30 gap qualified
+ *     having overlapped bedtime by zero minutes;
+ *   - a second, conflicting window (`lastCloseHour >= 22 || lastCloseHour <= 3`)
+ *     lived in `checkMorningPrompt` and nobody noticed the two disagreed.
+ *
+ * `src/lib/sleepWindow.ts` writes these through `set-preference` whenever the
+ * user changes them in Settings; `set-preference` below writes them back here.
+ */
+let sleepWindowStartHour = 22;
+let sleepWindowEndHour = 7;
+let sleepWindowEnabled = true;
+
+/** Is this instant inside the configured bedtime window? */
 function isWithinSleepHours(timestamp: number): boolean {
-  const h = new Date(timestamp).getHours();
-  return h >= SLEEP_HOUR_START || h <= SLEEP_HOUR_END;
+    if (!sleepWindowEnabled) return false;
+    return hourInSleepWindow(new Date(timestamp).getHours(), sleepWindowStartHour, sleepWindowEndHour);
+}
+
+/**
+ * The gate that was missing: a gap is only sleep if it genuinely OVERLAPS
+ * bedtime. Anything else — a coffee run, a meeting, a reboot at 3pm — is AFK,
+ * and the AFK prompt is the correct thing to show for it.
+ */
+function classifySleepGap(gapStart: number, gapEnd: number): 'sleep' | 'afk' {
+    if (!sleepWindowEnabled) return 'afk';
+    return classifyGap(sleepWindowStartHour, sleepWindowEndHour, gapStart, gapEnd, MIN_SLEEP_OVERLAP_MINUTES).verdict;
 }
 
 function detectSleepGap(gapStart: number, gapEnd: number): { isSleep: boolean; suggestedStart: string; suggestedEnd: string; durationMinutes: number } | null {
@@ -231,11 +406,42 @@ function checkMorningPrompt() {
     // Check conditions:
     // 1. App was closed for at least 4 hours
     // 2. Current time is in morning window (5am-10am)
-    // 3. Last close was in sleep window (10pm-3am)
+    // 3. Last close was during the user's CONFIGURED bedtime
+    //
+    // (3) used to be its own hardcoded `lastCloseHour >= 22 || lastCloseHour <= 3`
+    // while the sleep-gap guard used 21 → 10, so the same night could be "sleep"
+    // to one function and "not sleep" to another. It now asks the one window.
     const lastCloseHour = new Date(lastCloseTime).getHours();
-    const wasSleepTime = lastCloseHour >= 22 || lastCloseHour <= 3;
+    const wasSleepTime = isWithinSleepHours(lastCloseTime);
     
-    if (isMorning && hoursSinceClose >= 4 && wasSleepTime) {
+    // 4. Don't ask about a night that has ALREADY been recorded.
+    //
+    // `confirm-sleep` / `add-manual-sleep` key a night's sleep on the DATE OF
+    // BEDTIME, so a night that began before midnight belongs to yesterday. This
+    // guard had no equivalent, which is the other half of why the banner could
+    // double-log a night the popup had already confirmed.
+    let alreadyRecorded = false;
+    try {
+        const bedtime = new Date(lastCloseTime);
+        const bedtimeDate = bedtime.getFullYear()
+            + '-' + String(bedtime.getMonth() + 1).padStart(2, '0')
+            + '-' + String(bedtime.getDate()).padStart(2, '0');
+        const sleepActivity = db.prepare(`SELECT id FROM external_activities WHERE type = 'sleep' LIMIT 1`).get() as any;
+        if (sleepActivity) {
+            const row = db.prepare(`
+                SELECT id FROM external_sessions
+                WHERE activity_id = ? AND ended_at IS NOT NULL AND date(started_at) = ?
+                LIMIT 1
+            `).get(sleepActivity.id, bedtimeDate);
+            alreadyRecorded = !!row;
+        }
+    } catch (err) {
+        // Never let a guard failure suppress the prompt; over-asking is the
+        // lesser evil compared with silently dropping a night's sleep.
+        console.error('[DeskFlow] morning-prompt already-recorded check failed:', err);
+    }
+
+    if (isMorning && hoursSinceClose >= 4 && wasSleepTime && !alreadyRecorded) {
         console.log('[DeskFlow] 🌤️ Morning prompt conditions met:', {
             hoursSinceClose: hoursSinceClose.toFixed(1),
             lastCloseHour,
@@ -2640,6 +2846,41 @@ function initializeStorage() {
         try { db.exec("ALTER TABLE terminal_sessions ADD COLUMN subpage TEXT DEFAULT 'work/sessions'"); } catch {}
         try { db.exec('ALTER TABLE workspace_problems ADD COLUMN session_id TEXT'); } catch {}
 
+        // ========== Terminal process identity + resource rollups ==========
+        // Spec §2 / §28: a PID alone is not an identity because PIDs are reused.
+        // proc_start_jiffies is starttime from /proc/<pid>/stat field 22 --
+        // jiffies since boot, monotonic, and never reused for a different
+        // process, so (proc_pid, proc_start_jiffies) is collision-free.
+        // proc_posix_session / proc_pgrp / proc_tty_nr are the kernel's own
+        // relationships, which is what makes foreground-CLI attribution and
+        // orphan rescue possible without matching executable names.
+        try { db.exec('ALTER TABLE terminal_sessions ADD COLUMN proc_pid INTEGER'); } catch {}
+        try { db.exec('ALTER TABLE terminal_sessions ADD COLUMN proc_start_jiffies INTEGER'); } catch {}
+        try { db.exec('ALTER TABLE terminal_sessions ADD COLUMN proc_posix_session INTEGER'); } catch {}
+        try { db.exec('ALTER TABLE terminal_sessions ADD COLUMN proc_pgrp INTEGER'); } catch {}
+        try { db.exec('ALTER TABLE terminal_sessions ADD COLUMN proc_tty_nr INTEGER'); } catch {}
+        try { db.exec('ALTER TABLE terminal_sessions ADD COLUMN proc_spawned_at INTEGER'); } catch {}
+
+        // Minute rollups, one row per (workspace, minute). Raw 1 Hz samples are
+        // never persisted; this is what lets a FRESH AI session see roughly the
+        // last hour without the previous Electron process still running.
+        try {
+          db.exec(`
+            CREATE TABLE IF NOT EXISTS terminal_resource_rollups (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              workspace_id TEXT NOT NULL,
+              ts_ms INTEGER NOT NULL,
+              rss_mb REAL,
+              pss_mb REAL,
+              cpu_pct REAL,
+              swap_mb REAL,
+              proc_count INTEGER,
+              thread_count INTEGER
+            )
+          `);
+        } catch {}
+        try { db.exec('CREATE INDEX IF NOT EXISTS idx_terminal_resource_rollups_ws_ts ON terminal_resource_rollups(workspace_id, ts_ms)'); } catch {}
+
         // Collaborative Debugging System — Bug Reports
         db.exec(`
             CREATE TABLE IF NOT EXISTS bug_reports (
@@ -2812,6 +3053,9 @@ function initializeStorage() {
         } catch (_e) {}
 
         // Terminal bindings (terminal → project/agent/problem association)
+        // NOTE: session_id exists in the DDL but nothing ever WROTE it, which
+        // made getSessionIdForTerminal()'s primary branch dead code. Both
+        // register-terminal and update-terminal-binding now write it.
         db.exec(`
             CREATE TABLE IF NOT EXISTS terminal_bindings (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3333,6 +3577,8 @@ function initializeStorage() {
         try { db.exec('ALTER TABLE goals ADD COLUMN journal_text TEXT'); } catch {}
         try { db.exec('ALTER TABLE goals ADD COLUMN slipped_count INTEGER DEFAULT 0'); } catch {}
         try { db.exec('ALTER TABLE goals ADD COLUMN deadline TEXT'); } catch {}
+        // location for goals
+        try { db.exec('ALTER TABLE goals ADD COLUMN location TEXT'); } catch {}
 
         // ========== Life Phases Timeline (The River of Years) ==========
         db.exec(`
@@ -3384,6 +3630,9 @@ function initializeStorage() {
           ['status', 'TEXT DEFAULT \'complete\''],
           ['start_date', 'TEXT DEFAULT NULL'],
           ['end_date', 'TEXT DEFAULT NULL'],
+          // Form-shape only: how many questions the phase wizard asks.
+          // Nullable so every pre-existing row reads back as "unspecified".
+          ['scale', 'TEXT DEFAULT NULL'],
         ] as [string, string][]) {
           if (!lphHave.includes(col)) { try { db.exec(`ALTER TABLE life_phases ADD COLUMN ${col} ${type}`); } catch {} }
         }
@@ -3430,13 +3679,33 @@ function initializeStorage() {
             goal_id TEXT,
             done INTEGER NOT NULL DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now')),
-            due_time TEXT
+            due_time TEXT,
+            reminder_lead_min INTEGER NOT NULL DEFAULT 0,
+            description TEXT DEFAULT '',
+            links TEXT DEFAULT '[]',
+            location TEXT DEFAULT ''
           )
         `);
+        // Generic key/value app settings. There was no such store — the only
+        // "settings" IPC was backup:settings:get, which is scoped to backups —
+        // so notification lead times had nowhere to live.
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+          )
+        `);
+
         // older-DB safety: reminders created before the time picker have no due_time
+        // and before the lead-time picker have no reminder_lead_min
+        // and before the details picker have no description/links/location
         const remCols = db.prepare(`PRAGMA table_info(reminders)`).all().map((c: any) => c.name);
         for (const [col, type] of [
           ['due_time', 'TEXT DEFAULT NULL'],
+          ['reminder_lead_min', 'INTEGER NOT NULL DEFAULT 0'],
+          ['description', 'TEXT DEFAULT ""'],
+          ['links', 'TEXT DEFAULT "[]"'],
+          ['location', 'TEXT DEFAULT ""'],
         ] as [string, string][]) {
           if (!remCols.includes(col)) { try { db.exec(`ALTER TABLE reminders ADD COLUMN ${col} ${type}`); } catch {} }
         }
@@ -3677,22 +3946,41 @@ function initializeStorage() {
         };
         console.log('[GoalOrchestration] row counts:', JSON.stringify({ before: beforeCounts, after: afterCounts }));
 
-        // Migration: merge reminders into deadlines
+        // Migration: merge reminders into deadlines.
+        //
+        // THIS USED TO DROP THE `reminders` TABLE, and it ran on EVERY boot.
+        // `reminders` is created by `CREATE TABLE IF NOT EXISTS` at the top of
+        // this same block, so the table's lifecycle was:
+        //   boot 1  created empty  → count 0 → not dropped → you add reminders
+        //   boot 2  has rows       → rows copied to deadlines → TABLE DROPPED
+        //           …six live handlers then read/write a table that no longer
+        //             exists (get-reminders, create-reminder, toggle, delete,
+        //             and three goal-connection queries): every one throws
+        //             "no such table: reminders", which the catch blocks
+        //             swallow into an empty list. Your reminders appear to have
+        //           silently vanished, and adding one fails.
+        //   boot 3  recreated empty → works again for exactly one session
+        //
+        // So the feature alternated between working and broken on every other
+        // launch. The drop is removed: six handlers still depend on this table,
+        // and a reminder carries `due_time`, which `deadlines` has no column
+        // for — the two are genuinely different records, not duplicates.
+        //
+        // The copy is now `INSERT OR IGNORE` against `deadlines.id` (the
+        // primary key), which makes it idempotent, so it can safely run on
+        // every boot without ever duplicating a row.
         try {
-          const reminderCount = db.prepare('SELECT COUNT(*) as c FROM reminders').get();
-          if (reminderCount && reminderCount.c > 0) {
-            db.exec(`
-              INSERT INTO deadlines (id, title, due_date, status, description, category, created_at)
-              SELECT id, text,
-                COALESCE(due_date, datetime('now', '+1 day')),
-                CASE WHEN done = 1 THEN 'done' ELSE 'pending' END,
-                CASE WHEN goal_id IS NOT NULL THEN 'goal:' || goal_id ELSE NULL END,
-                'reminder',
-                created_at
-              FROM reminders
-            `);
-            db.exec('DROP TABLE reminders');
-          }
+          db.exec(`
+            INSERT OR IGNORE INTO deadlines (id, title, due_date, status, description, category, created_at)
+            SELECT id, text,
+              COALESCE(due_date, datetime('now', '+1 day')),
+              CASE WHEN done = 1 THEN 'done' ELSE 'pending' END,
+              CASE WHEN goal_id IS NOT NULL THEN 'goal:' || goal_id ELSE NULL END,
+              'reminder',
+              created_at
+            FROM reminders
+            WHERE id NOT IN (SELECT id FROM deadlines)
+          `);
         } catch {}
 
         // Insert builtin schedule templates
@@ -4530,13 +4818,17 @@ const { buildChain, runWithFallback } = require("./services/providers/router");
         // finance, categories, tiers, sessions, tracking, gas or lectures —
         // surfacing as a flood of "No handler registered for 'X'" and an app the
         // user cannot start. One unrelated failure must never take these down.
-        try { registerCategoryHandlers({ db, categoryConfig: categoryConfig as any, mainWindow: mainWindow as any, currentApp, saveCategoryConfig, categorizeApp }); console.log('[DeskFlow] ✅ Category handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Category handlers failed to register:', err.message); }
+        try { registerCategoryHandlers({ db, categoryConfig: categoryConfig as any, mainWindow: mainWindow as any, currentApp, getCurrentApp: () => currentApp, getMainWindow: () => mainWindow as any, saveCategoryConfig, categorizeApp }); console.log('[DeskFlow] ✅ Category handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Category handlers failed to register:', err.message); }
         try { registerGoalHandlers({ db, mainWindow: mainWindow as any, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback }); console.log('[DeskFlow] ✅ Goal handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Goal handlers failed to register:', err.message); }
         try { registerFinanceHandlers({ db, mainWindow: mainWindow as any, userPreferences, financePasswordHash, financePasswordSalt: financePasswordSalt, financeDataKey: financeDataKey, financeLocked, financeRememberDevice, financeRememberDeviceExpiry, financeLockTimeout, getLocalDateStr, toInt, financeDisplayCurrency, hashPassword, verifyPassword, encryptField, decryptField, isEncrypted, safeDecrypt, logAuditEvent, diffFields, formatAuditChanges, decryptAuditData, deriveFinanceDataKey, enc }); console.log('[DeskFlow] ✅ Finance handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Finance handlers failed to register:', err.message); }
         try { registerSessionHandlers({ db, useJson }); console.log('[DeskFlow] ✅ Session handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Session handlers failed to register:', err.message); }
         try { registerTrackingHandlers({ db, getIsTracking: () => isTracking, setIsTracking: (v) => { isTracking = v; }, getTrackingInterval: () => trackingInterval, setTrackingInterval: (v) => { trackingInterval = v; }, getLastPollTime: () => lastPollTime, setLastPollTime: (v) => { lastPollTime = v; }, pollForeground, userPreferences }); console.log('[DeskFlow] ✅ Tracking handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Tracking handlers failed to register:', err.message); }
         try { registerGasHandlers({ db }); console.log('[GAS] ✅ Gas handlers registered'); } catch (err: any) { console.error('[GAS] ⚠️ Gas handlers failed to register:', err.message); }
         try { registerLectureHandlers(db); console.log('[Lecture] ✅ SlideMind handlers registered'); } catch (err: any) { console.error('[Lecture] ⚠️ SlideMind handlers failed to register:', err.message); }
+        // Auto-update: a no-op under `npm start` (app.isPackaged is false), active
+        // for packaged builds. Wrapped for the same reason as every handler above —
+        // a failed update check must never stop the app from starting.
+        try { initAutoUpdate(() => mainWindow as any); console.log('[DeskFlow] ✅ Auto-update initialised'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Auto-update init failed (ignored):', err.message); }
 
         storageError = null;
     }
@@ -4819,13 +5111,16 @@ function getStats() {
         console.log(`[DeskFlow] Skipping sleep detection — gap ${gapMinutes}min exceeds 24h max`);
         return;
     }
-    if (!isWithinSleepHours(gapStart) && !isWithinSleepHours(gapEnd)) {
-        console.log(`[DeskFlow] Skipping sleep detection — neither gap end is within sleep hours (start=${new Date(gapStart).getHours()}:${new Date(gapStart).getMinutes()}, end=${new Date(gapEnd).getHours()}:${new Date(gapEnd).getMinutes()})`);
+    if (classifySleepGap(gapStart, gapEnd) !== 'sleep') {
+        const overlapMin = Math.floor(
+            classifyGap(sleepWindowStartHour, sleepWindowEndHour, gapStart, gapEnd, MIN_SLEEP_OVERLAP_MINUTES).overlapMinutes
+        );
+        console.log(`[DeskFlow] Skipping sleep detection — gap ${gapMinutes}min (${new Date(gapStart).getHours()}:${String(new Date(gapStart).getMinutes()).padStart(2, '0')} → ${new Date(gapEnd).getHours()}:${String(new Date(gapEnd).getMinutes()).padStart(2, '0')}) overlaps bedtime by only ${overlapMin}min. Outside the sleep window (${sleepWindowStartHour}:00 → ${sleepWindowEndHour}:00), so this is AFK, not sleep.`);
         return;
     }
-    if (gapMs < 120 * 60 * 1000) {
+    if (gapMs < 120 * 60 * 1000 && isIdleApiUsable()) {
         const systemIdleSec = electron_1.powerMonitor.getSystemIdleTime();
-        if (!opts?.skipActiveGuard && systemIdleSec < 300) {
+        if (!opts?.skipActiveGuard && systemIdleSec < getAfkThresholdSec()) {
             console.log(`[DeskFlow] Skipping sleep detection — system idle only ${systemIdleSec}s (user actively using other apps)`);
             return;
         }
@@ -4898,12 +5193,383 @@ let lastSuccessfulObservationTime = Date.now();
 let consecutiveNullPolls = 0;
 let MAX_SESSION_MS = 120 * 60 * 1000; // 120 minutes — cap for long sessions (was 30min)
 const MAX_LOGGED_SESSION_MS = 3600000; // 1 hour - cap logged sessions to prevent heatmap inflation
- const SLEEP_GAP_MS = 300000; // 5 minutes — gap threshold to detect system sleep (was 30s)
+ let SLEEP_GAP_MS = 300000; // 5 minutes — gap threshold to detect system sleep (was 30s)
  const BROWSER_MAX_DELTA_MS = 10 * 60 * 1000; // 10 minutes — separate cap for browser delta (extension sends ~5s normally)
  const BROWSER_MAX_NULL_POLL = 60; // polls before closing a browser session when extension doesn't report
  const IDLE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes — OS-level idle before pausing tracking
+/**
+ * AFK threshold in SECONDS, mirrored from the renderer (src/lib/afk.ts writes
+ * `afkThresholdMinutes` through set-preference). Declared here, above every
+ * reader, because `userPreferences` itself is declared ~2,800 lines further
+ * down — reading it from the sleep-gap guard would be a temporal-dead-zone
+ * ReferenceError.
+ *
+ * 0 means AFK detection is switched off in Settings.
+ */
+let afkThresholdSeconds = 300; // 5 min default until the renderer reports otherwise
+
+function getAfkThresholdSec(): number {
+    return afkThresholdSeconds;
+}
+
+/**
+ * Does `powerMonitor.getSystemIdleTime()` actually work on this platform?
+ *
+ * On Linux it returns 0 FOREVER. Measured on this machine: 40 seconds of total
+ * inactivity still read 0 on every tick, because Electron's implementation
+ * depends on OS power-management APIs Linux does not expose the same way. The
+ * practical consequence was that every idle-driven feature silently died:
+ *
+ *   - the AFK prompt never fired, because `0 > threshold` is never true;
+ *   - the sleep popup was ALWAYS skipped, because its "user is active in another
+ *     app" guard read `0 < threshold` and concluded the user was busy;
+ *   - the poll-based "fell asleep with the app still focused" detector could
+ *     never trigger.
+ *
+ * A guard that suppresses a feature when it cannot actually measure anything is
+ * worse than no guard, so the platform is probed once and the idle-dependent
+ * branches degrade to "unknown, assume idle" instead of "assume active".
+ */
+let idleApiUsable: boolean | null = null;
+function isIdleApiUsable(): boolean {
+    if (idleApiUsable !== null) return idleApiUsable;
+    // Probe on a short delay so it does not run during app construction, and
+    // latch the answer: this cannot change while the process is alive.
+    idleApiUsable = process.platform !== 'linux';
+    if (process.platform === 'linux') {
+        console.warn('[DeskFlow] powerMonitor.getSystemIdleTime() is not functional on Linux — it always returns 0. Idle-driven prompts (AFK, sleep) will use the renderer input clock / foreground-change fallback instead.');
+    }
+    return idleApiUsable;
+}
+
 let lastCheckpointTime = Date.now();
 const CHECKPOINT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes — checkpoint interval for long sessions (was 5min)
+
+// ── AI EVAL BASELINE ───────────────────────────────────────────────────────
+// See the call site (near initEval) for why this exists. Constants live here
+// so the numbers are in one readable place rather than inline at the call.
+const EVAL_BASELINE_STARTUP_DELAY_MS = 60 * 1000;   // let the app settle first
+const EVAL_BASELINE_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6 hours
+const EVAL_BASELINE_MAX_CASES = 25;                  // bounded spend/time per run
+
+/**
+ * Run the AI eval suite on a cadence so `ai-eval:compare-runs` has a baseline.
+ *
+ * Total failure tolerance is the design constraint: this must NEVER be able to
+ * stop the app, hang startup, or throw where a provider is misconfigured. Every
+ * failure is caught, logged once, and the timer re-arms regardless.
+ */
+
+// ══════════════════════════════════════════════════════════════════════
+// AUTOMATIONS — the rule runner (RESULT.md §5-§7)
+//
+// WHY THIS IS NOT INFRA/ipc/: main.ts imports each handler module directly
+// and never calls registerAllHandlers(), so anything registered only in
+// infrastructure/ipc/index.ts is dead code that compiles but never runs.
+//
+// The DONE BAR (RESULT.md round-04 §4) — these two greps stop being 0:
+//   grep -rn "CREATE TABLE.*automation"        src/main.ts | wc -l
+//   grep -rn "ipcMain.handle('automation:"    src/main.ts | wc -l
+// But the bar is necessary-not-sufficient: the proof is a `notify` run in
+// automation:get-runs fired by a real finance.transaction.created.
+// ══════════════════════════════════════════════════════════════════════
+
+let automationRunner: AutomationRunner | null = null;
+let automationBus: AutomationBus | null = null;
+
+function broadcastAutomationChanged(): void {
+    try {
+        for (const win of electron_1.BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed()) safeSend(win, 'automation:changed', {});
+        }
+    } catch { /* renderer may be gone; the next list() re-reads anyway */ }
+}
+
+function initAutomations(database: any): void {
+    if (!database) return;
+    try {
+        // ── DDL (RESULT.md §5). Idempotent; three tables + watermarks kv. ──
+        database.exec(`
+            CREATE TABLE IF NOT EXISTS automations (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              description TEXT DEFAULT '',
+              trigger_id TEXT NOT NULL,
+              catalogue_version INTEGER NOT NULL DEFAULT ${CATALOGUE_VERSION},
+              conditions_json TEXT NOT NULL DEFAULT '[]',
+              condition_logic TEXT NOT NULL DEFAULT 'and',
+              action_id TEXT NOT NULL,
+              action_params_json TEXT NOT NULL DEFAULT '{}',
+              lane TEXT NOT NULL DEFAULT 'tool',
+              mission_template_id TEXT,
+              action_tier TEXT NOT NULL DEFAULT 'benign',
+              unattended INTEGER NOT NULL DEFAULT 0,
+              on_miss TEXT NOT NULL DEFAULT 'fire',
+              lifecycle TEXT NOT NULL DEFAULT 'forever',
+              priority INTEGER NOT NULL DEFAULT 500,
+              category TEXT NOT NULL DEFAULT 'general',
+              status TEXT NOT NULL DEFAULT 'active',
+              status_reason TEXT,
+              last_satisfied_at INTEGER,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS automation_events (
+              id TEXT PRIMARY KEY,
+              type TEXT NOT NULL,
+              occurred_at INTEGER NOT NULL,
+              emitted_at INTEGER NOT NULL,
+              source TEXT NOT NULL,
+              payload_json TEXT NOT NULL,
+              entity_kind TEXT,
+              entity_id TEXT,
+              caused_by_json TEXT,
+              dispatched INTEGER NOT NULL DEFAULT 0,
+              dispatched_at INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_autoevents_undispatched
+              ON automation_events(dispatched) WHERE dispatched = 0;
+            CREATE TABLE IF NOT EXISTS automation_runs (
+              id TEXT PRIMARY KEY,
+              automation_id TEXT NOT NULL REFERENCES automations(id),
+              event_id TEXT NOT NULL REFERENCES automation_events(id),
+              status TEXT NOT NULL,
+              attempt INTEGER NOT NULL DEFAULT 0,
+              attempts_json TEXT,
+              error TEXT,
+              result_json TEXT,
+              digested_into TEXT,
+              created_at INTEGER NOT NULL,
+              finished_at INTEGER,
+              UNIQUE(automation_id, event_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_autoruns_pending
+              ON automation_runs(status, created_at);
+            CREATE TABLE IF NOT EXISTS automation_watermarks (
+              event_type TEXT PRIMARY KEY,
+              watermark INTEGER NOT NULL
+            );
+        `);
+
+        // ── Delivery by construction: main.ts builds the executor table, so
+        //    the runner never imports from here (no cycles, no exports). ──
+        const { runner, bus } = createAutomationRunner(database, buildExecutors(), {
+            log: (m: string) => console.log('[DeskFlow]', m),
+            warn: (m: string) => console.warn('[DeskFlow]', m),
+            notifyChanged: broadcastAutomationChanged,
+        });
+        automationRunner = runner;
+        automationBus = bus;
+        // handler modules emit through here; they never import main.ts
+        setAutomationPublisher(publishAutomationEvents);
+
+          // goal:create / goal:complete delegate to the SAME saveGoalEntry the
+          // save-goal IPC uses (category i-b). Bound here so executors.ts needs
+          // no import of goal-handlers.
+          try {
+            const gh = require('./infrastructure/ipc/goal-handlers');
+            if (typeof gh.saveGoalEntry === 'function') {
+              bindGoalBehavior(gh.saveGoalEntry);
+              // POSITIVE WITNESS (F1): absence of a bind ERROR is not evidence of a bind.
+              console.log(`[automation] goal behavior bound — goal:create/goal:complete are LIVE`);
+            }
+            else console.warn('[automation] goal behavior NOT bound — goal:create/goal:complete will NOT be offered');
+          } catch (e: any) {
+            console.warn('[automation] goal behavior NOT bound:', e?.message);
+          }
+
+        // ── Boot sequence (RESULT.md §7), in order. ──
+        const v = runner.validateAll();
+        const crashed = runner.recoverCrashedRuns();
+        const replayed = bus.replayUndispatched();
+        runner.start();
+
+      // ── system.app.started (lifecycle class, RESULT.md §3.3). ──
+        try {
+            bus.emit({
+      type: 'system.app.started',
+                payload: { version: electron_1.app?.getVersion?.() ?? 'dev' },
+                source: 'app',
+            });
+        } catch (e: any) {
+            console.warn('[DeskFlow] ai-automation: app.started emit failed:', e?.message);
+        }
+
+        console.log(`[DeskFlow] ✅ Automations ready — ${v.valid} valid, ${v.invalid} invalid, `
+            + `${crashed} crashed recovered, ${replayed} replayed, executors: ${liveExecutors().join(', ')}`);
+    } catch (err: any) {
+        console.error('[DeskFlow] ⚠️ AI Automation init failed:', err?.message);
+    }
+}
+
+/**
+ * Publish this bus into the module-level slot so handler modules can emit
+ * WITHOUT importing main.ts (which would be a cycle). See setAutomationPublisher.
+ */
+function publishAutomationEvents(type: string, payload: Record<string, any>, entity?: { kind: string; id: string }): void {
+    try { automationBus?.emit({ type, payload, entity }); }
+    catch (e: any) { console.warn(`[DeskFlow] ai-automation emit(${type}) failed:`, e?.message); }
+}
+
+// ── IPC (RESULT.md §6). `save` runs the SAME validation as boot. ──
+function registerAutomationIpc(database: any): void {
+    const handle = (channel: string, fn: any) => electron_1.ipcMain.handle(channel, async (_e: any, ...args: any[]) => {
+        try { return await fn(...args); }
+        catch (err: any) { return { error: err?.message ?? 'automation error' }; }
+    });
+
+    handle('automation:list', (feature?: string) => {
+        const rows = database.prepare(
+            `SELECT * FROM automations ${feature ? 'WHERE category = ?' : ''} ORDER BY priority DESC`,
+        ).all(...(feature ? [feature] : []));
+        return { automations: rows };
+    });
+
+    handle('automation:get', (id: string) => {
+        const row = database.prepare('SELECT * FROM automations WHERE id = ?').get(id);
+        return { automation: row ?? null };
+    });
+
+    // CANNOT BE SAVED INVALID (RESULT.md §6). The gate checks BOTH halves:
+    // the trigger must have a live emitter AND the action must have a
+    // registered executor. A catalogue entry with no emitter is what made the
+    // original builder "a complete catalogue over a void".
+    handle('automation:save', (input: any) => {
+        const v = isValidAutomation(input.triggerId, input.actionId);
+        if (!v.ok) return { error: v.reason };
+        if (!liveExecutors().includes(input.actionId)) {
+            return { error: `action ${input.actionId} has no executor registered yet` };
+        }
+        const action = getAction(input.actionId)!;
+        const id = input.id || `auto_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const now = Date.now();
+        database.prepare(`
+            INSERT INTO automations (id, name, description, trigger_id, catalogue_version,
+              conditions_json, condition_logic, action_id, action_params_json, lane,
+              action_tier, unattended, on_miss, lifecycle, priority, category, status,
+              enabled, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,?,?)
+            ON CONFLICT(id) DO UPDATE SET
+              name=excluded.name, description=excluded.description, trigger_id=excluded.trigger_id,
+              conditions_json=excluded.conditions_json, condition_logic=excluded.condition_logic,
+              action_id=excluded.action_id, action_params_json=excluded.action_params_json,
+              action_tier=excluded.action_tier, unattended=excluded.unattended,
+              on_miss=excluded.on_miss, lifecycle=excluded.lifecycle, priority=excluded.priority,
+              category=excluded.category, enabled=excluded.enabled, updated_at=excluded.updated_at
+        `).run(id, input.name || 'Automation', input.description || '',
+            input.triggerId, CATALOGUE_VERSION,
+            JSON.stringify(input.conditions ?? []), input.conditionLogic || 'and',
+            input.actionId, JSON.stringify(input.actionParams ?? {}), action.lane,
+            action.tier, input.unattended ? 1 : 0, input.onMiss || 'fire',
+            input.lifecycle || 'forever', input.priority ?? 500, input.category || 'general',
+            input.enabled === false ? 0 : 1, now, now);
+        broadcastAutomationChanged();
+        return { ok: true, id };
+    });
+
+    handle('automation:delete', (id: string) => {
+        database.prepare('DELETE FROM automation_runs WHERE automation_id = ?').run(id);
+        database.prepare('DELETE FROM automations WHERE id = ?').run(id);
+        broadcastAutomationChanged();
+        return { ok: true };
+    });
+
+    handle('automation:toggle', (id: string, enabled: boolean) => {
+        database.prepare('UPDATE automations SET enabled = ?, updated_at = ? WHERE id = ?')
+            .run(enabled ? 1 : 0, Date.now(), id);
+        broadcastAutomationChanged();
+        return { ok: true };
+    });
+
+    handle('automation:get-runs', (id: string, limit = 25) => {
+        const runs = database.prepare(
+            'SELECT * FROM automation_runs WHERE automation_id = ? ORDER BY created_at DESC LIMIT ?',
+        ).all(id, Math.min(Number(limit) || 25, 200));
+        return { runs };
+    });
+
+    handle('automation:get-events', (limit = 25) => {
+        const events = database.prepare(
+            'SELECT * FROM automation_events ORDER BY occurred_at DESC LIMIT ?',
+        ).all(Math.min(Number(limit) || 25, 200));
+        return { events };
+    });
+
+    // PURE dry-run (RESULT.md §6): feeds a synthetic envelope through the SAME
+    // matcher the runner uses. No enqueue, no executor — which is what makes it
+    // safe to run against a `confirm`-tier action.
+    handle('automation:test-fire', (input: any) => {
+        const trigger = getTrigger(input.triggerId);
+        if (!trigger) return { matched: false, reason: 'unknown trigger' };
+        let conditions: any[] = [];
+        let logic: 'and' | 'or' = 'and';
+        try { conditions = JSON.parse(input.conditionsJson || '[]'); logic = input.conditionLogic === 'or' ? 'or' : 'and'; } catch {}
+        const payload = input.samplePayload ?? {};
+        const matched = matches(trigger, payload, conditions, logic);
+        return { matched, reason: matched ? undefined : 'conditions did not match the sample payload', sample: payload };
+    });
+
+    handle('automation:run-now', (id: string) => {
+        // `manual` automations only fire through here, so this is the ONLY path
+        // that bypasses the event bus — and it still respects the tier gate.
+        const row = database.prepare('SELECT * FROM automations WHERE id = ?').get(id) as AutomationRow | undefined;
+        if (!row) return { error: 'no such automation' };
+        if (row.lifecycle !== 'manual') return { error: 'run-now is only for `manual` automations' };
+        const ev = automationBus!.emit({ type: row.trigger_id, payload: { id, source: 'run-now' }, source: 'app' });
+        return { ok: true, eventId: ev.eventId };
+    });
+
+    handle('automation:capabilities', () => {
+        const caps = capabilities();
+        return {
+            ...caps,
+            executors: liveExecutors(),
+            running: automationRunner !== null,
+        };
+    });
+
+    handle('automation:resolve-review', (runId: string, approve: boolean) => {
+        database.prepare("UPDATE automation_runs SET status = ?, finished_at = ?, error = ? WHERE id = ? AND status = 'awaiting-review'")
+            .run(approve ? 'succeeded' : 'skipped', Date.now(), approve ? null : 'declined by user', runId);
+        broadcastAutomationChanged();
+        return { ok: true };
+    });
+}
+
+function scheduleEvalBaselines(): void {
+  const tick = async (): Promise<void> => {
+    try {
+      const cases = listCases();
+      // A run with zero cases writes an empty row forever. Nothing to measure
+      // is not the same as "everything passed" — skip rather than record noise.
+      if (!Array.isArray(cases) || cases.length === 0) {
+        console.log('[DeskFlow] ai-eval baseline: no cases defined, skipping');
+        return;
+      }
+      const prefs = userPreferences || {};
+      const providersState = migrateProviderNames(JSON.parse(prefs.aiProviders || 'null'));
+      if (!providersState?.providers?.some((p: any) => p.enabled)) {
+        // Same reason aiEval-handlers throws. No provider = nothing to run.
+        return;
+      }
+      const run = await runEval({
+        label: 'scheduled baseline',
+        // structural only — an unattended run must never spend money on a judge
+        judge: 'structural',
+        caseIds: cases.slice(0, EVAL_BASELINE_MAX_CASES).map((c: any) => c.id),
+        providersState,
+      });
+      console.log('[DeskFlow] ai-eval baseline complete:', run.id);
+    } catch (err: any) {
+      // Logged, not thrown. A failing provider must not take the timer with it.
+      console.warn('[DeskFlow] ai-eval baseline skipped:', err?.message);
+    } finally {
+      setTimeout(() => { void tick(); }, EVAL_BASELINE_INTERVAL_MS);
+    }
+  };
+  void tick();
+}
 const TRANSIENT_APPS = [
     'explorer', 'task switching', 'taskbar', 'start menu',
     'system', 'shellexperiencehost', 'searchui', 'peopleexperiencehost',
@@ -4979,8 +5645,38 @@ function startSyncAgent() {
   getSyncTokenForRelay().then((token) => {
     if (!token) return; // no auth, skip
     if (syncAgent) return; // already running
+    // SYNC_ENC_KEY is produced BASE64URL by every generator in this repo:
+    // start-dev.ps1 `Generate-Base64Url`, start-dev.sh `generate_secret`
+    // (openssl rand -base64 | tr '+'->'_' '/'->'_' | strip '='), and start-dev.js.
+    // It was decoded with Buffer.from(x, "hex"), which stops at the first non-hex
+    // character and yields a 1-BYTE buffer.
+    //
+    // It does NOT throw: SyncAgent runs this through sha256() first
+    // (syncAgent.ts:68), so any input becomes a valid 32-byte AES key. The real
+    // consequence is ENTROPY, not an exception — 8 bits of key material means 256
+    // possible keys, so every stored terminal-message ciphertext is brute-forceable.
+    // Verified by executing the real path, not by reading it.
+    //
+    // So: accept either encoding (64 all-hex chars = hex, else base64url) and REQUIRE
+    // 32 bytes. A wrong-length key is refused rather than passed on, because
+    // changing the key retroactively makes every already-stored ciphertext
+    // undecryptable — silently continuing would look like success while quietly
+    // destroying the data.
     const syncEncKey = process.env.SYNC_ENC_KEY;
-    const encKey = syncEncKey ? Buffer.from(syncEncKey, "hex") : undefined;
+    let encKey: Buffer | undefined;
+    if (syncEncKey) {
+      const looksHex = /^[0-9a-fA-F]+$/.test(syncEncKey) && syncEncKey.length % 2 === 0;
+      const decoded = Buffer.from(syncEncKey, looksHex ? "hex" : "base64url");
+      if (decoded.length === 32) {
+        encKey = decoded;
+      } else {
+        console.error(
+          `[sync] SYNC_ENC_KEY decodes to ${decoded.length} bytes, need exactly 32 — ` +
+          `terminal-message encryption is NOT configured. Set a 32-byte key ` +
+          `(base64url or 64-char hex). Existing ciphertext cannot be re-keyed.`
+        );
+      }
+    }
     const syncLogPath2 = require('path').join(userDataPath, 'sync-debug.log');
     const syncLog2 = (msg: string) => {
       const line = `[sync ${new Date().toISOString()}] ${msg}\n`;
@@ -4997,7 +5693,13 @@ function startSyncAgent() {
           (getSyncTokenForRelay as any).__clearToken?.();
           if (syncIntervalId !== null) { clearInterval(syncIntervalId); syncIntervalId = null; }
           syncAgent = null;
-          syncLog2("sync STOPPED — auth expired, will resume on re-login");
+          syncLog2("sync STOPPED — auth expired; will retry automatically");
+          // The log used to claim "will resume on re-login", but nothing re-armed it:
+          // the only caller of this function early-returns while syncAgent is truthy,
+          // and auth:get-state never restarted it. A single token expiry therefore
+          // killed sync PERMANENTLY for the rest of the app's life with no way back
+          // short of a manual re-login. Retry the token, then re-arm here.
+          setTimeout(() => { startSyncAgent().catch(() => {}); }, 30_000);
           return;
         }
         syncLog2(`cycle FAIL: ${err.message}`);
@@ -5189,10 +5891,15 @@ function touchBrowserProfile(profileId, browserName, addedMs) {
 }
 function categorizeApp(appName, opts?: { isResolvedGame?: boolean }) {
     if (opts?.isResolvedGame) return 'Gaming';
-    const lower = appName.toLowerCase();
-    if (categoryConfig.appCategoryMap[appName]) {
-        return categoryConfig.appCategoryMap[appName];
-    }
+    const lower = (appName || '').toLowerCase();
+    // Overrides are keyed by the display name shown in Settings ("Konsole") while
+    // the Linux/Windows trackers report a lowercased process name ("konsole").
+    // An exact-key lookup silently missed every override, so tracking always
+    // fell through to keyword detection / 'Uncategorized'. Match case-insensitively.
+    const overrideMap = categoryConfig.appCategoryMap || {};
+    if (overrideMap[appName]) return overrideMap[appName];
+    const lowerKey = Object.keys(overrideMap).find((k) => k.toLowerCase() === lower);
+    if (lowerKey) return overrideMap[lowerKey];
     if (categoryConfig.detectedApps[lower]) {
         return categoryConfig.detectedApps[lower];
     }
@@ -5377,7 +6084,14 @@ async function pollForegroundInner() {
     // --- Idle-based sleep detection (runs every poll, independent of window focus/poll gaps) ---
     // Catches "fell asleep with RHEO focused" — no blur/focus event ever fires there.
     try {
-        const sysIdleSec = electron_1.powerMonitor.getSystemIdleTime();
+        // On Linux the OS idle API is dead (see isIdleApiUsable), so this can
+        // never fire. Fall back to "the foreground window has not changed for a
+        // long time", which is measurable here and is the same signal in
+        // practice: an active user changes what is in front of them.
+        let sysIdleSec = electron_1.powerMonitor.getSystemIdleTime();
+        if (!isIdleApiUsable()) {
+            sysIdleSec = lastForegroundChangeMs ? (now - lastForegroundChangeMs) / 1000 : sysIdleSec;
+        }
         if (sysIdleSec * 1000 >= SLEEP_DETECTION_MIN_GAP_MS) {
             if (idleDetectionStartMs === null) {
                 idleDetectionStartMs = now - sysIdleSec * 1000;
@@ -5518,6 +6232,10 @@ async function pollForegroundInner() {
                     addLog(new Date(sessionStart).toISOString(), currentApp, category, duration, `${currentApp} Window`, null);
                 }
             }
+            if (currentApp !== null) {
+                lastForegroundChangeMs = now;
+                lastForegroundActivityMs = now;
+            }
             currentApp = null;
             sessionStart = now;
             lastSuccessfulObservationTime = now;
@@ -5611,6 +6329,10 @@ async function pollForegroundInner() {
 
         const appName = resolved.name;
         const windowTitle = result?.title ?? '';
+        if (windowTitle && windowTitle !== lastForegroundTitle) {
+            lastForegroundTitle = windowTitle;
+            lastForegroundActivityMs = Date.now();
+        }
         const appLower = appName.toLowerCase();
         const isTransientApp = TRANSIENT_APPS.some(t => appLower.includes(t));
 
@@ -5682,6 +6404,10 @@ async function pollForegroundInner() {
                 addLog(new Date(sessionStart).toISOString(), currentApp, category, duration, `${currentApp} Window`, null);
             }
             // Start new session
+            if ((appName || null) !== currentApp) {
+                lastForegroundChangeMs = now;
+                lastForegroundActivityMs = now;   // a switch is a strong signal
+            }
             currentApp = appName || null;
             sessionStart = now;
             lastSuccessfulObservationTime = now;
@@ -5930,6 +6656,11 @@ function createWindow() {
             '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
             '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json',
         };
+// Shown only when dist/index.html is STILL absent after a bounded wait.
+        // It must never say "Please rebuild" — a rebuild is very often the CAUSE
+        // (vite empties dist/ mid-build), so that advice locked CZ in a loop.
+        // This page reloads itself the moment the bundle is back on disk.
+        const missingIndexPage = () => `<!doctype html><html><head><meta charset="UTF-8"><title>RHEO</title></head><body style="margin:0;background:#121212;color:#a1a1aa;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;"><div style="text-align:center;padding:24px;"><div style="font-size:48px;margin-bottom:8px;">⚠</div><div style="font-size:18px;font-weight:600;color:#e4e4e7;">RHEO is waiting for its files</div><div style="font-size:13px;color:#ef4444;max-width:520px;line-height:1.5;margin-top:8px;" id="why">dist/index.html is not on disk. This is normally a build in progress — a rebuild is NOT the fix. This page reloads itself automatically.</div><div style="font-size:12px;color:#71717a;margin-top:14px;" id="tick">checking…</div></div></body><script>(function(){var n=0,t=document.getElementById('tick');setInterval(function(){fetch('/index.html',{method:'HEAD',cache:'no-store'}).then(function(r){if(r.ok){t.textContent='files restored — reloading…';location.reload();}else{n++;t.textContent='still waiting (' + n + ') — no action needed';}}).catch(function(){n++;t.textContent='still waiting (' + n + ') — no action needed';});},2000);})();</script></html>`;
         const server = http_1.default.createServer((req, res) => {
             const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
             if (req.method === 'OPTIONS') { res.writeHead(204, corsHeaders); res.end(); return; }
@@ -5953,11 +6684,32 @@ function createWindow() {
                     }
                     fs_1.default.readFile(path_1.default.join(dist, 'index.html'), (err2, data2) => {
                         if (err2) {
-                            // dist/index.html itself is missing — serve a minimal inline
-                            // error page so the browser always gets valid HTML, never a
-                            // bare "Internal Server Error" string that leaves the window blank.
-                            res.writeHead(500, { 'Content-Type': 'text/html', ...corsHeaders, ...cacheHeaders });
-                            res.end('<!doctype html><html><head><meta charset="UTF-8"><title>RHEO</title></head><body style="margin:0;background:#121212;color:#a1a1aa;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;"><div style="text-align:center;padding:24px;"><div style="font-size:48px;margin-bottom:8px;">⚠</div><div style="font-size:18px;font-weight:600;color:#e4e4e7;">RHEO failed to start</div><div style="font-size:13px;color:#ef4444;max-width:500px;line-height:1.5;margin-top:8px;">The application files could not be found. Please rebuild: <code style="background:#27272a;padding:2px 6px;border-radius:4px;">node scripts/build.mjs</code></div></div></body></html>');
+                            // dist/index.html itself is missing. Overwhelmingly this is
+                            // TRANSIENT: `vite build` runs with emptyOutDir:true, so dist/
+                            // is deleted and refilled, and a request landing in that window
+                            // sees ENOENT. Bricking the window here is what produced the
+                            // recurring "The application files could not be found" crash.
+                            // So: wait it out, then fall back to a page that heals itself.
+                            console.warn('[DeskFlow] dist/index.html unavailable (' + (err2.code || err2.message) + ') — waiting for it to come back...');
+                            const indexPath = path_1.default.join(dist, 'index.html');
+                            const waitForIndex = (attempt: number) => {
+                                fs_1.default.readFile(indexPath, (err3: NodeJS.ErrnoException | null, data3: Buffer) => {
+                                    if (!err3) {
+                                        console.log('[DeskFlow] dist/index.html restored after ' + attempt + 's — serving.');
+                                        res.writeHead(200, { 'Content-Type': 'text/html', ...corsHeaders, ...cacheHeaders });
+                                        res.end(data3);
+                                        return;
+                                    }
+                                    if (attempt < 30) {
+                                        setTimeout(() => waitForIndex(attempt + 1), 1000);
+                                        return;
+                                    }
+                                    console.error('[DeskFlow] dist/index.html STILL missing after 30s. code=' + (err3.code || err3.message) + ' distExists=' + fs_1.default.existsSync(dist) + ' — serving self-healing page (it will reload itself).');
+                                    res.writeHead(500, { 'Content-Type': 'text/html', ...corsHeaders, ...cacheHeaders });
+                                    res.end(missingIndexPage());
+                                });
+                            };
+                            waitForIndex(0);
                             return;
                         }
                         res.writeHead(200, { 'Content-Type': 'text/html', ...corsHeaders, ...cacheHeaders });
@@ -6257,7 +7009,14 @@ function createWindow() {
                 currentApp,
                 currentCategory,
                 uptime: Date.now(),
-                systemIdleSeconds
+                systemIdleSeconds,
+                // Dead on Linux; the renderer uses this instead to tell "away
+                // from the desk" apart from "busy in another window".
+                foregroundTitle: lastForegroundTitle,
+                foregroundIdleSeconds: lastForegroundChangeMs ? Math.floor((Date.now() - lastForegroundChangeMs) / 1000) : 0,
+                // "showed any sign of life at all" — the renderer's guard against
+                // calling you AFK while a chat app rewrites its title every 2s.
+                foregroundActiveIdleSeconds: Math.floor((Date.now() - lastForegroundActivityMs) / 1000),
             });
         }
     }, 5000);
@@ -6376,6 +7135,16 @@ function createWindow() {
             }
         }
     });
+
+    // Embedded in-app browser panel. Registered HERE, not in the db block above,
+    // because it needs a live BrowserWindow to attach its WebContentsView to.
+    try {
+        const { registerEmbeddedBrowser } = require('./services/embedded-browser');
+        registerEmbeddedBrowser(mainWindow);
+        console.log('[DeskFlow] ✅ Embedded browser panel ready');
+    } catch (err: any) {
+        console.error('[DeskFlow] ⚠️ Embedded browser failed to register:', err?.message);
+    }
 }
 // --- IPC handlers ---
 electron_1.ipcMain.removeHandler('get-logs');
@@ -6386,6 +7155,37 @@ electron_1.ipcMain.handle('get-logs', () => {
     catch (err) {
         console.error('[DeskFlow] get-logs error:', err);
         return [];
+    }
+});
+/**
+ * Cheap "has anything changed?" probe for the logs table.
+ *
+ * get-logs ships every row: on a multi-month database that is tens of
+ * thousands of rows / ~10 MB / ~500 ms of main-process time. The renderer used
+ * to call it on every foreground-app change and every 30 s tick, then discard
+ * the result because a fingerprint matched — paying the whole cost to discover
+ * there was nothing new.
+ *
+ * MAX(id) is the primary key, so this is an O(1) lookup (~0.007 ms measured)
+ * rather than a scan. The renderer compares it against the last version it
+ * actually rendered and only pays for the full fetch when a row was added.
+ */
+electron_1.ipcMain.handle('get-logs-version', () => {
+    try {
+        if (useJson) {
+            // JSON mode has no SQL table to ask; the array length plus the tail
+            // id is the equivalent signal.
+            const last = jsonLogs.length ? jsonLogs[jsonLogs.length - 1] : null;
+            return { count: jsonLogs.length, maxId: last ? (last.id ?? 0) : 0 };
+        }
+        const row = db.prepare('SELECT COUNT(*) AS count, MAX(id) AS maxId FROM logs').get();
+        return { count: row?.count ?? 0, maxId: row?.maxId ?? 0 };
+    }
+    catch (err) {
+        console.error('[DeskFlow] get-logs-version error:', err);
+        // Report "unknown" so the caller falls back to fetching rather than
+        // wrongly concluding that nothing changed.
+        return { count: -1, maxId: -1 };
     }
 });
 electron_1.ipcMain.handle('update-app-log', (_event, id, data) => {
@@ -6626,6 +7426,174 @@ electron_1.ipcMain.handle('get-database-tables', () => {
         return { tables: [], error: err.message };
     }
 });
+
+/**
+ * Every table's row count, plus file/schema facts, in ONE round trip.
+ *
+ * The Settings › Database browser used to call `getTableDataCount` once per table
+ * inside a sequential `for … await` loop. With ~206 tables that is 206 serial IPC
+ * hops before a single row could be shown, which is why the list appeared to
+ * "stack out" with no counts — it was still waiting on the waterfall. One
+ * UNION ALL statement answers all of them at once.
+ */
+electron_1.ipcMain.handle('get-database-table-stats', () => {
+    if (useJson || !db) return { counts: {}, totalRows: 0, tableCount: 0, indexCount: 0, fkCount: 0, dbBytes: 0 };
+    try {
+        const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all() as any[])
+            .map((t) => t.name);
+
+        const counts: Record<string, number> = {};
+        if (names.length) {
+            // Chunked so a pathological table count can't build a giant statement.
+            const CHUNK = 60;
+            for (let i = 0; i < names.length; i += CHUNK) {
+                const slice = names.slice(i, i + CHUNK);
+                const sql = slice
+                    .map((n) => `SELECT '${n.replace(/'/g, "''")}' AS t, COUNT(*) AS c FROM "${n.replace(/"/g, '""')}"`)
+                    .join(' UNION ALL ');
+                try {
+                    for (const row of db.prepare(sql).all() as any[]) {
+                        counts[row.t] = Number(row.c) || 0;
+                    }
+                } catch {
+                    // One unreadable/locked table must not sink the whole batch.
+                    for (const n of slice) if (!(n in counts)) counts[n] = 0;
+                }
+            }
+        }
+
+        const totalRows = Object.values(counts).reduce((s, n) => s + n, 0);
+        const indexCount = (db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='index' AND name LIKE 'idx%'").get() as any)?.n ?? 0;
+        let fkCount = 0;
+        for (const n of names) {
+            try {
+                fkCount += (db.prepare(`PRAGMA foreign_key_list("${n.replace(/"/g, '""')}")`).all() as any[]).length;
+            } catch { /* table unreadable */ }
+        }
+
+        let dbBytes = 0;
+        try {
+            const pageCount = (db.prepare('PRAGMA page_count').get() as any)?.page_count ?? 0;
+            const pageSize = (db.prepare('PRAGMA page_size').get() as any)?.page_size ?? 0;
+            dbBytes = Number(pageCount) * Number(pageSize);
+        } catch { /* non-fatal */ }
+
+        return { counts, totalRows, tableCount: names.length, indexCount, fkCount, dbBytes };
+    } catch (err) {
+        console.error('[DeskFlow] get-database-table-stats error:', err);
+        return { counts: {}, totalRows: 0, tableCount: 0, indexCount: 0, fkCount: 0, dbBytes: 0, error: err.message };
+    }
+});
+
+/**
+ * Full schema map for the ERD, read from SQLite's own metadata.
+ *
+ * Every relationship here comes from `PRAGMA foreign_key_list` — a real declared
+ * constraint. We deliberately do NOT infer links from matching column names: when
+ * a table has no FK constraint we report `inferred: []` and count it in
+ * `tablesWithoutForeignKeys`, so the UI can say so plainly instead of drawing a
+ * relationship that the database does not actually enforce.
+ */
+electron_1.ipcMain.handle('get-erd-schema', () => {
+    if (useJson) return { error: 'JSON mode' };
+    if (!db) return { error: 'database not open' };
+    try {
+        const tableRows = db.prepare(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).all() as Array<{ name: string }>;
+
+        const tables = tableRows.map(({ name }) => {
+            const columns = db.prepare(`PRAGMA table_info(\`${name}\`)`).all() as any[];
+            const rawFks = db.prepare(`PRAGMA foreign_key_list(\`${name}\`)`).all() as any[];
+            const indexes = db.prepare(`PRAGMA index_list(\`${name}\`)`).all() as any[];
+
+            // PRAGMA foreign_key_list returns one row per FK column, repeating
+            // `id` for composite keys; group so a composite FK is not drawn twice.
+            const byId = new Map<number, any[]>();
+            for (const fk of rawFks) {
+                const list = byId.get(fk.id) || [];
+                list.push(fk);
+                byId.set(fk.id, list);
+            }
+
+            const foreignKeys = [...byId.values()].map((parts) => {
+                const p = parts[0];
+                const toCols = parts.map((x) => x.to).filter(Boolean);
+                const fromCols = parts.map((x) => x.from);
+                return {
+                    id: p.id,
+                    fromTable: name,
+                    fromColumns: fromCols,
+                    toTable: p.table,
+                    // `to` is null when the FK points at the referenced table's
+                    // PRIMARY KEY, which is the overwhelmingly common case.
+                    toColumns: toCols.length ? toCols : null,
+                    targetsPrimaryKey: toCols.length === 0,
+                    onUpdate: p.on_update ?? 'NO ACTION',
+                    onDelete: p.on_delete ?? 'NO ACTION',
+                };
+            });
+
+            // Uniqueness of the child side decides 1:1 vs 1:N.
+            const uniqueIdx = new Set(
+                indexes.filter((i) => i.unique).map((i) => i.name as string)
+            );
+            let cardinality = '1:N';
+            if (foreignKeys.length) {
+                const single = foreignKeys[0];
+                if (single.fromColumns.length === 1) {
+                    const hasUniqueOnFk = indexes.some(
+                        (i) => i.unique &&
+                            indexes.find((x) => x.name === i.name) &&
+                            (db.prepare(`PRAGMA index_info(\`${i.name}\`)`).all() as any[])
+                                .map((c) => c.name).join(',') === single.fromColumns[0]
+                    );
+                    const isPk = columns.some((c) => c.pk && c.name === single.fromColumns[0]);
+                    if (hasUniqueOnFk || isPk) cardinality = uniqueIdx.size > 0 || isPk ? '1:1' : '1:N';
+                } else {
+                    cardinality = '1:N';
+                }
+            }
+
+            return {
+                name,
+                columns: columns.map((c) => ({
+                    name: c.name,
+                    type: c.type || '',
+                    notNull: !!c.notnull,
+                    primaryKey: !!c.pk,
+                    pkOrdinal: c.pk || 0,
+                    defaultValue: c.dflt_value ?? null,
+                })),
+                primaryKey: columns.filter((c) => c.pk).map((c) => c.name),
+                foreignKeys,
+                indexes: indexes.map((i) => ({
+                    name: i.name,
+                    unique: !!i.unique,
+                    origin: i.origin,
+                    partial: !!i.partial,
+                })),
+                rowCount: (db.prepare(`SELECT COUNT(*) AS n FROM \`${name}\``).get() as any)?.n ?? 0,
+                cardinality,
+                hasDeclaredForeignKeys: foreignKeys.length > 0,
+            };
+        });
+
+        const edges = tables.flatMap((t) => t.foreignKeys);
+        return {
+            tables,
+            relationships: edges,
+            // Surfaced explicitly: these tables have no FK constraints, so the
+            // ERD must not draw links for them.
+            tablesWithoutForeignKeys: tables.filter((t) => !t.hasDeclaredForeignKeys).map((t) => t.name),
+            totalColumns: tables.reduce((n, t) => n + t.columns.length, 0),
+            generatedAt: new Date().toISOString(),
+        };
+    } catch (err: any) {
+        console.error('[DeskFlow] get-erd-schema error:', err);
+        return { error: err?.message || String(err) };
+    }
+});
 electron_1.ipcMain.handle('get-table-data', (event, tableName, limit = 50, offset = 0) => {
     if (useJson)
         return { error: 'JSON mode' };
@@ -6747,6 +7715,30 @@ const REFACTOR_STATS_TABLES = ['stats_hourly', 'stats_daily'];
 electron_1.ipcMain.handle('update-categories-from-overrides', (event, appOverrides, domainOverrides, previewOnly = false) => {
     const apps = sanitizeCategoryOverrides(appOverrides);
     const domains = sanitizeCategoryOverrides(domainOverrides);
+    // CRITICAL: persist into the in-memory categoryConfig that categorizeApp()
+    // reads. Without this the handler only rewrites HISTORICAL rows, so old
+    // tracking showed the new category while every NEW session was still
+    // categorised from the stale map on disk. previewOnly must not persist.
+    if (!previewOnly) {
+        for (const [app, cat] of Object.entries(apps)) {
+            categoryConfig.appCategoryMap[app] = cat;
+            delete categoryConfig.detectedApps[app.toLowerCase()];
+        }
+        for (const [domain, cat] of Object.entries(domains)) {
+            categoryConfig.domainCategoryMap[domain] = cat;
+            delete categoryConfig.detectedDomains[domain.toLowerCase()];
+        }
+        saveCategoryConfig();
+        // Also push the FULL maps: the old event carried only {id,label} and no
+        // renderer subscribed to it, so the UI stayed pinned to stale categories
+        // until a manual reload. Any change is broadcast whole, not a delta.
+        const all = electron_1.BrowserWindow.getAllWindows();
+        const payload = { appCategoryMap: { ...categoryConfig.appCategoryMap }, domainCategoryMap: { ...categoryConfig.domainCategoryMap } };
+        for (const w of all) {
+            if (!w.isDestroyed()) w.webContents.send('category-config-changed', payload);
+        }
+        console.log('[DeskFlow] category-config-changed: persisted', Object.keys(apps).length, 'app +', Object.keys(domains).length, 'domain overrides; broadcast to', all.length, 'window(s)');
+    }
     const previewMismatches = () => {
         const mismatches = [];
         const byCategory = {};
@@ -6845,22 +7837,22 @@ electron_1.ipcMain.handle('update-categories-from-overrides', (event, appOverrid
 });
 
 electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) => {
-    let conn: better_sqlite3.DefaultDatabase | null = null;
+    let conn: any = null;
     try {
         if (!dbPath) return { success: false, error: 'DB not available' };
-        conn = better_sqlite3.default(dbPath, { readonly: true });
+        const Database = require('better-sqlite3');
+        conn = new Database(dbPath, { readonly: true });
 
         const { period, granularity, metric, dateOffset } = request ?? {};
         const effectivePeriod = String(period ?? 'today');
         const offsetMs = Number(dateOffset) || 0;
 
-        const activeApps = Object.keys(appProductivityMap);
-        const tierOrder: Record<string, number> = { 'productive': 3, 'neutral': 2, 'distracting': 1, 'entertainment': 0, 'gaming': -1 };
-        const productiveCategories = new Set(['Productivity', 'Developer Tools', 'Tools', 'Communication']);
-        const distractingCategories = new Set(['Entertainment', 'Gaming']);
+        const tierAssignments = categoryConfig?.tierAssignments ?? DEFAULT_TIER_ASSIGNMENTS;
+        const productiveCategories = new Set<string>(tierAssignments.productive ?? DEFAULT_TIER_ASSIGNMENTS.productive);
+        const distractingCategories = new Set<string>(tierAssignments.distracting ?? DEFAULT_TIER_ASSIGNMENTS.distracting);
 
         type PeriodAgg = { date: string; app: string; category: string; total_sec: number; session_count: number };
-        type PeriodBucket = { label: string; start: string; end: string; days: number; appTotals: Record<string, { total_sec: number; session_count: number; categories: Set<string> }> };
+        type PeriodBucket = { label: string; start: string; end: string; startMs: number; endMs: number; days: number; appTotals: Record<string, { total_sec: number; session_count: number; categories: Set<string> }> };
 
         function parseDate(s: string): Date {
             const d = new Date(s + 'T00:00:00');
@@ -6868,7 +7860,14 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
             return d;
         }
 
-        function fmtDay(d: Date): string { return d.toISOString().slice(0, 10); }
+        // Must mirror parseDate()'s LOCAL-midnight semantics. toISOString() is UTC,
+        // which labelled every period one day EARLY in any timezone ahead of UTC.
+        function fmtDay(d: Date): string {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
 
         function getWindows(gran: string, today: Date, count: number): { start: Date; end: Date; label: string }[] {
             const windows: { start: Date; end: Date; label: string }[] = [];
@@ -6901,9 +7900,20 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
             return windows;
         }
 
+        type PeriodRank = {
+            key: string; label: string; start: string; end: string; days: number; rank: number;
+            productivityScore: number; prodPct: number; distPct: number;
+            prodSec: number; neutSec: number; distSec: number; totalSec: number; sessions: number;
+            focusCount: number; focusCompleted: number; focusFailed: number; focusSec: number; focusRate: number;
+            goalsDone: number; goalsAll: number; goalRate: number;
+            extTotal: number; extActivities: Record<string, number>; extTypes: Record<string, number>;
+            sleepSec: number; sleepSessions: number; sleepAvgMin: number; sleepDeficitMin: number;
+            groupUsage: Record<string, { sessions: number; sec: number }>;
+        };
+
         function aggregateWindows(rows: PeriodAgg[], windows: { start: Date; end: Date; label: string }[], gran: string): PeriodBucket[] {
             const buckets: PeriodBucket[] = windows.map(w => ({
-                label: w.label, start: fmtDay(w.start), end: fmtDay(w.end), days: gran === 'day' ? 1 : gran === 'week' ? 7 : 30,
+                label: w.label, start: fmtDay(w.start), end: fmtDay(w.end), startMs: w.start.getTime(), endMs: w.end.getTime(), days: gran === 'day' ? 1 : gran === 'week' ? 7 : 30,
                 appTotals: {}
             }));
             for (const r of rows) {
@@ -6911,9 +7921,12 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
                 if (isNaN(d.getTime()) || d > new Date()) continue;
                 for (let i = 0; i < buckets.length; i++) {
                     const b = buckets[i];
-                    if (d >= b.start && (gran === 'day' ? d < b.end : d < b.end)) {
+                    // Compare epoch ms: comparing a Date against the 'YYYY-MM-DD' STRING coerced it to
+                    // NaN, so this condition was ALWAYS false and every bucket stayed empty.
+                    const dms = d.getTime();
+                    if (dms >= b.startMs && dms < b.endMs) {
                         const app = (r.app ?? 'Unknown').trim();
-                        if (!app || !activeApps.includes(app)) continue;
+                        if (!app) continue;
                         let at = b.appTotals[app];
                         if (!at) { at = { total_sec: 0, session_count: 0, categories: new Set() }; b.appTotals[app] = at; }
                         at.total_sec += r.total_sec;
@@ -6926,25 +7939,9 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
             return buckets;
         }
 
-        function computeScore(b: PeriodBucket): number {
-            let totalSec = 0, productiveSec = 0, score = 0;
-            for (const app of Object.keys(b.appTotals)) {
-                const at = b.appTotals[app];
-                totalSec += at.total_sec;
-                const cats = at.categories;
-                const hasProductive = [...cats].some(c => productiveCategories.has(c));
-                const hasDistracting = [...cats].some(c => distractingCategories.has(c));
-                if (hasProductive && !hasDistracting) productiveSec += at.total_sec;
-            }
-            if (totalSec <= 0) return 0;
-            score = Math.round((productiveSec / totalSec) * 100);
-            if (b.session_count <= 0) return Math.max(0, score - 40);
-            return Math.min(100, Math.max(0, score));
-        }
-
         const _db = db;
 
-        async function computeAll(gran: string, targetPeriod: string, startFrom: Date): Promise<{ periods: PeriodRank[]; summary: { avgScore: number; bestPeriod: PeriodRank | null; worstPeriod: PeriodRank | null; totalProductiveSec: number; totalSec: number; totalFocusSec: number; totalGoalsDone: number; totalSleepMin: number; periodCount: number; granularity: string; metric: string; currentStreak: number; longestStreak: number } }> {
+        async function computeAll(gran: string, targetPeriod: string): Promise<{ periods: PeriodRank[]; summary: { avgScore: number; bestPeriod: PeriodRank | null; worstPeriod: PeriodRank | null; totalProductiveSec: number; totalSec: number; totalFocusSec: number; totalGoalsDone: number; totalSleepMin: number; periodCount: number; granularity: string; metric: string; currentStreak: number; longestStreak: number } }> {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             if (offsetMs) today.setTime(today.getTime() + offsetMs);
@@ -6956,7 +7953,7 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
 
             let filteredWindows = windows;
             if (targetPeriod !== 'all' && windows.length > 0) {
-                const idx = windows.findIndex(w => w.label.toLowerCase().includes(targetPeriod.toLowerCase()) || w.start.toISOString().slice(0, 10) === targetPeriod);
+                const idx = windows.findIndex(w => w.label.toLowerCase().includes(targetPeriod.toLowerCase()) || fmtDay(w.start) === targetPeriod);
                 if (idx >= 0) filteredWindows = windows.slice(Math.max(0, idx - (gran === 'day' ? 0 : gran === 'week' ? 3 : 2)), idx + 1);
                 else if (["today", "week", "month"].includes(targetPeriod.toLowerCase())) {
                     filteredWindows = windows.slice(-1);
@@ -7079,7 +8076,7 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
                 }
             }
 
-            const ranks: PeriodRank[] = bucketData.map((bd, i) => ({
+            const ranks: PeriodRank[] = bucketData.map((bd) => ({
                 key: bd.start,
                 label: bd.label,
                 start: bd.start,
@@ -7139,11 +8136,10 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
             }
             const avgScore = ranks.length > 0 ? Math.round(sumScore / ranks.length) : 0;
 
-            // best/worst by metric
-            // Already sorted by start descending above, re-sort only for best/worst comparison
-            const rankingCopy = [...ranks];
-            const bestPeriod = rankingCopy[0] || null;
-            const worstPeriod = rankingCopy[rankingCopy.length - 1] || null;
+            // best/worst by the ACTIVE METRIC (not by array position, which is just date order)
+            const byMetric = [...ranks].sort((a, b) => rf(b) - rf(a));
+            const bestPeriod = byMetric[0] || null;
+            const worstPeriod = byMetric.length > 0 ? byMetric.reduce((lo, p) => (rf(p) < rf(lo) ? p : lo), byMetric[0]) : null;
 
             // Sort by date descending so newest appears first
             ranks.sort((a, b) => (
@@ -7170,11 +8166,7 @@ electron_1.ipcMain.handle('get-period-rankings', async (_e: any, request: any) =
             };
         }
 
-        const startFrom = new Date();
-        startFrom.setHours(0, 0, 0, 0);
-        if (offsetMs) startFrom.setTime(startFrom.getTime() + offsetMs);
-
-        const { periods, summary } = await computeAll(granularity, effectivePeriod, startFrom);
+        const { periods, summary } = await computeAll(granularity, effectivePeriod);
         return {
             success: true,
             data: {
@@ -7279,6 +8271,27 @@ electron_1.ipcMain.handle('backup:verify', (_event, name) => {
     const { verifyBackup } = require('./main/backup/BackupService');
     return verifyBackup(name);
 });
+electron_1.ipcMain.handle('app-setting:get', (_event, key: string) => {
+  try {
+    const row = db!.prepare('SELECT value FROM app_settings WHERE key = ?').get(String(key)) as any;
+    return { success: true, value: row?.value ?? null };
+  } catch (e: any) { return { success: false, error: String(e?.message || e) }; }
+});
+
+electron_1.ipcMain.handle('app-setting:set', (_event, key: string, value: string | null) => {
+  try {
+    if (value === null || value === undefined) {
+      db!.prepare('DELETE FROM app_settings WHERE key = ?').run(String(key));
+      return { success: true };
+    }
+    db!.prepare(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    ).run(String(key), String(value));
+    return { success: true };
+  } catch (e: any) { return { success: false, error: String(e?.message || e) }; }
+});
+
 electron_1.ipcMain.handle('backup:settings:get', () => {
     const { getBackupSettings } = require('./main/backup/BackupService');
     return getBackupSettings();
@@ -7324,14 +8337,25 @@ function getGateway() {
     return gatewayService;
 }
 
+// IPC ENVELOPE CONSISTENCY.
+//
+// This returned a BARE ProviderAdapter[] on success but a `{success:false,error}`
+// envelope on failure. The renderer checked
+// `if (!a.success) setError(a.error || 'Failed to load providers')`, and
+// `undefined` is falsy — so the app reported "Failed to load providers" for a
+// call that had SUCCEEDED and returned adapters. A promise that resolves to the
+// wrong shape is worse than one that rejects: it claims failure while
+// succeeding, so the UI cannot tell the two apart.
+//
+// `aigateway:all-statuses` below already had it right. Match it.
 electron_1.ipcMain.handle('aigateway:list-providers', () => {
-    try { return getGateway().listProviders(); } catch (e: any) { return { success: false, error: e?.message }; }
+    try { return { success: true, data: getGateway().listProviders() }; } catch (e: any) { return { success: false, error: e?.message }; }
 });
 electron_1.ipcMain.handle('aigateway:all-statuses', () => {
     try { return { success: true, data: getGateway().allStatuses() }; } catch (e: any) { return { success: false, error: e?.message }; }
 });
 electron_1.ipcMain.handle('aigateway:playwright-status', () => {
-    try { return getGateway().playwrightStatus(); } catch (e: any) { return { available: false, error: e?.message }; }
+    try { return { success: true, data: getGateway().playwrightStatus() }; } catch (e: any) { return { success: false, error: e?.message }; }
 });
 electron_1.ipcMain.handle('aigateway:setup-provider', (_e, providerId: string) => {
     try { return getGateway().setupProvider(providerId); } catch (e: any) { return { success: false, error: e?.message }; }
@@ -7387,7 +8411,9 @@ electron_1.ipcMain.handle('aigateway:set-disabled', (_e, providerId: string, dis
     try { return getGateway().setProviderDisabled(providerId, disabled); } catch (e: any) { return { success: false, error: e?.message }; }
 });
 electron_1.ipcMain.handle('aigateway:recent-runs', (_e, providerId: string, limit?: number) => {
-    try { return getGateway().recentRuns(providerId, limit); } catch (e: any) { return []; }
+    // `catch { return [] }` turned a DB error into "no runs yet" — an empty list
+    // and a failed query are different facts and rendered identically.
+    try { return { success: true, data: getGateway().recentRuns(providerId, limit) }; } catch (e: any) { return { success: false, error: e?.message }; }
 });
 
 // Broadcast channels — forward service events to renderer listeners
@@ -7443,7 +8469,12 @@ const BROWSER_PROCESS_NAMES: Record<string, string[]> = {
     'edge': ['msedge', 'edge'],
     'opera': ['opera'],
     'vivaldi': ['vivaldi'],
-    'firefox': ['firefox'],
+    // Zen/Floorp/LibreWolf etc. ARE Firefox — same engine, often a near-stock
+    // UA. The OS names the PROCESS "zen" while the extension may self-report as
+    // "Firefox", so a bare ["firefox"] list can never match the foreground app
+    // and every payload gets rejected as app_mismatch. Verified: with these
+    // aliases, foreground "zen" now matches both 'firefox' and 'zen'.
+    'firefox': ['firefox', 'firefox-esr', 'zen', 'zen-browser', 'zenbrowser', 'floorp', 'librewolf', 'waterfox', 'mullvad', 'basilisk', 'ghost-browser'],
     'arc': ['arc'],
     'safari': ['safari'],
     'zen': ['zen', 'zen-browser', 'zenbrowser'],
@@ -7464,6 +8495,69 @@ function isAppMatchingBrowser(appName: string, browserName: string): boolean {
 }
 
 let userPreferences: UserPreferences = {};
+
+// AI Router console handlers.
+// Registered here, not in infrastructure/ipc/index.ts, because main.ts imports
+// each handler module DIRECTLY and never calls registerAllHandlers() — so
+// anything registered only in index.ts is dead code that ships but never runs.
+//
+// The URL is read lazily so changing it in Settings takes effect without a
+// restart. Registered before app.whenReady() because ipcMain.handle() is fine to
+// call early and this module has no DB dependency.
+try {
+  registerAirRouterHandlers({
+    getRouterUrl: () => (userPreferences as any)?.airRouterUrl,
+    // Lazily bring the sidecar up the first time something needs it, instead of
+    // spawning Python on every app launch. Idempotent: startRouter() probes
+    // /health first, so a manually-started router is adopted, never duplicated.
+    onRouterNeeded: async () => {
+      try {
+        const P = require('./services/aiRouterProcess');
+        P.configureRouter({ baseUrl: (userPreferences as any)?.airRouterUrl });
+        const st = await P.startRouter();
+        if (st.state === 'error') console.warn('[DeskFlow] ⚠️ AI Router:', st.message);
+      } catch (err: any) {
+        console.warn('[DeskFlow] ⚠️ AI Router autostart failed:', err?.message);
+      }
+    },
+  });
+  console.log('[DeskFlow] ✅ AI Router handlers registered');
+
+  // AI Eval Harness (Phase 4). Registered here rather than in
+  // infrastructure/ipc/index.ts because main.ts imports each handler module
+  // DIRECTLY and never calls registerAllHandlers() — anything registered only
+  // in index.ts is dead code that compiles but never runs.
+  try {
+    initEval(db!);
+    registerAiEvalHandlers({
+      getUserPreferences: () => userPreferences,
+      migrateProviderNames: (raw: string) => migrateProviderNames(raw),
+    });
+  } catch (err: any) {
+    console.error('[DeskFlow] ⚠️ AI Eval init/registration failed:', err?.message);
+  }
+
+  // ── AI EVAL: unattended baseline run ──────────────────────────────────────
+  // WHY THIS EXISTS. `ai-eval:run` existed and was never called by anything
+  // except a human clicking Run. `ai-eval:compare-runs` therefore had nothing
+  // to compare against: the harness could answer "is this prompt good?" but
+  // never "did this prompt change make it WORSE?", which is the only question
+  // worth automating. A regression gate needs a baseline on a cadence.
+  //
+  // GUARDRAILS, in order of importance:
+  //  1. NEVER blocks startup. Scheduled well after boot, and any failure is
+  //     logged and swallowed — a slow or failing provider must not stop the app.
+  //  2. NEVER spends money silently. Structural judging only; no LLM judge.
+  //  3. Bounded. One run per interval, feature-scoped, capped.
+  //  4. Skips when no case is defined — a run with zero cases is noise, and it
+  //     would otherwise write an empty row every interval forever.
+  setTimeout(() => { void scheduleEvalBaselines(); }, EVAL_BASELINE_STARTUP_DELAY_MS);
+
+  initAutomations(db!);
+  registerAutomationIpc(db!);
+} catch (err: any) {
+  console.error('[DeskFlow] ⚠️ AI Router handlers failed to register:', err?.message);
+}
 let DEBUG_TRACKING = false;
 // Throttle for the unconditional Linux tracking diagnostic (ms).
 let lastLinuxDiagAt = 0;
@@ -7485,24 +8579,110 @@ function loadPreferences() {
     }
     DEBUG_TRACKING = !!userPreferences.debugTracking;
 }
-function savePreferences() {
+// Preferences are flushed on a trailing edge rather than on every keypress.
+//
+// THE PROBLEM. `set-preference` is called once per keystroke by every text
+// input in Settings, and `savePreferences()` did a synchronous
+// `writeFileSync` of the ENTIRE preferences object — pretty-printed, no
+// debounce, no atomicity. So dragging a number input performed dozens of full
+// file rewrites, each blocking the main process; and a crash or power loss
+// mid-write truncated the file and lost every preference in it, with no way
+// back (there is no backup of this file).
+//
+// THE FIX, two parts:
+//   1. debounce — from src/lib/debounce.ts. Trailing edge, plus `flush()` on
+//      quit so the last edit before closing is never lost.
+//   2. atomic — write to a temp file and `rename` over the target, the same
+//      stage-then-swap `scripts/build.mjs` uses for dist. `rename` is atomic
+//      within a filesystem, so a reader either sees the whole old file or the
+//      whole new one, never a truncated one.
+//
+// `savePreferences` stays callable synchronously for the handful of code paths
+// that must be durable at once (it flushes through the same writer).
+const PREFERENCES_FLUSH_MS = 400;
+let preferencesWriteQueued = false;
+function writePreferencesAtomic() {
     try {
-        fs_1.default.writeFileSync(prefsPath, JSON.stringify(userPreferences, null, 2));
+        const dir = path_1.default.dirname(prefsPath);
+        // Same directory as the target, so rename() stays within one filesystem
+        // and is therefore atomic. A temp file in /tmp would NOT be.
+        const tmp = path_1.default.join(dir, `.deskflow-prefs.${process.pid}.tmp`);
+        fs_1.default.writeFileSync(tmp, JSON.stringify(userPreferences, null, 2));
+        fs_1.default.renameSync(tmp, prefsPath);
     }
     catch (err) {
         console.error('[DeskFlow] Failed to save preferences:', err);
     }
     DEBUG_TRACKING = !!userPreferences.debugTracking;
 }
+// The shared util, not a seventh hand-rolled copy. This module was extracted
+// precisely so a new debounce never gets written inline again; shipping it and
+// then hand-rolling the very first caller would have been worse than not having
+// written it at all.
+const flushPreferences = debounce(() => {
+    preferencesWriteQueued = false;
+    writePreferencesAtomic();
+}, PREFERENCES_FLUSH_MS);
+function schedulePreferencesFlush() {
+    preferencesWriteQueued = true;
+    flushPreferences();
+}
+function savePreferences() {
+    // Synchronous callers still want a durable write, so cancel any pending
+    // trailing write rather than letting it fire later and rewrite the file a
+    // second time.
+    flushPreferences.cancel();
+    preferencesWriteQueued = false;
+    writePreferencesAtomic();
+}
 // Load preferences on startup
 loadPreferences();
+// Seed the AFK mirror from whatever was persisted, so the sleep-gap guard uses
+// the user's chosen threshold from the very first poll instead of the 5 minute
+// default until they next change the setting.
+if (typeof userPreferences.afkThresholdMinutes === 'number') {
+    afkThresholdSeconds = Math.max(0, Math.round(userPreferences.afkThresholdMinutes)) * 60;
+}
+// Same for bedtime: without this seed the FIRST gap of the session is always
+// judged against the built-in 22:00 → 07:00, so a night owl who set 01:00 → 09:00
+// gets one bogus sleep prompt per launch until they touch the setting again.
+if (typeof userPreferences.sleepWindowStartHour === 'number') {
+    sleepWindowStartHour = clampHour(userPreferences.sleepWindowStartHour, 22);
+}
+if (typeof userPreferences.sleepWindowEndHour === 'number') {
+    sleepWindowEndHour = clampHour(userPreferences.sleepWindowEndHour, 7);
+}
+if (typeof userPreferences.sleepWindowEnabled === 'boolean') {
+    sleepWindowEnabled = userPreferences.sleepWindowEnabled;
+}
 (global as any).__aiAgentCustomPaths = userPreferences.aiAgentCustomPaths || {};
 electron_1.ipcMain.handle('get-preferences', () => {
     return userPreferences;
 });
 electron_1.ipcMain.handle('set-preference', (event, key, value) => {
     userPreferences[key] = value;
-    savePreferences();
+    // Debounced + atomic rather than a synchronous full-file rewrite per
+    // keystroke. See `schedulePreferencesFlush`.
+    schedulePreferencesFlush();
+    // Keep the early-declared AFK mirror in step with what the renderer wrote
+    // (src/lib/afk.ts). The sleep-gap guard reads the mirror rather than
+    // userPreferences, because userPreferences is declared ~2,800 lines further
+    // down and touching it from there is a temporal-dead-zone ReferenceError.
+    if (key === 'afkThresholdMinutes' && typeof value === 'number') {
+        afkThresholdSeconds = Math.max(0, Math.round(value)) * 60;
+    }
+    // Same reason, same shape: bedtime is a user setting (src/lib/sleepWindow.ts)
+    // but the classifier that raises the sleep popup runs up here, so it has to
+    // be mirrored. Before this, Settings had no effect on the sleep prompt at all.
+    if (key === 'sleepWindowStartHour' && typeof value === 'number') {
+        sleepWindowStartHour = clampHour(value, 22);
+    }
+    if (key === 'sleepWindowEndHour' && typeof value === 'number') {
+        sleepWindowEndHour = clampHour(value, 7);
+    }
+    if (key === 'sleepWindowEnabled' && typeof value === 'boolean') {
+        sleepWindowEnabled = value;
+    }
     return true;
 });
 
@@ -7533,6 +8713,12 @@ electron_1.ipcMain.handle('get-keyboard-shortcuts', () => {
 electron_1.ipcMain.handle('set-keyboard-shortcuts', (_event, shortcuts: Record<string, string>) => {
     userPreferences.keyboardShortcuts = shortcuts;
     savePreferences();
+    // Re-bind. Without this the Settings row is cosmetic: Electron captures the
+    // accelerator at register() time, so editing the key here would persist it
+    // and change nothing until a restart — the stored-but-never-read defect in
+    // its most literal form.
+    registerQuickCaptureShortcut();
+    registerHaloIslandShortcut();
     return true;
 });
 
@@ -7544,6 +8730,28 @@ const DEFAULT_KEYBOARD_SHORTCUTS: Record<string, string> = {
     aiPageTranscript: 'Ctrl+Shift+L',
     externalSelect: 'Enter',
     externalDeselect: 'Escape',
+    /*
+     * THE HALO ISLAND'S GLOBAL ACCELERATOR.
+     *
+     * Handoff §7 mandates "Cmd/Ctrl+Shift+H", but that combo is ALSO the terminal's
+     * "Split horizontal" — claimed in six places (`src/terminal/lib/data.ts:57`,
+     * `terminal/App.tsx:371`, `terminal/components/Panels.tsx:235`, `terminal/lib/shell.ts`,
+     * `src/pages/settings/constants.ts:67`, `SettingsPage.tsx:881`). A globalShortcut is
+     * claimed at the OS level and consumes the key BEFORE any renderer sees it, so registering
+     * Shift+H for the island does not degrade the terminal feature gracefully — it silently
+     * kills it. The comment above this registration used to assert "Shift+H is free", which was
+     * false, twenty lines below a comment listing H as already taken.
+     *
+     * So the island's key is READ FROM PREFS and defaults to a combo verified free: every
+     * Ctrl+Shift+<letter> claimed anywhere in src/ was enumerated and C, O, U and X came back
+     * with zero claims. Ctrl+Shift+U is NOT used: it is the GTK unicode-input accelerator, which
+     * would collide at the desktop layer rather than in this repo.
+     *
+     * `haloIslandToggle` is re-registered on `set-keyboard-shortcuts` exactly like
+     * `quickCapture` below, because Electron has no live rebind — without an unregister of the
+     * old accelerator, the previous key stays globally captured forever.
+     */
+    haloIslandToggle: 'Ctrl+Shift+O',
 };
 electron_1.ipcMain.handle('boot-animation-config', () => {
     try {
@@ -7626,15 +8834,206 @@ function sttKillNative() {
     }
     sttNativeSender = null;
 }
+// ── On-device speech-to-text (faster-whisper) ──────────────────────────
+// This is the PRIMARY engine. Dictation must work offline and without an
+// account: the cloud endpoint (Groq/OpenAI) is a fallback for people who
+// happen to have a key set, never the requirement.
+//
+// The app already runs faster-whisper for file transcription in
+// `overlay-studio:transcribe`; this reuses the same Python route for live mic
+// audio rather than inventing a second stack.
+const STT_LOCAL_PY = process.platform === 'win32' ? 'python' : 'python3';
+// faster-whisper identifies models by SIZE, not by API model id. The `sttModel`
+// preference holds a cloud id (SettingsPage defaults it to
+// 'whisper-large-v3-turbo'), so passing it straight through would try to fetch a
+// model that does not exist on HuggingFace and fail. Only accept real
+// faster-whisper sizes and fall back to 'base' otherwise.
+const STT_LOCAL_MODEL_DEFAULT = 'base';
+const STT_LOCAL_SIZES = new Set([
+    'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en',
+    'medium', 'medium.en', 'large-v1', 'large-v2', 'large-v3',
+    'distil-large-v2', 'distil-large-v3', 'distil-medium.en', 'distil-small.en',
+]);
+function sttLocalModelSize(): string {
+    const raw = String(userPreferences.sttModel || '').trim();
+    return STT_LOCAL_SIZES.has(raw) ? raw : STT_LOCAL_MODEL_DEFAULT;
+}
+interface SttLocalProbe {
+    ok: boolean;
+    python: boolean;
+    version: string | null;
+    reason: string;
+    install: string;
+}
+let sttLocalProbe: SttLocalProbe | null = null;   // null = not probed yet
+
+function sttLocalAvailability() {
+    if (sttLocalProbe) return sttLocalProbe;
+    try {
+        const probe = child_process_1.spawnSync(
+            STT_LOCAL_PY,
+            ['-c', 'import faster_whisper,sys;print(faster_whisper.__version__)'],
+            { timeout: 20000, windowsHide: true, encoding: 'utf-8' },
+        );
+        if (probe.error) {
+            const missingPython = /ENOENT|not found/i.test(String(probe.error.message || ''));
+            sttLocalProbe = {
+                ok: false,
+                python: !missingPython,
+                version: null,
+                reason: missingPython
+                    ? `Python was not found. Install Python 3.9+ so on-device transcription can run.`
+                    : `Python is installed but ${STT_LOCAL_PY} could not run it.`,
+                install: missingPython ? '' : 'pip install faster-whisper',
+            };
+        } else if (probe.status !== 0) {
+            sttLocalProbe = {
+                ok: false,
+                python: true,
+                version: null,
+                reason: 'faster-whisper is not installed for this Python.',
+                install: 'pip install faster-whisper',
+            };
+        } else {
+            sttLocalProbe = {
+                ok: true,
+                python: true,
+                version: String(probe.stdout || '').trim() || 'unknown',
+                reason: '',
+                install: '',
+            };
+        }
+    } catch (err) {
+        sttLocalProbe = {
+            ok: false, python: false, version: null,
+            reason: 'Could not probe on-device transcription.',
+            install: 'pip install faster-whisper',
+        };
+    }
+    return sttLocalProbe;
+}
+
+electron_1.ipcMain.handle('stt:local-availability', async () => sttLocalAvailability());
+
 electron_1.ipcMain.handle('stt:get-status', () => {
     try {
         const apiConfigured = sttApiConfigured();
         const nativeAvailable = process.platform === 'win32';
-        const engine = apiConfigured ? 'api' : (nativeAvailable ? 'native' : 'browser');
-        const label = apiConfigured ? 'Cloud API' : (nativeAvailable ? 'Windows speech' : 'Browser speech');
-        return { engine, apiConfigured, nativeAvailable, label };
+        const local = sttLocalAvailability();
+        // On-device wins. Cloud is only a fallback for someone who set a key.
+        const engine = local.ok ? 'local' : (apiConfigured ? 'api' : (nativeAvailable ? 'native' : 'browser'));
+        const label = local.ok
+            ? 'On-device (faster-whisper)'
+            : (apiConfigured ? 'Cloud API' : (nativeAvailable ? 'Windows speech' : 'No engine'));
+        return {
+            engine,
+            apiConfigured,
+            nativeAvailable,
+            label,
+            localAvailable: local.ok,
+            localPython: local.python,
+            localVersion: local.version,
+            localReason: local.reason,
+            localInstall: local.install,
+        };
     } catch (err) {
-        return { engine: 'browser', apiConfigured: false, nativeAvailable: false, label: 'Browser speech' };
+        return {
+            engine: 'browser', apiConfigured: false, nativeAvailable: false,
+            label: 'No engine', localAvailable: false, localPython: false,
+            localVersion: null, localReason: 'Status probe failed.', localInstall: 'pip install faster-whisper',
+        };
+    }
+});
+
+/**
+ * Transcribe recorded mic audio ON DEVICE with faster-whisper.
+ *
+ * The renderer already captures the audio with MediaRecorder; this writes it to
+ * a temp file (whisper reads a path, not a base64 blob) and runs the model. The
+ * temp file is always removed, including on failure.
+ */
+electron_1.ipcMain.handle('stt:transcribe-local', async (_event, payload) => {
+    const avail = sttLocalAvailability();
+    if (!avail.ok) {
+        return {
+            ok: false,
+            error: avail.reason,
+            install: avail.install,
+            needsInstall: true,
+        };
+    }
+    if (!payload || typeof payload.audioBase64 !== 'string' || payload.audioBase64.length === 0) {
+        return { ok: false, error: 'No audio was captured.' };
+    }
+
+    const model = sttLocalModelSize();
+    const mime = String(payload.mime || 'audio/webm');
+    const ext = mime.includes('mp4') ? 'mp4' : (mime.includes('ogg') ? 'ogg' : (mime.includes('wav') ? 'wav' : 'webm'));
+    const langRaw = String(payload.lang || 'en').split('-')[0];
+    const lang = /^[a-z]{2,3}$/.test(langRaw) ? langRaw : 'en';
+
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const audioPath = path_1.default.join(userDataPath, `stt-rec-${stamp}.${ext}`);
+    const scriptPath = path_1.default.join(userDataPath, `stt-rec-${stamp}.py`);
+
+    try {
+        fs_1.default.writeFileSync(audioPath, Buffer.from(payload.audioBase64, 'base64'));
+
+        const pyScript = [
+            'import json, sys',
+            'try:',
+            '    from faster_whisper import WhisperModel',
+            `    model = WhisperModel(${JSON.stringify(model)}, device="cpu", compute_type="int8")`,
+            `    segments, info = model.transcribe(${JSON.stringify(audioPath)}, language=${JSON.stringify(lang)}, beam_size=5)`,
+            '    parts = [s.text.strip() for s in segments]',
+            '    print(json.dumps({"text": " ".join(p for p in parts if p)}))',
+            'except Exception as e:',
+            '    print(json.dumps({"error": str(e)}))',
+            '    sys.exit(1)',
+        ].join('\n');
+
+        fs_1.default.writeFileSync(scriptPath, pyScript, 'utf-8');
+
+        const result = child_process_1.spawnSync(STT_LOCAL_PY, [scriptPath], {
+            timeout: 180000,      // first run downloads the model; be generous
+            windowsHide: true,
+            encoding: 'utf-8',
+            maxBuffer: 4 * 1024 * 1024,
+        });
+
+        if (result.error) {
+            return { ok: false, error: `On-device transcription failed to start: ${result.error.message}` };
+        }
+
+        const stdout = String(result.stdout || '').trim();
+        if (!stdout) {
+            const err = String(result.stderr || '').trim();
+            return {
+                ok: false,
+                error: /No module named/i.test(err)
+                    ? 'faster-whisper is not installed. Run: pip install faster-whisper'
+                    : `On-device transcription produced no output${err ? `: ${err.slice(0, 200)}` : ''}`,
+                needsInstall: /No module named/i.test(err),
+                install: /No module named/i.test(err) ? 'pip install faster-whisper' : '',
+            };
+        }
+
+        let parsed;
+        const lastLine = stdout.split('\n').filter(Boolean).pop() || '';
+        try { parsed = lastLine ? JSON.parse(lastLine) : null; }
+        catch { return { ok: false, error: 'Could not read the on-device transcription result.' }; }
+
+        if (parsed && parsed.error) {
+            return { ok: false, error: `On-device transcription error: ${String(parsed.error).slice(0, 300)}` };
+        }
+        const text = String((parsed && parsed.text) || '').trim();
+        if (!text) return { ok: false, error: 'No speech detected. Try again a little closer to the mic.' };
+        return { ok: true, text, engine: 'local', model };
+    } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'On-device transcription failed.' };
+    } finally {
+        try { fs_1.default.unlinkSync(audioPath); } catch { /* ignore */ }
+        try { fs_1.default.unlinkSync(scriptPath); } catch { /* ignore */ }
     }
 });
 electron_1.ipcMain.handle('stt:transcribe', async (_event, payload) => {
@@ -7808,32 +9207,98 @@ electron_1.ipcMain.handle('stt:native-stop', () => {
 electron_1.ipcMain.handle('stt:transcript-list', async () => {
   if (!db) return [];
   const rows = db.prepare('SELECT * FROM stt_transcripts ORDER BY created_at DESC').all();
+  // SQLite returns snake_case columns, but every consumer (sttStore.ts,
+  // TranscriptLibraryPage) reads camelCase. Spreading `r` alone therefore left
+  // `createdAt: undefined` on every row — the library rendered "Invalid Date"
+  // for each transcript and durationMs was always undefined. Map explicitly.
   return rows.map(r => ({
-    ...r,
-    tags: JSON.parse(r.tags || '[]'),
-    isFavorite: !!r.is_favorite,
+    id: r.id,
+    text: r.text || '',
     title: r.title || '',
     note: r.note || '',
     prompt: r.prompt || '',
     project: r.project || '',
+    createdAt: r.created_at,
+    durationMs: r.duration_ms || 0,
+    category: r.category || 'other',
+    tags: JSON.parse(r.tags || '[]'),
+    projectId: r.project_id,
+    projectName: r.project_name,
+    isFavorite: !!r.is_favorite,
+    source: r.source,
   }));
 });
 
 electron_1.ipcMain.handle('stt:transcript-save', async (_event, entry) => {
   if (!db) return { ok: false, error: 'No database' };
+  if (!entry || typeof entry.text !== 'string' || entry.text.trim().length === 0) {
+    return { ok: false, error: 'Nothing to save — the transcript is empty.' };
+  }
   const id = entry.id || `stt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tagsJson = JSON.stringify(entry.tags || []);
-  db.prepare(`
-    INSERT INTO stt_transcripts (id, text, created_at, duration_ms, category, tags, project_id, project_name, is_favorite, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET text=excluded.text, title=excluded.title, note=excluded.note, prompt=excluded.prompt, project=excluded.project, category=excluded.category, tags=excluded.tags, is_favorite=excluded.is_favorite, source=excluded.source
-  `).run(
-    id, entry.text, entry.createdAt || new Date().toISOString(),
+
+  // Column order is fixed; the VALUES below are positional, so `missing` can be
+  // filtered from the tail without disturbing anything before it.
+  const cols = [
+    'id', 'text', 'title', 'note', 'prompt', 'project', 'created_at',
+    'duration_ms', 'category', 'tags', 'project_id', 'project_name',
+    'is_favorite', 'source',
+  ];
+  const vals: any[] = [
+    id, entry.text,
+    entry.title || '', entry.note || '', entry.prompt || '', entry.project || '',
+    entry.createdAt || new Date().toISOString(),
     entry.durationMs || 0, entry.category || 'other', tagsJson,
     entry.projectId || null, entry.projectName || null,
-    entry.isFavorite ? 1 : 0, entry.source || null
-  );
-  return { ok: true, id };
+    entry.isFavorite ? 1 : 0, entry.source || null,
+  ];
+  // title/note/prompt/project were originally MISSING from this column list, so
+  // they were silently written as NULL. Adding them then broke any database
+  // still holding the older, narrower table shape with
+  // `SqliteError: no column named title` — which lost the recording outright.
+  // Migration v4 repairs that shape; this fallback keeps the save working even
+  // on a database that has not been migrated yet, because losing a transcript
+  // the user just spoke is the worst possible outcome.
+  const upsert = (useCols: string[]) => {
+    const setList = useCols
+      .filter(c => c !== 'id')
+      .map(c => `${c}=excluded.${c}`)
+      .join(', ');
+    const placeholders = useCols.map(() => '?').join(', ');
+    const useVals = useCols.map(c => vals[cols.indexOf(c)]);
+    return db
+      .prepare(
+        `INSERT INTO stt_transcripts (${useCols.join(', ')}) VALUES (${placeholders})
+         ON CONFLICT(id) DO UPDATE SET ${setList}`,
+      )
+      .run(...useVals);
+  };
+
+  try {
+    upsert(cols);
+    return { ok: true, id };
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (!/no column named/i.test(msg)) {
+      return { ok: false, error: msg };
+    }
+    try {
+      const present = new Set(
+        (db.prepare(`PRAGMA table_info(stt_transcripts)`).all() as any[])
+          .map((c: any) => String(c.name)),
+      );
+      const usable = cols.filter((c) => present.has(c));
+      if (usable.length < 2) return { ok: false, error: msg };
+      upsert(usable);
+      console.warn(
+        '[SttPanel] stt_transcripts is missing columns; saved with ' +
+        `${usable.length}/${cols.length}. Run migrations (migration v4) to repair.`,
+      );
+      return { ok: true, id };
+    } catch (err2: any) {
+      return { ok: false, error: err2?.message || msg };
+    }
+  }
 });
 
 electron_1.ipcMain.handle('stt:transcript-update', async (_event, id, changes) => {
@@ -7868,18 +9333,40 @@ electron_1.ipcMain.handle('stt:transcript-toggle-favorite', async (_event, id) =
 });
 
 // ── Local STT overlay handlers (R-46/R-47/R-48) ─────────────────────────
+// These three used to be lying stubs: `local-status` hardcoded
+// `{ok:true, config:{model:'base'}}` and `local-stop-recording` returned
+// `{ok:true, text:''}` without ever opening a microphone. `useLocalStt` read
+// that as "engine ready", so the whole local-STT overlay was guaranteed to
+// produce an empty transcript. They now report the REAL engine state, and the
+// recording pair is retired in favour of the floating panel's own MediaRecorder
+// pipeline (see `useSttFloat`, now owned solely by the Halo Island).
 
 electron_1.ipcMain.handle('stt:local-status', () => {
-  return { ok: true, config: { model: 'base' } };
+  const apiConfigured = sttApiConfigured();
+  const nativeAvailable = process.platform === 'win32';
+  if (!apiConfigured && !nativeAvailable) {
+    return {
+      ok: false,
+      error: 'No speech engine available. Add a speech API key in Settings → Voice & Speech.',
+      config: { model: 'none' },
+    };
+  }
+  return {
+    ok: true,
+    config: { model: apiConfigured ? (userPreferences.sttModel || STT_DEFAULT_MODEL) : 'windows-native' },
+  };
 });
 
-electron_1.ipcMain.handle('stt:local-start-recording', () => {
-  return { ok: true };
-});
+electron_1.ipcMain.handle('stt:local-start-recording', () => ({
+  ok: false,
+  error: 'Local recording is retired. Use the floating Speech-to-Text panel.',
+}));
 
-electron_1.ipcMain.handle('stt:local-stop-recording', async () => {
-  return { ok: true, text: '' };
-});
+electron_1.ipcMain.handle('stt:local-stop-recording', async () => ({
+  ok: false,
+  text: '',
+  error: 'Local recording is retired. Use the floating Speech-to-Text panel.',
+}));
 
 electron_1.ipcMain.handle('stt:local-vocab-add', async (_event, entry) => {
   if (!db) return { ok: false };
@@ -7920,6 +9407,16 @@ electron_1.ipcMain.handle('stt:local-vocab-load', async (_event, filePath) => {
   }
 });
 
+// ── Floating dictation widget window: REMOVED 2026-10-05 ─────────────────────
+// The standalone bottom-right dictation panel (createSttPanel, stt:panel-* IPC,
+// stt-panel.html) was deleted once the Halo Island took over dictation. The island
+// at src/main/halo/haloIsland.ts is now the always-on-top surface, and
+// DictationIsland.tsx is the sole owner of useSttFloat — the only caller that opens
+// the microphone. Two MediaRecorders on one device would break dictation, so there
+// must be exactly ONE owner and there now is one.
+// The Ctrl/Cmd+Shift+V and +R bindings that used to target this panel were
+// repointed at the island rather than deleted, so dictation stays reachable.
+
 electron_1.ipcMain.handle('stt:get-registered-shortcut', () => {
   return { shortcut: 'Ctrl+Shift+V' };
 });
@@ -7927,11 +9424,11 @@ electron_1.ipcMain.handle('stt:get-registered-shortcut', () => {
 electron_1.ipcMain.handle('stt:register-shortcut', async (_event, shortcut) => {
   if (!shortcut) return { ok: false, error: 'No shortcut provided' };
   try {
-    // Unregister old, register new
+    // Unregister old, register new. Rebinding now points the key at the
+    // Halo Island's show/hide, which is where dictation lives.
     globalShortcut.unregister('CommandOrControl+Shift+V');
     globalShortcut.register(shortcut.replace('+', '+'), () => {
-      const win = BrowserWindow.getFocusedWindow();
-      if (win) safeSend(win, 'stt:shortcut-triggered');
+      toggleHaloIsland();
     });
     return { ok: true };
   } catch (e) {
@@ -8015,6 +9512,26 @@ function saveAISyncState(state: AISyncState) {
 }
 electron_1.ipcMain.handle('get-ai-sync-status', () => {
     return loadAISyncState();
+});
+
+// Display-only timezone nudge for AI history screens.
+//
+// The stored data is already correct: ai_usage.date is bucketed with local-time
+// getLocalDateStr(), and created_at is true UTC. What was wrong was RENDERING —
+// `new Date("2026-10-01 16:20:00")` reinterprets SQLite's UTC text as local time,
+// so every timestamp appeared 7h/12h off. The renderer now parses correctly; this
+// setting exists only so someone whose data still lands in the wrong hour can
+// shift what they see without re-importing or rewriting a single row.
+electron_1.ipcMain.handle('get-ai-display-timezone-offset', () => {
+    const v = (userPreferences as any).aiDisplayTimezoneOffsetMinutes;
+    return { offsetMinutes: typeof v === 'number' && Number.isFinite(v) ? v : 0 };
+});
+electron_1.ipcMain.handle('set-ai-display-timezone-offset', (_event, offsetMinutes: number) => {
+    const n = Number(offsetMinutes);
+    const clamped = Number.isFinite(n) ? Math.max(-16 * 60, Math.min(16 * 60, Math.round(n))) : 0;
+    (userPreferences as any).aiDisplayTimezoneOffsetMinutes = clamped;
+    savePreferences();
+    return { success: true, offsetMinutes: clamped };
 });
 
 /**
@@ -8563,7 +10080,7 @@ function detectLinuxBrowsers(): string[] {
     const binNames: Record<string, string[]> = {
         'chrome': ['google-chrome', 'google-chrome-stable', 'chrome'],
         'chromium': ['chromium', 'chromium-browser'],
-        'firefox': ['firefox', 'firefox-esr'],
+        'firefox': ['firefox', 'firefox-esr', 'zen', 'zen-browser', 'zenbrowser', 'floorp'],
         'brave': ['brave-browser', 'brave'],
         'edge': ['microsoft-edge', 'microsoft-edge-stable'],
         'opera': ['opera'],
@@ -8602,7 +10119,7 @@ function detectLinuxBrowsers(): string[] {
     const extraBins: Record<string, string[]> = {
         'chrome': ['google-chrome', 'google-chrome-stable'],
         'chromium': ['chromium'],
-        'firefox': ['firefox'],
+        'firefox': ['firefox', 'firefox-esr', 'zen', 'zen-browser', 'zenbrowser', 'floorp'],
         'brave': ['brave-browser'],
         'edge': ['microsoft-edge'],
         'vivaldi': ['vivaldi'],
@@ -8837,6 +10354,36 @@ electron_1.ipcMain.handle('get-browser-profiles', () => {
  * manifest.json before it is returned, so the UI can never show a confident but
  * broken path.
  */
+let lastExtensionDir: string | null = null;
+
+/** The packaged .zip that Firefox / Zen's "Install Add-on From File" needs.
+ *  Built by scripts/build-extension-package.mjs. Returns null if not built,
+ *  so the UI can fall back to the unpacked folder for Chromium browsers. */
+function resolveExtensionPackage(): string | null {
+    const roots = [
+        process.platform === 'win32' ? undefined : joinSafe(process.resourcesPath || '', 'deskflow-bridge'),
+        path_1.default.join(__dirname, '..', 'release', 'deskflow-bridge'),
+        path_1.default.join(process.cwd(), 'release', 'deskflow-bridge'),
+    ].filter(Boolean) as string[];
+    for (const root of roots) {
+        // Prefer the Firefox/Zen variant: it declares ONLY background.scripts.
+        // A manifest with both scripts and service_worker triggers Firefox bug
+        // 1860304 — the add-on installs but the background page never starts,
+        // so the icon never appears and nothing is ever sent.
+        for (const name of ['deskflow-bridge-firefox.zip', 'deskflow-bridge.zip', 'deskflow-bridge.xpi']) {
+            const p = path_1.default.join(root, name);
+            try {
+                if (fs_1.default.existsSync(p)) return p;
+            } catch { /* ignore */ }
+        }
+    }
+    return null;
+}
+
+function joinSafe(a: string, b: string): string {
+    return a ? path_1.default.join(a, b) : b;
+}
+
 function resolveExtensionDir(): { dir: string | null; reason: string } {
     const candidates: string[] = [];
     try {
@@ -8855,6 +10402,7 @@ function resolveExtensionDir(): { dir: string | null; reason: string } {
     // Last resort: walk up from this bundle (dist-electron/.. === project root).
     candidates.push(path_1.default.join(__dirname, '..', 'browser-extension'));
     candidates.push(path_1.default.join(process.cwd(), 'browser-extension'));
+    lastExtensionDir = candidates[0] || null;
 
     for (const dir of candidates) {
         try {
@@ -8885,18 +10433,21 @@ const EXTENSION_INSTALL_GUIDE: Record<string, any> = {
     vivaldi: { label: 'Vivaldi', page: 'chrome://extensions', kind: 'chromium' },
     arc: { label: 'Arc', page: 'chrome://extensions', kind: 'chromium' },
     comet: { label: 'Comet', page: 'chrome://extensions', kind: 'chromium' },
-    zen: { label: 'Zen', page: 'chrome://extensions', kind: 'chromium' },
+    zen: { label: 'Zen', page: 'about:addons', kind: 'firefox' },
     dia: { label: 'Dia', page: 'chrome://extensions', kind: 'chromium' },
     firefox: { label: 'Firefox', page: 'about:debugging#/runtime/this-firefox', kind: 'firefox' },
 };
 
 function installStepsFor(kind: 'chromium' | 'firefox'): string[] {
     if (kind === 'firefox') {
+        // Firefox and Zen are the same flow. Note Zen has NO Developer mode and
+        // NO "Load unpacked" — those are Chromium-only concepts. Telling a Zen
+        // user to look for them sends them looking for something that does not exist.
         return [
-            'Open about:debugging in the address bar',
-            'Choose "This Firefox" in the sidebar',
-            'Click "Load Temporary Add-on…"',
-            'Select the manifest.json file (not the folder)',
+            'Type about:addons in the address bar and open the Extensions tab',
+            'Click the gear icon at the top-right of that page',
+            'Choose "Install Add-on From File…"',
+            'Select the deskflow-bridge.zip file, then confirm with "Add"',
         ];
     }
     return [
@@ -8947,6 +10498,27 @@ electron_1.ipcMain.handle('get-extension-setup', () => {
 
     return {
         extensionDir: dir,
+        extensionPackage: resolveExtensionPackage(),
+        /**
+         * Are we installed-but-blocked? The extension cannot be observed from
+         * outside, so the app can only report what it knows: an extension
+         * profile that has gone quiet is either gone or unpermitted. Surfacing
+         * "recently seen but silent now" lets the setup panel point at the
+         * about:addons permission toggle — a GUI path that does NOT require the
+         * user to find the popup, which is the circular dependency we were in.
+         */
+        staleProfileCount: (() => {
+            try {
+                if (!db) return 0;
+                const row = db.prepare(`SELECT COUNT(*) AS n FROM browser_profiles
+                    WHERE is_connected = 0
+                      AND last_seen_at IS NOT NULL
+                      AND (julianday('now','localtime') - julianday(last_seen_at)) * 86400000 BETWEEN ? AND ?`)
+                    .get(PROFILE_CONNECT_TTL_MS, PROFILE_CONNECT_TTL_MS * 200) as any;
+                return row?.n || 0;
+            }
+            catch { return 0; }
+        })(),
         extensionMissingReason: reason,
         manifestName: 'DeskFlow Browser Bridge',
         browsers,
@@ -9188,9 +10760,49 @@ electron_1.ipcMain.handle("relay:request-ticket", async (_event, userId?: string
     return { success: false, error: err.message };
   }
 });
+// Reports whether the sync server can actually REDEEM a ticket we issue.
+// The old version returned `active: !!process.env.RELAY_TICKET_SECRET`, which is
+// true whenever the variable merely EXISTS — so it reported "active" while the
+// desktop's secret and the server's RELAY_TICKET_SECRET disagreed (they did:
+// TQZle… in start-desktop.ps1 vs WQzCp… in sync-server/.env), which is precisely the
+// case where every ticket is rejected with "unauthorized". Presence is not agreement.
+//
+// This asks the server to sign a ticket and then verifies it with OUR local secret.
+// If the two secrets differ the verification throws, which is the honest answer.
 electron_1.ipcMain.handle("relay:status", async () => {
-  const port = parseInt(process.env.RELAY_PORT || "8788", 10);
-  return { active: !!process.env.RELAY_TICKET_SECRET, port };
+    const port = parseInt(process.env.RELAY_PORT || "8788", 10);
+    const hasLocalSecret = !!process.env.RELAY_TICKET_SECRET;
+    if (!hasLocalSecret) {
+        return { active: false, port, reason: "RELAY_TICKET_SECRET is not set in the desktop process" };
+    }
+    try {
+        const token = await getSyncTokenForRelay();
+        if (!token) {
+            return { active: false, port, reason: "Not authenticated with the sync server" };
+        }
+        const res = await fetch(`${syncUrl}/v1/relay/ticket`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+            return { active: false, port, reason: `Sync server returned ${res.status} for /v1/relay/ticket` };
+        }
+        const { ticket } = await res.json();
+        if (!ticket) return { active: false, port, reason: "Sync server returned no ticket" };
+        // Verify the server signed it with the SAME secret this relay uses.
+        const { jwtVerify } = require("jose");
+        const secretKey = new TextEncoder().encode(process.env.RELAY_TICKET_SECRET);
+        await jwtVerify(ticket, secretKey, { algorithms: ["HS256"] });
+        return { active: true, port };
+    } catch (err: any) {
+        return {
+            active: false,
+            port,
+            reason: err?.message === "signature verification failed"
+                ? "Secret mismatch: the desktop and sync server use different RELAY_TICKET_SECRET values"
+                : (err?.message || "Could not verify the relay ticket"),
+        };
+    }
 });
 
 // ── IPC: Pairing code flow ────────────────────────────────────────
@@ -9371,6 +10983,74 @@ electron_1.ipcMain.handle("auth:update-sync-url", async (_event, url) => {
 });
 
 // ── Device management (proxy to sync server) ────────────────────────
+// ── Phone telemetry (phone -> desktop display) ─────────────────────────────────
+// The server has served GET /v1/phone/telemetry/live and /summary since the phone
+// stats feature was specced, but NOTHING on the desktop ever called them: there was
+// no IPC channel, no preload binding and no UI, so `phone_telemetry` stayed empty
+// and the feature was invisible from this side. These are the missing consumers.
+electron_1.ipcMain.handle("phone-telemetry-live", async () => {
+  try {
+    if (!getSyncTokenForRelay) return { success: false, error: "Sync not configured" };
+    const token = await getSyncTokenForRelay();
+    if (!token) return { success: false, error: "Not authenticated with sync server" };
+    const res = await fetch(`${syncUrl}/v1/phone/telemetry/live`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { success: false, error: `Sync server returned ${res.status}` };
+    const live = await res.json();
+    // Normalise last_seen to an ISO string, seconds-or-millis, exactly like
+    // list-devices does. `is_online` is recomputed locally rather than trusted
+    // from the server so the badge stays honest if a row is stale but the clock moved.
+    const lastSeenMs = live?.last_seen
+      ? (typeof live.last_seen === "number" && live.last_seen < 1e12 ? live.last_seen * 1000 : Date.parse(live.last_seen))
+      : null;
+    const isOnline = lastSeenMs != null && (Date.now() - lastSeenMs) < 5 * 60 * 1000;
+    return {
+      success: true,
+      live: {
+        device_name: live?.device_name ?? null,
+        device_platform: live?.device_platform ?? null,
+        device_platform_version: live?.device_platform_version ?? null,
+        current_battery: live?.current_battery ?? null,
+        battery_state: live?.battery_state ?? null,
+        today_deskflow_foreground_sec: Number(live?.today_deskflow_foreground_sec) || 0,
+        today_deskflow_background_sec: Number(live?.today_deskflow_background_sec) || 0,
+        last_seen: lastSeenMs != null ? new Date(lastSeenMs).toISOString() : null,
+        is_online: isOnline,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+electron_1.ipcMain.handle("phone-telemetry-summary", async (_event, args?: { from?: string; to?: string }) => {
+  try {
+    if (!getSyncTokenForRelay) return { success: false, error: "Sync not configured" };
+    const token = await getSyncTokenForRelay();
+    if (!token) return { success: false, error: "Not authenticated with sync server" };
+    const qs = new URLSearchParams();
+    if (args?.from) qs.set("from", args.from);
+    if (args?.to) qs.set("to", args.to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    const res = await fetch(`${syncUrl}/v1/phone/telemetry/summary${suffix}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { success: false, error: `Sync server returned ${res.status}` };
+    const data = await res.json();
+    // libSQL hands back REAL as number/string/null depending on driver — coerce
+    // so the chart cannot render "NaN" or a string where a number is expected.
+    const daily = (data.daily || []).map((d: any) => ({
+      date: d.date,
+      foreground_sec: Number(d.deskflow_foreground_sec) || 0,
+      background_sec: Number(d.deskflow_background_sec) || 0,
+      avg_battery: d.avg_battery == null ? null : Number(d.avg_battery),
+      latest_battery: d.latest_battery == null ? null : Number(d.latest_battery),
+    }));
+    return { success: true, daily };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
 electron_1.ipcMain.handle("list-devices", async () => {
   try {
     if (!getSyncTokenForRelay) return { success: false, error: "Sync not configured" };
@@ -10651,6 +12331,23 @@ electron_1.ipcMain.handle('get-design-library-config', async () => {
   };
 });
 
+// ── App performance profiler ────────────────────────────────────────────────
+// `perf:ping` is a deliberate NO-OP handler. The renderer wraps it in a
+// monotonic clock (see src/lib/perfRecorder.ts → sampleIpc) to measure the real
+// renderer -> main -> renderer round trip. That number is the one that matters
+// when a handler is blocking the main process's event loop, which no amount of
+// renderer-side frame timing can see.
+//
+// It returns `performance.now()` from the MAIN process rather than `Date.now()`
+// on purpose: the caller subtracts a `performance.now()` taken in the renderer,
+// so both ends of the subtraction must come from the same monotonic clock.
+// Mixing `Date.now()` here with `performance.now()` there produces a value that
+// is wrong by the epoch offset (~1.7e12ms) and would look like a hung app.
+electron_1.ipcMain.handle('perf:ping', async () => {
+    return { ok: true, t: performance.now() };
+});
+
+
 electron_1.ipcMain.handle('set-design-library-config', async (_, config: any) => {
   try {
     const configDir = path_1.default.join(require('os').homedir(), '.deskflow');
@@ -11302,15 +12999,54 @@ function countLinesInFile(filePath: string, ext: string): { totalLines: number; 
   }
 }
 
-electron_1.ipcMain.handle('count-project-lines', async (_event, projectPath: string, projectId: string, options?: { excludeExtensions?: string[]; excludePatterns?: string[]; maxFiles?: number }) => {
+// Backup / copy artefacts, matched on the FILE NAME only.
+// This repo accumulates them heavily (`main.ts.bak`, `preload.bak-20261005`,
+// `db.ts.backup`, `flushTranscriptToDb2`, `useX.ts.orig`) and every one of them
+// was being counted as real source, which inflated the totals and made the same
+// file appear several times. Note `a.ts.orig.txt`: the earlier double-suffix
+// pattern `\.(?:bak|orig)(?:[-._]\w+)+\.\w+$` consumed `.txt` and left
+// nothing for the mandatory trailing extension, so it SURVIVED. The separator
+// run must therefore be optional after the first one.
+const LINE_COUNTER_BACKUP_RE = /(\.bak($|[-._\d])|\.backup($|[-._\d])|\.orig($|[-._])|\.rej$|\.old$|\.save$|\.sw[op]$|~$|^#.*#$|^\.#|\.(tmp|temp|copy|disabled)$)/i;
+// A numbered copy: `preload2.ts`, `foo3.tsx` — a trailing digit group right
+// before the extension, where the stem without it is also present in the scan.
+const LINE_COUNTER_DIGITCOPY_RE = /^(.*?)(\d+)\.[A-Za-z0-9]+$/;
+
+electron_1.ipcMain.handle('count-project-lines', async (_event, projectPath: string, projectId: string, options?: { excludeExtensions?: string[]; excludePatterns?: string[]; maxFiles?: number; ignoreDirs?: string[] }) => {
   try {
     if (!projectPath || !_fs.existsSync(projectPath)) return { success: false, error: 'Invalid project path' };
     const defaultExcludes = ['.md', '.json', '.lock', '.min.js'];
     const excludeExts = new Set([...defaultExcludes, ...(options?.excludeExtensions || [])]);
     const maxFiles = options?.maxFiles || 10000;
+    // User-configurable ignore list, ADDITIVE to the built-in skip set — never
+    // a replacement, or clearing a default would silently start counting
+    // node_modules.
+    const ignoreDirs = new Set([...(LINE_COUNTER_SKIP_DIRS as any), ...(options?.ignoreDirs || [])]);
     let filesWalked = 0;
     const results: any[] = [];
     const summary: Record<string, any> = {};
+    /**
+     * Dedupe by RESOLVED REAL PATH. Two spellings of one file (`src/main.ts`,
+     * `./src/main.ts`, a symlink, a differently-cased path) reached the walker
+     * as distinct strings and became distinct rows, which were then persisted
+     * and counted again in `summary`. `realpathSync` collapses symlinks; it can
+     * throw on a broken link, hence the fallback.
+     */
+    const seen = new Set<string>();
+    const stems = new Set<string>();
+    /**
+     * Files are COLLECTED in the walk and only judged afterwards. The
+     * numbered-copy rule below asks "does the un-numbered twin also exist?",
+     * and that cannot be answered while streaming: `readdir` order is not
+     * guaranteed, so `preload2.ts` may be visited BEFORE `preload.ts` and the
+     * twin would not be in `stems` yet. My own probe caught exactly that —
+     * preload2.ts was kept when the listing happened to favour it. Deciding
+     * order-dependently is the bug; collecting first makes it deterministic.
+     */
+    const candidates: Array<{ fullPath: string; key: string; name: string; ext: string; lang: string }> = [];
+    const keyFor = (p: string): string => {
+      try { return _fs.realpathSync(p); } catch { return _path.resolve(p); }
+    };
 
     function walkAndCount(dir: string, depth: number = 0): void {
       if (depth > 8 || filesWalked >= maxFiles) return;
@@ -11320,29 +13056,64 @@ electron_1.ipcMain.handle('count-project-lines', async (_event, projectPath: str
           if (filesWalked >= maxFiles) break;
           const fullPath = _path.join(dir, entry.name);
           if (entry.isDirectory()) {
-            if (!LINE_COUNTER_SKIP_DIRS.has(entry.name)) walkAndCount(fullPath, depth + 1);
+            if (!ignoreDirs.has(entry.name)) walkAndCount(fullPath, depth + 1);
           } else {
             filesWalked++;
+            // Backup artefacts never reach the counter at all, so they cannot
+            // reach the DB or the summary.
+            if (LINE_COUNTER_BACKUP_RE.test(entry.name)) continue;
             const ext = _path.extname(entry.name).toLowerCase();
             if (BINARY_EXTS.has(ext) || excludeExts.has(ext)) continue;
             const lang = LINE_COUNTER_EXT_MAP[ext];
             if (!lang) continue;
-            const counts = countLinesInFile(fullPath, ext);
-            if (counts.totalLines === 0) continue;
-            const relativePath = _path.relative(projectPath, fullPath);
-            results.push({ filePath: relativePath, fileType: lang, ...counts });
-            if (!summary[lang]) summary[lang] = { count: 0, totalLines: 0, codeLines: 0, commentLines: 0, blankLines: 0 };
-            summary[lang].count++;
-            summary[lang].totalLines += counts.totalLines;
-            summary[lang].codeLines += counts.codeLines;
-            summary[lang].commentLines += counts.commentLines;
-            summary[lang].blankLines += counts.blankLines;
+
+            // Dedupe: one logical file, one row. Collected only — judgement
+            // happens after the walk so the numbered-copy rule is not
+            // order-dependent (see `candidates`).
+            const key = keyFor(fullPath);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            candidates.push({ fullPath, key, name: entry.name, ext, lang });
           }
         }
       } catch {}
     }
 
     walkAndCount(projectPath);
+
+    // ── PASS 2: judge the collected candidates ───────────────────────────
+    // Seed `stems` from EVERY candidate name first, so a numbered copy is
+    // recognised no matter which of the pair the walk happened to reach first.
+    for (const c of candidates) {
+      const dc = c.name.match(LINE_COUNTER_DIGITCOPY_RE);
+      // `base64.ts` -> stem `base64`; do NOT record `base64.ts` itself as a
+      // stem, or `base642.ts` would later look like its copy.
+      if (dc && dc[1]) stems.add(dc[1].toLowerCase());
+    }
+    for (const c of candidates) {
+      const dc = c.name.match(LINE_COUNTER_DIGITCOPY_RE);
+      if (dc && dc[1]) {
+        // The twin's name is the stem with the digits removed and the SAME
+        // extension: `preload2.ts` -> `preload.ts`. Take the extension from
+        // the last dot directly — arithmetic over the match offsets is off by
+        // the digit width and silently produced `preloads`.
+        const twinName = (dc[1] + c.name.slice(c.name.lastIndexOf('.'))).toLowerCase();
+        const twinExists = candidates.some((o) => o !== c && o.name.toLowerCase() === twinName);
+        // `base64.ts` has no `base.ts`, so it survives. `preload2.ts` does have
+        // `preload.ts`, so it goes.
+        if (twinExists) continue;
+      }
+      const counts = countLinesInFile(c.fullPath, c.ext);
+      if (counts.totalLines === 0) continue;
+      const relativePath = _path.relative(projectPath, c.fullPath);
+      results.push({ filePath: relativePath, fileType: c.lang, ...counts });
+      if (!summary[c.lang]) summary[c.lang] = { count: 0, totalLines: 0, codeLines: 0, commentLines: 0, blankLines: 0 };
+      summary[c.lang].count++;
+      summary[c.lang].totalLines += counts.totalLines;
+      summary[c.lang].codeLines += counts.codeLines;
+      summary[c.lang].commentLines += counts.commentLines;
+      summary[c.lang].blankLines += counts.blankLines;
+    }
 
     // Cache in DB
     try {
@@ -13190,6 +14961,68 @@ function isTuiSettled(st: AgentState): boolean {
 // Called from BOTH the terminal:create and spawn-terminal data handlers after
 // the dataBuffer is appended. parseAgentOutput is idempotent for session-id
 // extraction (honors state.sessionIdCaptured).
+// ═══════════════════════════════════════════════════════════════════
+// WORKFORCE EVENT PIPELINE
+// ═══════════════════════════════════════════════════════════════════
+// Hooked immediately AFTER parseAgentOutput (integration plan §3: "Hook after
+// the existing parseAgentOutput call. Do not add a second parser."). This
+// ADDS a second, independent concern — tool-call classification — without
+// touching the session-id / launch-error parsing that already works.
+//
+//   PTY chunk → stripAnsi → per-session line buffer → per-agent adapter
+//             → classifyAction() → ActionEvent[] → 100ms batch
+//             → broadcast('workforce:event', batch)
+//
+// stripAnsi is INJECTED rather than reimplemented: the one below is hardened
+// against escape sequences split across two PTY chunks (see its comment), and
+// a second copy would drift — which is exactly how a tool name stops matching.
+//
+// RECORDING (§8.2): set DESKFLOW_RECORD_WORKFORCE=1 to accumulate every event
+// and dump the fixture with dumpWorkforceRecording(). The adapters' line
+// patterns are hypotheses until a real recording confirms them, so this is the
+// mechanism that turns a guess into a fixture.
+const workforceRecorder = createWorkforceRecorder();
+workforceRecorder.enabled = process.env.DESKFLOW_RECORD_WORKFORCE === '1';
+
+const workforceIngest = createWorkforceIngest({ strip: stripAnsi });
+
+/**
+ * One batched IPC message per 100ms, never one per event. A busy agent prints
+ * hundreds of lines a second; per-line IPC saturates the renderer main thread
+ * and freezes the scene it is meant to describe.
+ */
+const workforceBatcher = createWorkforceBatcher((batch: ActionEvent[]) => {
+    if (!batch.length) return;
+    workforceRecorder.record(batch);
+    broadcast('workforce:event', batch);
+});
+// Autostarts on the first event; started here so a session that produces output
+// immediately is never missed.
+workforceBatcher.start();
+
+/** Flush + return the recorded events as a fixture. Dev only. */
+function dumpWorkforceRecording(): string {
+    workforceBatcher.stop();
+    return workforceRecorder.dump();
+}
+
+/**
+ * Feed one PTY chunk for one terminal into the workforce pipeline.
+ *
+ * `terminalId` is the PTY identity; the ActionEvent carries the DESKFLOW
+ * session id so the renderer can join it to `terminal_sessions` rows. When no
+ * binding exists yet (a terminal that never bound a session) we fall back to
+ * the terminal id — the renderer treats an unknown session as "not yet
+ * attributed" rather than dropping the event, because a dropped event is
+ * indistinguishable from a worker that did nothing.
+ */
+function feedWorkforceChunk(terminalId: string, agentType: string, data: string): void {
+    if (!data) return;
+    const sessionId = getSessionIdForTerminal(terminalId) || terminalId;
+    const events = workforceIngest.push(sessionId, agentType, data);
+    workforceBatcher.add(events);
+}
+
 function handleAgentOutputChunk(id: string, st: AgentState, data: string) {
   try {
     st.parsed = parseAgentOutput(st.dataBuffer, st.agentType, st, getAgentConfig(st.agentType).sessionIdSource);
@@ -13349,10 +15182,69 @@ function broadcast(event: string, ...args: any[]) {
   }
 }
 
-// ========== Per-terminal resource stats (RAM / CPU / lag) — realtime ==========
-// Samples memory + CPU for each terminal's PTY process tree using built-in OS
-// tools (no external deps). Emits 'terminal:resource-stats' to all windows.
-const __cpuPrev = new Map(); // pid -> { cpuSec, ts } for Windows CPU delta
+// ========== Per-terminal resource stats — procfs sampler ==========
+// REPLACED the previous `ps -eo pid=,ppid=,rss=,pcpu=` sampler. See
+// agent/docs/terminal-workspace-monitoring-implementation-spec.md.
+//
+// Why it was replaced (measured on this box):
+//   * `ps pcpu` is a LIFETIME AVERAGE, not a rate. A shell that burned 100% of
+//     a core for 3 s then idled reported 2.5% forever. The UI thresholds built on
+//     it (cpuPct > 90 == "laggy") were unreachable.
+//   * Summing RSS over a tree double-counts shared pages, with no PSS figure to
+//     correct it and no way for a consumer to tell by how much.
+//   * When the shell PID vanished the sampler reported {alive:false, memMB:0},
+//     which is a LIE: surviving descendants were still holding the memory.
+//   * Cost: 31.8 ms/tick (1.06% of one core at 3 s), including one fork+exec.
+//
+// New cost, measured: 0.54 ms/tick for the hot walk (~0.05% of one core at
+// 1 Hz), plus a bounded PSS rotation. See procmon/sampler.ts.
+//
+// The channel name and the legacy field names are unchanged, so
+// PerformanceMetricsPanel.tsx and TerminalPage.tsx keep working; the payload
+// gains fields rather than replacing them.
+// './main/procmon', not './procmon': dist-electron/ mirrors src/, and procmon
+// lives at src/main/procmon. The shorter path resolved to nothing, so main.cjs
+// threw `Cannot find module './procmon'` before the app could boot at all.
+const procmon = require('./main/procmon');
+const __procMonitor = new procmon.ProcessMonitor({ persist: true });
+
+// Wire the single-writer rollup store. procmon never touches the DB itself.
+procmon.configureRollupStore(
+  (workspaceId: string, s: any) => {
+    if (!db) return;
+    try {
+      db.prepare(
+        'INSERT INTO terminal_resource_rollups (workspace_id, ts_ms, rss_mb, pss_mb, cpu_pct, swap_mb, proc_count, thread_count) VALUES (?,?,?,?,?,?,?,?)'
+      ).run(workspaceId, s.ts, s.rssMb, s.pssMb, s.cpuPctOfCore, s.swapMb, s.procCount, s.threadCount);
+      // Bounded retention: 48 h. Raw 1 Hz samples are never written.
+      db.prepare('DELETE FROM terminal_resource_rollups WHERE ts_ms < ?').run(Date.now() - 48 * 3600 * 1000);
+    } catch (_e) { /* telemetry persistence must never break sampling */ }
+  },
+  (workspaceId: string) => {
+    if (!db) return null;
+    try {
+      const rows = db.prepare(
+        'SELECT ts_ms, rss_mb, pss_mb, cpu_pct, swap_mb, proc_count, thread_count FROM terminal_resource_rollups WHERE workspace_id = ? ORDER BY ts_ms ASC LIMIT 240'
+      ).all(workspaceId) as any[];
+      if (!rows.length) return null;
+      return {
+        samples: rows.map((r) => ({
+          ts: r.ts_ms, rssMb: r.rss_mb ?? 0, pssMb: r.pss_mb ?? null,
+          cpuPct: r.cpu_pct ?? null, swapMb: r.swap_mb ?? null,
+          procCount: r.proc_count ?? 0, threadCount: r.thread_count ?? 0,
+        })),
+        sampleCount: rows.length,
+        windowSec: Math.round((rows[rows.length - 1].ts_ms - rows[0].ts_ms) / 1000),
+        hasGaps: false,
+        note: 'Loaded from persisted minute rollups written by a PREVIOUS app session. Minute resolution, not raw 1 Hz samples.',
+      };
+    } catch (_e) { return null; }
+  }
+);
+
+// Event-loop lag: a self-instrumentation signal about the MAIN process, not the
+// workspace. Kept in the payload for backward compatibility and labelled as
+// such by the UI.
 let __eventLoopLastTick = Date.now();
 let __eventLoopLagMs = 0;
 setInterval(() => {
@@ -13361,127 +15253,214 @@ setInterval(() => {
   __eventLoopLastTick = now;
 }, 1000);
 
-function __collectProcSnapshotUnix() {
-  return new Promise((resolve) => {
-    try {
-      const cp = require('child_process');
-      cp.execFile('ps', ['-eo', 'pid=,ppid=,rss=,pcpu='], { maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
-        const map = new Map();
-        if (!err && stdout) {
-          for (const line of String(stdout).split('\n')) {
-            const parts = line.trim().split(/\s+/);
-            if (parts.length >= 4) {
-              const pid = parseInt(parts[0], 10);
-              const ppid = parseInt(parts[1], 10);
-              const rssKb = parseInt(parts[2], 10);
-              const cpuPct = parseFloat(parts[3]);
-              if (!isNaN(pid)) map.set(pid, { ppid: ppid || 0, rssKb: rssKb || 0, cpuPct: isNaN(cpuPct) ? 0 : cpuPct });
-            }
-          }
-        }
-        resolve(map);
-      });
-    } catch (e) { resolve(new Map()); }
-  });
-}
-
-function __collectProcSnapshotWin() {
-  return new Promise((resolve) => {
-    try {
-      const cp = require('child_process');
-      const psCmd = "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize,@{N='Cpu';E={(Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue).CPU} } | ConvertTo-Csv -NoTypeInformation";
-      cp.execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psCmd], { maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
-        const map = new Map();
-        if (!err && stdout) {
-          const now = Date.now();
-          for (const line of String(stdout).split(/\r?\n/)) {
-            if (!line) continue;
-            if (line.indexOf('WorkingSetSize') !== -1) continue;
-            const cols = line.split(',').map((c) => c.replace(/^"|"$/g, ''));
-            if (cols.length < 3) continue;
-            const pid = parseInt(cols[0], 10);
-            const ppid = parseInt(cols[1], 10);
-            const ws = parseInt(cols[2], 10);
-            if (isNaN(pid)) continue;
-            const cpuSec = cols[3] !== undefined && cols[3] !== '' ? parseFloat(cols[3]) : NaN;
-            let cpuPct = 0;
-            if (!isNaN(cpuSec)) {
-              const prev = __cpuPrev.get(pid);
-              if (prev && now > prev.ts) cpuPct = Math.max(0, ((cpuSec - prev.cpuSec) / ((now - prev.ts) / 1000)) * 100);
-              __cpuPrev.set(pid, { cpuSec, ts: now });
-            }
-            map.set(pid, { ppid: ppid || 0, rssKb: Math.round((ws || 0) / 1024), cpuPct });
-          }
-        }
-        resolve(map);
-      });
-    } catch (e) { resolve(new Map()); }
-  });
-}
-
-function __collectProcSnapshot() {
-  return process.platform === 'win32' ? __collectProcSnapshotWin() : __collectProcSnapshotUnix();
-}
-
-function __sumProcessTree(rootPid, snap) {
-  let rssKb = 0;
-  let cpuPct = 0;
-  const stack = [rootPid];
-  const seen = new Set();
-  while (stack.length) {
-    const cur = stack.pop();
-    if (seen.has(cur)) continue;
-    seen.add(cur);
-    const info = snap.get(cur);
-    if (info) { rssKb += info.rssKb; cpuPct += info.cpuPct; }
-    for (const [pid, i] of snap) { if (i.ppid === cur && !seen.has(pid)) stack.push(pid); }
-  }
-  return { rssKb, cpuPct };
-}
-
-let __resourceStatsBusy = false;
-async function __sampleTerminalStats() {
-  if (__resourceStatsBusy) return;
-  const terms = terminalManager.terminals;
-  if (!terms || terms.size === 0) return;
-  __resourceStatsBusy = true;
+/** Register a workspace with the monitor. Called from the PTY spawn path. */
+function registerMonitoredTerminal(id: string, shellPid: number, agentType?: string, sessionId?: string | null): void {
   try {
-    const snap = await __collectProcSnapshot();
-    const alivePids = new Set(snap.keys());
-    for (const pid of Array.from(__cpuPrev.keys())) { if (!alivePids.has(pid)) __cpuPrev.delete(pid); }
-    const out = {};
-    for (const [id, t] of terms) {
-      const pid = t && t.pid;
-      if (!pid || !snap.has(pid)) { out[id] = { pid: pid || null, alive: false, memMB: 0, cpuPct: 0, eventLoopLagMs: __eventLoopLagMs, ts: Date.now() }; continue; }
-      const summed = __sumProcessTree(pid, snap);
-      out[id] = {
-        pid,
-        alive: true,
-        memMB: Math.round((summed.rssKb / 1024) * 10) / 10,
-        cpuPct: Math.round(summed.cpuPct * 10) / 10,
-        eventLoopLagMs: __eventLoopLagMs,
-        ts: Date.now(),
-      };
-    }
-    broadcast('terminal:resource-stats', out);
-  } catch (e) {
-    // non-fatal: sampling should never crash the app
-  } finally {
-    __resourceStatsBusy = false;
-  }
+    __procMonitor.registerWorkspace({
+      workspaceId: id,
+      shellPid,
+      declaredAgent: agentType || null,
+      deskflowSessionId: sessionId || null,
+      kind: 'app_pty',
+    });
+    // Persist identity so a restart can re-attribute without guessing.
+    persistTerminalIdentity(id, shellPid);
+  } catch (_e) { /* monitoring must never break terminal creation */ }
 }
 
-let __resourceStatsTimer = null;
-function __startResourceStatsSampler() {
+function persistTerminalIdentity(terminalId: string, shellPid: number): void {
+  if (!db) return;
+  try {
+    const st = procmon.readProcStat(shellPid);
+    if (!st) return;
+    db.prepare(
+      `UPDATE terminal_sessions
+          SET proc_pid = ?, proc_start_jiffies = ?, proc_posix_session = ?,
+              proc_pgrp = ?, proc_tty_nr = ?, proc_spawned_at = ?, updated_at = datetime('now')
+        WHERE terminal_id = ?`
+    ).run(shellPid, st.starttime, st.session, st.pgrp, st.ttyNr, Date.now(), terminalId);
+  } catch (_e) { /* identity persistence is best-effort */ }
+}
+
+/**
+ * Re-attach to terminals that are still alive from a previous app run.
+ * starttime is validated, so a PID recycled while the app was closed is
+ * rejected rather than adopted -- that is the whole point of pid+starttime.
+ */
+function rehydrateMonitoredTerminals(): void {
+  if (!db) return;
+  try {
+    const rows = db.prepare(
+      `SELECT id, terminal_id, proc_pid, proc_start_jiffies FROM terminal_sessions
+        WHERE proc_pid IS NOT NULL AND proc_start_jiffies IS NOT NULL AND status = 'active'`
+    ).all() as any[];
+    let restored = 0;
+    for (const r of rows) {
+      if (__procMonitor.rehydrateWorkspace({
+        workspaceId: r.terminal_id,
+        shellPid: r.proc_pid,
+        shellStarttime: r.proc_start_jiffies,
+        deskflowSessionId: r.id,
+      })) restored++;
+      // A dead or recycled PID must NOT stay registered as active, or the next
+      // cold census will keep trying to rescue a process that no longer exists.
+      else {
+        db.prepare(
+          `UPDATE terminal_sessions SET proc_pid = NULL, proc_start_jiffies = NULL WHERE id = ?`
+        ).run(r.id);
+      }
+    }
+    if (restored > 0) console.log(`[procmon] rehydrated ${restored}/${rows.length} terminal identities from DB`);
+  } catch (e) { console.log('[procmon] rehydrate skipped:', (e as any)?.message); }
+}
+
+function unregisterMonitoredTerminal(id: string): void {
+  try { __procMonitor.unregisterWorkspace(id); } catch (_e) { /* noop */ }
+}
+
+// Build the legacy shape from the new telemetry. `alive` now means "not
+// terminated", so a workspace whose shell died but whose descendants live still
+// reports its real memory instead of 0.
+// Keep the newest payload so `terminal:get-resource-stats` can answer with real
+// data instead of `{success:true}` and nothing.
+let __lastTelemetry: any[] = [];
+let __legacyCache: Record<string, any> = {};
+__procMonitor.onTelemetry((payloads: any[]) => {
+  __lastTelemetry = payloads;
+  __legacyCache = {};
+  for (const t of payloads) {
+    const legacy = procmon.toLegacyStats(t, __eventLoopLagMs);
+    if (legacy) __legacyCache[t.workspaceId] = legacy;
+  }
+  broadcast('terminal:resource-stats', __legacyCache);
+  // The full schema goes on its own channel so the legacy payload stays small
+  // for consumers that only want the four legacy fields.
+  broadcast('terminal:resource-telemetry', payloads);
+});
+
+let __resourceStatsTimer: boolean | null = null;
+function __startResourceStatsSampler(): void {
   if (__resourceStatsTimer) return;
-  __resourceStatsTimer = setInterval(() => { __sampleTerminalStats().catch(() => {}); }, 3000);
-  if (__resourceStatsTimer && __resourceStatsTimer.unref) __resourceStatsTimer.unref();
+  // The monitor owns its own adaptive 1 Hz busy / 0.25 Hz idle schedule, so the
+  // old fixed 3 s interval is gone. Its timer is unref'd and it early-returns
+  // when no workspace is registered, so an idle app costs nothing.
+  __procMonitor.start();
+  __resourceStatsTimer = true;
 }
 __startResourceStatsSampler();
 
 electron_1.ipcMain.handle('terminal:get-resource-stats', async () => {
-  await __sampleTerminalStats();
-  return { success: true };
+  try {
+    // Now returns the real payload instead of a bare success flag.
+    return { success: true, stats: __legacyCache, telemetry: __lastTelemetry };
+  } catch (e) { return { success: false, error: (e as any)?.message }; }
+});
+
+// Full AI-facing schema for one workspace, or all of them.
+electron_1.ipcMain.handle('terminal:get-resource-telemetry', async (_e: any, workspaceId?: string) => {
+  try {
+    if (workspaceId) {
+      const t = __procMonitor.sampleNow(workspaceId) as any;
+      return { success: !!t, data: t };
+    }
+    return { success: true, data: __procMonitor.sampleNow() };
+  } catch (e) { return { success: false, error: (e as any)?.message }; }
+});
+
+// T3 on-demand: PSS refresh (expensive, ~30 ms per heavy process).
+electron_1.ipcMain.handle('terminal:refresh-pss', async (_e: any, workspaceId: string) => {
+  try {
+    const n = __procMonitor.refreshWorkspacePss(workspaceId);
+    const t = __procMonitor.sampleNow(workspaceId) as any;
+    return { success: true, processesMeasured: n, data: t };
+  } catch (e) { return { success: false, error: (e as any)?.message }; }
+});
+
+// T3 on-demand deep inspection of a single process.
+electron_1.ipcMain.handle('terminal:inspect-process', async (_e: any, workspaceId: string, pidOrKey: number | string) => {
+  try {
+    return { success: true, data: __procMonitor.inspectProcess(workspaceId, pidOrKey) };
+  } catch (e) { return { success: false, error: (e as any)?.message }; }
+});
+// ========== console:metrics — real CPU / RAM / GPU sample for Penguin Console ==========
+// CPU% is computed from a delta between two os.cpus() reads (a single read has no
+// utilisation in it). GPU utilisation only exists if nvidia-smi is present; we say
+// "unavailable" rather than inventing a number.
+let _lastCpuTimes: any[] | null = null;
+let _lastCpuAt = 0;
+async function _gpuSample(): Promise<{ available: boolean; name: string; utilPct: number | null; memUsedMB: number | null; memTotalMB: number | null }> {
+    const out = { available: false, name: 'No GPU telemetry', utilPct: null as number | null, memUsedMB: null as number | null, memTotalMB: null as number | null };
+    const { execFile } = require('child_process');
+    const run = (args: string[]) => new Promise<string | null>((resolve) => {
+        try {
+            execFile('nvidia-smi', args, { timeout: 2500, windowsHide: true }, (e: any, stdout: any) => resolve(e ? null : String(stdout)));
+        } catch { resolve(null); }
+    });
+    const q = await run(['--query-gpu=utilization.gpu,memory.used,memory.total,name', '--format=csv,noheader,nounits']);
+    if (q) {
+        const line = q.split('\n').map((l) => l.trim()).find(Boolean);
+        if (line) {
+            const parts = line.split(',').map((x) => x.trim());
+            out.available = true;
+            out.utilPct = Number(parts[0]) || 0;
+            out.memUsedMB = Math.round((Number(parts[1]) || 0) / 1024);
+            out.memTotalMB = Math.round((Number(parts[2]) || 0) / 1024);
+            out.name = parts[3] || 'NVIDIA GPU';
+            return out;
+        }
+    }
+    // AMD / Intel fallback: sysfs exposes busy time for some drivers
+    try {
+        const fs = require('fs');
+        const p = '/sys/class/drm/card0/device/gpu_busy_percent';
+        if (fs.existsSync(p)) {
+            const v = parseInt(fs.readFileSync(p, 'utf8').trim(), 10);
+            if (Number.isFinite(v)) { out.available = true; out.utilPct = v; out.name = 'DRM GPU (sysfs)'; return out; }
+        }
+    } catch { /* not present */ }
+    return out;
+}
+
+electron_1.ipcMain.handle('console:metrics', async () => {
+    const os = require('os');
+    const now = Date.now();
+    const cpus = os.cpus();
+    let cpuPct: number | null = null;
+    try {
+        if (_lastCpuTimes && _lastCpuTimes.length === cpus.length && now > _lastCpuAt) {
+            let idleDelta = 0, totalDelta = 0;
+            for (let i = 0; i < cpus.length; i++) {
+                const t = cpus[i].times, p = _lastCpuTimes[i];
+                const dIdle = (t.idle - p.idle) * 1000;
+                const dTotal = ((t.user - p.user) + (t.nice - p.nice) + (t.sys - p.sys) + (t.irq - p.irq) + (t.idle - p.idle)) * 1000;
+                if (dTotal > 0) { idleDelta += dIdle; totalDelta += dTotal; }
+            }
+            if (totalDelta > 0) cpuPct = Math.max(0, Math.min(100, Math.round((1 - idleDelta / totalDelta) * 1000) / 10));
+        }
+    } catch { /* leave null on the first sample */ }
+    _lastCpuTimes = cpus.map((c) => ({ ...c.times }));
+    _lastCpuAt = now;
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const gpu = await _gpuSample();
+    const mu = process.memoryUsage();
+    return {
+        success: true,
+        data: {
+            cpuPct,
+            cpuCount: cpus.length,
+            cpuModel: cpus[0]?.model || 'Unknown',
+            loadAvg: os.loadavg().map((n) => Math.round(n * 100) / 100),
+            memTotalMB: Math.round(totalMem / 1048576),
+            memUsedMB: Math.round((totalMem - freeMem) / 1048576),
+            memPct: Math.round(((totalMem - freeMem) / totalMem) * 1000) / 10,
+            appRssMB: Math.round(mu.rss / 1048576),
+            appHeapMB: Math.round(mu.heapUsed / 1048576),
+            uptimeH: Math.round((os.uptime() / 3600) * 10) / 10,
+            gpu,
+        },
+    };
 });
 
 electron_1.ipcMain.handle('terminal:get-system-stats', async () => {
@@ -13510,13 +15489,39 @@ electron_1.ipcMain.handle('terminal:get-system-stats', async () => {
         gpuName = raw.trim().replace(/.*: /, '') || 'Unknown';
       }
     } catch { /* GPU detection not critical */ }
+    // /proc/meminfo for swap and for MemAvailable. Swap is the leading OOM
+    // indicator on Linux -- a box can be OOM-killed while MemAvailable looks
+    // acceptable -- and it was completely absent from this telemetry before.
+    // os.freemem() already tracks MemAvailable (libuv), so freeMem is NOT
+    // MemFree; the name is retained for backward compatibility.
+    let memTotalBytes = totalMem;
+    let memAvailBytes = freeMem;
+    let swapTotalBytes = 0;
+    let swapFreeBytes = 0;
+    try {
+      const procmon = require('./procmon');
+      const mi = procmon.readMeminfo(Date.now());
+      memTotalBytes = mi.memTotalBytes || memTotalBytes;
+      memAvailBytes = mi.memAvailableBytes || memAvailBytes;
+      swapTotalBytes = mi.swapTotalBytes;
+      swapFreeBytes = mi.swapFreeBytes;
+    } catch (_e) { /* fall back to os.* */ }
+    const swapUsedBytes = Math.max(0, swapTotalBytes - swapFreeBytes);
+
     return {
       success: true,
       data: {
-        totalMemMB: Math.round(totalMem / 1024 / 1024),
-        freeMemMB: Math.round(freeMem / 1024 / 1024),
-        usedMemMB: Math.round((totalMem - freeMem) / 1024 / 1024),
-        memPct: Math.round(((totalMem - freeMem) / totalMem) * 100) / 100,
+        totalMemMB: Math.round(memTotalBytes / 1024 / 1024),
+        freeMemMB: Math.round(memAvailBytes / 1024 / 1024),
+        usedMemMB: Math.round((memTotalBytes - memAvailBytes) / 1024 / 1024),
+        // 0-100, already. Consumers must NOT multiply by 100 again --
+        // PerformanceMetricsPanel used to, which rendered "9312%".
+        memPct: Math.round(((memTotalBytes - memAvailBytes) / memTotalBytes) * 100) / 100,
+        availableMemMB: Math.round(memAvailBytes / 1024 / 1024),
+        swapTotalMB: Math.round(swapTotalBytes / 1024 / 1024),
+        swapFreeMB: Math.round(swapFreeBytes / 1024 / 1024),
+        swapUsedMB: Math.round(swapUsedBytes / 1024 / 1024),
+        swapUsedPct: swapTotalBytes > 0 ? Math.round((swapUsedBytes / swapTotalBytes) * 1000) / 10 : 0,
         cpuCount: cpus.length,
         cpuModel: cpus[0]?.model || 'Unknown',
         uptime: Math.floor(os.uptime()),
@@ -13919,6 +15924,11 @@ electron_1.ipcMain.handle('terminal:create', async (_event, id: string, cwd: str
     try {
         const result = terminalManager.spawn(id, cwd, cols, rows);
         if (result.success) {
+            // [procmon] Register with the resource monitor (see spawn-terminal).
+            try {
+                const __shellPid = (terminalManager.terminals.get(id) as any)?.pid;
+                if (__shellPid) registerMonitoredTerminal(id, __shellPid, agentType ?? undefined, null);
+            } catch (_e) { /* never break terminal creation */ }
             // Always set up agent state — use DEFAULT_AGENT if none specified
             // This ensures agent:send works even for "Open Terminal" button spawns
             const type = (agentType && agentType.trim().length > 0) ? agentType : DEFAULT_AGENT;
@@ -14023,6 +16033,10 @@ electron_1.ipcMain.handle('terminal:create', async (_event, id: string, cwd: str
                 // [AGENT-PARSE] Incremental output parsing + session ID capture
                 handleAgentOutputChunk(id, st, data);
 
+                // [WORKFORCE] Same chunk into the scene pipeline. Wrapped so a
+                // classification bug can never take down agent session parsing.
+                try { feedWorkforceChunk(id, st.agentType, data); } catch (_e) { /* silent */ }
+
                 // [MEMORY-CAPTURE] Parse [save-memory] tags from agent output
                 try {
                     const saveMemoryMatch = data.match(/\[save-memory\]\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.+)/i);
@@ -14120,6 +16134,15 @@ electron_1.ipcMain.handle('spawn-terminal', async (_event, id: string, cwd?: str
         const rows = spawnRows || 24;
         const result = terminalManager.spawn(id, cwd || '', cols, rows);
         if (result.success) {
+            // [procmon] Register the workspace with the resource monitor using
+            // the shell pid node-pty returned. Attribution is keyed on
+            // pid+starttime + posix session/pgrp/tty, never on the agent name,
+            // so this works for any CLI (or none).
+            try {
+                const __shellPid = (terminalManager.terminals.get(id) as any)?.pid;
+                if (__shellPid) registerMonitoredTerminal(id, __shellPid, agentType ?? undefined, null);
+            } catch (_e) { /* monitoring must never break terminal creation */ }
+
             // Only set up agent state when an agent is explicitly requested
             if (agentType && agentType.trim().length > 0) {
                 const type = agentType || DEFAULT_AGENT;
@@ -14386,26 +16409,33 @@ electron_1.ipcMain.handle('agent:send', async (_event, terminalId: string, data:
         if (result) notifyTask(result.lastInsertRowid);
 
         // Start Verification Timer
+        //
+        // Why this is now per-agent and why the retry does NOT resend the payload:
+        //   * The old fixed 2.5s window was tuned for Ink TUIs. A bubbletea TUI
+        //     (opencode) can legitimately render nothing for longer than that
+        //     while it boots, so a perfectly good write was reported as a failure.
+        //   * The old retry re-sent the FULL payload. If the first write had
+        //     actually landed but rendered slowly, the user got a duplicated
+        //     prompt in their TUI. A retry must nudge, never re-deliver.
+        //   * Re-delivering is worse than reporting a possible failure, so the
+        //     retry now sends only a wake \r and waits again.
+        const cfgForVerify = getAgentConfig(st.agentType || type);
+        const verifyWindow = cfgForVerify.tuiFramework === 'bubbletea' ? 8000 : 2500;
+
         if (st.verifyTimeout) clearTimeout(st.verifyTimeout);
         st.verifyTimeout = setTimeout(() => {
-            if (st.phase === 'busy') {
-                console.warn(`[AGENT-VERIFY] Write unverified after 2.5s for ${terminalId}. Retrying...`);
-                // Retry once: send a wake \r (in case input box lost focus) then payload
-                terminalManager.write(terminalId, '\r');
-                setTimeout(() => {
-                    terminalManager.write(terminalId, payload);
-                    // Final fail timer
-                    st.verifyTimeout = setTimeout(() => {
-                        if (st.phase === 'busy') {
-                            console.error(`[AGENT-VERIFY] Retry failed for ${terminalId}. Marking error.`);
-                            st.phase = 'error';
-                            st.lastError = 'Write unverified: TUI did not react to input';
-                            broadcast('agent:write-failed', { terminalId, reason: 'unverified-write' });
-                        }
-                    }, 2500);
-                }, 100);
-            }
-        }, 2500);
+            if (st.phase !== 'busy') return;
+            console.warn(`[AGENT-VERIFY] No TUI reaction within ${verifyWindow}ms for ${terminalId}. Nudging, not resending.`);
+            // Wake the input box without re-delivering the prompt text.
+            terminalManager.write(terminalId, '\r');
+            st.verifyTimeout = setTimeout(() => {
+                if (st.phase !== 'busy') return;
+                console.error(`[AGENT-VERIFY] Still no reaction after nudge for ${terminalId}. Marking error.`);
+                st.phase = 'error';
+                st.lastError = 'Write unverified: TUI did not react to input';
+                broadcast('agent:write-failed', { terminalId, reason: 'unverified-write' });
+            }, verifyWindow);
+        }, verifyWindow);
         return { success: true, queued: false, written: true, verified: false };
     }
     return { success: false, error: 'PTY write failed' };
@@ -15226,6 +17256,9 @@ electron_1.ipcMain.handle('terminal:destroy-old-format', async (_event, terminal
 electron_1.ipcMain.handle('terminal:destroy', async (_event, terminalId: string) => {
     failPendingWrites(terminalId);
     const success = terminalManager.kill(terminalId);
+    // [procmon] Drop the workspace and flush its pending history rollup. The
+    // rollups stay in the DB so a fresh AI session can still see the run.
+    try { unregisterMonitoredTerminal(terminalId); } catch (_e) { /* noop */ }
     return { success };
 });
 
@@ -17633,7 +19666,14 @@ electron_1.ipcMain.handle('sync-commits', async (event, projectId: string, repoP
         // Get commit log from git
         let gitOutput: string;
         try {
-            gitOutput = execSync(`git log --format="%H|%an|%ae|%ai|%s" -n 500`, {
+            // %aI = author date, STRICT ISO-8601 WITH the author's UTC offset
+            // (e.g. 2026-06-30T01:59:27+07:00). %ai was "%ai" = "2026-06-30
+            // 01:59:27 +0700", a space-separated form that is NOT in the
+            // ECMA-262 date-time grammar — V8 silently guesses LOCAL time and
+            // throws the "+0700" away, so every commit was stored at an instant
+            // that is only correct when the machine's zone happens to equal the
+            // commit author's zone. %aI parses per spec on every engine.
+            gitOutput = execSync(`git log --format="%H|%an|%ae|%aI|%s" -n 500`, {
                 cwd: repoPath,
                 encoding: 'utf8',
                 maxBuffer: 10 * 1024 * 1024
@@ -17673,7 +19713,16 @@ electron_1.ipcMain.handle('sync-commits', async (event, projectId: string, repoP
             } catch {}
 
             const id = `commit-${sha}`;
-            const commitDate = new Date(date).toISOString();
+            // An unparseable date must never reach the DB: the renderer's
+            // day-bucketing calls format() on this value, and one Invalid Date
+            // throws RangeError and takes the whole timeline down with it.
+            const parsedDate = new Date(date);
+            const commitDate = isNaN(parsedDate.getTime())
+                ? new Date().toISOString()
+                : parsedDate.toISOString();
+            if (isNaN(parsedDate.getTime())) {
+                results.errors.push(`Commit ${sha.slice(0, 7)} has an unreadable date ("${date}")`);
+            }
 
             try {
                 db!.prepare(`
@@ -19575,6 +21624,24 @@ electron_1.ipcMain.handle('chat-library:ingest', async (_event, data: any) => {
   }
 });
 
+// ========== External AI launcher ==========
+// `window.open` from the renderer opens an ELECTRON window, not the user's real
+// browser — which made "open in browser" useless for the external-AI bridge.
+// Route through shell.openExternal so the prompt lands in Chrome/Firefox/etc.
+electron_1.ipcMain.handle('open-external-url', async (_event, url: string) => {
+    try {
+        const raw = String(url || '').trim();
+        if (!/^https?:\/\//i.test(raw)) {
+            return { ok: false, error: 'Only http(s) URLs can be opened externally' };
+        }
+        await electron_1.shell.openExternal(raw);
+        return { ok: true };
+    }
+    catch (e: any) {
+        return { ok: false, error: e?.message || 'Could not open the browser' };
+    }
+});
+
 // ========== AI Chat Send — Central pipeline handler ==========
 electron_1.ipcMain.handle('ai-chat:send', async (event, data: { threadDate: string; message: string; providerId?: string }) => {
   try {
@@ -19742,6 +21809,12 @@ electron_1.ipcMain.handle('ai-debug:query', (_e, opts: any) => {
 electron_1.ipcMain.handle('ai-debug:stats', () => {
   try { return require('./services/aiDebugVault').vaultStats(); } catch (err: any) { return { total: 0, error: err.message }; }
 });
+// AI observability aggregation (Phase 3): p50/p95 latency, error rate and cost
+// per provider/feature. Reuses the SAME filter shape as ai-debug:query so the
+// numbers always describe exactly the population the user is looking at.
+electron_1.ipcMain.handle('ai-debug:insights', (_e, opts: any) => {
+  try { return require('./services/aiDebugVault').vaultInsights(opts || {}); } catch (err: any) { return { error: err.message }; }
+});
 electron_1.ipcMain.handle('ai-debug:export', (_e, opts: any) => {
   try { return require('./services/aiDebugVault').vaultExport(opts || {}); } catch (err: any) { return { markdown: '', count: 0, error: err.message }; }
 });
@@ -19859,16 +21932,17 @@ function startBrowserTrackingServer() {
                         }
                     }
 
-                    // SIMPLE FOCUS CHECK: Trust the extension's is_browser_focused flag.
-                    // Only block if extension explicitly says NOT focused.
-                    // No bypass: website data is ONLY valid while the browser is focused.
-                    if (data.is_browser_focused === false) {
-                        console.log(`[DeskFlow] SKIPPED: extension says not focused`);
-                        notifyRendererClearBrowser();
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ status: 'skipped', reason: 'not_focused' }));
-                        return;
-                    }
+                    // Our own authoritative OS verdict. Default false; set true only
+                    // when a fresh foreground read confirms a browser is in front.
+                    let osSaysBrowser = false;
+                    // SIMPLE FOCUS CHECK: the extension's flag is advisory -- see
+                    // handleBrowserData. Do not return on it before our own OS read.
+                    // NOTE: we deliberately do NOT return early on the extension's
+                    // is_browser_focused:false here. That check ran before our own
+                    // OS read and was discarding healthy data from Firefox
+                    // derivatives, whose process names the extension cannot know.
+                    // The flag is now honoured inside handleBrowserData, where it
+                    // is weighed against the authoritative foreground read below.
                     
                     // CONSERVATIVE CHECK: the tracking browser must be the CONFIRMED foreground app.
                     // If currentApp is null/unknown OR is not a configured browser, don't trust the
@@ -19877,9 +21951,19 @@ function startBrowserTrackingServer() {
                     // poll reset, while the user was really in a normal app.)
                     if (hasAnyBrowser && !matchesAnyBrowser) {
                         const stillBrowser = await freshForegroundIsBrowser(browsersList);
+                        // Record our own verdict. Previously this branch confirmed a
+                        // browser was foreground, fell through, and left osSaysBrowser
+                        // at its `false` default -- so handleBrowserData then honoured
+                        // the extension's (necessarily incomplete) focus flag and
+                        // discarded healthy data. This is the path that matters when
+                        // the poll's cached currentApp is stale or null, which is
+                        // exactly what happens on Wayland and after a window switch.
+                        osSaysBrowser = stillBrowser === true;
                         if (stillBrowser !== true) {
                             console.log(`[DeskFlow] SKIPPED: currentApp='${curApp}' doesn't match any configured browser and fresh check not confirmed browser`);
                             notifyRendererClearBrowser();
+                            notifyRendererClearBrowser();
+                            clearLiveSite();
                             res.writeHead(200, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ status: 'skipped', reason: 'app_mismatch' }));
                             return;
@@ -19892,9 +21976,15 @@ function startBrowserTrackingServer() {
                     // app is focused, reject and tell the renderer to exit website mode immediately.
                     if (matchesAnyBrowser) {
                         const stillBrowser = await freshForegroundIsBrowser(browsersList);
+                        // `null` is INDETERMINATE (no active window during a
+                        // transition), not "not a browser" — so only an explicit
+                        // false should cost the payload its cover.
+                        osSaysBrowser = stillBrowser !== false;
                         if (stillBrowser === false) {
                             console.log(`[DeskFlow] SKIPPED: fresh foreground check shows user in a non-browser app (stale currentApp)`);
                             notifyRendererClearBrowser();
+                            notifyRendererClearBrowser();
+                            clearLiveSite();
                             res.writeHead(200, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ status: 'skipped', reason: 'app_mismatch' }));
                             return;
@@ -19902,7 +21992,24 @@ function startBrowserTrackingServer() {
                     }
                     
                     // Data accepted � process it
-                    handleBrowserData(data);
+// Surface the site we just accepted so the Dashboard can show what the
+// user is actually looking at. This is the ONLY viable current-website
+// signal: the pre-existing 'live-log' browser-tracking-event is emitted
+// solely by POST /browser-log, which no client ever calls, so its
+// listener had been dead and the Dashboard had nothing to render.
+// Emitting here means the site is shown, by construction, only while a
+// browser that HAS the extension is the foreground app -- no extra check.
+if (mainWindow && !mainWindow.isDestroyed()) {
+    safeSend(mainWindow, 'browser-tracking-event', {
+        type: 'live-site',
+        domain: data.domain,
+        url: data.sanitized_url || data.url,
+        title: data.title,
+        browser: data.browserName || data.browser_name || null,
+        timestamp: data.timestamp || Date.now(),
+    });
+}
+                    handleBrowserData(data, osSaysBrowser);
                     // Always stream to renderer
                     if (mainWindow && !mainWindow.isDestroyed()) {
                         const category = categorizeDomain(data.domain, data.title, data.url);
@@ -20415,6 +22522,99 @@ function startBrowserTrackingServer() {
                 res.end(JSON.stringify({ error: err?.message || 'ai research failed' }));
             }
         }
+        else if (req.method === 'GET' && req.url.split('?')[0] === '/ai-context/list') {
+            // The extension popup already called this and got a 404, so its capture
+            // list was permanently empty. Same query the renderer IPC uses.
+            try {
+                const q = new URL(req.url, `http://${req.headers.host}`);
+                const limit = Math.min(parseInt(q.searchParams.get('limit') || '25', 10) || 25, 200);
+                const offset = parseInt(q.searchParams.get('offset') || '0', 10) || 0;
+                const search = q.searchParams.get('search') || '';
+                const provider = q.searchParams.get('provider') || '';
+                let where = '1=1';
+                const params: any[] = [];
+                if (provider) { where += ' AND provider = ?'; params.push(provider); }
+                if (search) {
+                    where += ' AND (url LIKE ? OR title LIKE ? OR messages LIKE ? OR nickname LIKE ?)';
+                    const like = `%${search}%`;
+                    params.push(like, like, like, like);
+                }
+                const rows = db.prepare(
+                    `SELECT id, provider, url, title, source, timestamp, captured_at, nickname, tags, pinned, is_manual
+                     FROM ai_context_captures WHERE ${where}
+                     ORDER BY captured_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as any[];
+                const total = (db.prepare(`SELECT COUNT(*) as n FROM ai_context_captures WHERE ${where}`).get(...params) as any)?.n || 0;
+                // messageCount is computed here so the popup never has to download
+                // and parse whole transcripts just to render a list.
+                let counts: any[] = [];
+                try {
+                    counts = db.prepare(
+                        `SELECT id, LENGTH(messages) AS bytes FROM ai_context_captures WHERE ${where}`)
+                        .all(...params) as any[];
+                } catch { /* ignore */ }
+                const bytesById = new Map(counts.map((c: any) => [c.id, c.bytes]));
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    total,
+                    captures: rows.map((r: any) => ({
+                        id: r.id,
+                        provider: r.provider,
+                        url: r.url,
+                        title: r.title || r.nickname || r.url || '(untitled)',
+                        source: r.source,
+                        timestamp: r.timestamp,
+                        capturedAt: r.captured_at,
+                        pinned: !!r.pinned,
+                        isManual: !!r.is_manual,
+                        approxMessages: Math.max(0, Math.round((bytesById.get(r.id) || 0) / 400)),
+                    })),
+                }));
+            } catch (err: any) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'list failed' }));
+            }
+        }
+        else if (req.method === 'GET' && req.url === '/ai-context/stats') {
+            // Same reason: the popup read this and got 404, so the capture counter
+            // showed 0 no matter how much had actually been saved.
+            try {
+                const total = (db.prepare('SELECT COUNT(*) as n FROM ai_context_captures').get() as any)?.n || 0;
+                const byProvider = db.prepare('SELECT provider, COUNT(*) as count FROM ai_context_captures GROUP BY provider ORDER BY count DESC').all();
+                const newest = (db.prepare('SELECT MAX(captured_at) as ts FROM ai_context_captures').get() as any)?.ts || null;
+                const today = (db.prepare(
+                    "SELECT COUNT(*) as n FROM ai_context_captures WHERE date(captured_at/1000,'unixepoch') = date('now')")
+                    .get() as any)?.n || 0;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    total, today, newestMs: newest,
+                    byProvider: Object.fromEntries((byProvider as any[]).map((r: any) => [r.provider, r.count])),
+                }));
+            } catch (err: any) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'stats failed' }));
+            }
+        }
+        else if (req.method === 'GET' && req.url.split('?')[0] === '/ai-context/view') {
+            // Full transcript for ONE capture, so the popup can open a saved chat
+            // instead of only ever showing a list of titles.
+            try {
+                const q = new URL(req.url, `http://${req.headers.host}`);
+                const id = parseInt(q.searchParams.get('id') || '0', 10) || 0;
+                if (!id) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'id required' })); return; }
+                const row = db.prepare('SELECT * FROM ai_context_captures WHERE id = ?').get(id) as any;
+                if (!row) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'not found' })); return; }
+                let messages: any[] = [];
+                try { messages = JSON.parse(row.messages || '[]'); } catch { messages = []; }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    id: row.id, provider: row.provider, url: row.url,
+                    title: row.title, capturedAt: row.captured_at, messages,
+                }));
+            } catch (err: any) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err?.message || 'view failed' }));
+            }
+        }
         else if (req.method === 'GET' && req.url === '/health') {
             // Health check endpoint
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -20614,6 +22814,15 @@ function startBrowserTrackingServer() {
 
 // Tell the renderer to exit website mode immediately (website data rejected while a
 // non-browser app is foreground). Prevents the dashboard staying "stuck" on a website.
+/** Tell the renderer the current-site display should go blank. Without this the
+ *  Dashboard keeps showing the last accepted site after the user leaves the
+ *  browser, which reads as a frozen stopwatch. */
+function clearLiveSite() {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        safeSend(mainWindow, 'browser-tracking-event', { type: 'live-site', domain: null });
+    }
+}
+
 function notifyRendererClearBrowser() {
     try {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -20660,15 +22869,24 @@ async function freshForegroundIsBrowser(browsersList: string[]): Promise<boolean
 // Handle incoming browser tracking data from extension
 // FIX 1 + FIX 4: Use Map<string, LogEntry> keyed by domain, track time deltas properly
 // FIX: Only track the MOST RECENTLY active tab, not all tabs
-function handleBrowserData(data) {
+function handleBrowserData(data, foregroundReadSaysBrowser: boolean = false) {
     if (!isBrowserTrackingEnabled)
         return;
     if (!data.domain || !data.url)
         return;
-    // Block all browser data when unfocused (phantom deltas from background tabs).
-    // No bypass: the desktop app is the authority � website data is only recorded
-    // while the browser is actually the foreground window.
-    if (data.is_browser_focused === false) {
+    // Phantom-delta guard. The extension's own focus flag is a HINT, not the
+    // authority: it can only compare the foreground app against the process
+    // aliases it happens to know. On a Firefox derivative such as Zen that list
+    // is necessarily incomplete, so a perfectly healthy connected extension
+    // reported is_browser_focused:false while Zen was genuinely in the
+    // foreground, and every payload was discarded right here -- a stopwatch that
+    // never moved.
+    //
+    // The desktop app already performs the authoritative check with a fresh OS
+    // foreground read, which /browser-data does before calling us. So honour the
+    // extension only when it AGREES, and when it objects, let our own OS read
+    // decide rather than silently dropping the data.
+    if (data.is_browser_focused === false && !foregroundReadSaysBrowser) {
         return;
     }
     // Check if domain is excluded
@@ -20709,6 +22927,9 @@ function handleBrowserData(data) {
     // Update last active domain (global, for /status diagnostics only)
     lastActiveBrowserDomain = data.domain;
     lastActiveBrowserTimestamp = dataTimestamp;
+    /* Strict boolean: the field is absent on older extensions, and `undefined` must read as
+     * "not private" rather than leak into the island payload as a third state. */
+    lastActiveBrowserIsPrivate = data.isPrivate === true;
     const existingSession = activeBrowserSessions.get(sessionKey);
     if (existingSession) {
         // FIX: Use explicit delta from extension if available (new behavior)
@@ -21192,6 +23413,32 @@ electron_1.ipcMain.handle('conductor:kill', async (_event, missionId: string) =>
   try { return { success: true, data: svc.killMission(missionId) }; } catch (e: any) { return { success: false, error: e.message }; }
 });
 
+// Close ONE worker instead of the whole mission. `checkpointFirst` makes the
+// worker checkpoint before its PTY dies, so closing it does not discard work the
+// agent had not yet flushed. Returns the mission's crowd pressure afterwards so
+// the UI can decide whether to offer a replacement.
+electron_1.ipcMain.handle('conductor:close-node', async (_event, missionId: string, nodeId: string, opts?: any) => {
+  const svc = getConductorService();
+  if (!svc) return { success: false, error: 'ConductorService not available' };
+  try {
+    const data = await svc.closeNode(missionId, nodeId, opts || {});
+    return { success: !!data?.ok, data, error: data?.ok ? undefined : data?.reason };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Read-only crowd pressure, for polling without attempting a close.
+electron_1.ipcMain.handle('conductor:crowd', async (_event, missionId: string) => {
+  const svc = getConductorService();
+  if (!svc) return { success: false, error: 'ConductorService not available' };
+  try {
+    return { success: true, data: svc.crowdPressure(missionId) };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+});
+
 electron_1.ipcMain.handle('conductor:set-autonomy', async (_event, missionId: string, level: string) => {
   const svc = getConductorService();
   if (!svc) return { success: false, error: 'ConductorService not available' };
@@ -21435,12 +23682,31 @@ if (db) {
 const GPU_DISABLE_MARKER = path.join(electron_1.app.getPath('userData'), '.gpu-disabled');
 try {
     const forceOff = process.env.DESKFLOW_DISABLE_GPU === '1';
-    if (forceOff || fs_1.default.existsSync(GPU_DISABLE_MARKER)) {
+    // Opt back IN to the real GPU (this box has an Intel Arc + an RTX 4050 and a
+    // healthy /dev/dri, so the marker may just be stale from one bad launch).
+    const forceOn = process.env.DESKFLOW_GPU === '1';
+    if (!forceOn && (forceOff || fs_1.default.existsSync(GPU_DISABLE_MARKER))) {
         electron_1.app.disableHardwareAcceleration();
         electron_1.app.commandLine.appendSwitch('disable-gpu');
         electron_1.app.commandLine.appendSwitch('disable-gpu-compositing');
-        electron_1.app.commandLine.appendSwitch('disable-software-rasterizer');
-        console.log('[DeskFlow] GPU: hardware acceleration disabled (software rendering)');
+        // CRITICAL: do NOT pass --disable-software-rasterizer here.
+        //
+        // This block exists to keep the GPU *process* from launching (a failed
+        // launch is a FATAL that kills the whole app), and its own comment claimed
+        // it was "applying software rendering". But --disable-software-rasterizer
+        // disables SwiftShader, which is the ONLY renderer left once --disable-gpu
+        // is set. The old code therefore disabled hardware AND the software
+        // fallback: no GPU process (good) and no GL of any kind (bad), which made
+        // `webglSupported()` false and left the Orbit/solar-system view showing
+        // "needs WebGL, which this machine cannot provide" on a machine that has
+        // two GPUs. These two switches restore software WebGL so 3D still renders
+        // (on the CPU) without reintroducing the crash we are avoiding here.
+        electron_1.app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+        electron_1.app.commandLine.appendSwitch('use-angle', 'swiftshader');
+        console.log('[DeskFlow] GPU: hardware acceleration off — software WebGL enabled (SwiftShader)');
+    }
+    else if (forceOn) {
+        console.log('[DeskFlow] GPU: DESKFLOW_GPU=1 — forcing hardware acceleration despite the .gpu-disabled marker');
     }
 } catch { /* never block startup on GPU probing */ }
 
@@ -21461,7 +23727,225 @@ if (!gotTheLock) {
     electron_1.app.quit();
 } else {
     electron_1.app.whenReady().then(() => {
-    electron_1.app.setName('RHEO');
+      electron_1.app.setName('RHEO');
+  
+      // [procmon] Re-attach to terminals still alive from a previous run. Runs
+    // here because it needs `db` to have been initialised by
+    // initializeStorage(). starttime is validated, so a PID recycled while the
+    // app was closed is rejected instead of adopted.
+    try { rehydrateMonitoredTerminals(); } catch (_e) { /* identity is best-effort */ }
+
+    // ── halo:get-next-deadline ────────────────────────────────────────────────
+    // `nextDeadline` was the one promoted kind that needed NO new table: `deadlines` already
+    // exists and holds the answer. This is a READ, and it is the proof that the producer path
+    // works end to end against real data rather than a fixture.
+    //
+    // THE THREE THINGS THAT MAKE THIS HONEST
+    // 1. `count` is a MEASUREMENT, so `count: 0` is a real answer — "0 deadlines". It is not the
+    //    unknown literal. Only a failed query or a missing table yields `ok: false`, and only
+    //    then does the card say it has no deadline data.
+    // 2. `due_date` is stored as an ISO-8601 UTC string ending in `Z`. `datetime('now')` is
+    //    also UTC, so the comparison is like-for-like. Mixing in a LOCAL date formatter here
+    //    would shift every deadline by the UTC offset and silently pick the wrong one — the
+    //    exact trap that made every period in the Rankings page render one day early.
+    // 3. An OVERDUE pending deadline is still the next one; it is the most urgent thing on the
+    //    list. So the filter keeps every non-terminal status and orders ascending by due date.
+    //    Excluding past-due rows would hide the very deadline the user most needs to see.
+    try {
+      electron_1.ipcMain.handle('halo:get-next-deadline', () => {
+        if (useJson || !db) return { ok: false, count: null, title: null, dueAtMs: null, deltaMs: null, isOverdue: null };
+        try {
+          const open = db
+            .prepare(
+              `SELECT COUNT(*) AS n FROM deadlines
+                WHERE LOWER(COALESCE(status, 'pending')) NOT IN ('completed','cancelled','canceled','done','archived')`,
+            )
+            .get();
+          const count = Number(open?.n ?? 0);
+          if (count === 0) {
+            // MEASURED ZERO. The table answered and the answer was "none", so the card shows
+            // the zero literal — not "no deadline data yet", which would be a lie about data
+            // we demonstrably have.
+            return { ok: true, count: 0, title: null, dueAtMs: null, deltaMs: null, isOverdue: null };
+          }
+          const next = db
+            .prepare(
+              `SELECT title, due_date FROM deadlines
+                WHERE LOWER(COALESCE(status, 'pending')) NOT IN ('completed','cancelled','canceled','done','archived')
+                ORDER BY due_date ASC LIMIT 1`,
+            )
+            .get();
+          const dueAtMs = next?.due_date ? Date.parse(String(next.due_date)) : NaN;
+          if (!next || !Number.isFinite(dueAtMs)) {
+            // Rows exist but we cannot read the one we picked. Say so instead of inventing.
+            return { ok: false, count, title: null, dueAtMs: null, deltaMs: null, isOverdue: null };
+          }
+          const deltaMs = dueAtMs - Date.now();
+          return {
+            ok: true,
+            count,
+            title: String(next.title ?? ''),
+            dueAtMs,
+            deltaMs,
+            isOverdue: deltaMs < 0,
+          };
+        } catch (err: any) {
+          // A missing table on an older database must not take the island down.
+          return { ok: false, count: null, title: null, dueAtMs: null, deltaMs: null, isOverdue: null, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+    } catch { /* handler registration must never break startup */ }
+
+    // ── HALO WIDGET PRODUCERS ──────────────────────────────────────────────────
+    // The curation RESULT §6.2 marked `aiUsage` and `hud` as "real channels, payload
+    // unverified" and every other promoted kind as absent. These two handlers close that
+    // gap against the REAL schemas, and they do it defensively:
+    //
+    //   * `useJson` — this app can run on a JSON store with no SQLite file at all
+    //     (main.ts:2298). Every existing stat handler starts with an early return of
+    //     zeros for that case; these follow the same rule, because a widget that throws
+    //     in the main process is far worse than a widget that honestly reads zero.
+    //   * no fabricated columns. Only `ai_usage.*` and `terminal_sessions.*` columns
+    //     that exist in the CREATE TABLE are read.
+    //   * `unknown` is distinguishable from zero: `tokensToday`/`activeSessions` are
+    //     `null` when there is genuinely no row for today, and only 0 when a real row
+    //     sums to zero. That is RESULT §5.2's blood rule.
+    try {
+      electron_1.ipcMain.handle('halo:get-ai-usage', () => {
+        if (useJson || !db) return { tokensToday: null, sessionCount: null, topModel: null };
+        try {
+          const today = getLocalDateStr(new Date());
+          const row = db
+            .prepare(
+              `SELECT COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens,
+                      COALESCE(SUM(message_count), 0)      AS messages
+                 FROM ai_usage WHERE date = ?`,
+            )
+            .get(today);
+          const top = db
+            .prepare(
+              `SELECT model, COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens
+                 FROM ai_usage
+                WHERE date = ? AND model IS NOT NULL AND model != ''
+                GROUP BY model ORDER BY tokens DESC LIMIT 1`,
+            )
+            .get(today);
+          const tokens = Number(row?.tokens ?? 0);
+          const messages = Number(row?.messages ?? 0);
+          // No row for today -> genuinely "nothing yet", which is `null`, NOT 0.
+          const hasRow = !!db
+            .prepare(`SELECT 1 FROM ai_usage WHERE date = ? LIMIT 1`)
+            .get(today);
+          return {
+            tokensToday: hasRow ? tokens : null,
+            sessionCount: hasRow ? messages : null,
+            topModel: top?.model ?? null,
+          };
+        } catch (e) {
+          return { tokensToday: null, sessionCount: null, topModel: null, error: String(e?.message ?? e) };
+        }
+      });
+
+      electron_1.ipcMain.handle('halo:get-terminal-usage', () => {
+        if (useJson || !db) return { activeSessions: null, commandsToday: null, handbookPercent: null };
+        try {
+          // "Active" = a session updated within the last 5 minutes. There is no
+          // is_active column, so this is derived from updated_at rather than invented.
+          const active = db
+            .prepare(
+              `SELECT COUNT(*) AS n FROM terminal_sessions
+                WHERE updated_at IS NOT NULL
+                  AND updated_at >= datetime('now', '-5 minutes')`,
+            )
+            .get();
+          return {
+            activeSessions: Number(active?.n ?? 0),
+            commandsToday: null, // no command-count column exists; reported as unknown
+            handbookPercent: null, // handbook progress has no table; unknown, not fake
+          };
+        } catch (e) {
+          return { activeSessions: null, commandsToday: null, handbookPercent: null, error: String(e?.message ?? e) };
+        }
+      });
+    } catch (e) {
+      console.warn('[Halo] widget producer handlers failed to register:', e?.message ?? e);
+    }
+
+
+// âââ HALO ISLAND âââââââââââââââââââââââââââââââââââ
+
+    // ── HALO ISLAND ────────────────────────────────────────────────────────
+    // Created once and kept alive (never per-notification), so the renderer stays
+    // warm and the surface appears instantly on first hover.
+    try {
+      registerHaloIpc({
+        snapshotProvider: () => ({
+          // The stopwatch is still a renderer-module singleton, so main genuinely
+          // cannot read it yet; the island falls back to its fixture until the
+          // relay channel lands. currentApp IS available here.
+          stopwatch: haloStopwatchPayload,
+          currentApp: haloCurrentAppSnapshot(),
+          dictation: haloDictationPayload,
+        }),
+      });
+      /* The renderer owns the stopwatch clock and the mic, so it reports up here and main
+         * republishes. Registered before the island is created so the first snapshot is not
+         * lost to a startup race. */
+      electron_1.ipcMain.on('halo:report-stream', (_e: unknown, payload: any) => {
+        if (!payload || typeof payload !== 'object') return;
+        if ('stopwatch' in payload) haloStopwatchPayload = payload.stopwatch ?? null;
+        if ('dictation' in payload) haloDictationPayload = payload.dictation ?? null;
+      });
+
+      /* A card's route belongs to the MAIN window; the island has no router. */
+      electron_1.ipcMain.on('halo:navigate', (_e: unknown, route: string) => {
+        const r = typeof route === 'string' && route.startsWith('/') ? route : '/';
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+            mainWindow.webContents.send('navigate', r);
+          }
+        } catch { /* a closed window must not take the island down */ }
+      });
+      configureHaloPrefs(() => userPreferences[HALO_PREFS_KEY]);
+      createHaloIsland({
+        prefs: () => userPreferences[HALO_PREFS_KEY],
+        snapshotProvider: () => ({
+          stopwatch: haloStopwatchPayload,
+          currentApp: haloCurrentAppSnapshot(),
+          dictation: haloDictationPayload,
+        }),
+      }).catch((e) => {
+        console.warn('[Halo] island creation failed:', e?.message ?? e);
+        try {
+          const { appendFileSync } = require('fs');
+          appendFileSync(
+            path_1.default.join(userDataPath, 'halo-diagnostic.log'),
+            JSON.stringify({ t: new Date().toISOString(), event: 'creation-FAILED', message: String(e?.message ?? e) }) + '\n',
+          );
+        } catch { /* ignore */ }
+      });
+
+      // Display topology must not leave the island on the wrong monitor or with a
+      // stale hot zone (HALO §24/§25/§216).
+      electron_1.screen.on('display-added', () => reconcileHaloGeometry());
+      electron_1.screen.on('display-removed', () => reconcileHaloGeometry());
+      electron_1.screen.on('display-metrics-changed', () => reconcileHaloGeometry());
+      electron_1.powerMonitor.on('resume', () => reconcileHaloGeometry());
+      electron_1.powerMonitor.on('unlock-screen', () => reconcileHaloGeometry());
+    } catch (e: any) {
+      // The island is optional; it must never take the app down (HALO §145).
+      console.warn('[Halo] island disabled:', e?.message ?? e);
+      try {
+        const { appendFileSync } = require('fs');
+        appendFileSync(
+          path_1.default.join(userDataPath, 'halo-diagnostic.log'),
+          JSON.stringify({ t: new Date().toISOString(), event: 'disabled', message: String(e?.message ?? e) }) + '\n',
+        );
+      } catch { /* ignore */ }
+    }
     // Content Security Policy — defense in depth against XSS
     const { session } = require('electron');
     session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
@@ -21469,7 +23953,7 @@ if (!gotTheLock) {
             responseHeaders: {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
-                    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; frame-src https://www.realtimecolors.com blob:; img-src 'self' data: https:; connect-src 'self' http://localhost:* https://api.exchangerate-api.com https://raw.githack.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'none'"
+                    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; frame-src https://www.realtimecolors.com blob:; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* https://api.exchangerate-api.com https://raw.githack.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'none'"
                 ]
             }
         });
@@ -21541,11 +24025,140 @@ if (!gotTheLock) {
 
     initializeStorage();
     // ── Global shortcuts ──────────────────────────────────────────────
-    // Ctrl+Shift+V toggles voice input on the focused window
-    electron_1.globalShortcut.register('CommandOrControl+Shift+V', () => {
-      const win = electron_1.BrowserWindow.getFocusedWindow();
-      if (win) safeSend(win, 'stt:shortcut-triggered');
+    /* THE ISLAND'S TOGGLE — bound from prefs, and ONLY its return value is checked.
+     *
+     * The three registrations this replaces were hardcoded `CommandOrControl+Shift+V`,
+     * `+Shift+R` and `+Shift+H`. Shift+H is the terminal's Split horizontal and Shift+V its
+     * Split vertical, so both hardcoded registrations silently killed working terminal features
+     * (see the `haloIslandToggle` note in DEFAULT_KEYBOARD_SHORTCUTS). None of the three
+     * checked what `register()` returned, so a FAILED registration was invisible — which is why
+     * the collision was never noticed. `registerQuickCaptureShortcut` below already does this
+     * correctly, including unregistering the previous accelerator on rebind.
+     *
+     * Ctrl+Shift+R is kept: nothing claims it as a RENDERER shortcut (only SettingsPage's
+     * transcript affordance mentions it), and the island needs a global record toggle because it
+     * never takes keyboard focus.
+     */
+    registerHaloIslandShortcut();
+    electron_1.globalShortcut.register('CommandOrControl+Shift+R', () => {
+      sendHaloCommand('toggle-record');
     });
+    // F1 quick capture. Routed into the EXISTING window rather than a new
+    // always-on-top overlay, deliberately: this box runs native Wayland (see
+    // MEMORY.md), where a floating programmatic window needs an explicit
+    // ELECTRON_OZONE_PLATFORM_HINT=x11 or it silently misbehaves, and
+    // `transparent: true` is known-unsafe here. A shortcut that raises the real
+    // app and lands the caret in the capture box works everywhere; the overlay is
+    // a later refinement once it can be verified on this compositor.
+    // F1 quick capture — "grab a session".
+    //
+    // Ctrl+Shift+Space was the first choice and it was ALREADY TAKEN: Settings
+    // and terminal/lib/data.ts both bind it to "Balance Panes". A
+    // globalShortcut is registered at the OS level and consumes the key BEFORE
+    // the renderer ever sees it, so colliding with a renderer shortcut does not
+    // degrade gracefully — it silently breaks the terminal feature. Ctrl+Shift+G
+    // was verified free against every Ctrl+Shift+<letter> claimed anywhere in
+    // src/ (A,B,D,E,F,H,I,J,K,L,M,N,P,Q,R,S,T,V,W,Y,Z were taken).
+    //
+    // It reads the key OUT OF prefs rather than hardcoding it, because a
+    // hardcoded registration makes the Settings row cosmetic — the exact
+    // stored-but-never-read defect this repo already has a MEMORY entry about.
+    registerQuickCaptureShortcut();
+
+/*
+ * THE HALO ISLAND TOGGLE. Split out for the same reason as `registerQuickCaptureShortcut`
+ * below: Electron has no live rebind, so `set-keyboard-shortcuts` must unregister the previous
+ * accelerator before claiming a new one, or the old key stays globally captured forever.
+ *
+ * `register()` returns false when the OS already owns that combination, so the return value IS
+ * checked and a failure is reported loudly. Silently swallowing it is how the previous hardcoded
+ * registrations hid a collision that was breaking the terminal's split shortcuts.
+ */
+function registerHaloIslandShortcut() {
+  try {
+    const configured = userPreferences?.keyboardShortcuts?.haloIslandToggle;
+    const accel =
+      typeof configured === 'string' && configured.trim()
+        ? configured.trim().replace(/\+/g, '+')
+        : 'CommandOrControl+Shift+O';
+    const prev = userPreferences?._registeredHaloIsland;
+    if (prev && prev !== accel) {
+      try { globalShortcut.unregister(prev); } catch { /* was never registered */ }
+    }
+    const ok = globalShortcut.register(accel, () => {
+      try { toggleHaloIsland(); } catch (e: any) {
+        console.error('[DeskFlow] halo:toggle-island failed:', e?.message || e);
+      }
+    });
+    userPreferences._registeredHaloIsland = ok ? accel : null;
+    if (!ok) {
+      console.warn(
+        `[DeskFlow] halo island shortcut ${accel} is already claimed by another application. ` +
+        'The island still opens on hover and click; change it in Settings > Halo Island.',
+      );
+    }
+  } catch (e: any) {
+    console.error('[DeskFlow] halo island shortcut registration failed:', e?.message || e);
+  }
+}
+
+// F1 quick capture registration. Split out so `set-keyboard-shortcuts` can
+  // RE-REGISTER it: Electron has no live rebind, so changing the key in Settings
+  // must unregister the old accelerator before claiming the new one, or the old
+  // key stays globally captured forever.
+  const DEFAULT_MIN_MINUTES = require('./shared/weeklyScore').DEFAULT_MINIMUM_MINUTES;
+function registerQuickCaptureShortcut() {
+  try {
+    const configured = userPreferences?.keyboardShortcuts?.quickCapture;
+    const accel = typeof configured === 'string' && configured.trim()
+      ? configured.trim().replace(/\+/g, '+')
+      : 'CommandOrControl+Shift+G';
+    const prev = userPreferences?._registeredQuickCapture;
+    if (prev && prev !== accel) {
+      try { globalShortcut.unregister(prev); } catch { /* was never registered */ }
+    }
+    const ok = globalShortcut.register(accel, () => {
+      try {
+        mainWindow?.show();
+        mainWindow?.focus();
+        mainWindow?.webContents?.send('training:focus-capture');
+      } catch (e: any) {
+        console.error('[DeskFlow] training:focus-capture failed:', e?.message || e);
+      }
+    });
+    userPreferences._registeredQuickCapture = ok ? accel : null;
+    if (!ok) console.warn('[DeskFlow] quick-capture shortcut not registered —', accel, 'is already claimed');
+  } catch (e: any) {
+    console.error('[DeskFlow] registerQuickCaptureShortcut failed:', e?.message || e);
+  }
+}
+
+electron_1.ipcMain.handle('training:get-prefs', () => {
+  return {
+    minimumDayMinutes: Number(userPreferences?.training_minimum_day_minutes) || DEFAULT_MIN_MINUTES,
+    weeklyWinDays: Number(userPreferences?.training_weekly_win_days) || 5,
+  };
+});
+
+// This is what makes those two keys REAL. Both were previously READ by the
+// weekly-score handler and written by NOTHING, so "configurable minimum day" and
+// "5/7 win" were decorative. A read with no writer is a lie the UI cannot detect.
+electron_1.ipcMain.handle('training:set-prefs', (_event, patch: { minimumDayMinutes?: number; weeklyWinDays?: number }) => {
+  const min = Number(patch?.minimumDayMinutes);
+  const win = Number(patch?.weeklyWinDays);
+  if (Number.isFinite(min) && min >= 5 && min <= 600) {
+    userPreferences.training_minimum_day_minutes = Math.round(min);
+  }
+  if (Number.isFinite(win) && win >= 1 && win <= 7) {
+    userPreferences.training_weekly_win_days = Math.round(win);
+  }
+  savePreferences();
+  return {
+    minimumDayMinutes: Number(userPreferences?.training_minimum_day_minutes) || DEFAULT_MIN_MINUTES,
+    weeklyWinDays: Number(userPreferences?.training_weekly_win_days) || 5,
+  };
+});
+
     initMemorySystem();
     initContextSystem();
     initContextBrain();
@@ -21940,11 +24553,15 @@ electron_1.ipcMain.handle('get-typical-activity-at-time', (event, timestamp) => 
 });
 
 // Detect gaps in device/app usage where no activity was tracked, for filling in external activities
-electron_1.ipcMain.handle('detect-usage-gaps', (event, { period = 'week', minGapMinutes = 5 } = {}) => {
+electron_1.ipcMain.handle('detect-usage-gaps', (event, { period = 'week', minGapMinutes = 5, dateOffset = 0 } = {}) => {
     if (useJson) return [];
     if (!db) return [];  // DB closed (shutdown or restore in progress)
     try {
-        const now = new Date();
+        // Anchor to the day the user is VIEWING. Without this the coverage bar
+        // always described today, so on a past-dated timeline it reported the
+        // wrong day while sitting directly above the timeline it contradicted.
+        const shift = Number.isFinite(dateOffset) ? Math.trunc(dateOffset) : 0;
+        const now = new Date(Date.now() - shift * 24 * 60 * 60 * 1000);
         let periodStart;
         if (period === 'today') periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         else if (period === 'week') periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -21954,8 +24571,17 @@ electron_1.ipcMain.handle('detect-usage-gaps', (event, { period = 'week', minGap
         const periodStartIso = periodStart.toISOString();
 
         const logs = db.prepare(`SELECT timestamp, duration_ms FROM logs WHERE timestamp >= ? ORDER BY timestamp ASC`).all(periodStartIso);
-        const externals = db.prepare(`SELECT started_at, ended_at FROM external_sessions WHERE ended_at IS NOT NULL AND started_at >= ?`).all(periodStartIso);
-        const manualRows = db.prepare(`SELECT started_at, ended_at FROM manual_time_assignments WHERE started_at >= ?`).all(periodStartIso);
+        /* OVERLAP test, not a start-time test.
+         *
+         * Sleep routinely STARTS the evening before and ENDS this morning: a
+         * 23:20 -> 07:02 session was filtered out of "today" by `started_at >= ?`,
+         * so the app reported midnight -> 07:02 — seven hours of the user's sleep —
+         * as an untracked gap and then offered to fill it. Any session that merely
+         * STARTS before the window but runs into it contributes real coverage.
+         */
+        const externals = db.prepare(`SELECT started_at, ended_at FROM external_sessions WHERE ended_at IS NOT NULL AND ended_at > ?`).all(periodStartIso);
+        // Same overlap reasoning: a manual span may begin before the window.
+        const manualRows = db.prepare(`SELECT started_at, ended_at FROM manual_time_assignments WHERE ended_at > ?`).all(periodStartIso);
 
         const intervals = [];
         for (const log of logs) {
@@ -22019,7 +24645,9 @@ electron_1.ipcMain.handle('detect-usage-gaps', (event, { period = 'week', minGap
 function getManualIntervalsSince(sinceIso) {
     if (useJson || !ensureDb()) return [];
     try {
-        const rows = db.prepare(`SELECT started_at, ended_at FROM manual_time_assignments WHERE started_at >= ?`).all(sinceIso);
+        // Overlap, for the same reason as the other coverage queries: a manual span
+        // that began before `sinceIso` but runs past it is real coverage.
+        const rows = db.prepare(`SELECT started_at, ended_at FROM manual_time_assignments WHERE ended_at > ?`).all(sinceIso);
         return rows.filter((r) => r.started_at && r.ended_at).map((r) => ({
             start: new Date(r.started_at).getTime(),
             end: new Date(r.ended_at).getTime(),
@@ -22429,6 +25057,40 @@ electron_1.ipcMain.handle('add-manual-sleep', (event, sleepData: { started_at: s
             return { success: false, error: 'No sleep activity found' };
         }
         
+        // Dedupe on the BEDTIME date, exactly like `confirm-sleep` does.
+        //
+        // This handler used to INSERT unconditionally, so answering the
+        // "Good Morning!" banner after the sleep popup had already recorded that
+        // night produced TWO rows for one night — which double-counts the sleep in
+        // every average, and made the bedtime trends disagree with the timeline.
+        //
+        // The key is `date(started_at)` and both callers pass DEVICE-OFF as
+        // `started_at` (App.tsx `confirmSleep` and ExternalPage's
+        // `sleepPayload`), so the two paths agree on what "that night" means.
+        const dateStr = startTime.toISOString().split('T')[0];
+        const existing = db.prepare(`
+            SELECT id FROM external_sessions
+            WHERE activity_id = ? AND ended_at IS NOT NULL AND date(started_at) = ?
+            ORDER BY started_at DESC LIMIT 1
+        `).get(sleepActivity.id, dateStr) as any;
+
+        if (existing) {
+            db.prepare(`
+                UPDATE external_sessions
+                SET started_at = ?, ended_at = ?, duration_seconds = ?, device_off_to_sleep_seconds = ?, wake_up_to_app_seconds = ?
+                WHERE id = ?
+            `).run(
+                startTime.toISOString(),
+                endTime.toISOString(),
+                durationSeconds,
+                preSleep,
+                postWake,
+                existing.id
+            );
+            console.log(`[DeskFlow] add-manual-sleep: updated existing entry for ${dateStr} (ID: ${existing.id}) instead of duplicating`);
+            return { success: true, sessionId: existing.id.toString(), updated: true };
+        }
+
         const result = db.prepare(`
             INSERT INTO external_sessions (activity_id, started_at, ended_at, duration_seconds, device_off_to_sleep_seconds, wake_up_to_app_seconds)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -22441,7 +25103,7 @@ electron_1.ipcMain.handle('add-manual-sleep', (event, sleepData: { started_at: s
             postWake
         );
         
-        return { success: true, sessionId: result.lastInsertRowid.toString() };
+        return { success: true, sessionId: result.lastInsertRowid.toString(), updated: false };
     } catch (err) {
         console.error('[DeskFlow] Failed to add manual sleep:', err);
         return { success: false };
@@ -22579,7 +25241,9 @@ electron_1.ipcMain.handle('dismiss-morning-prompt', (event) => {
 // Detect device-usage gaps adjacent to a sleep window (before sleep / after wake),
 // so the sleep popup can offer to fill them as external activities.
 // Reuses the same interval-merging logic as detect-usage-gaps (logs + external_sessions).
-function detectAdjacentSleepGaps(gapStartIso, gapEndIso) {
+function detectAdjacentSleepGaps(gapStartIso: string, gapEndIso: string): Array<{
+    start: string; end: string; durationSeconds: number; relation: 'before' | 'after';
+}> {
     // Sleep-adjacent gaps: the sleep window is user-confirmed, so show all
     // untracked time on both sides. 1-minute floor only — a sub-minute sliver
     // between a tracked session and the sleep window is still real untracked time.
@@ -22590,8 +25254,19 @@ function detectAdjacentSleepGaps(gapStartIso, gapEndIso) {
         if (!isFinite(sleepStart) || !isFinite(sleepEnd) || sleepEnd <= sleepStart) return [];
         const windowStart = new Date(sleepStart - 48 * 60 * 60 * 1000).toISOString();
 
+        // LEGACY ROWS. Nights saved before this fix were written with
+        // started_at = DEVICE OFF, so the row covered the user's pre-sleep awake
+        // time and the gap either side of it was measured to the laptop being put
+        // away — which is the last moment of use, so that gap was always 0-2
+        // minutes. device_off_to_sleep_seconds already records the offset, so a
+        // legacy row can be corrected on read: real sleep began at
+        // started_at + device_off_to_sleep_seconds. New rows store fell-asleep
+        // directly and have pre = 0, so this is a no-op for them.
         const logs = db.prepare(`SELECT timestamp, duration_ms FROM logs WHERE timestamp >= ? ORDER BY timestamp ASC`).all(windowStart);
-        const externals = db.prepare(`SELECT started_at, ended_at FROM external_sessions WHERE ended_at IS NOT NULL AND started_at >= ?`).all(windowStart);
+        const sleepRows = db.prepare(`SELECT started_at, ended_at, device_off_to_sleep_seconds FROM external_sessions WHERE activity_id IN (SELECT id FROM external_activities WHERE type = 'sleep') AND ended_at > ?`).all(windowStart);
+        // Overlap, not start: the sleep row itself typically begins before
+        // `windowStart` relative to a short lookback and must still be seen.
+        const externals = db.prepare(`SELECT started_at, ended_at FROM external_sessions WHERE ended_at IS NOT NULL AND ended_at > ?`).all(windowStart);
 
         const intervals = [];
         for (const log of logs) {
@@ -22605,9 +25280,27 @@ function detectAdjacentSleepGaps(gapStartIso, gapEndIso) {
             if (end > start) intervals.push({ start, end });
         }
 
-        intervals.sort((a, b) => a.start - b.start);
-        const merged = [];
+        // The window is already accounted for — the user's confirmed sleep session
+        // was written with exactly [sleepStart, sleepEnd] moments before this runs.
+        // So that row is NOT evidence of activity AROUND the window; it only covers
+        // it. Feeding it in unchanged made the window look "already covered", which
+        // returned zero gaps and silently dismissed the prompt — the user then had to
+        // hunt the same gaps down by hand later.
+        //
+        // Clip every interval against the window and keep only the parts outside it.
+        // This is uniform and handles both shapes at once:
+        //   - the sleep row itself            -> vanishes entirely
+        //   - a session that straddles bedtime -> splits into before/after pieces
+        const outside = [];
         for (const iv of intervals) {
+            if (iv.end <= sleepStart || iv.start >= sleepEnd) { outside.push(iv); continue; }
+            if (iv.start < sleepStart) outside.push({ start: iv.start, end: sleepStart });
+            if (iv.end > sleepEnd) outside.push({ start: sleepEnd, end: iv.end });
+        }
+
+        outside.sort((a, b) => a.start - b.start);
+        const merged = [];
+        for (const iv of outside) {
             if (merged.length === 0 || iv.start > merged[merged.length - 1].end) {
                 merged.push({ start: iv.start, end: iv.end });
             } else {
@@ -22616,6 +25309,15 @@ function detectAdjacentSleepGaps(gapStartIso, gapEndIso) {
         }
 
         const adjacent = [];
+        // Normalise every sleep row to its TRUE sleep span before clipping, so the
+        // pre-sleep awake time becomes an offerable gap instead of silently
+        // counting as sleep.
+        for (const row of sleepRows) {
+            const trueStart = new Date(row.started_at).getTime() + (Number(row.device_off_to_sleep_seconds) || 0) * 1000;
+            const trueEnd = new Date(row.ended_at).getTime();
+            if (trueEnd > trueStart) intervals.push({ start: trueStart, end: trueEnd });
+        }
+
         const addPortion = (s, e, relation) => {
             if (e - s < MIN_GAP_MS) return;
             adjacent.push({
@@ -22626,39 +25328,68 @@ function detectAdjacentSleepGaps(gapStartIso, gapEndIso) {
             });
         };
 
-        // Strategy 1: Find merged intervals that OVERLAP the sleep/AFK window.
-        // Return the portions that extend before/after the window.
-        let foundOverlap = false;
-        for (const g of merged) {
-            if (g.start < sleepEnd && g.end > sleepStart) {
-                foundOverlap = true;
-                if (g.start < sleepStart) addPortion(g.start, sleepStart, 'before');
-                if (g.end > sleepEnd) addPortion(sleepEnd, g.end, 'after');
-                break;
-            }
+        // Last piece of recorded time before the window, first piece after it.
+        // Both sides are offered independently, so a night with work on either side
+        // yields exactly the two gaps the user expects to be asked about.
+        // Measure adjacency to the TRUE sleep edges. sleepStart may still be the
+        // device-off moment passed in by the caller, so use the sleep row's own
+        // corrected bounds when they sit inside the window.
+        let adjStart = sleepStart;
+        let adjEnd = sleepEnd;
+        for (const row of sleepRows) {
+            const rs = new Date(row.started_at).getTime() + (Number(row.device_off_to_sleep_seconds) || 0) * 1000;
+            const re = new Date(row.ended_at).getTime();
+            if (re <= sleepEnd && rs >= sleepStart && re > rs) { adjStart = rs; adjEnd = re; break; }
         }
 
-        // Strategy 2 (AFK case): No overlapping interval means the user was idle
-        // with no tracking during the window. Detect untracked gaps ADJACENT to the
-        // window: the gap between the last tracked interval's end and the window start,
-        // and the gap between the window end and the first tracked interval's start.
-        if (!foundOverlap && merged.length > 0) {
-            // Find the last interval that ends at or before sleepStart
-            let lastBefore = null;
-            let firstAfter = null;
-            for (const g of merged) {
-                if (g.end <= sleepStart) lastBefore = g;
-                if (g.start >= sleepEnd && !firstAfter) { firstAfter = g; break; }
-            }
-            // Before gap: last tracked session ended → sleep/AFK started
-            if (lastBefore && lastBefore.end < sleepStart) {
-                addPortion(lastBefore.end, sleepStart, 'before');
-            }
-            // After gap: sleep/AFK ended → first tracked session starts
-            if (firstAfter && firstAfter.start > sleepEnd) {
-                addPortion(sleepEnd, firstAfter.start, 'after');
-            }
+        let lastBefore = null;
+        for (const g of merged) {
+            if (g.end <= adjStart) lastBefore = g;
         }
+        let firstAfter = null;
+        for (const g of merged) {
+            if (g.start >= adjEnd) { firstAfter = g; break; }
+        }
+        if (lastBefore && adjStart - lastBefore.end >= MIN_GAP_MS) {
+            addPortion(lastBefore.end, adjStart, 'before');
+        }
+        if (firstAfter && firstAfter.start - adjEnd >= MIN_GAP_MS) {
+            addPortion(adjEnd, firstAfter.start, 'after');
+        }
+
+        // Adjacency alone is not enough, and this was wrong for real data.
+        //
+        // Tracking very often runs right up to the moment the laptop is closed, so
+        // the interval touching the window STRADDLES its edge by a few seconds. That
+        // clips to a gap of ~0s, which the floor discards — and the real untracked
+        // time that evening, sitting a little further out, was never offered at all.
+        // Measured on the 7 Oct night: the last log ended 16:51:24 against a sleep
+        // start of 16:51:00, so "before" came back as 0s while a genuine 70-minute
+        // evening block (15:05:44 -> 16:15:22) went unmentioned.
+        //
+        // So when a side has no adjacent gap, fall back to the NEAREST untracked
+        // block on that side, within the same night. Additive: when adjacency works
+        // it is still used, so nothing above changes.
+        const NEAREST_MS = 12 * 60 * 60 * 1000;
+        const addNearest = (direction: 'before' | 'after') => {
+            if (adjacent.some(a => a.relation === direction)) return;
+            let best: { start: number; end: number } | null = null;
+            for (let i = 0; i < merged.length - 1; i++) {
+                const from = merged[i].end;
+                const to = merged[i + 1].start;
+                if (to - from < MIN_GAP_MS) continue;
+                if (direction === 'before') {
+                    // wholly before the true sleep start, and nearest to it
+                    if (to <= adjStart && (adjStart - from) <= NEAREST_MS) best = { start: from, end: to };
+                } else {
+                    // wholly after the true sleep end, and nearest to it
+                    if (from >= adjEnd && (from - adjEnd) <= NEAREST_MS && !best) best = { start: from, end: to };
+                }
+            }
+            if (best) addPortion(best.start, best.end, direction);
+        };
+        addNearest('before');
+        addNearest('after');
         return adjacent;
     } catch (err) {
         console.error('[DeskFlow] detectAdjacentSleepGaps error:', err);
@@ -22883,17 +25614,48 @@ electron_1.ipcMain.handle('get-external-sessions', (event, period = 'all') => {
 electron_1.ipcMain.handle('get-day-detail', (event, dateStr) => {
     if (useJson) return { logs: [], externalSessions: [] };
     try {
-        const logs = db.prepare(`
+        // `date(timestamp) = ?` bucketed by the UTC date, but the heatmap that
+        // links here buckets by the user's LOCAL day (a "Wednesday 10am" cell).
+        // The two disagreed by one day for every timezone east of UTC. So resolve
+        // the requested local day to a [start, end) window in UTC and filter on
+        // the raw ISO text, which sorts identically to the stored values.
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+        let dayStartIso;
+        let dayEndIso;
+        if (match) {
+            const y = Number(match[1]), mo = Number(match[2]) - 1, d = Number(match[3]);
+            // new Date(y, mo, d) is LOCAL midnight by construction.
+            const localStart = new Date(y, mo, d, 0, 0, 0, 0);
+            const localEnd = new Date(y, mo, d + 1, 0, 0, 0, 0);
+            dayStartIso = localStart.toISOString();
+            dayEndIso = localEnd.toISOString();
+        }
+        const logs = dayStartIso
+            ? (db.prepare(`
+            SELECT * FROM logs WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC
+        `).all(dayStartIso, dayEndIso) || [])
+            : (db.prepare(`
             SELECT * FROM logs WHERE date(timestamp) = ? ORDER BY timestamp ASC
-        `).all(dateStr) || [];
+        `).all(dateStr) || []);
 
-        const externalSessions = db.prepare(`
+        // External sessions are compared on their start timestamp against the same
+        // window, plus an overlap test so a session begun the previous evening and
+        // still running past midnight is not dropped from the later day.
+        const externalSessions = dayStartIso
+            ? (db.prepare(`
+            SELECT es.*, ea.name as activity_name, ea.type, ea.color, ea.icon
+            FROM external_sessions es
+            JOIN external_activities ea ON es.activity_id = ea.id
+            WHERE es.started_at < ? AND COALESCE(es.ended_at, es.started_at) >= ?
+            ORDER BY es.started_at ASC
+        `).all(dayEndIso, dayStartIso) || [])
+            : (db.prepare(`
             SELECT es.*, ea.name as activity_name, ea.type, ea.color, ea.icon
             FROM external_sessions es
             JOIN external_activities ea ON es.activity_id = ea.id
             WHERE date(es.started_at) = ? OR date(es.ended_at) = ?
             ORDER BY es.started_at ASC
-        `).all(dateStr, dateStr) || [];
+        `).all(dateStr, dateStr) || []);
 
         return { logs, externalSessions };
     } catch (err) {
@@ -23300,19 +26062,45 @@ electron_1.ipcMain.handle('get-dashboard-aggregates', async (_event, request: { 
     const end = new Date(today);
     if (platform) {
       end.setDate(end.getDate() + 1);
-      const rows = db!.prepare('SELECT date, app_name, app_type, SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date >= ? AND date < ? AND platform = ? GROUP BY date, app_name ORDER BY date').all(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), platform) as any[];
-      return { success: true, period, dateRange: [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)], data: rows };
+      const rows = db!.prepare('SELECT date, app_name, app_type, category, SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date >= ? AND date < ? AND platform = ? GROUP BY date, app_name, category ORDER BY date').all(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), platform) as any[];
+        // Hour-level rows for the same window. `stats_daily` carries no hour, so the
+        // "today" view of the productivity chart had nothing to read and rendered a
+        // flat zero line. `stats_hourly` has the hour AND the category (hence the tier).
+        const hourlyRows = db!.prepare(`
+            SELECT date, hour, app_name, app_type, category,
+                   SUM(total_seconds) as total_seconds, SUM(session_count) as sessions
+            FROM stats_hourly
+            WHERE date >= ? AND date < ?` + (platform ? ' AND platform = ?' : '') + `
+            GROUP BY date, hour, app_name, category
+            ORDER BY date, hour
+        `).all(...(platform
+            ? [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), platform]
+            : [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)])) as any[];
+      return { success: true, period, dateRange: [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)], data: rows, hourlyData: hourlyRows };
     }
-    const rows = db!.prepare('SELECT date, app_name, app_type, SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date >= ? AND date < ? GROUP BY date, app_name ORDER BY date').all(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)) as any[];
+    const rows = db!.prepare('SELECT date, app_name, app_type, category, SUM(total_seconds) as total_seconds, SUM(session_count) as sessions FROM stats_daily WHERE date >= ? AND date < ? GROUP BY date, app_name, category ORDER BY date').all(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)) as any[];
     const heatmap = new Map<string, any>();
     for (const r of rows) {
-      const key = r.date + '|' + r.app_name;
-      heatmap.set(key, { date: r.date, app_name: r.app_name, app_type: r.app_type, total_seconds: r.total_seconds, sessions: r.sessions });
+      const key = r.date + '|' + r.app_name + '|' + (r.category || '');
+      heatmap.set(key, { date: r.date, app_name: r.app_name, app_type: r.app_type, category: r.category, total_seconds: r.total_seconds, sessions: r.sessions });
     }
-    return { success: true, period, dateRange: [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)], data: Array.from(heatmap.values()) };
+        // Hour-level rows for the same window. `stats_daily` carries no hour, so the
+        // "today" view of the productivity chart had nothing to read and rendered a
+        // flat zero line. `stats_hourly` has the hour AND the category (hence the tier).
+        const hourlyRows = db!.prepare(`
+            SELECT date, hour, app_name, app_type, category,
+                   SUM(total_seconds) as total_seconds, SUM(session_count) as sessions
+            FROM stats_hourly
+            WHERE date >= ? AND date < ?` + (platform ? ' AND platform = ?' : '') + `
+            GROUP BY date, hour, app_name, category
+            ORDER BY date, hour
+        `).all(...(platform
+            ? [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), platform]
+            : [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)])) as any[];
+    return { success: true, period, dateRange: [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)], data: Array.from(heatmap.values()), hourlyData: hourlyRows };
   } catch (err: any) {
     console.error('[DeskFlow] get-dashboard-aggregates error:', err);
-    return { success: false, error: err.message, data: [] };
+    return { success: false, error: err.message, data: [], hourlyData: [] };
   }
 });
 
@@ -24071,6 +26859,9 @@ electron_1.app.on('before-quit', async () => {
     electron_1.app.isQuitting = true;
     if (trackingInterval)
         clearInterval(trackingInterval);
+    // Only ever signals a router THIS process spawned. A router the user
+    // started in their own terminal is left running untouched.
+    try { require('./services/aiRouterProcess').disposeRouter(); } catch { /* ignore */ }
 
     // Flush any pending Knowledge Base write
     try {
@@ -24132,6 +26923,17 @@ electron_1.app.on('before-quit', async () => {
     // Unregister global shortcuts
     globalShortcut.unregisterAll();
     console.log('[DeskFlow] ✅ Global shortcuts unregistered');
+    // Flush any debounced preference write. Without this, an edit made inside
+    // the 400 ms debounce window before quitting is lost, because the whole
+    // point of the debounce is that it does not write synchronously.
+    try {
+        if (preferencesWriteQueued) {
+            flushPreferences.cancel();
+            preferencesWriteQueued = false;
+            writePreferencesAtomic();
+        }
+    }
+    catch (e) { /* ignore */ }
     // Shutdown AI Gateway browser contexts
     try {
         if (gatewayService) gatewayService.shutdown();
@@ -27370,26 +30172,48 @@ electron_1.ipcMain.handle('register-terminal', async (event, data: {
   projectId?: string;
   agentType?: string;
   status?: string;
+  sessionId?: string;
   }) => {
   try {
     if (!db) return { success: false, error: 'Database not ready' };
-    
+
+    // TWO FIXES HERE, both silent-failure classes:
+    // 1. The column list named 6 columns but supplied 5 placeholders. better-sqlite3
+    //    rejects that, the throw was swallowed by the catch below, and the handler
+    //    returned {success:false} on EVERY call while the renderer ignored it. So no
+    //    terminal binding was ever written.
+    // 2. session_id was never written by any code path, which is what made
+    //    getSessionIdForTerminal()'s primary lookup branch permanently dead.
+    //    Callers that know the DeskFlow session id should pass it.
+    const now = new Date().toISOString();
     db.run(
       `INSERT OR REPLACE INTO terminal_bindings 
-       (terminal_id, project_id, agent_type, status, last_activity_at, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+       (terminal_id, project_id, agent_type, session_id, status, last_activity_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         data.terminalId,
         data.projectId || null,
         data.agentType || null,
+        data.sessionId || null,
         data.status || 'idle',
-        new Date().toISOString(),
-        new Date().toISOString()
+        now,
+        now
       ]
     );
-    
+    if (data.sessionId) {
+      // Also backfill the FK the session->terminal direction uses, so both
+      // directions of getSessionIdForTerminal() resolve.
+      db.run(
+        `UPDATE terminal_sessions SET terminal_id = ? WHERE id = ? AND (terminal_id IS NULL OR terminal_id = '')`,
+        [data.terminalId, data.sessionId]
+      );
+    }
+
     return { success: true };
   } catch (error: any) {
+    // Do not swallow this. It used to be invisible, which is how a broken
+    // INSERT survived; the renderer needs to be able to see it.
+    console.warn('[terminal] register-terminal failed:', error?.message);
     return { success: false, error: error.message };
   }
 });
@@ -27402,6 +30226,8 @@ electron_1.ipcMain.handle('update-terminal-binding', async (event, data: {
     active_request_id?: string;
     session_context?: string;
     agent_type?: string;
+    /** Added: this column existed but no code path could ever write it. */
+    session_id?: string;
   };
 }) => {
   try {
@@ -28087,7 +30913,9 @@ let financeRememberDeviceExpiry: number | null = null;
 let financeLockTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds
 let financeDisplayCurrency = 'USD';
 let financeAttemptsLeft = 3;
-const MAX_FINANCE_ATTEMPTS = 3;
+// MAX_FINANCE_ATTEMPTS moved to infrastructure/ipc/finance-handlers.ts with the
+// rest of the finance handlers. A stale duplicate here silently drifted from 3
+// to 5, so the lockout gave more attempts than intended. Do not re-add it.
 const crypto = require('crypto');
 const PASSWORD_HASH_OPTS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
@@ -28325,182 +31153,6 @@ function verifyPassword(password: string): boolean {
   }
 }
 
-// ── Security ──
-// ── Finance IPC Handlers (extracted to src/infrastructure/ipc/finance-handlers.ts) ──
-// ========== Smart Gap Fill � Pattern Prediction ==========
-electron_1.ipcMain.handle('predict-gap-fill', (event, { start, end, mode = 'combined' }) => {
-    if (useJson) return { predictions: [], gaps: [] };
-    try {
-        const gapStart = new Date(start);
-        const gapEnd = new Date(end);
-        const now = new Date();
-
-        const getContextApps = (time: Date, before: boolean): Map<string, string> => {
-            const ctxStart = before
-                ? new Date(time.getTime() - 3600000)
-                : new Date(time.getTime());
-            const ctxEnd = before
-                ? time
-                : new Date(time.getTime() + 3600000);
-            const ctx = new Map();
-            const logs = db.prepare(`
-                SELECT DISTINCT l.app, l.category FROM logs l
-                WHERE l.timestamp >= ? AND l.timestamp < ? AND l.duration_ms > 0
-            `).all(ctxStart.toISOString(), ctxEnd.toISOString());
-            for (const r of logs) ctx.set(r.app, r.category || 'Other');
-            if (mode === 'combined' || mode === 'separate') {
-                const ext = db.prepare(`
-                    SELECT DISTINCT ea.name, ea.color FROM external_sessions es
-                    JOIN external_activities ea ON es.activity_id = ea.id
-                    WHERE es.started_at >= ? AND es.started_at < ? AND es.duration_seconds > 0
-                `).all(ctxStart.toISOString(), ctxEnd.toISOString());
-                for (const r of ext) ctx.set(r.name, 'External');
-            }
-            return ctx;
-        };
-
-        const contextBefore = getContextApps(gapStart, true);
-        const contextAfter = getContextApps(gapEnd, false);
-
-        const predictSlot = (slotTime: Date, slotEnd: Date) => {
-            const dayOfWeek = slotTime.getDay();
-            const hour = slotTime.getHours();
-
-            const hourlyStats = db.prepare(`
-                SELECT sh.app_name, sh.category, SUM(sh.total_seconds) as total_sec,
-                       COUNT(DISTINCT sh.date) as days_used, MAX(sh.date) as last_seen
-                FROM stats_hourly sh
-                WHERE CAST(strftime('%w', sh.date) AS INTEGER) = ?
-                  AND sh.hour = ? AND sh.total_seconds > 0
-                GROUP BY sh.app_name ORDER BY total_sec DESC LIMIT 15
-            `).all(dayOfWeek, hour);
-
-            const logStats = db.prepare(`
-                SELECT l.app, l.category, SUM(l.duration_ms) as total_ms,
-                       COUNT(DISTINCT date(l.timestamp)) as days_used,
-                       MAX(date(l.timestamp)) as last_seen
-                FROM logs l
-                WHERE CAST(strftime('%w', l.timestamp) AS INTEGER) = ?
-                  AND CAST(strftime('%H', l.timestamp) AS INTEGER) = ?
-                  AND l.duration_ms > 0
-                GROUP BY l.app ORDER BY total_ms DESC LIMIT 15
-            `).all(dayOfWeek, hour);
-
-            const scored = new Map();
-
-            const scoreEntry = (app: string, cat: string, total: number, daysUsed: number, lastSeen: string | null) => {
-                const daysSince = lastSeen ? Math.max(1, (now.getTime() - new Date(lastSeen + 'T00:00:00').getTime()) / 86400000) : 60;
-                const freqW = Math.min(1, daysUsed / 30);
-                const recencyW = Math.max(0.2, 1 / Math.log2(daysSince + 1));
-                const adjBefore = contextBefore.has(app) ? 0.3 : 0;
-                const adjAfter = contextAfter.has(app) ? 0.3 : 0;
-                const score = freqW * 0.4 + recencyW * 0.2 + adjBefore * 0.2 + adjAfter * 0.2;
-                const avgSec = Math.round(total / Math.max(1, daysUsed));
-                if (!scored.has(app) || score > scored.get(app).score) {
-                    scored.set(app, { app, category: cat, score, avgSec, daysUsed });
-                }
-            };
-
-            for (const r of hourlyStats) {
-                scoreEntry(r.app_name, r.category || 'Other', r.total_sec, r.days_used, r.last_seen);
-            }
-            for (const r of logStats) {
-                scoreEntry(r.app, r.category || 'Other', (r.total_ms || 0) / 1000, r.days_used, r.last_seen);
-            }
-
-            return Array.from(scored.values())
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 3)
-                .map(p => ({
-                    app: p.app,
-                    category: p.category,
-                    confidence: Math.min(99, Math.round(p.score * 100)),
-                    avgSeconds: p.avgSec,
-                    daysUsed: p.daysUsed
-                }));
-        };
-
-        const slots = [];
-        let cursor = new Date(gapStart);
-        while (cursor < gapEnd) {
-            const slotEnd = new Date(Math.min(cursor.getTime() + 15 * 60 * 1000, gapEnd.getTime()));
-            if (slotEnd <= cursor) break;
-            const preds = predictSlot(cursor, slotEnd);
-            slots.push({
-                slotStart: cursor.toISOString(),
-                slotEnd: slotEnd.toISOString(),
-                predictions: preds,
-                durationSeconds: Math.floor((slotEnd.getTime() - cursor.getTime()) / 1000)
-            });
-            cursor = slotEnd;
-        }
-
-        const gapDurationSec = Math.floor((gapEnd.getTime() - gapStart.getTime()) / 1000);
-        return {
-            gaps: [{
-                start: gapStart.toISOString(),
-                end: gapEnd.toISOString(),
-                durationSeconds: gapDurationSec,
-                slots
-            }]
-        };
-    } catch (err) {
-        console.error('[DeskFlow] predict-gap-fill error:', err);
-        return { predictions: [], gaps: [] };
-    }
-});
-
-// Write confirmed gap fill predictions to the logs table
-electron_1.ipcMain.handle('confirm-gap-fill', (event, fills) => {
-    if (useJson) return { success: false };
-    try {
-        console.log('[DeskFlow] confirm-gap-fill received', fills.length, 'fills');
-        for (const f of fills) {
-            console.log('[DeskFlow]   fill:', JSON.stringify({ app: f.app, category: f.category, activityId: f.activityId, slotStart: f.slotStart, slotEnd: f.slotEnd }));
-        }
-        const insertLog = db.prepare(`
-            INSERT INTO logs (timestamp, app, category, duration_ms, title)
-            VALUES (?, ?, ?, ?, ?)
-        `);
-        const insertExtSession = db.prepare(`
-            INSERT INTO external_sessions (activity_id, started_at, ended_at, duration_seconds)
-            VALUES (?, ?, ?, ?)
-        `);
-        const insertMany = db.transaction((items) => {
-            let appCount = 0;
-            let extCount = 0;
-            for (const f of items) {
-                const startMs = new Date(f.slotStart).getTime();
-                const endMs = new Date(f.slotEnd).getTime();
-                const durationMs = Math.max(1000, endMs - startMs);
-                const durationSec = Math.max(1, Math.floor(durationMs / 1000));
-                if (f.activityId && f.activityId.startsWith('ext:')) {
-                    const externalActId = Number(f.activityId.slice(4));
-                    console.log('[DeskFlow]   → external activity, extracted id:', externalActId);
-                    if (externalActId > 0) {
-                        insertExtSession.run(externalActId, f.slotStart, f.slotEnd, durationSec);
-                        extCount++;
-                    }
-                } else {
-                    insertLog.run(f.slotStart, f.app, f.category || 'Other', durationMs, `Gap fill: ${f.app}`);
-                    appCount++;
-                }
-            }
-            return { appCount, extCount };
-        });
-        const { appCount, extCount } = insertMany(fills);
-        console.log(`[DeskFlow] confirm-gap-fill: wrote ${appCount} logs + ${extCount} external sessions`);
-        if (extCount > 0) {
-            try { event.sender.send('external-data-changed'); } catch (_) {}
-        }
-        return { success: true, count: fills.length };
-    } catch (err) {
-        console.error('[DeskFlow] confirm-gap-fill error:', err);
-        return { success: false, error: String(err) };
-    }
-});
-
-// Predict details for a whole day at once (batch prediction)
 electron_1.ipcMain.handle('predict-day-gaps', (event, { date, mode = 'combined' }) => {
     if (useJson) return { slots: [] };
     try {

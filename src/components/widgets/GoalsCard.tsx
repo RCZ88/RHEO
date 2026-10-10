@@ -29,7 +29,7 @@ export function GoalsCard({ goals }: GoalsCardProps) {
         {goals.map((goal, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 h-10 rounded-lg border border-zinc-800/50 bg-zinc-950/40 px-3 py-2"
+            className="flex items-center gap-3 h-10 rounded-lg border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-3 py-2"
           >
             {/* Checkbox */}
             <div className="flex-shrink-0 flex items-center justify-center">

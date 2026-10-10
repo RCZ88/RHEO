@@ -66,7 +66,7 @@ export default function ResumePage() {
               whileHover={{ scale: 1.04, y: -1 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => navigate('/resume/import')}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-zinc-700/60 bg-zinc-900/60 text-zinc-300 font-medium text-sm hover:border-zinc-600 hover:bg-zinc-800/60 transition-colors light:border-zinc-300/60 light:bg-white/80 light:text-zinc-700 light:hover:border-zinc-400 light:hover:bg-zinc-50"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-zinc-700/60 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-300 font-medium text-sm hover:border-zinc-600 hover:bg-zinc-800/60 transition-colors light:border-zinc-300/60 light:bg-white/80 light:text-zinc-700 light:hover:border-zinc-400 light:hover:bg-zinc-50"
             >
               <Upload className="w-4 h-4" />
               Import Chat
@@ -139,7 +139,7 @@ export default function ResumePage() {
               className={`relative overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 ${
                 step.available
                   ? 'border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-800/40 cursor-pointer hover:border-zinc-700/60 light:border-zinc-200/60 light:from-white/80 light:to-zinc-100/40'
-                  : 'border-zinc-800/30 opacity-40 cursor-not-allowed bg-zinc-900/30 light:border-zinc-200/20 light:bg-white/50'
+                  : 'border-zinc-800/30 opacity-40 cursor-not-allowed bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] light:border-zinc-200/20 light:bg-white/50'
               }`}
             >
               {step.available && (
@@ -171,7 +171,7 @@ export default function ResumePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.08 }}
               whileHover={{ y: -2 }}
-              className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 p-4 hover:border-zinc-700/60 transition-colors light:border-zinc-200/60 light:bg-white/70"
+              className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-4 hover:border-zinc-700/60 transition-colors light:border-zinc-200/60 light:bg-white/70"
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <stat.icon className={`w-3.5 h-3.5 text-${stat.color}-400`} />
@@ -208,7 +208,7 @@ export default function ResumePage() {
                   transition={{ delay: i * 0.08 }}
                   whileHover={{ y: -3 }}
                   onClick={() => navigate('/resume/preview')}
-                  className="group relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-5 cursor-pointer hover:border-zinc-700/60 transition-colors light:border-zinc-200/60 light:bg-white/70"
+                  className="group relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-5 cursor-pointer hover:border-zinc-700/60 transition-colors light:border-zinc-200/60 light:bg-white/70"
                 >
                   <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[var(--page-accent)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="h-[80px] rounded-lg bg-gradient-to-br from-zinc-950 to-zinc-900 mb-3 flex items-center justify-center light:from-zinc-100 light:to-zinc-200">

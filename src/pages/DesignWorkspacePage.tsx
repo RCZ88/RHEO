@@ -733,7 +733,7 @@ export default function DesignWorkspacePage({ projectPath, activeTerminalId }: D
       />
 
       {/* Design Suite Status Bar */}
-      <DesignSuiteStatus className="border-t border-zinc-800/40 bg-zinc-900/30" />
+      <DesignSuiteStatus className="border-t border-zinc-800/40 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]" />
     </div>
   );
 }

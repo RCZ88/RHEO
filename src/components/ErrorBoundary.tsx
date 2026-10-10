@@ -10,6 +10,10 @@ let globalErrorCallback: ((error: Error) => void) | null = null;
 let pendingGlobalErrors: Error[] = [];
 
 export function triggerGlobalError(error: Error) {
+  if (isBenignBrowserError(error)) {
+    console.warn('[ErrorBoundary] Ignored benign browser error:', (error as Error)?.message ?? error);
+    return;
+  }
   if (globalErrorCallback) {
     globalErrorCallback(error);
   } else {
@@ -24,13 +28,56 @@ export function isDynamicImportFailure(error: unknown): boolean {
   return DYNAMIC_IMPORT_PATTERN.test(msg);
 }
 
-let lastAutoReloadAt = 0;
+/**
+ * Browser-emitted conditions that are NOT application render errors.
+ *
+ * Chromium delivers `ResizeObserver loop completed with undelivered
+ * notifications` as a window `error` event with `error === null` and a string
+ * message. Routing that into the boundary unmounts the whole screen for what is,
+ * in a normal page, only a console warning — so a layout hiccup anywhere in the
+ * app becomes a dead screen. Resource load failures (`<img>`, `<script>`) reach
+ * the same handler with an empty `error` and an empty `message`, which used to
+ * trip the boundary with a blank "This screen stopped responding" screen.
+ *
+ * These are logged and swallowed, never fatal. Real render errors still trip the
+ * boundary as before.
+ */
+const BENIGN_BROWSER_ERROR_PATTERNS = [
+  /resizeobserver loop/i,
+  /^script error\.?$/i,
+  /^script error$/i,
+  /^\s*$/,
+];
+
+export function isBenignBrowserError(error: unknown): boolean {
+  if (error === null || error === undefined) return true;
+  // Resource-load events have no Error object and no message.
+  if (!(error instanceof Error) && typeof error !== 'string') return false;
+  const msg = (error instanceof Error ? error.message : String(error)) || '';
+  return BENIGN_BROWSER_ERROR_PATTERNS.some((re) => re.test(msg));
+}
+
+// ONE self-heal reload per session, ever.
+//
+// This used to be rate-limited to one reload per 8s. That is a RELOAD STORM:
+// a genuinely missing chunk fails, we reload, the reload hits the same missing
+// chunk 8s later, we reload again — and the user sees the app "restart itself"
+// over and over with no way to stop it. The premise of a self-heal is that
+// reloading FIXES the problem; if the first reload didn't, a second one won't
+// either, it just destroys whatever the user was doing. Fail visibly instead.
+let didAutoReload = false;
 export function autoHealDynamicImport(): void {
-  const now = Date.now();
-  if (now - lastAutoReloadAt < 8000) return;
-  lastAutoReloadAt = now;
+  if (didAutoReload) {
+    console.error(
+      '[SelfHeal] Dynamic import failed AGAIN after a reload — not reloading again. ' +
+      'A chunk is genuinely missing (a build likely replaced dist/ while the app was ' +
+      'running). Close and relaunch the app.'
+    );
+    return;
+  }
+  didAutoReload = true;
   clearPersistedError();
-  console.warn('[SelfHeal] Dynamic import failed (stale bundle after rebuild) — reloading to pick up fresh chunks.');
+  console.warn('[SelfHeal] Dynamic import failed (stale bundle after rebuild) — reloading ONCE to pick up fresh chunks.');
   window.location.reload();
 }
 
@@ -91,7 +138,7 @@ export class ErrorBoundary extends Component<Props, State> {
   static getDerivedStateFromError(error: Error): State {
     persistError(error);
     const showAlternative = getPersistedErrorCount() >= MAX_RELOADS;
-    return { hasError: true, error, showAlternative };
+    return { hasError: true, error, showAlternative, copied: false };
   }
 
   componentDidMount() {

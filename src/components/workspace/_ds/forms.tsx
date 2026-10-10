@@ -11,16 +11,16 @@ import { DUR, EASE_OUT } from './motion';
 // These are the SINGLE source of truth. Import from here, never inline.
 
 export const WS_INPUT =
-  'w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150';
+  'w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150';
 
 export const WS_INPUT_SM =
-  'w-full bg-zinc-900/60 border border-zinc-800 rounded-md px-2.5 py-1.5 text-[12px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150';
+  'w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-md px-2.5 py-1.5 text-[12px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150';
 
 export const WS_TEXTAREA =
-  'w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150 resize-none min-h-[80px]';
+  'w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150 resize-none min-h-[80px]';
 
 export const WS_SELECT =
-  'bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 appearance-none focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150 cursor-pointer';
+  'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 appearance-none focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent)]/40 focus:border-[color:var(--page-accent)]/40 transition-colors duration-150 cursor-pointer';
 
 // ---- Button Variants --------------------------------------------------------
 export const WS_BTN_PRIMARY =

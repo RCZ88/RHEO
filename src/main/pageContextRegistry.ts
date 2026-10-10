@@ -44,7 +44,7 @@ export const PAGE_CONTEXT_REGISTRY: Record<string, PageContextEntry> = {
     contextProviders: [
       { name: 'Recent External Sessions', description: 'Recent external sessions', queryFn: "SELECT type, start_time, end_time FROM external_sessions ORDER BY start_time DESC LIMIT 5" },
     ],
-    keyComponents: ['ExternalPage', 'SleepPatternsCard', 'ActivityGrid', 'GapFillDrawer'],
+    keyComponents: ['ExternalPage', 'SleepPatternsCard', 'ActivityGrid', 'GapsListModal'],
   },
   '/life': {
     route: '/life', name: 'life',

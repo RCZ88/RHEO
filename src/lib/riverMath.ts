@@ -57,6 +57,8 @@ export interface LifePhase {
   reflectionSource?: 'manual' | 'ai' | 'ai-edited' | null
   reflectionGeneratedAt?: string | null
   status?: 'draft' | 'complete'
+  /** How much of the form this chapter earned. Shapes required steps only. */
+  scale?: PhaseScaleId | null
   updatedAt?: string
 }
 
@@ -71,6 +73,55 @@ export const MAGNITUDE_LABELS: Record<string, string> = {
   '5-6': 'Significant',
   '7-8': 'Defining',
   '9-10': 'Everything changed',
+}
+
+/* ── Phase detail level (how deep the FORM goes) ──────────────
+   WHY THIS EXISTS: every chapter — a three-week trip and a four-year
+   company — used to walk through the SAME nine-step wizard, so a small
+   life event cost as much to record as a defining era. This picks how
+   many questions we ask, so a trip can be recorded in seconds.
+
+   ⚠ IT IS NOT `magnitude`. These two live in the same dialog and MUST NOT
+   read alike, or the user cannot tell which is which:
+     • magnitude (0–100) — how MUCH this chapter changed you. A rating.
+     • scale    (this)   — how MUCH WORK you want to do writing it. Effort.
+   The blurbs below are therefore phrased as EXAMPLES the user might pick,
+   never as judgements about their life, so it never sounds like a score.
+
+   It is a FORM-SHAPE control, not a value judgement: lowering the
+   level never deletes anything already written. Optional steps stay
+   reachable forever via `deeper`, so this can always be widened. */
+
+export const PHASE_SCALES = [
+  {
+    id: 'light',
+    label: 'Quick',
+    blurb: 'Just the basics — name it, date it, move on.',
+    example: 'Six weeks in Lisbon',
+    /** Required to save. Keep this SHORT — that is the entire point. */
+    required: ['basics'] as const,
+  },
+  {
+    id: 'standard',
+    label: 'Standard',
+    blurb: 'Add the story and what it taught you.',
+    example: 'Four years at a startup',
+    required: ['basics', 'story', 'lessons'] as const,
+  },
+  {
+    id: 'deep',
+    label: 'Full',
+    blurb: 'Everything we can ask, including people and mood.',
+    example: 'Starting a company',
+    required: ['basics', 'story', 'moments', 'people', 'feelings', 'lessons'] as const,
+  },
+] as const
+
+export type PhaseScaleId = (typeof PHASE_SCALES)[number]['id']
+export const DEFAULT_PHASE_SCALE: PhaseScaleId = 'standard'
+
+export function scaleOf(id?: string | null) {
+  return PHASE_SCALES.find(s => s.id === id) ?? PHASE_SCALES.find(s => s.id === DEFAULT_PHASE_SCALE)!
 }
 
 export const MONTHS = [

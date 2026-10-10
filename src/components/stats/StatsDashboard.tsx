@@ -69,7 +69,7 @@ export function StatsDashboard({ rawData, loading, error, onRetry, timeframeDays
     return deriveStats(rawData, timeframeDays);
   }, [rawData, timeframeDays]);
 
-  const isEmpty = !loading && !error && stats && !stats.hasData;
+  const isEmpty = !loading && !error && !!stats && !stats.hasData;
 
   const kpiData: KpiData = {
     totalTokens: stats?.totalTokens || '—',
@@ -103,10 +103,10 @@ export function StatsDashboard({ rawData, loading, error, onRetry, timeframeDays
           empty={isEmpty}
           error={error}
           onRetry={onRetry}
-          items={stats?.tokensByTool.labels.map((label, i) => ({
+          items={stats?.tokensByTool?.labels?.map((label, i) => ({
             key: label,
             label: TOOL_NAME_MAP[label] || label,
-            value: stats.tokensByTool.values[i],
+            value: stats?.tokensByTool?.values?.[i] ?? 0,
             color: TOOL_COLORS[label] || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
             glow: TOOL_GLOWS[label] || FALLBACK_GLOWS[i % FALLBACK_GLOWS.length],
           })) || []}
@@ -119,10 +119,10 @@ export function StatsDashboard({ rawData, loading, error, onRetry, timeframeDays
           empty={isEmpty}
           error={error}
           onRetry={onRetry}
-          items={stats?.sessionsByAgent.labels.map((label, i) => ({
+          items={stats?.sessionsByAgent?.labels?.map((label, i) => ({
             key: label,
             label: TOOL_NAME_MAP[label] || label,
-            value: stats.sessionsByAgent.values[i],
+            value: stats?.sessionsByAgent?.values?.[i] ?? 0,
             color: TOOL_COLORS[label] || FALLBACK_COLORS[(i + 1) % FALLBACK_COLORS.length],
             glow: TOOL_GLOWS[label] || FALLBACK_GLOWS[(i + 1) % FALLBACK_GLOWS.length],
           })) || []}
@@ -169,8 +169,8 @@ function StripedBarCard({
         boxShadow: '0px 20px 40px -10px rgba(0,0,0,0.5)',
       }}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none" />
-
+      {/* LAMINAR §7.1: no decorative chrome gradient. Depth comes from the
+          hairline above, not a white wash. */}
       <div className="flex items-center justify-between mb-5 relative">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#8E95A5]">{title}</h3>
         <div className="w-8 h-8 rounded-xl flex items-center justify-center"

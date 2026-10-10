@@ -511,7 +511,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                   <div
                     key={p.id}
                     className={`flex items-center gap-1 rounded-lg px-2 py-1.5 ${
-                      p.id === activePresetId ? 'bg-[var(--page-accent)]/10 light:bg-white light:text-stone-900 light:border-[var(--ws-border-strong)]' : ''
+                      p.id === activePresetId ? 'bg-[var(--page-accent)]/10 light:bg-white light:text-[var(--text-primary)] light:border-[var(--ws-border-strong)]' : ''
                     }`}
                   >
                     <button
@@ -594,7 +594,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
             <div className="flex items-center gap-2">
               <button
                 onClick={cancelEdit}
-                className="flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] px-3 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] light:bg-white light:border-[var(--ws-border-strong)] light:text-stone-900"
+                className="flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] px-3 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] light:bg-white light:border-[var(--ws-border-strong)] light:text-[var(--text-primary)]"
                 aria-label="Cancel editing and discard changes (Esc)"
               >
                 <X size={13} />
@@ -617,7 +617,10 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
       {/* ── Preview overlay ── */}
       {previewMode && (
         <div className="fixed inset-0 z-[100] bg-[var(--ws-surface)] overflow-auto">
-          <div className="sticky top-0 z-10 flex items-center justify-between bg-[rgba(9,9,11,0.9)] backdrop-blur-xl border-b border-[var(--ws-border)] p-4">
+          {/* rgba(9,9,11,0.9) IS --ws-surface at 90%. It was written as an arbitrary
+              value, which is invisible to every class-name-based light-mode net, so
+              this sticky bar stayed dark over the whole Dashboard Preview. */}
+          <div className="sticky top-0 z-10 flex items-center justify-between bg-[color-mix(in_srgb,var(--ws-surface)_90%,transparent)] backdrop-blur-xl border-b border-[var(--ws-border)] p-4">
             <span className="font-display text-lg font-semibold text-[var(--text-primary)]">Dashboard Preview</span>
             <button onClick={() => setPreviewMode(false)}
               className="flex items-center gap-2 rounded-lg border border-[var(--ws-border)] px-4 py-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]">
@@ -702,7 +705,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
             </button>
             <button
               onClick={resetToDefault}
-              className="flex min-h-[32px] items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] light:bg-white light:border-[var(--ws-border-strong)] light:text-stone-900"
+              className="flex min-h-[32px] items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] light:bg-white light:border-[var(--ws-border-strong)] light:text-[var(--text-primary)]"
               aria-label="Reset deck to default layout"
             >
               <RotateCcw size={13} />

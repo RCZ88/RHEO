@@ -109,32 +109,71 @@ export function useSmoothScroll(): SmoothScrollValue {
   return useContext(SmoothScrollContext);
 }
 
-/** The app's primary scroller is not a stable class — it is a layout decision
- *  each page makes for itself. Rather than hard-coding one selector (which
- *  breaks the moment a page nests its scroller), pick the LARGEST genuinely
- *  overflowing pane inside the routed content area. It re-picks on route
- *  change, so navigating from a long Settings page to a two-card dashboard
- *  hands the lerp to whatever is actually scrolling. */
+/** Regions the lerp must never take over: text selection, code, and the xterm
+ *  terminal all need the native wheel to reach them untouched. */
+function isExcluded(el: Element | null): boolean {
+  return !!el?.closest('pre, code, textarea, input, .xterm, [data-no-smooth]');
+}
+
+function isScrollable(el: HTMLElement): boolean {
+  const { overflowY } = getComputedStyle(el);
+  if (overflowY !== 'auto' && overflowY !== 'scroll') return false;
+  return el.scrollHeight - el.clientHeight > 2;
+}
+
+/** The scroller the POINTER is actually over.
+ *
+ *  Walks up the ancestor chain from the event target rather than scanning the
+ *  document. Depth is bounded by the DOM tree (~15 levels), so this is O(depth)
+ *  instead of O(elements) — the difference between a handful of style reads and
+ *  the tens of thousands a querySelectorAll('*') sweep costs on a page that is
+ *  rendering a few thousand rows.
+ */
+function scrollerUnderPointer(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null;
+  let el: HTMLElement | null = target as HTMLElement;
+  while (el && el !== document.body && el !== document.documentElement) {
+    if (isScrollable(el)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+/** The app's primary scroller when nothing else is known — e.g. the first
+ *  binding right after a route change, before the pointer has moved.
+ *
+ *  Scoped to the routed content pane and biased to shallow candidates so it
+ *  cannot walk thousands of nodes. The previous implementation looked for
+ *  `[data-sf-routed-content]`, an attribute that is READ here but WRITTEN
+ *  nowhere in the codebase, so it silently fell back to `document.body` and
+ *  ran getComputedStyle over every element on every navigation. */
 function findPrimaryScroller(): HTMLElement | null {
   const root =
-    document.querySelector('[data-sf-routed-content]') ??
+    document.querySelector<HTMLElement>('[data-page-root]') ??
     document.querySelector('main') ??
     document.body;
 
   let best: HTMLElement | null = null;
-  let bestOverflow = 24; // ignore a few stray pixels
+  let bestOverflow = 24;
 
-  for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
-    if (el.closest('pre, code, .xterm, [data-no-smooth]')) continue;
-
-    const { overflowY } = getComputedStyle(el);
-    if (overflowY !== 'auto' && overflowY !== 'scroll') continue;
-
-    const overflow = el.scrollHeight - el.clientHeight;
-    if (overflow > bestOverflow) {
-      bestOverflow = overflow;
-      best = el;
+  // Breadth-first from the pane itself: the outermost scroller is almost always
+  // the intended one, and stopping early keeps this cheap.
+  const queue: Element[] = [root as Element];
+  for (let depth = 0; depth < 4 && queue.length; depth++) {
+    const next: Element[] = [];
+    for (const el of queue) {
+      if (el instanceof HTMLElement) {
+        if (isExcluded(el)) continue;
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight - el.clientHeight > bestOverflow) {
+          bestOverflow = el.scrollHeight - el.clientHeight;
+          best = el;
+        }
+      }
+      for (const child of Array.from(el.children)) next.push(child);
     }
+    queue.length = 0;
+    queue.push(...next);
   }
   return best;
 }
@@ -143,49 +182,98 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
   const [enabled, setEnabledState] = useState(false);
   const lenisRef = useRef<Lenis | null>(null);
   const manualRef = useRef<HTMLElement | null>(null);
+  const boundRef = useRef<HTMLElement | null>(null);
   const rafRef = useRef<number>(0);
   const enabledRef = useRef(false);
 
-  const teardown = useCallback(() => {
+  const stopLoop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = 0;
-    lenisRef.current?.destroy();
-    lenisRef.current = null;
-    manualRef.current = null;
   }, []);
 
-  const boot = useCallback(() => {
-    teardown();
+  const destroyLenis = useCallback(() => {
+    stopLoop();
+    lenisRef.current?.destroy();
+    lenisRef.current = null;
+    boundRef.current = null;
+  }, [stopLoop]);
 
+  /** (Re)bind the lerp to `wrapper`. Passing null releases the wheel entirely so
+   *  the browser scrolls natively — that is what happens over text, code and the
+   *  terminal, and over nothing scrollable at all. */
+  const mountLenis = useCallback(
+    (wrapper: HTMLElement | null) => {
+      destroyLenis();
+
+      if (!enabledRef.current || !wrapper) {
+        publish(false);
+        return;
+      }
+
+      const content = wrapper.firstElementChild;
+      const lenis = new Lenis({
+        ...LENIS_OPTIONS,
+        wrapper,
+        // Lenis needs the element that actually carries the scrollable content.
+        // A nested pane often has no wrapper child, in which case the wrapper
+        // itself is the scroller.
+        content: (content instanceof HTMLElement ? content : wrapper) as HTMLElement,
+      });
+      lenisRef.current = lenis;
+      boundRef.current = wrapper;
+
+      const raf = (time: number) => {
+        lenis.raf(time);
+        rafRef.current = requestAnimationFrame(raf);
+      };
+      rafRef.current = requestAnimationFrame(raf);
+
+      publish(true);
+    },
+    [destroyLenis],
+  );
+
+  const boot = useCallback(() => {
+    destroyLenis();
     if (!enabledRef.current) {
       publish(false);
       return;
     }
-
     const wrapper = manualRef.current ?? findPrimaryScroller();
-    if (!wrapper) {
-      // Nothing on this page scrolls. That is a valid state, not an error —
-      // publish "off" so no downstream CSS assumes a lerp is running.
-      publish(false);
-      return;
-    }
+    mountLenis(wrapper);
+  }, [destroyLenis, mountLenis]);
 
-    const lenis = new Lenis({
-      ...LENIS_OPTIONS,
-      wrapper,
-      // Lenis needs the actual scrolling element, not the padded parent.
-      content: wrapper.firstElementChild as HTMLElement ?? wrapper,
-    });
-    lenisRef.current = lenis;
+  /** Follow the pointer. Lenis calls preventDefault on wheel to take over
+   *  scrolling, so whichever element it is bound to is the ONLY thing that
+   *  moves. Binding it once per route meant that hovering a panel and scrolling
+   *  scrolled the page behind it — the pointer was ignored entirely.
+   *
+   *  The rebind is deferred to the next frame and coalesced, so sweeping the
+   *  pointer across a page of nested panes costs one remount rather than one per
+   *  boundary crossed. */
+  useEffect(() => {
+    if (!enabled) return;
 
-    const raf = (time: number) => {
-      lenis.raf(time);
-      rafRef.current = requestAnimationFrame(raf);
+    let queued: number | null = null;
+    let next: HTMLElement | null = null;
+
+    const onWheel = (e: WheelEvent) => {
+      const wrapper = isExcluded(e.target as Element | null) ? null : scrollerUnderPointer(e.target);
+      if (wrapper === boundRef.current) return;
+      next = wrapper;
+      if (queued !== null) return;
+      queued = requestAnimationFrame(() => {
+        queued = null;
+        if (next !== boundRef.current) mountLenis(next);
+      });
     };
-    rafRef.current = requestAnimationFrame(raf);
 
-    publish(true);
-  }, [teardown]);
+    window.addEventListener('wheel', onWheel, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('wheel', onWheel, { capture: true });
+      if (queued !== null) cancelAnimationFrame(queued);
+    };
+  }, [enabled, mountLenis]);
 
   const setEnabled = useCallback(
     (next: boolean) => {
@@ -202,10 +290,13 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
     [boot],
   );
 
-  const register = useCallback((el: HTMLElement | null) => {
-    manualRef.current = el;
-    if (enabledRef.current) boot();
-  }, [boot]);
+  const register = useCallback(
+    (el: HTMLElement | null) => {
+      manualRef.current = el;
+      if (enabledRef.current) boot();
+    },
+    [boot],
+  );
 
   const scrollTo = useCallback(
     (target: HTMLElement | number, opts?: { offset?: number; immediate?: boolean }) => {
@@ -215,9 +306,15 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
         return;
       }
       // No Lenis (disabled, or nothing scrollable): fall back to the DOM so
-      // every "jump to this" button keeps working.
+      // every "jump to this" button keeps working. This queried
+      // [data-sf-routed-content], which is written nowhere, so the optional
+      // chaining swallowed a null and the numeric scroll silently did nothing.
       if (typeof target === 'number') {
-        document.querySelector('[data-sf-routed-content]')?.scrollTo({ top: target, behavior: 'auto' });
+        const pane =
+          boundRef.current ??
+          document.querySelector<HTMLElement>('[data-page-root]') ??
+          document.scrollingElement;
+        pane?.scrollTo({ top: target, behavior: 'auto' });
       } else {
         target.scrollIntoView({ block: 'start', behavior: 'auto' });
       }
@@ -231,8 +328,8 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
     enabledRef.current = resolved;
     setEnabledState(resolved);
     boot();
-    return teardown;
-  }, [boot, teardown]);
+    return destroyLenis;
+  }, [boot, destroyLenis]);
 
   /* The primary scroller changes per route. Re-pick on navigation so the lerp
      follows the user, and re-check reduced-motion in case the user flipped the

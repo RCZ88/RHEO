@@ -68,11 +68,11 @@ export function AiUsageWidget({ usage, loading, error }: AIUsageWidgetProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 flex-1">
-        <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/50 p-3">
+        <div className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 p-3">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Tokens Today</div>
           <div className="text-lg font-display font-bold text-zinc-100 tabular-nums">{tokensToday.toLocaleString()}</div>
         </div>
-        <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/50 p-3">
+        <div className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 p-3">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Sessions</div>
           <div className="text-lg font-display font-bold text-zinc-100 tabular-nums">{sessionCount}</div>
         </div>

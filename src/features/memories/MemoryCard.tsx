@@ -31,14 +31,14 @@ export function MemoryCard({ memory, onOpen, span = 'sm', idPrefix }: MemoryCard
       onClick={onOpen}
       whileHover={hoverAnimate}
       transition={hoverTransition}
-      className={`relative block w-full overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900/40 text-left ${
+      className={`relative block w-full overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-left ${
         span === 'lg' ? 'row-span-2 aspect-[3/4]' : 'aspect-square'
       }`}
     >
       {memory.meta.kind === 'video' ? (
         <>
           {poster && <img src={poster} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80">
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]">
             <PlayCircle className="w-8 h-8 text-white/90 drop-shadow" />
           </div>
         </>

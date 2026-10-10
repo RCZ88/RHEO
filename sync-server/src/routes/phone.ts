@@ -90,13 +90,21 @@ export async function phoneRoutes(app: FastifyInstance) {
       const fromDate = from || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
       const toDate = to || new Date().toISOString().slice(0, 10)
 
+      // `latest_battery` used to be SUBSTRING(MAX(recorded_at || '|' || battery_level), 22).
+      // A recorded_at of "2026-10-05T10:00:00.000Z" is 24 chars, so index 22 lands
+      // INSIDE the timestamp: the expression evaluated to the text "00Z|85", which
+      // CAST(... AS REAL) then silently turned into 0. The chart read "0% battery"
+      // for every phone. A correlated subquery is both correct and readable.
       const result = await db.execute({
         sql: `SELECT
           date(recorded_at) as date,
           SUM(deskflow_foreground_sec) as deskflow_foreground_sec,
           SUM(deskflow_background_sec) as deskflow_background_sec,
           AVG(battery_level) as avg_battery,
-          CAST(SUBSTRING(MAX(recorded_at || '|' || CAST(battery_level AS TEXT)), 22) AS REAL) as latest_battery
+          (SELECT battery_level FROM phone_telemetry p2
+             WHERE p2.user_id = phone_telemetry.user_id
+               AND date(p2.recorded_at) = date(phone_telemetry.recorded_at)
+             ORDER BY p2.recorded_at DESC LIMIT 1) as latest_battery
         FROM phone_telemetry
         WHERE user_id = ? AND date(recorded_at) >= ? AND date(recorded_at) <= ?
         GROUP BY date(recorded_at)

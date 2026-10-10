@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { RefreshCw, Search, X, Network, Wifi } from 'lucide-react'
-import { CanvasGraph } from './context-brain/CanvasGraph'
+import { BrainVisualization } from './context-brain/BrainVisualization'
 import { EntityDetailPanel } from './context-graph/EntityDetailPanel'
 import { NumberTicker } from '../../components/ui/number-ticker'
 import type { GraphNode, GraphLink } from './context-graph/types'
 import { BrainManagementView } from './context-brain/BrainManagementView'
-import { NeuralFlow } from './context-brain/NeuralFlow'
 import { DotPattern } from '../../components/ui/dot-pattern'
 import { Skeleton } from '../../components/ui/skeleton'
 import { ExternalAITrail } from './context-brain/ExternalAITrail'
@@ -314,32 +313,32 @@ export function ContextGraphView() {
 
   return (
     <div className="relative">
-      {/* ── Neural flow background (visible!) ── */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-        <NeuralFlow opacity={0.5} />
-      </div>
-
       {/* ── Graph canvas ── */}
       <div
         ref={containerRef}
         className="relative z-10 w-full h-full rounded-xl overflow-hidden"
-        style={{ background: '#09090b', border: ACCENTS.border }}
+        style={{ background: 'var(--ws-surface-sunken)', border: ACCENTS.border }}
       >
         {/* Subtle dot pattern overlay */}
         <div className="absolute inset-0 pointer-events-none z-0">
           <DotPattern opacity={0.015} radius={0.6} gap={28} className="text-[#8b5cf6]" />
         </div>
 
-        <CanvasGraph
+        {/* One generative system, two windows (spec §1). BrainVisualization
+            owns the shared noise field AND the graph, so this is not a
+            second CanvasGraph running beside a decorative background. */}
+        <BrainVisualization
           nodes={filteredNodes as GraphNode[]}
           links={filteredLinks as GraphLink[]}
           width={width}
           height={height}
+          state={loading ? 'loading' : filteredNodes.length ? 'populated' : 'empty'}
           onNodeHover={handleNodeHover}
           onNodeClick={handleNodeClick}
           hoveredNode={hoveredNode}
           selectedNode={selectedNode}
           selectionSet={selectedNodeIds}
+          hideChrome
         />
 
         {/* ── Search bar ── */}

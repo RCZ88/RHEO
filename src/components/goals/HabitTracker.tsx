@@ -172,7 +172,7 @@ export function HabitTracker({ currentDate }: HabitTrackerProps) {
                     ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
                     : day.date === currentDate
                       ? 'bg-zinc-800/60 border-zinc-600/50 text-zinc-400 hover:border-zinc-500'
-                      : 'bg-zinc-900/30 border-zinc-800/40 text-zinc-600 hover:border-zinc-700'
+                      : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border-zinc-800/40 text-zinc-600 hover:border-zinc-700'
                 }`}
               >
                 {day.completed && <CheckCircle2 size={14} />}

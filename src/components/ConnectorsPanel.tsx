@@ -25,7 +25,7 @@ const typeAccent: Record<string, 'violet' | 'pink'> = { email: 'violet', calenda
 
 function ConnectorCardSkeleton() {
   return (
-    <div className="rounded-xl bg-zinc-900/40 ring-1 ring-zinc-800/60 p-4 animate-pulse">
+    <div className="rounded-xl bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 p-4 animate-pulse">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-zinc-800/60" />
         <div className="flex-1 space-y-1.5">
@@ -68,7 +68,7 @@ function ErrorState({ message, retry }: { message: string; retry: () => void }) 
         <AlertCircle className="h-5 w-5 text-red-400" />
       </div>
       <p className="text-sm text-zinc-400 max-w-[280px]">{message}</p>
-      <button onClick={retry} className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors">
+      <button onClick={retry} className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors">
         Retry
       </button>
     </div>
@@ -225,7 +225,7 @@ export function ConnectorsPanel({ onSetup }: ConnectorsPanelProps) {
         <div className="flex items-center gap-2">
           {countBadge}
           {onSetup && (
-            <button onClick={onSetup} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors">
+            <button onClick={onSetup} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors">
               <Plus className="h-3.5 w-3.5" />
               Connect
             </button>
@@ -381,7 +381,7 @@ export function ConnectorsPanel({ onSetup }: ConnectorsPanelProps) {
                           <div className="p-3 space-y-2">
                             {/* ItemFilterBar */}
                             <div className="flex items-center gap-2 pb-2">
-                              <div className="flex rounded-lg bg-zinc-900 ring-1 ring-zinc-800 p-0.5">
+                              <div className="flex rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800 p-0.5">
                                 {['all', 'email', 'event'].map(t => (
                                   <button
                                     key={t}
@@ -402,7 +402,7 @@ export function ConnectorsPanel({ onSetup }: ConnectorsPanelProps) {
                                   type="text"
                                   placeholder="Search\u2026"
                                   onChange={handleSearchChange}
-                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-2 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-pink-500/40"
+                                  className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg pl-7 pr-2 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-pink-500/40"
                                 />
                               </div>
                               <button

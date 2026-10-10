@@ -164,7 +164,7 @@ const Row: React.FC<RowProps> = ({ entry, nested, isExpanded, status, isDeleting
         {isExpanded && (
           <motion.div variants={expandPanel} initial="hidden" animate="show" exit="exit" className="overflow-hidden">
             <div className="space-y-2 border-t border-zinc-700/40 px-2.5 py-2.5">
-              <div className="rounded-lg bg-zinc-900/60 p-2.5">
+              <div className="rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] p-2.5">
                 <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-zinc-300">{entry.prompt}</pre>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">

@@ -1,9 +1,15 @@
 import type Database from 'better-sqlite3';
 import type { InsightAtom } from '../../shared/insights';
 import { mean, std, zScore, delta, percentile, streak } from './detectors';
+import { localDay, localToday, localDaysAgo, periodBounds, parseLocalDay } from '../../lib/rewindPeriod';
 
-const today = () => new Date().toISOString().slice(0, 10);
-const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+// NOTE ON CLOCKS: every day string in this file is a LOCAL calendar day, built
+// with localDay() and read with parseLocalDay(). The engine previously used
+// `new Date()` + `toISOString()`, which is UTC — on UTC+7 that files a day's
+// value under the previous date for seven hours every morning, and silently
+// dropped the last day of every month. See src/lib/rewindPeriod.ts.
+const today = localToday;
+const daysAgo = localDaysAgo;
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const score = (a: InsightAtom) =>
@@ -117,11 +123,29 @@ export function buildDailyRollup(db: Database, date: string) {
 // ═══════════════════════════════════════════════════════════════
 // HELPER: fetch a metric's history from daily_rollup
 // ═══════════════════════════════════════════════════════════════
-function metricHistory(db: Database, domain: string, metric: string, days: number): number[] {
+/**
+ * Fetch a metric's history from daily_rollup for the `days` days ENDING at (but
+ * excluding) `anchor`.
+ *
+ * `anchor` is REQUIRED, and that is the point. This used to be
+ * `metricHistory(db, domain, metric, days)` with the window hardcoded to
+ * "today", which meant every atom generated for a past day compared itself
+ * against a baseline ending TODAY — so a September rewind measured "was 15 Sep
+ * unusual?" against the last fortnight of October. All z-scores, percent
+ * deltas and "vs usual" comparisons in a historical rewind were noise.
+ * Making the anchor a required argument means no call site can forget it.
+ *
+ * Ordered oldest-first (index 0 = the oldest day), which is the order the
+ * streak and polyglot detectors expect.
+ */
+function metricHistory(db: Database, anchor: string, domain: string, metric: string, days: number): number[] {
+  const stmt = db.prepare(
+    `SELECT value FROM daily_rollup WHERE date = ? AND domain = ? AND metric = ?`
+  );
   return Array.from({ length: days }, (_, i) => {
-    const row = db.prepare(
-      `SELECT value FROM daily_rollup WHERE date = ? AND domain = ? AND metric = ?`
-    ).get(daysAgo(i + 1), domain, metric) as any;
+    const anchorDate = parseLocalDay(anchor);
+    anchorDate.setDate(anchorDate.getDate() - (days - i));
+    const row = stmt.get(localDay(anchorDate), domain, metric) as any;
     return row?.value || 0;
   });
 }
@@ -144,7 +168,7 @@ function genTopApp(db: Database, date: string): InsightAtom | null {
   `).get(date) as any;
   if (!topApp || topApp.minutes < 15) return null;
 
-  const hist = metricHistory(db, 'apps', `app:${topApp.app}:min`, 14);
+  const hist = metricHistory(db, date, 'apps', `app:${topApp.app}:min`, 14);
   const z = zScore(topApp.minutes, hist);
   const avg = mean(hist);
   const pct = avg > 0 ? Math.round(((topApp.minutes - avg) / avg) * 100) : 0;
@@ -179,8 +203,8 @@ function genProductivityRatio(db: Database, date: string): InsightAtom | null {
   if (todayTotal < 30) return null;
 
   const ratio = todayProd / todayTotal;
-  const histProd = metricHistory(db, 'productivity', 'productive_min', 14);
-  const histTotal = metricHistory(db, 'productivity', 'total_min', 14);
+  const histProd = metricHistory(db, date, 'productivity', 'productive_min', 14);
+  const histTotal = metricHistory(db, date, 'productivity', 'total_min', 14);
   const histRatios = histProd.map((p, i) => histTotal[i] > 0 ? p / histTotal[i] : 0);
   const z = zScore(ratio, histRatios);
 
@@ -209,7 +233,7 @@ function genGitCommits(db: Database, date: string): InsightAtom | null {
   const todayCommits = todayMetric(db, 'git', 'commits', date);
   if (todayCommits <= 0) return null;
 
-  const hist = metricHistory(db, 'git', 'commits', 14);
+  const hist = metricHistory(db, date, 'git', 'commits', 14);
   const z = zScore(todayCommits, hist);
   const avg = mean(hist);
 
@@ -241,7 +265,7 @@ function genSleep(db: Database, date: string): InsightAtom | null {
   const todaySleep = todayMetric(db, 'sleep', 'hours', date);
   if (todaySleep <= 0) return null;
 
-  const hist = metricHistory(db, 'sleep', 'hours', 14);
+  const hist = metricHistory(db, date, 'sleep', 'hours', 14);
   const filteredHist = hist.filter(v => v > 0);
   const avgSleep = mean(filteredHist);
   if (avgSleep <= 0) return null;
@@ -316,7 +340,7 @@ function genContextSwitch(db: Database, date: string): InsightAtom | null {
   const switches = todayMetric(db, 'productivity', 'app_switches', date);
   if (switches < 5) return null;
 
-  const hist = metricHistory(db, 'productivity', 'app_switches', 14);
+  const hist = metricHistory(db, date, 'productivity', 'app_switches', 14);
   const z = zScore(switches, hist);
   const avg = mean(hist);
   if (Math.abs(z) < 1) return null;
@@ -344,7 +368,7 @@ function genContextSwitch(db: Database, date: string): InsightAtom | null {
 }
 
 function genFocusStreak(db: Database, date: string): InsightAtom | null {
-  const hist = metricHistory(db, 'focus', 'minutes', 14).reverse(); // oldest first
+  const hist = metricHistory(db, date, 'focus', 'minutes', 14).reverse(); // oldest first
   const activeDays = hist.map(v => v > 0 ? 1 : 0);
   const currentStreak = streak(activeDays.map((v, i) => ({ date: daysAgo(14 - i), value: v })), 1);
 
@@ -375,7 +399,7 @@ function genAISpend(db: Database, date: string): InsightAtom | null {
   const todayTokens = todayMetric(db, 'ai', 'tokens', date);
   if (todayTokens <= 0) return null;
 
-  const hist = metricHistory(db, 'ai', 'tokens', 14);
+  const hist = metricHistory(db, date, 'ai', 'tokens', 14);
   const z = zScore(todayTokens, hist);
   const avg = mean(hist);
   if (Math.abs(z) < 0.8) return null;
@@ -410,7 +434,7 @@ function genFocusRecord(db: Database, date: string): InsightAtom | null {
   const todayFocus = todayMetric(db, 'focus', 'minutes', date);
   if (todayFocus <= 0) return null;
 
-  const hist = metricHistory(db, 'focus', 'minutes', 30);
+  const hist = metricHistory(db, date, 'focus', 'minutes', 30);
   const max = Math.max(...hist, 0);
   if (todayFocus <= max || todayFocus < 60) return null; // only if it's a new record
 
@@ -440,7 +464,7 @@ function genProductivityBar(db: Database, date: string): InsightAtom | null {
   const todayProd = todayMetric(db, 'productivity', 'productive_min', date);
   if (todayProd <= 0) return null;
 
-  const hist = metricHistory(db, 'productivity', 'productive_min', 7);
+  const hist = metricHistory(db, date, 'productivity', 'productive_min', 7);
   const avg = mean(hist);
 
   return {
@@ -475,7 +499,7 @@ function genSleepVsFocus(db: Database, date: string): InsightAtom | null {
   if (todaySleep <= 0 || todayFocus <= 0) return null;
 
   // Check if sleep was good (>=7h) and focus was above average
-  const focusHist = metricHistory(db, 'focus', 'minutes', 14);
+  const focusHist = metricHistory(db, date, 'focus', 'minutes', 14);
   const avgFocus = mean(focusHist.filter(v => v > 0));
   if (avgFocus <= 0) return null;
 
@@ -510,12 +534,12 @@ function genSleepVsFocus(db: Database, date: string): InsightAtom | null {
 
 function genConsistency(db: Database, date: string): InsightAtom | null {
   // Calculate consistency: days with >30 min productive in the last 7 days
-  const prodHist = metricHistory(db, 'productivity', 'productive_min', 7);
+  const prodHist = metricHistory(db, date, 'productivity', 'productive_min', 7);
   const activeDays = prodHist.filter(v => v > 30).length;
   if (activeDays < 3) return null; // need at least 3 active days to be interesting
 
   const consistencyPct = Math.round((activeDays / 7) * 100);
-  const prevHist = metricHistory(db, 'productivity', 'productive_min', 14);
+  const prevHist = metricHistory(db, date, 'productivity', 'productive_min', 14);
   const prevActiveDays = prevHist.slice(0, 7).filter(v => v > 30).length;
   const prevConsistencyPct = Math.round((prevActiveDays / 7) * 100);
   const deltaPct = consistencyPct - prevConsistencyPct;
@@ -684,29 +708,48 @@ export function buildInsightStrip(db: Database, period: string): InsightAtom[] {
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC API: generateRewind — full rewind for a period (month/week)
 // ═══════════════════════════════════════════════════════════════
+
+/**
+ * SQLite's `datetime('now')` returns UTC with NO zone marker, e.g.
+ * "2026-10-06 09:43:48". `new Date()` on that string parses it as LOCAL time, so
+ * on UTC+7 every cache timestamp read 7 hours stale — which stretched the
+ * intended 24 h rewind cache to 31 h. Mark it as UTC before parsing.
+ */
+function parseSqliteUtc(ts: string): number {
+  return Date.parse(ts.includes('T') ? ts.replace(' ', 'T') + 'Z' : ts + 'Z');
+}
+
 export function generateRewind(db: Database, periodKey: string): any {
-  // Check cache first — invalidate if >24h old for current period
-  const cached = db.prepare(`SELECT json, built_at FROM rewind_cache WHERE period_key = ?`).get(periodKey) as any;
+  const isWeek = periodKey.includes('-W');
+  const startDate = isWeek ? weekStart(periodKey) : periodBounds(periodKey).start;
+  const endDate = isWeek ? weekEnd(periodKey) : periodBounds(periodKey).end;
+
+  // A FINISHED month is immutable — last day of activity is already in it — so
+  // its cache is permanent. The current (incomplete) period keeps filling up,
+  // so it expires after a day. Both used to expire at 24 h, which meant
+  // re-opening a September rewind in late October rebuilt it from scratch.
+  const isClosed = !isWeek && endDate < today();
+
+  // Cache read. This one line was NOT guarded while the matching INSERT twenty
+  // lines below it was — so on any database without `rewind_cache` (which is
+  // every database built from current source; the table had no DDL anywhere)
+  // this threw and `generateRewind` never reached the computation at all. The
+  // whole Rewind / Insights digest was dead, not degraded, and the guarded
+  // INSERT is why it presented as a silent cache miss rather than a crash.
+  // Migration v5 creates the table; this guard is what makes the feature
+  // survive a database that predates it.
+  let cached: any = null;
+  try {
+    cached = db.prepare(`SELECT json, built_at FROM rewind_cache WHERE period_key = ?`).get(periodKey) as any;
+  } catch { /* no cache table — build it */ }
   if (cached) {
     try {
       const data = JSON.parse(cached.json);
-      // Invalidate if cache is older than 24 hours
-      if (cached.built_at) {
-        const builtAt = new Date(cached.built_at).getTime();
-        if (Date.now() - builtAt < 24 * 60 * 60 * 1000) {
-          return data;
-        }
-      } else {
-        return data;
-      }
+      const builtAt = cached.built_at ? parseSqliteUtc(cached.built_at) : NaN;
+      const fresh = !cached.built_at || isClosed || Date.now() - builtAt < 24 * 60 * 60 * 1000;
+      if (fresh) return data;
     } catch { /* fall through */ }
   }
-
-  // Parse period key (e.g. "2026-06" for month, "2026-W23" for week)
-  const isMonth = periodKey.length === 7; // YYYY-MM
-  const isWeek = periodKey.includes('-W');
-  const startDate = isWeek ? weekStart(periodKey) : `${periodKey}-01`;
-  const endDate = isWeek ? weekEnd(periodKey) : monthEnd(periodKey);
 
   // Generate daily facts for each day in the period
   const days = dateRange(startDate, endDate);
@@ -730,13 +773,18 @@ export function generateRewind(db: Database, periodKey: string): any {
     period: periodKey,
     startDate,
     endDate,
+    daysTracked: days.filter(d => hasActivity(db, d)).length,
     archetype,
     insights: topInsights,
     summary: {
       totalDays: days.length,
       topDomain: findTopDomain(allAtoms),
       bestDay: findBestDay(db, days),
-      totalScore: Math.round(topInsights.reduce((sum, a) => sum + score(a), 0) / topInsights.length * 100),
+      // Guarded: an empty selection made this NaN, which serialised to null and
+      // rendered as a blank in the player.
+      totalScore: topInsights.length
+        ? Math.round(topInsights.reduce((sum, a) => sum + score(a), 0) / topInsights.length * 100)
+        : 0,
     },
   };
 
@@ -750,6 +798,17 @@ export function generateRewind(db: Database, periodKey: string): any {
   }
 
   return rewind;
+}
+
+/** Did anything at all get logged on this day? Used to tell an empty day from an
+ *  untracked one, so the player can say which it is. */
+function hasActivity(db: Database, day: string): boolean {
+  const row = safeQuery(
+    db,
+    `SELECT COALESCE(SUM(duration_ms), 0) AS ms FROM logs WHERE date(timestamp) = ?`,
+    day,
+  );
+  return (row?.ms || 0) > 0;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -767,39 +826,40 @@ export function logInsightEvent(db: Database, atomId: string, event: 'shown' | '
 // HELPERS
 // ═══════════════════════════════════════════════════════════════
 
+// All four of these used to mix an UTC parse (`new Date('YYYY-MM-DD')`, and
+// `toISOString()` for output) with LOCAL calendar arithmetic (`setDate`), so on
+// any timezone ahead of UTC they disagreed with each other. `monthEnd` in
+// particular reported the 29th as September's last day, dropping a full day of
+// every rewind. Both ends now go through parseLocalDay/localDay.
+
+/** Inclusive list of local days from `start` to `end`. */
 function dateRange(start: string, end: string): string[] {
   const dates: string[] = [];
-  const d = new Date(start);
-  const e = new Date(end);
-  while (d <= e) {
-    dates.push(d.toISOString().slice(0, 10));
+  const d = parseLocalDay(start);
+  const e = parseLocalDay(end);
+  while (d.getTime() <= e.getTime()) {
+    dates.push(localDay(d));
     d.setDate(d.getDate() + 1);
   }
   return dates;
 }
 
+/** ISO week start (Monday) for a 'YYYY-Www' key. */
 function weekStart(key: string): string {
   const [year, week] = key.split('-W').map(Number);
   const jan1 = new Date(year, 0, 1);
   const dayOfWeek = jan1.getDay();
   const firstMonday = new Date(jan1);
   firstMonday.setDate(jan1.getDate() + ((8 - dayOfWeek) % 7 || 7));
-  const weekStart = new Date(firstMonday);
-  weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
-  return weekStart.toISOString().slice(0, 10);
+  const start = new Date(firstMonday);
+  start.setDate(firstMonday.getDate() + (week - 1) * 7);
+  return localDay(start);
 }
 
 function weekEnd(key: string): string {
-  const start = weekStart(key);
-  const d = new Date(start);
+  const d = parseLocalDay(weekStart(key));
   d.setDate(d.getDate() + 6);
-  return d.toISOString().slice(0, 10);
-}
-
-function monthEnd(key: string): string {
-  const [year, month] = key.split('-').map(Number);
-  const d = new Date(year, month, 0);
-  return d.toISOString().slice(0, 10);
+  return localDay(d);
 }
 
 function findTopDomain(atoms: InsightAtom[]): string {
@@ -823,23 +883,56 @@ function findBestDay(db: Database, days: string[]): string {
   return best;
 }
 
-function determineArchetype(db: Database, start: string, end: string): { name: string; emoji: string; description: string } {
-  // Analyze the period's data to determine archetype
-  const totalGit = metricHistory(db, 'git', 'commits', 30).reduce((a, b) => a + b, 0);
-  const totalFocus = metricHistory(db, 'focus', 'minutes', 30).reduce((a, b) => a + b, 0);
-  const totalAI = metricHistory(db, 'ai', 'tokens', 30).reduce((a, b) => a + b, 0);
-  const totalSleep = metricHistory(db, 'sleep', 'hours', 30).reduce((a, b) => a + b, 0);
+export interface RewindArchetype {
+  /** Human name, e.g. "The Builder". */
+  name: string;
+  /** A lucide-react icon NAME (never an emoji — LAMINAR §7.5). */
+  icon: string;
+  description: string;
+}
 
-  // Simple archetype detection
-  if (totalGit > 20 && totalFocus > 600) {
-    return { name: 'The Builder', emoji: '🔧', description: 'You shipped code and stayed focused — a powerful combo.' };
-  } else if (totalAI > 50000) {
-    return { name: 'The Explorer', emoji: '🧭', description: 'AI was your copilot this month — curiosity led the way.' };
-  } else if (totalSleep > 200) {
-    return { name: 'The Rested One', emoji: '😴', description: 'You prioritized rest — and it showed in your energy.' };
-  } else if (totalFocus > 1000) {
-    return { name: 'The Deep Diver', emoji: '🤿', description: 'Deep work was your superpower this month.' };
+/**
+ * Classify the period into a narrative archetype.
+ *
+ * This used to call `metricHistory(db, domain, metric, 30)` — a window hardcoded
+ * to "the last 30 days ending today" — and ignored both `start` and `end`. So the
+ * archetype on a September rewind was actually a description of mid-October. It
+ * now SUMS the period it was asked about, and scales its thresholds by the
+ * period's length so a 7-day period is not judged against month-long bars.
+ */
+function determineArchetype(db: Database, start: string, end: string): RewindArchetype {
+  const span = (Math.round(
+    (parseLocalDay(end).getTime() - parseLocalDay(start).getTime()) / 86_400_000,
+  ) + 1);
+  // Thresholds below were authored against a 30-day window; scale so a shorter
+  // period needs proportionally less to earn the same archetype.
+  const scale = Math.max(1, span) / 30;
+  const at = (monthly: number) => monthly * scale;
+
+  const sum = (domain: string, metric: string): number => {
+    const row = safeQuery(
+      db,
+      `SELECT COALESCE(SUM(value), 0) AS total FROM daily_rollup
+       WHERE domain = ? AND metric = ? AND date >= ? AND date <= ?`,
+      domain, metric, start, end,
+    );
+    return row?.total || 0;
+  };
+
+  const totalGit = sum('git', 'commits');
+  const totalFocus = sum('focus', 'minutes');
+  const totalAI = sum('ai', 'tokens');
+  const totalSleep = sum('sleep', 'hours');
+
+  if (totalGit > at(20) && totalFocus > at(600)) {
+    return { name: 'The Builder', icon: 'Hammer', description: 'You shipped code and stayed focused — a powerful combo.' };
+  } else if (totalAI > at(50000)) {
+    return { name: 'The Explorer', icon: 'Compass', description: 'AI was your copilot this month — curiosity led the way.' };
+  } else if (totalSleep > at(200)) {
+    return { name: 'The Rested One', icon: 'MoonStar', description: 'You prioritised rest — and it showed in your energy.' };
+  } else if (totalFocus > at(1000)) {
+    return { name: 'The Deep Diver', icon: 'Waves', description: 'Deep work was your superpower this month.' };
   } else {
-    return { name: 'The Balanced One', emoji: '⚖️', description: 'A steady month with a healthy mix of everything.' };
+    return { name: 'The Balanced One', icon: 'Scale', description: 'A steady month with a healthy mix of everything.' };
   }
 }

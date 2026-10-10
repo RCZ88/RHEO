@@ -141,7 +141,7 @@ export function SessionEditDialog({ session, onClose, onSave }: SessionEditDialo
         {/* Resume ID */}
         {session?.resume_id && (
           <FormField label="Resume ID">
-            <div className="px-3 py-2 bg-zinc-950/50 border border-zinc-800/50 rounded-lg text-[11px] font-mono text-zinc-500 truncate">
+            <div className="px-3 py-2 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/50 rounded-lg text-[11px] font-mono text-zinc-500 truncate">
               {session.resume_id}
             </div>
           </FormField>
@@ -198,15 +198,15 @@ export function SessionEditDialog({ session, onClose, onSave }: SessionEditDialo
 
         <ModalSection title="Stats">
           <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="p-2.5 bg-zinc-950/50 border border-zinc-800/40 rounded-lg">
+            <div className="p-2.5 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg">
               <div className="text-[9px] text-zinc-600 uppercase tracking-wider mb-0.5">Created</div>
               <div className="text-[11px] text-zinc-300 font-medium">{session?.created_at ? new Date(session.created_at).toLocaleDateString() : '-'}</div>
             </div>
-            <div className="p-2.5 bg-zinc-950/50 border border-zinc-800/40 rounded-lg">
+            <div className="p-2.5 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg">
               <div className="text-[9px] text-zinc-600 uppercase tracking-wider mb-0.5">Cost</div>
               <div className="text-[11px] text-emerald-400 font-medium font-mono">${session?.total_cost?.toFixed(2) || '0.00'}</div>
             </div>
-            <div className="p-2.5 bg-zinc-950/50 border border-zinc-800/40 rounded-lg">
+            <div className="p-2.5 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg">
               <div className="text-[9px] text-zinc-600 uppercase tracking-wider mb-0.5">Tokens</div>
               <div className="text-[11px] text-zinc-300 font-mono font-medium">{session?.total_tokens?.toLocaleString() || 0}</div>
             </div>

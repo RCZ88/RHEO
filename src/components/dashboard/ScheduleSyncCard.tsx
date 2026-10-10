@@ -94,7 +94,7 @@ export function ScheduleSyncCard({ schedule = [], goals = [], loading = false }:
             return (
               <motion.div key={entry.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
                 className={`flex items-center gap-2.5 p-2 rounded-lg border transition-colors duration-150 ${
-                  status === 'active' ? 'bg-sky-500/[0.06] border-sky-500/20' : status === 'past' ? 'bg-zinc-900/20 border-zinc-800/30 opacity-50' : 'bg-zinc-900/30 border-zinc-800/30 hover:border-zinc-700/40'
+                  status === 'active' ? 'bg-sky-500/[0.06] border-sky-500/20' : status === 'past' ? 'bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] border-zinc-800/30 opacity-50' : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border-zinc-800/30 hover:border-zinc-700/40'
                 }`}>
                 <div className="w-16 text-right shrink-0">
                   <p className="font-mono text-[11px] font-semibold text-zinc-400 tabular-nums">{entry.start_time}</p>

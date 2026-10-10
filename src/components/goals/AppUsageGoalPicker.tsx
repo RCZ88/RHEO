@@ -110,7 +110,7 @@ export function AppUsageGoalPicker({ value, onChange, existingFocusGroups = [] }
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search detected apps…"
-          className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-amber-500/50 text-[13px] h-8 pl-8"
+          className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 focus-visible:ring-amber-500/50 text-[13px] h-8 pl-8"
         />
       </div>
 
@@ -131,7 +131,7 @@ export function AppUsageGoalPicker({ value, onChange, existingFocusGroups = [] }
                 onClick={() => toggleApp(a.app)}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] transition-all duration-150 ${selected
                   ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
-                  : 'bg-zinc-900/60 border-zinc-700/50 text-zinc-300 hover:border-zinc-600'}`}
+                  : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-zinc-300 hover:border-zinc-600'}`}
               >
                 <span
                   className="w-4 h-4 rounded grid place-items-center text-[8px] font-bold text-black/80"
@@ -148,7 +148,7 @@ export function AppUsageGoalPicker({ value, onChange, existingFocusGroups = [] }
       )}
 
       {value.apps.length > 0 && (
-        <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/40 space-y-2">
+        <div className="p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 space-y-2">
           <div className="flex items-start gap-2 text-[11px] text-zinc-400">
             <Layers size={13} className="text-amber-400 mt-0.5 shrink-0" />
             <span>
@@ -182,7 +182,7 @@ export function AppUsageGoalPicker({ value, onChange, existingFocusGroups = [] }
                   value={value.focusGroupName || ''}
                   onChange={e => onChange({ ...value, focusGroupName: e.target.value })}
                   placeholder="Focus Group name"
-                  className="flex-1 bg-zinc-900/80 border-zinc-700/50 text-[12px] h-7"
+                  className="flex-1 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[12px] h-7"
                 />
               )}
             </div>

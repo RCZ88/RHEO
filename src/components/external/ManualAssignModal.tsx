@@ -505,7 +505,7 @@ export function ManualAssignModal({
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
-            className="relative flex max-h-[85vh] w-full max-w-[680px] flex-col rounded-xl border border-white/10 bg-zinc-900/60 backdrop-blur-xl"
+            className="relative flex max-h-[85vh] w-full max-w-[680px] flex-col rounded-xl border border-white/10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl"
           >
             <div className="border-b border-white/10 p-5">
               <div className="flex items-start justify-between">
@@ -595,7 +595,7 @@ export function ManualAssignModal({
                   <div key={i} className="flex-1 text-left pl-0.5">{i}:00</div>
                 ))}
               </div>
-              <div className="relative mb-4 h-12 overflow-hidden rounded-xl border border-white/10 bg-zinc-950/40">
+              <div className="relative mb-4 h-12 overflow-hidden rounded-xl border border-white/10 bg-zinc-950 light:bg-[var(--ws-surface)]/40">
                 {/* hour ticks */}
                 {Array.from({ length: 24 }, (_, i) => (
                   <div
@@ -669,7 +669,7 @@ export function ManualAssignModal({
                   <div className="text-[11px] uppercase tracking-wider text-zinc-500">Free</div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="text-lg font-semibold text-sky-200">{formatMinutes(trackedMinutes)}</div>
+                  <div className="text-lg font-semibold text-[var(--text-secondary)]">{formatMinutes(trackedMinutes)}</div>
                   <div className="text-[11px] uppercase tracking-wider text-sky-400/70">App</div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
@@ -900,7 +900,7 @@ export function ManualAssignModal({
                                 step={1}
                                 value={weights[app] ?? 1}
                                 onChange={(e) => setWeight(app, Number(e.target.value))}
-                                className="flex-1 accent-violet-400"
+                                className="flex-1"
                               />
                               <span className="w-8 text-right text-xs tabular-nums text-zinc-400">
                                 {weights[app] ?? 1}

@@ -226,10 +226,7 @@ function SliderRow({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3
-          [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full
-          [&::-webkit-slider-thumb]:bg-zinc-400 [&::-webkit-slider-thumb]:cursor-pointer"
+        className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-400 [&::-webkit-slider-thumb]:cursor-pointer"
       />
     </div>
   );
@@ -249,7 +246,7 @@ function TextInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 transition-colors ${
+        className={`w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 transition-colors ${
           monospace ? 'font-mono' : ''
         }`}
       />
@@ -269,7 +266,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400/40 transition-colors appearance-none cursor-pointer"
+        className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400/40 transition-colors appearance-none cursor-pointer"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -438,7 +435,7 @@ export default function ContextSidebar({ projectPath, projectId }: ContextSideba
             <span>{totalTokens} tok</span>
           </div>
         </div>
-        <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden flex">
+        <div className="h-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-full overflow-hidden flex">
           {SYSTEM_CARDS.map((card) => {
             const sys = wsConfig.systems[card.key];
             if (!sys?.enabled) return null;
@@ -510,10 +507,7 @@ export default function ContextSidebar({ projectPath, projectId }: ContextSideba
                           type="range" min={100} max={1200} step={50}
                           value={(sys as SystemConfig).max_tokens}
                           onChange={(e) => updateSystem(card.key, { max_tokens: parseInt(e.target.value) })}
-                          className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer
-                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5
-                            [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full
-                            [&::-webkit-slider-thumb]:bg-zinc-400 [&::-webkit-slider-thumb]:cursor-pointer"
+                          className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-400 [&::-webkit-slider-thumb]:cursor-pointer"
                         />
                       </div>
                     )}
@@ -587,12 +581,7 @@ export default function ContextSidebar({ projectPath, projectId }: ContextSideba
                               type="range" min={1} max={10}
                               value={ds.levels[key]}
                               onChange={(e) => updateDesignLevel(key, parseInt(e.target.value))}
-                              className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer
-                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
-                                [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
-                                [&::-webkit-slider-thumb]:bg-amber-400
-                                [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(245,158,11,0.4)]
-                                [&::-webkit-slider-thumb]:cursor-pointer"
+                              className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(245,158,11,0.4)] [&::-webkit-slider-thumb]:cursor-pointer"
                             />
                             <div className="flex justify-between mt-0.5">
                               <span className="text-[9px] text-zinc-600">{meta.low}</span>
@@ -745,7 +734,7 @@ export default function ContextSidebar({ projectPath, projectId }: ContextSideba
                     <textarea value={termComm.systemPromptPrefix}
                       onChange={(e) => setTermComm((p) => ({ ...p, systemPromptPrefix: e.target.value }))}
                       placeholder="Prepended to assembled context..." rows={3}
-                      className="w-full bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 transition-colors font-mono resize-none" />
+                      className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 transition-colors font-mono resize-none" />
                   </VoiceInputWrapper>
                 </div>
                 <SelectInput label="Message Line Ending" value={termComm.messageLineEnding}

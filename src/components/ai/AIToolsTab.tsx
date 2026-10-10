@@ -21,6 +21,7 @@ import {
   Coins,
   Loader2,
   Monitor,
+  Globe,
   CalendarDays,
 } from 'lucide-react'
 import {
@@ -45,6 +46,7 @@ import { AISessionHistory } from './AISessionHistory'
 import { WordTrackerPanel } from './WordTrackerPanel'
 import { MOTION, SURFACE, RING, TEXT } from './tokens'
 import { cn } from './lib/cn'
+import { setAiDisplayOffsetMinutes, formatOffsetLabel } from './lib/timeDisplay'
 
 ChartJS.register(
   CategoryScale,
@@ -219,14 +221,14 @@ function TokenValue({ value }: { value: number }) {
       title={showFull ? 'Click for abbreviated' : 'Click for full number'}
     >
       {showFull ? (
-        <span className="text-[10px] text-zinc-400 light:text-stone-500 font-normal">
+        <span className="text-[10px] text-zinc-400 light:text-[var(--text-muted)] font-normal">
           {value.toLocaleString()}
         </span>
       ) : (
         <span>{formatTokens(value)}</span>
       )}
       {value > 0 && (
-        <span className="text-[9px] text-zinc-600 light:text-stone-500 font-normal opacity-50 hover:opacity-100 transition-opacity">
+        <span className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] font-normal opacity-50 hover:opacity-100 transition-opacity">
           {showFull ? 'abbreviated' : 'full'}
         </span>
       )}
@@ -243,14 +245,14 @@ function CostValue({ value }: { value: number }) {
       title={showFull ? 'Click for abbreviated' : 'Click for full amount'}
     >
       {showFull ? (
-        <span className="text-[10px] text-zinc-400 light:text-stone-500 font-normal">
+        <span className="text-[10px] text-zinc-400 light:text-[var(--text-muted)] font-normal">
           ${value.toFixed(value >= 1 ? 2 : 4)}
         </span>
       ) : (
         <span>{formatCurrency(value)}</span>
       )}
       {value > 0 && (
-        <span className="text-[9px] text-zinc-600 light:text-stone-500 font-normal opacity-50 hover:opacity-100 transition-opacity">
+        <span className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] font-normal opacity-50 hover:opacity-100 transition-opacity">
           {showFull ? 'abbreviated' : 'full'}
         </span>
       )}
@@ -474,7 +476,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
         'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150 max-w-[120px] truncate',
         active
           ? 'bg-zinc-700/60 text-zinc-200'
-          : 'text-zinc-600 light:text-stone-500 hover:text-zinc-400 light:hover:text-stone-400'
+          : 'text-zinc-600 light:text-[var(--text-muted)] hover:text-zinc-400 light:hover:text-stone-400'
       )}
     >
       {children}
@@ -485,7 +487,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
     <div className="space-y-3">
       {/* ── Controls ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
           {(['tools', 'models'] as const).map((d) => (
             <button
               key={d}
@@ -496,7 +498,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 dimension === d
                   ? 'bg-violet-500/20 text-violet-400'
-                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
               )}
             >
               {d === 'tools' ? 'Tools' : 'Models'}
@@ -504,7 +506,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
           ))}
         </div>
 
-        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
           {(['tokens', 'messages', 'sessions', 'cost'] as const).map((m) => (
             <button
               key={m}
@@ -515,7 +517,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 metric === m
                   ? 'bg-violet-500/20 text-violet-400'
-                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
               )}
             >
               {m.charAt(0).toUpperCase() + m.slice(1)}
@@ -534,7 +536,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                     'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                     tokenSub === sub
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                   )}
                 >
                   {sub === 'combined' ? 'All' : sub === 'input' ? 'In' : 'Out'}
@@ -544,7 +546,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
           {(['week', 'month', 'all'] as const).map((p) => (
             <button
               key={p}
@@ -555,7 +557,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 period === p
                   ? 'bg-zinc-700/60 text-zinc-200'
-                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
               )}
             >
               {p === 'week' ? '7D' : p === 'month' ? '30D' : 'All'}
@@ -563,7 +565,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
           ))}
         </div>
 
-        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50 ml-auto">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 ml-auto">
           {(['overlay', 'split'] as const).map((l) => (
             <button
               key={l}
@@ -575,7 +577,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 layout === l
                   ? 'bg-zinc-700/60 text-zinc-200'
-                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
               )}
             >
               {l === 'overlay' ? 'Combined' : 'Split'}
@@ -593,7 +595,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
             'px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150',
             selection.length === 0
               ? 'bg-violet-500/20 text-violet-400'
-              : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
           )}
         >
           All
@@ -618,7 +620,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
 
       {/* ── States ── */}
       {errorText ? (
-        <div className="p-3 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-400 light:text-stone-500">
+        <div className="p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-400 light:text-[var(--text-muted)]">
           {errorText}{' '}
           <button
             type="button"
@@ -629,18 +631,18 @@ function AgentComparePanel(props: AgentComparePanelProps) {
           </button>
         </div>
       ) : isLoading ? (
-        <div className="h-48 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 animate-pulse" />
+        <div className="h-48 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 animate-pulse" />
       ) : options.length === 0 ? (
-        <div className="p-4 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-stone-500">
+        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
           No {dimension === 'tools' ? 'tools' : 'models'} with recorded usage yet. Run a
           sync from the toolbar to import your AI activity.
         </div>
       ) : series.length === 0 ? (
-        <div className="p-4 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-stone-500">
+        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
           Select at least one {dimension === 'tools' ? 'tool' : 'model'} to compare.
         </div>
       ) : grandTotal === 0 ? (
-        <div className="p-4 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-stone-500">
+        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
           No {metricLabel.toLowerCase()} recorded in this period. Try a wider range or a
           different metric.
         </div>
@@ -652,14 +654,14 @@ function AgentComparePanel(props: AgentComparePanelProps) {
             {ranked.map((r) => (
               <div
                 key={r.key}
-                className="flex items-center justify-between gap-2 px-2 py-1 bg-zinc-950/60 light:bg-white rounded-lg ring-1 ring-zinc-800/50"
+                className="flex items-center justify-between gap-2 px-2 py-1 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-lg ring-1 ring-zinc-800/50"
               >
                 <span className="flex items-center gap-1.5 min-w-0">
                   <span
                     className="w-1.5 h-1.5 rounded-full shrink-0"
                     style={{ backgroundColor: r.color }}
                   />
-                  <span className="text-[10px] text-zinc-400 light:text-stone-500 truncate">
+                  <span className="text-[10px] text-zinc-400 light:text-[var(--text-muted)] truncate">
                     {r.label}
                   </span>
                 </span>
@@ -672,7 +674,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
               </div>
             ))}
           </div>
-          <div className="h-56 bg-zinc-950/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50">
+          <div className="h-56 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50">
             {chartType === 'bar' ? (
               <Bar data={overlayData as any} options={barOptions as any} />
             ) : (
@@ -688,7 +690,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
             return (
               <div
                 key={r.key}
-                className="bg-zinc-950/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50"
+                className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50"
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="flex items-center gap-1.5 min-w-0">
@@ -697,7 +699,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                       style={{ backgroundColor: r.color }}
                     />
                     <span
-                      className="text-[10px] text-zinc-300 light:text-stone-700 truncate"
+                      className="text-[10px] text-zinc-300 light:text-[var(--text-secondary)] truncate"
                       title={r.label}
                     >
                       {r.label}
@@ -824,6 +826,10 @@ export default function AIToolsTab({
 
   // ── Popup-internal model filter ──
   const [modalSelectedModels, setModalSelectedModels] = useState<string[]>([])
+
+  // ── Display timezone offset (display-only; never rewrites stored data) ──
+  const [displayOffsetMinutes, setDisplayOffsetMinutes] = useState(0)
+  const [showTzControl, setShowTzControl] = useState(false)
 
   // ── Comparison (multi tool/model, combined vs split) ──
   // The detail view used to be structurally one-agent-at-a-time: `selectedAgent`
@@ -1537,6 +1543,35 @@ export default function AIToolsTab({
     )
   }
 
+  // Restore the persisted display offset. The helper module holds it so every
+  // timestamp formatter reads one value instead of threading a prop.
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const res = (await window.deskflowAPI?.getAIDisplayTimezoneOffset?.()) as any
+        const m = typeof res?.offsetMinutes === 'number' && Number.isFinite(res.offsetMinutes)
+          ? res.offsetMinutes
+          : 0
+        if (!alive) return
+        setDisplayOffsetMinutes(m)
+        setAiDisplayOffsetMinutes(m)
+      } catch {}
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const applyDisplayOffset = useCallback(async (minutes: number) => {
+    const clamped = Math.max(-16 * 60, Math.min(16 * 60, Math.round(minutes)))
+    // Applied locally first so the list re-renders immediately; the write to
+    // preferences is only persistence, so a failure here is not user-visible.
+    setDisplayOffsetMinutes(clamped)
+    setAiDisplayOffsetMinutes(clamped)
+    try {
+      await window.deskflowAPI?.setAIDisplayTimezoneOffset?.(clamped)
+    } catch {}
+  }, [])
+
   const handleToolsConfig = async () => {
     setToolsLoading(true)
     setPathMsg(null)
@@ -1599,7 +1634,7 @@ export default function AIToolsTab({
   const activeCount = aiAgents.filter((a) => a.status !== 'inactive').length
 
   return (
-    <div data-section="ide.ai-tools" className="space-y-5">
+    <div data-section="ide.ai-tools" className="mt-6 space-y-5">
       {/* ── Summary Bar ── */}
       <GlassCard>
         <div className="flex items-center justify-between">
@@ -1611,7 +1646,7 @@ export default function AIToolsTab({
               <h2 className="text-[15px] font-semibold text-zinc-100">
                 AI Tools
               </h2>
-              <p className="text-[11px] text-zinc-500 light:text-stone-500">
+              <p className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                 {activeCount} active tool{activeCount !== 1 ? 's' : ''} detected
               </p>
             </div>
@@ -1620,7 +1655,7 @@ export default function AIToolsTab({
             <button
               onClick={handleSyncAI}
               disabled={syncingAI}
-              className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/70 light:bg-stone-200 hover:bg-zinc-700/70 light:hover:bg-stone-200 text-zinc-200 rounded-lg text-xs ring-1 ring-zinc-700/60 disabled:opacity-50 transition-colors duration-150"
+              className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/70 light:bg-[var(--ws-surface-sunken)] hover:bg-zinc-700/70 light:hover:bg-[var(--ws-surface-hover)] text-zinc-200 rounded-lg text-xs ring-1 ring-zinc-700/60 disabled:opacity-50 transition-colors duration-150"
             >
               <Sparkles
                 className={`w-3.5 h-3.5 ${syncingAI ? 'animate-spin' : ''}`}
@@ -1642,7 +1677,7 @@ export default function AIToolsTab({
                 'flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors duration-150 ring-1',
                 timeLock
                   ? 'bg-indigo-500/15 ring-indigo-500/30 text-indigo-300'
-                  : 'text-zinc-500 light:text-stone-500 bg-zinc-800/50 light:bg-stone-100 hover:text-zinc-200 ring-zinc-700/40'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] bg-zinc-800/50 light:bg-[var(--ws-surface-raised)] hover:text-zinc-200 ring-zinc-700/40'
               )}
             >
               {timeLock ? (
@@ -1663,7 +1698,7 @@ export default function AIToolsTab({
                 'flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors duration-150 ring-1',
                 detailViewMode === 'dropdown'
                   ? 'bg-emerald-500/15 ring-emerald-500/30 text-emerald-300'
-                  : 'text-zinc-500 light:text-stone-500 bg-zinc-800/50 light:bg-stone-100 hover:text-zinc-200 ring-zinc-700/40'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] bg-zinc-800/50 light:bg-[var(--ws-surface-raised)] hover:text-zinc-200 ring-zinc-700/40'
               )}
             >
               {detailViewMode === 'dropdown' ? (
@@ -1676,10 +1711,52 @@ export default function AIToolsTab({
             <div className="w-px h-5 bg-zinc-700/60" />
             <button
               onClick={handleDebugAgents}
-              className="px-2.5 py-1.5 text-[11px] text-zinc-400 light:text-stone-500 hover:text-zinc-200 bg-zinc-800/70 light:bg-stone-200 hover:bg-zinc-700/70 light:hover:bg-stone-200 rounded-lg ring-1 ring-zinc-700/60 transition-colors duration-150"
+              className="px-2.5 py-1.5 text-[11px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-200 bg-zinc-800/70 light:bg-[var(--ws-surface-sunken)] hover:bg-zinc-700/70 light:hover:bg-[var(--ws-surface-hover)] rounded-lg ring-1 ring-zinc-700/60 transition-colors duration-150"
             >
               {showAgentDebug ? 'Hide Details' : 'Details'}
             </button>
+             <div className="flex items-center gap-1">
+               <button
+                 onClick={() => setShowTzControl((v) => !v)}
+                 aria-expanded={showTzControl}
+                 title="Shift how AI timestamps are displayed. This changes nothing on disk — your stored dates stay exactly as synced."
+                 className={cn(
+                   'flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-lg ring-1 transition-colors duration-150',
+                   displayOffsetMinutes !== 0
+                     ? 'text-amber-300 bg-amber-950/30 ring-amber-500/25 hover:bg-amber-900/40'
+                     : 'text-zinc-500 light:text-[var(--text-muted)] bg-zinc-800/50 light:bg-[var(--ws-surface-raised)] hover:text-zinc-200 ring-zinc-700/40'
+                 )}
+               >
+                 <Globe className="w-3 h-3" />
+                 {formatOffsetLabel(displayOffsetMinutes)}
+               </button>
+               {showTzControl && (
+                 <div className="flex items-center gap-1 px-1.5 py-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg ring-1 ring-zinc-800/50">
+                   {[
+                     { label: '-1h', delta: -60 },
+                     { label: '-15m', delta: -15 },
+                     { label: '+15m', delta: 15 },
+                     { label: '+1h', delta: 60 },
+                   ].map((s) => (
+                     <button
+                       key={s.label}
+                       onClick={() => applyDisplayOffset(displayOffsetMinutes + s.delta)}
+                       className="px-1.5 py-0.5 rounded-md text-[10px] font-medium text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-300 transition-colors duration-150"
+                     >
+                       {s.label}
+                     </button>
+                   ))}
+                   <div className="w-px h-3 bg-zinc-700/60" />
+                   <button
+                     onClick={() => applyDisplayOffset(0)}
+                     disabled={displayOffsetMinutes === 0}
+                     className="px-1.5 py-0.5 rounded-md text-[10px] font-medium text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-300 disabled:opacity-40 transition-colors duration-150"
+                   >
+                     Reset
+                   </button>
+                 </div>
+               )}
+             </div>
              <button
                onClick={handleToolsConfig}
                disabled={toolsLoading}
@@ -1709,7 +1786,7 @@ export default function AIToolsTab({
                 a.click()
                 URL.revokeObjectURL(url)
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-zinc-400 light:text-stone-500 hover:text-zinc-200 bg-zinc-800/70 light:bg-stone-200 hover:bg-zinc-700/70 light:hover:bg-stone-200 rounded-lg ring-1 ring-zinc-700/60 transition-colors duration-150"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-200 bg-zinc-800/70 light:bg-[var(--ws-surface-sunken)] hover:bg-zinc-700/70 light:hover:bg-[var(--ws-surface-hover)] rounded-lg ring-1 ring-zinc-700/60 transition-colors duration-150"
             >
               <Download className="w-3 h-3" />
               CSV
@@ -1720,14 +1797,14 @@ export default function AIToolsTab({
 
       {/* ── Chart Controls ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
           <button
             onClick={() => { setChartType('line'); try { localStorage.setItem('ide-ai-chart-type', 'line') } catch {} }}
             className={cn(
               'px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
               chartType === 'line'
                 ? 'bg-violet-500/20 text-violet-400 ring-1 ring-violet-500/30'
-                : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
             )}
           >
             <span className="flex items-center gap-1.5">
@@ -1741,7 +1818,7 @@ export default function AIToolsTab({
               'px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
               chartType === 'bar'
                 ? 'bg-violet-500/20 text-violet-400 ring-1 ring-violet-500/30'
-                : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
             )}
           >
             <span className="flex items-center gap-1.5">
@@ -1765,7 +1842,7 @@ export default function AIToolsTab({
             'px-2.5 py-1 rounded-lg text-[11px] font-medium ring-1 transition-colors duration-150',
             logScale
               ? 'bg-cyan-500/15 text-cyan-400 ring-cyan-500/30'
-              : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
           )}
         >
           Log
@@ -1784,7 +1861,7 @@ export default function AIToolsTab({
             'px-2.5 py-1 rounded-lg text-[11px] font-medium ring-1 transition-colors duration-150',
             excludeOutliers
               ? 'bg-amber-500/15 text-amber-400 ring-amber-500/30'
-              : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
           )}
         >
           Outliers
@@ -1796,7 +1873,7 @@ export default function AIToolsTab({
             'px-2.5 py-1 rounded-lg text-[11px] font-medium ring-1 transition-colors duration-150',
             showDataOnly
               ? 'bg-emerald-500/15 text-emerald-400 ring-emerald-500/30'
-              : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
           )}
         >
           {showDataOnly ? 'Data Only' : 'All Days'}
@@ -1829,15 +1906,15 @@ export default function AIToolsTab({
                 <SectionHeader title="Tool Detection Details" icon={<Bot />} />
                 <button
                   onClick={() => setShowAgentDebug(false)}
-                  className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800"
+                  className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-800 light:hover:bg-[var(--ws-surface-hover)]"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {agentDebugInfo.database && (
-                <div className="mb-4 p-4 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 light:text-stone-500 mb-2">
+                <div className="mb-4 p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)] mb-2">
                     Database State
                   </h4>
                   {agentDebugInfo.database.error ? (
@@ -1847,13 +1924,13 @@ export default function AIToolsTab({
                   ) : (
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div>
-                        <span className="text-zinc-500 light:text-stone-500">Total Records:</span>
+                        <span className="text-zinc-500 light:text-[var(--text-muted)]">Total Records:</span>
                         <span className="text-zinc-100 ml-2">
                           {agentDebugInfo.database.totalRecords}
                         </span>
                       </div>
                       <div>
-                        <span className="text-zinc-500 light:text-stone-500">Total Tokens:</span>
+                        <span className="text-zinc-500 light:text-[var(--text-muted)]">Total Tokens:</span>
                         <span className="text-violet-400 ml-2">
                           <TokenValue
                             value={agentDebugInfo.database.totalTokens || 0}
@@ -1861,7 +1938,7 @@ export default function AIToolsTab({
                         </span>
                       </div>
                       <div>
-                        <span className="text-zinc-500 light:text-stone-500">By Tool:</span>
+                        <span className="text-zinc-500 light:text-[var(--text-muted)]">By Tool:</span>
                         <span className="text-zinc-100 ml-2">
                           {Array.isArray(agentDebugInfo.database.byTool)
                             ? agentDebugInfo.database.byTool
@@ -1880,7 +1957,7 @@ export default function AIToolsTab({
                   ([agentId, info]: [string, any]) => (
                     <div
                       key={agentId}
-                      className="bg-zinc-950/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50"
+                      className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -1909,10 +1986,10 @@ export default function AIToolsTab({
                       </div>
                       <div className="space-y-2">
                         <div>
-                          <span className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider">
+                          <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider">
                             Paths
                           </span>
-                          <div className="text-[11px] text-zinc-400 light:text-stone-500 font-mono mt-1">
+                          <div className="text-[11px] text-zinc-400 light:text-[var(--text-muted)] font-mono mt-1">
                             {(info.paths || []).map((p: string, i: number) => (
                               <div key={i} className="truncate" title={p}>
                                 {p}
@@ -1923,7 +2000,7 @@ export default function AIToolsTab({
                         {info.sampleFiles &&
                           info.sampleFiles.length > 0 && (
                             <div>
-                              <span className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider">
+                              <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider">
                                 Files Found
                               </span>
                               {info.totalFiles > 0 && (
@@ -1931,7 +2008,7 @@ export default function AIToolsTab({
                                   ({info.totalFiles} total)
                                 </span>
                               )}
-                              <div className="text-[11px] text-zinc-400 light:text-stone-500 font-mono mt-1 max-h-24 overflow-y-auto">
+                              <div className="text-[11px] text-zinc-400 light:text-[var(--text-muted)] font-mono mt-1 max-h-24 overflow-y-auto">
                                 {info.sampleFiles
                                   .slice(0, 5)
                                   .map((f: string, i: number) => (
@@ -1940,7 +2017,7 @@ export default function AIToolsTab({
                                     </div>
                                   ))}
                                 {info.sampleFiles.length > 5 && (
-                                  <div className="text-zinc-600 light:text-stone-500">
+                                  <div className="text-zinc-600 light:text-[var(--text-muted)]">
                                     ...and {info.sampleFiles.length - 5} more
                                   </div>
                                 )}
@@ -1970,14 +2047,14 @@ export default function AIToolsTab({
                 <SectionHeader title="Tools Config" icon={<FolderOpen />} />
                 <button
                   onClick={() => setShowToolsConfig(false)}
-                  className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800"
+                  className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-800 light:hover:bg-[var(--ws-surface-hover)]"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="space-y-4">
-                <p className="text-[11px] text-zinc-500 light:text-stone-500">
+                <p className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                   Where each tool stores its sessions, exactly as the sync engine
                   resolves it. Tools detected automatically need no setup —
                   override a path only if the tool lives somewhere unusual.
@@ -1985,14 +2062,14 @@ export default function AIToolsTab({
 
                 <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
                   {agentPaths.length === 0 && (
-                    <p className="text-[11px] text-zinc-500 light:text-stone-500">
+                    <p className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                       No agents found.
                     </p>
                   )}
                   {agentPaths.map((agent) => (
                     <div
                       key={agent.id}
-                      className="p-3 bg-zinc-950/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50"
+                      className="p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">
@@ -2000,7 +2077,7 @@ export default function AIToolsTab({
                             className="w-2 h-2 rounded-full flex-shrink-0"
                             style={{ backgroundColor: agent.color }}
                           />
-                          <span className="text-[12px] text-zinc-200 light:text-stone-800 truncate">
+                          <span className="text-[12px] text-zinc-200 light:text-[var(--text-primary)] truncate">
                             {agent.name}
                           </span>
                           <span
@@ -2024,7 +2101,7 @@ export default function AIToolsTab({
                           </button>
                           <button
                             onClick={() => handleAgentPathReset(agent.id, agent.name)}
-                            className="px-2 py-1 bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-300 rounded-lg text-[10px] ring-1 ring-zinc-700/60 transition-colors duration-150"
+                            className="px-2 py-1 bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-300 rounded-lg text-[10px] ring-1 ring-zinc-700/60 transition-colors duration-150 light:hover:bg-[var(--ws-surface-hover)]"
                           >
                             Auto
                           </button>
@@ -2033,14 +2110,14 @@ export default function AIToolsTab({
 
                       <div className="mt-2 space-y-1">
                         {agent.paths.length === 0 ? (
-                          <div className="text-[10px] text-zinc-500 light:text-stone-500 font-mono truncate">
+                          <div className="text-[10px] text-zinc-500 light:text-[var(--text-muted)] font-mono truncate">
                             No storage location resolved
                           </div>
                         ) : (
                           agent.paths.map((p, i) => (
                             <div
                               key={i}
-                              className="text-[10px] text-zinc-400 light:text-stone-500 font-mono truncate"
+                              className="text-[10px] text-zinc-400 light:text-[var(--text-muted)] font-mono truncate"
                             >
                               {p}
                             </div>
@@ -2052,13 +2129,13 @@ export default function AIToolsTab({
                 </div>
 
                 {pathMsg && (
-                  <p className="text-[11px] text-zinc-400 light:text-stone-500">{pathMsg}</p>
+                  <p className="text-[11px] text-zinc-400 light:text-[var(--text-muted)]">{pathMsg}</p>
                 )}
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowToolsConfig(false)}
-                    className="px-3 py-1.5 bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-300 rounded-lg text-xs ring-1 ring-zinc-700/60 transition-colors duration-150"
+                    className="px-3 py-1.5 bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-300 rounded-lg text-xs ring-1 ring-zinc-700/60 transition-colors duration-150 light:hover:bg-[var(--ws-surface-hover)]"
                   >
                     Done
                   </button>
@@ -2086,7 +2163,7 @@ export default function AIToolsTab({
                   <div className="text-sm text-zinc-100 font-medium">
                     Sync Complete
                   </div>
-                  <div className="text-[11px] text-zinc-500 light:text-stone-500">
+                  <div className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                     {Object.keys(aiSyncResult.agents).length > 0 ? (
                       Object.entries(aiSyncResult.agents).map(
                         ([agent, count]) => (
@@ -2125,7 +2202,7 @@ export default function AIToolsTab({
                   <h3 className="text-[13px] font-semibold text-zinc-100">
                     Language Distribution
                   </h3>
-                  <p className="text-[11px] text-zinc-500 light:text-stone-500">
+                  <p className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                     By project type detection
                   </p>
                 </div>
@@ -2199,7 +2276,7 @@ export default function AIToolsTab({
                   <h3 className="text-[13px] font-semibold text-zinc-100">
                     Avg Response Time
                   </h3>
-                  <p className="text-[11px] text-zinc-500 light:text-stone-500">
+                  <p className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                     {usageDetails.avgResponseTime}ms average
                   </p>
                 </div>
@@ -2260,7 +2337,7 @@ export default function AIToolsTab({
                     }}
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-zinc-500 light:text-stone-500 text-sm">
+                  <div className="h-full flex items-center justify-center text-zinc-500 light:text-[var(--text-muted)] text-sm">
                     No response time data yet
                   </div>
                 )}
@@ -2281,14 +2358,14 @@ export default function AIToolsTab({
               Tools
             </span>
           </div>
-          <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+          <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
             <button
               onClick={() => setTopViewMode('tools')}
               className={cn(
                 'px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
                 topViewMode === 'tools'
                   ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30'
-                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
               )}
             >
               <span className="flex items-center gap-1.5">
@@ -2302,7 +2379,7 @@ export default function AIToolsTab({
                 'px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
                 topViewMode === 'models'
                   ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30'
-                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
               )}
             >
               <span className="flex items-center gap-1.5">
@@ -2338,10 +2415,10 @@ export default function AIToolsTab({
                       setSelectedAgentDetail(agent)
                   }}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ring-1',
+                    'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-150 ring-1',
                     selectedAgent === agent.id
                       ? 'ring-violet-500/50 bg-violet-500/10 text-zinc-100'
-                      : 'ring-zinc-700/40 light:ring-stone-300 bg-zinc-800/30 light:bg-stone-100 text-zinc-400 hover:ring-zinc-600/60 hover:bg-zinc-800/60 hover:text-zinc-200'
+                      : 'ring-zinc-700/40 light:ring-[var(--ws-border-strong)] bg-zinc-800/30 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:ring-zinc-600/60 hover:bg-zinc-800/60 hover:text-zinc-200'
                   )}
                 >
                   <div
@@ -2397,21 +2474,21 @@ export default function AIToolsTab({
                     </div>
                   )}
                   {agent.status !== 'inactive' && agent.models.length > 0 && (
-                    <span className="text-[9px] text-zinc-600 light:text-stone-500 bg-zinc-800/60 light:bg-stone-200 px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] bg-zinc-800/60 light:bg-[var(--ws-surface-sunken)] px-1.5 py-0.5 rounded">
                       {agent.models.length === 1
                         ? agent.models[0]
                         : `${agent.models.length} models`}
                     </span>
                   )}
                   {agent.status !== 'inactive' && (
-                    <span className="text-[10px] text-zinc-600 light:text-stone-500 tabular-nums ml-0.5">
+                    <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] tabular-nums ml-0.5">
                       <TokenValue value={agent.tokens} />
                     </span>
                   )}
                 </button>
               )
             })}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs ring-1 ring-zinc-800/40 bg-zinc-900/20 text-zinc-600 light:text-stone-500">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs ring-1 ring-zinc-800/40 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] text-zinc-600 light:text-[var(--text-muted)]">
               <Monitor className="w-3 h-3 text-indigo-400/50" />
               <span>Copilot</span>
               <span className="text-[9px] bg-amber-500/10 text-amber-400/60 px-1.5 py-0.5 rounded">
@@ -2425,14 +2502,14 @@ export default function AIToolsTab({
         {topViewMode === 'models' && (
           <div className="flex flex-wrap gap-2">
             {allModelData.length === 0 ? (
-              <span className="text-xs text-zinc-500 light:text-stone-500 py-2">
+              <span className="text-xs text-zinc-500 light:text-[var(--text-muted)] py-2">
                 No model data detected yet. Click "Sync AI" to scan.
               </span>
             ) : (
               allModelData.map(([modelName, data], idx) => (
                 <div
                   key={modelName}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs ring-1 ring-zinc-700/30 bg-zinc-800/20 hover:bg-zinc-800/50 light:bg-stone-200 transition-colors duration-150"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs ring-1 ring-zinc-700/30 bg-zinc-800/20 hover:bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] transition-colors duration-150 light:hover:bg-[var(--ws-surface-hover)]"
                 >
                   <div
                     className="w-2 h-2 rounded-full flex-shrink-0"
@@ -2442,15 +2519,15 @@ export default function AIToolsTab({
                     }}
                   />
                   <span
-                    className="text-zinc-300 light:text-stone-700 font-medium truncate max-w-[160px]"
+                    className="text-zinc-300 light:text-[var(--text-secondary)] font-medium truncate max-w-[160px]"
                     title={modelName}
                   >
                     {modelName}
                   </span>
-                  <span className="text-[10px] text-zinc-600 light:text-stone-500 tabular-nums">
+                  <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] tabular-nums">
                     <TokenValue value={data.tokens} />
                   </span>
-                  <span className="text-[9px] text-zinc-600 light:text-stone-500 bg-zinc-800/60 light:bg-stone-200 px-1.5 py-0.5 rounded">
+                  <span className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] bg-zinc-800/60 light:bg-[var(--ws-surface-sunken)] px-1.5 py-0.5 rounded">
                     {data.agents
                       .map((a) => AGENT_CONFIG[a]?.name || a)
                       .join(', ')}
@@ -2611,7 +2688,7 @@ export default function AIToolsTab({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                className="fixed inset-0 bg-black/70  z-50 flex items-center justify-center p-4"
                 onClick={(e) => {
                   if (e.target === e.currentTarget) {
                     setSelectedAgent(null)
@@ -2624,7 +2701,7 @@ export default function AIToolsTab({
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.95, opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="bg-zinc-900 light:bg-white/95 backdrop-blur-xl border border-zinc-700 light:border-stone-400/50 rounded-xl max-w-4xl w-full max-h-[85vh] overflow-y-auto shadow-2xl"
+                  className="bg-zinc-900 light:bg-white/95  border border-zinc-700 light:border-[color-mix(in_srgb,var(--ws-border)_50%,transparent)] rounded-xl max-w-4xl w-full max-h-[85vh] overflow-y-auto shadow-2xl"
                 >
                   <div className="p-6 space-y-5">
                     {/* Header */}
@@ -2643,7 +2720,7 @@ export default function AIToolsTab({
                           <h3 className="text-lg font-semibold text-zinc-100">
                             {agent.name}
                           </h3>
-                          <div className="flex items-center gap-2 text-[11px] text-zinc-500 light:text-stone-500">
+                          <div className="flex items-center gap-2 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                             <div
                               className={cn(
                                 'w-1.5 h-1.5 rounded-full',
@@ -2678,7 +2755,7 @@ export default function AIToolsTab({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                           {([
                             { key: 'week' as const, label: '7D' },
                             { key: 'month' as const, label: '30D' },
@@ -2691,7 +2768,7 @@ export default function AIToolsTab({
                                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                                 modalPeriod === p.key
                                   ? 'bg-violet-500/20 text-violet-400'
-                                  : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                               )}
                             >
                               {p.label}
@@ -2703,7 +2780,7 @@ export default function AIToolsTab({
                             setSelectedAgent(null)
                             setSelectedAgentDetail(null)
                           }}
-                          className="p-2 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800"
+                          className="p-2 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-800 light:hover:bg-[var(--ws-surface-hover)]"
                         >
                           <X className="w-5 h-5" />
                         </button>
@@ -2724,12 +2801,12 @@ export default function AIToolsTab({
                           ].map((stat) => (
                             <div
                               key={stat.label}
-                              className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
+                              className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
                             >
                               <div className={cn('text-base font-bold tabular-nums', stat.color)}>
                                 {stat.comp}
                               </div>
-                              <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">
+                              <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">
                                 {stat.label}
                               </div>
                             </div>
@@ -2746,12 +2823,12 @@ export default function AIToolsTab({
                           ].map((stat) => (
                             <div
                               key={stat.label}
-                              className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
+                              className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
                             >
                               <div className={cn('text-base font-bold tabular-nums', stat.color)}>
                                 {stat.comp || stat.value}
                               </div>
-                              <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">
+                              <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">
                                 {stat.label}
                               </div>
                             </div>
@@ -2766,29 +2843,29 @@ export default function AIToolsTab({
                           const dMsgs = totalMessages / timeframeDays
                           return (
                             <div className="grid grid-cols-3 gap-3">
-                              <div className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-amber-500/20">
+                              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-amber-500/20">
                                 <div className="text-base font-bold text-amber-400 tabular-nums"><TokenValue value={Math.round(dTokens)} /></div>
-                                <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">Tokens/Day ({timeframeDays}d)</div>
+                                <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Tokens/Day ({timeframeDays}d)</div>
                               </div>
-                              <div className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-cyan-500/20">
+                              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-cyan-500/20">
                                 <div className="text-base font-bold text-cyan-400 tabular-nums"><CostValue value={dCost} /></div>
-                                <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">Cost/Day</div>
+                                <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Cost/Day</div>
                               </div>
-                              <div className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-pink-500/20">
+                              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-pink-500/20">
                                 <div className="text-base font-bold text-pink-400 tabular-nums">{Math.round(dMsgs).toLocaleString()}</div>
-                                <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">Msgs/Day</div>
+                                <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Msgs/Day</div>
                               </div>
                             </div>
                           )
                         })()}
 
                         {/* Daily Usage Timeline Chart */}
-                        <div className="bg-zinc-950/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                        <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
                           <div className="flex items-center justify-between mb-4">
-                            <div className="text-[11px] text-zinc-600 light:text-stone-500 uppercase tracking-wider font-semibold">
+                            <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider font-semibold">
                               Daily Usage Timeline
                             </div>
-                            <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                            <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                               {(['tokens', 'messages', 'sessions', 'cost'] as const).map((mode) => (
                                 <button
                                   key={mode}
@@ -2797,7 +2874,7 @@ export default function AIToolsTab({
                                     'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                                     aiChartMode === mode
                                       ? 'bg-violet-500/20 text-violet-400'
-                                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                                   )}
                                 >
                                   {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -2817,8 +2894,8 @@ export default function AIToolsTab({
                                             ? 'bg-blue-500/20 text-blue-400'
                                             : sub === 'output'
                                               ? 'bg-emerald-500/20 text-emerald-400'
-                                              : 'bg-zinc-700/50 text-zinc-300 light:bg-stone-200 light:text-stone-700'
-                                          : 'text-zinc-600 light:text-stone-500 hover:text-zinc-400 light:hover:text-stone-400'
+                                              : 'bg-zinc-700/50 text-zinc-300 light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)]'
+                                          : 'text-zinc-600 light:text-[var(--text-muted)] hover:text-zinc-400 light:hover:text-stone-400'
                                       )}
                                     >
                                       {sub === 'combined' ? 'All' : sub === 'input' ? 'In' : 'Out'}
@@ -2827,19 +2904,19 @@ export default function AIToolsTab({
                                 </>
                               )}
                             </div>
-                            <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                            <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                               <button
                                 onClick={() => { setChartType('line'); try { localStorage.setItem('ide-ai-chart-type', 'line') } catch {} }}
                                 className={cn(
                                   'px-1.5 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
-                                  chartType === 'line' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                                  chartType === 'line' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                                 )}
                               >Line</button>
                               <button
                                 onClick={() => { setChartType('bar'); try { localStorage.setItem('ide-ai-chart-type', 'bar') } catch {} }}
                                 className={cn(
                                   'px-1.5 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
-                                  chartType === 'bar' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                                  chartType === 'bar' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                                 )}
                               >Bar</button>
                             </div>
@@ -2932,9 +3009,9 @@ export default function AIToolsTab({
                           if (modelDatasets.length === 0) return null
 
                           return (
-                            <div className="bg-zinc-950/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                            <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
                               <div className="flex items-center justify-between mb-3">
-                                <div className="text-[11px] text-zinc-600 light:text-stone-500 uppercase tracking-wider font-semibold">
+                                <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider font-semibold">
                                   Models — {modelMetricLabel}
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -2942,7 +3019,7 @@ export default function AIToolsTab({
                                     onClick={() => setModalSelectedModels([])}
                                     className={cn(
                                       'px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150',
-                                      modalSelectedModels.length === 0 ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                                      modalSelectedModels.length === 0 ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                                     )}
                                   >All</button>
                                   {modelNames.slice(0, 6).map((m, i) => {
@@ -2953,7 +3030,7 @@ export default function AIToolsTab({
                                         onClick={() => setModalSelectedModels(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])}
                                         className={cn(
                                           'px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150 max-w-[90px] truncate',
-                                          isActive ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-600 light:text-stone-500 hover:text-zinc-400 light:hover:text-stone-400'
+                                          isActive ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-600 light:text-[var(--text-muted)] hover:text-zinc-400 light:hover:text-stone-400'
                                         )}
                                         title={m}
                                       >
@@ -2991,8 +3068,8 @@ export default function AIToolsTab({
 
                         {/* Models list */}
                         {agent.models.length > 0 && (
-                          <div className="bg-zinc-950/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
-                            <div className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mb-3 font-semibold">
+                          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                            <div className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mb-3 font-semibold">
                               Models Used
                             </div>
                             <div className="flex flex-wrap gap-1.5">
@@ -3001,7 +3078,7 @@ export default function AIToolsTab({
                               ).map((m, i) => (
                                 <div
                                   key={m.name}
-                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] ring-1 ring-zinc-700/30 bg-zinc-800 light:bg-stone-200/30"
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] ring-1 ring-zinc-700/30 bg-zinc-800 light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_30%,transparent)]"
                                 >
                                   <div
                                     className="w-2 h-2 rounded-full flex-shrink-0"
@@ -3010,10 +3087,10 @@ export default function AIToolsTab({
                                         MODEL_COLORS[i % MODEL_COLORS.length],
                                     }}
                                   />
-                                  <span className="text-zinc-400 light:text-stone-500">
+                                  <span className="text-zinc-400 light:text-[var(--text-muted)]">
                                     {m.name}
                                   </span>
-                                  <span className="text-zinc-600 light:text-stone-500 tabular-nums">
+                                  <span className="text-zinc-600 light:text-[var(--text-muted)] tabular-nums">
                                     <TokenValue value={m.tokens} />
                                   </span>
                                 </div>
@@ -3024,19 +3101,19 @@ export default function AIToolsTab({
                       </div>
                     ) : (
                       <div className="text-center py-8">
-                        <span className="text-sm text-zinc-500 light:text-stone-500">
+                        <span className="text-sm text-zinc-500 light:text-[var(--text-muted)]">
                           Not detected
                         </span>
                         {agentDebugInfo?.agents?.[agent.id]?.paths ? (
                           <p
-                            className="text-[11px] text-zinc-600 light:text-stone-500 mt-1 truncate mx-2"
+                            className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] mt-1 truncate mx-2"
                             title={agentDebugInfo.agents[agent.id].paths[0]}
                           >
                             Looking in:{' '}
                             {agentDebugInfo.agents[agent.id].paths[0]}
                           </p>
                         ) : (
-                          <p className="text-[11px] text-zinc-600 light:text-stone-500 mt-1">
+                          <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] mt-1">
                             Install {agent.name} to start tracking
                           </p>
                         )}
@@ -3054,7 +3131,7 @@ export default function AIToolsTab({
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 className="overflow-hidden"
               >
-                <div className="bg-zinc-900/80 light:bg-white border border-zinc-700 light:border-stone-400/50 rounded-xl p-5 space-y-4">
+                <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] light:bg-white border border-zinc-700 light:border-[color-mix(in_srgb,var(--ws-border)_50%,transparent)] rounded-xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div
@@ -3065,7 +3142,7 @@ export default function AIToolsTab({
                       </div>
                       <div>
                         <h3 className="text-[13px] font-semibold text-zinc-100">{agent.name}</h3>
-                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 light:text-stone-500">
+                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 light:text-[var(--text-muted)]">
                           <div className={cn('w-1.5 h-1.5 rounded-full', agent.status === 'active' ? 'bg-emerald-400' : agent.status === 'idle' ? 'bg-amber-400' : 'bg-zinc-600')} />
                           <span>{agent.status === 'active' ? 'Active' : agent.status === 'idle' ? 'Idle' : 'Not detected'}</span>
                         </div>
@@ -3073,7 +3150,7 @@ export default function AIToolsTab({
                     </div>
                     <button
                       onClick={() => { setSelectedAgent(null); setSelectedAgentDetail(null) }}
-                      className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-stone-500 hover:text-zinc-200 light:hover:text-stone-800"
+                      className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors duration-150 text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-800 light:hover:bg-[var(--ws-surface-hover)]"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -3092,9 +3169,9 @@ export default function AIToolsTab({
                           { label: 'Messages', comp: <span>{totalMessages.toLocaleString()}</span>, color: 'text-blue-400' },
                           { label: 'Cost', comp: <CostValue value={totalCost} />, color: 'text-emerald-400' },
                         ].map((s) => (
-                          <div key={s.label} className="bg-zinc-950/60 light:bg-white rounded-lg p-2 text-center ring-1 ring-zinc-800/50">
+                          <div key={s.label} className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-lg p-2 text-center ring-1 ring-zinc-800/50">
                             <div className={cn('text-sm font-bold tabular-nums', s.color)}>{s.comp}</div>
-                            <div className="text-[8px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-0.5">{s.label}</div>
+                            <div className="text-[8px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-0.5">{s.label}</div>
                           </div>
                         ))}
                       </div>
@@ -3152,10 +3229,10 @@ export default function AIToolsTab({
 
         if (heatmapAgents.length === 0 || !overview) {
           return (
-            <div className="bg-zinc-900/60 light:bg-stone-200 backdrop-blur-xl border border-zinc-800/50 light:border-[var(--ws-border)] rounded-xl !p-5 flex flex-col items-center justify-center min-h-[200px] text-center">
-              <CalendarDays className="w-8 h-8 text-zinc-500 light:text-stone-500 mb-2" />
-              <p className="text-sm text-zinc-400 light:text-stone-500 font-medium">No daily usage data available</p>
-              <p className="text-[10px] text-zinc-500 light:text-stone-500 mt-1">Try selecting a specific tool or refreshing the data.</p>
+            <div className="bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)]  border border-zinc-800/50 light:border-[var(--ws-border)] rounded-xl !p-5 flex flex-col items-center justify-center min-h-[200px] text-center">
+              <CalendarDays className="w-8 h-8 text-zinc-500 light:text-[var(--text-muted)] mb-2" />
+              <p className="text-sm text-zinc-400 light:text-[var(--text-muted)] font-medium">No daily usage data available</p>
+              <p className="text-[10px] text-zinc-500 light:text-[var(--text-muted)] mt-1">Try selecting a specific tool or refreshing the data.</p>
             </div>
           )
         }
@@ -3166,7 +3243,7 @@ export default function AIToolsTab({
           : heatmapAgents.filter(a => a.id === selectedHeatmapTool)
         if (filteredAgents.length === 0) {
           return (
-            <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-xl !p-5 text-center text-sm text-zinc-500 light:text-stone-500">
+            <div className="bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 rounded-xl !p-5 text-center text-sm text-zinc-500 light:text-[var(--text-muted)]">
               No data for the selected tool filter.
             </div>
           )
@@ -3194,10 +3271,10 @@ export default function AIToolsTab({
 
         if (allDateStrs.size === 0) {
           return (
-            <div className="bg-zinc-900/60 light:bg-stone-200 backdrop-blur-xl border border-zinc-800/50 light:border-[var(--ws-border)] rounded-xl !p-5 flex flex-col items-center justify-center min-h-[200px] text-center">
-              <CalendarDays className="w-8 h-8 text-zinc-500 light:text-stone-500 mb-2" />
-              <p className="text-sm text-zinc-400 light:text-stone-500 font-medium">No daily usage data available</p>
-              <p className="text-[10px] text-zinc-500 light:text-stone-500 mt-1">Try selecting a specific tool or refreshing the data.</p>
+            <div className="bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)]  border border-zinc-800/50 light:border-[var(--ws-border)] rounded-xl !p-5 flex flex-col items-center justify-center min-h-[200px] text-center">
+              <CalendarDays className="w-8 h-8 text-zinc-500 light:text-[var(--text-muted)] mb-2" />
+              <p className="text-sm text-zinc-400 light:text-[var(--text-muted)] font-medium">No daily usage data available</p>
+              <p className="text-[10px] text-zinc-500 light:text-[var(--text-muted)] mt-1">Try selecting a specific tool or refreshing the data.</p>
             </div>
           )
         }
@@ -3294,28 +3371,28 @@ export default function AIToolsTab({
                 </div>
                 <div>
                   <h3 className="text-[13px] font-semibold text-zinc-100">Usage Pattern</h3>
-                  <p className="text-[11px] text-zinc-600 light:text-stone-500">
+                  <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                     {selectedHeatmapTool === 'all' ? 'All tools' : heatmapAgents.find(a => a.id === selectedHeatmapTool)?.name || selectedHeatmapTool} · {days.length} days · {aiChartMode}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
-                  <button onClick={() => setToolFilter('all')} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === 'all' ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300')}>All</button>
+                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                  <button onClick={() => setToolFilter('all')} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === 'all' ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300')}>All</button>
                   {heatmapAgents.slice(0, 8).map(a => (
-                    <button key={a.id} onClick={() => setToolFilter(a.id)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === a.id ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300')}>{a.name.split(' ')[0]}</button>
+                    <button key={a.id} onClick={() => setToolFilter(a.id)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === a.id ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300')}>{a.name.split(' ')[0]}</button>
                   ))}
                 </div>
-                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                   {(['tokens', 'messages', 'cost', 'sessions'] as const).map((mode) => (
-                    <button key={mode} onClick={() => setAiChartMode(mode)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', aiChartMode === mode ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300')}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</button>
+                    <button key={mode} onClick={() => setAiChartMode(mode)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', aiChartMode === mode ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300')}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</button>
                   ))}
                 </div>
               </div>
             </div>
 
             <div
-              className="rounded-2xl p-4 overflow-visible relative"
+              className="rounded-xl p-4 overflow-visible relative"
               style={{
                 background: 'linear-gradient(135deg, rgba(20,22,30,0.9) 0%, rgba(11,12,16,0.95) 100%)',
                 border: '1px solid rgba(255,255,255,0.08)',
@@ -3327,14 +3404,14 @@ export default function AIToolsTab({
                   <div className="flex" style={{ marginLeft: 30, marginBottom: 2 }}>
                     {weeks.map((w, i) => (
                       <div key={i} style={{ width: STEP, textAlign: 'center' }}>
-                        {w.monthLabel && <span className="text-[9px] text-zinc-500 light:text-stone-500">{w.monthLabel}</span>}
+                        {w.monthLabel && <span className="text-[9px] text-zinc-500 light:text-[var(--text-muted)]">{w.monthLabel}</span>}
                       </div>
                     ))}
                   </div>
 
                   {dayLabels.map((label, di) => (
                     <div key={label} className="flex items-center" style={{ height: STEP }}>
-                      <span className="text-[9px] text-zinc-500 light:text-stone-500 w-[26px] text-right mr-1 flex-shrink-0">{label}</span>
+                      <span className="text-[9px] text-zinc-500 light:text-[var(--text-muted)] w-[26px] text-right mr-1 flex-shrink-0">{label}</span>
                       <div className="flex">
                         {weeks.map((w, wi) => {
                           const date = w.days[di]
@@ -3345,7 +3422,7 @@ export default function AIToolsTab({
                           return (
                             <div key={wi} className="relative group" style={{ width: STEP, height: STEP }}>
                               <div
-                                className="w-[14px] h-[14px] rounded-[3px] transition-all duration-100 group-hover:scale-[1.4] cursor-default"
+                                className="w-[14px] h-[14px] rounded-[3px] transition-colors duration-100 group-hover:scale-[1.4] cursor-default"
                                 style={{
                                   backgroundColor: cellColor(dayData ? b : 0),
                                   outline: isToday ? '1px solid rgba(255,255,255,0.3)' : 'none',
@@ -3370,11 +3447,11 @@ export default function AIToolsTab({
                                     </span>
                                   </div>
                                   {selectedHeatmapTool === 'all' && dayData.details.length > 1 && (
-                                    <div className="border-t border-zinc-700 light:border-stone-400/40 mt-0.5 pt-0.5 space-y-0.5">
+                                    <div className="border-t border-zinc-700 light:border-[color-mix(in_srgb,var(--ws-border)_40%,transparent)] mt-0.5 pt-0.5 space-y-0.5">
                                       {dayData.details.slice(0, 5).map((det) => (
                                         <div key={det.agent} className="flex items-center justify-between gap-2">
-                                          <span className="text-[8px] text-zinc-500 light:text-stone-500 truncate max-w-[60px]">{det.agent}</span>
-                                          <span className="text-[8px] text-zinc-400 light:text-stone-500 tabular-nums">
+                                          <span className="text-[8px] text-zinc-500 light:text-[var(--text-muted)] truncate max-w-[60px]">{det.agent}</span>
+                                          <span className="text-[8px] text-zinc-400 light:text-[var(--text-muted)] tabular-nums">
                                             {aiChartMode === 'tokens' ? formatTokens(det.tokens)
                                               : aiChartMode === 'cost' ? formatCurrency(det.cost)
                                               : aiChartMode === 'messages' ? det.messages
@@ -3382,7 +3459,7 @@ export default function AIToolsTab({
                                           </span>
                                         </div>
                                       ))}
-                                      {dayData.details.length > 5 && <div className="text-[7px] text-zinc-600 light:text-stone-500 text-center">+{dayData.details.length - 5} more</div>}
+                                      {dayData.details.length > 5 && <div className="text-[7px] text-zinc-600 light:text-[var(--text-muted)] text-center">+{dayData.details.length - 5} more</div>}
                                     </div>
                                   )}
                                 </div>
@@ -3396,11 +3473,11 @@ export default function AIToolsTab({
 
                   {/* Legend */}
                   <div className="flex items-center gap-1.5 mt-3" style={{ paddingLeft: 30 }}>
-                    <span className="text-[8px] text-zinc-600 light:text-stone-500">Less</span>
+                    <span className="text-[8px] text-zinc-600 light:text-[var(--text-muted)]">Less</span>
                     {[0, 0.2, 0.4, 0.6, 0.8].map(intensity => (
                       <div key={intensity} className="w-[12px] h-[12px] rounded-[3px]" style={{ backgroundColor: cellColor(intensity) }} />
                     ))}
-                    <span className="text-[8px] text-zinc-600 light:text-stone-500">More</span>
+                    <span className="text-[8px] text-zinc-600 light:text-[var(--text-muted)]">More</span>
                   </div>
                 </div>
               </div>
@@ -3420,7 +3497,7 @@ export default function AIToolsTab({
               <h3 className="text-[13px] font-semibold text-zinc-100">
                 Session History
               </h3>
-              <p className="text-[11px] text-zinc-600 light:text-stone-500">
+              <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                 Recent sessions per tool
               </p>
             </div>
@@ -3440,10 +3517,10 @@ export default function AIToolsTab({
                   key={toolId}
                   onClick={() => setSessionTool(toolId)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all duration-150 ring-1',
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors duration-150 ring-1',
                     isActive
-                      ? 'bg-zinc-800/80 text-zinc-100 ring-zinc-600/60 light:bg-stone-200 light:text-stone-800 light:ring-stone-400'
-                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300 ring-transparent hover:ring-zinc-700/40'
+                      ? 'bg-zinc-800/80 text-zinc-100 ring-zinc-600/60 light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-primary)] light:ring-[var(--ws-border-strong)]'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-transparent hover:ring-zinc-700/40'
                   )}
                 >
                   <span
@@ -3484,7 +3561,7 @@ export default function AIToolsTab({
                 <h3 className="text-[13px] font-semibold text-zinc-100">
                   Usage Trend
                 </h3>
-                <p className="text-[11px] text-zinc-600 light:text-stone-500">
+                <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                   {viewMode === 'model'
                     ? 'Per model, daily breakdown'
                     : 'Per tool, daily breakdown'}
@@ -3493,14 +3570,14 @@ export default function AIToolsTab({
             </div>
             <div className="flex items-center gap-2">
               {/* City/Charts toggle */}
-              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                 <button
                   onClick={() => setShowCityView(true)}
                   className={cn(
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     showCityView
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                   )}
                 >
                   City
@@ -3511,21 +3588,21 @@ export default function AIToolsTab({
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     !showCityView
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                   )}
                 >
                   Charts
                 </button>
               </div>
               {/* Tool/Model toggle */}
-              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                 <button
                   onClick={() => setViewMode('tool')}
                   className={cn(
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     viewMode === 'tool'
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                   )}
                 >
                   Tool
@@ -3536,14 +3613,14 @@ export default function AIToolsTab({
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     viewMode === 'model'
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                   )}
                 >
                   Model
                 </button>
               </div>
               {/* Metric selector */}
-              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-1 ring-1 ring-zinc-800/50">
+              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-1 ring-1 ring-zinc-800/50">
                 {(
                   ['tokens', 'messages', 'sessions', 'cost'] as const
                 ).map((mode) => (
@@ -3554,7 +3631,7 @@ export default function AIToolsTab({
                       'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                       aiChartMode === mode
                         ? 'bg-violet-500/20 text-violet-400'
-                        : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                        : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                     )}
                   >
                     {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -3576,8 +3653,8 @@ export default function AIToolsTab({
                               ? 'bg-blue-500/20 text-blue-400'
                               : sub === 'output'
                                 ? 'bg-emerald-500/20 text-emerald-400'
-                                : 'bg-zinc-700/50 text-zinc-300 light:bg-stone-200 light:text-stone-700'
-                            : 'text-zinc-600 light:text-stone-500 hover:text-zinc-400 light:hover:text-stone-400'
+                                : 'bg-zinc-700/50 text-zinc-300 light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)]'
+                            : 'text-zinc-600 light:text-[var(--text-muted)] hover:text-zinc-400 light:hover:text-stone-400'
                         )}
                       >
                         {sub === 'combined'
@@ -3598,7 +3675,7 @@ export default function AIToolsTab({
             <Suspense
               fallback={
                 <GlassCard>
-                  <div className="h-[500px] flex items-center justify-center text-zinc-500 light:text-stone-500">
+                  <div className="h-[500px] flex items-center justify-center text-zinc-500 light:text-[var(--text-muted)]">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-8 h-8 border-2 border-violet-500/30 border-t-violet-400 rounded-full animate-spin" />
                       <span className="text-sm">Loading cityscape...</span>
@@ -3650,13 +3727,13 @@ export default function AIToolsTab({
                       <div className="text-[13px] font-semibold text-zinc-100">
                         Human vs AI Tokens
                       </div>
-                      <div className="text-[11px] text-zinc-600 light:text-stone-500">
+                      <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                         Input (you) vs Output (AI) across all tools
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 light:bg-stone-200 rounded-lg ring-1 ring-zinc-800/50">
-                    <span className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg ring-1 ring-zinc-800/50">
+                    <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider">
                       In:Out
                     </span>
                     <span className="text-sm font-bold text-zinc-100 font-mono">
@@ -3665,10 +3742,10 @@ export default function AIToolsTab({
                   </div>
                 </div>
 
-                <div className="relative h-10 bg-zinc-900/60 light:bg-stone-200 rounded-xl overflow-hidden mb-4 ring-1 ring-zinc-800/40">
+                <div className="relative h-10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-xl overflow-hidden mb-4 ring-1 ring-zinc-800/40">
                   <div className="absolute inset-0 flex">
                     <div
-                      className="h-full flex items-center justify-end px-3 transition-all"
+                      className="h-full flex items-center justify-end px-3 transition-colors"
                       style={{
                         width: `${inRatio}%`,
                         background:
@@ -3682,7 +3759,7 @@ export default function AIToolsTab({
                       )}
                     </div>
                     <div
-                      className="h-full flex items-center px-3 transition-all"
+                      className="h-full flex items-center px-3 transition-colors"
                       style={{
                         width: `${outRatio}%`,
                         background:
@@ -3702,7 +3779,7 @@ export default function AIToolsTab({
                   <div className="bg-blue-500/5 rounded-xl p-3 ring-1 ring-blue-500/10">
                     <div className="flex items-center gap-1.5 mb-1">
                       <div className="w-2 h-2 rounded-full bg-blue-400" />
-                      <span className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider">
+                      <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider">
                         Human Input
                       </span>
                     </div>
@@ -3716,7 +3793,7 @@ export default function AIToolsTab({
                   <div className="bg-emerald-500/5 rounded-xl p-3 ring-1 ring-emerald-500/10">
                     <div className="flex items-center gap-1.5 mb-1">
                       <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider">
+                      <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider">
                         AI Output
                       </span>
                     </div>
@@ -3727,9 +3804,9 @@ export default function AIToolsTab({
                       {outRatio.toFixed(1)}% of total
                     </div>
                   </div>
-                  <div className="bg-zinc-900/60 light:bg-stone-200 rounded-xl p-3 ring-1 ring-zinc-800/40">
+                  <div className="bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-xl p-3 ring-1 ring-zinc-800/40">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-[10px] text-zinc-600 light:text-stone-500 uppercase tracking-wider">
+                      <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider">
                         Avg Ratio
                       </span>
                     </div>
@@ -3776,10 +3853,10 @@ export default function AIToolsTab({
                             className="w-2 h-2 rounded-full flex-shrink-0"
                             style={{ backgroundColor: agent.color }}
                           />
-                          <span className="text-[11px] text-zinc-400 light:text-stone-500 min-w-[80px]">
+                          <span className="text-[11px] text-zinc-400 light:text-[var(--text-muted)] min-w-[80px]">
                             {agent.name}
                           </span>
-                          <div className="flex-1 h-2 bg-zinc-800/60 light:bg-stone-200 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-zinc-800/60 light:bg-[var(--ws-surface-sunken)] rounded-full overflow-hidden">
                             <div className="h-full flex">
                               <div
                                 className="h-full bg-blue-500/60 rounded-l-full"
@@ -3791,7 +3868,7 @@ export default function AIToolsTab({
                               />
                             </div>
                           </div>
-                          <span className="text-[10px] text-zinc-600 light:text-stone-500 font-mono min-w-[60px] text-right">
+                          <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] font-mono min-w-[60px] text-right">
                             {formatTokens(aIn)}{' '}
                             <span className="text-zinc-700">/</span>{' '}
                             {formatTokens(aOut)}
@@ -3823,7 +3900,7 @@ export default function AIToolsTab({
                       <span className="text-[13px] font-medium text-zinc-100">
                         {agentChart.agentName}
                       </span>
-                      <span className="text-[11px] text-zinc-600 light:text-stone-500 ml-auto">
+                      <span className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] ml-auto">
                         {agentChart.metricLabel}
                       </span>
                     </div>
@@ -3988,7 +4065,7 @@ export default function AIToolsTab({
                       <h3 className="text-[13px] font-semibold text-zinc-100">
                         Usage Distribution
                       </h3>
-                      <p className="text-[11px] text-zinc-600 light:text-stone-500">
+                      <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                         {viewMode === 'model' ? 'By model' : 'By tool'}
                       </p>
                     </div>
@@ -4042,7 +4119,7 @@ export default function AIToolsTab({
                       }}
                     />
                   ) : (
-                    <p className="text-zinc-600 light:text-stone-500 text-sm">No data yet</p>
+                    <p className="text-zinc-600 light:text-[var(--text-muted)] text-sm">Nothing to chart yet — data appears once a session is tracked.</p>
                   )}
                 </div>
               </GlassCard>
@@ -4105,27 +4182,27 @@ export default function AIToolsTab({
                         <h3 className="text-[13px] font-semibold text-zinc-100">
                           Cost Insights
                         </h3>
-                        <p className="text-[11px] text-zinc-600 light:text-stone-500 mt-1">
+                        <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] mt-1">
                           Projections based on {dailyCostDays.length} active day{dailyCostDays.length !== 1 ? 's' : ''}
                         </p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                      <div className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-rose-400 tabular-nums">{formatCurrency(avgDailyCost)}</div>
-                        <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">Avg/Day</div>
+                        <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Avg/Day</div>
                       </div>
-                      <div className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-amber-400 tabular-nums">{formatCurrency(projectedMonthly)}</div>
-                        <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">Projected Month</div>
+                        <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Projected Month</div>
                       </div>
-                      <div className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-orange-400 tabular-nums">{formatCurrency(projectedYearly)}</div>
-                        <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">Projected Year</div>
+                        <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Projected Year</div>
                       </div>
-                      <div className="bg-zinc-950/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-emerald-400 tabular-nums">{freeModels.length}</div>
-                        <div className="text-[9px] text-zinc-600 light:text-stone-500 uppercase tracking-wider mt-1">Free Models</div>
+                        <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Free Models</div>
                       </div>
                     </div>
                     {freeModels.length > 0 && (
@@ -4298,20 +4375,20 @@ export default function AIToolsTab({
                           <h3 className="text-[13px] font-semibold text-zinc-100">
                             Model Usage Timeline
                           </h3>
-                          <p className="text-[11px] text-zinc-600 light:text-stone-500">
+                          <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                             Per-model {metricLabel.toLowerCase()} \u2014 all
                             tools
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-stone-200 rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                      <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
                         <button
                           onClick={() => setSelectedTimelineModels([])}
                           className={cn(
                             'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                             selectedTimelineModels.length === 0
                               ? 'bg-violet-500/20 text-violet-400'
-                              : 'text-zinc-500 light:text-stone-500 hover:text-zinc-300 light:hover:text-stone-300'
+                              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
                           )}
                         >
                           All
@@ -4331,7 +4408,7 @@ export default function AIToolsTab({
                                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150 max-w-[100px] truncate',
                                 isActive
                                   ? 'bg-zinc-700/60 text-zinc-200'
-                                  : 'text-zinc-600 light:text-stone-500 hover:text-zinc-400 light:hover:text-stone-400'
+                                  : 'text-zinc-600 light:text-[var(--text-muted)] hover:text-zinc-400 light:hover:text-stone-400'
                               )}
                               title={m.model}
                             >
@@ -4396,7 +4473,7 @@ export default function AIToolsTab({
                             return (
                               <span
                                 key={`${r.start}-${r.end}-${ds.label}`}
-                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-900/60 ring-1 ring-zinc-800/40 text-[10px] text-zinc-400 light:text-stone-500"
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/40 text-[10px] text-zinc-400 light:text-[var(--text-muted)]"
                               >
                                 <span
                                   className="w-2 h-2 rounded-full shrink-0"
@@ -4404,7 +4481,7 @@ export default function AIToolsTab({
                                     backgroundColor: ds.backgroundColor,
                                   }}
                                 />
-                                <span className="font-medium text-zinc-300 light:text-stone-700 truncate max-w-[160px]">
+                                <span className="font-medium text-zinc-300 light:text-[var(--text-secondary)] truncate max-w-[160px]">
                                   {ds.label}
                                 </span>
                                 <span>
@@ -4413,7 +4490,7 @@ export default function AIToolsTab({
                                     ? ` - ${fmtDay(r.end)}`
                                     : ''}
                                 </span>
-                                <span className="text-zinc-500 light:text-stone-500">
+                                <span className="text-zinc-500 light:text-[var(--text-muted)]">
                                   ·{' '}
                                   {Math.round(
                                     (r.total / grandTotal) * 100
@@ -4694,7 +4771,7 @@ export default function AIToolsTab({
                           <h3 className="text-[13px] font-semibold text-zinc-100">
                             Tool Usage Timeline
                           </h3>
-                          <p className="text-[11px] text-zinc-600 light:text-stone-500">
+                          <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                             Per-tool {toolMetricLabel.toLowerCase()}{' '}
                             \u2014 all models
                           </p>
@@ -4709,7 +4786,7 @@ export default function AIToolsTab({
                             return (
                               <span
                                 key={`${r.start}-${r.end}-${ds.label}`}
-                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-900/60 ring-1 ring-zinc-800/40 text-[10px] text-zinc-400 light:text-stone-500"
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/40 text-[10px] text-zinc-400 light:text-[var(--text-muted)]"
                               >
                                 <span
                                   className="w-2 h-2 rounded-full shrink-0"
@@ -4717,7 +4794,7 @@ export default function AIToolsTab({
                                     backgroundColor: ds.backgroundColor,
                                   }}
                                 />
-                                <span className="font-medium text-zinc-300 light:text-stone-700 truncate max-w-[160px]">
+                                <span className="font-medium text-zinc-300 light:text-[var(--text-secondary)] truncate max-w-[160px]">
                                   {ds.label}
                                 </span>
                                 <span>
@@ -4726,7 +4803,7 @@ export default function AIToolsTab({
                                     ? ` - ${toolFmtDay(r.end)}`
                                     : ''}
                                 </span>
-                                <span className="text-zinc-500 light:text-stone-500">
+                                <span className="text-zinc-500 light:text-[var(--text-muted)]">
                                   ·{' '}
                                   {Math.round(
                                     (r.total / toolGrandTotal) * 100
@@ -4864,12 +4941,12 @@ export default function AIToolsTab({
                         <h3 className="text-[13px] font-semibold text-zinc-100">
                           Compare {viewMode === 'model' ? 'Models' : 'AI Tools'}
                         </h3>
-                        <p className="text-[11px] text-zinc-600 light:text-stone-500">
+                        <p className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">
                           Grouped daily breakdown
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] text-zinc-600 light:text-stone-500 bg-zinc-900/60 light:bg-stone-200 px-2 py-1 rounded-lg ring-1 ring-zinc-800/40">
+                    <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] px-2 py-1 rounded-lg ring-1 ring-zinc-800/40">
                       {timeLock
                         ? 'All Time'
                         : selectedPeriod === 'today'
@@ -4893,7 +4970,7 @@ export default function AIToolsTab({
                     {activeForCompare.map((agent) => (
                         <label
                           key={agent.id}
-                          className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900/60 rounded-lg cursor-pointer hover:bg-zinc-800/60 light:bg-stone-200 transition-colors duration-150 ring-1 ring-zinc-800/40"
+                          className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-lg cursor-pointer hover:bg-zinc-800/60 light:bg-[var(--ws-surface-sunken)] transition-colors duration-150 ring-1 ring-zinc-800/40 light:hover:bg-[var(--ws-surface-hover)]"
                         >
                           <input
                             type="checkbox"
@@ -4910,13 +4987,13 @@ export default function AIToolsTab({
                                 )
                               }
                             }}
-                            className="w-3 h-3 rounded border-zinc-600 light:border-stone-400"
+                            className="w-3 h-3 rounded border-zinc-600 light:border-[var(--ws-border-strong)]"
                           />
                           <div
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: agent.color }}
                           />
-                          <span className="text-[11px] text-zinc-400 light:text-stone-500">
+                          <span className="text-[11px] text-zinc-400 light:text-[var(--text-muted)]">
                             {agent.name}
                           </span>
                         </label>

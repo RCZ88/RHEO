@@ -233,7 +233,7 @@ function FeatureCard({ feature, index, onTryIt }: { feature: Feature; index: num
       transition={{ delay: index * 0.04, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       className="group"
     >
-      <div className="relative rounded-lg border border-zinc-800/40 bg-zinc-900/40 backdrop-blur-sm overflow-hidden transition-all duration-200 hover:border-zinc-700/50 hover:bg-zinc-900/60">
+      <div className="relative rounded-lg border border-zinc-800/40 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm overflow-hidden transition-all duration-200 hover:border-zinc-700/50 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]">
         <button
           onClick={() => setExpanded(!expanded)}
           className="w-full text-left p-3"
@@ -339,7 +339,7 @@ export function AIFeaturesModal({ open, onClose, onTryIt }: AIFeaturesModalProps
             </div>
 
             {/* Quick tags */}
-            <div className="flex items-center gap-1.5 px-5 py-2 border-b border-zinc-800/30 shrink-0 bg-zinc-900/20">
+            <div className="flex items-center gap-1.5 px-5 py-2 border-b border-zinc-800/30 shrink-0 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)]">
               <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/8 border border-emerald-500/15">
                 <MessageSquare className="w-2.5 h-2.5 text-emerald-400" />
                 <span className="text-[10px] text-emerald-300/80">Ask naturally</span>
@@ -406,7 +406,7 @@ export function AIFeaturesModal({ open, onClose, onTryIt }: AIFeaturesModalProps
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-2 border-t border-zinc-800/30 shrink-0 bg-zinc-900/15">
+            <div className="px-5 py-2 border-t border-zinc-800/30 shrink-0 bg-zinc-900/15 light:bg-[var(--ws-surface-raised)]">
               <p className="text-[10px] text-zinc-600 text-center">
                 Just type what you need in natural language — I'll figure out the rest.
               </p>

@@ -68,7 +68,7 @@ export function ExternalActivityPicker({ value, onChange }: ExternalActivityPick
 
   if (activities.length === 0) {
     return (
-      <div className="p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/30 text-center">
+      <div className="p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] text-center">
         <Activity size={20} className="mx-auto mb-2 text-zinc-600" />
         <p className="text-[12px] text-zinc-400">No external activities yet</p>
         <p className="mt-1 text-[10px] text-zinc-600">Create one on the External page first.</p>
@@ -88,7 +88,7 @@ export function ExternalActivityPicker({ value, onChange }: ExternalActivityPick
               key={activity.id}
               onClick={() => onChange(selected ? null : activity.id)}
               aria-pressed={selected}
-              className={`min-h-11 flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ${selected ? 'border-violet-500/50 bg-violet-500/10' : 'border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-800/50'}`}
+              className={`min-h-11 flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ${selected ? 'border-violet-500/50 bg-violet-500/10' : 'border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700 hover:bg-zinc-800/50'}`}
             >
               <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${activity.color || '#f59e0b'}22`, color: activity.color || '#f59e0b' }}>
                 <Activity size={14} />

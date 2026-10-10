@@ -1,4 +1,22 @@
 import { BrowserWindow, ipcMain, screen } from 'electron';
+
+// ── WHY THIS IS A STATIC IMPORT, NOT require() ─────────────────────────────
+// These were `require('../../…')` calls. That path is correct for the SOURCE
+// file but wrong for the OUTPUT: the build leaves a bare require() in
+// dist-electron/main.cjs, where `../../` resolves ABOVE the repo root.
+// The aiEval twin of this bug KILLED THE APP AT BOOT:
+//     Cannot find module '../../services/aiEval'
+// These ones never threw, because each sat inside `catch {}` — which converts a
+// crash into a SILENT NO-OP. `airouter` has been quietly failing to configure
+// its router this entire time. Silence is strictly worse than a crash.
+// A static import is inlined by the bundler, so there is no path to misresolve.
+// Verified: none of these modules run code at module scope.
+// THE EXPORT IS `focusSessionDone`, not `notificationsFocusDone` — that name
+// does not exist and never did. The old require() therefore resolved to
+// `undefined`, and because the call sat inside `catch {}` the TypeError was
+// swallowed: the 'Focus session complete' notification had NEVER fired.
+// A static import turns that silence into a build error, which is the point.
+import { focusSessionDone } from '../../main/notifications';
 import path from 'path';
 import type Database from 'better-sqlite3';
 import { ensureFocusSchema } from './focusSchema';
@@ -209,9 +227,8 @@ export class FocusManager {
     // Fire a human-centric notification when a focus session completes successfully
     if (outcome === 'completed' && this.getMainWindow()) {
       try {
-        const { notificationsFocusDone } = require('../../main/notifications');
-        const goalLabel = this.state.strictness === 'non_allowed' ? 'Deep Focus session' : 'Focus session';
-        notificationsFocusDone(this.db, goalLabel, actualSec);
+                const goalLabel = this.state.strictness === 'non_allowed' ? 'Deep Focus session' : 'Focus session';
+        focusSessionDone(this.db, goalLabel, actualSec);
       } catch {}
     }
 

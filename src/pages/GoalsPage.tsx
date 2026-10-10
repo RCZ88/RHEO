@@ -407,7 +407,7 @@ export default function GoalsPage() {
                             <input
                               value={editForm.title || ''}
                               onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-900/80 border border-zinc-700/50 text-[13px] text-zinc-200 focus:outline-none focus:border-violet-500/50"
+                              className="w-full px-3 py-2 rounded-lg bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-[13px] text-zinc-200 focus:outline-none focus:border-violet-500/50"
                               autoFocus
                               onKeyDown={e => e.key === 'Enter' && handleUpdate(goal.id, editForm)}
                             />
@@ -462,7 +462,7 @@ export default function GoalsPage() {
                       className="overflow-hidden space-y-1.5 mt-2"
                     >
                       {completedGoals.map(goal => (
-                        <div key={goal.id} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 opacity-50 hover:opacity-80 transition-opacity">
+                        <div key={goal.id} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] opacity-50 hover:opacity-80 transition-opacity">
                           <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
                           <span className="text-[12px] text-zinc-500 line-through flex-1">{goal.title}</span>
                           <button onClick={() => handleToggle(goal.id)} className="text-zinc-600 hover:text-zinc-400 p-1 rounded" title="Undo">

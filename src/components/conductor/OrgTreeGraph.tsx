@@ -185,7 +185,7 @@ export default function OrgTreeGraph({
             <foreignObject key={n.id} x={p.x - NODE_W / 2} y={p.y - NODE_H / 2} width={NODE_W} height={NODE_H} style={foStyle}>
               <button
                 onClick={() => onSelect(n.id)}
-                className="w-full h-full rounded-lg bg-zinc-900/95 px-2.5 py-1.5 text-left flex flex-col justify-center gap-0.5 transition-shadow"
+                className="w-full h-full rounded-lg bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] px-2.5 py-1.5 text-left flex flex-col justify-center gap-0.5 transition-shadow"
                 style={cardStyle}
               >
                 <div className="flex items-center gap-1.5">

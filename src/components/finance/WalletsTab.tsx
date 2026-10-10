@@ -283,7 +283,7 @@ export function WalletsTab({
           {showTypeFilter && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowTypeFilter(false)} />
-              <div className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-700/50 rounded-xl shadow-xl z-20 py-1 overflow-hidden">
+              <div className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl shadow-xl z-20 py-1 overflow-hidden">
                 <button
                   onClick={() => { setTypeFilter(null); setShowTypeFilter(false); }}
                   className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-zinc-800 ${!typeFilter ? 'text-emerald-400' : 'text-zinc-400'}`}
@@ -345,7 +345,7 @@ export function WalletsTab({
                           {accountTypeLabels[account.type] || account.type}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-500">
+                      <p className="fin-label">
                         {sectionWallets.length} wallet{sectionWallets.length !== 1 ? 's' : ''}
                         {totalBalance !== 0 && ` \u00b7 Total ${maskedCurrency(totalBalance, displayCurrency)}`}
                       </p>
@@ -428,7 +428,7 @@ export function WalletsTab({
                                     );
                                   })()}
                                   {w.last_four && (
-                                    <span className="text-[10px] text-zinc-600">&bull;&bull;&bull;&bull;{w.last_four}</span>
+                                    <span className="fin-label">&bull;&bull;&bull;&bull;{w.last_four}</span>
                                   )}
                                 </div>
                               </div>
@@ -472,14 +472,14 @@ export function WalletsTab({
                             {/* Provider/description line */}
                             <div className="flex items-center gap-2 mt-1">
                               {w.provider && (
-                                <span className="text-[10px] text-zinc-500 truncate max-w-[120px]">{w.provider}</span>
+                                <span className="fin-label truncate max-w-[120px]">{w.provider}</span>
                               )}
                               {(() => {
                                 try {
                                   const md = typeof w.metadata === 'string' ? JSON.parse(w.metadata) : (w.metadata || {});
                                   const desc = md.description || md.notes || '';
                                   return desc ? (
-                                    <span className="text-[10px] text-zinc-600 truncate max-w-[140px]">{desc}</span>
+                                    <span className="fin-label truncate max-w-[140px]">{desc}</span>
                                   ) : null;
                                 } catch { return null; }
                               })()}

@@ -20,23 +20,23 @@ import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDe
 import DevTriggerPanel from './components/DevTriggerPanel';
 import { format as dateFormat } from 'date-fns';
 import SettingsPage from './pages/SettingsPage';
+import TranscriptPage from './pages/TranscriptPage';
 import StatsPage from './pages/StatsPage';
 import BrowserActivityPage from './pages/BrowserActivityPage';
 import ProductivityPage from './pages/ProductivityPage';
 import ActivityPage from './pages/ActivityPage';
-import DatabasePage from './pages/DatabasePage';
+import ProfilerPage from './pages/ProfilerPage';
 import IDEProjectsPage from './pages/IDEProjectsPage';
 import IDEHelpPage from './pages/IDEHelpPage';
 import TutorialPage from './pages/TutorialPage';
 import { LearnPage } from './components/learn/LearnPage';
 import GuidePage from './pages/GuidePage';
-import TerminalPage from './pages/TerminalPage';
-import SimpleTerminalPage from './pages/SimpleTerminalPage';
+import GoldPage from './features/warmth/gold/GoldPage';
+import LabsPage from './pages/LabsPage';
 import PenguinConsole from './terminal/App';
 import ExternalPage from './pages/ExternalPage';
 import RankingsPage from './pages/RankingsPage';
 import FocusPage from './pages/FocusPage';
-import ConductorPage from './pages/ConductorPage';
 
 import { AiPage } from './pages/AiPage';
 // TEMP-DISABLED-BY-AGENT: their NEON WIP has unresolved imports (withAlpha/resolveColor)
@@ -62,12 +62,32 @@ import NativeFindOverlay from './components/NativeFindOverlay';
 // people actually press. See NativeFindOverlay's header.
 import type { SearchHit } from './services/search/index';
 import { usePageSearchIndex } from './hooks/usePageSearchIndex';
+import { locateHit } from './lib/findLocate';
 import MissedTimePanel from './components/MissedTimePanel';
 import { PairPhoneModal } from './components/PairPhoneModal';
 import { VoiceProvider } from './context/VoiceContext';
 import { getDateRange } from './lib/dateRange';
 import type { Period } from './lib/dateRange';
+import {
+  getAfkPrefs,
+  afkThresholdMs,
+  shouldPromptForAbsence,
+  absenceHasHeld,
+  isPassiveCategory,
+  defaultsToNotAfk,
+  type AfkPrefs,
+} from './lib/afk';
+import { stopwatch, startStopwatchDriver } from './lib/stopwatchStore';
+import { ClockDropdown } from './components/ClockDropdown';
+import {
+  getSleepWindow,
+  isWithinSleepWindow,
+  shouldDeferToSleep,
+  SLEEP_WINDOW_CHANGED_EVENT,
+  type SleepWindowPrefs,
+} from './lib/sleepWindow';
 import GlobalSearchCommandPalette from './components/GlobalSearchCommandPalette';
+const RewindNav = lazy(() => import('./features/rewind-nav/RewindNav'));
 // Agent dashboard is disabled - file incomplete
 
 // Lazy load OrbitSystem - it's heavy and should only load when needed
@@ -79,6 +99,18 @@ const LifePage = lazy(() => import('./features/warmth/LifePage'));
 
 // Agentic System page (agent comms + session groups + context brain)
 const AgenticSystemPage = lazy(() => import('./pages/AgenticSystemPage'));
+
+// Terminal Workspace + Simple Terminal.
+//
+// These were static imports, which meant ~5.6k lines of TerminalPage plus the
+// ~4.6k-line workforce scene cluster were parsed and evaluated on EVERY app
+// start, whether or not the user ever opened /terminal. That is the bulk of
+// the "takes forever to open" symptom: the cost was being paid at boot, not at
+// navigation. Lazy moves it to first navigation, behind a <Suspense> that
+// already exists in this tree (every other lazy page above uses the same
+// pattern), so the route now costs nothing until it is asked for.
+const TerminalPage = lazy(() => import('./pages/TerminalPage'));
+const SimpleTerminalPage = lazy(() => import('./pages/SimpleTerminalPage'));
 
 // SlideMind lecture workspace (ported lecturer-feature) — nested routes under /lecture
 const LectureWorkspace = lazy(() => import('./features/lecture/LectureWorkspace'));
@@ -283,9 +315,7 @@ function isAppMatchingBrowserRenderer(appName: string, browserName: string | str
 
 import { GapBanner } from './components/GapBanner';
 import { TodoMiniPage } from './features/todo/TodoMiniPage';
-import { GapFillModal } from './components/external/GapFillModal';
 import { ManualAssignModal } from './components/external/ManualAssignModal';
-import { fillGapWithSegments } from './lib/external/gaps';
 import { TutorialProvider } from './contexts/TutorialContext';
 import TutorialOverlay from './components/TutorialOverlay';
 
@@ -301,11 +331,28 @@ function App() {
 
   // Global command palette — ⌘K / Ctrl+K navigation search (app-wide)
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Rewind overlay (film/classic). Lazily mounted; open is driven by the mode setting.
+  const [rewindOpen, setRewindOpen] = useState(false);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setPaletteOpen(prev => !prev);
+        // The navigation-mode setting decides which overlay Ctrl+K opens. Reading
+        // it here (not in state) means flipping the setting takes effect on the
+        // very next keypress with no stale-mode window.
+        let mode: string = 'classic'
+        try { mode = JSON.parse(localStorage.getItem('rewind:prefs:v1') || '{}').mode || 'classic' } catch { mode = 'classic' }
+        // MUTUALLY EXCLUSIVE. These used to be two independent toggles, so if the
+        // classic palette was already open and you pressed Ctrl+K again in film
+        // mode, Rewind opened ON TOP of the still-open palette and you saw both at
+        // once. Whichever one we open, the other is force-closed.
+        if (mode === 'film') {
+          setRewindOpen(prev => !prev)
+          setPaletteOpen(false)
+          return
+        }
+        setPaletteOpen(prev => !prev)
+        setRewindOpen(false)
       }
     };
     window.addEventListener('keydown', handler);
@@ -347,36 +394,31 @@ function App() {
     };
   }, [openFind]);
 
+  /**
+   * Result click / Enter target.
+   *
+   * The previous version failed SILENTLY in three separate ways:
+   *   1. it scrolled with scrollToSection(hit.section), which queries
+   *      `[data-section="<value>"]` — but auto-indexed segments store a card
+   *      TITLE in `section`, not an anchor value, so the query never matched;
+   *   2. its same-page fallback used document.getElementById(hit.id), assuming
+   *      segment ids were DOM ids. Auto ids look like `auto:settings:c:5`, so
+   *      this was always null and same-page clicks did nothing at all;
+   *   3. it only did anything for cross-page hits.
+   *
+   * locateHit finds the real element (data-df-locator -> text probe), scrolls it
+   * to centre and flashes it, retrying while the target route mounts. NOTE:
+   * another agent reverted this file once already and silently restored the old
+   * handler, which is why clicks navigated but never scrolled — if that symptom
+   * returns, check that `locateHit` is still imported and called here.
+   */
   const handleSmartSearchSelect = useCallback((hit: SearchHit) => {
-    console.debug('[SmartSearch] selected:', hit);
-    // If the hit is on a different page, navigate there and scroll to section
     if (hit.pageId !== currentPageId) {
-      console.debug('[SmartSearch] navigating to different page:', hit.pageId);
       const route = resolvePageRoute(hit.pageId);
-      console.debug('[SmartSearch] resolved route:', route);
-      if (route) {
-        console.debug('[SmartSearch] navigating to:', route.route);
-        navigateTo({ route: route.route, tab: hit.section ? route.tab : undefined }, navigate);
-        if (hit.section) {
-          console.debug('[SmartSearch] will scroll to section:', hit.section);
-          setTimeout(() => {
-            const ok = scrollToSection(hit.section);
-            console.debug('[SmartSearch] scrollToSection result:', ok, 'section:', hit.section);
-          }, 300);
-        }
-      }
-    } else {
-      console.debug('[SmartSearch] same page, scrolling to section:', hit.section);
-      // Same page — just scroll to the section without navigating away
-      if (hit.section) {
-        const ok = scrollToSection(hit.section);
-        console.debug('[SmartSearch] scrollToSection result:', ok, 'section:', hit.section);
-      } else {
-        // No section specified; try scrolling to the title element
-        const el = document.getElementById(hit.id);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      // Never drop the click on the floor for an unregistered page id.
+      navigateTo({ route: route?.route ?? `/${hit.pageId}`, tab: hit.section ? route?.tab : undefined }, navigate);
     }
+    locateHit(hit);
   }, [currentPageId, navigate]);
 
   // Keyboard shortcut: Ctrl+F / ⌘F — open the find-in-page bar.
@@ -432,6 +474,23 @@ function App() {
   const [currentApp, setCurrentApp] = useState('VS Code');
   const [elapsedTime, setElapsedTime] = useState(0);
   const [sessionStart, setSessionStart] = useState(new Date());
+
+  // ── The stopwatch driver ────────────────────────────────────────────────
+  // The stopwatch is a MODULE-level store (lib/stopwatchStore.ts) and its
+  // one-second republish interval used to live inside DashboardPage. Because
+  // App.tsx renders `<Routes key={location.pathname}>`, leaving the dashboard
+  // tore that interval down: the timer froze on every other route, and coming
+  // back restarted it as if it were new. Starting it here — once, for the whole
+  // app — is what makes the dashboard hero and the sidebar rail show the same
+  // running number on every page.
+  useEffect(() => startStopwatchDriver(), []);
+
+  // Is there a foreground window to time? App owns the foreground app for the
+  // app's whole lifetime (heartbeat + foreground-change), so it is the single
+  // writer for this flag rather than the dashboard, which is not always mounted.
+  useEffect(() => {
+    stopwatch.setHasRealApp(!!currentApp);
+  }, [currentApp]);
   const [logs, setLogs] = useState<ActivityLog[]>([]); // Display logs (filtered by period)
   const [planetColors, setPlanetColors] = useState<Record<string, string>>({});
   const [showCustomization, setShowCustomization] = useState(false);
@@ -632,10 +691,14 @@ function App() {
   // Load external activities from database on mount
   useEffect(() => {
     if (window.deskflowAPI?.getExternalActivities) {
-      window.deskflowAPI.getExternalActivities().then((activities: any[]) => {
-        console.log('[DeskFlow] Loaded external activities:', activities.length);
+      window.deskflowAPI.getExternalActivities().then((activities: any) => {
+        // Guard the ARRAY, not just the promise: this handler can resolve with a
+        // non-array, and `.length`/`.map` on that throws inside a .then with no
+        // .catch, which surfaces as an unhandled rejection rather than a stack.
+        const rows: any[] = Array.isArray(activities) ? activities : [];
+        console.log('[DeskFlow] Loaded external activities:', rows.length);
         // Map to expected format for DashboardPage
-        const mapped = activities.map((a: any) => ({
+        const mapped = rows.map((a: any) => ({
           id: a.id,
           name: a.name,
           type: a.type || 'stopwatch',
@@ -682,8 +745,9 @@ function App() {
   useEffect(() => {
     const refreshActivities = () => {
       if (window.deskflowAPI?.getExternalActivities) {
-        window.deskflowAPI.getExternalActivities().then((activities: any[]) => {
-          const mapped = activities.map((a: any) => ({
+        window.deskflowAPI.getExternalActivities().then((activities: any) => {
+          const rows: any[] = Array.isArray(activities) ? activities : [];
+          const mapped = rows.map((a: any) => ({
             id: a.id,
             name: a.name,
             type: a.type || 'stopwatch',
@@ -711,6 +775,14 @@ function App() {
         setCurrentApp(data.app);
         setSessionStart(new Date(data.timestamp));
         setElapsedTime(0);
+
+        // A window switch does NOT touch the stopwatch. It used to be a
+        // one-line-looking `setElapsedTime(0)` here that the sidebar rendered
+        // directly, which is exactly why "the sidebar just resets the stopwatch
+        // for no reason": every alt-tab, every notification, every dev-tools
+        // window. `elapsedTime` is still reset because it is the PER-WINDOW
+        // session counter used for activity-log durations below — that is what
+        // it is for. The number on screen comes from lib/stopwatchStore now.
         
         // Add to live activity logs
         const newLog = {
@@ -764,8 +836,31 @@ function App() {
         // Store OS-level idle seconds for idle detection
         if (typeof data.systemIdleSeconds === 'number') {
           systemIdleSecondsRef.current = data.systemIdleSeconds;
+          // This heartbeat is the ONE signal that is alive for the whole app
+          // lifetime, on every route. The stopwatch uses it as its presence
+          // feed, so the timer advances identically no matter which page is
+          // mounted — previously the republish interval lived in DashboardPage,
+          // so the readout froze the moment you navigated away.
+          // A changing foreground window title means the user is typing
+          // SOMEWHERE, even if not here. Without this the renderer assumes
+          // anyone working in another app is away.
+          if (typeof data.foregroundIdleSeconds === 'number') {
+            foregroundQuietRef.current = data.foregroundIdleSeconds;
+          }
+          // A changing foreground title is a WEAK activity signal and must NOT
+          // reset the input clock — see lastForegroundActivityRef. Conflating
+          // the two is what made AFK stop firing whenever a chat app or music
+          // player rewrote its title.
+          if (typeof data.foregroundTitle === 'string' && data.foregroundTitle !== lastForegroundTitleRef.current) {
+            lastForegroundTitleRef.current = data.foregroundTitle;
+            lastForegroundActivityRef.current = Date.now();
+          }
+          if (typeof data.foregroundActiveIdleSeconds === 'number') {
+            lastForegroundActivityRef.current = Date.now() - data.foregroundActiveIdleSeconds * 1000;
+          }
+          if (data.systemIdleSeconds * 1000 < afkIdleMs) stopwatch.touch();
           // Auto-resume from idle if system idle drops below threshold (user resumed activity)
-          if (idleRef.current && data.systemIdleSeconds * 1000 < idleThreshold * 60 * 1000) {
+          if (idleRef.current && effectiveIdleSeconds() * 1000 < afkIdleMs) {
             console.log('[DeskFlow] System idle dropped - resuming tracking');
             setIsIdle(false);
             setIsTracking(true);
@@ -780,14 +875,17 @@ function App() {
     if (window.deskflowAPI && typeof window.deskflowAPI.onBrowserTrackingEvent === 'function') {
       window.deskflowAPI.onBrowserTrackingEvent((data) => {
         // SIMPLE CHECK: Only track website if the current foreground app is the tracking browser
-        const trackingBrowser = trackingBrowserRef.current;
         const currentApp = currentForegroundAppRef.current;
         
         // If current app is NOT the tracking browser, skip
         // Uses process name mapping to handle brand-name vs executable-name mismatches
-        if (!trackingBrowser || !currentApp || !isAppMatchingBrowserRenderer(currentApp, trackingBrowser)) {
-          return; // Not on browser - don't log website
-        }
+          // Test the FULL detected list. `isAppMatchingBrowserRenderer` already
+          // accepts string | string[]; it was only ever handed the first entry, so a
+          // second browser running the extension never matched.
+          const candidates = trackingBrowsersRef.current;
+          if (!candidates.length || !currentApp || !isAppMatchingBrowserRenderer(currentApp, candidates)) {
+            return; // Not on a browser with the extension - don't log website
+          }
         
         if (data.type === 'browser-data' || data.type === 'live-log') {
           // Deduplication: Only add if it's a DIFFERENT website from the last log entry
@@ -896,6 +994,10 @@ function App() {
 
   // Ref to track tracking browser without causing re-renders in useEffect dependencies
   const trackingBrowserRef = useRef<string>('');
+  // The full detected list. `trackingBrowser` is only browsersWithExtension[0],
+  // so a second browser with the extension (e.g. Zen alongside Chrome) never
+  // matched, and its websites were silently dropped.
+  const trackingBrowsersRef = useRef<string[]>([]);
   const currentForegroundAppRef = useRef<string>('');
 
   // Load category overrides from localStorage AND categoryConfig on mount
@@ -908,6 +1010,10 @@ function App() {
   useEffect(() => {
     trackingBrowserRef.current = trackingBrowser;
   }, [trackingBrowser]);
+
+  useEffect(() => {
+    trackingBrowsersRef.current = trackingBrowsers || [];
+  }, [trackingBrowsers]);
 
   useEffect(() => {
     const loadTrackingBrowser = async () => {
@@ -976,9 +1082,83 @@ function App() {
   const [sleepModalStep, setSleepModalStep] = useState<'sleep' | 'gaps'>('sleep');
   const [sleepFillActivities, setSleepFillActivities] = useState<any[] | null>(null);
   const [sleepFillSessions, setSleepFillSessions] = useState<any[] | null>(null);
-  const [sleepGapFillTarget, setSleepGapFillTarget] = useState<any>(null);
-  const [sleepGapQueue, setSleepGapQueue] = useState<any[]>([]);
   const [sleepFilledGapStarts, setSleepFilledGapStarts] = useState<string[]>([]);
+  /**
+   * ONE queue for every "explain this gap" prompt.
+   *
+   * There used to be four separate consumers of a gap-filling modal — the sleep
+   * popup, the AFK prompt, a smart-fill path, and the External page — each with
+   * its own target/queue/filled list and its own modal instance. They could
+   * stack on top of each other at `z-[10000]` with no coordination, and the
+   * modal they shared had no split-lock while the AFK prompt did.
+   *
+   * A gap is just an absence, and `AfkPromptModal` already knows how to explain
+   * an absence, so every entry point now pushes onto this one queue and a single
+   * `AfkPromptModal` in gap mode drains it.
+   */
+  interface GapFillRowShape {
+    id: string;
+    start: Date;
+    end: Date;
+    duration_seconds: number;
+  }
+  const [gapFillQueue, setGapFillQueue] = useState<Array<{
+    id: string;
+    start: Date;
+    end: Date;
+    duration_seconds: number;
+  }>>([]);
+  const [gapFillSource, setGapFillSource] = useState<'afk' | 'sleep' | 'external'>('external');
+  const [gapFillActivities, setGapFillActivities] = useState<any[]>([]);
+
+  /**
+   * Normalise a gap into the ONE shape the rest of the app consumes.
+   *
+   * Producers disagree, and the disagreement was silently fatal:
+   *   - computeAdjacentGaps returns ISO STRINGS and `durationSeconds`
+   *   - the inject paths pass `new Date(...)` objects and `duration_seconds`
+   * `gap.start.getTime()` therefore threw on the sleep path only, and
+   * `duration_seconds` was `undefined` there, so even a non-crashing sleep gap
+   * would have had no duration.
+   *
+   * Coercing HERE means no caller has to remember which convention it holds, and
+   * the next producer cannot reintroduce it.
+   */
+  const enqueueGapFill = useCallback(
+    (gaps: Array<{
+      start: Date | string;
+      end: Date | string;
+      duration_seconds?: number;
+      durationSeconds?: number;
+    }>, source: 'afk' | 'sleep' | 'external') => {
+      if (!gaps || gaps.length === 0) return;
+      setGapFillSource(source);
+      setGapFillQueue(prev => {
+        const stamp = Date.now();
+        const added = gaps.map((g, i) => {
+          const start = g.start instanceof Date ? g.start : new Date(g.start);
+          const end = g.end instanceof Date ? g.end : new Date(g.end);
+          // Either key, and fall back to the span itself rather than `undefined`:
+          // a gap with no duration cannot be rendered, saved or bulk-filled.
+          const declared = g.duration_seconds ?? g.durationSeconds;
+          const duration_seconds =
+            typeof declared === 'number' && Number.isFinite(declared)
+              ? declared
+              : Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
+          if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+            console.warn('[App] dropping unparseable gap', g);
+            return null;
+          }
+          return { id: `${source}-gap-${stamp}-${i}`, start, end, duration_seconds };
+        }).filter(Boolean) as GapFillRowShape[];
+        if (added.length === 0) {
+          console.warn(`[App] ${source}: all ${gaps.length} gap(s) were unusable`);
+        }
+        return [...prev, ...added];
+      });
+    },
+    [],
+  );
   const [sleepDetectCustomBedtime, setSleepDetectCustomBedtime] = useState({ hours: 22, minutes: 0 });
   const [sleepDetectCustomWaketime, setSleepDetectCustomWaketime] = useState({ hours: 7, minutes: 0 });
   const [sleepDetectFellAsleepAt, setSleepDetectFellAsleepAt] = useState({ hours: 22, minutes: 15 });
@@ -1080,9 +1260,10 @@ function App() {
       lastVisibilityCheckRef.current = now;
       // If app was hidden for >45 minutes and it's sleep hours, check for sleep
       if (gapMs < 45 * 60 * 1000) return;
-      const hour = new Date().getHours();
-      const isSleepHours = hour >= 21 || hour < 10;
-      if (!isSleepHours) return;
+      // Reads the CONFIGURED window. This used to be `hour >= 21 || hour < 10`,
+      // hardcoded, so a user who set 01:00 -> 09:00 still got night-time
+      // behaviour on return at 23:00 — the setting looked broken from here.
+      if (!isWithinSleepWindow(now)) return;
       try {
         const detResult = await window.deskflowAPI?.checkSleepDetection?.();
         if (detResult?.detected && !showSleepDetection) {
@@ -1118,8 +1299,6 @@ function App() {
     setSleepDetectionData(null);
     setSleepFillActivities(null);
     setSleepFillSessions(null);
-    setSleepGapFillTarget(null);
-    setSleepGapQueue([]);
     setSleepFilledGapStarts([]);
     try {
       if (window.deskflowAPI?.dismissSleepDetection) {
@@ -1175,7 +1354,13 @@ function App() {
       const deviceOffToSleepSec = Math.max(0, Math.round((fellAsleep.getTime() - deviceOff.getTime()) / 1000));
       const wakeUpToAppSec = Math.max(0, Math.round((deviceOn.getTime() - wokeUp.getTime()) / 1000));
 
-      const sleepStartMs = deviceOff.getTime();
+      // Fell asleep, NOT device-off. Recording the session from device-off made the app
+      // measure the "before sleep" gap back to the laptop being put away — which IS
+      // the last moment of use — so that gap was always 0-2 minutes while the real
+      // one (last use -> actually falling asleep) ran 75-192 minutes and was never
+      // offered. The device-off moment is not lost: it lives in
+      // device_off_to_sleep_seconds.
+      const sleepStartMs = fellAsleep.getTime();
       const sleepEndMs = wokeUp.getTime();
       sleepPeriodRef.current = { startMs: sleepStartMs, endMs: sleepEndMs };
 
@@ -1184,7 +1369,7 @@ function App() {
 
       if (window.deskflowAPI?.confirmSleep) {
         const result = await window.deskflowAPI.confirmSleep({
-          started_at: deviceOff.toISOString(),
+          started_at: fellAsleep.toISOString(),
           ended_at: wokeUp.toISOString(),
           device_off_to_sleep_seconds: deviceOffToSleepSec,
           wake_up_to_app_seconds: wakeUpToAppSec,
@@ -1200,7 +1385,7 @@ function App() {
           let gaps: any[] = [];
           try {
             const gapResult = await (window as any).deskflowAPI?.computeAdjacentGaps?.({
-              sleepStartIso: deviceOff.toISOString(),
+              sleepStartIso: fellAsleep.toISOString(),
               sleepEndIso: wokeUp.toISOString(),
             });
             gaps = gapResult?.gaps || [];
@@ -1551,7 +1736,16 @@ function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [lastActivity, setLastActivity] = useState<number>(() => Date.now());
   const [isIdle, setIsIdle] = useState(false);
-  const [idleThreshold, setIdleThreshold] = useState(5); // minutes
+  // The AFK threshold used to be a bare `useState(5)` here, which meant the
+  // detector that actually raises the "while you were away" prompt ignored the
+  // AFK Behaviour setting completely — you could set 30 minutes in Settings and
+  // still be asked after 5. These two are read from the same modules the
+  // Settings page writes, and re-read whenever the user changes them.
+  const [afkPrefs, setAfkPrefsState] = useState<AfkPrefs>(() => getAfkPrefs());
+  const [sleepWindow, setSleepWindowState] = useState<SleepWindowPrefs>(() => getSleepWindow());
+  // Infinity when AFK detection is switched off, so the comparison below reads
+  // "never idle" without a second flag at every call site.
+  const afkIdleMs = afkThresholdMs(afkPrefs);
   const [autoDetect, setAutoDetect] = useState(true);
   interface AfkPromptEntry {
     id: number;
@@ -1562,13 +1756,7 @@ function App() {
   }
   const [afkPromptQueue, setAfkPromptQueue] = useState<AfkPromptEntry[]>([]);
   const [afkGapsData, setAfkGapsData] = useState<{ gaps: any[]; activities: any[]; sessions: any[] } | null>(null);
-  const [afkGapFillTarget, setAfkGapFillTarget] = useState<any>(null);
-  const [afkGapQueue, setAfkGapQueue] = useState<any[]>([]);
   const [afkFilledGapStarts, setAfkFilledGapStarts] = useState<string[]>([]);
-  const [smartFillGaps, setSmartFillGaps] = useState<Array<{ id: string; start: Date; end: Date; duration_seconds: number }> | null>(null);
-  const [smartFillActivities, setSmartFillActivities] = useState<any[]>([]);
-  const [smartFillSessions, setSmartFillSessions] = useState<any[]>([]);
-  const [smartFillSource, setSmartFillSource] = useState<'afk' | 'sleep' | 'external' | null>(null);
   const [showManualAssign, setShowManualAssign] = useState(false);
   const afkQueueIdRef = useRef(0);
   const afkPromptShownRef = useRef(false);
@@ -1589,7 +1777,7 @@ function App() {
     }
     return {};
   });
-  const [timerBehavior, setTimerBehavior] = useState<{ neutralAction: 'pause' | 'reset' | 'ignore'; distractingAction: 'pause' | 'reset' | 'ignore' }>({ neutralAction: 'ignore', distractingAction: 'reset' });
+  const [timerBehavior, setTimerBehavior] = useState<{ neutralAction: 'pause' | 'reset' | 'ignore'; distractingAction: 'pause' | 'reset' | 'ignore' }>({ neutralAction: 'pause', distractingAction: 'reset' });
   const [trackerAppMode, setTrackerAppMode] = useState<'show-other' | 'pause' | 'track'>('track');
   const [timerState, setTimerState] = useState<any>(() => {
     if (typeof window !== 'undefined') {
@@ -1643,14 +1831,66 @@ function App() {
     localStorage.setItem('deskflow-activity-feed', JSON.stringify(newItems));
   }, []);
   
-  const handleAfkConfirm = useCallback(async (segments: { activityId: string; startedAt: string; endedAt: string }[]) => {
-    console.log('[DeskFlow] handleAfkConfirm called with', segments.length, 'segments');
-    if (segments.length > 0 && window.deskflowAPI?.createExternalSessionsBatch) {
-      try {
-        await window.deskflowAPI.createExternalSessionsBatch(segments);
-      } catch (err) { console.error('[DeskFlow] createExternalSessionsBatch error:', err); }
-    }
+  /**
+   * Put tracking back after the user tells us they were not actually away.
+   *
+   * AFK detection deliberately calls `setTracking(false)` so the absence becomes
+   * a real hole in the logs that gap detection can find. Every path back out of
+   * the prompt therefore has to undo it, otherwise one dismissal silently stops
+   * all tracking. Declining ("I wasn't AFK") is the clearest case of that; this
+   * is also called from the save and dismiss paths so no exit leaves it off.
+   */
+  const resumeTrackingAfterAfk = useCallback(() => {
     pendingIdleRangeRef.current = null;
+    setIsIdle(false);
+    setIsTracking(true);
+    setSessionStart(new Date());
+    idleCooldownRef.current = Date.now() + 12000;
+    if (window.deskflowAPI?.setTracking) {
+      window.deskflowAPI.setTracking(true).catch(err =>
+        console.error('[DeskFlow] failed to resume tracking after AFK prompt:', err),
+      );
+    }
+  }, []);
+
+  const handleAfkConfirm = useCallback(async (segments: { activityId: string; startedAt: string; endedAt: string }[]): Promise<boolean> => {
+    console.log('[DeskFlow] handleAfkConfirm called with', segments.length, 'segments');
+
+    // Branch on the PAYLOAD, not on "it didn't throw".
+    //
+    // This handler used to `await` the write and then fall through, returning
+    // `undefined`. The modal does `const ok = await onConfirm(result)` and treats
+    // falsy as failure, so EVERY successful save rendered "Couldn't save. Your
+    // answer was not recorded — try again." — and because that path returns
+    // early, `setSaved(true)`, `resetAfterAfkFill()` and the adjacent-gaps panel
+    // never ran either. Answering the prompt was effectively broken.
+    //
+    // `create-external-sessions-batch` also reports rejection by RETURNING
+    // {success:false} rather than throwing, so a try/catch alone would still let
+    // a rejected write claim success.
+    if (segments.length === 0) {
+      console.error('[DeskFlow] AFK save rejected: no segments');
+      return false;
+    }
+    if (!window.deskflowAPI?.createExternalSessionsBatch) {
+      console.error('[DeskFlow] AFK save rejected: createExternalSessionsBatch unavailable');
+      return false;
+    }
+    try {
+      const res: any = await window.deskflowAPI.createExternalSessionsBatch(segments);
+      if (res && res.success === false) {
+        console.error('[DeskFlow] AFK save rejected by main:', res.error ?? res);
+        return false;
+      }
+    } catch (err) {
+      console.error('[DeskFlow] createExternalSessionsBatch error:', err);
+      return false;
+    }
+
+    pendingIdleRangeRef.current = null;
+    // The user answered, so they were here. Resume tracking before anything else
+    // so no exit path from this prompt can leave the app untracked.
+    resumeTrackingAfterAfk();
     window.dispatchEvent(new CustomEvent('external-data-changed'));
     // Compute adjacent gaps around the AFK period — keep popup open, pass gaps to it
     const entry = afkPromptQueue[0];
@@ -1677,14 +1917,64 @@ function App() {
       } catch {}
     }
     // DO NOT remove from queue — popup stays open
+    return true;
   }, [afkPromptQueue, externalActivities]);
   
-  const handleAfkDismiss = useCallback(() => {
-    console.log('[DeskFlow] handleAfkDismiss called');
-    pendingIdleRangeRef.current = null;
-    setAfkPromptQueue(prev => prev.slice(1));
+  /**
+   * Write ONE composition across many gaps, rescaled to each length.
+   *
+   * Rows are built here rather than by the modal so the timestamps are derived
+   * once, from each gap's own start, with the cursor advancing across EVERY
+   * segment. Skipping the cursor over a blank segment shifts every later segment
+   * earlier and silently leaves the tail of the gap unfilled — which then shows
+   * up again in gap detection as if it were never answered.
+   */
+  const handleBulkFill = useCallback(async (
+    gaps: Array<{ start: string; end: string; duration_seconds: number }>,
+    segments: Array<{ activityId: string; minutes: number }>,
+  ): Promise<void> => {
+    const filled = segments.filter((sg) => sg.activityId);
+    if (!gaps.length || !filled.length || !window.deskflowAPI?.createExternalSessionsBatch) return;
+
+    const rows: Array<{ activityId: string; startedAt: string; endedAt: string }> = [];
+    for (const gap of gaps) {
+      const gapEndMs = new Date(gap.end).getTime();
+      let cursor = new Date(gap.start).getTime();
+      for (const sg of filled) {
+        const end = cursor + Math.max(60, Math.round(sg.minutes)) * 60_000;
+        if (end > gapEndMs) break;                 // never spill past the gap
+        rows.push({
+          activityId: sg.activityId,
+          startedAt: new Date(cursor).toISOString(),
+          endedAt: new Date(end).toISOString(),
+        });
+        cursor = end;                              // advance for EVERY segment
+      }
+    }
+    if (!rows.length) return;
+    try {
+      const res: any = await window.deskflowAPI.createExternalSessionsBatch(rows);
+      if (res && res.success === false) {
+        console.error('[DeskFlow] bulk fill rejected:', res.error);
+        return;
+      }
+      console.log(`[DeskFlow] bulk filled ${rows.length} segments across ${gaps.length} gaps`);
+    } catch (err) {
+      console.error('[DeskFlow] bulk fill failed:', err);
+      return;
+    }
+    // Mark them filled so the parent's list updates, then refresh the dashboard.
+    setAfkFilledGapStarts(prev => [...prev, ...gaps.map((g) => g.start)]);
     window.dispatchEvent(new CustomEvent('external-data-changed'));
   }, []);
+
+  const handleAfkDismiss = useCallback(() => {
+    console.log('[DeskFlow] handleAfkDismiss called');
+    resumeTrackingAfterAfk();
+    setAfkPromptQueue(prev => prev.slice(1));
+    window.dispatchEvent(new CustomEvent('external-data-changed'));
+  }, [resumeTrackingAfterAfk]);
+
 
   // Persist AFK queue to disk so it survives app restart
   useEffect(() => {
@@ -1693,28 +1983,35 @@ function App() {
     }
   }, [afkPromptQueue]);
 
-  // Listen for gap-drawer open event — now opens the new GapFillModal
+  // Listen for gap-drawer open event — routes into the single gap-fill prompt
   useEffect(() => {
     const handler = async () => {
       try {
         const api = (window as any).deskflowAPI;
-        const [gaps, apps, ext] = await Promise.all([
+        const [gaps, ext] = await Promise.all([
           api?.detectUsageGaps?.({ period: 'week', minGapMinutes: 5 }) || [],
-          api?.getKnownApps?.() || [],
           api?.getExternalActivities?.() || [],
         ]);
-        const activities = [
-          ...((apps || []).map((a: any) => ({ id: 'app:' + a.app, name: a.app, category: a.category || 'Other', color: '#6366f1', type: 'app' as const }))),
-          ...((ext || []).filter((a: any) => a.name !== 'AFK' && a.type !== 'sleep').map((a: any) => ({ id: 'ext:' + a.id, name: a.name, category: 'External', color: a.color || '#6b7280', type: 'external' as const }))),
-        ];
+        // Only REAL `external_activities` rows are offered.
+        //
+        // This used to synthesise `'app:'+name` and `'ext:'+id` ids for the
+        // picker. Those strings were then written straight into
+        // `external_sessions.activity_id`, which is an INTEGER column with a
+        // foreign key — SQLite cannot convert them, so the rows joined to no
+        // activity and vanished from every per-activity total. The `app:`
+        // entries had no backing row at all.
+        const activities = (Array.isArray(ext) ? ext : [])
+          .filter((a: any) => a.type !== 'sleep')
+          .map((a: any) => ({ ...a, id: String(a.id) }));
         const fillGaps = (Array.isArray(gaps) ? gaps : []).map((g: any, i: number) => ({
           id: `gap-${i}`,
           start: new Date(g.start),
           end: new Date(g.end),
           duration_seconds: g.durationSeconds,
         }));
-        setSmartFillGaps(fillGaps.length > 0 ? fillGaps : null);
-        setSmartFillActivities(activities);
+        // Same queue as every other gap source.
+        enqueueGapFill(fillGaps as any, 'external');
+        setGapFillActivities(activities as any);
       } catch (err) {
         console.error('[App] Failed to detect gaps for smart fill:', err);
       }
@@ -1725,6 +2022,22 @@ function App() {
       window.removeEventListener('open-gap-panel', handler);
       window.removeEventListener('open-gap-drawer', handler);
     };
+  }, []);
+
+  // External page hands us the specific gap(s) the user picked, rather than
+  // mounting a second gap UI of its own.
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const gaps = (e as CustomEvent<{ gaps?: any[] }>).detail?.gaps;
+      if (!Array.isArray(gaps) || gaps.length === 0) return;
+      enqueueGapFill(gaps, 'external');
+      try {
+        const acts = await window.deskflowAPI?.getExternalActivities?.();
+        setGapFillActivities((acts || []).filter((a: any) => a.type !== 'sleep'));
+      } catch { /* the picker just shows fewer options */ }
+    };
+    window.addEventListener('enqueue-gap-fill', handler as EventListener);
+    return () => window.removeEventListener('enqueue-gap-fill', handler as EventListener);
   }, []);
 
   // Global listener for pair-phone modal (open from any page)
@@ -1921,10 +2234,52 @@ function App() {
 
   // Track mount status to prevent state updates after unmount
   const isMountedRef = useRef(true);
+  /**
+   * Last genuine pointer position, for AFK detection.
+   *
+   * THIS REF MUST LIVE AT COMPONENT SCOPE. It previously sat INSIDE the
+   * activity-listener `useEffect`, which is an illegal hook call — React throws
+   * "Minified React error #321 / Invalid hook call" and the whole screen fails to
+   * mount. A `useRef` inside `useEffect` also has the wrong semantics even if it
+   * were tolerated: it would be a fresh ref on every effect run, so the
+   * stationary-cursor filter below would reset instead of remembering.
+   */
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   // Use refs to track latest state values for the activity handler
   const idleRef = useRef(isIdle);
   const trackingRef = useRef(isTracking);
   const systemIdleSecondsRef = useRef(0); // OS-level idle seconds (from main process)
+
+  /**
+   * Fallback idle clock, measured from real input events in THIS window.
+   *
+   * `powerMonitor.getSystemIdleTime()` returns 0 FOREVER on Linux — verified by
+   * running it against this box for 40 seconds of complete idleness and reading
+   * 0 on every tick. Because the AFK detector compared `systemIdleSecondsRef`
+   * against the threshold, `0 > 300000` was never true, so AFK could never be
+   * detected no matter how long you were away. The whole prompt was dead code on
+   * this platform, which is why none of the threshold fixes appeared to help.
+   *
+   * The renderer DOES receive real input events, so we derive idle from those and
+   * take whichever clock reports MORE idleness. On macOS/Windows the OS value
+   * wins and keeps working as before; on Linux this is the only signal there is.
+   *
+   * Known limitation: while DeskFlow is not focused it receives no input events,
+   * so this can read as idle while you type in another app. That is precisely
+   * the case the OS clock covers on the platforms where it works.
+   */
+  const lastUserInputAtRef = useRef<number>(Date.now());
+  /* Declared here, next to the ref it is compared against. It was READ in four
+     places (the powerMonitor foreground handler and two idle computations) but
+     never declared anywhere in the tree, so the main process pushed a
+     foreground-active heartbeat into a bare global and threw
+     `ReferenceError: lastForegroundActivityRef is not defined` roughly every
+     1.5s. That killed the whole renderer, not just the AFK clock. */
+  const lastForegroundActivityRef = useRef<number>(Date.now());
+  const lastForegroundTitleRef = useRef<string>('');
+  // Seconds since the foreground window last changed, measured in main across
+  // ALL windows. This is the only system-wide activity signal Linux gives us.
+  const foregroundQuietRef = useRef<number>(0);
   const currentCategoryRef = useRef<string | null>(null); // Tracked app category for passive-active check
   const idleStartRef = useRef<number | null>(null); // When idle began (for AFK duration)
   const idleReturnFnRef = useRef<() => void>(() => {}); // Updated below to avoid stale closures
@@ -1946,6 +2301,69 @@ function App() {
   // Ref to latest timerState so idle detector can check externalRunning
   const timerStateRef = useRef(timerState);
   timerStateRef.current = timerState;
+
+  // Same trick for the AFK prefs. `idleReturnFnRef.current` is installed ONCE
+  // with an empty dep array, so reading the `afkPrefs` state directly inside it
+  // would pin the values that were current at mount — changing a setting in
+  // Settings would save to localStorage and then keep using the old numbers
+  // until the app restarted. That is the exact "the setting does nothing" bug
+  // this whole feature kept hitting.
+  const afkPrefsStateRef = useRef(afkPrefs);
+  afkPrefsStateRef.current = afkPrefs;
+
+  // Same reason: the sleep-handoff fallback below runs on a timer created inside
+  // a `[]`-deps closure, so reading the state directly would compare against
+  // mount-time values and the "has the sleep flow taken over?" test would always
+  // answer "no" (or always "yes"), i.e. the safety net could not work.
+  /**
+   * Idle seconds, from whichever clock can actually SEE the user.
+   *
+   * The renderer only receives input addressed to its own window, so its own
+   * clock keeps climbing while you type in a completely different app. Trusting
+   * it alone produced a constant stream of false "you were away" prompts — the
+   * bug that made AFK look broken in the other direction.
+   *
+   * Three rules, in order:
+   *   1. If the OS clock works (macOS/Windows) it is authoritative.
+   *   2. If our window is hidden we cannot observe input at all, so we report
+   *      only what the OS says rather than inventing idleness.
+   *   3. Otherwise use our own clock, but a change in the FOREGROUND WINDOW TITLE
+   *      (published by main, and updated as you type in a browser/editor/terminal)
+   *      counts as activity. That is what distinguishes "away from the desk" from
+   *      "busy in another window" on Linux.
+   */
+  const effectiveIdleSeconds = useCallback((): number => {
+    const os = typeof systemIdleSecondsRef.current === 'number' ? systemIdleSecondsRef.current : 0;
+    // A working OS clock is authoritative — macOS/Windows.
+    if (os > 0) return os;
+    // Hidden: we receive no input events at all, so we cannot claim idleness.
+    if (typeof document !== 'undefined' && document.hidden) return 0;
+
+    const renderer = Math.max(0, (Date.now() - lastUserInputAtRef.current) / 1000);
+    // We have focus: our own clock sees every keystroke, so trust it fully. The
+    // foreground signal is deliberately NOT consulted here, or a chat app
+    // chattering in the background could hold AFK open forever.
+    if (typeof document !== 'undefined' && document.hasFocus()) return renderer;
+
+    // No focus — we are blind to input outside this window, so our own clock
+    // would call you AFK for simply working in another app. CAP it by how long
+    // the system as a whole has shown no sign of life. While anything is visibly
+    // happening (app switch, title rewrite) we report near-zero idle; once the
+    // machine stops moving, the cap opens and the threshold is reachable.
+    const systemQuiet = Math.max(
+      0,
+      (Date.now() - Math.max(lastForegroundActivityRef.current, lastUserInputAtRef.current)) / 1000,
+    );
+    return Math.min(renderer, systemQuiet);
+  }, []);
+
+  const showSleepDetectionRef = useRef(showSleepDetection);
+  showSleepDetectionRef.current = showSleepDetection;
+  const afkPromptQueueRef = useRef(afkPromptQueue);
+  afkPromptQueueRef.current = afkPromptQueue;
+
+  // How long to give the sleep flow before raising the AFK prompt anyway.
+  const SLEEP_HANDOFF_FALLBACK_MS = 20_000;
   
   // Keep idleReturnFnRef.current updated with the actual handler
   useEffect(() => {
@@ -1972,8 +2390,46 @@ function App() {
         elapsedSec = Math.max(0, elapsedSec - sleepOverlap);
       }
 
-      // Req 4: tiny idle ? silent discard, no prompt
-      if (elapsedSec < 60) { pendingIdleRangeRef.current = null; return; }
+      // Below the configured floor: discard silently, no prompt. Was a
+      // hardcoded `elapsedSec < 60` — now `Ask about absences over` in Settings.
+      if (!shouldPromptForAbsence(elapsedSec, afkPrefsStateRef.current)) {
+        pendingIdleRangeRef.current = null;
+        return;
+      }
+
+      // If this absence actually overlapped the user's configured sleep window,
+      // the SLEEP flow owns it — do not also raise "what were you doing?". The
+      // two prompts used to be able to fire for the same hour, which is how the
+      // feature came to feel broken. Outside the window this never triggers, so
+      // a coffee break at 10am still gets the AFK prompt it deserves.
+      if (idleStartMs && shouldDeferToSleep(idleStartMs, nowMs)) {
+        console.warn(
+          `[DeskFlow] AFK prompt deferred — absence of ${Math.round(elapsedSec / 60)}min is mostly bedtime (${sleepWindow.startHour}:00 → ${sleepWindow.endHour}:00), handing off to the sleep flow. If no sleep prompt appears in ${SLEEP_HANDOFF_FALLBACK_MS / 1000}s this absence will be queued anyway, so it can never be silently dropped.`,
+        );
+        pendingIdleRangeRef.current = null;
+        // SAFETY NET. The sleep popup is raised by main-process events (screen
+        // resume, window focus, poll-gap) rather than from here, so deferring on
+        // the assumption that it "will take over" can leave the user with NO
+        // prompt at all. That is exactly what happened: a 2-hour evening absence
+        // deferred, the sleep flow never fired, and the absence vanished. An
+        // un-asked question is much worse than a duplicate one, so if the sleep
+        // flow has not taken over shortly, the AFK prompt is raised regardless.
+        window.setTimeout(() => {
+          if (showSleepDetectionRef.current) return;
+          if (afkPromptQueueRef.current.some((q) => Math.abs((q.idleStartMs ?? 0) - (idleStartMs ?? -1)) < 1000)) {
+            return; // already queued
+          }
+          console.warn('[DeskFlow] Sleep flow did not take over — raising the AFK prompt anyway.');
+          setAfkPromptQueue(prev => [...prev, {
+            id: afkQueueIdRef.current++,
+            duration: `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`,
+            idleStartMs,
+            returnMs: nowMs,
+            defaultNotAfk: false,
+          }]);
+        }, SLEEP_HANDOFF_FALLBACK_MS);
+        return;
+      }
 
       const duration = elapsedSec < 60 ? `${elapsedSec}s` : `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`;
       const entry: AfkPromptEntry = {
@@ -1982,7 +2438,9 @@ function App() {
         idleStartMs,
         returnMs: nowMs,
         // Req 4: moderate idle (1�15m) defaults to "I wasn't AFK"
-        defaultNotAfk: elapsedSec <= 15 * 60,
+        // Was hardcoded `elapsedSec <= 15 * 60` — now `Pre-select "I wasn't AFK"
+        // for absences up to` in Settings.
+        defaultNotAfk: defaultsToNotAfk(elapsedSec, afkPrefsStateRef.current),
       };
       setAfkPromptQueue(prev => [...prev, entry]);
     };
@@ -1993,8 +2451,33 @@ function App() {
     isMountedRef.current = true;
     
     // Track actual user activity (mouse/keyboard) - ALWAYS active to detect return from idle
+    /**
+     * Mouse MOVEMENT only counts when the pointer genuinely moved.
+     *
+     * `mousemove` also fires when the element under a perfectly stationary cursor
+     * is replaced — which in a live app happens constantly, because the sidebar
+     * stopwatch ticks, logs stream in and charts repaint. Those synthetic events
+     * refreshed the idle clock forever, so AFK could never be detected while
+     * RHEO itself was the focused window. It worked in every OTHER app, which is
+     * exactly the symptom: the phantom events come from our own DOM.
+     */
+    const POINTER_MOVE_MIN_PX = 3;
+    const handlePointerMove = (e: MouseEvent) => {
+      const last = lastPointerRef.current;
+      if (
+        last &&
+        Math.abs(e.clientX - last.x) < POINTER_MOVE_MIN_PX &&
+        Math.abs(e.clientY - last.y) < POINTER_MOVE_MIN_PX
+      ) {
+        return; // stationary cursor over a repainting DOM: not a person
+      }
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      handleActivity();
+    };
+
     const handleActivity = () => {
       if (!isMountedRef.current) return;
+      lastUserInputAtRef.current = Date.now();
       setLastActivity(Date.now());
       if (idleRef.current) {
         // Immediately resume tracking when user returns from idle
@@ -2015,16 +2498,21 @@ function App() {
 
     // Always listen for activity (even when tracking is paused)
     // Use capture phase so xterm.js (or other libs) calling stopPropagation doesn't block it
-    window.addEventListener('mousemove', handleActivity, { capture: true });
+    window.addEventListener('mousemove', handlePointerMove, { capture: true });
     window.addEventListener('mousedown', handleActivity, { capture: true });
     window.addEventListener('keydown', handleActivity, { capture: true });
     window.addEventListener('touchstart', handleActivity, { capture: true });
-    window.addEventListener('scroll', handleActivity, { capture: true });
     window.addEventListener('wheel', handleActivity, { capture: true });
+    // 'scroll' DELIBERATELY NOT LISTENED TO. It fires for programmatic scrolling,
+    // auto-scroll and scroll anchoring, so a live dashboard repainting under a
+    // motionless cursor produced a steady stream of it and reset the idle clock
+    // forever. That is why AFK worked in other apps but never while RHEO was the
+    // focused window. `wheel` remains: a real scroll gesture is unambiguous.
 
     // Also listen for window focus/visibility to catch user returning to app
     const handleFocus = () => {
       if (!isMountedRef.current) return;
+      lastUserInputAtRef.current = Date.now();
       if (idleRef.current) {
         console.log('[DeskFlow] Window focused - resuming tracking');
         setIsIdle(false);
@@ -2040,6 +2528,9 @@ function App() {
 
     const handleVisibilityChange = () => {
       if (!isMountedRef.current) return;
+      // Coming back to the tab counts as presence, otherwise the very act of
+      // alt-tabbing back would still read as idle.
+      if (document.visibilityState === 'visible') lastUserInputAtRef.current = Date.now();
       if (document.visibilityState === 'visible' && idleRef.current) {
         console.log('[DeskFlow] Window visible - resuming tracking');
         setIsIdle(false);
@@ -2058,11 +2549,10 @@ function App() {
 
     return () => {
       // Cleanup: remove all activity listeners on unmount
-      window.removeEventListener('mousemove', handleActivity, { capture: true });
+      window.removeEventListener('mousemove', handlePointerMove, { capture: true });
       window.removeEventListener('mousedown', handleActivity, { capture: true });
       window.removeEventListener('keydown', handleActivity, { capture: true });
       window.removeEventListener('touchstart', handleActivity, { capture: true });
-      window.removeEventListener('scroll', handleActivity, { capture: true });
       window.removeEventListener('wheel', handleActivity, { capture: true });
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -2070,9 +2560,68 @@ function App() {
     };
   }, []); // Empty deps - this runs once on mount and cleans up on unmount
 
+  /**
+   * Live AFK diagnostics on `window.__afkDebug`, refreshed every second.
+   *
+   * AFK detection has been wrong in BOTH directions at different times: never
+   * fired on Linux because the OS idle API returns 0, then fired constantly
+   * because the fallback counted time spent in other apps. Guessing which
+   * branch was live is what caused both, so the decision inputs are published
+   * where they can be read rather than inferred.
+   *
+   *   console.table(window.__afkDebug())
+   */
+  useEffect(() => {
+    const publish = () => {
+      (window as any).__afkDebug = () => ({
+        thresholdMinutes: afkPrefsStateRef.current.thresholdMinutes,
+        thresholdMs: afkIdleMs,
+        osIdleSeconds: systemIdleSecondsRef.current,
+        osApiUsable: systemIdleSecondsRef.current > 0,
+        rendererIdleSeconds: Math.round((Date.now() - lastUserInputAtRef.current) / 1000),
+        foregroundQuietSeconds: foregroundQuietRef.current,
+        systemQuietSeconds: Math.round(
+          Math.max(0, (Date.now() - Math.max(lastForegroundActivityRef.current, lastUserInputAtRef.current)) / 1000),
+        ),
+        lastForegroundTitle: lastForegroundTitleRef.current,
+        effectiveIdleSeconds: Math.round(effectiveIdleSeconds()),
+        wouldFireNow: effectiveIdleSeconds() * 1000 > afkIdleMs,
+        branch: typeof document !== 'undefined' && document.hidden
+          ? 'hidden -> returns os only'
+          : (typeof document !== 'undefined' && document.hasFocus())
+            ? 'focused -> trusts renderer clock'
+            : 'unfocused -> min(renderer, foregroundQuiet)',
+        hasFocus: typeof document !== 'undefined' ? document.hasFocus() : null,
+        hidden: typeof document !== 'undefined' ? document.hidden : null,
+        isTracking,
+        isIdle,
+        focusedCategory: currentCategoryRef.current,
+        pendingIdleRange: !!pendingIdleRangeRef.current,
+      });
+    };
+    publish();
+    const t = setInterval(publish, 1000);
+    return () => clearInterval(t);
+  });
+
   // Guard against re-triggering idle within N seconds of returning from idle
   // Prevents the stale heartbeat idle value from causing a second idle detection
   const idleCooldownRef = useRef(0);
+
+  // Keep the detector in step with Settings WITHOUT a restart. Both modules
+  // dispatch on write, so changing "Treat as AFK after" or the sleep window in
+  // Settings takes effect on the next tick rather than the next launch.
+  useEffect(() => {
+    const onAfk = (e: Event) => setAfkPrefsState((e as CustomEvent<AfkPrefs>).detail ?? getAfkPrefs());
+    const onSleep = (e: Event) =>
+      setSleepWindowState((e as CustomEvent<SleepWindowPrefs>).detail ?? getSleepWindow());
+    window.addEventListener('afk-prefs-changed', onAfk);
+    window.addEventListener(SLEEP_WINDOW_CHANGED_EVENT, onSleep);
+    return () => {
+      window.removeEventListener('afk-prefs-changed', onAfk);
+      window.removeEventListener(SLEEP_WINDOW_CHANGED_EVENT, onSleep);
+    };
+  }, []);
 
   // Live tracking timer with OS-level idle detection
   // Uses powerMonitor.getSystemIdleTime() from main process (via heartbeat)
@@ -2092,12 +2641,24 @@ function App() {
         // Idle check: Use OS-level system idle time (from main process heartbeat)
         // This correctly detects idle even when DeskFlow is in the background
         // Skip idle check for entertainment/gaming (YouTube, Netflix, games � user is watching, not AFK)
-        const PASSIVE_ACTIVE = new Set(['Entertainment', 'Gaming']);
-        const isPassiveActive = currentCategoryRef.current && PASSIVE_ACTIVE.has(currentCategoryRef.current);
-        const idleMs = idleThreshold * 60 * 1000; // Convert minutes to ms
-        if (!isPassiveActive && systemIdleSecondsRef.current * 1000 > idleMs) {
+        // Was a hardcoded `new Set(['Entertainment','Gaming'])`. Now the user's
+        // own list, so "don't call me AFK for Netflix" is a setting.
+        const isPassiveActive = isPassiveCategory(currentCategoryRef.current, afkPrefsStateRef.current);
+        const idleMs = afkIdleMs; // from AFK Behaviour settings; Infinity when disabled
+        const idleSec = effectiveIdleSeconds();
+        // Two gates, both required: the absence must clear the threshold AND
+        // hold for the configured time. The hold is re-evaluated every tick, so
+        // moving the mouse at any point cancels it instantly rather than latching.
+        if (!isPassiveActive && idleSec * 1000 > idleMs && absenceHasHeld(idleSec, afkPrefsStateRef.current)) {
           if (!pendingIdleRangeRef.current) {
-            pendingIdleRangeRef.current = { idleStart: Date.now() - idleMs, idleEnd: null };
+            // The real start of the absence is `now - systemIdleSeconds`, which
+            // the heartbeat already hands us on the line above. It used to be
+            // `Date.now() - idleMs`, which BACK-COMPUTES the start from the
+            // threshold — so stepping away for 45 minutes with a 5 minute
+            // threshold recorded exactly 5 minutes, and the other 40 silently
+            // became an untracked gap the user was never asked about.
+            const trueIdleMs = Math.max(idleMs, idleSec * 1000);
+            pendingIdleRangeRef.current = { idleStart: Date.now() - trueIdleMs, idleEnd: null };
             idleStartRef.current = pendingIdleRangeRef.current.idleStart;
             setIsIdle(true);
             afkPromptShownRef.current = false;
@@ -2119,7 +2680,7 @@ function App() {
     return () => {
       clearInterval(interval);
     };
-  }, [isTracking, elapsedTime, currentApp, sessionStart, idleThreshold]);
+  }, [isTracking, elapsedTime, currentApp, sessionStart, afkIdleMs, effectiveIdleSeconds]);
 
   // Switch app simulation
   const switchApp = (newApp: string) => {
@@ -2734,19 +3295,11 @@ Trend: +14% vs. yesterday. Keep it up!`;
   };
   const devFireSleepGapFill = () => {
     const now = new Date();
-    setSleepGapFillTarget({
-      start: new Date(now.getTime() - 30 * 60 * 1000).toISOString(),
-      end: now.toISOString(),
-      duration_seconds: 1800,
-    });
+    enqueueGapFill([{ start: new Date(now.getTime() - 30 * 60 * 1000), end: now, duration_seconds: 1800 }], 'sleep');
   };
   const devFireAfkGapFill = () => {
     const now = new Date();
-    setAfkGapFillTarget({
-      start: new Date(now.getTime() - 30 * 60 * 1000).toISOString(),
-      end: now.toISOString(),
-      duration_seconds: 1800,
-    });
+    enqueueGapFill([{ start: new Date(now.getTime() - 30 * 60 * 1000), end: now, duration_seconds: 1800 }], 'afk');
   };
 const devFireSmartFill = async () => {
      try {
@@ -2758,8 +3311,7 @@ const devFireSmartFill = async () => {
            end: new Date(g.end),
            duration_seconds: g.durationSeconds,
          }));
-         setSmartFillGaps(fillGaps);
-         setSmartFillSource('external');
+         enqueueGapFill(fillGaps as any, 'external');
        }
      } catch (err) {
        console.error('[DevTrigger] Failed to detect gaps for smart fill:', err);
@@ -2827,7 +3379,7 @@ const devFireSmartFill = async () => {
        const wakeUpToAppSec = Math.max(0, Math.round((deviceOn.getTime() - wokeUp.getTime()) / 1000));
        if (window.deskflowAPI?.confirmSleep) {
          const result = await window.deskflowAPI.confirmSleep({
-           started_at: deviceOff.toISOString(), ended_at: wokeUp.toISOString(),
+           started_at: fellAsleep.toISOString(), ended_at: wokeUp.toISOString(),
            device_off_to_sleep_seconds: deviceOffToSleepSec, wake_up_to_app_seconds: wakeUpToAppSec,
          });
          if (result?.success) {
@@ -2836,7 +3388,7 @@ const devFireSmartFill = async () => {
            let gaps: any[] = [];
            try {
              const gapResult = await (window as any).deskflowAPI?.computeAdjacentGaps?.({
-               sleepStartIso: deviceOff.toISOString(), sleepEndIso: wokeUp.toISOString(),
+               sleepStartIso: fellAsleep.toISOString(), sleepEndIso: wokeUp.toISOString(),
              });
              gaps = gapResult?.gaps || [];
            } catch {}
@@ -2880,8 +3432,7 @@ const devFireSmartFill = async () => {
        const gaps = sleepDetectionData.adjacentGaps.map((g, i) => ({
          id: `sleep-gap-${i}`, start: new Date(g.start), end: new Date(g.end), duration_seconds: g.durationSeconds,
        }));
-       setSmartFillGaps(gaps);
-       setSmartFillSource('sleep');
+       enqueueGapFill(gaps as any, 'sleep');
      } else {
        // Fallback: detect gaps around a synthetic sleep window
        const now = new Date();
@@ -2893,8 +3444,7 @@ const devFireSmartFill = async () => {
          const gaps = (r?.gaps || []).map((g: any, i: number) => ({
            id: `auto-sleep-gap-${i}`, start: new Date(g.start), end: new Date(g.end), duration_seconds: g.durationSeconds,
          }));
-         setSmartFillGaps(gaps);
-         setSmartFillSource('sleep');
+         enqueueGapFill(gaps as any, 'sleep');
        }).catch(() => {});
      }
    };
@@ -2903,18 +3453,16 @@ const devFireSmartFill = async () => {
      const entry = afkPromptQueue[0];
      if (entry?.idleStartMs && entry?.returnMs) {
        const gaps = [{ id: 'afk-gap', start: new Date(entry.idleStartMs), end: new Date(entry.returnMs), duration_seconds: Math.round((entry.returnMs - entry.idleStartMs) / 1000) }];
-       setSmartFillGaps(gaps);
-       setSmartFillSource('afk');
+       enqueueGapFill(gaps as any, 'afk');
      }
    };
 
    const dismissAllDev = () => {
      setShowSleepDetection(false); setSleepDetectionData(null); setSleepModalStep('sleep');
-     setSleepFillActivities(null); setSleepFillSessions(null); setSleepGapFillTarget(null);
-     setSleepGapQueue([]); setSleepFilledGapStarts([]);
-     setAfkPromptQueue([]); setAfkGapsData(null); setAfkGapFillTarget(null);
-     setAfkGapQueue([]); setAfkFilledGapStarts([]);
-     setSmartFillGaps(null); setSmartFillSource(null);
+     setSleepFillActivities(null); setSleepFillSessions(null);
+     setSleepFilledGapStarts([]);
+     setAfkPromptQueue([]); setAfkGapsData(null); setAfkFilledGapStarts([]);
+     setGapFillQueue([]); setGapFillSource('external');
      setShowManualAssign(false); setPairPhoneModal(null); setShowConfirmClear(false);
      setShowConfirmExport(null); setShowSummary(false); setNotifPanelOpen(false);
      setShowWorkspaceWarning(false); setShowUnsavedWarning(false);
@@ -2939,7 +3487,6 @@ const devFireSmartFill = async () => {
     setShowGapBanner(true);
     setGapBannerMinutes(15);
   };
-  const devFireDatabasePage = () => navigate('/database');
   const devFireActivityLogs = () => navigate('/ai?tab=logs');
   const devFireReports = () => navigate('/reports');
 
@@ -2949,7 +3496,7 @@ const devFireSmartFill = async () => {
     { id: 'afk-prompt', label: 'AFK Prompt', icon: <Clock className="w-4 h-4" />, condition: 'After AFK period', fire: devFireAfkPrompt },
     { id: 'sleep-gap-fill', label: 'Sleep Gap Fill', icon: <Zap className="w-4 h-4" />, condition: 'When sleep gap needs fill', fire: devFireSleepGapFill },
     { id: 'afk-gap-fill', label: 'AFK Gap Fill', icon: <Zap className="w-4 h-4" />, condition: 'When AFK gap detected', fire: devFireAfkGapFill },
-    { id: 'smart-fill', label: 'Smart Fill Modal', icon: <Brain className="w-4 h-4" />, condition: 'Automatic gap detection', fire: devFireSmartFill },
+    { id: 'smart-fill', label: 'Smart Fill (gap prompt)', icon: <Brain className="w-4 h-4" />, condition: 'Automatic gap detection', fire: devFireSmartFill },
     { id: 'manual-assign', label: 'Manual Assign Modal', icon: <UserCheck className="w-4 h-4" />, condition: 'Manual time assignment', fire: devFireManualAssign },
     { id: 'pair-phone', label: 'Pair Phone Modal', icon: <Smartphone className="w-4 h-4" />, condition: 'Device pairing', fire: devFirePairPhone },
     { id: 'confirm-export', label: 'Confirm Export Modal', icon: <Download className="w-4 h-4" />, condition: 'Before data export', fire: devFireConfirmExportCsv, prepAndFire: devFireConfirmExportCsv, hasPrep: () => false, prepLabel: () => 'CSV | JSON' },
@@ -2962,14 +3509,18 @@ const devFireSmartFill = async () => {
     { id: 'unsaved-warning', label: 'Unsaved Warning', icon: <Save className="w-4 h-4" />, condition: 'Unsaved settings', fire: devFireUnsavedWarning },
     { id: 'gap-drawer', label: 'Gap Drawer', icon: <LayoutDashboard className="w-4 h-4" />, condition: 'Open gap drawer', fire: devFireGapDrawer },
     { id: 'settings-warning', label: 'Settings Warning', icon: <Settings className="w-4 h-4" />, condition: 'Unsaved settings', fire: devFireGapBannerSetting },
-    { id: 'database-page', label: 'Database Page', icon: <Database className="w-4 h-4" />, condition: 'Navigate to database', fire: devFireDatabasePage },
     { id: 'activity-logs', label: 'Activity Logs Tab', icon: <BarChart3 className="w-4 h-4" />, condition: 'Navigate to logs', fire: devFireActivityLogs },
   ];
 
   return (
     <VoiceProvider>
     <TutorialProvider>
-    <div className="flex flex-col h-screen overflow-hidden bg-[#121212] text-white">
+    {/* LIGHT MODE — was `bg-[#121212] text-white` (a literal arbitrary value that
+        pins the app root to near-black in BOTH themes; everything sits on it).
+        This fix was applied before and CLOBBERED by a concurrent App.tsx rewrite.
+        If it regresses again, the app background will be black in light mode.
+        Both halves read the token contract now. */}
+    <div className="flex flex-col h-screen overflow-hidden bg-[var(--ws-surface)] text-[var(--text-primary)]">
       <TitleBar />
       <AppBackground pathname={location.pathname} />
       <ServerErrorBanner />
@@ -2983,7 +3534,6 @@ const devFireSmartFill = async () => {
           onToggle={toggleSidebar}
           pathname={location.pathname}
           isTracking={isTracking}
-          elapsedTime={elapsedTime}
           onToggleTracking={toggleTracking}
           onQuickLog={() => {}}
           onOpenPalette={() => setPaletteOpen(true)}
@@ -3059,6 +3609,7 @@ const devFireSmartFill = async () => {
               <Clock className="w-4 h-4 text-zinc-500" />
               {formatDuration(displayTime)}
             </div>
+            <ClockDropdown />
 
             <div className="flex bg-zinc-900 rounded-full p-1 text-xs light:bg-zinc-100">
               {/* Today */}
@@ -3235,6 +3786,7 @@ const devFireSmartFill = async () => {
                   onTimerStateChange={setTimerState} 
                   activityFeed={activityFeed} 
                   onActivityFeedChange={handleActivityFeedChange} 
+                  sharedLogs={allLogs}
                   externalActivities={externalActivities} 
                   externalWeeklyStats={externalWeeklyStats}
                 />
@@ -3267,10 +3819,11 @@ const devFireSmartFill = async () => {
                <Route path="/old-dashboard" element={<Navigate to="/external" replace />} />
 
               <Route path="/guide" element={<GuidePage />} />
+              <Route path="/labs" element={<LabsPage />} />
               <Route path="/compositions" element={<Navigate to="/ai" replace />} />
 
               <Route path="/life" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Life...</div>}><LifePage /></Suspense></ErrorBoundary>} />
-
+              <Route path="/gold" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Gold...</div>}><GoldPage /></Suspense></ErrorBoundary>} />
               <Route path="/learn" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Learn...</div>}><LearnPage /></Suspense></ErrorBoundary>} />
               <Route path="/lecture/*" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Lecture...</div>}><LectureWorkspace /></Suspense></ErrorBoundary>} />
               <Route path="/conductor" element={<div className="flex items-center justify-center h-full text-zinc-500 text-sm">Conductor is now in the workspace sidebar</div>} />
@@ -3279,8 +3832,15 @@ const devFireSmartFill = async () => {
 
               <Route path="/ide-help" element={<IDEHelpPage />} />
 
-              <Route path="/terminal" element={<TerminalPage />} />
-              <Route path="/simple-terminal" element={<SimpleTerminalPage />} />
+              {/* Lazy, so the <Suspense> + <ErrorBoundary> wrapper is REQUIRED --
+                  without a Suspense ancestor a lazy() component that is still
+                  loading has nothing to render into and React throws. The
+                  fallback is deliberately terminal-shaped (dark, monospace)
+                  rather than a spinner, because this route normally follows a
+                  click on a running terminal and a spinner would read as a
+                  stutter in the app it is supposed to feel continuous with. */}
+              <Route path="/terminal" element={<ErrorBoundary><Suspense fallback={<div className="flex items-center justify-center h-full"><div className="font-mono text-[11px] text-zinc-600">starting terminal workspace…</div></div>}><TerminalPage /></Suspense></ErrorBoundary>} />
+              <Route path="/simple-terminal" element={<ErrorBoundary><Suspense fallback={<div className="flex items-center justify-center h-full"><div className="font-mono text-[11px] text-zinc-600">starting terminal…</div></div>}><SimpleTerminalPage /></Suspense></ErrorBoundary>} />
               <Route path="/penguin-console" element={<PenguinConsole />} />
               {/* Reports/Insights Page */}
               <Route path="/reports" element={<InsightsPage
@@ -3293,7 +3853,13 @@ const devFireSmartFill = async () => {
                 tierAssignments={tierAssignments || DEFAULT_TIER_ASSIGNMENTS}
               />} />
               {/* Database Page */}
-              <Route path="/database" element={<DatabasePage />} />
+              {/* Database is a Settings subpage now, not a top-level route. A
+                  redirect rather than a delete keeps deep links / bookmarks alive. */}
+              <Route path="/database" element={<Navigate to="/settings" replace />} />
+              <Route path="/transcripts" element={<TranscriptPage />} />
+              {/* App-wide performance profiler. Arms on demand; collects frame
+                  time, blocking tasks, renderer heap and per-page cost. */}
+              <Route path="/profiler" element={<ProfilerPage />} />
               {/* Backup Center */}
               {/* Pricing Page */}
               <Route path="/pricing" element={<div className="glass rounded-xl p-8 flex items-center justify-center h-96"><div className="text-center text-zinc-400"><div className="text-4xl mb-4">!</div><div className="text-lg font-medium">Not Yet Added Feature</div><div className="text-sm text-zinc-500 mt-1">Pricing plans are coming soon</div></div></div>} />
@@ -3380,71 +3946,18 @@ const devFireSmartFill = async () => {
                 sessions={sleepFillSessions || []}
                 onDone={dismissSleepDetection}
                 onFillGapRequest={(gaps) => {
-                  if (gaps.length === 1) {
-                    setSleepGapFillTarget(gaps[0]);
-                  } else if (gaps.length > 1) {
-                    setSmartFillSource('sleep');
-                    setSmartFillGaps(gaps.map((g, i) => ({ id: `sleep-gap-${i}`, start: g.start, end: g.end, duration_seconds: g.duration_seconds })));
-                    setSmartFillActivities(sleepFillActivities || []);
-                    setSmartFillSessions(sleepFillSessions || []);
-                  }
+                  // Sleep gaps are absences too — they now go to the same single
+                  // "While you were away" prompt as everything else, instead of
+                  // opening a second, lock-less modal.
+                  enqueueGapFill(gaps as any, 'sleep');
                 }}
 onFillGap={(gap) => {
-                  // Open the splitter for exactly the gap that was clicked.
-                  // GapFillModal takes a single `gap` as well as `multiGaps`, so
-                  // a named gap needs no new code path — just pass that one.
-                  setSleepGapFillTarget(gap);
-                  setSleepGapQueue([]);
+                  enqueueGapFill([gap as any], 'sleep');
                 }}
                 filledGapStarts={sleepFilledGapStarts}
               />
             )}
           </AnimatePresence>
-
-          {/* -- Sleep Gap Fill Modal (reuses external GapFillModal) -- */}
-          <GapFillModal
-            open={!!sleepGapFillTarget}
-            gap={sleepGapFillTarget ? {
-              start: new Date(sleepGapFillTarget.start),
-              end: new Date(sleepGapFillTarget.end),
-              duration_seconds: sleepGapFillTarget.duration_seconds,
-            } : null}
-            activities={sleepFillActivities || []}
-            sessions={sleepFillSessions || []}
-            onClose={() => {
-              // Skip this gap, move to next in queue
-              const startKey = sleepGapFillTarget ? (typeof sleepGapFillTarget.start === 'string' ? sleepGapFillTarget.start : sleepGapFillTarget.start?.toISOString?.()) : null;
-              if (startKey) setSleepFilledGapStarts(prev => [...prev, startKey]);
-              if (sleepGapQueue.length > 0) {
-                setSleepGapFillTarget(sleepGapQueue[0]);
-                setSleepGapQueue(q => q.slice(1));
-              } else {
-                setSleepGapFillTarget(null);
-                setSleepGapQueue([]);
-              }
-            }}
-            onFillGap={async (gap, segments) => {
-              await fillGapWithSegments(
-                gap,
-                segments,
-                async (activityId, minutes, startedAt, endedAt) => {
-                  await window.deskflowAPI?.addExternalTime(activityId, minutes, startedAt, endedAt);
-                }
-              );
-              const startKey = sleepGapFillTarget ? (typeof sleepGapFillTarget.start === 'string' ? sleepGapFillTarget.start : sleepGapFillTarget.start?.toISOString?.()) : null;
-              if (startKey) setSleepFilledGapStarts(prev => [...prev, startKey]);
-              window.dispatchEvent(new CustomEvent('external-data-changed'));
-              // Move to next gap in queue
-              if (sleepGapQueue.length > 0) {
-                setSleepGapFillTarget(sleepGapQueue[0]);
-                setSleepGapQueue(q => q.slice(1));
-              } else {
-                setSleepGapFillTarget(null);
-                setSleepGapQueue([]);
-              }
-            }}
-            zClass="z-[10000]"
-          />
 
           {/* Confirm Export Modal */}
           <AnimatePresence>
@@ -3498,7 +4011,7 @@ onFillGap={(gap) => {
           {/* SQLite Database Modal */}
           <AnimatePresence>
             {showDatabase && (
-              <div className="fixed inset-0 bg-black/70 backdrop-blur flex items-center justify-center z-[70]" onClick={() => setShowDatabase(false)}>
+              <div className="fixed inset-0 bg-[var(--ws-modal-scrim)] backdrop-blur flex items-center justify-center z-[70]" onClick={() => setShowDatabase(false)}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -3671,20 +4184,23 @@ onFillGap={(gap) => {
                 queueRemaining={afkPromptQueue.length - 1}
                 onConfirm={handleAfkConfirm}
                 onDismiss={handleAfkDismiss}
-                onNotAfk={() => { pendingIdleRangeRef.current = null; setAfkPromptQueue(prev => prev.slice(1)); }}
+                onNotAfk={() => {
+                  // Declining the prompt means the user WAS here, so tracking has
+                  // to come back. AFK detection turns tracking off (that is what
+                  // creates the real gap in the logs); this handler used to just
+                  // drop the queue entry, leaving the app silently untracked
+                  // until some unrelated event happened to switch it back on.
+                  resumeTrackingAfterAfk();
+                  setAfkPromptQueue(prev => prev.slice(1));
+                }}
                 defaultNotAfk={entry.defaultNotAfk}
                 adjacentGaps={afkGapsData?.gaps || []}
                 onFillGapRequest={(gaps) => {
-                  if (gaps.length === 1) {
-                    setAfkGapFillTarget(gaps[0]);
-                  } else if (gaps.length > 1) {
-                    setSmartFillSource('afk');
-                    setSmartFillGaps(gaps.map((g, i) => ({ id: `afk-gap-${i}`, start: g.start, end: g.end, duration_seconds: g.duration_seconds })));
-                    setSmartFillActivities(afkGapsData?.activities || []);
-                    setSmartFillSessions(afkGapsData?.sessions || []);
-                  }
+                  enqueueGapFill(gaps as any, 'afk');
+                  setGapFillActivities(afkGapsData?.activities || []);
                 }}
                 filledGapStarts={afkFilledGapStarts}
+                onBulkFill={handleBulkFill}
                 onGapsDone={() => { setAfkGapsData(null); setAfkPromptQueue(prev => prev.slice(1)); }}
               >
                 <MissedTimePanel
@@ -3700,9 +4216,8 @@ onFillGap={(gap) => {
                         end: new Date(g.end),
                         duration_seconds: g.durationSeconds,
                       }));
-                      setSmartFillGaps(fillGaps);
-                      setSmartFillActivities(afkGapsData?.activities || []);
-                      setSmartFillSessions(afkGapsData?.sessions || []);
+                      enqueueGapFill(fillGaps as any, 'afk');
+                      setGapFillActivities(afkGapsData?.activities || []);
                     }
                   }}
                 />
@@ -3710,67 +4225,80 @@ onFillGap={(gap) => {
             );
           })()}
 
-          {/* -- AFK Gap Fill Modal -- */}
-          <GapFillModal
-            open={!!afkGapFillTarget}
-            gap={afkGapFillTarget ? { start: new Date(afkGapFillTarget.start), end: new Date(afkGapFillTarget.end), duration_seconds: afkGapFillTarget.duration_seconds } : null}
-            activities={afkGapsData?.activities || []}
-            sessions={afkGapsData?.sessions || []}
-            onClose={() => {
-              setAfkFilledGapStarts(prev => afkGapFillTarget ? [...prev, afkGapFillTarget.start] : prev);
-              if (afkGapQueue.length > 0) {
-                setAfkGapFillTarget(afkGapQueue[0]);
-                setAfkGapQueue(q => q.slice(1));
-              } else {
-                setAfkGapFillTarget(null);
-                setAfkGapQueue([]);
-              }
-            }}
-            onFillGap={async (gap, segments) => {
-              await fillGapWithSegments(gap, segments, async (activityId, minutes, startedAt, endedAt) => {
-                await window.deskflowAPI?.addExternalTime(activityId, minutes, startedAt, endedAt);
-              });
-              setAfkFilledGapStarts(prev => [...prev, afkGapFillTarget.start]);
-              window.dispatchEvent(new CustomEvent('external-data-changed'));
-              if (afkGapQueue.length > 0) {
-                setAfkGapFillTarget(afkGapQueue[0]);
-                setAfkGapQueue(q => q.slice(1));
-              } else {
-                setAfkGapFillTarget(null);
-                setAfkGapQueue([]);
-              }
-            }}
-            zClass="z-[10000]"
-          />
+          {/* -- Single gap-fill prompt (replaces three GapFillModal mounts) --
+              Renders "While you were away" against whatever gap is at the head of
+              the queue, so a sleep gap, an AFK gap, a smart-fill and an
+              External-page gap all get the SAME UI — including the split-lock that
+              the deleted modal never had. */}
 
-          {/* ── Smart Fill Modal (replaces old GapFillDrawer) ── */}
-          <GapFillModal
-            open={!!smartFillGaps && smartFillGaps.length > 0}
-            gap={smartFillGaps && smartFillGaps.length === 1 ? smartFillGaps[0] : null}
-            multiGaps={smartFillGaps && smartFillGaps.length > 1 ? smartFillGaps : undefined}
-            activities={smartFillActivities}
-            sessions={smartFillSessions}
-            onClose={() => { setSmartFillGaps(null); }}
-            onFillGap={async (gap, segments) => {
-              await fillGapWithSegments(
-                gap,
-                segments,
-                async (activityId, minutes, startedAt, endedAt) => {
-                  await window.deskflowAPI?.addExternalTime(activityId, minutes, startedAt, endedAt);
-                }
-              );
-              // Mark **only the gap that just got filled** (not the whole smartFillGaps list)
-              const startKey = gap.start.toISOString();
-              if (smartFillSource === 'afk') {
-                setAfkFilledGapStarts(prev => [...prev, startKey]);
-              } else if (smartFillSource === 'sleep') {
-                setSleepFilledGapStarts(prev => [...prev, startKey]);
-              }
+          {/* ── Manual Time Assign Modal ── */}
+          {gapFillQueue.length > 0 && (() => {
+            const gap = gapFillQueue[0];
+            // enqueueGapFill already normalises, so these ARE Dates. Coerce again
+            // rather than trust it: this runs inside App's render, and an exception
+            // here is caught by the root boundary, which unmounts the whole app
+            // rather than one prompt. A malformed gap must cost you the gap, never
+            // the screen.
+            const gapStart = gap.start instanceof Date ? gap.start : new Date(gap.start);
+            const gapEnd = gap.end instanceof Date ? gap.end : new Date(gap.end);
+            const startMs = gapStart.getTime();
+            const endMs = gapEnd.getTime();
+            const durationSec = Math.max(60, Math.round((endMs - startMs) / 1000));
+            const startKey = gapStart.toISOString();
+
+            const advance = () => {
+              if (gapFillSource === 'afk') setAfkFilledGapStarts(prev => [...prev, startKey]);
+              else if (gapFillSource === 'sleep') setSleepFilledGapStarts(prev => [...prev, startKey]);
+              setGapFillQueue(prev => prev.slice(1));
               window.dispatchEvent(new CustomEvent('external-data-changed'));
               fetchGaps();
-            }}
-            zClass="z-[10000]"
-          />
+            };
+
+            return (
+              <AfkPromptModal
+                /* Fall back to the app-level list. `gapFillActivities` is only
+                   filled by the paths that happen to fetch, and `afkGapsData` —
+                   the other former source — is only set after an AFK prompt is
+                   SAVED. So reaching "fill past gaps" without answering an AFK
+                   prompt first handed this picker an empty array and it showed
+                   nothing at all. */
+                allActivities={gapFillActivities.length > 0 ? gapFillActivities : externalActivities}
+                totalDurationSeconds={durationSec}
+                periodStart={gapStart.toISOString()}
+                periodEnd={gapEnd.toISOString()}
+                idleStartMs={startMs}
+                returnMs={endMs}
+                queueRemaining={gapFillQueue.length - 1}
+                defaultNotAfk={false}
+                onConfirm={async (segments) => {
+                  if (!segments.length || !window.deskflowAPI?.createExternalSessionsBatch) return false;
+                  try {
+                    // Forward the modal's rows VERBATIM. The modal already builds
+                    // startedAt/endedAt by walking a cursor from periodStart, and it
+                    // deliberately advances that cursor for SKIPPED segments too, so a
+                    // blank middle slot shifts the later rows correctly. Rebuilding the
+                    // rows here from the filled segments alone would throw those offsets
+                    // away and corrupt the timeline exactly when the user was selective.
+                    // Branch on the PAYLOAD, not on "it didn't throw". This
+                    // handler reports rejection by returning {success:false},
+                    // so a try/catch alone would render a lost answer as "Saved".
+                    const res: any = await window.deskflowAPI.createExternalSessionsBatch(segments);
+                    if (res && res.success === false) {
+                      console.error('[DeskFlow] gap fill rejected:', res.error);
+                      return false;
+                    }
+                  } catch (err) {
+                    console.error('[DeskFlow] gap fill failed:', err);
+                    return false;
+                  }
+                  advance();
+                  return true;
+                }}
+                onDismiss={advance}
+                onNotAfk={() => { advance(); resumeTrackingAfterAfk(); }}
+              />
+            );
+          })()}
 
           {/* ── Manual Time Assign Modal ── */}
           <ManualAssignModal
@@ -3788,10 +4316,14 @@ onFillGap={(gap) => {
             />
           )}
 
+          {/* Rewind overlay — film/classic navigation. Only mounted when open so
+              the whole chunk (reels, previews, strip) stays off the idle path. */}
+          {rewindOpen && <RewindNav open onClose={() => setRewindOpen(false)} />}
+
           {/* Global Command Palette — ⌘K / Ctrl+K navigation search */}
           <GlobalSearchCommandPalette
             isOpen={paletteOpen}
-            onClose={() => setPaletteOpen(false)}
+            onClose={() => { setPaletteOpen(false); setRewindOpen(false) }}
             onNavigate={(item) => {
               setPaletteOpen(false);
               // Title bar settings — fire a custom event for the TitleBar component to pick up

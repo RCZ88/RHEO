@@ -67,7 +67,7 @@ const child = { hidden: { opacity: 0, rotateX: -90 }, visible: { opacity: 1, rot
       `motion.div
   whileHover={{ y: -8, boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }}
   transition={{ duration: ${duration}, ease: "${ease}" }}
-  className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5"`,
+  className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 rounded-xl p-5"`,
   },
   {
     id: 'magnetic-button',

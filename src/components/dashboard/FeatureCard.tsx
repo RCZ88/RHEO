@@ -54,7 +54,7 @@ export function FeatureCard({ id, type, title, data, onQuickAction }: FeatureCar
       whileHover={{ y: -4, scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => navigate(route)}
-      className="group relative flex flex-col justify-between p-6 h-48 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-600 transition-colors overflow-hidden"
+      className="group relative flex flex-col justify-between p-6 h-48 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-600 transition-colors overflow-hidden"
     >
       <div className={`absolute top-0 right-0 w-24 h-24 ${bg} blur-3xl opacity-20 group-hover:opacity-30 transition-opacity`} />
 
@@ -103,7 +103,7 @@ export function FeatureCard({ id, type, title, data, onQuickAction }: FeatureCar
           ) : null}
         </div>
 
-      <div className="absolute inset-x-0 bottom-0 p-3 bg-zinc-950/90 border-t border-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between backdrop-blur-sm">
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/90 border-t border-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between backdrop-blur-sm">
         <span className="text-xs text-zinc-500">Click to open</span>
         <div className="flex gap-2">
           {type === 'finance' && (

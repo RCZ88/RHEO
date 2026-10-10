@@ -108,7 +108,7 @@ export default function NotifPanel({ isOpen, onClose }: NotifPanelProps) {
           {/* Header */}
           <div
             className="flex items-center justify-between px-4 h-12 shrink-0 border-b border-white/10"
-            style={{ background: '#1a1a1a' }}
+            style={{ background: 'var(--ws-surface-raised)' }}
           >
             <div className="flex items-center gap-2">
               <Bell size={16} style={{ color: '#a1a1aa' }} strokeWidth={1.5} />
@@ -226,7 +226,7 @@ export default function NotifPanel({ isOpen, onClose }: NotifPanelProps) {
           {items.length > 0 && (
             <div
               className="flex items-center justify-between px-4 py-2 shrink-0 border-t border-white/10"
-              style={{ background: '#1a1a1a' }}
+              style={{ background: 'var(--ws-surface-raised)' }}
             >
               <span className="text-[11px] text-[#52525b]">
                 {items.length} notification{items.length !== 1 ? 's' : ''}

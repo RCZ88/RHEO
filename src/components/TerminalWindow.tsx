@@ -423,20 +423,20 @@ function TerminalPane({ terminalId, isActive, onTerminalReady, onSplit, onClose,
 
       {/* Agent status indicator (non-blocking) */}
       {agentStatus === 'waiting' && (
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 backdrop-blur-sm rounded-full px-2.5 py-1 z-10 pointer-events-none">
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm rounded-full px-2.5 py-1 z-10 pointer-events-none">
           <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           <span className="text-[10px] text-cyan-400 font-medium">Initializing agent...</span>
         </div>
       )}
       {capturedSessionId && (
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 backdrop-blur-sm rounded-full px-2.5 py-1 z-10 pointer-events-none"
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm rounded-full px-2.5 py-1 z-10 pointer-events-none"
              title={`Agent session ${capturedSessionId}`}>
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           <span className="text-[10px] text-emerald-400 font-mono">Connected — session {capturedSessionId}</span>
         </div>
       )}
       {agentStatus === 'timeout' && (
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 backdrop-blur-sm rounded-full px-2.5 py-1 z-10 cursor-pointer"
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm rounded-full px-2.5 py-1 z-10 cursor-pointer"
              onClick={() => onRetryInit?.(terminalId)}>
           <svg className="w-2.5 h-2.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -445,7 +445,7 @@ function TerminalPane({ terminalId, isActive, onTerminalReady, onSplit, onClose,
         </div>
       )}
       {isDead && (
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 backdrop-blur-sm rounded-full px-2.5 py-1 z-10 cursor-pointer"
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm rounded-full px-2.5 py-1 z-10 cursor-pointer"
              onClick={() => window.dispatchEvent(new CustomEvent('re-spawn-terminal', { detail: { terminalId } }))}>
           <svg className={`w-2.5 h-2.5 ${exitWasCrash ? 'text-red-400' : 'text-zinc-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -760,7 +760,7 @@ export function TerminalLayout({
 
   if (!layout || getLeafIds(layout).length === 0) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-zinc-950 overflow-hidden z-10">
+      <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-zinc-950 light:bg-[var(--ws-surface)] overflow-hidden z-10">
         <div className="flex flex-col items-center gap-3">
           <TerminalIcon className="w-8 h-8 text-zinc-600" />
           <button
@@ -784,7 +784,7 @@ export function TerminalLayout({
   }
 
   return (
-    <div className="w-full h-full min-h-0 bg-zinc-950 overflow-hidden flex flex-col">
+    <div className="w-full h-full min-h-0 bg-zinc-950 light:bg-[var(--ws-surface)] overflow-hidden flex flex-col">
       <PaneRenderer
         node={layout}
         activeTerminalId={activeTerminalId}

@@ -171,7 +171,7 @@ export function KnowledgeGraphBlock({ nodes, edges, layout = 'dagre', onNodeSele
   }, [searchTerm]);
 
   return (
-    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40">
+    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800">
         <input
           type="text"

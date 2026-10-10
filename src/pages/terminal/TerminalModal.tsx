@@ -7,7 +7,7 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-m
   if (!open) return null;
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[var(--z-overlay)] flex items-center justify-center p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={accentStyle('cyan')} className={`w-full ${width} rounded-xl border border-zinc-800/60 bg-zinc-900 animate-[ws-modal-in_250ms_cubic-bezier(0.2,0,0,1)]`}>
+      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={accentStyle('cyan')} className={`w-full ${width} rounded-xl border border-zinc-800/60 bg-zinc-900 light:bg-[var(--ws-surface-raised)] animate-[ws-modal-in_250ms_cubic-bezier(0.2,0,0,1)]`}>
         <header className="flex items-center justify-between px-4 h-11 border-b border-zinc-800/60">
           <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
           <button onClick={onClose} className={WS_ICON_BTN}><X className="w-4 h-4" /></button>
@@ -21,7 +21,7 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-m
 
 export function SectionCard({ accent, title, children }: { accent: string; title: string; children: React.ReactNode }) {
   return (
-    <section style={accentStyle(accent)} className="rounded-xl ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/50 backdrop-blur-sm">
+    <section style={accentStyle(accent)} className="rounded-xl ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm">
       <header className="flex items-center gap-1.5 px-3 h-9 border-b border-zinc-800/60">
         <span className={`w-1.5 h-1.5 rounded-full ${ACCENT_STRIP[accent]}`} />
         <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{title}</span>
@@ -61,7 +61,7 @@ export function WorkspaceDetailModal({ projectId, onClose, onLoad, onDelete }: W
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[var(--z-overlay)] flex items-center justify-center p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-xl border border-zinc-800/60 bg-zinc-900 p-4">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-xl border border-zinc-800/60 bg-zinc-900 light:bg-[var(--ws-surface-raised)] p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-zinc-100">Saved Workspaces</h3>
           <button onClick={onClose} className={WS_ICON_BTN}><X className="w-4 h-4" /></button>

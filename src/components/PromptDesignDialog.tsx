@@ -85,7 +85,7 @@ const PromptDesignDialog: React.FC<PromptDesignDialogProps> = ({ open, onClose, 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900 rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden border border-zinc-700 m-4 flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden border border-zinc-700 m-4 flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <div className="flex items-center gap-3">

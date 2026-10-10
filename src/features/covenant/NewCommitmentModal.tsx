@@ -79,7 +79,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
           animate={cardMotion.animate}
           exit={cardMotion.initial}
           transition={cardMotion.transition}
-          className="w-full max-w-md rounded-xl bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 p-5 max-h-[85vh] overflow-y-auto"
+          className="w-full max-w-md rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 p-5 max-h-[85vh] overflow-y-auto"
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">{isEditing ? 'Edit commitment' : 'New commitment'}</h3>
@@ -179,9 +179,9 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
                       className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
                         detectMode === m
                           ? m === 'positive'
-                            ? 'bg-[#6fb38f]/15 text-[#6fb38f] border-[#6fb38f]/30'
+                            ? 'bg-[var(--color-mem-400)]/15 text-[var(--color-mem-400)] border-[var(--color-mem-400)]/30'
                             : 'bg-[#e8866b]/15 text-[#e8866b] border-[#e8866b]/30'
-                          : 'bg-zinc-900/60 text-zinc-500 border-zinc-700/50'
+                          : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50'
                       }`}
                     >
                       {m === 'positive' ? 'Positive (count as done)' : 'Avoidance (cancel streak)'}
@@ -192,7 +192,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
                   value={keywords}
                   onChange={e => setKeywords(e.target.value)}
                   placeholder="App or site keywords, comma-separated (e.g. Duolingo, reddit.com)"
-                  className="w-full px-2.5 py-1.5 rounded-md bg-zinc-900/60 border border-zinc-700/50 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 rounded-md bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                 />
                 {detectMode === 'positive' && (
                   <div className="flex items-center gap-2 text-[11px] text-zinc-400">
@@ -202,7 +202,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
                       min={1}
                       value={minMinutes}
                       onChange={e => setMinMinutes(Number(e.target.value) || 1)}
-                      className="w-14 px-1.5 py-1 rounded bg-zinc-900/60 border border-zinc-700/50 text-center"
+                      className="w-14 px-1.5 py-1 rounded bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-center"
                     />
                     minutes
                   </div>

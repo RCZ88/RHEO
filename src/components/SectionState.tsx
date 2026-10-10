@@ -7,16 +7,18 @@ interface SectionStateProps {
   hint?: string;
   chart?: 'pie' | 'bar' | 'card';
   onRetry?: () => void;
+  /** Optional extra content below the message (install links, steps). Additive. */
+  children?: React.ReactNode;
 }
 
-export function SectionState({ kind, message, hint, chart, onRetry }: SectionStateProps) {
+export function SectionState({ kind, message, hint, chart, onRetry, children }: SectionStateProps) {
   if (kind === 'loading') {
     if (chart === 'pie') {
       return (
         <div className="flex items-center justify-center h-64">
           <div className="relative w-40 h-40">
             <div className="absolute inset-0 rounded-full animate-pulse bg-zinc-800/60" />
-            <div className="absolute inset-4 rounded-full bg-zinc-900/80" />
+            <div className="absolute inset-4 rounded-full bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]" />
           </div>
         </div>
       );
@@ -34,7 +36,7 @@ export function SectionState({ kind, message, hint, chart, onRetry }: SectionSta
       return (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-zinc-900/30 rounded-xl p-5 space-y-3">
+            <div key={i} className="bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 space-y-3">
               <Skeleton className="h-9 w-9 rounded-xl" />
               <Skeleton className="h-8 w-24" />
               <Skeleton className="h-3 w-16" />
@@ -76,6 +78,7 @@ export function SectionState({ kind, message, hint, chart, onRetry }: SectionSta
       <Icon className="w-8 h-8 text-zinc-700 mb-3" />
       <p className="text-sm text-zinc-500">{message || 'No data available'}</p>
       {hint && <p className="text-xs text-zinc-600 mt-1">{hint}</p>}
+      {children}
     </div>
   );
 }

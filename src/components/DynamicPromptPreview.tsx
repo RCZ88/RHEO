@@ -102,7 +102,7 @@ export function DynamicPromptPreview({
     )
 
   return (
-    <div className={cn('rounded-xl border border-white/[0.08] bg-zinc-900/60 overflow-hidden', className)}>
+    <div className={cn('rounded-xl border border-white/[0.08] bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] overflow-hidden', className)}>
       <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/[0.08]">
         <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{title}</span>
         <div className="flex gap-0.5 p-0.5 rounded-lg bg-white/[0.04]">

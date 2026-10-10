@@ -5,10 +5,11 @@
 // legend chips, stat row. L1 composed.
 // ============================================================
 
-import { useState } from "react";
+import { useState } from "react";import { useState, useEffect } from "react";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { WidgetCardA, type WidgetCategory, CardEntrance } from "./WidgetCardA_SIGNAL";
+import { alpha, chartTokens, chartTooltip, watchChartTokens } from '../finance/_fx/chartTokens';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -28,11 +29,18 @@ interface DataPoint {
   distracting: number;
 }
 
+/* The two DATA hues are per-page accents and are allowed to differ per page.
+   `grid` and `text` are SURFACE colours, so they cannot live here as literals —
+   rgba(63,63,70,.4) grid and #a1a1aa text are dark-theme values and were the
+   grey the chart rendered with on paper. They resolve from tokens below, via the
+   same chartTokens() cache the tooltip uses. */
 const COLORS = {
   productive: "rgba(236,72,153,0.7)",
   distracting: "rgba(251,191,36,0.55)",
-  grid: "rgba(63,63,70,0.4)",
-  text: "#a1a1aa",
+};
+const surfaceColors = () => {
+  const t = chartTokens();
+  return { grid: alpha(t.grid, 0.4), text: t.textSecondary };
 };
 
 export function ProductivityChartA({
@@ -43,6 +51,13 @@ export function ProductivityChartA({
   className?: string;
 }) {
   const [period, setPeriod] = useState<Period>("7");
+
+  /* Keep the canvas tooltip in sync with the theme.
+     `chartTokens()` caches resolved colours and drops that cache on a <html>
+     class/attribute change, but a canvas has no CSS to recompute - so without a
+     live observer here the tooltip keeps the colours it was built with and goes
+     stale the moment the user switches light/dark. */
+  useEffect(() => watchChartTokens(), []);
 
   const sliced = data.slice(0, PERIOD_OPTIONS[period].days);
   const labels = sliced.map((d) => d.date);
@@ -75,6 +90,7 @@ export function ProductivityChartA({
     ],
   };
 
+  const sk = surfaceColors();
   const options = {
     responsive: true,
     maintainAspectRatio: false,
@@ -83,12 +99,12 @@ export function ProductivityChartA({
       legend: { display: false },
       tooltip: {
         enabled: true,
-        backgroundColor: "#18181b",
-        titleColor: "#fafafa",
-        bodyColor: "#a1a1aa",
-        borderColor: "#3f3f46",
-        borderWidth: 1,
-        padding: 8,
+        /* Was hardcoded #18181b / #fafafa / #3f3f46 — a dark grey box with a
+           #71717a-ish title on EVERY theme. Because a chart.js tooltip is painted
+           into a <canvas> from JS, no CSS override can reach it: that is why this
+           grey survived every stylesheet fix. It now resolves the real tokens, so
+           it follows the theme. See chartTooltip(). */
+        ...chartTooltip(),
         titleFont: { family: "JetBrains Mono", size: 11 },
         bodyFont: { family: "JetBrains Mono", size: 11 },
         displayColors: true,
@@ -100,16 +116,16 @@ export function ProductivityChartA({
       x: {
         grid: { display: false },
         ticks: {
-          color: COLORS.text,
+          color: sk.text,
           font: { family: "JetBrains Mono", size: 10 },
           maxRotation: 0,
         },
         border: { display: false },
       },
       y: {
-        grid: { color: COLORS.grid, drawBorder: false },
+        grid: { color: sk.grid, drawBorder: false },
         ticks: {
-          color: COLORS.text,
+          color: sk.text,
           font: { family: "JetBrains Mono", size: 10 },
           padding: 4,
         },
@@ -169,19 +185,19 @@ export function ProductivityChartA({
 
         {/* Stat row — inner-well treatment */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-zinc-950/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
             <div className="text-[11px] font-medium text-zinc-500">Total Focus</div>
             <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
               {Math.round(totalFocus)}m
             </div>
           </div>
-          <div className="bg-zinc-950/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
             <div className="text-[11px] font-medium text-zinc-500">Daily Avg</div>
             <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
               {Math.round(dailyAvg)}m
             </div>
           </div>
-          <div className="bg-zinc-950/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
             <div className="text-[11px] font-medium text-zinc-500">Best Day</div>
             <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
               {Math.round(bestDay)}m

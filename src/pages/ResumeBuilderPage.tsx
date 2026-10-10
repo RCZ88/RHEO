@@ -639,7 +639,7 @@ export default function ResumeBuilderPage() {
             step={5}
             value={scale}
             onChange={(e) => setScale(parseInt(e.target.value, 10))}
-            className="w-20 h-1.5 rounded-full bg-zinc-700 accent-[var(--page-accent)] cursor-pointer"
+            className="w-20 h-1.5 rounded-full bg-zinc-700 cursor-pointer"
             aria-label="Preview zoom"
           />
           <span className="text-[10px] tabular-nums text-zinc-500 w-10 text-center">
@@ -686,7 +686,7 @@ export default function ResumeBuilderPage() {
         }}
       >
         {!resumeContent || (!resumeContent.summary && (!resumeContent.experience || resumeContent.experience.length === 0)) ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-zinc-950/40">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-zinc-950 light:bg-[var(--ws-surface)]/40">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}

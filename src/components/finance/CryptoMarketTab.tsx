@@ -177,7 +177,7 @@ export function CryptoMarketTab({ wallets, displayCurrency, loading, onWalletCli
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-zinc-600 mt-1.5">
+            <div className="fin-label mt-1.5">
               Cost basis: {fmtMoney(totalCost, displayCurrency)}
             </div>
           </GlassSurface>
@@ -210,9 +210,9 @@ export function CryptoMarketTab({ wallets, displayCurrency, loading, onWalletCli
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-white truncate">{coinName}</span>
-                          {coinSym && <span className="text-[10px] text-zinc-500">{coinSym}</span>}
+                          {coinSym && <span className="fin-label">{coinSym}</span>}
                         </div>
-                        <div className="text-[11px] text-zinc-500 truncate">
+                        <div className="fin-label truncate">
                           {a.walletNames.length === 1 ? a.walletNames[0] : `${a.walletNames.length} wallets`}
                         </div>
                       </div>
@@ -238,7 +238,7 @@ export function CryptoMarketTab({ wallets, displayCurrency, loading, onWalletCli
 
                   {/* Bottom row: holding + P&L */}
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-                    <span className="text-[10px] text-zinc-500">
+                    <span className="fin-label">
                       {fmtAmount(a.amount)} {coinSym || 'coins'}
                     </span>
                     {a.avgCost > 0 && (
@@ -281,7 +281,7 @@ export function CryptoMarketTab({ wallets, displayCurrency, loading, onWalletCli
                       </div>
                       {a.walletIds.length > 1 && (
                         <div className="pt-1.5 border-t border-white/5">
-                          <span className="text-[10px] text-zinc-600">Across {a.walletIds.length} wallets</span>
+                          <span className="fin-label">Across {a.walletIds.length} wallets</span>
                         </div>
                       )}
                     </div>
@@ -299,7 +299,7 @@ export function CryptoMarketTab({ wallets, displayCurrency, loading, onWalletCli
             <Wallet className="w-7 h-7 text-[#8B5CF6]" />
           </div>
           <p className="text-sm text-zinc-300 font-medium">No coins added yet</p>
-          <p className="text-[11px] text-zinc-500 mt-1 max-w-[260px] leading-relaxed">
+          <p className="fin-label mt-1 max-w-[260px] leading-relaxed">
             Open a crypto wallet and add the coins you own to see live prices and portfolio value.
           </p>
         </div>
@@ -320,9 +320,9 @@ export function CryptoMarketTab({ wallets, displayCurrency, loading, onWalletCli
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-xs text-zinc-400 truncate">{w.name}</div>
-                <div className="text-[10px] text-zinc-600">Tap to add coins</div>
+                <div className="fin-label">Tap to add coins</div>
               </div>
-              <div className="text-[10px] text-zinc-600 tabular-nums">{fmtMoney(w.balance, displayCurrency)}</div>
+              <div className="fin-label tabular-nums">{fmtMoney(w.balance, displayCurrency)}</div>
             </GlassSurface>
           ))}
         </div>

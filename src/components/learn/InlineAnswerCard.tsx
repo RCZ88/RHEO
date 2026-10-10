@@ -71,7 +71,7 @@ export function InlineAnswerCard({ state, onClose, onRetry }: InlineAnswerCardPr
             </button>
           </div>
 
-          <div className="px-4 py-2 border-b border-zinc-700/30 bg-zinc-900/40">
+          <div className="px-4 py-2 border-b border-zinc-700/30 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
             <p className="text-xs text-zinc-500 italic leading-relaxed">
               <span className="text-zinc-600">Selected: </span>"{state.text}"
             </p>

@@ -97,16 +97,16 @@ export function FunFactHero() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className={`w-3.5 h-3.5 ${accent}`} />
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium light:text-stone-500">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium light:text-[var(--text-muted)]">
                 Today's insight
               </span>
             </div>
-            <h3 className="text-base font-semibold text-zinc-100 leading-tight light:text-stone-900">
+            <h3 className="text-base font-semibold text-zinc-100 leading-tight light:text-[var(--text-primary)]">
               <AnimatedGradientText colorFrom="#ec4899" colorTo="#f43f5e" speed={0.5}>
                 {fact.copy.headline}
               </AnimatedGradientText>
             </h3>
-            <p className="text-sm text-zinc-400 mt-0.5 light:text-stone-500">
+            <p className="text-sm text-zinc-400 mt-0.5 light:text-[var(--text-muted)]">
               {fact.copy.subtext}
             </p>
           </div>
@@ -119,7 +119,7 @@ export function FunFactHero() {
             )}
             <button
               onClick={handleDismiss}
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors light:text-stone-500 hover:light:text-stone-700 hover:light:bg-stone-200/60"
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors light:text-[var(--text-muted)] hover:light:text-[var(--text-secondary)] hover:light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_60%,transparent)]"
               title="Dismiss for today"
             >
               <X className="w-3.5 h-3.5" />

@@ -202,7 +202,7 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                           'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all duration-200',
                           done
                             ? 'border-amber-500/25 bg-amber-500/10 shadow-[0_0_12px_-4px_rgba(251,191,36,0.3)]'
-                            : 'border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700/70 hover:bg-zinc-900/60'
+                            : 'border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700/70 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]'
                         )}
                         data-lifephase="covenant-toggle"
                       >
@@ -259,7 +259,7 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="rounded-xl border border-amber-500/20 bg-zinc-900/40 p-3 overflow-hidden"
+                  className="rounded-xl border border-amber-500/20 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3 overflow-hidden"
                 >
                   <CriteriaBuilder
                     value={newCriteria}
@@ -288,7 +288,7 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                           'flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all duration-200',
                           done
                             ? 'border-emerald-500/25 bg-emerald-500/10'
-                            : 'border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700/70 hover:bg-zinc-900/60'
+                            : 'border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700/70 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]'
                         )}
                         data-lifephase="daily-toggle"
                       >
@@ -356,7 +356,7 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="space-y-1.5 rounded-xl border border-amber-500/20 bg-zinc-900/40 p-3 overflow-hidden"
+                  className="space-y-1.5 rounded-xl border border-amber-500/20 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3 overflow-hidden"
                 >
                   <input
                     autoFocus
@@ -364,13 +364,13 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                     onChange={e => setLtgForm(f => ({ ...f, title: e.target.value }))}
                     onKeyDown={e => e.key === 'Enter' && void handleLTGSubmit()}
                     placeholder="Long-term goal title…"
-                    className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"
+                    className="w-full bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"
                   />
                   <div className="flex gap-1.5">
                     <select
                       value={ltgForm.category}
                       onChange={e => setLtgForm(f => ({ ...f, category: e.target.value as LTGForm['category'] }))}
-                      className="flex-1 min-w-0 bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
+                      className="flex-1 min-w-0 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
                     >
                       {Object.keys(CAT_META).map(k => (
                         <option key={k} value={k}>{CAT_META[k].label}</option>
@@ -379,7 +379,7 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                     <select
                       value={ltgForm.priority}
                       onChange={e => setLtgForm(f => ({ ...f, priority: Number(e.target.value) }))}
-                      className="bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
+                      className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
                     >
                       {PRIORITY_OPTIONS.map(p => (
                         <option key={p.value} value={p.value}>{p.label}</option>
@@ -390,7 +390,7 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                     type="date"
                     value={ltgForm.deadline}
                     onChange={e => setLtgForm(f => ({ ...f, deadline: e.target.value }))}
-                    className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 [color-scheme:dark] transition-colors"
+                    className="w-full bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 [color-scheme:dark] transition-colors"
                   />
                   <div className="flex gap-1.5">
                     <button
@@ -425,7 +425,7 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                   return (
                     <div
                       key={ltg.id}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 border-l-4 bg-zinc-900/40"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 border-l-4 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]"
                       style={{ borderColor: cat.color, backgroundColor: `${cat.color}08` }}
                     >
                       <Ring pct={ltg.progress ?? 0} />

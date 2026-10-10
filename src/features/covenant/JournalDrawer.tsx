@@ -29,7 +29,7 @@ export function JournalDrawer({ commitmentId, date, initialText, onSave }: Journ
   }, [playing]);
 
   return (
-    <div className="rounded-lg bg-zinc-900/60 border border-zinc-800/50 p-3">
+    <div className="rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 p-3">
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
@@ -52,7 +52,7 @@ export function JournalDrawer({ commitmentId, date, initialText, onSave }: Journ
                   if (playing) { audioRef.current?.pause(); setPlaying(false); }
                   else { audioRef.current?.play(); setPlaying(true); }
                 }}
-                className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#6fb38f]/15 text-[#6fb38f] text-[10px]"
+                className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--color-mem-400)]/15 text-[var(--color-mem-400)] text-[10px]"
               >
                 {playing ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                 {voiceDurationSec ? `${Math.round(voiceDurationSec)}s` : 'voice note'}

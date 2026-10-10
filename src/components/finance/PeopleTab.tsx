@@ -91,7 +91,7 @@ export function PeopleTab({ persons, transactions, wallets, displayCurrency, onR
             <Users className="w-5 h-5 text-amber-400" />
             People & Debt
           </h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Track who owes you and manage repayments</p>
+          <p className="fin-label mt-0.5">Track who owes you and manage repayments</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleSyncBalances} disabled={syncing}
@@ -108,21 +108,21 @@ export function PeopleTab({ persons, transactions, wallets, displayCurrency, onR
 
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-xl bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 p-4">
+        <div className="fin-surface p-4">
           <div className="flex items-center gap-2 text-zinc-500 mb-1">
             <ArrowUpRight className="w-3.5 h-3.5" />
             <span className="text-[11px] uppercase tracking-wider">Total Owed</span>
           </div>
           <div className="text-xl font-bold text-amber-400">{displayCurrency}{fmtMoney(stats.totalOwed)}</div>
         </div>
-        <div className="rounded-xl bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 p-4">
+        <div className="fin-surface p-4">
           <div className="flex items-center gap-2 text-zinc-500 mb-1">
             <Users className="w-3.5 h-3.5" />
             <span className="text-[11px] uppercase tracking-wider">Active</span>
           </div>
           <div className="text-xl font-bold text-emerald-400">{stats.activeCount}</div>
         </div>
-        <div className="rounded-xl bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 p-4">
+        <div className="fin-surface p-4">
           <div className="flex items-center gap-2 text-zinc-500 mb-1">
             <ArrowDownRight className="w-3.5 h-3.5" />
             <span className="text-[11px] uppercase tracking-wider">Settled</span>
@@ -136,7 +136,7 @@ export function PeopleTab({ persons, transactions, wallets, displayCurrency, onR
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
         <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search people by name, email, or phone..."
-          className="w-full rounded-xl bg-zinc-900/60 border border-zinc-800/60 pl-9 pr-3 py-2.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-amber-500/30 transition-colors" />
+          className="w-full rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 pl-9 pr-3 py-2.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-amber-500/30 transition-colors" />
       </div>
 
       {/* People Grid */}
@@ -221,21 +221,21 @@ function AddPersonModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl p-5 animate-in zoom-in-95">
+      <div className="w-full max-w-sm fin-surface fin-surface--raised p-5 animate-in zoom-in-95">
         <h3 className="text-sm font-semibold text-zinc-100 mb-4">Add New Person</h3>
         <div className="space-y-3">
           <div>
-            <label className="text-[11px] text-zinc-500 mb-1 block">Name *</label>
+            <label className="fin-label mb-1 block">Name *</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="e.g. Sarah Chen"
               className="w-full rounded-lg bg-zinc-800/60 border border-zinc-700/60 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-amber-500/50" />
           </div>
           <div>
-            <label className="text-[11px] text-zinc-500 mb-1 block">Email</label>
+            <label className="fin-label mb-1 block">Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="optional"
               className="w-full rounded-lg bg-zinc-800/60 border border-zinc-700/60 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-amber-500/50" />
           </div>
           <div>
-            <label className="text-[11px] text-zinc-500 mb-1 block">Phone</label>
+            <label className="fin-label mb-1 block">Phone</label>
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="optional"
               className="w-full rounded-lg bg-zinc-800/60 border border-zinc-700/60 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-amber-500/50" />
           </div>

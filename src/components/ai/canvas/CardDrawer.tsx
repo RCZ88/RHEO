@@ -67,7 +67,7 @@ function MiniFocusPreview() {
           <div className="w-2.5 h-2.5 rounded-full border border-zinc-600 light:border-zinc-300 flex items-center justify-center">
             {i === 0 && <div className="w-1.5 h-1.5 rounded-full bg-pink-400 light:bg-pink-500" />}
           </div>
-          <span className="text-[8px] text-zinc-400 light:text-stone-600 truncate">{g}</span>
+          <span className="text-[8px] text-zinc-400 light:text-[var(--text-secondary)] truncate">{g}</span>
         </div>
       ))}
     </div>
@@ -81,12 +81,12 @@ function MiniPlanPreview() {
       <div className="flex items-center gap-1.5 mb-1.5">
         <TrendingUp size={9} className="text-violet-400 light:text-violet-500" />
         <span className="text-[8px] font-semibold text-violet-300 uppercase tracking-wider light:text-violet-600">Plan</span>
-        <span className="text-[7px] text-zinc-600 light:text-stone-500 ml-auto">3 goals</span>
+        <span className="text-[7px] text-zinc-600 light:text-[var(--text-muted)] ml-auto">3 goals</span>
       </div>
       {items.map((item, i) => (
         <div key={i} className="flex items-center gap-1.5 py-0.5">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: item.c === 'work' ? '#ec4899' : item.c === 'health' ? '#34d399' : '#22d3ee' }} />
-          <span className="text-[8px] text-zinc-400 light:text-stone-500 truncate">{item.t}</span>
+          <span className="text-[8px] text-zinc-400 light:text-[var(--text-muted)] truncate">{item.t}</span>
         </div>
       ))}
     </div>
@@ -100,10 +100,10 @@ function MiniFinancePreview() {
         <TrendingUp size={9} className="text-emerald-400 light:text-emerald-500" />
         <span className="text-[8px] font-semibold text-emerald-300 uppercase tracking-wider light:text-emerald-600">Finance</span>
       </div>
-      <div className="text-[11px] font-bold text-zinc-200 light:text-stone-800 font-mono">$12,450</div>
+      <div className="text-[11px] font-bold text-zinc-200 light:text-[var(--text-primary)] font-mono">$12,450</div>
       <div className="flex gap-3 mt-1">
-        <div><span className="text-[7px] text-zinc-600 light:text-stone-500">Income</span><div className="text-[8px] text-emerald-400 light:text-emerald-600 font-mono">$5,200</div></div>
-        <div><span className="text-[7px] text-zinc-600 light:text-stone-500">Expense</span><div className="text-[8px] text-red-400 light:text-red-500 font-mono">$3,800</div></div>
+        <div><span className="text-[7px] text-zinc-600 light:text-[var(--text-muted)]">Income</span><div className="text-[8px] text-emerald-400 light:text-emerald-600 font-mono">$5,200</div></div>
+        <div><span className="text-[7px] text-zinc-600 light:text-[var(--text-muted)]">Expense</span><div className="text-[8px] text-red-400 light:text-red-500 font-mono">$3,800</div></div>
       </div>
     </div>
   )
@@ -118,7 +118,7 @@ function MiniDigestPreview() {
       </div>
       <div className="space-y-1">
         {['AI trends', 'Web dev', 'DevOps'].map((t, i) => (
-          <div key={i} className="text-[7px] text-zinc-500 light:text-stone-500 flex items-center gap-1">
+          <div key={i} className="text-[7px] text-zinc-500 light:text-[var(--text-muted)] flex items-center gap-1">
             <div className="w-1 h-1 rounded-full bg-cyan-400 light:bg-cyan-500" />
             <span className="truncate">{t}</span>
           </div>
@@ -135,7 +135,7 @@ function MiniReflectPreview() {
         <Bell size={9} className="text-purple-400 light:text-purple-500" />
         <span className="text-[8px] font-semibold text-purple-300 uppercase tracking-wider light:text-purple-600">Reflect</span>
       </div>
-      <div className="text-[7px] text-zinc-500 light:text-stone-500 italic leading-relaxed">"Today I focused on..."</div>
+      <div className="text-[7px] text-zinc-500 light:text-[var(--text-muted)] italic leading-relaxed">"Today I focused on..."</div>
     </div>
   )
 }
@@ -148,9 +148,9 @@ function MiniResponsePreview() {
         <span className="text-[8px] font-semibold text-blue-300 uppercase tracking-wider light:text-blue-600">Response</span>
       </div>
       <div className="space-y-1">
-        <div className="h-1.5 bg-zinc-700/50 light:bg-stone-200 rounded w-full" />
-        <div className="h-1.5 bg-zinc-700/50 light:bg-stone-200 rounded w-4/5" />
-        <div className="h-1.5 bg-zinc-700/50 light:bg-stone-200 rounded w-3/5" />
+        <div className="h-1.5 bg-zinc-700/50 light:bg-[var(--ws-surface-sunken)] rounded w-full" />
+        <div className="h-1.5 bg-zinc-700/50 light:bg-[var(--ws-surface-sunken)] rounded w-4/5" />
+        <div className="h-1.5 bg-zinc-700/50 light:bg-[var(--ws-surface-sunken)] rounded w-3/5" />
       </div>
     </div>
   )
@@ -163,7 +163,7 @@ function MiniAnnotationPreview() {
         <MessageSquare size={9} className="text-orange-400 light:text-orange-500" />
         <span className="text-[8px] font-semibold text-orange-300 uppercase tracking-wider light:text-orange-600">Note</span>
       </div>
-      <div className="text-[7px] text-zinc-500 light:text-stone-500">Reminder: Buy groceries</div>
+      <div className="text-[7px] text-zinc-500 light:text-[var(--text-muted)]">Reminder: Buy groceries</div>
     </div>
   )
 }
@@ -179,7 +179,7 @@ function MiniConnectorsPreview() {
         {['Gmail', 'Calendar'].map((n, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 light:bg-emerald-500" />
-            <span className="text-[7px] text-zinc-500 light:text-stone-500">{n}</span>
+            <span className="text-[7px] text-zinc-500 light:text-[var(--text-muted)]">{n}</span>
           </div>
         ))}
       </div>
@@ -197,8 +197,8 @@ function MiniSchedulePreview() {
       <div className="flex gap-0.5">
         {['M','T','W','T','F','S','S'].map((d, i) => (
           <div key={i} className="flex-1 text-center">
-            <div className="text-[6px] text-zinc-600 light:text-stone-500">{d}</div>
-            <div className={`h-3 rounded-sm mt-0.5 ${i === 2 ? 'bg-red-400/30 light:bg-red-400/40' : 'bg-zinc-800/50 light:bg-stone-200'}`} />
+            <div className="text-[6px] text-zinc-600 light:text-[var(--text-muted)]">{d}</div>
+            <div className={`h-3 rounded-sm mt-0.5 ${i === 2 ? 'bg-red-400/30 light:bg-red-400/40' : 'bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)]'}`} />
           </div>
         ))}
       </div>
@@ -217,7 +217,7 @@ function MiniDeadlinesPreview() {
         {['Report due', 'Tax filing'].map((d, i) => (
           <div key={i} className="flex items-center gap-1.5 py-0.5">
             <div className="w-1 h-1 rounded-full" style={{ background: i === 0 ? '#f87171' : '#fbbf24' }} />
-            <span className="text-[7px] text-zinc-500 light:text-stone-500 truncate">{d}</span>
+            <span className="text-[7px] text-zinc-500 light:text-[var(--text-muted)] truncate">{d}</span>
           </div>
         ))}
       </div>
@@ -233,11 +233,11 @@ function MiniPlannerPreview() {
         <span className="text-[8px] font-semibold text-sky-300 uppercase tracking-wider light:text-sky-600">Planner</span>
       </div>
       <div className="flex items-center gap-1">
-        <div className="text-[7px] text-zinc-600 light:text-stone-500 font-mono">9:00</div>
+        <div className="text-[7px] text-zinc-600 light:text-[var(--text-muted)] font-mono">9:00</div>
         <div className="flex-1 h-1.5 rounded bg-sky-400/20 light:bg-sky-400/20" />
       </div>
       <div className="flex items-center gap-1 mt-0.5">
-        <div className="text-[7px] text-zinc-600 light:text-stone-500 font-mono">14:00</div>
+        <div className="text-[7px] text-zinc-600 light:text-[var(--text-muted)] font-mono">14:00</div>
         <div className="flex-1 h-1.5 rounded bg-violet-400/20 light:bg-violet-400/20" />
       </div>
     </div>
@@ -252,8 +252,8 @@ function MiniGroupPreview() {
         <span className="text-[8px] font-semibold text-indigo-300 uppercase tracking-wider light:text-indigo-600">Group</span>
       </div>
       <div className="grid grid-cols-2 gap-1">
-        <div className="h-4 rounded bg-zinc-800/60 light:bg-stone-200 border border-zinc-700/30 light:border-zinc-200/30" />
-        <div className="h-4 rounded bg-zinc-800/60 light:bg-stone-200 border border-zinc-700/30 light:border-zinc-200/30" />
+        <div className="h-4 rounded bg-zinc-800/60 light:bg-[var(--ws-surface-sunken)] border border-zinc-700/30 light:border-zinc-200/30" />
+        <div className="h-4 rounded bg-zinc-800/60 light:bg-[var(--ws-surface-sunken)] border border-zinc-700/30 light:border-zinc-200/30" />
       </div>
     </div>
   )
@@ -300,7 +300,7 @@ export function CardDrawer({ open, onToggle, onAddCard }: CardDrawerProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[180] bg-black/30 backdrop-blur-sm"
+            className="fixed inset-0 z-[180] bg-black/30 "
             onClick={onToggle}
           />
 
@@ -310,17 +310,17 @@ export function CardDrawer({ open, onToggle, onAddCard }: CardDrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 bottom-0 z-[190] w-[380px] bg-[rgba(18,18,18,0.95)] backdrop-blur-xl border-l border-zinc-800/60 flex flex-col light:bg-white light:border-l-[var(--ws-border-strong)]"
+            className="fixed right-0 top-0 bottom-0 z-[190] w-[380px] bg-[rgba(18,18,18,0.95)]  border-l border-zinc-800/60 flex flex-col light:bg-white light:border-l-[var(--ws-border-strong)]"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-zinc-800/50 light:border-[var(--ws-border)]">
               <div>
-                <h3 className="text-sm font-semibold text-white light:text-stone-900">Add Card</h3>
-                <p className="text-[11px] text-zinc-500 mt-0.5 light:text-stone-500">Click a card to add it to your canvas</p>
+                <h3 className="text-sm font-semibold text-white light:text-[var(--text-primary)]">Add Card</h3>
+                <p className="text-[11px] text-zinc-500 mt-0.5 light:text-[var(--text-muted)]">Click a card to add it to your canvas</p>
               </div>
               <button
                 onClick={onToggle}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-800/60 text-zinc-400 hover:text-white transition-colors light:hover:bg-stone-100 light:text-stone-500"
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-800/60 text-zinc-400 hover:text-white transition-colors light:hover:bg-stone-100 light:text-[var(--text-muted)]"
               >
                 <ChevronRight size={16} />
               </button>
@@ -331,7 +331,7 @@ export function CardDrawer({ open, onToggle, onAddCard }: CardDrawerProps) {
               {grouped.map(({ category, label, cards }) => (
                 <div key={category}>
                   <div className="px-1 mb-2">
-                    <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider light:text-stone-500">{label}</span>
+                    <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider light:text-[var(--text-muted)]">{label}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {cards.map(template => {
@@ -344,16 +344,16 @@ export function CardDrawer({ open, onToggle, onAddCard }: CardDrawerProps) {
                           onClick={() => handleAdd(template.type)}
                           onMouseEnter={() => setHoveredType(template.type)}
                           onMouseLeave={() => setHoveredType(null)}
-                          className="flex flex-col items-stretch rounded-xl text-left transition-all duration-200 overflow-hidden"
+                          className="flex flex-col items-stretch rounded-xl text-left transition-colors duration-200 overflow-hidden"
                           style={{
                             border: `1px solid ${isHovered ? template.color + '40' : 'rgba(63,63,70,0.3)'}`,
                             boxShadow: isHovered ? `0 0 20px ${template.color}15, 0 4px 12px rgba(0,0,0,0.3)` : '0 2px 8px rgba(0,0,0,0.2)',
                           }}
                         >
                           {/* Card preview — mock thumbnails stay dark-as-designed (thumbnail precedent) */}
-                          <div className="p-2 light:bg-stone-100 light:rounded-t-xl">
+                          <div className="p-2 light:bg-[var(--ws-surface-raised)] light:rounded-t-xl">
                             {Preview ? <Preview /> : (
-                              <div className="h-16 rounded-lg bg-zinc-800/40 light:bg-stone-100 flex items-center justify-center">
+                              <div className="h-16 rounded-lg bg-zinc-800/40 light:bg-[var(--ws-surface-raised)] flex items-center justify-center">
                                 <Icon size={20} style={{ color: template.color, opacity: 0.4 }} />
                               </div>
                             )}
@@ -362,7 +362,7 @@ export function CardDrawer({ open, onToggle, onAddCard }: CardDrawerProps) {
                           <div className="px-2.5 py-1.5 border-t border-zinc-800/40 bg-[rgba(24,24,27,0.5)] light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border)]">
                             <div className="flex items-center gap-1.5">
                               <Icon size={10} style={{ color: template.color }} />
-                              <span className="text-[11px] font-medium text-zinc-300 light:text-stone-700">{template.label}</span>
+                              <span className="text-[11px] font-medium text-zinc-300 light:text-[var(--text-secondary)]">{template.label}</span>
                             </div>
                           </div>
                         </button>

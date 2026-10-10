@@ -18,7 +18,7 @@ export function ChartCard({ title, subtitle, loading, empty, error, onRetry, chi
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`relative overflow-hidden rounded-xl p-4 bg-zinc-900/75 backdrop-blur-xl border border-zinc-800/50 min-h-[260px] flex flex-col ${className}`}
+      className={`relative overflow-hidden rounded-xl p-4 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 min-h-[260px] flex flex-col ${className}`}
     >
       <div className="flex items-center justify-between mb-3">
         <div>

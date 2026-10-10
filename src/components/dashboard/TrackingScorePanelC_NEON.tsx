@@ -139,7 +139,7 @@ export function TrackingScorePanelC({
         </div>
 
         {/* Trend badge — glass pill */}
-        <div className="flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50">
+        <div className="flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/50">
           {getTrendIcon(trend)}
           <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color }}>
             {trend === 'up' ? 'Up from yesterday' : trend === 'down' ? 'Down from yesterday' : 'Same as yesterday'}
@@ -149,28 +149,28 @@ export function TrackingScorePanelC({
 
       {/* Breakdown — glass mini-pills */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 p-3">
+        <div className="rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <Flame size={10} className="text-orange-400" />
             <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-600">Streak</span>
           </div>
           <span className="text-[13px] font-mono font-medium text-zinc-200 tabular-nums">{streak} days</span>
         </div>
-        <div className="rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 p-3">
+        <div className="rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <Target size={10} className="text-violet-400" />
             <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-600">Done</span>
           </div>
           <span className="text-[13px] font-mono font-medium text-zinc-200 tabular-nums">{completionRate}%</span>
         </div>
-        <div className="rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 p-3">
+        <div className="rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <Clock size={10} className="text-cyan-400" />
             <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-600">Focus</span>
           </div>
           <span className="text-[13px] font-mono font-medium text-zinc-200 tabular-nums">{focusHours}h</span>
         </div>
-        <div className="rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 p-3">
+        <div className="rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-600">Score</span>
           </div>

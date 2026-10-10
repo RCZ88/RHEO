@@ -63,7 +63,7 @@ function renderMarkdown(text: string): { __html: string } {
     .replace(/^### (.+)$/gm, '<h4 class="text-[11px] font-bold text-cyan-300 mt-2 mb-1 font-mono tracking-tight">$1</h4>')
     .replace(/^## (.+)$/gm, '<h3 class="text-[12px] font-bold text-amber-300 mt-3 mb-2 font-mono tracking-tight">$1</h3>')
     .replace(/^# (.+)$/gm, '<h2 class="text-[13px] font-bold text-white mt-4 mb-2 font-mono tracking-tight">$1</h2>')
-    .replace(/\n```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-zinc-950 border border-zinc-700/50 rounded px-3 py-2 my-2 overflow-x-auto"><code class="text-[10px] text-green-300 font-mono">$2</code></pre>')
+    .replace(/\n```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded px-3 py-2 my-2 overflow-x-auto"><code class="text-[10px] text-green-300 font-mono">$2</code></pre>')
     .replace(/^\| (.+) \|$/gm, '<tr><td class="px-2 py-0.5 text-[10px] text-zinc-400">$1</td></tr>')
     .replace(/^- \[ \] (.+)$/gm, '<div class="text-[10px] text-zinc-400 my-0.5"><span class="text-zinc-600 mr-2">☐</span>$1</div>')
     .replace(/^- \[x\] (.+)$/gm, '<div class="text-[10px] text-green-400 my-0.5"><span class="text-green-600 mr-2">☑</span>$1</div>')
@@ -298,7 +298,7 @@ export function InstructionPanel({
       </div>
 
       {activeTerminalId && (
-        <div className="flex items-center gap-2 mb-3 px-2 py-1 bg-zinc-900/50 rounded border border-zinc-700/30">
+        <div className="flex items-center gap-2 mb-3 px-2 py-1 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-700/30">
           <div className={`w-1.5 h-1.5 rounded-full ${isAgentReady ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`} />
           <span className="text-[10px] text-zinc-400">
             Target: <span className="text-zinc-300 font-mono">{activeTerminalId}</span>
@@ -351,7 +351,7 @@ export function InstructionPanel({
                 return (
                   <div
                     key={layer.id}
-                    className={`bg-zinc-900/50 rounded border border-zinc-800/50 overflow-hidden ${!isOn ? 'opacity-40' : ''}`}
+                    className={`bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-800/50 overflow-hidden ${!isOn ? 'opacity-40' : ''}`}
                   >
                     <div className="flex items-center justify-between px-2 py-1.5">
                       <div className="flex items-center gap-2">
@@ -387,7 +387,7 @@ export function InstructionPanel({
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
           <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Problems</label>
-          <div className="mt-1 max-h-24 overflow-y-auto space-y-0.5 bg-zinc-900/50 rounded p-1">
+          <div className="mt-1 max-h-24 overflow-y-auto space-y-0.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded p-1">
             {activeProblems.length === 0 ? (
               <div className="text-[10px] text-zinc-600 px-1 py-2 text-center">No open problems</div>
             ) : activeProblems.map(p => (
@@ -419,7 +419,7 @@ export function InstructionPanel({
 
         <div>
           <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Requests</label>
-          <div className="mt-1 max-h-24 overflow-y-auto space-y-0.5 bg-zinc-900/50 rounded p-1">
+          <div className="mt-1 max-h-24 overflow-y-auto space-y-0.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded p-1">
             {activeRequests.length === 0 ? (
               <div className="text-[10px] text-zinc-600 px-1 py-2 text-center">No open requests</div>
             ) : activeRequests.map(r => (
@@ -527,7 +527,7 @@ export function InstructionPanel({
             <textarea
               value={customInstruction}
               onChange={(e) => setCustomInstruction(e.target.value)}
-              className="w-full mt-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-300 min-h-[120px] max-h-[300px] resize-y"
+              className="w-full mt-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-300 min-h-[120px] max-h-[300px] resize-y"
               placeholder="Additional instructions..."
             />
           </VoiceInputWrapper>
@@ -548,7 +548,7 @@ export function InstructionPanel({
             </svg>
           </button>
           {showFilePicker && (
-            <div className="mt-1 max-h-28 overflow-y-auto space-y-0.5 bg-zinc-900/50 rounded p-1">
+            <div className="mt-1 max-h-28 overflow-y-auto space-y-0.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded p-1">
               {agentFiles.length === 0 ? (
                 <div className="text-[10px] text-zinc-600 px-2 py-3 text-center">No agent files found</div>
               ) : agentFiles.map((f) => (
@@ -586,7 +586,7 @@ export function InstructionPanel({
       )}
 
       {hasSelection && (
-        <div className="mb-3 bg-zinc-900/80 rounded-lg border border-zinc-700/50 overflow-hidden">
+        <div className="mb-3 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] rounded-lg border border-zinc-700/50 overflow-hidden">
           <button
             onClick={() => setPreviewExpanded(!previewExpanded)}
             className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-zinc-800/50 transition-colors"

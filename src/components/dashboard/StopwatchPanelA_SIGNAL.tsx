@@ -119,7 +119,7 @@ export function StopwatchPanelA({
           {/* RIGHT: Today's stats — three inner wells */}
           <div className="grid grid-cols-3 gap-3">
             {/* Focused */}
-            <div className="bg-zinc-950/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+            <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
               <div className="text-[11px] font-medium text-zinc-500">Focused</div>
               <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
                 {productiveMs > 0 ? fmtSec(productiveMs) : "--"}
@@ -127,7 +127,7 @@ export function StopwatchPanelA({
             </div>
 
             {/* Distracted */}
-            <div className="bg-zinc-950/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+            <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
               <div className="text-[11px] font-medium text-zinc-500">Distracted</div>
               <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
                 {distractingMs > 0 ? fmtSec(distractingMs) : "--"}
@@ -135,7 +135,7 @@ export function StopwatchPanelA({
             </div>
 
             {/* Sessions */}
-            <div className="bg-zinc-950/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+            <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
               <div className="text-[11px] font-medium text-zinc-500">Sessions</div>
               <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
                 {streak > 0 ? streak : "--"}

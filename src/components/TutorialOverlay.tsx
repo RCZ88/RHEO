@@ -312,7 +312,7 @@ export default function TutorialOverlay() {
                 <span className="text-[9px] text-zinc-600 ml-1.5 font-medium">{stepIndex + 1}/{totalSteps}</span>
               </div>
 
-              <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-900/60 border-t border-zinc-700/50">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border-t border-zinc-700/50">
                 <button onClick={prevStep} disabled={stepIndex === 0}
                   className="px-2.5 py-1.5 rounded-lg text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/40 transition-colors disabled:opacity-30 flex items-center gap-1">
                   <ArrowLeft className="w-3 h-3" />

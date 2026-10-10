@@ -204,7 +204,7 @@ export function IllustrationBlock({ meta, nodeId, onGenerated }: Props) {
                   {copied ? 'Copied!' : 'Copy prompt'}
                 </button>
               </div>
-              <pre className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/50 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
+              <pre className="p-3 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
                 {meta.prompt}
               </pre>
             </div>

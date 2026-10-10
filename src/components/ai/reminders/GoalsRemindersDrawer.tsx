@@ -121,7 +121,7 @@ export function GoalsRemindersDrawer(props: GoalsRemindersProps) {
               <button
                 onClick={props.onOpenHistory}
                 title="Chat History"
-                className="h-[26px] w-[26px] rounded-md border border-zinc-800/60 bg-zinc-900/60 flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors"
+                className="h-[26px] w-[26px] rounded-md border border-zinc-800/60 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors"
               >
                 <History size={12} />
               </button>
@@ -129,7 +129,7 @@ export function GoalsRemindersDrawer(props: GoalsRemindersProps) {
             <button
               onClick={props.onClose}
               title="Close"
-              className="h-[26px] w-[26px] rounded-md border border-zinc-800/60 bg-zinc-900/60 flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors"
+              className="h-[26px] w-[26px] rounded-md border border-zinc-800/60 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors"
             >
               <X size={12} />
             </button>
@@ -162,7 +162,7 @@ export function GoalsRemindersDrawer(props: GoalsRemindersProps) {
             <div className="space-y-4 p-3">
               {eventDates.map(date => (
                 <div key={date}>
-                  <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2 sticky top-0 bg-zinc-900/95 backdrop-blur py-1">
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2 sticky top-0 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur py-1">
                     {formatEventDate(date)}
                   </div>
                   <div className="space-y-1.5">
@@ -170,7 +170,7 @@ export function GoalsRemindersDrawer(props: GoalsRemindersProps) {
                       <button
                         key={ev.id}
                         onClick={() => props.onOpenEvent?.(ev.id)}
-                        className="w-full text-left rounded-lg bg-zinc-950/40 p-2.5 ring-1 ring-zinc-800/50 hover:ring-zinc-700 transition-all group"
+                        className="w-full text-left rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-2.5 ring-1 ring-zinc-800/50 hover:ring-zinc-700 transition-all group"
                       >
                         <div className="flex items-center gap-2">
                           <Clock size={11} className="text-cyan-400 shrink-0" />
@@ -244,7 +244,7 @@ export function GoalsRemindersDrawer(props: GoalsRemindersProps) {
                   <div
                     key={r.id}
                     className={cn(
-                      "flex items-center gap-2 rounded-lg bg-zinc-950/40 p-2.5 ring-1 ring-zinc-800/50 transition-all group",
+                      "flex items-center gap-2 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-2.5 ring-1 ring-zinc-800/50 transition-all group",
                       r.done && "opacity-50"
                     )}
                   >
@@ -281,7 +281,7 @@ export function GoalsRemindersDrawer(props: GoalsRemindersProps) {
             )}
 
             {/* Inline Add */}
-            <div className="rounded-lg bg-zinc-950/40 p-2.5 ring-1 ring-zinc-800/50 space-y-2">
+            <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-2.5 ring-1 ring-zinc-800/50 space-y-2">
               <input
                 type="text"
                 value={newReminderText}
@@ -338,7 +338,7 @@ function GoalReminderRow({
   return (
     <button
       onClick={onClick}
-      className="w-full text-left rounded-lg bg-zinc-950/40 p-2.5 ring-1 ring-zinc-800/50 hover:ring-zinc-700 transition-all"
+      className="w-full text-left rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-2.5 ring-1 ring-zinc-800/50 hover:ring-zinc-700 transition-all"
     >
       <div className="flex items-center gap-2">
         <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", dotColor)} />

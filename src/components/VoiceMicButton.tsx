@@ -65,7 +65,7 @@ export function VoiceMicButton({
             ? 'bg-[#d96846]/15 text-[#e8866b] ring-1 ring-[#d96846]/30'
             : isError
               ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/40'
-              : 'text-zinc-400 bg-zinc-900/60 ring-1 ring-zinc-800/60 hover:text-[#e8866b] hover:ring-[#d96846]/30'
+              : 'text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-[#e8866b] hover:ring-[#d96846]/30'
           }
         `}
         title={label}
@@ -135,7 +135,7 @@ export function VoiceMicButton({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 4, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full right-0 mt-1 z-50 min-w-[140px] rounded-lg bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 shadow-xl shadow-black/20 py-1"
+                className="absolute top-full right-0 mt-1 z-50 min-w-[140px] rounded-lg bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 shadow-xl shadow-black/20 py-1"
               >
                 {SUPPORTED_LANGUAGES.map(({ code, label }) => (
                   <button

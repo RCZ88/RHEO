@@ -1,7 +1,49 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { tierColor as getTierColor, tierColor as tierColorValue, TIERS, TIER_LABELS, setTierColor, resetTierColors } from '../lib/tierColors';
 import { DURATION_PRESETS, getToastDurationMs, setToastDurationMs, DEFAULT_DURATION_MS } from '../lib/toastDuration';
-import { getAmbientPrefs, setAmbientPrefs, ambientGradient, type AmbientPrefs } from '../lib/ambient';
+import {
+  getAmbientPrefs,
+  setAmbientPrefs,
+  ambientGradient,
+  ambientTheme,
+  getPageAccent,
+  AMBIENT_PAGES,
+  ALL_AMBIENT_PAGE_IDS,
+  type AmbientPrefs,
+} from '../lib/ambient';
+import { consumeSectionHint, scrollToSection } from '../lib/deepNav';
+// Leaf module, not the `@/pages/registry` barrel: the barrel re-exports
+// `usePageSurface`, which imports React and reads `import.meta.env`. Importing it
+// here would make a plain data import drag the whole React hook chain in, which
+// is the exact mistake `deepNav.ts` documents at the top of its own file.
+import { SETTINGS_SECTION_TAB } from './registry/pages/settings';
+import {
+  getAfkPrefs,
+  setAfkPrefs,
+  AFK_PRESETS,
+  AFK_ACTIONS,
+  AFK_MIN_MINUTES,
+  AFK_MAX_MINUTES,
+  AFK_MIN_NOT_AFK_MINUTES,
+  AFK_MAX_NOT_AFK_MINUTES,
+  ALL_CATEGORIES,
+  type AfkPrefs,
+} from '../lib/afk';
+import {
+  getSleepWindow,
+  setSleepWindow,
+  COMMON_SLEEP_WINDOWS,
+  SLEEP_WINDOW_CHANGED_EVENT,
+  MIN_SLEEP_OVERLAP_MINUTES,
+  describeSleepWindow,
+  formatHour,
+  type SleepWindowPrefs,
+} from '../lib/sleepWindow';
+/** Plain-language name for the AFK action, used in the summary line. */
+function afkActionLabel(a: string): string {
+  return AFK_ACTIONS.find(x => x.value === a)?.label ?? 'Pause only';
+}
+
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -9,13 +51,22 @@ import {
   ChevronRight, X, Plus, GripVertical, Palette, Check, ChevronDown, Globe,
   ChevronLeft, Search, AlertTriangle, Sparkles, ChevronUp, Loader2,
   Eye, EyeOff, DollarSign, Shield, Key, Save, Lock, LockOpen, History, Undo2, Pencil,
-  Upload, FileText, SearchX, Inbox, Keyboard, Monitor, Sun, Moon, Bell, Waves
+  Upload, FileText, SearchX, Inbox, Keyboard, Monitor, Sun, Moon, Bell, Waves, Mic
 } from 'lucide-react';
 import { useSmoothScroll } from '../components/ui/smooth-scroll';
 import { lazy } from 'react';
-import { SearchableSection, ColorPicker, TierContainer, SortableChip } from './settings/shared';
+// ColorPicker / TierContainer / SortableChip are intentionally NOT imported here:
+// this module declares its own local copies further down, and importing the same
+// binding twice is a module-level Duplicate Declaration — a PARSE error, not a type
+// error. It surfaced as `Duplicate declaration "ColorPicker"` in the vite dev
+// transform, and because vite compiles the whole import graph it breaks the whole
+// page, not just the settings tab. `./settings/shared` still exports all three and
+// ColorsSection.tsx consumes them from there; only this file's own copies are used here.
+import { SearchableSection } from './settings/shared';
 
 const DatabasePage = lazy(() => import('./DatabasePage'));
+import ErdCanvas, { type ErdSchema } from '@/features/database/ErdCanvas';
+import { ARCH_GROUPS } from '@/features/database/domains';
 import {
   DndContext,
   DragOverlay,
@@ -39,13 +90,20 @@ import { DEFAULT_SYSTEM_PROMPT } from '../lib/defaults';
 import { migrateSystemPrompts, projectKey } from '../lib/promptAssembly';
 import { useLocation } from 'react-router-dom';
 import { useNumberMask, type MaskMode } from '../context/NumberMaskContext';
+import { applyAccent, getStoredAccent, setAccent, ACCENT_SWATCHES, isLightMode } from '../lib/applyAccent';
+import { registerCustomCategories } from '../components/CategoryColors';
 import { SectionHeader } from '../components/SectionHeader'
 import { ProviderDiagnostics } from '../components/ProviderDiagnostics';
 import { GlassCard } from '../components/GlassCard';
+import { searchSettings } from './settings/registry';
+import type { SettingsTabId } from './settings/registry';
+import RewindNavSetting from '../features/rewind-nav/RewindNavSetting';
 import { PageShell } from '../components/PageShell';
 import { DevicesPanel } from '../components/DevicesPanel';
+import { PhoneStatsPanel } from '../components/PhoneStatsPanel';
 import { AuthSettings } from '../components/AuthSettings';
 import BrowserProfileSettings from '../components/BrowserProfileSettings';
+import ExtensionSetupPanel from '../components/ExtensionSetupPanel';
 import { BorderBeam } from '../components/ui/border-beam';
 import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
@@ -144,13 +202,9 @@ const PRESET_COLORS = [
 ];
 
 // Wrapper that hides sections when they don't match the settings search
-function SearchableSection({ terms, search, children }: { terms: string[]; search: string; children: React.ReactNode }) {
-  if (!search.trim()) return <>{children}</>;
-  const q = search.toLowerCase();
-  const matches = terms.some(t => t.toLowerCase().includes(q) || q.includes(t.toLowerCase()));
-  if (!matches) return null;
-  return <>{children}</>;
-}
+// SearchableSection is imported from './settings/shared' (line 16). A local copy
+// used to live here and shadowed that import, which is why search only ever
+// matched the manually-maintained `terms` arrays. Do not re-add it.
 
 // Custom color picker component with preset swatches - simplified circle design
 function ColorPicker({ value, onChange, size = 'md' }: { value: string; onChange: (color: string) => void; size?: 'sm' | 'md' }) {
@@ -208,7 +262,7 @@ function ColorPicker({ value, onChange, size = 'md' }: { value: string; onChange
               left: '50%',
               transform: 'translate(-50%, -50%)',
             }}
-            className="p-4 bg-zinc-900 border border-zinc-700 rounded-xl w-52"
+            className="p-4 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl w-52"
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium text-zinc-300">Pick a color</span>
@@ -224,7 +278,7 @@ function ColorPicker({ value, onChange, size = 'md' }: { value: string; onChange
                 <button
                   key={color}
                   onClick={() => { onChange(color); setIsOpen(false); }}
-                  className={`w-7 h-7 rounded-full hover:scale-110 transition-transform ${value === color ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-900' : ''}`}
+                  className={`w-7 h-7 rounded-full hover:scale-110 transition-transform ${value === color ? 'ring-2 ring-white ring-offset-zinc-900' : ''}`}
                   style={{ backgroundColor: color }}
                 />
               ))}
@@ -234,7 +288,7 @@ function ColorPicker({ value, onChange, size = 'md' }: { value: string; onChange
                 type="color"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
+                className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
               />
               <span className="text-xs text-zinc-400 font-mono">{value}</span>
             </div>
@@ -296,6 +350,42 @@ function SortableChip({
 
 // Tier container with droppable zone
 import { useDroppable } from '@dnd-kit/core';
+import {
+  HALO_CLOSE_DELAY_MAX,
+  HALO_CLOSE_DELAY_MIN,
+  HALO_DEFAULTS,
+  HALO_DURATION_MAX,
+  HALO_DURATION_MIN,
+  HALO_MAX_VISIBLE_MAX,
+  HALO_MAX_VISIBLE_MIN,
+  HALO_OPEN_DELAY_MAX,
+  HALO_OPEN_DELAY_MIN,
+  HALO_ORDERABLE,
+  HALO_PAD_X_MAX,
+  HALO_PAD_Y_MAX,
+  HALO_PREFS_KEY,
+  HALO_SCALE_MAX,
+  HALO_SCALE_MIN,
+  HALO_OFFSET_Y_MAX,
+  HALO_OFFSET_Y_MIN,
+  HALO_PILL_RESIDENTS,
+  HALO_SIZE_TOKENS,
+  isWidgetVisible,
+  normalizeHaloPrefs,
+  type HaloPageId,
+  type HaloPillResident,
+  type HaloPrefs,
+  // `as HaloUiVersion[]` is used by the Layout picker in the Halo block below and
+  // was never imported — TS2304 on a type-only reference, so it breaks the file
+  // under `verbatimModuleSyntax`. The export exists (HaloPreferences.ts:118).
+  type HaloUiVersion,
+} from '../features/halo/HaloPreferences';
+import { HaloSettingsPreview } from '../features/halo/HaloSettingsPreview';
+import {
+  HALO_SIZE_PRESETS,
+  presetForScale,
+  resolveHaloSize,
+} from '../shared/halo/sizes';
 
 function TierContainer({
   tier,
@@ -363,6 +453,126 @@ function formatTrackedTime(ms: number): string {
   return `${d}d ${h % 24}h`;
 }
 
+/* ── Reminder lead times ───────────────────────────────────────────────────
+   checkDeadlinesAndNotify fires at three points before a deadline. Those were
+   hardcoded 1 day / 3 hours / 1 hour with no way to change them, so this reads
+   and writes the same app_settings row the main-process poller reads. */
+function ReminderLeadTimeSettings() {
+  const [minutes, setMinutes] = useState<{ d1: number; h3: number; h1: number }>({ d1: 1440, h3: 180, h1: 60 });
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const api = (window as any).deskflowAPI;
+    if (!api?.appSettingGet) { setLoaded(true); return; }
+    api.appSettingGet('reminder_lead_minutes')
+      .then((r: any) => {
+        if (!alive) return;
+        if (r?.value) {
+          try {
+            const p = JSON.parse(r.value);
+            const n = (v: unknown, d: number) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : d);
+            setMinutes({ d1: n(p.d1, 1440), h3: n(p.h3, 180), h1: n(p.h1, 60) });
+          } catch { /* fall back to defaults */ }
+        }
+      })
+      .catch(() => { if (alive) setError('Could not read reminder settings. Defaults are in use.'); })
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, []);
+
+  const save = async (next: { d1: number; h3: number; h1: number }) => {
+    setMinutes(next);
+    const api = (window as any).deskflowAPI;
+    if (!api?.appSettingSet) return;
+    setSaving(true); setError(null);
+    try {
+      const res = await api.appSettingSet('reminder_lead_minutes', JSON.stringify(next));
+      if (res && res.success === false) throw new Error(res.error || 'Could not save reminder settings.');
+    } catch (e: any) {
+      setError(e?.message || 'Could not save reminder settings.');
+    } finally { setSaving(false); }
+  };
+
+  const toAmount = (mins: number) =>
+    mins === 0 ? 'At the deadline'
+    : mins % 1440 === 0 ? `${mins / 1440} day${mins / 1440 === 1 ? '' : 's'} before`
+    : mins % 60 === 0 ? `${mins / 60} hour${mins / 60 === 1 ? '' : 's'} before`
+    : `${mins} min before`;
+
+  const rows: Array<{ key: 'd1' | 'h3' | 'h1'; label: string; help: string }> = [
+    { key: 'd1', label: 'First warning', help: 'The earliest heads-up before something is due.' },
+    { key: 'h3', label: 'Second warning', help: 'A mid-point reminder. Set to 0 to skip this one.' },
+    { key: 'h1', label: 'Final warning', help: 'The last nudge. Set to 0 to skip this one.' },
+  ];
+
+  if (!loaded) {
+    return (
+      <GlassCard>
+        <div className="h-8 w-1/3 animate-pulse rounded bg-zinc-800/40" aria-hidden />
+        <div className="mt-3 h-8 w-2/3 animate-pulse rounded bg-zinc-800/40" aria-hidden />
+        <p className="sr-only">Loading reminder settings</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="space-y-4">
+      <div>
+        <h3 className="text-sm font-medium text-zinc-200">Deadline reminders</h3>
+        <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
+          How far ahead DeskFlow warns you about an upcoming deadline. Anything already past its
+          date is announced once as overdue and then left on the list until you clear it.
+        </p>
+      </div>
+
+      {error && (
+        <p role="alert" className="text-[12px] text-amber-400/90">{error}</p>
+      )}
+
+      <div className="space-y-3">
+        {rows.map(row => {
+          const id = `reminder-lead-${row.key}`;
+          return (
+            <div key={row.key} className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <label htmlFor={id} className="block text-[13px] text-[var(--text-primary)]">{row.label}</label>
+                <p className="text-[11px] text-[var(--text-muted)]">{row.help}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  id={id}
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={minutes[row.key]}
+                  disabled={saving}
+                  aria-describedby={`${id}-help`}
+                  onChange={e => {
+                    const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                    setMinutes(prev => ({ ...prev, [row.key]: v }));
+                  }}
+                  onBlur={() => save(minutes)}
+                  className="w-20 rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1.5 text-[12px] text-[var(--text-primary)] outline-none focus-visible:border-[var(--page-accent)] focus-visible:ring-[var(--page-accent)]/40 disabled:opacity-60"
+                />
+                <span id={`${id}-help`} className="w-36 text-[11px] text-[var(--text-muted)]">
+                  {toAmount(minutes[row.key])}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[11px] text-[var(--text-muted)]">
+        {saving ? 'Saving…' : 'Changes apply to the next deadline check (runs every 5 minutes).'}
+      </p>
+    </GlassCard>
+  );
+}
+
 export default function SettingsPage({
   logs = [],
   appStats = [],
@@ -399,6 +609,10 @@ export default function SettingsPage({
     return (saved as any) || 'category';
   });
   const location = useLocation();
+  /* The section a deep link asked for, held until the tab that owns it has
+     mounted. See the deep-nav arrival effect below for why it cannot be scrolled
+     to in the same tick. */
+  const [pendingSection, setPendingSection] = useState<string | null>(null);
   /* Smooth scrolling — the toggleable half of the scroll feature. The other
      half (scrollbar appearance) is unconditional and lives in
      src/styles/surface.css, so there is nothing to configure here for it. */
@@ -414,9 +628,52 @@ export default function SettingsPage({
     }
   })();
   useEffect(() => {
-    const tab = (location.state as any)?.tab;
-    if (tab) setActiveTab(tab);
+    applyAccent();
   }, []);
+
+  /* Deep-nav arrival: pick the tab, then scroll to the section ON THAT TAB.
+   *
+   * Two real defects are repaired here.
+   *
+   * 1. `deepNav` writes the target section into `sessionStorage['deepNav:section']`
+   *    (`src/lib/deepNav.ts:70`) and expects the destination page to CONSUME it.
+   *    `SettingsPage` never called `consumeSectionHint`, so the key was written
+   *    and never removed — it survived every later visit to Settings and would
+   *    have fired a scroll the moment anything did start reading it.
+   *
+   * 2. A same-page section row carries a `section` but no `tab`, so a ⌘K pick of
+   *    "Settings — Halo Island" arrived on whatever tab was last open. Now the
+   *    owning tab comes from `SETTINGS_SECTION_TAB`, which is declared next to the
+   *    section itself, and the scroll runs in a SECOND effect that is keyed on the
+   *    tab — so it happens after the tab's content has mounted rather than racing
+   *    it. Scrolling before paint is what made a stale hint look like it had
+   *    landed on the wrong section entirely. */
+  useEffect(() => {
+    const tab = (location.state as any)?.tab;
+    const section = consumeSectionHint();
+    const stateSection = (location.state as any)?.section;
+    const wanted = section || stateSection;
+    const owning = typeof wanted === 'string' ? SETTINGS_SECTION_TAB[wanted] : undefined;
+    if (tab) setActiveTab(tab);
+    else if (owning) setActiveTab(owning as TabId);
+    if (typeof wanted === 'string') setPendingSection(wanted);
+  }, []);
+
+  // Runs after the tab content is in the DOM, with the retry the helper documents
+  // for lazily-mounted panels. Keyed on `activeTab` so switching tabs by hand
+  // re-resolves rather than replaying a spent hint.
+  useEffect(() => {
+    if (!pendingSection) return;
+    let cancelled = false;
+    const attempt = (n: number) => {
+      if (cancelled || n <= 0) return;
+      if (scrollToSection(pendingSection)) return;
+      window.setTimeout(() => attempt(n - 1), 200);
+    };
+    const t = window.setTimeout(() => attempt(4), 100);
+    return () => { cancelled = true; window.clearTimeout(t); };
+  }, [activeTab, pendingSection]);
+
   const [tierAssignments, setTierAssignments] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('deskflow-tier-assignments');
@@ -447,6 +704,26 @@ export default function SettingsPage({
   const [localTimerBehavior, setLocalTimerBehavior] = useState(timerBehaviorProp);
   const [trackerAppMode, setTrackerAppMode] = useState(trackerAppModeProp);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [accentColor, setAccentColor] = useState<string | null>(() => getStoredAccent());
+  const [erdSchema, setErdSchema] = useState<ErdSchema | null>(null);
+  const [erdLoading, setErdLoading] = useState(false);
+
+  const fetchErd = useCallback(async () => {
+    const api: any = (window as any).deskflowAPI;
+    const blank = { tables: [], relationships: [], tablesWithoutForeignKeys: [], totalColumns: 0, generatedAt: '' };
+    if (!api?.getErdSchema) { setErdSchema({ ...blank, error: 'Schema introspection unavailable — rebuild the app' } as ErdSchema); return; }
+    setErdLoading(true);
+    try { setErdSchema(await api.getErdSchema()); }
+    catch (e: any) { setErdSchema({ ...blank, error: e?.message || String(e) } as ErdSchema); }
+    finally { setErdLoading(false); }
+  }, []);
+
+  // Load the schema the first time the Database subpage is opened.
+  // Declared AFTER the state above — a useEffect that reads `erdSchema`
+  // earlier in the body throws "Cannot access before initialization".
+  useEffect(() => {
+    if (activeTab === 'database' && !erdSchema && !erdLoading) fetchErd();
+  }, [activeTab, erdSchema, erdLoading, fetchErd]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [localExternalTiers, setLocalExternalTiers] = useState<Record<number, string>>(() => {
     if (typeof window !== 'undefined') {
@@ -480,7 +757,21 @@ export default function SettingsPage({
 
   const { showNumbers, setShowNumbers, maskMode, setMaskMode, maskFixedValue, setMaskFixedValue } = useNumberMask();
 
-  const allCategories = useMemo(() => [...DEFAULT_CATEGORIES, ...customCategories], [customCategories]);
+  // Union of the built-in and user-created categories, deduped case-insensitively
+  // so a custom category can never be shadowed or dropped by a built-in spelling.
+  const allCategories = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of [...DEFAULT_CATEGORIES, ...customCategories]) {
+      const k = String(c || '').trim();
+      if (!k) continue;
+      const lk = k.toLowerCase();
+      if (seen.has(lk)) continue;
+      seen.add(lk);
+      out.push(k);
+    }
+    return out;
+  }, [customCategories]);
 
   // Sync tracker app mode from props when they change
   useEffect(() => {
@@ -505,13 +796,22 @@ export default function SettingsPage({
     // Global shortcuts
     voiceInput: 'Ctrl+Shift+V',
     commandPalette: 'Ctrl+K',
+    quickCapture: 'Ctrl+Shift+G',
     aiChatVoice: 'Ctrl+Shift+M',
     aiPageTranscript: 'Ctrl+Shift+L',
     aiPagePalette: 'Ctrl+K',
     designWorkspacePalette: 'Cmd+K',
-    externalSelect: 'Enter',
-    externalDeselect: 'Escape',
-    // App shortcuts
+externalSelect: 'Enter',
+      externalDeselect: 'Escape',
+      // Matches DEFAULT_KEYBOARD_SHORTCUTS in src/main.ts. Deliberately NOT one of the
+      // terminal's Ctrl+Shift+<letter> combos: this one is registered GLOBALLY, so it would be
+      // consumed by the OS before the terminal's renderer handler ever ran.
+      // The 3 "files" claiming Ctrl+Shift+O in this repo are all this same default value in the
+      // three maps that must agree (main defaults, settings constants, settings renderer) — not
+      // three competing features. That is the mirror-image of the H/V bug, where the claims were
+      // genuinely different features.
+      haloIslandToggle: 'Ctrl+Shift+O',
+      // App shortcuts
     canvasUndo: 'Ctrl+Z',
     canvasRedo: 'Ctrl+Shift+Z',
     financeNewTx: 'Ctrl+N',
@@ -607,6 +907,7 @@ export default function SettingsPage({
     terminalSplitFind: { label: 'Find in Split', description: 'Search within the current split pane (Ctrl+Shift+J)', group: 'Terminal' },
     terminalSplitFindHist: { label: 'Find in Split History', description: 'Search split pane history (Ctrl+Shift+K)', group: 'Terminal' },
     terminalEnter: { label: 'Terminal Enter', description: 'Send Enter to the active terminal pane', group: 'Terminal' },
+    quickCapture: { label: 'Quick Capture', description: 'Jump to the training capture box from anywhere (Ctrl+Shift+G)', group: 'Global' },
     terminalBalance: { label: 'Balance Panes', description: 'Balance active pane sizes (Ctrl+Shift+Space)', group: 'Terminal' },
     terminalExport: { label: 'Export Transcript', description: 'Export terminal transcript (Ctrl+Shift+E)', group: 'Terminal' },
     // Lyceum
@@ -868,6 +1169,8 @@ export default function SettingsPage({
           // Load custom categories
           if (config?.customCategories) {
             setCustomCategories(config.customCategories);
+            // Make them first-class for every getCategoryStyle() consumer.
+            registerCustomCategories(config.customCategories);
           }
         } catch { /* ignore */ }
       }
@@ -990,9 +1293,23 @@ export default function SettingsPage({
     return 'forward';
   });
 
-  // Save dataSyncMode when it changes
+  /* Save dataSyncMode when it changes, AND raise the save bar.
+   *
+   * The write alone was silent: the preference reached `localStorage` and the page gave the
+   * user no indication whatsoever. A setting that writes without telling you is
+   * indistinguishable from one that silently fails — the exact defect that made the Halo
+   * island's `enabled` flag untrustworthy for as long as it existed. The audit that found this
+   * found the same shape in three other places; they all now report.
+   *
+   * The `didMount` ref matters because this effect also runs on the FIRST render, where there
+   * is no user change to report. Without it the bar would flash up the moment the Settings
+   * tab opened, which is worse than silence: a prompt that is wrong once teaches you to
+   * distrust the prompt. */
+  const dataSyncModeDidMount = useRef(false);
   useEffect(() => {
     localStorage.setItem('deskflow-data-sync-mode', dataSyncMode);
+    if (dataSyncModeDidMount.current) setHasChanges(true);
+    else dataSyncModeDidMount.current = true;
   }, [dataSyncMode]);
 
   // Refactor flow: analyze (read-only preview) -> confirm dialog -> apply -> feedback
@@ -1106,18 +1423,31 @@ export default function SettingsPage({
   const handleAddCategory = async () => {
     const name = newCategoryName.trim();
     if (!name) return;
-    if (allCategories.includes(name)) return;
-    if (window.deskflowAPI?.addCategory) {
-      await window.deskflowAPI.addCategory(name);
-    }
-    setCustomCategories(prev => [...prev, name]);
-    setTierAssignments(prev => ({
+    if (allCategories.some(c => c.toLowerCase() === name.toLowerCase())) return;
+    // Update local state FIRST, then persist. The IPC await used to sit above
+    // this setState with no try/catch, so a single rejection (handler not
+    // registered, main busy, restart mid-call) aborted the handler and the new
+    // category silently never appeared in any picker.
+    setCustomCategories((prev: string[]) => {
+      if (prev.some((c: string) => c.toLowerCase() === name.toLowerCase())) return prev;
+      const next = [...prev, name];
+      registerCustomCategories(next);
+      return next;
+    });
+    setTierAssignments((prev: any) => ({
       ...prev,
       neutral: [...prev.neutral, name]
     }));
     setNewCategoryName('');
     setHasChanges(true);
-    onHasChangesChange(true);
+    onHasChangesChange?.(true);
+    // Persist after the UI is already correct, and never let a failure roll the
+    // visible state back — Save will re-push the full list anyway.
+    try {
+      await (window as any).deskflowAPI?.addCategory?.(name);
+    } catch (err: any) {
+      console.error('[Settings] add-category IPC failed; category kept locally:', err?.message || err);
+    }
   };
 
   const saveChanges = async () => {
@@ -1250,6 +1580,20 @@ export default function SettingsPage({
   const getAppColor = (app: string): string => {
     return localAppColors[app] || appColors[app] || '#888888';
   };
+
+  // Keep category assignments live: when a category is saved, main broadcasts the
+  // FULL maps. Without this subscriber the panel kept rendering the previous
+  // values until a manual reload, so it looked like the change never applied.
+  useEffect(() => {
+    const api: any = (window as any).deskflowAPI;
+    if (!api?.onCategoryConfigChanged) return;
+    const off = api.onCategoryConfigChanged((p: any) => {
+      if (p?.appCategoryMap) setAppCategoryOverrides(p.appCategoryMap);
+      if (p?.domainCategoryMap) setDomainCategoryOverrides(p.domainCategoryMap);
+      setHasChanges(false);
+    });
+    return () => { try { off?.(); } catch { /* ignore */ } };
+  }, []);
 
   const changeAppCategory = (app: string, newCategory: string) => {
     if (lockedApps[app]) return; // Don't change locked apps
@@ -1621,26 +1965,17 @@ export default function SettingsPage({
   const [colorSearchFilter, setColorSearchFilter] = useState('');
   const [settingsSearch, setSettingsSearch] = useState('');
 
-  const settingsTabKeywords: Record<string, string[]> = {
-    category: ['category', 'categories', 'tier', 'productive', 'neutral', 'distracting', 'drag', 'drop', 'sync', 'custom', 'applications', 'apps', 'websites', 'domains', 'smart', 'categorization', 'keyword', 'external', 'activities'],
-    general: ['general', 'behavior', 'idle', 'threshold', 'neutral', 'distracting', 'pause', 'reset', 'ignore', 'auto-start', 'auto-export', 'animation', 'storage', 'export', 'csv', 'json', 'window mode'],
-    tracking: ['tracking', 'transient', 'background', 'recording', 'game', 'detection', 'browser', 'profiles', 'sleep', 'gap', 'max session', 'prompt history', 'visible prompts'],
-    prompts: ['prompts', 'system prompt', 'default', 'agent', 'resume', 'commands', 'instructions', 'general additions', 'opencode', 'claude', 'aider', 'codex', 'gemini'],
-    colors: ['colors', 'color', 'palette', 'theme', 'category color'],
-    ai: ['ai', 'openrouter', 'api key', 'provider', 'routing', 'daily brief', 'research', 'topics', 'usage', 'cost', 'data access', 'agent color', 'diagnostics', 'multi-provider'],
-    finance: ['finance', 'currency', 'auto-save', 'security', 'password', 'lock', 'masking', 'balance', 'recalculate'],
-    devices: ['devices', 'device'],
-    auth: ['auth', 'login', 'register', 'sync', 'password', 'account'],
-  };
-
-  const findMatchingTab = (query: string): string | null => {
-    if (!query.trim()) return null;
-    const q = query.toLowerCase();
-    for (const [tabId, keywords] of Object.entries(settingsTabKeywords)) {
-      if (keywords.some(kw => q.includes(kw) || kw.includes(q))) return tabId;
-    }
-    return null;
-  };
+  // Settings search is driven by the manifest in `pages/settings/registry/`.
+  //
+  // The object this replaces covered 9 of the 12 tabs, so `appearance`,
+  // `database` and `shortcuts` could NEVER be reached by typing — the page just
+  // did not move, which reads exactly like broken search. It also returned the
+  // FIRST insertion-order hit, so "sync" (owned by Auth, Category and Devices)
+  // always landed on whichever happened to be declared first.
+  //
+  // `searchSettings` scores instead, breaks ties by keyword importance, and
+  // reports what matched so results can be highlighted.
+  const findMatchingTab = (query: string): SettingsTabId | null => searchSettings(query).bestTab;
   const [generatingColors, setGeneratingColors] = useState(false);
   const [pendingColors, setPendingColors] = useState<Record<string, string>>({});
   const [preAiColors, setPreAiColors] = useState<Record<string, string>>({});
@@ -1702,6 +2037,156 @@ export default function SettingsPage({
   const [sttBaseUrl, setSttBaseUrl] = useState('https://api.groq.com/openai/v1/audio/transcriptions');
   const [showSttKey, setShowSttKey] = useState(false);
 
+  // Floating dictation overlay. It is a portal inside the app now (not a second
+  // OS window), so visibility lives in a module store rather than in the main
+  // process — this launcher, the /labs launcher and the hotkey all talk to it.
+  const [islandOpen, setIslandOpen] = useState(false);
+  const [haloPrefs, setHaloPrefs] = useState(HALO_DEFAULTS);
+  // Loaded once on mount. There is no `onPreferenceChanged` channel in this
+  // preload, so a live subscription would be a silent no-op — the write would land
+  // and the control would simply not move, which is worse than not offering it.
+  useEffect(() => {
+    let alive = true;
+    void window.deskflowAPI
+      ?.getPreference?.(HALO_PREFS_KEY)
+      .then((raw: unknown) => {
+        if (alive) setHaloPrefs(normalizeHaloPrefs(raw));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const [islandError, setIslandError] = useState<string | null>(null);
+
+  /* THE ONE WRITE PATH FOR HALO PREFERENCES.
+   *
+   * Every control in this section used to inline the same two lines — set local state, then
+   * `setPreference` — and stop there. That persisted the value and did nothing with it: the
+   * main process only ever pushed `halo:prefs` on `did-finish-load`, so the renderer had no
+   * way to learn about a change and the section had to promise "applies on next launch".
+   * Centralising it means a new control cannot forget the third step, which is the failure
+   * mode that made every other setting here decorative.
+   *
+   * It also normalises before writing, so what lands on disk is always a value the island
+   * will accept — a partially-edited object can never be persisted half-formed.
+   */
+  /* Settings copy for the four handoff §5 pages. The `hint` is the one-line description shown
+   * under the name, taken from the handoff's own wording for each page. */
+  const HALO_PAGE_LABELS: Record<HaloPageId, { label: string; hint: string }> = {
+    focus: { label: 'Focus', hint: 'Stopwatch, what is being tracked, productive time' },
+    now: { label: 'Now', hint: 'Current app and website, AI usage' },
+    deadlines: { label: 'Deadlines', hint: 'Next deadline and open count' },
+    tools: { label: 'Tools', hint: 'Dictation and console' },
+  };
+  const HALO_PILL_LABELS: Record<HaloPillResident, { label: string; hint: string }> = {
+    stopwatch: { label: 'Stopwatch', hint: 'Session time and what it is tracking' },
+    now: { label: 'Current app and website', hint: 'What you are using right now' },
+    aiUsage: { label: 'AI usage', hint: "Share of today's AI budget used" },
+    nextDeadline: { label: 'Next deadline', hint: 'Your closest open deadline' },
+    hud: { label: 'Console', hint: 'Running console sessions' },
+  };
+  /* The stored sequence, falling back to the handoff order so an install that never touched
+   * these settings still renders all four pages. `normalizeHaloPages` already guarantees the
+   * array is complete, de-duped and never fully hidden. */
+  const haloPages: HaloPageId[] = haloPrefs.pages?.order?.length
+    ? haloPrefs.pages.order
+    : (['focus', 'now', 'deadlines', 'tools'] as HaloPageId[]);
+  const haloHidden: HaloPageId[] = haloPrefs.pages?.hidden ?? [];
+
+  const haloPrefsRef = useRef(haloPrefs);
+  /* Drag-reorder state for the Pages list. `dragIndex` is a ref because it is only read inside
+   * the drop handler and re-rendering on every dragstart would fight the drag. */
+  const dragIndex = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [pageMenu, setPageMenu] = useState<HaloPageId | null>(null);
+  const saveHaloPrefs = useCallback(async (patch: Partial<HaloPrefs>) => {
+    /* WHY A REF AND NOT A FUNCTIONAL setState
+     *
+     * The first version of this did the writes inside the updater:
+     *   setHaloPrefs(prev => { persist(...); apply(); return next })
+     * A `useState` updater must be PURE, and React calls it twice under StrictMode — so every
+     * slider tick would have written to the database and pushed to the island twice. For a
+     * range input that is dozens of duplicate IPC round-trips per drag, and it would make the
+     * island re-apply preferences the user is still in the middle of changing.
+     *
+     * Reading the previous value from a ref keeps the callback stable (empty deps, so it is
+     * not re-created on every render) and keeps the side effects in the event handler, which
+     * is the only place they belong. */
+    const next = normalizeHaloPrefs({ ...haloPrefsRef.current, ...patch });
+    haloPrefsRef.current = next;
+    setHaloPrefs(next);
+
+    /* THE WRITE MUST COMPLETE BEFORE THE PUSH. THIS IS A REAL RACE, NOT A STYLE CHOICE.
+     *
+     * These were two fire-and-forget `invoke`s on TWO DIFFERENT CHANNELS:
+     *   setPreference -> 'set-preference'
+     *   applyPrefs    -> 'halo:apply-prefs'
+     * Electron guarantees no ordering ACROSS different channels, so `applyPrefs` regularly
+     * arrived FIRST. `applyHaloPrefs` in the main process re-reads prefs from disk, so it read
+     * the STALE value — still `enabled: false` — and destroyed the island again. The live
+     * diagnostic log shows precisely this, and `deskflow-prefs.json` ended up holding
+     * `enabled: false` with the island dead, so turning the toggle back ON did nothing either:
+     * every push raced the write and lost.
+     *
+     * THE FIX IS ORDER, NOT RETRY. Awaiting the persist makes the value durable before
+     * anything reads it. A retry loop would paper over a race with an unbounded window, and
+     * `sleep`-then-retry is exactly the shape behind the OOM disaster in AGENTS.md §0-0.
+     *
+     * `setHasChanges(true)` moves into a `finally` so the bar still appears if the write
+     * THROWS. A setting that stays silent when its persistence errors is worse than one that
+     * reports falsely, because the user cannot tell those two apart — which is the same trap
+     * as the `enabled` flag this whole chain exists to fix. */
+    try {
+      await window.deskflowAPI?.setPreference?.(HALO_PREFS_KEY, next);
+      await window.haloBridge?.applyPrefs?.();
+    } finally {
+      setHasChanges(true);
+    }
+  }, []);
+
+  /* Monitor list for the position picker. Fetched once: displays do not change while this
+   * panel is open often enough to justify a subscription, and `listDisplays` is a cheap
+   * synchronous read of cached Electron display data in the main process. */
+  const [haloDisplays, setHaloDisplays] = useState<
+    { id: number; label: string; primary: boolean }[]
+  >([]);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const raw = (await window.haloBridge?.listDisplays?.()) as
+          | { id: number; label: string; primary: boolean }[]
+          | undefined;
+        if (alive && Array.isArray(raw)) setHaloDisplays(raw);
+      } catch {
+        /* the picker degrades to "main display only" — an honest empty state, not a crash */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = await window.haloBridge?.getSnapshot?.();
+        if (!cancelled && s) setIslandOpen(!!s.open);
+      } catch { /* cosmetic */ }
+    })();
+    const off = window.haloBridge?.onHover?.((s) => { if (!cancelled) setIslandOpen(!!s.open); });
+    return () => { cancelled = true; if (typeof off === 'function') off(); };
+  }, []);
+  const toggleSttPanel = async () => {
+    setIslandError(null);
+    try {
+      const s = await window.haloBridge?.open?.();
+      if (s && typeof s.open === 'boolean') setIslandOpen(s.open);
+    } catch (err) {
+      setIslandError(err instanceof Error ? err.message : 'The Halo Island could not be opened.');
+    }
+  };
+
   // AI Assistant state
   const [interestTopics, setInterestTopics] = useState<string[]>([]);
   const [kbDocs, setKbDocs] = useState<Array<{ id: string; name: string; type: string; addedAt: number }>>([]);
@@ -1751,12 +2236,51 @@ export default function SettingsPage({
   // How long toasts/notifications stay on screen. Persisted in
   // localStorage (see src/lib/toastDuration.ts) and applied live.
   const [toastDuration, setToastDurationState] = useState(() => getToastDurationMs());
+
+  // AFK threshold + what to do on AFK (Settings → Tracking → AFK Behaviour).
+  const [afkPrefs, setAfkPrefsState] = useState<AfkPrefs>(getAfkPrefs);
+  useEffect(() => {
+    const onAfk = () => setAfkPrefsState(getAfkPrefs());
+    window.addEventListener('afk-prefs-changed', onAfk);
+    return () => window.removeEventListener('afk-prefs-changed', onAfk);
+  }, []);
+
+  // Bedtime. Sits directly under AFK Behaviour because it is the OTHER half of
+  // the same decision — "how long until AFK" and "when does AFK become sleep"
+  // were previously defined in three places that disagreed, and only the first
+  // of them was ever in this file.
+  const [sleepWindow, setSleepWindowState] = useState<SleepWindowPrefs>(getSleepWindow);
+  useEffect(() => {
+    const onSleep = () => setSleepWindowState(getSleepWindow());
+    window.addEventListener(SLEEP_WINDOW_CHANGED_EVENT, onSleep);
+    return () => window.removeEventListener(SLEEP_WINDOW_CHANGED_EVENT, onSleep);
+  }, []);
   // Global ambient background (the tinted wash). Live — no save bar.
   const [ambientPrefs, setAmbientPrefsState] = useState<AmbientPrefs>(getAmbientPrefs);
   useEffect(() => {
     const onAmbient = () => setAmbientPrefsState(getAmbientPrefs());
     window.addEventListener('ambient-prefs-changed', onAmbient);
     return () => window.removeEventListener('ambient-prefs-changed', onAmbient);
+  }, []);
+  /* The preview has to repaint when the THEME changes, not only when the ambient
+   * prefs do. `ambientTheme()` reads `document.documentElement.classList`, and
+   * without this the preview kept drawing the dark-theme alpha after the user
+   * flipped to light — a preview that shows the wrong thing is worse than no
+   * preview.
+   *
+   * Observed rather than pushed: the theme is owned by `src/lib/theme.ts`, which
+   * flips a class on `<html>`. A MutationObserver on that attribute fires for
+   * every writer of that class, so this cannot drift from however the theme is
+   * actually applied. */
+  const [ambientThemeNow, setAmbientThemeNow] = useState(() => ambientTheme());
+  useEffect(() => {
+    if (typeof MutationObserver === 'undefined' || !document.documentElement) return;
+    const mo = new MutationObserver(() => setAmbientThemeNow(ambientTheme()));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    // Also read once on mount: the observer only fires on a CHANGE, so a page
+    // loaded directly into light mode would otherwise show the dark preview.
+    setAmbientThemeNow(ambientTheme());
+    return () => mo.disconnect();
   }, []);
   const [promptHistoryLimit, setPromptHistoryLimit] = useState(5);
   const [browserRecordingMode, setBrowserRecordingMode] = useState<'always' | 'on-view'>('always');
@@ -2004,6 +2528,51 @@ export default function SettingsPage({
   const displayedAppStats = showUncategorizedOnly ? uncategorizedApps : filteredAppStats;
   const displayedDomainStats = showUncategorizedOnly ? uncategorizedDomains : filteredDomainStats;
 
+  /* WHICH CHANGES ARE ACTUALLY PENDING — the save bar's honesty contract.
+   *
+   * The bar now appears for EVERY settings change, because most of this page writes through
+   * immediately and previously gave the user no confirmation at all. But "unsaved changes" is
+   * only true for the small group that genuinely stages in component state and writes on the
+   * bar's action: the tier assignments, the planet/app colours, and the category order. Those
+   * three live in localStorage under their own keys; everything else is already in the store.
+   *
+   * So this is computed by COMPARING the live state against what is actually persisted, not by
+   * assuming. A flag set at mutation time would be wrong the moment any other path wrote the
+   * same key, which is the stale-flag family of bug: the prompt would claim work is pending
+   * after it was already saved. Comparing the values makes the bar self-correcting — press
+   * Save, the store matches, the copy flips to "Settings applied" on its own.
+   *
+   * `stringify` is used instead of `===` because these are objects and arrays, and identity
+   * comparison would report every render as changed. `JSON.stringify` key order follows
+   * insertion order, so both sides are produced by the same writers and the comparison is
+   * stable in practice; the fallbacks keep this from ever throwing. */
+  const stringify = (v: unknown) => {
+    try {
+      return JSON.stringify(v ?? null);
+    } catch {
+      return '';
+    }
+  };
+  const readStored = (key: string) => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  const hasStagedChanges =
+    readStored('deskflow-tier-assignments') !== stringify(tierAssignments) ||
+    readStored('deskflow-planet-colors') !== stringify(localAppColors) ||
+    readStored('deskflow-category-order') !== stringify(localCategoryOrder) ||
+    readStored('deskflow-app-category-overrides') !== stringify(appCategoryOverrides) ||
+    readStored('deskflow-domain-category-overrides') !== stringify(domainCategoryOverrides) ||
+    readStored('deskflow-agent-colors') !== stringify(agentColorOverrides) ||
+    /* `animationSpeed` is a plain string, not JSON, so it is compared verbatim. Wrapping it in
+     * `stringify` would quote it and make every comparison false — which is the same bug as
+     * `JSON.stringify` on a string, and the reason the type is checked rather than assumed. */
+    (readStored('deskflow-animation-speed') ?? '') !== (animationSpeed ?? '');
+
   return (
     <PageShell page="settings">
       <div className="flex items-center justify-between">
@@ -2024,11 +2593,15 @@ export default function SettingsPage({
             onChange={e => {
               const v = e.target.value;
               setSettingsSearch(v);
+              // Re-score on EVERY keystroke. The old code also ran per keystroke,
+              // but its matcher returned the first hit for the WHOLE query, so
+              // once a query matched a tab, later characters could never move you
+              // somewhere better.
               const matched = findMatchingTab(v);
               if (matched) setActiveTab(matched as any);
             }}
             placeholder="Search settings..."
-            className="w-full bg-zinc-900/50 light:bg-white/50 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+            className="w-full bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] light:bg-white/50 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 transition-colors"
           />
         {settingsSearch && (
           <button onClick={() => setSettingsSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
@@ -2037,7 +2610,7 @@ export default function SettingsPage({
         )}
       </div>
 
-      <div className="flex gap-1 bg-zinc-900/50 light:bg-white/50 p-1 rounded-xl">
+      <div className="flex gap-1 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] light:bg-white/50 p-1 rounded-xl">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -2053,18 +2626,18 @@ export default function SettingsPage({
       </div>
 
       {/* Content based on active tab */}
-      {activeTab === 'appearance' && (
+{activeTab === 'appearance' && (
         <div data-section="settings.appearance" className="space-y-6">
           {/* ── Ambient background ───────────────────────────────────────────
               The soft tinted wash that used to exist only on the terminal page,
-              now on every route and tinted by that page's --page-accent. Three
-              controls: off/on, how strong the tint is, and how far it spreads.
-              "Spread" is the distracting one — a wide wash tints more of the
-              reading area even when the alpha is low. */}
+              now on every route and tinted by that page's --page-accent. Four
+              controls: off/on, how strong the tint is, how far it spreads, and
+              WHICH pages wear it. "Spread" is the distracting one — a wide wash tints
+              more of the reading area even when the alpha is low. */}
           <GlassCard>
             <SectionHeader title="Ambient Background" icon={<Sparkles className="w-5 h-5" />} />
             <p className="text-xs text-zinc-500 mb-4">
-              A faint tinted light behind every page. Each screen gets its own hue from its accent colour.
+              A faint tinted light behind the app. Each screen gets its own hue from its accent colour.
             </p>
 
             <div className="flex items-center justify-between py-2">
@@ -2072,13 +2645,15 @@ export default function SettingsPage({
                 <label className="text-sm font-medium text-zinc-300">Enabled</label>
                 <p className="text-xs text-zinc-500">Turn the wash off entirely</p>
               </div>
-              <button
-                onClick={() => setAmbientPrefsState(setAmbientPrefs({ enabled: !ambientPrefs.enabled }))}
-                aria-pressed={ambientPrefs.enabled}
-                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${ambientPrefs.enabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${ambientPrefs.enabled ? 'translate-x-5' : ''}`} />
-              </button>
+              {/* Was a bare <button> with a hardcoded `bg-emerald-500` track and a
+                  `bg-white` knob — a fourth switch style on this page, and a
+                  hardcoded hue where the token contract specifies the accent. It is
+                  now the same `sf-switch` as every other switch here. */}
+              <SettingsSwitch
+                checked={ambientPrefs.enabled}
+                label="Ambient background"
+                onChange={(v) => setAmbientPrefsState(setAmbientPrefs({ enabled: v }))}
+              />
             </div>
 
             {ambientPrefs.enabled && (
@@ -2091,7 +2666,8 @@ export default function SettingsPage({
                   <input
                     type="range" min={0} max={100} step={5} value={ambientPrefs.intensity}
                     onChange={(e) => setAmbientPrefsState(setAmbientPrefs({ intensity: Number(e.target.value) }))}
-                    className="w-full accent-emerald-500"
+                    aria-label="Ambient intensity"
+                    className="w-full"
                   />
                   <p className="text-[11px] text-zinc-600 mt-1">How visible the tint is. Keep it low — this is atmosphere, not decoration.</p>
                 </div>
@@ -2104,16 +2680,122 @@ export default function SettingsPage({
                   <input
                     type="range" min={0} max={100} step={5} value={ambientPrefs.spread}
                     onChange={(e) => setAmbientPrefsState(setAmbientPrefs({ spread: Number(e.target.value) }))}
-                    className="w-full accent-emerald-500"
+                    aria-label="Ambient spread"
+                    className="w-full"
                   />
                   <p className="text-[11px] text-zinc-600 mt-1">How far the wash reaches. Higher tints more of the screen and reads as more distracting.</p>
                 </div>
 
+                {/* ── WHERE IT SHOWS ──────────────────────────────────────────
+                    Progressive disclosure, deliberately (Human-Centric UX §2): the
+                    common case is "everywhere", so the common case is a single
+                    click. Fifteen checkboxes on screen by default would be the
+                    flat-wall-of-controls anti-pattern for a setting almost nobody
+                    wants to narrow.
+                    `.sf-radio--card` and `.sf-check` are the sanctioned control
+                    classes from src/styles/surface.css — not new components, and
+                    selected state is carried by a 2px hairline + raised surface
+                    rather than by hue alone. */}
+                <div className="pt-1 pb-3">
+                  <p className="text-sm font-medium text-zinc-300 mb-2">Where it shows</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={ambientPrefs.scope === 'all'}
+                      className="sf-radio--card"
+                      onClick={() => setAmbientPrefsState(setAmbientPrefs({ scope: 'all' }))}
+                    >
+                      <span className="text-[13px] font-medium">Every page</span>
+                      <span className="text-[11px] text-zinc-500">Tint the whole app. One switch, nothing to maintain.</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={ambientPrefs.scope === 'selected'}
+                      className="sf-radio--card"
+                      onClick={() => setAmbientPrefsState(setAmbientPrefs({ scope: 'selected' }))}
+                    >
+                      <span className="text-[13px] font-medium">Only some pages</span>
+                      <span className="text-[11px] text-zinc-500">
+                        Pick the screens below. Pages you leave unticked stay plain.
+                      </span>
+                    </button>
+                  </div>
+
+                  {ambientPrefs.scope === 'selected' && (
+                    <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--ws-border)' }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] text-zinc-500">
+                          {ambientPrefs.pages.length} of {AMBIENT_PAGES.length} pages selected
+                        </p>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setAmbientPrefsState(setAmbientPrefs({ pages: [...ALL_AMBIENT_PAGE_IDS] }))}
+                            className="text-[11px] px-2 py-1 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAmbientPrefsState(setAmbientPrefs({ pages: [] }))}
+                            className="text-[11px] px-2 py-1 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      {/* Empty state, stated rather than left blank: a grid of
+                          unticked boxes reads as "nothing selected", which IS the
+                          meaning here, but the sentence makes it unambiguous. */}
+                      {ambientPrefs.pages.length === 0 && (
+                        <p className="text-[11px] text-zinc-500 mb-2" style={{ color: 'var(--text-muted)' }}>
+                          No pages selected — the wash is currently off everywhere. Tick at least one to see it.
+                        </p>
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {AMBIENT_PAGES.map(p => {
+                          const on = ambientPrefs.pages.includes(p.id);
+                          return (
+                            <label
+                              key={p.id}
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-zinc-800/40"
+                              style={{ minHeight: 32 }}
+                            >
+                              <input
+                                type="checkbox"
+                                className="sf-check"
+                                checked={on}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...ambientPrefs.pages, p.id]
+                                    : ambientPrefs.pages.filter(x => x !== p.id);
+                                  setAmbientPrefsState(setAmbientPrefs({ pages: next }));
+                                }}
+                              />
+                              <span className="text-[12px]" style={{ color: on ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                                {p.label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* The preview renders the EXACT gradient the app paints, in the
+                    current theme, so it cannot drift from reality the way a
+                    hardcoded `#22d3ee` approximation would. */}
                 <div className="pt-2">
-                  <p className="text-[11px] text-zinc-500 mb-2">Preview</p>
+                  <p className="text-[11px] text-zinc-500 mb-2">Preview on {ambientThemeNow === 'light' ? 'light' : 'dark'}</p>
                   <div
-                    className="h-16 rounded-lg border border-zinc-700/50"
-                    style={{ background: ambientGradient(ambientPrefs, '#22d3ee') }}
+                    className="h-16 rounded-lg border"
+                    style={{
+                      borderColor: 'var(--ws-border)',
+                      background: ambientGradient(ambientPrefs, getPageAccent(), ambientThemeNow),
+                    }}
                   />
                 </div>
               </>
@@ -2135,7 +2817,7 @@ export default function SettingsPage({
                         ? mode === 'light' ? 'bg-amber-500/10 border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : mode === 'dark' ? 'bg-violet-500/10 border-violet-500/50 shadow-[0_0_20px_rgba(139,92,246,0.15)]' : 'bg-blue-500/10 border-blue-500/50 shadow-[0_0_20px_rgba(6,182,212,0.15)]'
                         : 'bg-zinc-800/40 light:bg-zinc-100/40 border-zinc-700/40 hover:border-zinc-600/60 hover:bg-zinc-800/60 light:bg-zinc-100'}`}>
                       <div className={`w-16 h-12 rounded-xl border-2 flex items-center justify-center transition-all duration-200 ${isActive
-                        ? mode === 'light' ? 'border-amber-400 bg-white shadow-sm' : mode === 'dark' ? 'border-violet-400 bg-zinc-900 shadow-sm' : 'border-blue-400 bg-gradient-to-br from-white to-zinc-800 shadow-sm'
+                        ? mode === 'light' ? 'border-amber-400 bg-white shadow-sm' : mode === 'dark' ? 'border-violet-400 bg-zinc-900 light:bg-[var(--ws-surface-raised)] shadow-sm' : 'border-blue-400 bg-gradient-to-br from-white to-zinc-800 shadow-sm'
                         : 'border-zinc-600/40 bg-zinc-800'}`}>
                         {mode === 'light' && <div className="w-full h-full rounded-xl bg-gradient-to-br from-amber-50 via-white to-amber-50/50 border border-amber-200/30" />}
                         {mode === 'dark' && <div className="w-full h-full rounded-xl bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900/50 border border-zinc-700/30" />}
@@ -2169,38 +2851,40 @@ export default function SettingsPage({
                   <span className="text-xs text-zinc-500">Highlights, borders, active states</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    { name: 'Cyan', hex: '#06b6d4' },
-                    { name: 'Blue', hex: '#3b82f6' },
-                    { name: 'Indigo', hex: '#6366f1' },
-                    { name: 'Violet', hex: '#8b5cf6' },
-                    { name: 'Pink', hex: '#ec4899' },
-                    { name: 'Amber', hex: '#f59e0b' },
-                    { name: 'Emerald', hex: '#10b981' },
-                    { name: 'Rose', hex: '#f43f5e' },
-                    { name: 'Slate', hex: '#64748b' },
-                  ].map(color => {
-                    const saved = localStorage.getItem('deskflow-accent-color');
-                    const isSelected = saved === color.hex;
+                  {/* Each swatch is a NAME, not a hex: applyAccent resolves it
+                      per theme, because the dark value and the light value are
+                      different colours (the dark set is calibrated as a fill on
+                      #09090b and fails 4.5:1 on cream). The chip previews the
+                      value for the theme currently on screen. */}
+                  {ACCENT_SWATCHES.map(color => {
+                    const chip = isLightMode() ? color.light : color.dark;
+                    const saved = accentColor;
+                    // Compare by NAME. It used to compare against a hex, but
+                    // the stored value is a swatch name now and the hex is
+                    // theme-dependent — a hex comparison can never match in
+                    // one of the two themes (and TypeScript proves it: the dark
+                    // and light literal unions do not overlap).
+                    const isSelected = saved === color.name;
                     return (
-                      <button key={color.hex}
+                      <button key={color.name}
                         onClick={() => {
-                          localStorage.setItem('deskflow-accent-color', color.hex);
+                          setAccent(color.name);
+                          setAccentColor(color.name);
                           setHasChanges(true);
                           onHasChangesChange(true);
                         }}
                         className={`w-9 h-9 rounded-full border-2 transition-all duration-200 hover:scale-110 ${isSelected
                           ? 'border-white/60 ring-2 ring-white/30 shadow-lg scale-110'
                           : 'border-zinc-700/50 hover:border-zinc-500/70'}`}
-                        style={{ backgroundColor: color.hex }}
+                        style={{ backgroundColor: chip }}
                         title={color.name}
                       />
                     );
                   })}
                 </div>
-                {localStorage.getItem('deskflow-accent-color') && (
+                {accentColor && (
                   <button
-                    onClick={() => { localStorage.removeItem('deskflow-accent-color'); setHasChanges(true); onHasChangesChange(true); }}
+                    onClick={() => { setAccent(null); setAccentColor(null); setHasChanges(true); onHasChangesChange(true); }}
                     className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
                   >
                     Reset to default (cyan)
@@ -2278,23 +2962,16 @@ export default function SettingsPage({
                     : 'Pages glide to a stop instead of stopping dead. Scrollbars stay identical either way.'}
                 </p>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={smoothScrollEnabled}
-                aria-label="Smooth scrolling"
+              {/* Was a hand-rolled <button> whose track was filled with
+                  `--page-accent` and whose knob was `bg-white`. On this page that
+                  token is `var(--text-primary)` = `#fafafa` on dark, so ON rendered
+                  white-on-white at 1.04:1. Now the one sanctioned `sf-switch`. */}
+              <SettingsSwitch
+                checked={smoothScrollEnabled}
                 disabled={smoothScrollBlockedByOS}
-                onClick={() => setSmoothScrollEnabled(!smoothScrollEnabled)}
-                className={`relative shrink-0 h-6 w-11 rounded-full transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${
-                  smoothScrollEnabled ? 'bg-[var(--page-accent)]' : 'bg-zinc-700 light:bg-zinc-300'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200 ${
-                    smoothScrollEnabled ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+                label="Smooth scrolling"
+                onChange={(v) => setSmoothScrollEnabled(v)}
+              />
             </div>
           </GlassCard>
 
@@ -2306,7 +2983,7 @@ export default function SettingsPage({
                 <p className="text-xs text-zinc-500">How your current choice looks</p>
               </div>
             </div>
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-white/30 p-5 space-y-3 light:border-zinc-200/40 light:bg-white/50">
+            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] light:bg-white/30 p-5 space-y-3 light:border-zinc-200/40 light:bg-white/50">
               <div className="flex gap-3">
                 <div className="w-10 h-10 rounded-full bg-zinc-700/50 light:bg-zinc-200/50 flex items-center justify-center">
                   <Settings className="w-4 h-4 text-zinc-500" />
@@ -2371,15 +3048,15 @@ export default function SettingsPage({
           {showRunLogs && (aiRun?.prompt || aiRun?.rawOutput) && (
             <div className="space-y-2">
               {aiRun.prompt && (
-                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 light:bg-zinc-100/70 overflow-hidden">
+                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] light:bg-zinc-100/70 overflow-hidden">
                   <div className="px-3 py-1.5 bg-zinc-800/60 light:bg-zinc-100 text-[11px] font-mono text-zinc-400 border-b border-zinc-700/40">INPUT PROMPT → provider</div>
-                  <pre className="px-3 py-2 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{aiRun.prompt}</pre>
+                  <pre className="px-3 py-2 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap break-words max-h-40 overflow-y-auto sf-scroll-gutter">{aiRun.prompt}</pre>
                 </div>
               )}
               {aiRun.rawOutput && (
-                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 light:bg-zinc-100/70 overflow-hidden">
+                <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] light:bg-zinc-100/70 overflow-hidden">
                   <div className="px-3 py-1.5 bg-zinc-800/60 light:bg-zinc-100 text-[11px] font-mono text-zinc-400 border-b border-zinc-700/40">RAW OUTPUT ← provider</div>
-                  <pre className="px-3 py-2 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{aiRun.rawOutput}</pre>
+                  <pre className="px-3 py-2 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap break-words max-h-40 overflow-y-auto sf-scroll-gutter">{aiRun.rawOutput}</pre>
                 </div>
               )}
             </div>
@@ -2445,7 +3122,7 @@ export default function SettingsPage({
                 </div>
 
                 {refactorPhase === 'analyzing' && (
-                  <div className="space-y-2 px-3 py-3 bg-zinc-900/60 light:bg-white/40 rounded-lg border border-zinc-800">
+                  <div className="space-y-2 px-3 py-3 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-white/40 rounded-lg border border-zinc-800">
                     <div className="h-3 bg-zinc-800 rounded animate-pulse w-2/3" />
                     <div className="h-3 bg-zinc-800 rounded animate-pulse w-1/2" />
                     <div className="h-3 bg-zinc-800 rounded animate-pulse w-3/4" />
@@ -2488,9 +3165,9 @@ export default function SettingsPage({
                         </div>
                       )}
 
-                      <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-800 divide-y divide-zinc-800/80">
+                      <div className="max-h-40 overflow-y-auto sf-scroll-gutter rounded-lg border border-zinc-800 divide-y divide-zinc-800/80">
                         {refactorPreview.mismatches.map((m) => (
-                          <div key={`${m.kind}-${m.key}`} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-zinc-900/50 light:bg-white/50">
+                          <div key={`${m.kind}-${m.key}`} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] light:bg-white/50">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="text-xs text-zinc-300 truncate">{m.key}</span>
                               <span className="text-[11px] text-zinc-500 shrink-0">{m.kind === 'domain' ? 'website' : 'app'}</span>
@@ -2611,7 +3288,7 @@ export default function SettingsPage({
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }}
                   placeholder="New category name..."
-                  className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                  className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500"
                 />
               <button
                 onClick={handleAddCategory}
@@ -2830,7 +3507,7 @@ export default function SettingsPage({
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
+                  className="mt-4 p-4 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] light:bg-white/60 rounded-xl border border-zinc-700/50"
                 >
                   <div className="grid grid-cols-3 gap-2">
                     {(['productive', 'neutral', 'distracting'] as const).map(tier => {
@@ -2845,6 +3522,12 @@ export default function SettingsPage({
                             setLocalExternalTiers(updated);
                             localStorage.setItem('deskflow-external-activity-tiers', JSON.stringify(updated));
                             onExternalActivityTiersChange?.(updated);
+                            /* This one DID already raise a transient "Saved" popup — the only
+                             * write-through setting that did. It still skipped the persistent
+                             * bar, so the confirmation vanished after 2.5s and left no record
+                             * that anything had changed. The two now agree: the popup for the
+                             * immediate acknowledgement, the bar for the standing state. */
+                            setHasChanges(true);
                             setSavedNotice(true);
                             clearSavedNoticeTimer();
                             savedNoticeTimerRef.current = setTimeout(() => setSavedNotice(false), 2500);
@@ -2916,7 +3599,7 @@ export default function SettingsPage({
                       </div>
                     )}
 
-                    <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 max-h-[45vh]">
+                    <div className="flex-1 overflow-y-auto sf-scroll-gutter px-5 py-3 space-y-2 max-h-[45vh]">
                       {pendingChanges.length === 0 ? (
                         <div className="flex flex-col items-center gap-2 py-10 text-center">
                           <Check className="w-6 h-6 text-emerald-400" />
@@ -2981,7 +3664,7 @@ export default function SettingsPage({
                       })}
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-zinc-800 bg-zinc-900/50 light:bg-white/50">
+                    <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] light:bg-white/50">
                       {pendingChanges.length > 0 ? (
                         <>
                           <button
@@ -3057,7 +3740,7 @@ export default function SettingsPage({
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                    <div className="space-y-2 max-h-64 overflow-y-auto sf-scroll-gutter">
                       {changeHistory.slice().reverse().map((change) => {
                         const catColor = getCategoryColor(change.newCategory);
                         const prevColor = getCategoryColor(change.previousCategory);
@@ -3179,7 +3862,7 @@ export default function SettingsPage({
                         placeholder="Search apps..."
                         value={appSearchFilter}
                         onChange={(e) => { setAppSearchFilter(e.target.value); setAppCarouselIndex(0); }}
-                        className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 w-36"
+                        className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 w-36"
                       />
                   </div>
                 )}
@@ -3330,7 +4013,7 @@ export default function SettingsPage({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
+                className="mt-4 p-4 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] light:bg-white/60 rounded-xl border border-zinc-700/50"
               >
                 {lockedApps[editingAppCategory] ? (
                   <div className="flex flex-col items-center gap-2 py-4">
@@ -3355,10 +4038,10 @@ export default function SettingsPage({
                         placeholder="Search categories..."
                         value={appSearchQuery}
                         onChange={(e) => setAppSearchQuery(e.target.value)}
-                        className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none"
+                        className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500"
                       />
                     </div>
-                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto sf-scroll-gutter">
                       {allCategories.filter(cat => cat.toLowerCase().includes(appSearchQuery.toLowerCase())).map((cat) => {
                         const catColor = getCategoryColor(cat);
                         const appData = appStats.find((a: any) => a.app === editingAppCategory);
@@ -3480,7 +4163,7 @@ export default function SettingsPage({
                       placeholder="Search sites..."
                       value={domainSearchFilter}
                       onChange={(e) => { setDomainSearchFilter(e.target.value); setDomainCarouselIndex(0); }}
-                      className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 w-36"
+                      className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 w-36"
                     />
                   </div>
                 )}
@@ -3626,7 +4309,7 @@ export default function SettingsPage({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
+                className="mt-4 p-4 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] light:bg-white/60 rounded-xl border border-zinc-700/50"
               >
                 {lockedDomains[editingDomainCategory] ? (
                   <div className="flex flex-col items-center gap-2 py-4">
@@ -3651,10 +4334,10 @@ export default function SettingsPage({
                         placeholder="Search categories..."
                         value={domainSearchQuery}
                         onChange={(e) => setDomainSearchQuery(e.target.value)}
-                        className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none"
+                        className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500"
                       />
                     </div>
-                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto sf-scroll-gutter">
                       {allCategories.filter(cat => cat.toLowerCase().includes(domainSearchQuery.toLowerCase())).map((cat) => {
                         const catColor = getCategoryColor(cat);
                         const siteData = domainStats.find((s: any) => s.domain === editingDomainCategory);
@@ -3776,7 +4459,7 @@ export default function SettingsPage({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50"
+                className="mt-4 p-4 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] light:bg-white/60 rounded-xl border border-zinc-700/50"
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold">
@@ -3801,7 +4484,7 @@ export default function SettingsPage({
                     <select
                       value={newKeywordDomain}
                       onChange={(e) => setNewKeywordDomain(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
                     >
                       <option value="">Choose a website...</option>
                       {domainStats
@@ -3833,7 +4516,7 @@ export default function SettingsPage({
                                 setEditingKeywordSets(updated);
                               }
                             }}
-                            className="px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-white"
+                            className="px-2 py-1 bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-white"
                           >
                             {allCategories.map(cat => (
                               <option key={cat} value={cat}>{cat}</option>
@@ -3882,7 +4565,7 @@ export default function SettingsPage({
                             <span className="text-xs text-zinc-500 italic">No keywords - will always use this category</span>
                           )}
                           {/* Hide Numbers Toggle */}
-                          <GlassCard className="mt-4 p-4 bg-zinc-900/80 light:bg-white/60 rounded-xl border border-zinc-700/50">
+                          <GlassCard className="mt-4 p-4 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] light:bg-white/60 rounded-xl border border-zinc-700/50">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <Eye className="w-5 h-5 text-emerald-400" />
@@ -3893,7 +4576,7 @@ export default function SettingsPage({
                               </div>
                               <button
                                 onClick={() => setShowNumbers(!showNumbers)}
-                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950 ${showNumbers ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-300'}`}
+                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg ${showNumbers ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-300'}`}
                                 aria-pressed={showNumbers}
                                 aria-label="Toggle hide numbers"
                               >
@@ -3930,7 +4613,7 @@ export default function SettingsPage({
                               }
                             }}
                             placeholder={`Add keyword for ${set.category}...`}
-                            className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white placeholder-zinc-500"
+                            className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500"
                           />
                         </div>
                       </div>
@@ -3962,7 +4645,7 @@ export default function SettingsPage({
                   <select
                     value={tempCategoryForNewSet}
                     onChange={(e) => setTempCategoryForNewSet(e.target.value)}
-                    className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-white"
+                    className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-white"
                   >
                     {allCategories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -4056,33 +4739,6 @@ export default function SettingsPage({
               <h2 className="text-lg font-semibold mb-3">App Tracker Behavior</h2>
 
               <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-zinc-400 mb-2 block">App Tracker Window Mode</label>
-                  <div className="flex gap-2">
-                    {(['show-other', 'pause', 'track'] as const).map(mode => (
-                      <button
-                        key={mode}
-                        onClick={() => {
-                          setTrackerAppMode(mode);
-                          setTrackerAppModeProp(mode);
-                          setHasChanges(true);
-                          onHasChangesChange(true);
-                        }}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition flex-1 ${trackerAppMode === mode
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
-                          }`}
-                      >
-                        {mode === 'show-other' ? 'Show Other Apps' : mode === 'pause' ? 'Pause Timer' : 'Track as Normal'}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-2 space-y-1 text-xs text-zinc-500">
-                    <p><span className="text-emerald-400">Show Other Apps:</span> When you open the tracker, it keeps showing the last app you were using. The tracker app itself is not tracked.</p>
-                    <p><span className="text-amber-400">Pause Timer:</span> The stopwatch pauses when you're using the tracker app (but previous time is preserved). Useful when reviewing stats.</p>
-                    <p><span className="text-blue-400">Track as Normal:</span> The tracker app is tracked like any other app. Timer counts based on its category.</p>
-                  </div>
-                </div>
 
                 <div>
                   <label className="text-sm font-medium text-zinc-400 mb-2 block">Idle Threshold</label>
@@ -4386,12 +5042,404 @@ export default function SettingsPage({
 
       {activeTab === 'tracking' && (
         <div data-section="settings.tracking" className="space-y-4">
+          <ReminderLeadTimeSettings />
+
+          {/* ── AFK behaviour ────────────────────────────────────────────────
+              Three unrelated idle thresholds used to exist (5 min in the stopwatch
+              store, 5 min of never-persisted state in App.tsx, a dead 10 min
+              constant in main.ts, and a bare inline `300` in the sleep-gap
+              guard). None were in Settings and none agreed. One now. */}
+          <SearchableSection terms={['afk', 'idle', 'away', 'threshold', 'streak', 'stopwatch', 'reset', 'minutes', 'inactive']} search={settingsSearch}>
+          <GlassCard>
+            <SectionHeader title="AFK Behaviour" icon={<Clock className="w-5 h-5" />} />
+
+            {/* One-line summary of what is actually in force right now, so the
+                state is readable without interpreting the controls below. */}
+            <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded-lg border mb-4 text-[12px] ${
+              afkPrefs.enabled
+                ? 'bg-emerald-500/[0.07] border-emerald-500/25 text-[var(--text-muted)]'
+                : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-400'
+            }`}>
+              <Clock size={13} className="shrink-0 mt-0.5" />
+              <span className="leading-relaxed">
+                {afkPrefs.enabled ? (
+                  <>Away for <strong className="font-semibold">{afkPrefs.thresholdMinutes}m</strong> → {afkActionLabel(afkPrefs.action)}</>
+                ) : (
+                  <>AFK detection is <strong className="font-semibold">off</strong> — the timer keeps counting while you are away.</>
+                )}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between py-2 border-t border-zinc-800/40">
+              <div className="pr-4">
+                <label className="text-sm font-medium text-zinc-300">Detect AFK</label>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Uses system idle time, so reading or watching still counts as present</p>
+              </div>
+              <button
+                onClick={() => setAfkPrefsState(setAfkPrefs({ enabled: !afkPrefs.enabled }))}
+                aria-pressed={afkPrefs.enabled}
+                aria-label="Detect AFK"
+                className={`relative w-11 h-6 shrink-0 rounded-full transition-colors duration-200 ${afkPrefs.enabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${afkPrefs.enabled ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+
+            {afkPrefs.enabled && (
+              <>
+                {/* Threshold: presets for the common choices, slider underneath so
+                    7 or 13 minutes is reachable without the slider being the only
+                    control (which reads as a fine-tune afterthought). */}
+                <div className="py-4 border-t border-zinc-800/40">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <label className="text-sm font-medium text-zinc-300">Treat as AFK after</label>
+                    <span className="text-xs font-mono text-zinc-400">{afkPrefs.thresholdMinutes} min</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {AFK_PRESETS.map((m) => {
+                      const on = afkPrefs.thresholdMinutes === m;
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => setAfkPrefsState(setAfkPrefs({ thresholdMinutes: m }))}
+                          aria-pressed={on}
+                          className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors duration-150 ${
+                            on
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-zinc-800/40 border border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                          }`}
+                        >
+                          {m}m
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="range" min={AFK_MIN_MINUTES} max={AFK_MAX_MINUTES} step={1}
+                    value={afkPrefs.thresholdMinutes}
+                    onChange={(e) => setAfkPrefsState(setAfkPrefs({ thresholdMinutes: Number(e.target.value) }))}
+                    className="w-full mt-3"
+                    aria-label="AFK threshold in minutes"
+                  />
+                  <div className="flex justify-between text-[10px] text-zinc-600 font-mono">
+                    <span>{AFK_MIN_MINUTES}m</span><span>{AFK_MAX_MINUTES}m</span>
+                  </div>
+                </div>
+
+                {/* Action: a radio group, not four cards. Only one can ever be
+                    true, and the summary line at the top already spells the
+                    consequence out in words. */}
+                <div className="py-4 border-t border-zinc-800/40">
+                  <label className="text-sm font-medium text-zinc-300 mb-2 block">When AFK is detected</label>
+                  <div className="space-y-0.5">
+                    {AFK_ACTIONS.map((a) => {
+                      const on = afkPrefs.action === a.value;
+                      return (
+                        <button
+                          key={a.value}
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => setAfkPrefsState(setAfkPrefs({ action: a.value }))}
+                          className={`w-full flex items-start gap-3 px-2.5 py-2 rounded-md text-left transition-colors duration-150 ${
+                            on ? 'bg-emerald-500/[0.08]' : 'hover:bg-zinc-800/40'
+                          }`}
+                        >
+                          <span className={`mt-0.5 w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors duration-150 ${
+                            on ? 'border-emerald-400' : 'border-zinc-600'
+                          }`}>
+                            {on && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className={`block text-[13px] ${on ? 'text-zinc-100 font-medium' : 'text-zinc-300'}`}>{a.label}</span>
+                            <span className="block text-[11px] text-zinc-500 mt-0.5">{a.hint}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ── Prompt thresholds ──────────────────────────────────────
+                    These were hardcoded inside App.tsx, so the prompt had
+                    behaviour nobody could see or change: a fixed 60s floor, a
+                    fixed 15-minute "I wasn't AFK" default, and a fixed
+                    Entertainment+Gaming exemption. */}
+                <div className="py-4 border-t border-zinc-800/40 space-y-4">
+                  <div>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <label className="text-sm font-medium text-zinc-300">Must stay away for</label>
+                      <span className="text-xs font-mono text-zinc-400">{afkPrefs.holdSeconds}s</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[0, 30, 60, 90, 180].map((sec) => {
+                        const on = afkPrefs.holdSeconds === sec;
+                        return (
+                          <button
+                            key={sec}
+                            onClick={() => setAfkPrefsState(setAfkPrefs({ holdSeconds: sec }))}
+                            aria-pressed={on}
+                            className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors duration-150 ${
+                              on
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-zinc-800/40 border border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                            }`}
+                          >
+                            {sec === 0 ? 'instantly' : `${sec}s`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-zinc-600 mt-1.5">Touch the mouse at any point and this resets — nothing is decided from a single sample.</p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <label className="text-sm font-medium text-zinc-300">Ask about absences over</label>
+                      <span className="text-xs font-mono text-zinc-400">
+                        {afkPrefs.minPromptSeconds === 0 ? 'any' : `${afkPrefs.minPromptSeconds}s`}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[0, 30, 60, 120, 300].map((sec) => {
+                        const on = afkPrefs.minPromptSeconds === sec;
+                        return (
+                          <button
+                            key={sec}
+                            onClick={() => setAfkPrefsState(setAfkPrefs({ minPromptSeconds: sec }))}
+                            aria-pressed={on}
+                            className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors duration-150 ${
+                              on
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-zinc-800/40 border border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                            }`}
+                          >
+                            {sec === 0 ? 'any' : sec < 60 ? `${sec}s` : `${sec / 60}m`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-zinc-600 mt-1.5">Shorter absences are discarded without asking. 0 means ask about everything.</p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <label className="text-sm font-medium text-zinc-300">Pre-select &quot;I wasn&apos;t AFK&quot; up to</label>
+                      <span className="text-xs font-mono text-zinc-400">{afkPrefs.notAfkBelowMinutes} min</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={AFK_MIN_NOT_AFK_MINUTES}
+                      max={AFK_MAX_NOT_AFK_MINUTES}
+                      step={1}
+                      value={afkPrefs.notAfkBelowMinutes}
+                      onChange={(e) => setAfkPrefsState(setAfkPrefs({ notAfkBelowMinutes: Number(e.target.value) }))}
+                      className="w-full"
+                      aria-label="Minutes below which I was not AFK is pre-selected"
+                    />
+                    <p className="text-[10px] text-zinc-600 mt-1">Short absences are usually a bathroom or kitchen trip, so the answer arrives pre-picked. You still confirm it.</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-zinc-300 block mb-1.5">Never treat as AFK</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ALL_CATEGORIES.map((cat) => {
+                        const on = afkPrefs.passiveCategories.includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            onClick={() =>
+                              setAfkPrefsState(
+                                setAfkPrefs({
+                                  passiveCategories: on
+                                    ? afkPrefs.passiveCategories.filter((c) => c !== cat)
+                                    : [...afkPrefs.passiveCategories, cat],
+                                }),
+                              )
+                            }
+                            aria-pressed={on}
+                            className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors duration-150 ${
+                              on
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-zinc-800/40 border border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-zinc-600 mt-1.5">
+                      While the focused app is one of these, idle time is what you meant, so AFK is never raised. Watching something used to be hardcoded here.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </GlassCard>
+          </SearchableSection>
+
+          {/* ── Sleep window ───────────────────────────────────────────────
+              The other half of the AFK decision. A gap that overlaps these
+              hours is sleep; anything else is AFK and gets the AFK prompt.
+              Before this existed the boundary was hardcoded to 21:00 → 10:59
+              inside main.ts and could not be changed from anywhere, and it
+              tested each gap's ENDPOINTS rather than its overlap — so a 10:15am
+              coffee break qualified (because `h <= 10` swallowed the whole 10
+              o'clock hour) while a genuine 20:00 → 22:00 pre-bed gap with only
+              30 minutes of overlap did not.
+
+              Same primitives as the AFK section above on purpose: same emerald
+              signal hue, same pill toggle, same preset-chip treatment, same
+              hairline dividers. This is a sibling subsection, not a new surface,
+              so it must not invent its own visual language. */}
+          <SearchableSection group="sleep-window" terms={['sleep', 'bedtime', 'night', 'bed', 'wake', 'overnight', 'hours', 'window', 'afk']} search={settingsSearch}>
+          <GlassCard>
+            <SectionHeader title="Sleep Window" icon={<Moon className="w-5 h-5" />} />
+
+            {/* State readable without interpreting the controls — the same
+                one-line-summary contract the AFK section sets. */}
+            <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded-lg border mb-4 text-[12px] ${
+              sleepWindow.enabled
+                ? 'bg-emerald-500/[0.07] border-emerald-500/25 text-[var(--text-muted)]'
+                : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-400'
+            }`}>
+              <Moon size={13} className="shrink-0 mt-0.5" />
+              <span className="leading-relaxed">
+                {sleepWindow.enabled ? (
+                  <>Away between <strong className="font-semibold">{describeSleepWindow(sleepWindow.startHour, sleepWindow.endHour)}</strong> counts as sleep, not AFK.</>
+                ) : (
+                  <>Sleep detection is <strong className="font-semibold">off</strong> — every absence is treated as AFK.</>
+                )}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between py-2 border-t border-zinc-800/40">
+              <div className="pr-4">
+                <label className="text-sm font-medium text-zinc-300">Detect sleep</label>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Outside these hours you get the AFK prompt instead</p>
+              </div>
+              <button
+                onClick={() => setSleepWindowState(setSleepWindow({ enabled: !sleepWindow.enabled }))}
+                aria-pressed={sleepWindow.enabled}
+                aria-label="Detect sleep"
+                className={`relative w-11 h-6 shrink-0 rounded-full transition-colors duration-200 ${sleepWindow.enabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${sleepWindow.enabled ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+
+            {sleepWindow.enabled && (
+              <>
+                {/* Presets for the windows people actually keep, with the exact
+                    hour inputs underneath so an unusual schedule is still one
+                    keystroke away. Mirrors the AFK threshold control's shape. */}
+                <div className="py-4 border-t border-zinc-800/40">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <label className="text-sm font-medium text-zinc-300">Your usual hours</label>
+                    <span className="text-xs font-mono text-zinc-400">{describeSleepWindow(sleepWindow.startHour, sleepWindow.endHour)}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {COMMON_SLEEP_WINDOWS.map((w) => {
+                      const on = sleepWindow.startHour === w.startHour && sleepWindow.endHour === w.endHour;
+                      return (
+                        <button
+                          key={w.label}
+                          onClick={() => setSleepWindowState(setSleepWindow({ startHour: w.startHour, endHour: w.endHour }))}
+                          aria-pressed={on}
+                          className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors duration-150 ${
+                            on
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-zinc-800/40 border border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                          }`}
+                        >
+                          {w.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="text-[11px] text-zinc-500 block mb-1">Sleep starts</label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={sleepWindow.startHour}
+                          onChange={(e) => setSleepWindowState(setSleepWindow({ startHour: Number(e.target.value) }))}
+                          aria-label="Hour sleep starts"
+                          className="w-16 px-2 py-1 text-sm bg-zinc-800/60 border border-zinc-700 rounded-lg text-white text-right font-mono"
+                        />
+                        <span className="text-[11px] text-zinc-500">0–23</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-zinc-500 block mb-1">Sleep ends</label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={sleepWindow.endHour}
+                          onChange={(e) => setSleepWindowState(setSleepWindow({ endHour: Number(e.target.value) }))}
+                          aria-label="Hour sleep ends"
+                          className="w-16 px-2 py-1 text-sm bg-zinc-800/60 border border-zinc-700 rounded-lg text-white text-right font-mono"
+                        />
+                        <span className="text-[11px] text-zinc-500">0–23</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">
+                    An absence has to sit inside these hours for at least {MIN_SLEEP_OVERLAP_MINUTES} minutes before you get asked about sleep.
+                    {sleepWindow.endHour <= sleepWindow.startHour ? ' Your window runs overnight, past midnight.' : ' Your window is within the same day.'}
+                  </p>
+                </div>
+              </>
+            )}
+          </GlassCard>
+          </SearchableSection>
+
           <SearchableSection terms={['tracking', 'transient', 'background', 'recording', 'game', 'detection', 'browser', 'profiles', 'sleep', 'gap', 'max session']} search={settingsSearch}>
           <GlassCard className="space-y-6">
             <div>
               <h2 className="text-lg font-semibold mb-1">Tracking Settings</h2>
               <p className="text-xs text-zinc-500">Configure how app usage is tracked</p>
             </div>
+
+                              <div>
+                                <label className="text-sm font-medium text-zinc-400 mb-2 block">App Tracker Window Mode</label>
+                                <div className="flex gap-2">
+                                  {(['show-other', 'pause', 'track'] as const).map(mode => (
+                                    <button
+                                      key={mode}
+                                      onClick={() => {
+                                        setTrackerAppMode(mode);
+                                        setTrackerAppModeProp(mode);
+                                        // Persist immediately. The main-process poll reads this
+                                        // preference every tick, so waiting for the OK button
+                                        // meant the setting appeared to do nothing.
+                                        window.deskflowAPI?.setPreference?.('trackerAppMode', mode)
+                                          .catch((e: any) => console.warn('[Settings] trackerAppMode persist failed:', e?.message || e));
+                                        setHasChanges(true);
+                                        onHasChangesChange(true);
+                                      }}
+                                      className={`px-3 py-2 rounded-lg text-sm font-medium transition flex-1 ${trackerAppMode === mode
+                                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                        : 'bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 text-zinc-400 hover:text-white'
+                                        }`}
+                                    >
+                                      {mode === 'show-other' ? 'Show Other Apps' : mode === 'pause' ? 'Pause Timer' : 'Track as Normal'}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="mt-2 space-y-1 text-xs text-zinc-500">
+                                  <p><span className="text-emerald-400">Show Other Apps:</span> When you open the tracker, it keeps showing the last app you were using. The tracker app itself is not tracked.</p>
+                                  <p><span className="text-amber-400">Pause Timer:</span> The stopwatch pauses when you're using the tracker app (but previous time is preserved). Useful when reviewing stats.</p>
+                                  <p><span className="text-blue-400">Track as Normal:</span> The tracker app is tracked like any other app. Timer counts based on its category.</p>
+                                </div>
+                              </div>
 
             <div className="flex items-center justify-between py-2">
               <div>
@@ -4476,6 +5524,13 @@ export default function SettingsPage({
                 reflects reality back. "Connected" is a 60s heartbeat, never a
                 permanent flag, and a browser with no extension is shown quietly
                 because its absence is not an error. */}
+            {/* Guided setup: get the folder -> load it in the browser -> confirm it
+                connected. Sits above the live mirror because a first-time user needs
+                instructions, and only needs the status list once something reports. */}
+            <div className="pt-4 border-t border-zinc-700/50">
+              <ExtensionSetupPanel onStatusChange={refreshExtStatus} />
+            </div>
+
             <div className="pt-4 border-t border-zinc-700/50 space-y-3" data-section="settings.tracking.browsers">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -4680,7 +5735,7 @@ export default function SettingsPage({
                     type="number"
                     value={trackingPollInterval}
                     onChange={(e) => setTrackingPollInterval(parseInt(e.target.value) || 1000)}
-                    className="w-24 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded text-white text-right font-mono"
+                    className="w-24 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-lg text-white text-right font-mono"
                   />
                   <span className="text-xs text-zinc-500">ms</span>
                 </div>
@@ -4710,7 +5765,7 @@ export default function SettingsPage({
                     type="number"
                     value={sleepGapMs}
                     onChange={(e) => setSleepGapMs(parseInt(e.target.value) || 10000)}
-                    className="w-24 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded text-white text-right font-mono"
+                    className="w-24 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-lg text-white text-right font-mono"
                   />
                   <span className="text-xs text-zinc-500">ms</span>
                 </div>
@@ -4739,7 +5794,7 @@ export default function SettingsPage({
                     type="number"
                     value={maxSessionMs}
                     onChange={(e) => setMaxSessionMs(parseInt(e.target.value) || 300000)}
-                    className="w-24 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded text-white text-right font-mono"
+                    className="w-24 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-lg text-white text-right font-mono"
                   />
                   <span className="text-xs text-zinc-500">ms</span>
                 </div>
@@ -4785,6 +5840,7 @@ export default function SettingsPage({
                       onClick={() => {
                         setPromptHistoryLimit(n);
                         window.deskflowAPI?.setPreference?.('promptHistoryLimit', n);
+                        setHasChanges(true);
                       }}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${promptHistoryLimit === n
                         ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
@@ -4807,8 +5863,14 @@ export default function SettingsPage({
                     const v = Math.max(1, parseInt(e.target.value) || 5);
                     setPromptHistoryLimit(v);
                     window.deskflowAPI?.setPreference?.('promptHistoryLimit', v);
+                    /* The numeric input is the SAME setting as the preset buttons above, so it
+                     * reports the same way. Typing raises the bar on every keystroke, which is
+                     * correct: `setHasChanges(true)` is idempotent, so it does not re-render
+                     * beyond the first, and the bar is a standing state rather than a toast —
+                     * it should be present the whole time the value differs. */
+                    setHasChanges(true);
                   }}
-                  className="w-20 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded text-white text-right font-mono"
+                  className="w-20 px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-lg text-white text-right font-mono"
                 />
               </div>
             </div>
@@ -4832,7 +5894,7 @@ export default function SettingsPage({
                 <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
                 View default prompt
               </summary>
-              <div className="mt-2 bg-zinc-900/80 light:bg-white/60 rounded-lg border border-zinc-700/50 p-3 max-h-48 overflow-y-auto">
+              <div className="mt-2 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] light:bg-white/60 rounded-lg border border-zinc-700/50 p-3 max-h-48 overflow-y-auto sf-scroll-gutter">
                 <pre className="text-[11px] text-zinc-400 font-mono whitespace-pre-wrap">{DEFAULT_SYSTEM_PROMPT}</pre>
               </div>
             </details>
@@ -4852,7 +5914,7 @@ export default function SettingsPage({
               onBlur={() => handleSaveSystemPrompt('generalAdditions', systemPrompts.generalAdditions || '')}
               placeholder={'App-wide instructions appended after the default, before agent/project layers...'}
               rows={4}
-              className="mt-2 w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-colors duration-150"
+              className="mt-2 w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-600 transition-colors duration-150"
             />
           </GlassCard>
           </SearchableSection>
@@ -4884,7 +5946,7 @@ export default function SettingsPage({
                       onBlur={() => handleSaveSystemPrompt(agent, systemPrompts[agent] || '')}
                       placeholder={`Instructions applied only to ${agent} sessions...`}
                       rows={4}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-colors duration-150"
+                      className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-600 transition-colors duration-150"
                     />
                   </div>
                 );
@@ -4904,7 +5966,7 @@ export default function SettingsPage({
               <select
                 value={promptProjectId}
                 onChange={(e) => setPromptProjectId(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300"
               >
                 {promptProjects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
@@ -4916,7 +5978,7 @@ export default function SettingsPage({
                 onBlur={() => handleSaveSystemPrompt(projectKey(promptProjectId), systemPrompts[projectKey(promptProjectId)] || '')}
                 placeholder={'Instructions applied only to this project...'}
                 rows={4}
-                className="mt-2 w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-colors duration-150"
+                className="mt-2 w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-600 transition-colors duration-150"
               />
             </div>
           </GlassCard>
@@ -4942,7 +6004,7 @@ export default function SettingsPage({
                         onChange={(e) => setResumeCommands(prev => ({ ...prev, [agent]: e.target.value }))}
                         onBlur={() => handleSaveResumeCommand(agent, resumeCommands[agent] || DEFAULT_RESUME_COMMANDS[agent] || '{agent} -s {resumeId}')}
                         placeholder="{agent} -s {resumeId}"
-                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-300 font-mono placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-colors duration-150"
+                        className="flex-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-300 font-mono placeholder-zinc-600 transition-colors duration-150"
                       />
                       <button
                         onClick={() => handleSaveResumeCommand(agent, resumeCommands[agent] || DEFAULT_RESUME_COMMANDS[agent] || '{agent} -s {resumeId}')}
@@ -5096,7 +6158,7 @@ export default function SettingsPage({
             <p className="text-xs text-zinc-500 mb-3">Individual colors</p>
 
             {/* Apps/Websites Toggle */}
-            <div className="flex gap-1 bg-zinc-900/50 light:bg-white/50 p-1 rounded-xl mb-4 w-fit">
+            <div className="flex gap-1 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] light:bg-white/50 p-1 rounded-xl mb-4 w-fit">
               <button
                 onClick={() => setColorTab('apps')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 ${colorTab === 'apps'
@@ -5125,7 +6187,7 @@ export default function SettingsPage({
                 placeholder={`Search ${colorTab}...`}
                 value={colorSearchFilter}
                 onChange={(e) => setColorSearchFilter(e.target.value)}
-                className="w-full sm:w-64 pl-8 pr-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                className="w-full sm:w-64 pl-8 pr-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500"
               />
             </div>
 
@@ -5191,7 +6253,7 @@ export default function SettingsPage({
           <GlassCard className="space-y-4">
             <div>
               <h2 className="text-lg font-semibold mb-1">Voice & Speech</h2>
-              <p className="text-xs text-zinc-500">Dictation engine order: Cloud API → Windows speech → Browser speech</p>
+              <p className="text-xs text-zinc-500">Dictation runs on-device with faster-whisper — your audio never leaves this machine. A cloud key is optional and only used if on-device is unavailable.</p>
             </div>
 
             <div>
@@ -5208,7 +6270,7 @@ export default function SettingsPage({
                       window.deskflowAPI.setPreference('sttApiKey', v.trim());
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono pr-10"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 font-mono pr-10"
                 />
                 <button
                   type="button"
@@ -5236,7 +6298,7 @@ export default function SettingsPage({
                       window.deskflowAPI.setPreference('sttModel', v.trim() || 'whisper-large-v3-turbo');
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 font-mono"
                 />
               </div>
               <div>
@@ -5252,9 +6314,33 @@ export default function SettingsPage({
                       window.deskflowAPI.setPreference('sttBaseUrl', v.trim());
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 font-mono"
                 />
               </div>
+            </div>
+
+            {/* Floating dictation panel — the reachable entry point */}
+            <div className="rounded-lg border border-zinc-700/40 p-3 space-y-2">
+              <p className="text-xs text-zinc-400 font-medium">Floating dictation panel</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={toggleSttPanel}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-zinc-700/60 bg-zinc-800/50 hover:bg-zinc-800 light:bg-zinc-100/60 light:border-zinc-300/60 light:hover:bg-zinc-200/60 text-zinc-100 light:text-zinc-900 transition-colors"
+                >
+                  <Mic className="w-4 h-4" />
+                  {islandOpen ? 'Close Halo Island' : 'Open Halo Island'}
+                </button>
+                <span className="text-xs text-zinc-500">
+                  {islandError
+                    ? islandError
+                    : 'A separate window that stays above your other apps. Press Start, speak, then press Stop — it saves the transcript to your library and copies it to your clipboard.'}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500">
+                <span className="text-zinc-400">Ctrl+Shift+V</span> shows this panel when it is
+                hidden and hides it again when it is already open.
+              </p>
             </div>
 
             <div className="rounded-lg bg-zinc-800/40 light:bg-zinc-100/40 border border-zinc-700/40 p-3 space-y-1.5">
@@ -5265,6 +6351,993 @@ export default function SettingsPage({
             </div>
           </GlassCard>
           </SearchableSection>
+        </div>
+      )}
+
+      {/* HALO ISLAND — enable/disable, layout, size, shape and widgets.
+          *
+          * ── THIS BLOCK WAS RENDERING ON EVERY SETTINGS TAB ─────────────────────────────────
+          * It sat at the top level of the page's JSX, outside every
+          * `activeTab === '…'` conditional, so React mounted it unconditionally —
+          * appended below whatever tab you were on. Finance, Devices, Database,
+          * Auth and Keyboard Shortcuts therefore all ended in a Halo Island
+          * panel, and because it was the LAST `data-section` in the DOM it is
+          * also what a scroll-to-section lands on when the requested tab has not
+          * painted yet.
+          *
+          * It belongs to APPEARANCE: the island is window chrome — an
+          * always-on-top surface the user chooses the look of — and Appearance
+          * already owns theme, fonts and the ambient wash. Finance/Devices/
+          * Database/Auth/Shortcuts are data and account domains; a floating
+          * top-of-screen widget is not part of any of them.
+          *
+          * It keeps its own `data-section` so ⌘K and the tour have a real anchor. */}
+      {activeTab === 'appearance' && (
+        <div data-section="settings.halo" className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-200">Halo Island</h3>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              The always-on-top strip at the top of the screen showing tracked time and dictation.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <div className="text-[12px] text-zinc-300">Show Halo Island</div>
+              <div className="text-[11px] text-zinc-500">
+                Also opens on hover. The global shortcut is editable under Keyboard.
+              </div>
+            </div>
+            {/* Track was `var(--page-accent)` (= `--text-primary` = `#fafafa` on dark) with a
+                `bg-zinc-100` knob: white-on-white at 1.04:1. Delegated to `sf-switch`. */}
+            <SettingsSwitch
+              checked={haloPrefs.enabled}
+              label="Show Halo Island"
+              onChange={(v) => {
+                void saveHaloPrefs({ enabled: v });
+              }}
+            />
+          </div>
+
+          {/* DUAL-BOOT: which of the two shipped layouts the island renders.
+           *
+           * Both are complete and independently functional — 'legacy' is the top rail with two
+           * tabs, 'figma' is board `2 / Pages` with four pages and a bottom rail. The pin is in
+           * BOTH. This exists so a new, unverified design never ships without an escape hatch,
+           * and so a revert is one click rather than a re-implementation. */}
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-[12px] text-zinc-300">Layout</span>
+              <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+                {haloPrefs.uiVersion === 'figma' ? '4 pages' : '2 tabs'}
+              </span>
+            </div>
+            <div role="radiogroup" aria-label="Halo layout" className="grid grid-cols-2 gap-1">
+              {(['figma', 'legacy'] as HaloUiVersion[]).map((key) => {
+                const active = haloPrefs.uiVersion === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={!haloPrefs.enabled}
+                    onClick={() => void saveHaloPrefs({ uiVersion: key })}
+                    className={[
+                      'rounded-md border px-2 py-1.5 text-[11px] transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70',
+                      active
+                        ? 'border-emerald-500/60 bg-emerald-500/10 text-zinc-100'
+                        : 'border-zinc-800 text-zinc-400 hover:bg-zinc-800/60',
+                      !haloPrefs.enabled ? 'opacity-50 cursor-not-allowed' : '',
+                    ].join(' ')}
+                  >
+                    {key === 'figma' ? 'New (4 pages)' : 'Previous (2 tabs)'}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-zinc-600 mt-1.5">
+              {haloPrefs.uiVersion === 'figma'
+                ? 'Bottom tab rail, four pages, per Figma board 2.'
+                : 'Top rail, Tracked time and Dictation, as it shipped before.'}
+            </p>
+          </div>
+
+          {/* THREE SIZES, NOT A CONTINUOUS SLIDER.
+           *
+           * This was a 0.7-1.6 range input. The island now resolves a scale onto one of three
+           * DESIGNED presets (480 / 560 / 680 wide — Figma board `1 / Sizes`), so most of that
+           * slider became a dead zone: 0.95 and 1.05 both render Medium, and dragging between
+           * them changed nothing on screen. It also labelled its ends `322px` and `736px`,
+           * computed from the legacy 460-wide token, which matched no real island at any size.
+           *
+           * A stored `scale` from an older install still works: `presetForScale` maps any old
+           * value onto the band it falls in, and 1.0 — the historical default — lands on
+           * Medium. So this replaces the control without migrating anyone's setting. */}
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-[12px] text-zinc-300">Size</span>
+              <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+                {resolveHaloSize(haloPrefs.scale).expandedWidth}×
+                {resolveHaloSize(haloPrefs.scale).expandedHeight}
+              </span>
+            </div>
+            <div role="radiogroup" aria-label="Halo Island size" className="grid grid-cols-3 gap-1">
+              {(['small', 'medium', 'large'] as const).map((key) => {
+                const preset = HALO_SIZE_PRESETS[key];
+                const active = presetForScale(haloPrefs.scale) === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={!haloPrefs.enabled}
+                    onClick={() => void saveHaloPrefs({ scale: preset.typeScale })}
+                    className={[
+                      'rounded-md border px-2 py-1.5 text-[11px] transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70',
+                      active
+                        ? 'border-emerald-500/60 bg-emerald-500/10 text-zinc-100'
+                        : 'border-zinc-800 text-zinc-400 hover:bg-zinc-800/60',
+                      !haloPrefs.enabled ? 'opacity-50 cursor-not-allowed' : '',
+                    ].join(' ')}
+                  >
+                    <span className="block">{preset.label}</span>
+                    <span className="block font-mono text-[10px] tabular-nums opacity-60">
+                      {preset.expandedWidth}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+<p className="text-[10px] text-zinc-600 mt-1.5">
+                {resolveHaloSize(haloPrefs.scale).iconOnlyTabs
+                  ? 'Compact tabs at this size.'
+                  : 'Tabs show icon and label.'}
+              </p>
+            </div>
+
+            {/* ── PREVIEW — HALO_SETTINGS.html places this between General and Pages:
+                "This is the real island at your size. It updates as you change things.
+                Sample data." with an Open | Pill toggle. It renders the island's own
+                presentation primitives at the user's chosen size/shape/radius/scale, so every
+                one of those controls now has a visible consequence on this page. */}
+            <HaloSettingsPreview
+              prefs={haloPrefs}
+              pages={haloPages.filter((id) => !haloHidden.includes(id)) as HaloPageId[]}
+            />
+
+            {/* ── PAGES — drag or keyboard to reorder, Show to hide ────────────────
+                Replaces the up/down widget block that was rejected. Claude's
+                `agent/docs/HALO_SETTINGS.html` puts a drag HANDLE on each row so the row
+                itself stays a plain target, and adds a "More" menu with Move up / Move down /
+                Move to top as the WCAG 2.5.7 alternative to dragging. */}
+            <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-[12px] text-zinc-300">Pages</span>
+                <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+                  {haloPages.length - haloHidden.length}/{haloPages.length} on
+                </span>
+              </div>
+              <ul className="flex flex-col gap-1" role="list" aria-label="Halo pages">
+                {haloPages.map((id, i) => {
+                  const on = !haloHidden.includes(id);
+                  const meta = HALO_PAGE_LABELS[id];
+                  const move = (to: number) => {
+                    const next = haloPages.slice();
+                    const [row] = next.splice(i, 1);
+                    next.splice(Math.max(0, Math.min(next.length, to)), 0, row);
+                    void saveHaloPrefs({ pages: { ...haloPrefs.pages, order: next } });
+                  };
+                  return (
+                    <li
+                      key={id}
+                      className={[
+                        'flex items-center gap-2 rounded-md border px-2 py-1.5',
+                        'border-zinc-800',
+                        dragOver === id ? 'border-emerald-500/60' : '',
+                        on ? '' : 'opacity-60',
+                      ].join(' ')}
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(id); }}
+                      onDragLeave={() => setDragOver((p) => (p === id ? null : p))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const from = dragIndex.current;
+                        setDragOver(null);
+                        if (from == null || from === i) return;
+                        const next = haloPages.slice();
+                        const [row] = next.splice(from, 1);
+                        next.splice(i, 0, row);
+                        void saveHaloPrefs({ pages: { ...haloPrefs.pages, order: next } });
+                      }}
+                    >
+                      <button
+                        type="button"
+                        draggable
+                        aria-label={`Move ${meta.label}. Position ${i + 1} of ${haloPages.length}.`}
+                        onDragStart={(e) => {
+                          dragIndex.current = i;
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnd={() => { dragIndex.current = null; setDragOver(null); }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowUp') { e.preventDefault(); move(i - 1); }
+                          else if (e.key === 'ArrowDown') { e.preventDefault(); move(i + 1); }
+                        }}
+                        className="h-6 w-6 shrink-0 cursor-grab rounded border border-zinc-800 text-[11px] leading-none text-zinc-400 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                      >
+                        ⠿
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className={['text-[12px]', on ? 'text-zinc-200' : 'text-zinc-500 line-through'].join(' ')}>
+                          {meta.label}
+                        </div>
+                        <div className="text-[11px] text-zinc-500">{meta.hint}</div>
+                      </div>
+                      <SettingsSwitch
+                        checked={on}
+                        label={`Show the ${meta.label} page`}
+                        onChange={(v) => {
+                          const hidden = v
+                            ? haloHidden.filter((p) => p !== id)
+                            : [...haloHidden, id];
+                          void saveHaloPrefs({ pages: { ...haloPrefs.pages, hidden } });
+                        }}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`More actions for ${meta.label}`}
+                        aria-expanded={pageMenu === id}
+                        onClick={() => setPageMenu((p) => (p === id ? null : id))}
+                        className="h-6 w-6 shrink-0 rounded border border-zinc-800 text-[11px] leading-none text-zinc-400 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                      >
+                        ⋯
+                      </button>
+                      {pageMenu === id && (
+                        <div className="flex gap-1 rounded-md bg-zinc-900 p-1">
+                          <button type="button" disabled={i === 0} onClick={() => { move(i - 1); setPageMenu(null); }}
+                            className="rounded px-1.5 py-0.5 text-[11px] text-zinc-300 disabled:opacity-40">Up</button>
+                          <button type="button" disabled={i === haloPages.length - 1} onClick={() => { move(i + 1); setPageMenu(null); }}
+                            className="rounded px-1.5 py-0.5 text-[11px] text-zinc-300 disabled:opacity-40">Down</button>
+                          <button type="button" disabled={i === 0} onClick={() => { move(0); setPageMenu(null); }}
+                            className="rounded px-1.5 py-0.5 text-[11px] text-zinc-300 disabled:opacity-40">Top</button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex items-center justify-between py-1.5 mt-2">
+                <div>
+                  <div className="text-[12px] text-zinc-300">Open on</div>
+                  <div className="text-[11px] text-zinc-500">Which page shows when the island opens.</div>
+                </div>
+                <select
+                  aria-label="Open on"
+                  value={haloPrefs.pages.open}
+                  onChange={(e) => {
+                    const v = e.target.value as 'last' | HaloPageId;
+                    void saveHaloPrefs({ pages: { ...haloPrefs.pages, open: v } });
+                  }}
+                  className="h-11 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-[12px] text-zinc-200"
+                >
+                  <option value="last">The last page I used</option>
+                  {haloPages.map((id) => (
+                    <option key={id} value={id}>{HALO_PAGE_LABELS[id].label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* ── THE PILL — one main item, others may still appear ──────────────── */}
+            <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-[12px] text-zinc-300">The pill</span>
+                <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+                  {HALO_PILL_LABELS[haloPrefs.pill.resident].label}
+                </span>
+              </div>
+              <ul className="flex flex-col gap-1" role="radiogroup" aria-label="Main item in the pill">
+                {HALO_PILL_RESIDENTS.map((kind) => {
+                  const isResident = haloPrefs.pill.resident === kind;
+                  const canAppear = haloPrefs.widgets?.[kind]?.compact !== false;
+                  return (
+                    <li key={kind} className="flex items-center gap-2 rounded-md border border-zinc-800 px-2 py-1.5">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={isResident}
+                        onClick={() => void saveHaloPrefs({ pill: { resident: kind } })}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2"
+                          style={{ borderColor: isResident ? 'var(--color-emerald-500)' : 'var(--color-zinc-600)' }}
+                        >
+                          {isResident && (
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className={['block text-[12px]', isResident ? 'text-zinc-100' : 'text-zinc-300'].join(' ')}>
+                            {HALO_PILL_LABELS[kind].label}
+                            {isResident && <span className="ml-1 text-[11px] font-normal text-zinc-500">main item</span>}
+                          </span>
+                          <span className="block text-[11px] text-zinc-500">{HALO_PILL_LABELS[kind].hint}</span>
+                        </span>
+                      </button>
+                      {!isResident && (
+                        <SettingsSwitch
+                          checked={canAppear}
+                          label={`Let ${HALO_PILL_LABELS[kind].label} appear in the pill`}
+                          onChange={(v) => void saveHaloPrefs({
+                            widgets: {
+                              ...haloPrefs.widgets,
+                              [kind]: { ...haloPrefs.widgets?.[kind], compact: v },
+                            },
+                          })}
+                        />
+                      )}
+                    </li>
+                  );
+                })}
+                <li className="flex items-center gap-2 rounded-md border border-zinc-800 px-2 py-1.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[12px] text-zinc-300">Overdue alerts</span>
+                    <span className="block text-[11px] text-zinc-500">
+                      Always take over the pill when a deadline is overdue.
+                    </span>
+                  </span>
+                  <span className="text-[11px] text-zinc-500">Always on</span>
+                </li>
+              </ul>
+            </div>
+
+
+          {/* Shape and the corner-radius slider are NOT offered. Claude's ruling: LAMINAR
+              allows radii 8, 12 and pill only, and the radius is decided by OS placement
+              (§8: macOS square top corners, Windows all rounded), so a free radius control
+              contradicts the design system. `shape` and `radius` stay in the normaliser so an
+              existing pref still loads; they are just not editable here. */}
+
+          {/* ── How many widgets show at once ───────────────────────────────────
+            Capped at 3 because the spec forbids three legible text segments inside the
+            232px compact pill; beyond that, extra widgets degrade to identity dots
+            instead of the type shrinking. */}
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-[12px] text-zinc-300">Widgets shown at once</span>
+              <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+                {haloPrefs.maxVisible}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={HALO_MAX_VISIBLE_MIN}
+              max={HALO_MAX_VISIBLE_MAX}
+              step={1}
+              value={haloPrefs.maxVisible}
+              disabled={!haloPrefs.enabled}
+              aria-label="Widgets shown at once"
+              onChange={(e) => {
+                void saveHaloPrefs({ maxVisible: Number(e.target.value) });
+              }}
+              className="w-full"
+            />
+            <p className="text-[10px] text-zinc-600 mt-1 leading-snug">
+              Up to 3. The compact pill is 232px wide and cannot hold three legible values,
+              so anything beyond the limit appears as a small coloured dot rather than
+              shrinking the type.
+            </p>
+          </div>
+
+          {/* ── Which widgets appear, and in what order ─────────────────────────
+            Show/hide per widget. The stopwatch is deliberately NOT listed: it is the
+            permanent hero and the surface's core invariant is that it is never removed. */}
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300 mb-0.5">Widgets</div>
+            <p className="text-[10px] text-zinc-600 mb-2 leading-snug">
+              Tracked time always shows. Turn the rest on or off, and drag to change the
+              order they appear in.
+            </p>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between py-1.5 px-2" style={{ borderRadius: 8, background: 'var(--ws-surface-raised)' }}>
+                <div>
+                  <div className="text-[12px] text-zinc-200">Tracked time</div>
+                  <div className="text-[10px] text-zinc-500">Always on — the hero.</div>
+                </div>
+                <span className="text-[10px] text-zinc-500">Required</span>
+              </div>
+              {HALO_ORDERABLE.map((kind) => {
+                const on = isWidgetVisible(haloPrefs, kind);
+                return (
+                  <div
+                    key={kind}
+                    className="flex items-center gap-2 py-1.5 px-2"
+                    style={{ borderRadius: 8, background: on ? 'var(--ws-surface-raised)' : 'transparent', border: on ? 'none' : '1px solid var(--ws-border)' }}
+                  >
+                    <span className="text-[11px] text-zinc-400 capitalize flex-1">{kind.replace(/([A-Z])/g, ' $1')}</span>
+                    <button
+                      type="button"
+                      disabled={!haloPrefs.enabled}
+                      aria-label={`Move ${kind} up`}
+                      onClick={() => {
+                        const i = haloPrefs.order.indexOf(kind);
+                        if (i <= 0) return;
+                        const order = [...haloPrefs.order];
+                        [order[i - 1], order[i]] = [order[i], order[i - 1]];
+                        void saveHaloPrefs({ order });
+                      }}
+                      className="text-[11px] text-zinc-500 px-1 disabled:opacity-40"
+                      style={{ color: 'var(--text-disabled)' }}
+                    >
+                      ↑
+                    </button>
+                    {/* Same white-on-white track/knob pair as the two above — the third instance of
+                        the identical defect. `sf-switch` handles the disabled state too. */}
+                    <SettingsSwitch
+                      checked={on}
+                      disabled={!haloPrefs.enabled}
+                      label={`Show ${kind}`}
+                      onChange={(v) => {
+                        void saveHaloPrefs({
+                          widgets: { ...haloPrefs.widgets, [kind]: { visible: v } },
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════════
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+            Trigger
+          </div>
+              TRIGGER — the hitbox. FIRST because it is the control people reach for
+              when the island "doesn't work right", and the one whose effect is
+              invisible until it is wrong.
+
+              WHY THE HITBOX IS DESCRIBED AS HOVER-ONLY, IN PLAIN WORDS
+              Human-Centric UX, pillar 1: no raw field names. `padX`/`padY` mean
+              nothing to a user; "how far away the pointer can be" does. And the
+              reassurance that it never blocks clicks is stated here rather than
+              buried in a code comment, because a user widening a hitbox on an
+              always-on-top overlay is exactly the person who needs to know that.
+              ═══════════════════════════════════════════════════════════════════ */}
+          <div className="py-2 space-y-3" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div>
+              <div className="text-[12px] text-zinc-300 mb-0.5">Opens when</div>
+              <p className="text-[10px] text-zinc-600 leading-snug">
+                How the island is summoned. None of these ever intercept a click meant for the
+                app underneath — the hitbox is a hover region only.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Halo Island opens when">
+              {([
+                ['hover', 'Pointer enters', 'Move the mouse over it'],
+                ['hover-or-click', 'Pointer or click', 'Either one (most forgiving)'],
+                ['click', 'Click only', 'Never opens on its own'],
+                ['hotkey', 'Shortcut only', 'Nothing opens it by accident'],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={haloPrefs.trigger.mode === value}
+                  disabled={!haloPrefs.enabled}
+                  onClick={() => void saveHaloPrefs({ trigger: { ...haloPrefs.trigger, mode: value } })}
+                  className="text-left disabled:opacity-50"
+                  style={{
+                    padding: 8,
+                    borderRadius: 8,
+                    border: `1px solid ${haloPrefs.trigger.mode === value ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                    background: haloPrefs.trigger.mode === value ? 'var(--ws-surface-raised)' : 'transparent',
+                  }}
+                >
+                  <div className="text-[11px] text-zinc-300">{label}</div>
+                  <div className="text-[10px] text-zinc-500 leading-tight mt-0.5">{hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Hitbox reach ────────────────────────────────────────────────────
+              The live diagram is the point. The hitbox is invisible on the desktop, so
+              a slider with a number next to it is unauditable — you cannot tell whether
+              60px reaches past the pill or eats half your title bar. The dashed outline
+              is drawn at the TRUE ratio (pill 232x40 inside the zone), so what you see
+              is what the cursor actually does. */}
+          <div className="py-2 space-y-3" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[12px] text-zinc-300">Hitbox size</span>
+              <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+                {haloPrefs.trigger.padX}px sides · {haloPrefs.trigger.padY}px deep
+              </span>
+            </div>
+            <div
+              aria-hidden="true"
+              className="relative mx-auto"
+              style={{ width: '100%', maxWidth: 320, height: 96 }}
+            >
+              <div
+                className="absolute"
+                style={{
+                  left: '50%',
+                  top: 6,
+                  width: `calc(${HALO_SIZE_TOKENS.compactWidth + haloPrefs.trigger.padX * 2}px)`,
+                  height: resolveHaloSize(haloPrefs.scale).compactHeight + haloPrefs.trigger.padY,
+                  transform: 'translateX(-50%)',
+                  border: '1px dashed var(--page-accent)',
+                  borderRadius: 4,
+                  opacity: 0.75,
+                }}
+              />
+              <div
+                className="absolute flex items-center justify-center"
+                style={{
+                  left: '50%',
+                  top: 6,
+                  width: HALO_SIZE_TOKENS.compactWidth,
+                  height: resolveHaloSize(haloPrefs.scale).compactHeight,
+                  transform: 'translateX(-50%)',
+                  background: 'var(--ws-surface-raised)',
+                  border: '1px solid var(--ws-border-strong)',
+                  borderRadius: 9999,
+                }}
+              >
+                <span className="text-[10px] text-zinc-500">the island</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <HaloSlider
+                label="How far in from the sides"
+                value={haloPrefs.trigger.padX}
+                min={0}
+                max={HALO_PAD_X_MAX}
+                step={4}
+                suffix="px"
+                disabled={!haloPrefs.enabled}
+                onChange={(padX) => void saveHaloPrefs({ trigger: { ...haloPrefs.trigger, padX } })}
+              />
+              <HaloSlider
+                label="How far down it reaches"
+                value={haloPrefs.trigger.padY}
+                min={0}
+                max={HALO_PAD_Y_MAX}
+                step={4}
+                suffix="px"
+                disabled={!haloPrefs.enabled}
+                onChange={(padY) => void saveHaloPrefs({ trigger: { ...haloPrefs.trigger, padY } })}
+              />
+            </div>
+            <p className="text-[10px] text-zinc-600 leading-snug">
+              Widen this if the island is hard to summon. It will not make the island harder to
+              click through — a bigger hitbox only means it appears sooner.
+            </p>
+          </div>
+
+          {/* ── Timing ────────────────────────────────────────────────────────── */}
+          <div className="py-2 space-y-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300">Timing</div>
+            <HaloSlider
+              label="Delay before it opens"
+              value={haloPrefs.trigger.openDelayMs}
+              min={HALO_OPEN_DELAY_MIN}
+              max={HALO_OPEN_DELAY_MAX}
+              step={10}
+              suffix="ms"
+              disabled={!haloPrefs.enabled}
+              onChange={(openDelayMs) => void saveHaloPrefs({ trigger: { ...haloPrefs.trigger, openDelayMs } })}
+            />
+            <HaloSlider
+              label="Grace period before it closes"
+              value={haloPrefs.trigger.closeDelayMs}
+              min={HALO_CLOSE_DELAY_MIN}
+              max={HALO_CLOSE_DELAY_MAX}
+              step={10}
+              suffix="ms"
+              disabled={!haloPrefs.enabled}
+              onChange={(closeDelayMs) => void saveHaloPrefs({ trigger: { ...haloPrefs.trigger, closeDelayMs } })}
+            />
+            {/* `leaveMarginPx` was the ONE hover pref with no control. The island feeds it to
+                `pointInHotZone` as the padding around the hot zone, so it decides how far the
+                pointer can drift toward the island before the close timer starts. A value of 0
+                makes the island feel like it is being dismissed the instant you reach for it;
+                the default 24 lets you travel diagonally onto it without losing it. */}
+            <HaloSlider
+              label="Pointer forgiveness"
+              value={haloPrefs.trigger.leaveMarginPx}
+              min={0}
+              max={64}
+              step={4}
+              suffix="px"
+              disabled={!haloPrefs.enabled}
+              onChange={(leaveMarginPx) => void saveHaloPrefs({ trigger: { ...haloPrefs.trigger, leaveMarginPx } })}
+            />
+            <p className="text-[10px] text-zinc-600 leading-snug">
+              A long open delay ignores a cursor merely passing by. A short close delay collapses
+              the island the moment the pointer drifts off it.
+            </p>
+          </div>
+
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+            Position
+          </div>
+          {/* ── SHAPE ────────────────────────────────────────────────────────────
+              `shape` and `radius` were READ by the island (`prefs.shape`,
+              `prefs.radius`) but had no control anywhere, so a stored value from an older
+              session changed the silhouette and the user had no way to change it back.
+              The island renders `shape: 'capsule'` as a full pill and otherwise honours
+              `radius`, so these two controls are the whole surface treatment. */}
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+            Shape
+          </div>
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300 mb-2">Silhouette</div>
+            <div className="flex gap-2" role="radiogroup" aria-label="Halo Island silhouette">
+              {([
+                ['capsule', 'Capsule'],
+                ['square', 'Square'],
+              ] as const).map(([value, label]) => {
+                const active = (haloPrefs.shape ?? 'capsule') === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => void saveHaloPrefs({ shape: value })}
+                    className={[
+                      'flex-1 rounded-md border px-2 py-1.5 text-[11px] transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70',
+                      active
+                        ? 'border-emerald-500/60 bg-emerald-500/10 text-zinc-100 font-medium'
+                        : 'border-zinc-800 text-zinc-400 hover:bg-zinc-800/60',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between py-2 mt-1">
+              <div className="min-w-0">
+                <div className="text-[12px] text-zinc-300">Corner radius</div>
+                <div className="text-[11px] text-zinc-500">
+                  Applies to the Square silhouette. The capsule is always fully rounded.
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <input
+                  type="range"
+                  min={0}
+                  max={16}
+                  step={2}
+                  value={haloPrefs.radius ?? HALO_DEFAULTS.radius ?? 12}
+                  aria-label="Halo Island corner radius in pixels"
+                  onChange={(e) => void saveHaloPrefs({ radius: Number(e.target.value) })}
+                  className="h-11 w-40 accent-emerald-500"
+                />
+                <span className="w-10 text-right font-mono text-[11px] tabular-nums text-zinc-400">
+                  {haloPrefs.radius ?? HALO_DEFAULTS.radius ?? 12} px
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── POSITION ─────────────────────────────────────────────────────────
+              HALO §127 defines exactly three edges and forbids freeform positioning,
+              so this offers three and no more. What was actually broken is that the
+              renderer hardcoded the top edge, so picking left or right moved the window
+              and changed nothing on screen. */}
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300 mb-2">Where it sits</div>
+            <HaloPlacementPreview prefs={haloPrefs} />
+              {/* Claude's ruling: the island is 560x134, so a side edge would need a vertical
+                  layout that is not designed anywhere. The top edge is the only one offered, and
+                  "where along it" becomes three anchors plus a gap. Left/right stay in the
+                  normaliser so an old stored pref still loads — they are just not offered. */}
+              <div className="text-[12px] text-zinc-300 mt-3 mb-2">Where along the top edge</div>
+              <div className="flex gap-2" role="radiogroup" aria-label="Halo Island horizontal position">
+                {([
+                  ['left', 'Left'],
+                  ['center', 'Center'],
+                  ['right', 'Right'],
+                ] as const).map(([value, label]) => {
+                  const active = (haloPrefs.anchor ?? 'center') === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => void saveHaloPrefs({ anchor: value })}
+                      className={[
+                        'flex-1 rounded-md border px-2 py-1.5 text-[11px] transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70',
+                        active
+                          ? 'border-emerald-500/60 bg-emerald-500/10 text-zinc-100 font-medium'
+                          : 'border-zinc-800 text-zinc-400 hover:bg-zinc-800/60',
+                      ].join(' ')}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between py-2 mt-1">
+                <div className="min-w-0">
+                  <div className="text-[12px] text-zinc-300">Gap below the top edge</div>
+                  <div className="text-[11px] text-zinc-500">
+                    Windows and Linux only. Keep clear of your top bar.
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <input
+                    type="range"
+                    min={HALO_OFFSET_Y_MIN}
+                    max={HALO_OFFSET_Y_MAX}
+                    step={4}
+                    value={haloPrefs.offsetY ?? HALO_DEFAULTS.offsetY}
+                    aria-label="Gap below the top edge in pixels"
+                    onChange={(e) => void saveHaloPrefs({ offsetY: Number(e.target.value) })}
+                    className="h-11 w-40 accent-emerald-500"
+                  />
+                  <span className="w-10 text-right font-mono text-[11px] tabular-nums text-zinc-400">
+                    {haloPrefs.offsetY ?? HALO_DEFAULTS.offsetY} px
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          {/* ── Which monitor ──────────────────────────────────────────────────── */}
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300 mb-2">Display</div>
+            <div className="flex gap-2" role="radiogroup" aria-label="Halo Island display">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={haloPrefs.displayId == null}
+                disabled={!haloPrefs.enabled || haloDisplays.length === 0}
+                onClick={() => void saveHaloPrefs({ displayId: null })}
+                className="flex-1 text-[11px] py-1.5 disabled:opacity-40"
+                style={{
+                  borderRadius: 8,
+                  border: `1px solid ${haloPrefs.displayId == null ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                  background: haloPrefs.displayId == null ? 'var(--ws-surface-raised)' : 'transparent',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                Main display
+              </button>
+              {haloDisplays.filter((d) => !d.primary).map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={haloPrefs.displayId === d.id}
+                  disabled={!haloPrefs.enabled}
+                  onClick={() => void saveHaloPrefs({ displayId: d.id })}
+                  className="flex-1 text-[11px] py-1.5 disabled:opacity-40 truncate"
+                  style={{
+                    borderRadius: 8,
+                    border: `1px solid ${haloPrefs.displayId === d.id ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                    background: haloPrefs.displayId === d.id ? 'var(--ws-surface-raised)' : 'transparent',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+            {haloDisplays.length === 0 && (
+              <p className="text-[10px] text-zinc-600 mt-1">Could not read the display list.</p>
+            )}
+            <p className="text-[10px] text-zinc-600 mt-1 leading-snug">
+              Falls back to the main display if that monitor is unplugged.
+            </p>
+          </div>
+
+          {/* ── Custom corner radius ───────────────────────────────────────────── */}
+
+
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+            Contents
+          </div>
+          {/* ── What the small pill shows ────────────────────────────────────────
+              This is the setting the pill needed and did not have. Its contents used to
+              depend on which producers were emitting at that instant, so the pill
+              flickered and the user could not predict or control it. */}
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+            Motion
+          </div>
+                    {/* ── MOTION ───────────────────────────────────────────────────────────
+              One duration and one curve, read by both the stylesheet and the JS
+              transition. They previously disagreed (250ms vs 280ms). */}
+          <div className="py-2 space-y-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300">Motion</div>
+            <HaloSlider
+              label="Open and close speed"
+              value={haloPrefs.motion.durationMs}
+              min={HALO_DURATION_MIN}
+              max={HALO_DURATION_MAX}
+              step={10}
+              suffix="ms"
+              disabled={!haloPrefs.enabled}
+              onChange={(durationMs) => void saveHaloPrefs({ motion: { ...haloPrefs.motion, durationMs } })}
+            />
+            <div className="flex gap-2" role="radiogroup" aria-label="Halo Island motion curve">
+              {([
+                ['expo', 'Settle'],
+                ['standard', 'Even'],
+                ['snappy', 'Quick'],
+                ['linear', 'No easing'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={haloPrefs.motion.easing === value}
+                  disabled={!haloPrefs.enabled}
+                  onClick={() => void saveHaloPrefs({ motion: { ...haloPrefs.motion, easing: value } })}
+                  className="flex-1 text-[11px] py-1.5 disabled:opacity-50"
+                  style={{
+                    borderRadius: 8,
+                    border: `1px solid ${haloPrefs.motion.easing === value ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                    background: haloPrefs.motion.easing === value ? 'var(--ws-surface-raised)' : 'transparent',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-zinc-600 leading-snug">
+              If your system asks for reduced motion, that always wins over this setting.
+            </p>
+          </div>
+
+          {/* ── Liveliness ─────────────────────────────────────────────────────────
+              `motion.liveliness` was honoured by motionDurationMs() from the day it was
+              written, but NO control ever wrote it — so it could only ever be 'full' and the
+              pref was dead weight. This is the last of that class. */}
+          <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300 mb-2">How much it moves</div>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Halo Island motion amount">
+              {([
+                ['full', 'Normal', 'Moves at the speed above'],
+                ['reduced', 'Minimal', 'Short cross-fade only'],
+                ['off', 'None', 'Snaps between states'],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={haloPrefs.motion.liveliness === value}
+                  disabled={!haloPrefs.enabled}
+                  onClick={() => void saveHaloPrefs({ motion: { ...haloPrefs.motion, liveliness: value } })}
+                  className="text-left disabled:opacity-50"
+                  style={{
+                    padding: 8,
+                    borderRadius: 8,
+                    border: `1px solid ${haloPrefs.motion.liveliness === value ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                    background: haloPrefs.motion.liveliness === value ? 'var(--ws-surface-raised)' : 'transparent',
+                  }}
+                >
+                  <div className="text-[11px] text-zinc-300">{label}</div>
+                  <div className="text-[10px] text-zinc-500 leading-tight mt-0.5">{hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Pin control + click behaviour ─────────────────────────────────────
+              Two toggles that answer questions a user actually has: "why is there a
+              pin and where is it", and "is this thing going to eat my clicks". */}
+          <div className="py-2 space-y-1" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="flex items-center justify-between py-1.5">
+              <div>
+                <div className="text-[12px] text-zinc-300">Show the pin button</div>
+                <div className="text-[10px] text-zinc-500">Pin keeps the island open. Click away or press Esc to release it.</div>
+              </div>
+              <SettingsSwitch
+                checked={haloPrefs.showPin}
+                disabled={!haloPrefs.enabled}
+                label="Show the pin button"
+                onChange={(showPin) => void saveHaloPrefs({ showPin })}
+              />
+            </div>
+            {/* `clickShield` was REMOVED as a control, not wired up.
+                It was a switch whose "off" position wrote `clickShield: 'canvas'` — and
+                `haloIsland.ts:360` deliberately ignores that value, because making the whole
+                transparent canvas a click region is exactly the "the hitbox blocks my clicks"
+                bug HALO §12/§13 forbid. So the switch was a lie: it persisted a preference the
+                main process refuses to honour, which is the same stored-but-never-read defect as
+                a dead pin button, only worse because the UI implies an off state exists.
+
+                The behaviour itself is correct and stays: `applyClickRegion` always shapes the
+                window to the painted surface. The pref field remains in the normaliser so an
+                existing saved value still loads without being reported as invalid. */}
+          </div>
+
+<div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div className="text-[12px] text-zinc-300 mb-0.5">Collapsed pill contents</div>
+            <p className="text-[10px] text-zinc-600 mb-2 leading-snug">
+              The small pill at the top of the screen. Opening the island always shows
+              everything — this only affects the collapsed pill.
+            </p>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Halo Island collapsed pill contents">
+              {([
+                ['auto', 'Live only', 'Shows what has fresh data'],
+                ['always', 'Always', 'Always shows the ones you pick'],
+                ['off', 'Nothing', 'Just the tracked time'],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={haloPrefs.compactStyle === value}
+                  disabled={!haloPrefs.enabled}
+                  onClick={() => void saveHaloPrefs({ compactStyle: value })}
+                  className="text-left disabled:opacity-50"
+                  style={{
+                    padding: 8,
+                    borderRadius: 8,
+                    border: `1px solid ${haloPrefs.compactStyle === value ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                    background: haloPrefs.compactStyle === value ? 'var(--ws-surface-raised)' : 'transparent',
+                  }}
+                >
+                  <div className="text-[11px] text-zinc-300">{label}</div>
+                  <div className="text-[10px] text-zinc-500 leading-tight mt-0.5">{hint}</div>
+                </button>
+              ))}
+            </div>
+            {haloPrefs.compactStyle === 'always' && (
+              <p className="text-[10px] text-zinc-500 mt-2 leading-snug">
+                Pick which ones below. A widget with no fresh reading shows dimmed rather than
+                disappearing, so a quiet widget is never mistaken for a missing one.
+              </p>
+            )}
+          
+
+<div className="text-[12px] text-zinc-300 mb-0.5">Collapsed pill</div>
+            <HaloPillPreview prefs={haloPrefs} />
+            <p className="text-[10px] text-zinc-600 mb-2 leading-snug">
+              The pill is small. Turn a widget off here to keep it out of the collapsed island
+              while still showing it when the island is open.
+            </p>
+            <div className="space-y-1">
+              {HALO_ORDERABLE.map((kind) => {
+                const inPill = haloPrefs.widgets?.[kind]?.compact !== false;
+                return (
+                  <div
+                    key={`pill-${kind}`}
+                    className="flex items-center justify-between py-1.5 px-2"
+                    style={{ borderRadius: 8, background: inPill ? 'var(--ws-surface-raised)' : 'transparent' }}
+                  >
+                    <span className="text-[11px] text-zinc-400 capitalize">
+                      {kind.replace(/([A-Z])/g, ' $1')}
+                    </span>
+                    <SettingsSwitch
+                      checked={inPill}
+                      disabled={!haloPrefs.enabled || !isWidgetVisible(haloPrefs, kind)}
+                      label={`Show ${kind} in the collapsed pill`}
+                      onChange={(compact) =>
+                        void saveHaloPrefs({
+                          widgets: { ...haloPrefs.widgets, [kind]: { visible: true, compact } },
+                        })
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -5291,7 +7364,7 @@ export default function SettingsPage({
                     setHasChanges(true);
                     onHasChangesChange(true);
                   }}
-                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-mono pr-10"
+                  className="w-full px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 font-mono pr-10"
                 />
                 <button
                   type="button"
@@ -5407,7 +7480,7 @@ export default function SettingsPage({
                                 const next = aiProviders.map(p => p.id === prov.id ? { ...p, apiKey: e.target.value } : p);
                                 setAiProviders(next); setHasChanges(true); onHasChangesChange(true);
                               }}
-                              className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-zinc-800 border border-zinc-700/50 rounded text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
+                              className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-zinc-800 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-600 font-mono"
                             />
                             <button
                               onClick={() => setShowProviderApiKeys(prev => ({ ...prev, [prov.id]: !prev[prov.id] }))}
@@ -5460,7 +7533,7 @@ export default function SettingsPage({
                                   const next = aiProviders.map(p => p.id === prov.id ? { ...p, extraConfig: { ...p.extraConfig, cloudflareAccountId: e.target.value } } : p);
                                   setAiProviders(next); setHasChanges(true); onHasChangesChange(true);
                                 }}
-                                className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-zinc-800 border border-zinc-700/50 rounded text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
+                                className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-zinc-800 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-600 font-mono"
                               />
                               <a
                                 href="https://dash.cloudflare.com"
@@ -5510,7 +7583,7 @@ export default function SettingsPage({
                                       setAiProviders(next); setHasChanges(true); onHasChangesChange(true);
                                     }
                                   }}
-                                  className="w-24 px-1.5 py-0.5 text-[10px] bg-zinc-850 border border-zinc-700/30 rounded text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
+                                  className="w-24 px-1.5 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700/30 rounded-lg text-white placeholder-zinc-600 font-mono"
                                 />
                                 <button
                                   onClick={() => {
@@ -5535,7 +7608,7 @@ export default function SettingsPage({
                                   const next = aiProviders.map(p => p.id === prov.id ? { ...p, baseUrl: e.target.value } : p);
                                   setAiProviders(next); setHasChanges(true); onHasChangesChange(true);
                                 }}
-                                className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-zinc-800 border border-zinc-700/50 rounded text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
+                                className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-zinc-800 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-600 font-mono"
                               />
                           </div>
                         </div>
@@ -5591,7 +7664,7 @@ export default function SettingsPage({
                     }
                   }}
                   placeholder="e.g., Artificial Intelligence"
-                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500"
                 />
                 <button
                   onClick={async () => {
@@ -5699,7 +7772,7 @@ export default function SettingsPage({
               {kbDocs.length > 0 && (
                 <div className="space-y-1.5 mb-4">
                   {kbDocs.map(doc => (
-                    <div key={doc.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/40 light:bg-white/30 border border-zinc-700/30">
+                    <div key={doc.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] light:bg-white/30 border border-zinc-700/30">
                       <FileText className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                       <span className="text-xs text-zinc-300 truncate flex-1" title={doc.name}>{doc.name}</span>
                       <span className="text-[10px] text-zinc-500 uppercase shrink-0">{doc.type}</span>
@@ -5735,7 +7808,7 @@ export default function SettingsPage({
                     }
                   }}
                   placeholder="Test retrieval — type a question about your notes…"
-                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                  className="flex-1 px-3 py-2 text-sm bg-zinc-800/50 light:bg-zinc-100/50 border border-zinc-700/50 rounded-lg text-white placeholder-zinc-500"
                 />
                 <button
                   onClick={async () => {
@@ -5756,7 +7829,7 @@ export default function SettingsPage({
               {kbResults.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {kbResults.map((r, i) => (
-                    <div key={i} className="px-3 py-2 rounded-lg bg-zinc-900/40 light:bg-white/30 border border-zinc-700/30">
+                    <div key={i} className="px-3 py-2 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] light:bg-white/30 border border-zinc-700/30">
                       <div className="text-[10px] text-violet-400 mb-1 truncate">{r.docName}</div>
                       <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{r.content}</p>
                     </div>
@@ -5861,7 +7934,7 @@ export default function SettingsPage({
                             setHasChanges(true);
                             onHasChangesChange(true);
                           }}
-                          className="w-8 h-6 rounded border border-zinc-600 bg-transparent cursor-pointer"
+                          className="w-8 h-6 rounded-lg border border-zinc-600 bg-transparent cursor-pointer"
                         />
                         {agentColorOverrides[id] && (
                           <button
@@ -5977,7 +8050,7 @@ export default function SettingsPage({
                   setAutoSave(next);
                   window.deskflowAPI?.financeSetAutoSave?.(next);
                 }}
-                className={`w-10 h-5 rounded-full transition-colors focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950 ${autoSave ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                className={`w-10 h-5 rounded-full transition-colors ${autoSave ? 'bg-emerald-500' : 'bg-zinc-700'}`}
               >
                 <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${autoSave ? 'translate-x-5' : ''}`} />
               </button>
@@ -6006,7 +8079,7 @@ export default function SettingsPage({
                   setAutoRecalc(next);
                   window.deskflowAPI?.financeSetAutoRecalc?.(next);
                 }}
-                className={`w-10 h-5 rounded-full transition-colors focus-visible:ring-2 ring-violet-500/50 ring-offset-2 ring-offset-zinc-950 ${autoRecalc ? 'bg-violet-500' : 'bg-zinc-700'}`}
+                className={`w-10 h-5 rounded-full transition-colors ${autoRecalc ? 'bg-violet-500' : 'bg-zinc-700'}`}
               >
                 <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${autoRecalc ? 'translate-x-5' : ''}`} />
               </button>
@@ -6030,7 +8103,7 @@ export default function SettingsPage({
                   <span className="text-[11px] text-zinc-400">Remember device</span>
                   <button
                     onClick={() => handleSetRememberDevice(!securitySettings.rememberDevice, 7)}
-                    className={`w-10 h-5 rounded-full transition-colors focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950 ${securitySettings.rememberDevice ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                    className={`w-10 h-5 rounded-full transition-colors ${securitySettings.rememberDevice ? 'bg-emerald-500' : 'bg-zinc-700'}`}
                   >
                     <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${securitySettings.rememberDevice ? 'translate-x-5' : ''}`} />
                   </button>
@@ -6040,7 +8113,7 @@ export default function SettingsPage({
                   <select
                     value={securitySettings.lockTimeout / (60 * 1000)}
                     onChange={(e) => handleSetLockTimeout(parseInt(e.target.value) * 60 * 1000)}
-                    className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-zinc-300 focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950"
+                    className="bg-zinc-800 border border-zinc-700 rounded-lg px-1.5 py-0.5 text-[10px] text-zinc-300"
                   >
                     <option value="1">1 min</option>
                     <option value="5">5 min</option>
@@ -6053,7 +8126,7 @@ export default function SettingsPage({
                   <select
                     value={maskMode}
                     onChange={(e) => setMaskMode(e.target.value as MaskMode)}
-                    className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-zinc-300 focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950"
+                    className="bg-zinc-800 border border-zinc-700 rounded-lg px-1.5 py-0.5 text-[10px] text-zinc-300"
                   >
                     <option value="digits">Same digit count</option>
                     <option value="fixed">Fixed number</option>
@@ -6066,7 +8139,7 @@ export default function SettingsPage({
                       type="number"
                       value={maskFixedValue}
                       onChange={(e) => setMaskFixedValue(parseFloat(e.target.value) || 0)}
-                      className="w-24 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-zinc-300 text-right focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950"
+                      className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg px-1.5 py-0.5 text-[10px] text-zinc-300 text-right"
                     />
                   </div>
                 )}
@@ -6132,7 +8205,7 @@ export default function SettingsPage({
                     value={currentPassword}
                     onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
                     placeholder="Current password"
-                    className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
                   />
                 )}
                 <input
@@ -6140,21 +8213,21 @@ export default function SettingsPage({
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
                   placeholder="New password"
-                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
                 />
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
                   placeholder="Confirm password"
-                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
                 />
                 {passwordError && <p className="text-[11px] text-red-400">{passwordError}</p>}
                 {passwordSuccess && <p className="text-[11px] text-emerald-400">{passwordSuccess}</p>}
                 <button
                   onClick={handleChangePassword}
                   disabled={securitySettings?.hasPassword ? (!currentPassword || !newPassword || !confirmPassword) : (!newPassword || !confirmPassword)}
-                  className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40 focus-visible:ring-2 ring-emerald-500/50"
+                  className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40"
                 >
                   Set Password
                 </button>
@@ -6180,28 +8253,28 @@ export default function SettingsPage({
                   value={currentPassword}
                   onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
                   placeholder="Current password"
-                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
                 />
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
                   placeholder="New password"
-                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
                 />
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
                   placeholder="Confirm new password"
-                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full bg-zinc-800/80 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
                 />
                 {passwordError && <p className="text-[11px] text-red-400">{passwordError}</p>}
                 {passwordSuccess && <p className="text-[11px] text-emerald-400">{passwordSuccess}</p>}
                 <button
                   onClick={handleChangePassword}
                   disabled={!currentPassword || !newPassword || !confirmPassword}
-                  className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs font-medium transition-colors disabled:opacity-40 focus-visible:ring-2 ring-emerald-500/50"
+                  className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs font-medium transition-colors disabled:opacity-40"
                 >
                   Update Password
                 </button>
@@ -6223,6 +8296,9 @@ export default function SettingsPage({
       {activeTab === 'devices' && (
         <div data-section="settings.devices" className="space-y-4">
           <SearchableSection terms={['devices', 'device']} search={settingsSearch}>
+          <PhoneStatsPanel />
+          </SearchableSection>
+          <SearchableSection terms={['devices', 'device']} search={settingsSearch}>
           <DevicesPanel />
           </SearchableSection>
         </div>
@@ -6230,6 +8306,16 @@ export default function SettingsPage({
 
       {activeTab === 'shortcuts' && (
         <div data-section="settings.shortcuts" className="space-y-4">
+          {/* Navigation mode. Split out of ShortcutSection.tsx because that file
+              is dead code — it is imported nowhere, and SettingsPage renders the
+              shortcuts tab inline. Its `SearchableSection` terms are widened so
+              the mode is findable by typing "film", "palette" or "navigation". */}
+          {/* `group` (not `terms`): the synonyms live in settings/registry, so a
+              word added there is searchable here with no edit to this file. */}
+          <SearchableSection group="nav-mode" search={settingsSearch}>
+            <RewindNavSetting />
+          </SearchableSection>
+
           <SearchableSection terms={['shortcut', 'keybind', 'hotkey', 'keyboard', 'key', 'bind', 'ctrl', 'command']} search={settingsSearch}>
           <GlassCard className="space-y-4">
             <div>
@@ -6302,7 +8388,18 @@ export default function SettingsPage({
       )}
 
       {activeTab === 'database' && (
-        <div data-section="settings.database" className="space-y-4">
+        <div data-section="settings.database"
+             className="flex flex-col gap-3"
+             /* A DEFINITE height is what makes the database list scroll internally.
+                 With `minHeight:0` alone this box sized to `auto`, so `DatabasePage`'s root `h-full` resolved against an auto parent,
+                 the whole flex chain went unbounded, and the table list's `overflow-y-auto` had nothing to scroll inside — every table
+                 stacked into the page and you had to scroll Settings to the
+                 bottom to reach one. */
+             style={{ minHeight: 0, height: 'min(78vh, 900px)' }}>
+          {/* The Schema(ERD)/Data toggle is gone: `DatabasePage` already owns
+              ERD, Architecture, Browse and Recent Changes as its own tabs, so
+              this rendered the ERD twice — once bare via `ErdCanvas` and once
+              inside Data. One surface, one place for the ERD. */}
           <Suspense fallback={<div className="py-24 flex items-center justify-center text-zinc-500 text-sm">Loading database…</div>}>
             <DatabasePage />
           </Suspense>
@@ -6317,12 +8414,30 @@ export default function SettingsPage({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-700/50 shadow-black/50"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-md border-t border-zinc-700/50 shadow-black/50"
           >
             <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                <span className="text-sm text-zinc-300">You have unsaved changes</span>
+                <span className="text-sm text-zinc-300">
+                    {/* HONEST COPY. This bar now appears for BOTH kinds of change, so it must
+                     * not claim every one of them is unsaved.
+                     *
+                     * `saveHaloPrefs` and friends write through `setPreference` the instant
+                     * they change — there is nothing pending to save. The staged group is
+                     * narrower: tier assignments, planet colours and category order, which
+                     * live in localStorage until this bar's action persists them. Calling the
+                     * whole thing "unsaved changes" when most of it is already committed is how
+                     * a user ends up clicking Save repeatedly, or distrusting the page. */}
+                    <span className="text-zinc-400">
+                      {hasStagedChanges ? 'You have unsaved changes' : 'Settings applied'}
+                    </span>
+                    {hasStagedChanges && (
+                      <span className="ml-2 text-xs text-zinc-500">
+                        Tier assignments and colours are saved when you press Save.
+                      </span>
+                    )}
+                  </span>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -6388,5 +8503,406 @@ export default function SettingsPage({
       </AnimatePresence>
 
     </PageShell>
+  );
+}
+
+/* Halo settings — the live preview pieces.
+ *
+ * WHY A PREVIEW AND NOT A DESCRIPTION
+ * -----------------------------------
+ * The shape control was three text buttons reading "Fully rounded, floats free" /
+ * "Top corners only, hugs the edge" / "8px on every corner". Every one of those is a
+ * CLAIM about a picture, and the user has to hold the claim in their head and trust it.
+ * A shape is a single glance. So each option now DRAWS its own shape, at the real
+ * proportion (232x40 compact), and the "Custom" row draws the actual radius the slider
+ * is currently set to. Nothing to interpret.
+ *
+ * The same reasoning gives the placement diagram: "Left edge" is a word, but where the
+ * island actually lands on a 16:9 screen is not, and it is the thing you cannot check
+ * by reading.
+ *
+ * Every preview reads live from `haloPrefs`, so moving a slider moves the picture. A
+ * preview that does not update is a screenshot, and a screenshot cannot be a control.
+ */
+
+
+/**
+ * The preview scale.
+ *
+ * WHY THE PREVIEWS USED TO LIE
+ * ----------------------------
+ * The pill preview was hardcoded to 116x20, the placement frame to 260px, and the shape
+ * swatch to a 20px bar — all fixed numbers chosen when the default scale was 1.00. Drag the
+ * Size slider to 1.60 and the drawing stayed exactly the same size, so the preview showed a
+ * 232px island that the user was about to make 371px. A preview that does not move when the
+ * thing it previews moves is a decoration, and it is worse than none because it is trusted.
+ *
+ * Every preview now derives its geometry from this one factor, which is the user's `scale`
+ * preference multiplied by PREVIEW_ZOOM. PREVIEW_ZOOM exists because the real 232px pill is
+ * far too wide to sit inside a settings panel next to its own labels; the zoom is a pure
+ * presentation scale and never affects the ratio, which is the thing being communicated.
+ */
+const PREVIEW_ZOOM = 0.5;
+
+function previewScale(scale: number): number {
+  const n = Number.isFinite(scale) ? scale : 1;
+  return Math.min(1.6, Math.max(0.7, n)) * PREVIEW_ZOOM;
+}
+
+/** Draws one shape option as the shape itself. */
+function HaloShapeSwatch({
+  shape,
+  radius,
+  scaleScale,
+  active,
+  disabled,
+  label,
+  hint,
+  onClick,
+}: {
+  shape: HaloPrefs['shape'];
+  radius: number;
+  scaleScale: number;
+  active: boolean;
+  disabled?: boolean;
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  /* Mirrors shellRadii() for the swatch: 'notch' rounds the edge it sits on, and a
+   * 40px-tall pill is fully rounded at any radius past ~20. Kept deliberately in sync
+   * with HaloPreferences rather than imported, because this is a 1-glyph approximation
+   * and pulling the real function in here would drag the whole island module into a
+   * settings panel. The PROBE on shape is what keeps them honest. */
+  const r =
+    shape === 'custom'
+      ? Math.min(48, radius)
+      : shape === 'square'
+        ? 4
+        : shape === 'notch'
+          ? '4px 4px 0 0'
+          : 9999;
+
+  /* Height tracks the real compact height (40px at scale 1) rather than a fixed 20px, so
+   * swatches grow and shrink with the Size slider like the island does. The width is the
+   * 5.8:1 compact ratio so the silhouette is honest at every scale. */
+  /* This component takes EXPLICIT PROPS. It has no `prefs` binding and no `haloPrefs` binding —
+   * both threw `ReferenceError` on every render of the Halo section (first `prefs.scale`, then
+   * `haloPrefs.scale` when I "fixed" it by reaching one scope out). The island's stored scale is
+   * ALREADY passed in as `scaleScale`, so use it. A component reads its own props or it is not a
+   * component. */
+  const barH = Math.round(resolveHaloSize(scaleScale).compactHeight * previewScale(scaleScale));
+  const barW = Math.round(HALO_SIZE_TOKENS.compactWidth * previewScale(scaleScale) * 0.62);
+
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      aria-label={`${label}. ${hint}`}
+      disabled={disabled}
+      onClick={onClick}
+      className="text-left disabled:opacity-40"
+      style={{
+        padding: 8,
+        borderRadius: 8,
+        /* Selection is a STRONGER HAIRLINE, not a hue (design.md 2: monochrome chrome). */
+        border: `1px solid ${active ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+        background: active ? 'var(--ws-surface-raised)' : 'transparent',
+      }}
+    >
+      {/* The shape, drawn at the real compact proportion. */}
+      <div
+        aria-hidden="true"
+        style={{
+          height: barH,
+          width: barW,
+          borderRadius: r,
+          /* The island's OWN signal colour, amber (halo.css:38). Showing the settings page
+             accent here would make the preview describe something the user will not get. */
+          background: active ? 'var(--color-amber-400)' : 'var(--ws-border-strong)',
+          marginBottom: 6,
+          opacity: active ? 1 : 0.7,
+        }}
+      />
+      <div className="text-[11px]" style={{ color: 'var(--text-primary)' }}>
+        {label}
+      </div>
+      <div className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-disabled)' }}>
+        {hint}
+      </div>
+    </button>
+  );
+}
+
+/**
+ * Where the island lands, drawn on a miniature screen.
+ *
+ * The frame is 16:9 because that is the common case and because a wrong aspect ratio
+ * would misrepresent how much of the screen the island occupies. The island is drawn
+ * FLUSH to the edge it is attached to, which is the entire point of the control — the
+ * old version moved the native window but the renderer ignored the edge, so the
+ * diagram would have been showing a promise the code did not keep.
+ */
+function HaloPlacementPreview({ prefs }: { prefs: HaloPrefs }) {
+  const edge = prefs.edge;
+  /* The island's footprint on screen, as a fraction of the frame. Derived rather than
+   * guessed: 232px wide is 11.3% of a 2048px display and 17px of a 1440px one, so the
+   * honest fraction depends on the scale the user picked. A constant here would show a
+   * 1.6x island at the same footprint as a 0.7x one. */
+  const frac = (232 * prefs.scale) / 2048;
+  const barPx = Math.max(5, Math.round(frac * 260 * 3));
+  const island = {
+    top: { left: `${Math.round((1 - frac) * 50)}%`, width: `${Math.max(4, frac * 100)}%` },
+    left: { top: `${Math.round((1 - (40 * prefs.scale) / 900) * 50)}%`, height: `${Math.max(3, (40 * prefs.scale) / 900 * 100)}%` },
+    right: { top: `${Math.round((1 - (40 * prefs.scale) / 900) * 50)}%`, height: `${Math.max(3, (40 * prefs.scale) / 900 * 100)}%` },
+  } as const;
+
+  return (
+    <div
+      aria-hidden="true"
+      className="relative mx-auto"
+      style={{
+        width: '100%',
+        maxWidth: 260,
+        aspectRatio: '16 / 9',
+        borderRadius: 8,
+        border: '1px solid var(--ws-border)',
+        background: 'var(--ws-surface)',
+      }}
+    >
+      {/* Fills the frame so the island reads as ON something. */}
+      <div className="absolute inset-0" style={{ borderRadius: 7 }} />
+      <div
+        style={{
+          position: 'absolute',
+          background: 'var(--color-amber-400)',
+          borderRadius: 3,
+          ...(edge === 'top'
+            ? { top: 0, left: island.top.left, width: island.top.width, height: barPx }
+            : edge === 'left'
+              ? { left: 0, top: island.left.top, width: barPx, height: island.left.height }
+              : { right: 0, top: island.right.top, width: barPx, height: island.right.height }),
+        }}
+      />
+      <span
+        className="absolute text-[9px]"
+        style={{
+          color: 'var(--text-disabled)',
+          ...(edge === 'top'
+            ? { top: 11, left: '38%' }
+            : edge === 'left'
+              ? { left: 11, top: '52%' }
+              : { right: 11, top: '52%' }),
+        }}
+      >
+        Halo
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The compact pill at true aspect, with one dot per opted-in widget.
+ *
+ * 232x40 is a 5.8:1 ratio, so it is drawn at 116x20 — exactly half. Anything else
+ * would misrepresent how crowded the pill is, which is the whole question this control
+ * answers: "does everything I picked still fit?"
+ */
+function HaloPillPreview({ prefs }: { prefs: HaloPrefs }) {
+  const dots = prefs.compactStyle === 'off'
+    ? []
+    : (prefs.order ?? []).filter(
+        (k) => isWidgetVisible(prefs, k) && prefs.widgets?.[k]?.compact !== false,
+      );
+  const cap = 3;
+  const shown = dots.slice(0, cap);
+  const overflow = dots.length - shown.length;
+
+  /* EVERY dimension is derived, not chosen. The pill is 232x40 at scale 1 and keeps its
+   * 5.8:1 ratio at any scale, so a wider island genuinely looks wider here — which is the
+   * only way the user can tell whether their picks still fit before they leave the panel. */
+  const k = previewScale(prefs.scale);
+  const w = Math.round(HALO_SIZE_TOKENS.compactWidth * k);
+  const h = Math.round(resolveHaloSize(prefs.scale).compactHeight * k);
+  const padX = Math.round(10 * k);
+  const padY = Math.round(4 * k);
+  const heroW = Math.round(26 * k);
+  const heroH = Math.max(3, Math.round(6 * k));
+  const dot = Math.max(3, Math.round(4 * k));
+  const gap = Math.max(2, Math.round(3 * k));
+
+  return (
+    <div className="flex justify-center" style={{ marginTop: 6, marginBottom: 8 }}>
+      <div
+        aria-hidden="true"
+        title={`${Math.round(HALO_SIZE_TOKENS.compactWidth)}×${resolveHaloSize(prefs.scale).compactHeight}px (${resolveHaloSize(prefs.scale).label})`}
+        style={{
+          position: 'relative',
+          width: w,
+          height: h,
+          borderRadius:
+            prefs.shape === 'square' ? 4 : prefs.shape === 'notch' ? '4px 4px 0 0' : 9999,
+          background: 'var(--ws-surface-raised)',
+          border: '1px solid var(--ws-border-strong)',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: padX,
+            top: Math.round((h - heroH) / 2),
+            width: heroW,
+            height: heroH,
+            borderRadius: 2,
+            background: 'var(--color-amber-400)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            right: padX,
+            top: Math.round((h - Math.max(dot, 8)) / 2),
+            display: 'flex',
+            gap,
+            alignItems: 'center',
+          }}
+        >
+          {shown.map((k2) => (
+            <span
+              key={`pv-${k2}`}
+              style={{ width: dot, height: dot, borderRadius: 9999, background: 'var(--text-disabled)' }}
+            />
+          ))}
+          {overflow > 0 && (
+            <span style={{ fontSize: Math.max(8, 9 * k), color: 'var(--text-disabled)' }}>+{overflow}</span>
+          )}
+          {dots.length === 0 && (
+            <span style={{ fontSize: Math.max(8, 9 * k), color: 'var(--text-disabled)' }}>—</span>
+          )}
+        </div>
+      </div>
+      {/* The real dimensions, so the number is never something you have to infer. */}
+      <span
+        className="font-mono tabular-nums"
+        style={{ fontSize: 10, color: 'var(--text-disabled)', marginLeft: 10, alignSelf: 'center' }}
+      >
+        {Math.round(HALO_SIZE_TOKENS.compactWidth)}×
+        {resolveHaloSize(prefs.scale).compactHeight}px
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A labelled range control for the Halo section.
+ *
+ * WHY A HELPER RATHER THAN SIX MORE COPIES OF THE MARKUP
+ * The section already had an inline `input[type=range]` for size and another for widget
+ * count, and this change adds four more. Six hand-written copies is six places to forget the
+ * `aria-label`, the disabled state or the tabular-nums readout — and an unlabelled slider is
+ * invisible to a screen reader, which is the one thing a "customize everything" panel must not
+ * ship. One helper makes the omission impossible.
+ *
+ * The readout is `font-mono tabular-nums` per the file's existing convention for numeric
+ * values, so the number does not jitter horizontally while dragging.
+ */
+function HaloSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix?: string;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="py-1">
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-[11px] text-zinc-400">{label}</span>
+        <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+          {value}
+          {suffix}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full disabled:opacity-40"
+      />
+    </div>
+  );
+}
+
+/**
+ * The switch used throughout Settings — previously `HaloSwitch`, which was only
+ * used by the Halo section and therefore only fixed the Halo section.
+ *
+ * ── WHY THE HAND-ROLLED SWITCHES WERE INVISIBLE ─────────────────────────────────
+ * Three switches here (smooth scrolling, Show Halo Island, the Halo widget
+ * toggles) drew their own track and coloured it with `--page-accent`. On this
+ * page `index.css:743` sets:
+ *
+ *     [data-page="settings"] { --page-accent: var(--text-primary); }
+ *
+ * deliberately — Settings is MONOCHROME, so "selection" is meant to read as
+ * contrast rather than hue. `--text-primary` is `#fafafa` on dark. The knob was
+ * `bg-white`. So in the ON state the track and the knob were both `#fafafa`:
+ * **measured 1.04:1 contrast**, i.e. a white shape on a white field.
+ * `agent/probes/ambient-probe.mjs` prints that number.
+ *
+ * Swapping the token for `--ws-accent` is NECESSARY BUT NOT SUFFICIENT. A white
+ * knob on the dark accent measures **2.43:1**, which still fails WCAG 1.4.11
+ * (3:1 for a control boundary). The knob has to invert to the surface colour,
+ * which is exactly what `.sf-switch` already does (`src/styles/surface.css:643`)
+ * and what this component now delegates to.
+ *
+ * So there is ONE switch implementation on this page and it is the sanctioned
+ * one — not a fourth hand-drawn variant.
+ */
+function SettingsSwitch({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  /* A real <input type="checkbox" role="switch"> wearing `.sf-switch`.
+   *
+   * The previous version was a <button> containing its own knob <span>, hand-drawn per
+   * call site — and three of them did not agree with each other or with the Halo ones. A real
+   * checkbox is focusable, submittable and announced correctly by every screen reader, and
+   * `sf-switch` draws the track and the knob from a pseudo-element so no extra markup is
+   * needed at all. */
+  return (
+    <input
+      type="checkbox"
+      role="switch"
+      className="sf-switch"
+      checked={checked}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(e) => onChange(e.target.checked)}
+    />
   );
 }

@@ -63,7 +63,7 @@ export function FocusStats({ stats, streak }: FocusStatsProps) {
           <div
             key={stat.label}
             className={cn(
-              'relative rounded-lg p-3 bg-zinc-900/95 border border-zinc-800/60',
+              'relative rounded-lg p-3 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60',
             )}
           >
             {/* Accent glow dot */}

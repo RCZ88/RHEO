@@ -11,6 +11,7 @@ import { ChevronDown, BarChart3 } from 'lucide-react';
 import { Chart, registerables } from 'chart.js';
 import type { WidgetCardProps } from './WidgetCardC_NEON';
 import { WidgetCardC } from './WidgetCardC_NEON';
+import { chartTokens, chartTooltip, watchChartTokens } from '../finance/_fx/chartTokens';
 
 Chart.register(...registerables);
 
@@ -42,6 +43,10 @@ export function ProductivityChartC({
   loading = false,
   className = '',
 }: ProductivityChartProps) {
+  /* Keep the canvas tooltip in sync with the theme. A <canvas> cannot recompute
+     its own colours, so this observer is what makes it re-skin on light/dark. */
+  useEffect(() => watchChartTokens(), []);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const [period, setPeriod] = useState<Period>('week');
@@ -132,12 +137,10 @@ export function ProductivityChartC({
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: 'rgba(13, 13, 13, 0.95)',
-            titleColor: '#fafafa',
-            bodyColor: '#a1a1aa',
-            borderColor: 'rgba(59, 59, 66, 0.5)',
-            borderWidth: 1,
-            padding: 8,
+            /* Hardcoded near-black tooltip. Canvas-painted, so no CSS reaches
+               it - this is the third chart carrying its own dark tooltip skin.
+               All three now share chartTokens(). */
+            ...chartTooltip(),
             titleFont: { size: 11, family: 'JetBrains Mono, monospace' },
             bodyFont: { size: 12, family: 'JetBrains Mono, monospace' },
             callbacks: {
@@ -189,7 +192,7 @@ export function ProductivityChartC({
       </div>
 
       {/* Chart area — glass bordered */}
-      <div className="h-40 w-full rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 p-2">
+      <div className="h-40 w-full rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 p-2">
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <div className="h-4 w-48 rounded bg-zinc-800/50 animate-pulse" />
@@ -201,17 +204,17 @@ export function ProductivityChartC({
 
       {/* Legend — glass pills with subtle glow */}
       <div className="flex items-center gap-3 mt-2 mb-3">
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
           <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'rgba(236, 72, 153, 0.8)', boxShadow: '0 0 6px -2px rgba(236,72,153,0.4)' }} />
           <span className="text-[10px] font-mono uppercase text-zinc-500">Productive</span>
           <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{formatHours(totalProductive)}</span>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
           <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'rgba(113, 113, 122, 0.6)' }} />
           <span className="text-[10px] font-mono uppercase text-zinc-500">Neutral</span>
           <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{formatHours(totalNeutral)}</span>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
           <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'rgba(244, 63, 94, 0.8)', boxShadow: '0 0 6px -2px rgba(244,63,94,0.4)' }} />
           <span className="text-[10px] font-mono uppercase text-zinc-500">Distracting</span>
           <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{formatHours(totalDistracting)}</span>
@@ -220,11 +223,11 @@ export function ProductivityChartC({
 
       {/* Bottom stats — glass pills */}
       <div className="flex items-center justify-between border-t border-zinc-800/30 pt-2">
-        <div className="flex flex-col px-2 py-1 rounded-md bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+        <div className="flex flex-col px-2 py-1 rounded-md bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
           <span className="text-[10px] font-mono uppercase text-zinc-600">Total</span>
           <span className="text-[13px] font-mono font-medium text-zinc-200 tabular-nums">{formatHours(totalAll)}</span>
         </div>
-        <div className="flex flex-col px-2 py-1 rounded-md bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+        <div className="flex flex-col px-2 py-1 rounded-md bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
           <span className="text-[10px] font-mono uppercase text-zinc-600">Best day</span>
           <span className="text-[13px] font-mono font-medium text-emerald-400 tabular-nums">
             {bestDay ? `${bestDay.day} — ${formatHours(bestDay.productive)}` : '—'}

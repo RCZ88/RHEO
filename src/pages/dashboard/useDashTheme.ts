@@ -75,6 +75,63 @@ export function useDashTheme() {
 // ── TERMINAL THEME ───────────────────────────────────────────────────────────
 // Scoped entirely under [data-dash-theme="terminal"]. Current design untouched.
 export const TERMINAL_THEME_CSS = `
+/* ── WARM PAPER ───────────────────────────────────────────────────────────────
+ *
+ * This token set was hardcoded dark end to end and had no light branch at all,
+ * which is why the Dashboard rendered near-black while every other page followed
+ * the theme: it is the ONE surface in the app that ships its own theme system, so
+ * it never inherited html.light. --dt-surface-deep: #060608 against
+ * --dt-text: #fafafa is a dark field no matter which theme you pick.
+ *
+ * The dark values above are untouched. These rebind the SAME tokens to Warm
+ * Paper, so every rule further down that reads var(--dt-surface) / --dt-text /
+ * --dt-border-subtle becomes correct on paper without touching a single one of
+ * them. That is the whole fix — one block, not thirty edits.
+ *
+ * Selector is 'html.light[data-dash-theme="terminal"]' at (0,2,1), which beats
+ * the plain '[data-dash-theme="terminal"]' at (0,1,0). Both must match, so this
+ * only applies when the terminal theme is genuinely active.
+ *
+ * Warm, never grey: --ws-surface / -raised / -overlay / -sunken are the
+ * design.md §11 S0-S3 ladder (bone #f5f2ec, card #fcfbf8, overlay #ffffff), and
+ * the text is the --text-* ink ramp. Nothing here substitutes a neutral.
+ */
+html.light[data-dash-theme="terminal"] {
+  /* Card field. S1 card, so cards sit one step ABOVE the page field. */
+  --dt-surface:        var(--ws-surface-raised);
+  --dt-surface-raised: var(--ws-surface-overlay);
+  /* The page field is the BASE of the ladder, not a card. */
+  --dt-surface-deep:   var(--ws-surface);
+  /* Light needs MORE alpha than dark for a hairline to read at all: a dark
+     hairline vanishes into a bright field where a light one does not. This is
+     design.md §11 verbatim, and it is why --ws-border is 0.10 here against
+     --ws-border-strong's 0.60. */
+  --dt-border-subtle:  var(--ws-border);
+  --dt-text:           var(--text-primary);
+  --dt-text-dim:       var(--text-secondary);
+  --dt-text-muted:     var(--text-muted);
+  /* "Depth comes from hairlines, never shadow" (§11) — a sheen is a shadow. */
+  --dt-sheen:          none;
+}
+
+/* The page wash. The dark version is a 3-hue field at 16%/9%/7%; on paper those
+   same alphas disappear, so each is raised and the field is left to the token
+   rather than painted. Amplitude stays low — this is atmosphere, not a theme. */
+html.light[data-dash-theme="terminal"] .dash-root {
+  background-image:
+    radial-gradient(120% 75% at 50% -10%,
+      color-mix(in srgb, var(--page-accent, #ec4899) 10%, transparent) 0%,
+      color-mix(in srgb, #6d28d9 7%, transparent) 34%,
+      color-mix(in srgb, #0369a1 6%, transparent) 58%,
+      transparent 78%),
+    radial-gradient(90% 55% at 12% 100%,
+      color-mix(in srgb, #0369a1 5%, transparent) 0%, transparent 62%);
+}
+
+/* The dot grid sits on paper, so it needs more presence than the 0.07 it can
+   get away with on a dark field — same reason the hairline alpha went up. */
+html.light[data-dash-theme="terminal"] .dash-root::before { opacity: .16; }
+
 [data-dash-theme="terminal"] {
   --dt-surface:        #0b0b0d;
   --dt-surface-raised: #111114;
@@ -259,7 +316,6 @@ export const TERMINAL_THEME_CSS = `
 
   [data-dash-theme="terminal"] .dash-root :is(.DeskFlowCard, .dash-card):hover { transform: none; }
   [data-dash-theme="terminal"] .dash-root button:active { transform: none; }
-}
 
 
 /* ── Widget Library (CardLibrary) — modal + category rail + card grid ─────── */

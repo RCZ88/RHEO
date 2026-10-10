@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { maxOf, maxBy } from '../utils/safeMath';
+import { maxOf, maxBy } from '../../utils/safeMath';
 
 const APP_CATEGORIES = ['IDE', 'AI Tools', 'Browser', 'Entertainment', 'Communication', 'Design', 'Productivity', 'Tools', 'Other'];
 const VIVID_PALETTE = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#5f27cd', '#01a3a4', '#f368e0', '#ee5a24', '#eccc68'];
@@ -84,8 +84,23 @@ export const ORBIT_CONFIG = { innerRadius: 5, outerRadius: 250, minOrbitRadius: 
 export const SUN_RENDER_SIZE = 8;
 export const PLANET_COLOR_FAMILIES = CATEGORY_COLOR_FAMILIES;
 
-export interface PlanetData { name: string; category: string; color: string; radius: number; orbitRadius: number; angularSpeed: number; orbitalPeriod: number; eccentricity: number; inclination: number; longitudeOfPerihelion: number; rotationSpeed: number; moons: number; time: number; sessions: number; speed: number; }
-export interface ActivityLog { app: string; category: string; timestamp: string | Date; total_ms: number; }
+export interface PlanetMoon { name: string; radius: number; orbitRadius: number; speed: number; color: string; }
+export interface PlanetRing { innerRadius: number; outerRadius: number; opacity: number; color: string; tilt: number; }
+
+/**
+ * `moons` was declared `number` while every producer has always returned an array
+ * of PlanetMoon, and `rings` was never declared at all. A contract that does not
+ * match reality is how `angularSpeed` stayed missing from the producer for so
+ * long: the type said the field existed, so nothing looked wrong.
+ */
+export interface PlanetData { name: string; category: string; color: string; radius: number; orbitRadius: number; angularSpeed: number; orbitalPeriod: number; eccentricity: number; inclination: number; longitudeOfPerihelion: number; rotationSpeed: number; moons: PlanetMoon[]; rings: PlanetRing[]; time: number; sessions: number; speed: number; }
+/**
+ * Logs reach this module from the raw `logs` table (which has `duration_ms` and
+ * NO `duration` column), from the dashboard aggregate (`seconds`), and from the
+ * DashboardPage adapters (`duration`). Requiring one exact spelling made every
+ * other caller a type error AND, at runtime, a silent 0. Read time via logSeconds().
+ */
+export interface ActivityLog { app: string; category?: string; timestamp: string | Date; total_ms?: number; seconds?: number; duration?: number; duration_ms?: number; domain?: string; url?: string; title?: string; project?: string | null; is_browser_tracking?: number | boolean; }
 export interface OrbitSystemProps { logs: ActivityLog[]; appColors?: Record<string, string>; categoryOverrides?: Record<string, string>; websiteLogs?: ActivityLog[]; websiteColors?: Record<string, string>; websiteCategoryOverrides?: Record<string, string>; selectedPeriod?: string; onPeriodChange?: (period: string) => void; }
 
 // ── Computation helpers (extracted from orchestrator) ──
@@ -123,6 +138,19 @@ export function calculateOrbitalPeriodLocal(radius: number): number { return (2 
 
 export function calculateAngularSpeedLocal(radius: number): number { return Math.max(ORBIT_CONFIG_LOCAL.minAngularSpeed, ORBIT_CONFIG_LOCAL.baseAngularSpeed / Math.pow(radius, 1.5) + 0.25 * (1 - radius / ORBIT_CONFIG_LOCAL.maxOrbitRadius)); }
 
+/**
+ * Spread N planets between minOrbitRadius and maxOrbitRadius on a power curve.
+ * Called by computePlanets/computeWebsitePlanets below but never defined, so
+ * rendering the orbit view threw a ReferenceError. The `spacingExponent`,
+ * `minOrbitRadius` and `maxOrbitRadius` fields in ORBIT_CONFIG_LOCAL existed
+ * only for this function.
+ */
+export function calculateOrbitRadiusLocal(index: number, total: number): number {
+  const n = Math.max(total, 1);
+  const t = n <= 1 ? 0 : index / (n - 1);
+  return ORBIT_CONFIG_LOCAL.minOrbitRadius + Math.pow(t, ORBIT_CONFIG_LOCAL.spacingExponent) * (ORBIT_CONFIG_LOCAL.maxOrbitRadius - ORBIT_CONFIG_LOCAL.minOrbitRadius);
+}
+
 export function computeEccentricityLocal(planetIndex: number, totalPlanets: number): number { const t = planetIndex / Math.max(totalPlanets - 1, 1); const noise = (seededRandom(planetIndex * 7.3 + 13.7) - 0.5) * 0.03; return 0.15 - 0.12 * t + noise; }
 
 export function computeInclinationLocal(planetName: string): number { return (hashStringLocal(planetName) % 1000) / 1000 * 6; }
@@ -137,18 +165,42 @@ export function getCategoryColorLocal(category: string, indexInCategory: number)
 
 export function getDistinctColorLocal(index: number): string { const VIVID_PALETTE = ['#6366f1', '#06b6d4', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#3b82f6', '#84cc16', '#e879f9', '#22d3ee']; return VIVID_PALETTE[index % VIVID_PALETTE.length]; }
 
+/**
+ * Seconds a single log represents, tolerating every field spelling the data
+ * layer has used. The `logs` table has NO `duration` column at all (only
+ * `duration_ms`), while the dashboard aggregate normalizer emits `seconds` and
+ * the legacy shape used `duration`. Reading only one of them yields 0, and 0 is
+ * indistinguishable from "no time spent", so an entire view can render empty
+ * with no error anywhere.
+ */
+const logSeconds = (l: any): number => {
+  if (typeof l?.duration === 'number' && Number.isFinite(l.duration)) return l.duration;
+  if (typeof l?.seconds === 'number' && Number.isFinite(l.seconds)) return l.seconds;
+  if (typeof l?.total_ms === 'number' && Number.isFinite(l.total_ms)) return l.total_ms / 1000;
+  if (typeof l?.duration_ms === 'number' && Number.isFinite(l.duration_ms)) return l.duration_ms / 1000;
+  return 0;
+};
+
 export function computePlanets(logs: ActivityLog[], appColors?: Record<string, string>, categoryOverrides?: Record<string, string>): PlanetData[] {
   const validLogs = (logs || []).filter((log: any) => log && log.app && typeof log.app === 'string' && log.app.trim().length > 0 && !log.is_browser_tracking);
-  if (validLogs.length === 0) return [{ name: 'VS Code', category: 'IDE', color: '#FCD34D', time: 120, sessions: 5, radius: 0.8, orbitRadius: 12, speed: calculateAngularSpeedLocal(12), orbitalPeriod: calculateOrbitalPeriodLocal(12), eccentricity: 0.05, inclination: 0.05, longitudeOfPerihelion: 0, moons: [], rings: [{ innerRadius: 2.2, outerRadius: 3.8, opacity: 0.45, color: '#6366f1', tilt: 0.2 }] }];
+  if (validLogs.length === 0) return [{ name: 'VS Code', category: 'IDE', color: '#FCD34D', time: 120, sessions: 5, radius: 0.8, orbitRadius: 12, speed: calculateAngularSpeedLocal(12), angularSpeed: calculateAngularSpeedLocal(12), rotationSpeed: calculateAngularSpeedLocal(12) * 2, orbitalPeriod: calculateOrbitalPeriodLocal(12), eccentricity: 0.05, inclination: 0.05, longitudeOfPerihelion: 0, moons: [], rings: [{ innerRadius: 2.2, outerRadius: 3.8, opacity: 0.45, color: '#6366f1', tilt: 0.2 }] }];
   const grouped: Record<string, any[]> = {};
   for (const log of validLogs) { const appName = log.app.trim(); if (!grouped[appName]) grouped[appName] = []; grouped[appName].push(log); }
-  const maxTime = Math.max(...Object.values(grouped).map(l => l.reduce((s: number, ll: any) => s + (ll.duration || 0), 0)), 1);
+  const maxTime = Math.max(...Object.values(grouped).map(l => l.reduce((s: number, x: any) => s + logSeconds(x), 0)), 1);
   const catCount: Record<string, number> = {};
-  return Object.entries(grouped).sort(([, a], [, b]) => b.reduce((s: number, l: any) => s + (l.duration || 0), 0) - a.reduce((s: number, l: any) => s + (l.duration || 0), 0)).filter(([, a]) => a.reduce((s: number, l: any) => s + (l.duration || 0), 0) >= MIN_PLANET_TIME_SECONDS).slice(-MAX_RENDERED_PLANETS).map(([appName, appLogs], idx) => {
-    const category = categoryOverrides?.[appName.toLowerCase()] || 'Other';
+  // `.slice(0, …)`, NOT `.slice(-…)`: the list above is sorted DESCENDING by time
+  // spent, so a negative slice kept the 80 SMALLEST apps and threw away the
+  // largest ones — on this database that silently deleted Visual Studio Code
+  // (94h, the single biggest object in the DB) from the solar system.
+  return Object.entries(grouped).sort(([, a], [, b]) => b.reduce((s: number, l: any) => s + logSeconds(l), 0) - a.reduce((s: number, l: any) => s + logSeconds(l), 0)).filter(([, a]) => a.reduce((s: number, l: any) => s + logSeconds(l), 0) >= MIN_PLANET_TIME_SECONDS).slice(0, MAX_RENDERED_PLANETS).map(([appName, appLogs], idx) => {
+    // An explicit override still wins, but the log's OWN category must be the
+    // fallback. It used to be hardcoded to 'Other', which collapsed all 138
+    // tracked apps into a single solar system regardless of their real
+    // category — the galaxy rendered as one "Other" star with everything on it.
+    const category = categoryOverrides?.[appName.toLowerCase()] || appLogs.find((l: any) => l?.category)?.category || 'Other';
     const idxInCat = (catCount[category] = (catCount[category] || 0) + 1);
     const color = getCategoryColorLocal(category, idxInCat - 1);
-    const appTime = appLogs.reduce((s: number, l: any) => s + (l.duration || 0), 0);
+    const appTime = appLogs.reduce((s: number, l: any) => s + logSeconds(l), 0);
     const radius = Math.max(0.3, Math.min(1.5, 0.5 + (appTime / maxTime) * 0.5));
     const orbitRadius = calculateOrbitRadiusLocal(idx, Object.keys(grouped).length);
     const eccentricity = computeEccentricityLocal(idx, Object.keys(grouped).length);
@@ -157,7 +209,13 @@ export function computePlanets(logs: ActivityLog[], appColors?: Record<string, s
     const projects = [...new Set(appLogs.map((l: any) => l.project).filter((p: any) => p && typeof p === 'string'))] as string[];
     const moons = projects.slice(0, 3).map((proj: string, mIdx: number) => ({ name: proj, radius: 0.25, orbitRadius: 1.5 + mIdx * 0.3, speed: 1.2 + mIdx * 0.3, color: color + '88' }));
     const rings: any[] = [];
-    return { name: appName, category, color, time: appTime, sessions: appLogs.length, radius, orbitRadius, speed: calculateAngularSpeedLocal(orbitRadius), orbitalPeriod: calculateOrbitalPeriodLocal(orbitRadius), eccentricity, inclination, longitudeOfPerihelion, moons, rings };
+    const angularSpeed = calculateAngularSpeedLocal(orbitRadius);
+    // `angularSpeed` is what Planet.tsx/Moon.tsx actually integrate
+    // (`angle += data.angularSpeed * speedMultiplier`) and what PlanetData
+    // declares. It was never emitted here — only `speed` was — so on frame one
+    // `angle` became NaN, `Math.cos(NaN)` put every mesh at NaN, and Three.js
+    // rendered nothing. `speed` is kept for existing callers.
+    return { name: appName, category, color, time: appTime, sessions: appLogs.length, radius, orbitRadius, speed: angularSpeed, angularSpeed, rotationSpeed: angularSpeed * 2, orbitalPeriod: calculateOrbitalPeriodLocal(orbitRadius), eccentricity, inclination, longitudeOfPerihelion, moons, rings };
   });
 }
 
@@ -178,7 +236,7 @@ export function computeWebsitePlanets(websiteLogs: ActivityLog[], websiteColors?
   const grouped: Record<string, any[]> = {};
   for (const log of validLogs) { const domainName = (log as any).domain?.trim() || (log as any).app?.trim() || 'Unknown'; if (!grouped[domainName]) grouped[domainName] = []; grouped[domainName].push(log); }
   const planets: PlanetData[] = [];
-  const sortedApps = Object.entries(grouped).sort(([, a], [, b]) => b.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0) - a.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0)).filter(([, a]) => a.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0) >= MIN_PLANET_TIME_SECONDS).slice(-MAX_RENDERED_PLANETS);
+  const sortedApps = Object.entries(grouped).sort(([, a], [, b]) => b.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0) - a.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0)).filter(([, a]) => a.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0) >= MIN_PLANET_TIME_SECONDS).slice(0, MAX_RENDERED_PLANETS); // desc-sorted: keep the BIGGEST, not the smallest 80
   const catCount: Record<string, number> = {};
   const wsMaxTime = sortedApps.length > 0 ? Math.max(...sortedApps.map(([, d]) => d.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0)), 1) : 1;
   for (let idx = 0; idx < sortedApps.length; idx++) {
@@ -188,7 +246,8 @@ export function computeWebsitePlanets(websiteLogs: ActivityLog[], websiteColors?
     catCount[category] = (catCount[category] || 0) + 1;
     const appTime = domainLogs.reduce((s: number, l: any) => s + ((l as any).duration_ms ? (l as any).duration_ms / 1000 : (l as any).duration || 0), 0);
     const orbitRadius = 24 + (220 - 24) * Math.pow(idx / Math.max(sortedApps.length - 1, 1), 0.8);
-    planets.push({ name: domainName, category, color, time: appTime, sessions: domainLogs.length, radius: 0.8 + Math.pow(appTime / wsMaxTime, 1/3) * 1.2, orbitRadius, speed: calculateAngularSpeedLocal(orbitRadius) * 0.1, eccentricity: computeEccentricityLocal(idx, sortedApps.length), inclination: computeInclinationLocal(domainName) * (Math.PI / 180), longitudeOfPerihelion: seededRandom(idx * 7.3) * Math.PI * 2, moons: [], rings: orbitRadius > 1.5 ? [{ innerRadius: orbitRadius * 1.4, outerRadius: orbitRadius * 2.2, opacity: 0.2 + seededRandom(idx * 7.4) * 0.3, color, tilt: (seededRandom(idx * 7.5) - 0.5) * 0.5 }] : [] });
+    const webSpeed = calculateAngularSpeedLocal(orbitRadius) * 0.1;
+    planets.push({ name: domainName, category, color, time: appTime, sessions: domainLogs.length, radius: 0.8 + Math.pow(appTime / wsMaxTime, 1/3) * 1.2, orbitRadius, speed: webSpeed, angularSpeed: webSpeed, rotationSpeed: webSpeed * 2, orbitalPeriod: calculateOrbitalPeriodLocal(orbitRadius), eccentricity: computeEccentricityLocal(idx, sortedApps.length), inclination: computeInclinationLocal(domainName) * (Math.PI / 180), longitudeOfPerihelion: seededRandom(idx * 7.3) * Math.PI * 2, moons: [], rings: orbitRadius > 1.5 ? [{ innerRadius: orbitRadius * 1.4, outerRadius: orbitRadius * 2.2, opacity: 0.2 + seededRandom(idx * 7.4) * 0.3, color, tilt: (seededRandom(idx * 7.5) - 0.5) * 0.5 }] : [] });
   }
   return planets;
 }
@@ -204,4 +263,9 @@ export function computeWebsiteSolarSystems(websiteLogs: ActivityLog[], websiteCo
   return allCategories.map(cat => ({ category: cat, planets: categoryGroups[cat] || [], totalTime: categoryTimes[cat] || 0, sunSize: WEBSITE_SUN_CONFIGS_LOCAL[cat]?.sizeRange[0] || 3.5 })).filter(ss => ss.planets.length > 0 || ss.totalTime > 0).sort((a, b) => { const aIdx = ['Social Media', 'Entertainment', 'Productivity', 'Search Engine', 'News', 'Shopping', 'Communication', 'Education', 'Developer Tools', 'Uncategorized', 'Other'].indexOf(a.category); const bIdx = ['Social Media', 'Entertainment', 'Productivity', 'Search Engine', 'News', 'Shopping', 'Communication', 'Education', 'Developer Tools', 'Uncategorized', 'Other'].indexOf(b.category); if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx; if (aIdx !== -1) return -1; if (bIdx !== -1) return 1; return b.totalTime - a.totalTime; });
 }
 
-function seededRandom(seed: number): number { return (Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1; }
+// Exported because src/components/orbit/index.ts re-exports both of these by
+// name; seededRandom was module-private, which made the whole barrel fail to
+// resolve. `createSeededRandom` never existed at all — it is the factory form of
+// the same generator, so it is provided here rather than left dangling.
+export function seededRandom(seed: number): number { return (Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1; }
+export function createSeededRandom(seed: number): (n: number) => number { return (n: number) => seededRandom(seed + n); }

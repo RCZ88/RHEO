@@ -265,7 +265,7 @@ function MagicCard({ children, className = '', glowFrom = '#10b981', glowTo = '#
         background: useMotionTemplate`linear-gradient(#09090b 0 0) padding-box, radial-gradient(${glowSize / 2}px circle at ${mouseX}px ${mouseY}px, ${glowFrom}, ${glowTo}, transparent 100%) border-box`,
       }}
     >
-      <div className="absolute inset-px z-20 rounded-[inherit] bg-zinc-950/90" />
+      <div className="absolute inset-px z-20 rounded-[inherit] bg-zinc-950 light:bg-[var(--ws-surface)]/90" />
       <motion.div
         className="pointer-events-none absolute z-30"
         style={{
@@ -311,7 +311,7 @@ function ScanLineInput({
         disabled={disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-4 py-3.5 pr-10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed font-mono tracking-wide"
+        className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/40 rounded-xl px-4 py-3.5 pr-10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed font-mono tracking-wide"
         style={{
           boxShadow: focused ? '0 0 20px rgba(16,185,129,0.08), inset 0 1px 0 rgba(255,255,255,0.05)' : 'inset 0 1px 0 rgba(255,255,255,0.03)',
         }}
@@ -352,7 +352,15 @@ function ScanLineInput({
 /* ------------------------------------------------------------------ */
 
 function AttemptIndicator({ attemptsLeft, maxAttempts = 3 }: { attemptsLeft: number; maxAttempts?: number }) {
-  const segments = Array.from({ length: maxAttempts }, (_, i) => i < attemptsLeft);
+  // Clamp defensively. `i < attemptsLeft` treats a non-number as false for
+  // every segment, so one undefined payload from the IPC layer renders all
+  // three attempts red — a "you are about to be locked out" warning for a user
+  // who still has every attempt. Never let bad data invent a danger state.
+  const safeMax = Number.isFinite(maxAttempts) && maxAttempts > 0 ? Math.floor(maxAttempts) : 3;
+  const left = Number.isFinite(attemptsLeft)
+    ? Math.max(0, Math.min(safeMax, Math.floor(attemptsLeft)))
+    : safeMax;
+  const segments = Array.from({ length: safeMax }, (_, i) => i < left);
 
   return (
     <div className="flex items-center gap-1.5">
@@ -510,7 +518,7 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center p-5 relative overflow-hidden bg-zinc-950">
+    <div className="flex-1 flex items-center justify-center p-5 relative overflow-hidden bg-zinc-950 light:bg-[var(--ws-surface)]">
       {/* Layer 1: Aurora */}
       <AuroraBackground />
 
@@ -757,7 +765,7 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                           <div className="w-full border-t border-zinc-800/60" />
                         </div>
                         <div className="relative flex justify-center">
-                          <span className="bg-zinc-900/80 px-3 text-[10px] text-zinc-500 uppercase tracking-widest" style={{ fontFamily: "'JetBrains Mono', monospace" }}>or</span>
+                          <span className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] px-3 text-[10px] text-zinc-500 uppercase tracking-widest" style={{ fontFamily: "'JetBrains Mono', monospace" }}>or</span>
                         </div>
                       </div>
                       <motion.button

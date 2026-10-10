@@ -36,7 +36,7 @@ export function ResponseCardContent({ content, isToolOutput, timestamp, isUserIn
             {timestamp && <span className="dk-response-time">{timestamp}</span>}
           </div>
           <div className="dk-response-body">
-            <MarkdownRenderer content={content} />
+            <MarkdownRenderer content={content} settled />
           </div>
         </div>
 

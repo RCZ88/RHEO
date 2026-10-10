@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ScanLine, BarChart3, FileCode, Code, MessageSquare, Minus, RefreshCw, PieChart, Search, ArrowUpDown, FileText, Settings } from 'lucide-react';
-import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, TooltipProps } from 'recharts';
-import { WorkspaceCard, WorkspaceSection, WorkspaceToolbar } from './_ds/containers';
+import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+
+import { WorkspaceCard, WorkspaceToolbar } from './_ds/containers';
 import { listContainer, riseItem } from './_ds/motion';
 import { NumberTicker } from '../ui/number-ticker';
-import type { LineStatsData, LineCountResult } from '../../types/line-stats';
+import { useLineStats } from '../line-stats/useLineStats';
+import IgnoreNotice from '../line-stats/IgnoreNotice';
+import IgnoreSettings from '../line-stats/IgnoreSettings';
+import { TOTAL_EXCLUDED } from '../line-stats/lineStatsFilter';
 
 const NEON_COLORS = ['#00FF66', '#00F0FF', '#FF007A', '#FF2A4B', '#A855F7', '#F59E0B', '#10B981', '#3B82F6', '#EC4899', '#14B8A6'];
-const HATCHED_COLORS = ['url(#stripeCyan)', 'url(#stripeEmerald)', 'url(#stripePurple)', 'url(#stripeAmber)', 'url(#stripePink)', 'url(#stripeRose)'];
 
 const DEFAULT_EXCLUDES = [
   { key: 'md', label: 'Markdown', ext: '.md' },
@@ -20,7 +23,26 @@ const DEFAULT_EXCLUDES = [
 type SortKey = 'filePath' | 'fileType' | 'totalLines' | 'codeLines' | 'commentLines' | 'blankLines' | 'codePercent';
 type SortDir = 'asc' | 'desc';
 
-function GlassTooltip({ active, payload, label }: TooltipProps<number, string>) {
+/**
+ * recharts 3 types `TooltipProps` WITHOUT the injected `payload`/`label`, so the
+ * tooltip components are typed against the props recharts actually passes at
+ * render time, not the ones it exposes to the `content` prop's type position.
+ */
+interface TooltipEntry {
+  name?: string | number;
+  color?: string;
+  value?: number | string;
+  /** Pie tooltips carry the originating slice datum here, not on the entry. */
+  payload?: { name?: string; color?: string; codeLines?: number; count?: number; percent?: string };
+}
+
+interface TooltipLikeProps {
+  active?: boolean;
+  label?: string | number;
+  payload?: ReadonlyArray<TooltipEntry>;
+}
+
+function GlassTooltip({ active, payload, label }: TooltipLikeProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-[rgba(20,22,30,0.80)] backdrop-blur-xl border border-[rgba(255,255,255,0.12)] rounded-xl px-3.5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
@@ -36,16 +58,17 @@ function GlassTooltip({ active, payload, label }: TooltipProps<number, string>) 
   );
 }
 
-function PieTooltip({ active, payload }: TooltipProps<number, string>) {
+function PieTooltip({ active, payload }: TooltipLikeProps) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
+  if (!d) return null;
   return (
     <div className="bg-[rgba(20,22,30,0.80)] backdrop-blur-xl border border-[rgba(255,255,255,0.12)] rounded-xl px-3.5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
       <div className="flex items-center gap-2 text-[11px]">
         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color, boxShadow: `0 0 8px ${d.color}` }} />
         <span className="font-semibold text-zinc-100">{d.name}</span>
       </div>
-      <div className="text-[10px] text-zinc-400 mt-1">{d.codeLines.toLocaleString()} code lines • {d.count} files</div>
+      <div className="text-[10px] text-zinc-400 mt-1">{(d.codeLines ?? 0).toLocaleString()} code lines • {d.count ?? 0} files</div>
       <div className="text-[10px] text-zinc-500">{d.percent}%</div>
     </div>
   );
@@ -57,10 +80,10 @@ interface Props {
 }
 
 export default function CodeStatsTab({ projectId, projectPath }: Props) {
-  const [data, setData] = useState<LineStatsData | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const ls = useLineStats(projectId, projectPath);
+  const { data, report, isScanning, error } = ls;
   const [showSettings, setShowSettings] = useState(false);
+  const [showIgnoreEditor, setShowIgnoreEditor] = useState(false);
   const [excludes, setExcludes] = useState<Record<string, boolean>>(Object.fromEntries(DEFAULT_EXCLUDES.map(e => [e.key, true])));
   const [customExts, setCustomExts] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('codeLines');
@@ -68,40 +91,18 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const loadCached = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const result = await (window as any).deskflowAPI?.getProjectLineStats?.(projectId);
-      if (result?.success && result.data) setData(result.data);
-    } catch {}
-  }, [projectId]);
-
-  useEffect(() => { loadCached(); }, [loadCached]);
-
   const handleScan = async () => {
     if (!projectPath || !projectId) return;
-    setIsScanning(true);
-    setError(null);
-    try {
-      const excludeExtensions: string[] = [];
-      for (const item of DEFAULT_EXCLUDES) { if (excludes[item.key]) excludeExtensions.push(item.ext); }
-      if (customExts.trim()) customExts.split(',').map(e => e.trim()).filter(Boolean).forEach(e => { if (!e.startsWith('.')) e = '.' + e; excludeExtensions.push(e); });
-      const result = await (window as any).deskflowAPI?.countProjectLines?.(projectPath, projectId, { excludeExtensions, excludePatterns: [] });
-      if (result?.success) {
-        setData({ files: result.data.files, summary: result.data.summary, scannedAt: new Date().toISOString(), totalFiles: result.data.totalFiles });
-      } else {
-        setError(result?.error || 'Scan failed');
-      }
-    } catch (e: any) { setError(e.message || 'Scan failed'); }
-    finally { setIsScanning(false); }
+    const excludeExtensions: string[] = [];
+    for (const item of DEFAULT_EXCLUDES) { if (excludes[item.key]) excludeExtensions.push(item.ext); }
+    if (customExts.trim()) customExts.split(',').map(e => e.trim()).filter(Boolean).forEach(e => { if (!e.startsWith('.')) e = '.' + e; excludeExtensions.push(e); });
+    await ls.scan(excludeExtensions);
   };
 
   const totals = useMemo(() => data ? data.files.reduce((acc, f) => ({
     totalLines: acc.totalLines + f.totalLines, codeLines: acc.codeLines + f.codeLines,
     commentLines: acc.commentLines + f.commentLines, blankLines: acc.blankLines + f.blankLines,
   }), { totalLines: 0, codeLines: 0, commentLines: 0, blankLines: 0 }) : null, [data]);
-
-  const codePercent = totals && totals.totalLines > 0 ? ((totals.codeLines / totals.totalLines) * 100).toFixed(1) : '0';
 
   const fileTypes = useMemo(() => {
     if (!data) return ['all'];
@@ -209,17 +210,43 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
           </div>
         </WorkspaceToolbar>
         {showSettings && (
-          <div className="flex items-center gap-3 mt-2 px-1">
-            {DEFAULT_EXCLUDES.map(item => (
-              <label key={item.key} className="flex items-center gap-1 cursor-pointer">
-                <input type="checkbox" checked={excludes[item.key]} onChange={(e) => setExcludes(prev => ({ ...prev, [item.key]: e.target.checked }))} className="accent-purple-500 w-3 h-3" />
-                <span className="text-[10px] text-zinc-500">{item.label}</span>
-              </label>
-            ))}
-            <input type="text" value={customExts} onChange={(e) => setCustomExts(e.target.value)} placeholder=".log,.tmp"
-              className="w-20 bg-zinc-900 border border-zinc-800 rounded px-2 py-0.5 text-[10px] text-zinc-400 placeholder-zinc-700 focus:outline-none" />
+          <div className="mt-2 space-y-2 px-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              {DEFAULT_EXCLUDES.map(item => (
+                <label key={item.key} className="flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" checked={excludes[item.key]} onChange={(e) => setExcludes(prev => ({ ...prev, [item.key]: e.target.checked }))} className="accent-purple-500 w-3 h-3" />
+                  <span className="text-[10px] text-zinc-500">{item.label}</span>
+                </label>
+              ))}
+              <input type="text" value={customExts} onChange={(e) => setCustomExts(e.target.value)} placeholder=".log,.tmp"
+                className="w-20 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded px-2 py-0.5 text-[10px] text-zinc-400 placeholder-zinc-700 focus:outline-none" />
+            </div>
+            <IgnoreSettings
+              accent="purple"
+              settings={ls.settings}
+              ready={ls.settingsReady}
+              onChange={ls.updateSettings}
+              onReset={ls.resetSettings}
+            />
           </div>
         )}
+        <div className="mt-1.5 px-1">
+          {showIgnoreEditor ? (
+            <IgnoreSettings
+              accent="purple"
+              mode="summary"
+              settings={ls.settings}
+              ready={ls.settingsReady}
+              onChange={ls.updateSettings}
+              onReset={ls.resetSettings}
+            />
+          ) : (
+            <button onClick={() => setShowIgnoreEditor(true)}
+              className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors">
+              Ignored directories & backup rules →
+            </button>
+          )}
+        </div>
       </motion.div>
 
       {error && (
@@ -227,6 +254,10 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
           <div className="rounded-xl bg-[rgba(255,42,75,0.08)] border border-[rgba(255,42,75,0.25)] p-3 text-xs text-rose-300">{error}</div>
         </motion.div>
       )}
+
+      <motion.div variants={riseItem}>
+        <IgnoreNotice report={report} accent="purple" />
+      </motion.div>
 
       {/* Empty state */}
       {!data && !isScanning ? (
@@ -248,7 +279,7 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
           {/* Bento stat cards */}
           <motion.div variants={riseItem} className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { key: 'files', label: 'Total Files', value: data!.totalFiles, icon: FileCode, color: '#00F0FF', sub: 'scanned files' },
+              { key: 'files', label: 'Total Files', value: data!.totalFiles, icon: FileCode, color: '#00F0FF', sub: report && TOTAL_EXCLUDED(report) > 0 ? `of ${report.inputFiles} scanned` : 'scanned files' },
               { key: 'code', label: 'Code Lines', value: totals.codeLines, icon: Code, color: '#00FF66', sub: 'actual code' },
               { key: 'comments', label: 'Comment Lines', value: totals.commentLines, icon: MessageSquare, color: '#A855F7', sub: 'documentation' },
               { key: 'blank', label: 'Blank Lines', value: totals.blankLines, icon: Minus, color: '#52525B', sub: 'whitespace' },
@@ -288,7 +319,7 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
                       <Pie data={languageData} dataKey="codeLines" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}
                         stroke="none"
                       >
-                        {languageData.map((entry, i) => (
+                        {languageData.map((entry) => (
                           <Cell key={entry.name} fill={entry.color} style={{ filter: `drop-shadow(0 0 6px ${entry.color}80)` }} />
                         ))}
                       </Pie>
@@ -335,7 +366,7 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
                   }} axisLine={false} tickLine={false} />
                   <Tooltip content={<GlassTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                   <Bar dataKey="codeLines" shape={(props: any) => {
-                    const { x, y, width, height, fill } = props;
+                    const { x, y, width, height } = props;
                     const colorIndex = props.index % 6;
                     return (
                       <g>
@@ -358,16 +389,16 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
                   <input type="text" placeholder="Search files..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500/30" />
+                    className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500/30" />
                 </div>
                 <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-                  className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-500/30">
+                  className="bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-500/30">
                   {fileTypes.map(t => <option key={t} value={t}>{t === 'all' ? 'All Types' : t}</option>)}
                 </select>
               </div>
               <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-zinc-900/90 backdrop-blur-sm">
+                  <thead className="sticky top-0 bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm">
                     <tr className="border-b border-[rgba(63,63,70,0.35)] text-zinc-500 uppercase tracking-wider text-[10px]">
                       {[
                         { key: 'filePath' as SortKey, label: 'File' },
@@ -394,7 +425,7 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
                       const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
                       return (
                         <tr key={file.filePath} title={file.filePath}
-                          className={`border-b border-[rgba(63,63,70,0.15)] hover:bg-zinc-800/40 transition-colors ${i % 2 === 0 ? 'bg-transparent' : 'bg-zinc-900/30'}`}>
+                          className={`border-b border-[rgba(63,63,70,0.15)] hover:bg-zinc-800/40 transition-colors ${i % 2 === 0 ? 'bg-transparent' : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]'}`}>
                           <td className="px-3 py-2"><div className="flex items-center gap-1.5"><FileText className="w-3 h-3 text-zinc-600 shrink-0" /><span className="text-zinc-300 truncate max-w-[180px]">{fileName}</span></div></td>
                           <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded bg-zinc-800/60 text-zinc-400 text-[10px]">{file.fileType}</span></td>
                           <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">{file.totalLines.toLocaleString()}</td>
@@ -416,9 +447,13 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
                 </table>
               </div>
               {sortedFiles.length === 0 && <div className="p-6 text-center text-zinc-600 text-xs">No files match your filters</div>}
-              <div className="px-3 py-1.5 border-t border-[rgba(63,63,70,0.35)] text-[10px] text-zinc-600 flex items-center justify-between">
+              <div className="px-3 py-1.5 border-t border-[rgba(63,63,70,0.35)] text-[10px] text-zinc-600 flex items-center justify-between gap-3">
                 <span>Showing {sortedFiles.length} of {data!.files.length} files</span>
-                <span className="text-zinc-600">{data!.totalFiles} files scanned</span>
+                <span className="text-zinc-600">
+                  {report && TOTAL_EXCLUDED(report) > 0
+                    ? `${report.keptFiles} of ${report.inputFiles} scanned — ${TOTAL_EXCLUDED(report)} rows excluded (see above)`
+                    : `${data!.totalFiles} files scanned`}
+                </span>
               </div>
             </WorkspaceCard>
           </motion.div>

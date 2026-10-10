@@ -140,7 +140,7 @@ export function GlobalSearch({ libraries, onAddComponent }: GlobalSearchProps) {
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            className="absolute z-50 mt-1 w-full rounded-lg bg-zinc-900 border border-zinc-800/60 shadow-xl overflow-hidden"
+            className="absolute z-50 mt-1 w-full rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 shadow-xl overflow-hidden"
           >
             {loading && (
               <div className="flex items-center justify-center py-6">

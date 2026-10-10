@@ -51,6 +51,7 @@ export interface DeckProps {
   scheduleSlot?: ReactNode
   deadlineSlot?: ReactNode
   automationsSlot?: ReactNode
+  timeSlot?: ReactNode
   memoryChips?: { id: string; text: string }[]
   onNewThread?: () => void
   connectorStatus?: { unreadCount: number; todayEventCount: number; lastSyncTime?: string; syncing?: boolean }
@@ -244,7 +245,7 @@ function ExpandableCard({
               <button
                 type="button"
                 onClick={() => setFullPageOpen(false)}
-                className="flex items-center gap-2 rounded-lg border border-zinc-800/60 bg-zinc-900/80 px-3 py-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/80 transition-colors"
+                className="flex items-center gap-2 rounded-lg border border-zinc-800/60 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] px-3 py-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/80 transition-colors"
               >
                 <Minimize2 size={11} />
                 <span className="hidden sm:inline">Close</span>
@@ -276,7 +277,7 @@ function ExpandableCard({
                 </div>
               ) : (
                 <div className="text-[14px] leading-relaxed text-zinc-200 space-y-6
-                  [&_.dk-card]:border-zinc-700/60 [&_.dk-card]:bg-zinc-900/60
+                  [&_.dk-card]:border-zinc-700/60 [&_.dk-card]:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]
                   [&_.dk-microlabel]:text-[10px] [&_.dk-microlabel]:text-zinc-400
                   [&_.dk-news-grid]:grid [&_.dk-news-grid]:grid-cols-1 [&_.dk-news-grid]:md:grid-cols-2 [&_.dk-news-grid]:gap-4
                   [&_.dk-empty]:py-12
@@ -340,6 +341,7 @@ export function AiPageDeck(props: DeckProps) {
   const dailyPlannerSummary = props.dailyPlannerSlot ? "Today's schedule & goals" : undefined
   const scheduleSummary = props.scheduleSlot ? "Weekly schedule" : undefined
   const deadlineSummary = props.deadlineSlot ? "Upcoming deadlines" : undefined
+  const timeSummary = props.timeSlot ? "Timers, stopwatch, alarms" : undefined
 
   // ALL cards always visible — no filtering
   const cardDefs = [
@@ -450,6 +452,18 @@ export function AiPageDeck(props: DeckProps) {
       empty: false,
       onAdd: undefined,
       addLabel: "Create automations",
+    },
+    {
+      id: "time",
+      icon: <Clock size={16} />,
+      title: "Time",
+      summary: timeSummary,
+      accent: "cyan" as AccentKey,
+      slot: props.timeSlot,
+      loading: false,
+      empty: !props.timeSlot,
+      onAdd: undefined,
+      addLabel: "Start a timer from the top-bar clock",
     },
   ]
 

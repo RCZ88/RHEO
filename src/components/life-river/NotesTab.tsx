@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Plus, Search, X, BookOpen, Trash2, Pencil, FileClock, ChevronRight, Link2, ExternalLink, Layers, Target, ChevronDown, GripVertical } from 'lucide-react'
-import { MarkdownPreview } from '../MarkdownPreview'
+import { Plus, Search, X, BookOpen, Trash2, Pencil, FileClock, ChevronRight, Link2, ExternalLink, Layers, Target, ChevronDown, GripVertical, ArrowRight, FileText, Sparkles } from 'lucide-react'
+import { GoalPicker } from '../goals/GoalPicker'
+import { PremiumNoteEditor } from './PremiumNoteEditor'
+import { NoteContent, type InspectTarget } from './NoteContent'
 
 interface LinkItem { url: string; title?: string; open?: 'external' | 'inapp'; browser?: string }
 interface Note {
@@ -102,6 +104,8 @@ function useNotesPrefs() {
 function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note; onClose: () => void; onEdit: (n: Note) => void; onDelete: (id: string) => void; prefs: ReturnType<typeof useNotesPrefs> }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [viewerUrl, setViewerUrl] = useState<string | null>(null)
+  // The PEEK. A chip click inspects; it does not navigate, so the note stays put.
+  const [peek, setPeek] = useState<InspectTarget | null>(null)
   const safeLinks = normalizeLinks(note.links)
   const safeFiles = normalizeFiles(note.files)
   const safeTags = Array.isArray(note.tags) ? note.tags
@@ -118,13 +122,71 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
     }
   }
 
+  /* Goal and phase links are INTERNAL routes, not URLs. They were rendered as a
+     static <div> while URL links got a real <button>, so they looked clickable
+     and did nothing. Navigating to the goal's hub is the whole point of
+     attaching one. */
+  const handleOpenEntityLink = (url: string) => {
+    if (url.startsWith('file://')) {
+      // Opens in the OS default app, same as the Files section.
+      (window as any).deskflowAPI?.openPath?.(url.slice(7));
+      return;
+    }
+    if (url.startsWith('chat://')) {
+      // Jump to the AI chat thread this note references.
+      const thread = url.slice(7);
+      window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { path: '/ai', threadDate: thread } }));
+      onClose?.();
+      return;
+    }
+    if (url.startsWith('goal://')) {
+      const id = url.slice(7);
+      window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { path: '/life', tab: 'gold', goalId: id } }));
+      onClose?.();
+      return;
+    }
+    if (url.startsWith('phase://')) {
+      window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { path: '/life', tab: 'self', phaseId: url.slice(8) } }));
+      onClose?.();
+      return;
+    }
+    handleOpenLink({ url });
+  };
+
+  /* A chip click INSPECTS. It deliberately does not navigate and does not close.
+     Two reasons, both about not disturbing the reader: (a) they opened a note to
+     read it, and leaving for a goal title is a bigger interruption than the one
+     they asked for; (b) `rheo:navigate` changes the route, which unmounts this
+     popup anyway — so "don't close it" could never have been satisfied by simply
+     deleting the onClose call. Navigating is offered inside the peek instead. */
+  const handleInspect = (t: InspectTarget) => {
+    if (t.kind === 'file') { handleOpenFile(t.path); return }
+    if (t.kind === 'link') { (window as any).deskflowAPI?.openUrlInBrowser?.(t.url); return }
+    if (t.kind === 'image') { (window as any).deskflowAPI?.openPath?.(t.path); return }
+    setPeek((prev) => (prev && prev.kind === t.kind && (prev as any).id === (t as any).id ? null : t))
+  };
+
+  const peekNavigate = () => {
+    if (!peek) return
+    if (peek.kind === 'goal') window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { path: '/life', tab: 'gold', goalId: (peek as any).id } }))
+    else if (peek.kind === 'phase') window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { path: '/life', tab: 'self', phaseId: (peek as any).id } }))
+    onClose?.()
+  }
+
   const handleOpenFile = (filePath: string) => {
     (window as any).deskflowAPI?.openPath?.(filePath, prefs.fileApp || undefined)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-zinc-950/95 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+    // Close only on a REAL backdrop press, checked on mousedown against the
+    // element itself. `onClick` fired after the mouse came up: select text that
+    // began inside the note and dragged past the edge, release, and the note
+    // vanished — the selection was the accident, not the intent.
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-zinc-950 light:bg-[var(--ws-surface)]/95 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 border-b border-zinc-800/60">
           <div className="flex items-center justify-between mb-4">
@@ -133,7 +195,17 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
               <span>·</span>
               <span>Created {formatDate(note.created_at)}</span>
             </div>
-            <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300"><X size={18} /></button>
+            {/* It existed but had NO accessible name — a screen reader announced
+                an unlabelled button, and it was 18px, well under the 44px target
+                floor. Both are Gate D failures, not preferences. */}
+            <button
+              onClick={onClose}
+              aria-label="Close note"
+              title="Close"
+              className="-m-2 p-2 rounded-lg text-zinc-500 hover:text-zinc-200 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--page-accent)]"
+            >
+              <X size={18} aria-hidden />
+            </button>
           </div>
           <h2 className="text-2xl font-display text-zinc-100 mb-4">{note.title || 'Untitled Note'}</h2>
           <div className="flex flex-wrap gap-2 items-center">
@@ -145,7 +217,33 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          <MarkdownPreview content={note.content} accent="amber" className="mb-6" />
+          <NoteContent content={note.content} onInspect={handleInspect} className="mb-6" />
+
+          {peek && (
+            <div className="mb-6 rounded-xl border border-zinc-700 light:border-zinc-300 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wider text-zinc-500">{peek.kind}</p>
+                  <p className="text-sm text-zinc-100 light:text-zinc-900 truncate">{peek.label}</p>
+                  {('id' in peek) && (
+                    <p className="mt-0.5 font-mono text-[10px] text-zinc-600 truncate">{String((peek as any).id)}</p>
+                  )}
+                </div>
+                <button onClick={() => setPeek(null)} aria-label="Close peek"
+                  className="-m-1 p-1 rounded text-zinc-500 hover:text-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2">
+                  <X size={14} aria-hidden />
+                </button>
+              </div>
+              {('id' in peek) && (
+                <button
+                  onClick={peekNavigate}
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1 text-[12px] text-zinc-300 hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-offset-2 light:border-zinc-300 light:hover:bg-zinc-100"
+                >
+                  Open full page <ArrowRight size={11} aria-hidden />
+                </button>
+              )}
+            </div>
+          )}
           {/* Links */}
           {safeLinks.length > 0 && (
             <div className="space-y-2 mb-6">
@@ -153,11 +251,32 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
               {safeLinks.map((link, i) => {
                 const isPhase = link.url.startsWith('phase://')
                 const isGoal = link.url.startsWith('goal://')
-                const icon = isPhase ? <Layers size={12} className="shrink-0" /> : isGoal ? <Target size={12} className="shrink-0" /> : <Link2 size={12} className="shrink-0" />
+                const isFile = link.url.startsWith('file://');
+                const isChat = link.url.startsWith('chat://');
+                const icon = isPhase ? <Layers size={12} className="shrink-0" />
+                  : isGoal ? <Target size={12} className="shrink-0" />
+                  : isFile ? <FileText size={12} className="shrink-0" />
+                  : isChat ? <Sparkles size={12} className="shrink-0" />
+                  : <Link2 size={12} className="shrink-0" />
                 const label = link.title || (isPhase ? `Phase: ${link.url.slice(8)}` : isGoal ? `Goal: ${link.url.slice(7)}` : link.url)
-                const colorClass = isPhase ? 'text-amber-400 hover:text-amber-300' : isGoal ? 'text-emerald-400 hover:text-emerald-300' : 'text-sky-400 hover:text-sky-300'
-                if (isPhase || isGoal) {
-                  return <div key={i} className={cn("flex items-center gap-2 text-[13px] transition-colors", colorClass)}>{icon}<span>{label}</span></div>
+                const colorClass = isPhase ? 'text-amber-400 hover:text-amber-300'
+                  : isGoal ? 'text-emerald-400 hover:text-emerald-300'
+                  : isFile ? 'text-zinc-300 hover:text-zinc-100'
+                  : isChat ? 'text-violet-400 hover:text-violet-300'
+                  : 'text-sky-400 hover:text-sky-300'
+                if (isPhase || isGoal || isFile || isChat) {
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleOpenEntityLink(link.url)}
+                      className={cn("w-full flex items-center gap-2 px-1 py-0.5 -mx-1 rounded text-[13px] transition-colors hover:bg-white/5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50", colorClass)}
+                    >
+                      {icon}
+                      <span className="truncate">{label}</span>
+                      <ArrowRight size={11} className="shrink-0 ml-auto opacity-60" aria-hidden />
+                    </button>
+                  );
                 }
                 return <button key={i} onClick={() => handleOpenLink(link)} className={cn("flex items-center gap-2 text-[13px] transition-colors break-all text-left", colorClass)}>{icon}<span className="truncate">{label}</span><ExternalLink size={11} className="shrink-0 ml-auto" /></button>
               })}
@@ -182,7 +301,7 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-zinc-800/60 flex items-center justify-between bg-zinc-900/50">
+        <div className="p-4 border-t border-zinc-800/60 flex items-center justify-between bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]">
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)} className="text-[12px] text-zinc-500 hover:text-rose-400 transition-colors">Delete</button>
           ) : (
@@ -201,7 +320,7 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
       {/* In-app webview viewer */}
       {viewerUrl && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setViewerUrl(null)}>
-          <div className="w-full max-w-5xl h-[80vh] bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700 flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-5xl h-[80vh] bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl overflow-hidden border border-zinc-700 flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800">
               <span className="text-[12px] text-zinc-400 truncate">{viewerUrl}</span>
               <button onClick={() => setViewerUrl(null)} className="text-zinc-500 hover:text-zinc-300"><X size={16} /></button>
@@ -261,6 +380,29 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
 
   useEffect(() => { if (open) isDirty.current = true }, [title, content, tags, groupName, links, files])
 
+    /* Load goal titles so the attached-goal chip shows a name, not a raw id. */
+    useEffect(() => {
+      if (!open) return;
+      let alive = true;
+      (async () => {
+        try {
+          const dsk = (window as any).deskflowAPI;
+          if (!dsk?.getGoalsBatch) return;
+          const now = new Date();
+          const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const end = new Date(now); end.setDate(end.getDate() + 120);
+          const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+          const res = await dsk.getGoalsBatch('2000-01-01', endStr);
+          const map: Record<string, string> = {};
+          for (const d of (res?.days || []) as any[]) {
+            for (const g of (d.goals || []) as any[]) if (g?.id) map[g.id] = g.title;
+          }
+          if (alive) setGoalTitles(map);
+        } catch { /* non-critical */ }
+      })();
+      return () => { alive = false; };
+    }, [open]);
+
   useEffect(() => {
     if (!open) return
     const api = (window as any).deskflowAPI
@@ -281,6 +423,11 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
   const addTagFromExisting = (t: string) => { const tag = t.trim().toLowerCase(); if (tag && !tags.includes(tag)) { setTags(prev => [...prev, tag]); setTagColors(prev => prev[tag] ? prev : { ...prev, [tag]: getTagColor(tag, tagColors) }) } }
   const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t))
 
+  /* Titles for goal:// chips. Populated from the same goals list the phase
+     picker loads, so the chip reads "Learn C" rather than a raw id. */
+  const [goalTitles, setGoalTitles] = useState<Record<string, string>>({});
+  const goalTitle = (gid: string) => goalTitles[gid] || '';
+
   const addLink = () => {
     let url = linkUrlInput.trim()
     if (!url) return
@@ -296,11 +443,14 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
     setLinks(prev => prev.map(l => l.url === url ? { ...l, ...patch } : l))
   }
 
+  /* The bridge is `showOpenDialog` and it returns { canceled, filePaths[] }.
+     This called `dialogOpenFile`, which does not exist on the preload, so the
+     optional call silently did nothing — attaching a file never worked. */
   const addFile = async () => {
-    const res = await (window as any).deskflowAPI?.dialogOpenFile?.()
-    if (res && !res.canceled && res.filePath) {
-      setFiles(prev => prev.includes(res.filePath) ? prev : [...prev, res.filePath])
-    }
+    const res = await (window as any).deskflowAPI?.showOpenDialog?.({ properties: ['openFile'] })
+    if (!res || res.canceled || !Array.isArray(res.filePaths)) return
+    const paths = (res.filePaths as string[]).filter(p => !files.includes(p))
+    if (paths.length) setFiles(prev => [...prev, ...paths])
   }
   const removeFile = (fp: string) => setFiles(prev => prev.filter(f => f !== fp))
 
@@ -325,26 +475,37 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
 
   return (
     <div className={cn("fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity", open ? "opacity-100" : "opacity-0 pointer-events-none")} onClick={() => handleClose(false)}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-semibold text-zinc-100 mb-4">{initial?.is_draft ? 'Resume draft' : initial ? 'Edit note' : 'New note'}</h3>
-        <div className="space-y-3.5">
-          <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title (optional)" className="text-[14px]" />
-          {/* Content with preview toggle */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] uppercase tracking-wider text-zinc-500">Content</label>
-              <button type="button" onClick={() => setPreviewMode(!previewMode)} className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">
-                {previewMode ? 'Edit' : 'Preview'}
-              </button>
-            </div>
-            {previewMode ? (
-              <div className="min-h-[120px] rounded-lg border border-zinc-700 bg-zinc-950/50 p-3">
-                {content.trim() ? <MarkdownPreview content={content} accent="amber" /> : <p className="text-[13px] text-zinc-500 italic">Nothing to preview</p>}
-              </div>
-            ) : (
-              <Textarea value={content} onChange={e => setContent(e.target.value)} placeholder="What's on your mind? (Markdown supported)" rows={6} className="text-[13px] leading-relaxed resize-none" autoFocus />
-            )}
+      {/* The EDITOR was max-w-lg (512px) — narrower than the read view — so the
+          surface you actually type into was the smallest thing on the page, and
+          the two-column layout had ~200px of writing space. It now owns a real
+          sheet: wide body column, fixed 300px config rail, and a tall viewport. */}
+      <div className="w-full max-w-[min(1400px,96vw)] h-[90vh] bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl shadow-2xl flex flex-col overflow-hidden p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-zinc-100 mb-4 shrink-0">{initial?.is_draft ? 'Resume draft' : initial ? 'Edit note' : 'New note'}</h3>
+        {/* Two columns: you write on the left, everything that is metadata about
+            the note lives on the right. Writing is the primary action, so it gets
+            the space and the config becomes a quiet rail. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5 items-stretch flex-1 min-h-0">
+          {/* ── LEFT: title + body ── */}
+          <div className="flex flex-col gap-3 min-w-0 min-h-0 h-full">
+          <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title (optional)" className="w-full min-w-0 shrink-0 text-[14px]" />
+          {/* PremiumNoteEditor owns its own Write/Preview switch, so there is no
+              second toggle here — two competing toggles hid the toolbar. */}
+          <div className="flex flex-col flex-1 min-h-0">
+            <label className="text-[11px] uppercase tracking-wider text-zinc-500 mb-1.5 shrink-0">Note</label>
+            <PremiumNoteEditor
+              value={content}
+              onChange={setContent}
+              links={links}
+              onLinksChange={setLinks}
+              files={files}
+              onFilesChange={setFiles}
+              noteId={initial?.id ?? null}
+            />
           </div>
+          </div>
+
+          {/* ── RIGHT: config rail ── */}
+          <div className="space-y-4 min-h-0 lg:overflow-y-auto lg:pr-1">
           {/* Tags */}
           <div className="space-y-1.5">
             <label className="text-[11px] uppercase tracking-wider text-zinc-500">Tags</label>
@@ -422,6 +583,18 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
             {showLinkTitle && (
               <Input value={linkTitleInput} onChange={e => setLinkTitleInput(e.target.value)} placeholder="Link title (optional)" className="text-[12px] h-8" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addLink() } }} />
             )}
+            {/* Attach a goal directly. The editor already RENDERED goal:// links,
+                but addLink() only accepted a raw URL, so there was no way to
+                create one — the capability was display-only. */}
+            <GoalPicker
+              value={links.find(l => l.url.startsWith('goal://'))?.url.slice(7) ?? null}
+              onChange={(gid: string | null) => setLinks(prev => {
+                const without = prev.filter(l => !l.url.startsWith('goal://'));
+                if (!gid) return without;
+                return [...without, { url: `goal://${gid}`, title: goalTitle(gid) || `Goal ${gid}`, open: 'inapp' }];
+              })}
+              label="Linked goal"
+            />
             {links.length > 0 && <div className="flex flex-col gap-1.5">{links.map(l => {
               const isInternal = l.url.startsWith('phase://') || l.url.startsWith('goal://')
               const icon = l.url.startsWith('phase://') ? <Layers size={10} className="shrink-0" /> : l.url.startsWith('goal://') ? <Target size={10} className="shrink-0" /> : <Link2 size={10} className="shrink-0" />
@@ -454,7 +627,7 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
               Related <ChevronDown size={11} className={cn("transition-transform", showLinkPicker && "rotate-180")} />
             </button>
             {showLinkPicker && (
-              <div className="rounded-lg border border-zinc-700/50 bg-zinc-950/50 p-3 space-y-2">
+              <div className="rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-3 space-y-2">
                 {phases.length > 0 && (
                   <div>
                     <div className="text-[10px] text-zinc-500 mb-1">Phases</div>
@@ -504,13 +677,14 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
               </div>
             )}
           </div>
-        </div>
-        <div className="flex justify-between mt-5">
-          <button onClick={() => handleSave(true)} className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">Save as draft</button>
-          <div className="flex gap-2">
-            <button onClick={() => handleClose(false)} className="h-9 rounded-lg border border-zinc-700 px-4 text-sm text-zinc-400 hover:text-zinc-200">Cancel</button>
-            <button onClick={() => handleSave(false)} disabled={!content.trim()} className="h-9 rounded-lg bg-amber-400/15 border border-amber-400/30 px-4 text-sm text-amber-100 disabled:opacity-50">Save note</button>
           </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 shrink-0 mt-4 pt-4 border-t border-zinc-800">
+            <button onClick={() => handleSave(true)} className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">Save as draft</button>
+            <div className="flex gap-2">
+              <button onClick={() => handleClose(false)} className="h-9 rounded-lg border border-zinc-700 px-4 text-sm text-zinc-400 hover:text-zinc-200">Cancel</button>
+              <button onClick={() => handleSave(false)} disabled={!content.trim()} className="h-9 rounded-lg bg-amber-400/15 border border-amber-400/30 px-4 text-sm text-amber-100 disabled:opacity-50">Save note</button>
+            </div>
         </div>
       </div>
     </div>
@@ -556,7 +730,7 @@ function NoteCard({ note, onClick, onDragStart, onDragEnd }: { note: Note; onCli
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', note.id); onDragStart?.(note.id) }}
       onDragEnd={onDragEnd}
-      className="group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-5 pl-6 text-left backdrop-blur-xl transition-colors hover:border-zinc-700 w-full cursor-grab active:cursor-grabbing"
+      className="group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-5 pl-6 text-left backdrop-blur-xl transition-colors hover:border-zinc-700 w-full cursor-grab active:cursor-grabbing"
     >
       {/* group-color accent rail */}
       <span className="pointer-events-none absolute left-0 top-0 h-full w-1" style={{ background: `linear-gradient(to bottom, ${groupColor}, ${groupColor}00)` }} />
@@ -625,6 +799,14 @@ export function NotesTab() {
   }, [])
 
   useEffect(() => { loadNotes() }, [loadNotes])
+
+  /* A quick-captured note is written behind this tab's back, so refresh when
+     one lands — otherwise the list looks stale until you switch tabs. */
+  useEffect(() => {
+    const onChanged = () => loadNotes();
+    window.addEventListener('rheo:notes-changed', onChanged);
+    return () => window.removeEventListener('rheo:notes-changed', onChanged);
+  }, [loadNotes]);
   useEffect(() => { loadGroups() }, [loadGroups])
 
   const handleCreate = async (data: any) => { await (window as any).deskflowAPI.notesCreate(data); loadNotes(); loadGroups() }
@@ -718,7 +900,7 @@ export function NotesTab() {
 
       {/* Notes grouped by category */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{[1, 2, 3].map(i => <div key={i} className="h-32 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{[1, 2, 3].map(i => <div key={i} className="h-32 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]" />)}</div>
       ) : activeNotes.length === 0 ? (
         <div className="text-center py-12"><BookOpen size={32} className="mx-auto text-zinc-700 mb-3" /><p className="text-[13px] text-zinc-500">{search || filterTag || filterGroup ? 'No notes match your filters' : 'No notes yet — tap "New note" to start'}</p></div>
       ) : (

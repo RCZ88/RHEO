@@ -44,10 +44,10 @@ export function ReflectionEcho() {
         animate={enter.animate}
         exit={enter.exit}
         transition={enter.transition}
-        className="relative overflow-hidden rounded-xl border border-[#6fb38f]/20 bg-[#6fb38f]/[0.05] p-4"
+        className="relative overflow-hidden rounded-xl border border-[var(--color-mem-400)]/20 bg-[var(--color-mem-400)]/[0.05] p-4"
       >
         <div className="flex items-center justify-between mb-1.5">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6fb38f]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[var(--color-mem-400)]">
             <Quote className="w-3.5 h-3.5" />
             {daysAgoLabel(entry.date)}, you wrote
           </div>

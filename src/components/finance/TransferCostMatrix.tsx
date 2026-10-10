@@ -129,7 +129,7 @@ export default function TransferCostMatrix() {
 
   if (loading) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
         <div className="h-6 w-48 bg-zinc-800 rounded mb-4"></div>
         <div className="h-64 bg-zinc-800/50 rounded-lg"></div>
       </div>
@@ -138,7 +138,7 @@ export default function TransferCostMatrix() {
 
   if (error) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
         <div className="text-center py-8">
           <Route size={32} className="text-zinc-600 mx-auto mb-2" />
           <p className="text-sm text-zinc-500">No transfer history yet</p>
@@ -151,7 +151,7 @@ export default function TransferCostMatrix() {
   if (!data || wallets.length === 0) return null;
 
   return (
-    <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
+    <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -211,7 +211,7 @@ export default function TransferCostMatrix() {
               {wallets.map((toW) => {
                 if (fromW.id === toW.id) {
                   return (
-                    <div key={`${fromW.id}-${toW.id}`} className="w-20 flex-shrink-0 bg-zinc-950/30 border border-zinc-800/30 rounded-sm m-0.5"></div>
+                    <div key={`${fromW.id}-${toW.id}`} className="w-20 flex-shrink-0 bg-zinc-950 light:bg-[var(--ws-surface)]/30 border border-zinc-800/30 rounded-sm m-0.5"></div>
                   );
                 }
                 const cell = matrixMap.get(`${fromW.id}-${toW.id}`);

@@ -133,9 +133,9 @@ export function UnifiedGoalsCard({
       <AnimatePresence>
         {isAdding && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mb-3">
-            <div className="p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/50 space-y-2">
+            <div className="p-2.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 space-y-2">
               <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()}
-                placeholder="What do you want to achieve?" autoFocus className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-8 font-sans" />
+                placeholder="What do you want to achieve?" autoFocus className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-8 font-sans" />
               <div className="flex items-center gap-2">
                 <Select value={newCategory} onValueChange={v => setNewCategory(v as GoalCategory)} className="w-[100px]">
                   {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -162,7 +162,7 @@ export function UnifiedGoalsCard({
               <div className="space-y-1.5">
                 {suggestions.map((s, i) => (
                   <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-                    className="flex items-center justify-between p-2 rounded-md bg-zinc-900/60 border border-zinc-800/40">
+                    className="flex items-center justify-between p-2 rounded-md bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40">
                     <div className="flex items-center gap-2 min-w-0">
                       <Sparkles size={10} className="text-violet-400 shrink-0" />
                       <div className="min-w-0">

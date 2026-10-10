@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
+import { useReducedMotion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import TerminalPage from './TerminalPage';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -69,7 +70,7 @@ import {
   Filler
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-import { format, subDays, eachDayOfInterval, formatDistanceToNow } from 'date-fns';
+import { format, subDays, eachDayOfInterval, formatDistanceToNow, startOfDay, differenceInCalendarDays } from 'date-fns';
 const AnalyticsDashboard = lazy(() => import('../components/AnalyticsDashboard'));
 import { PageShell } from '../components/PageShell';
 import { GlassCard } from '../components/GlassCard';
@@ -106,7 +107,14 @@ interface ProjectLanguagesResult {
   allLanguages: LanguageBreakdownItem[];
   totalFiles: number;
   codingFiles: number;
+  message?: string;
 }
+
+type ProjectScanState = {
+  status: 'scanning' | 'ok' | 'unreachable' | 'error';
+  languages?: LanguageBreakdownItem[];
+  message?: string;
+};
 
 interface AIAgent {
   id: string;
@@ -248,13 +256,13 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
   const month = calculateStats(30);
 
   const StatCard = ({ label, stats }: { label: string; stats: ReturnType<typeof calculateStats> }) => (
-    <div className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-3 flex flex-col text-center">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-3 flex flex-col text-center">
       <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-2">{label}</div>
       
       {/* Usage bar */}
       <div className="w-full h-1.5 bg-zinc-800 light:bg-zinc-100 rounded-full mb-2 overflow-hidden">
         <div 
-          className={`h-full rounded-full transition-all ${stats.overLimit ? 'bg-red-500' : stats.usagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+          className={`h-full rounded-full transition-[width] ${stats.overLimit ? 'bg-red-500' : stats.usagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
           style={{ width: `${Math.min(100, stats.usagePercent)}%` }}
         />
       </div>
@@ -327,6 +335,26 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
 
 type TabKey = 'overview' | 'projects' | 'ai' | 'git' | 'environment' | 'analytics' | 'backup';
 
+/** Read a live design token for imperative libraries (Chart.js) that cannot take
+ * Tailwind classes. Returns '' when the token is absent so the library falls back
+ * to its own default instead of a hardcoded hex that only works in one theme. */
+function cssToken(name: string): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  } catch {
+    return '';
+  }
+}
+
+// Categorical tones for language data — defined ONCE. Three call sites each
+// used to redeclare this array, so the same language could get a different
+// colour depending on which card you looked at.
+const LANGUAGE_TONES = [
+  'bg-emerald-400', 'bg-sky-400', 'bg-violet-400', 'bg-amber-400',
+  'bg-rose-400', 'bg-cyan-400', 'bg-orange-400', 'bg-fuchsia-400',
+];
+
 const TAB_KEYS: TabKey[] = ['overview', 'projects', 'ai', 'git', 'environment', 'analytics', 'backup'];
 
 const TAB_HOVER = { scale: 1.02 };
@@ -357,6 +385,12 @@ interface IDEProjectsPageProps {
 
 export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 0 }: IDEProjectsPageProps) {
   useEffect(() => { startPhaseClock(); }, []);
+  // L1 Composed + reduced-motion: enter animations are decorative, so they are
+  // the first thing to drop. Content and data are unaffected.
+  const reduceMotion = useReducedMotion();
+  const enter = (delay = 0) => reduceMotion
+    ? { initial: { opacity: 1 }, animate: { opacity: 1 }, transition: { duration: 0 } }
+    : { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.15, ease: 'easeOut' as const, delay } };
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -384,6 +418,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   const [contributorStats, setContributorStats] = useState<any>(null);
   const [doraMetrics, setDoraMetrics] = useState<any>(null);
   const [syncingGit, setSyncingGit] = useState(false);
+  const [gitSyncNotice, setGitSyncNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const autoSyncedRef = useRef<string | null>(null);
   const [expandedCommit, setExpandedCommit] = useState<string | null>(null);
   const [gitDiff, setGitDiff] = useState<string | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
@@ -446,7 +482,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   const [provisionStatus, setProvisionStatus] = useState<'idle' | 'provisioning' | 'provisioned'>('idle');
   const [showInitModal, setShowInitModal] = useState(false);
   const [showSpecs, setShowSpecs] = useState(false);
+  const [projectSort, setProjectSort] = useState<'name' | 'health' | 'language'>('name');
   const [projectLanguages, setProjectLanguages] = useState<Record<string, LanguageBreakdownItem[]>>({});
+  const [projectScanState, setProjectScanState] = useState<Record<string, ProjectScanState>>({});
   const [projectLanguagesLoading, setProjectLanguagesLoading] = useState(false);
   const [showLanguageStats, setShowLanguageStats] = useState(true);
   const scannedPathsRef = useRef<Set<string>>(new Set());
@@ -603,6 +641,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   useEffect(() => {
     if (activeTab === 'git' && selectedProject) {
       loadGitData(selectedProject);
+      // Nothing was ingesting commits on its own: sync only ran when the button
+      // was clicked, so "new commits" could never appear by themselves. Do it
+      // once per project when the Git tab opens, and say what happened.
+      if (autoSyncedRef.current !== selectedProject) {
+        autoSyncedRef.current = selectedProject;
+        handleSyncGitRef.current?.();
+      }
     }
   }, [selectedProject, activeTab]);
 
@@ -755,30 +800,49 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
     }
   };
 
+  const handleSyncGitRef = useRef<(() => Promise<void>) | null>(null);
+
   const handleSyncGit = async () => {
     if (!selectedProject) return;
     setSyncingGit(true);
+    setGitSyncNotice(null);
     try {
       const project = overview?.projects?.find((p: any) => p.id === selectedProject);
-      if (project?.repository_url) {
-        const urlParts = project.repository_url.replace('https://', '').split('/');
-        const token = localStorage.getItem('github_token');
-        await window.deskflowAPI!.syncGitHubCommits(
-          selectedProject,
-          urlParts[1],
-          urlParts[2],
-          token || undefined
-        );
+      // These handlers RESOLVE with {success:false, message} on failure — they
+      // do not reject. Awaiting them and ignoring the result made every failed
+      // sync look like a success, which is why the timeline could sit empty for
+      // months with the UI claiming it had synced.
+      const result: any = project?.repository_url
+        ? await (async () => {
+            const urlParts = project.repository_url.replace('https://', '').split('/');
+            const token = localStorage.getItem('github_token');
+            return window.deskflowAPI!.syncGitHubCommits(selectedProject, urlParts[1], urlParts[2], token || undefined);
+          })()
+        : await window.deskflowAPI!.syncCommits(selectedProject, project?.path);
+
+      if (!result?.success) {
+        setGitSyncNotice({
+          ok: false,
+          text: result?.message || `Sync failed for ${project?.name ?? 'project'}`,
+        });
       } else {
-        await window.deskflowAPI!.syncCommits(selectedProject, project?.path);
+        const n = result.commits ?? 0;
+        setGitSyncNotice({
+          ok: true,
+          text: n > 0
+            ? `Parsed ${n} new commit${n === 1 ? '' : 's'}`
+            : 'Up to date — no new commits found',
+        });
       }
       await loadGitData(selectedProject);
       await loadOverview();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Git sync failed:', err);
+      setGitSyncNotice({ ok: false, text: err?.message || 'Sync failed' });
     }
     setSyncingGit(false);
   };
+  handleSyncGitRef.current = handleSyncGit;
 
   const loadOverview = async (period?: string, offset?: number) => {
     setLoading(true);
@@ -812,32 +876,142 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
     if (uncached.length === 0) return;
 
     setProjectLanguagesLoading(true);
+    // Mark as in-flight so a card can say "scanning" instead of "no languages".
+    setProjectScanState(prev => {
+      const next = { ...prev };
+      for (const p of uncached) next[p] = { status: 'scanning' };
+      return next;
+    });
     try {
       const results = await window.deskflowAPI.detectProjectsLanguages(uncached);
+      // A failed scan is a REAL, reportable state. The old code dropped it on the
+      // floor, so a project whose folder is not on this machine (very common:
+      // the DB holds C:\Users\... paths) rendered as "no languages" forever.
+      setProjectScanState(prev => {
+        const next = { ...prev };
+        for (const [path, result] of Object.entries(results)) {
+          const r = result as ProjectLanguagesResult;
+          if (r.success && r.languages) next[path] = { status: 'ok', languages: r.languages };
+          else next[path] = { status: 'unreachable', message: (r as any).message || 'Folder not found on this machine' };
+          scannedPathsRef.current.add(path);
+        }
+        return next;
+      });
       setProjectLanguages(prev => {
         const next = { ...prev };
         for (const [path, result] of Object.entries(results)) {
           const r = result as ProjectLanguagesResult;
-          if (r.success && r.languages) {
-            next[path] = r.languages;
-            scannedPathsRef.current.add(path);
-          }
+          if (r.success && r.languages) next[path] = r.languages;
         }
         return next;
       });
     } catch (err) {
       console.error('[IDEProjectsPage] Failed to scan project languages:', err);
+      setProjectScanState(prev => {
+        const next = { ...prev };
+        for (const p of uncached) next[p] = { status: 'error', message: 'Language scan failed' };
+        return next;
+      });
     } finally {
       setProjectLanguagesLoading(false);
     }
   }, []);
 
-  // Detect languages when projects or analytics tab becomes active
+  // Detect languages whenever the project list changes — Overview's Recent
+  // Projects and language distribution need it too, not just the Projects tab.
   useEffect(() => {
-    if (activeTab !== 'projects' && activeTab !== 'analytics') return;
     if (!overview?.projects?.length) return;
     scanProjectLanguages(overview.projects);
-  }, [activeTab, overview?.projects, scanProjectLanguages]);
+  }, [overview?.projects, scanProjectLanguages]);
+
+  // Prefetch project details once per project so the Projects tab can expand
+  // instantly and the Overview health rollup has real data.
+  const detailsFetchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!overview?.projects?.length) return;
+    const toFetch = overview.projects.filter((p: any) => p?.id != null && !detailsFetchedRef.current.has(p.id));
+    if (toFetch.length === 0) return;
+    for (const p of toFetch) detailsFetchedRef.current.add(p.id);
+    setLoadingProjectDetails(prev => {
+      const next = new Set(prev);
+      for (const p of toFetch) next.add(p.id);
+      return next;
+    });
+    for (const p of toFetch) {
+      window.deskflowAPI!.getProjectDetails(p.id)
+        .then((details: any) => {
+          setProjectDetailsCache(prev => ({
+            ...prev,
+            [p.id]: {
+              project: details.project,
+              tools: details.tools,
+              sessions: details.sessions,
+              health: details.health,
+              presets: details.presets,
+              aiUsage: details.aiUsage,
+            },
+          }));
+        })
+        .catch((err: any) => {
+          console.error('[IDEProjectsPage] Failed to prefetch project details:', err);
+          detailsFetchedRef.current.delete(p.id);
+        })
+        .finally(() => {
+          setLoadingProjectDetails(prev => {
+            const next = new Set(prev);
+            next.delete(p.id);
+            return next;
+          });
+        });
+    }
+  }, [overview?.projects]);
+
+  const sortedProjects = useMemo(() => {
+    const list = [...(overview?.projects ?? [])];
+    const topLanguage = (p: any) => projectLanguages[p.path]?.[0]?.language || p.primary_language || '';
+    if (projectSort === 'health') {
+      list.sort((a: any, b: any) => (projectDetailsCache[b.id]?.health?.healthScore ?? -1) - (projectDetailsCache[a.id]?.health?.healthScore ?? -1));
+    } else if (projectSort === 'language') {
+      list.sort((a: any, b: any) => topLanguage(a).localeCompare(topLanguage(b)) || String(a.name || '').localeCompare(String(b.name || '')));
+    } else {
+      list.sort((a: any, b: any) => String(a.name || '').localeCompare(String(b.name || '')));
+    }
+    return list;
+  }, [overview?.projects, projectSort, projectDetailsCache, projectLanguages]);
+
+  // "Project health" was an abstract 0-100 score shown as authority. main.ts
+  // already returns what the score is MADE of (last 7 days: commits, sessions,
+  // AI messages) plus a canonical activityLevel — so show the facts and let the
+  // score be a consequence, not a mystery number.
+  const activityRollup = useMemo(() => {
+    const rows = (overview?.projects ?? []).map((p: any) => {
+      const h = projectDetailsCache[p.id]?.health;
+      return {
+        id: p.id,
+        name: p.name,
+        score: h?.healthScore ?? null,
+        level: h?.activityLevel ?? null,
+        commits: h?.commits ?? null,
+        aiSessions: h?.aiSessions ?? null,
+      };
+    });
+    return {
+      rows,
+      totalCommits: rows.reduce((s: number, r) => s + (r.commits || 0), 0),
+      totalAi: rows.reduce((s: number, r) => s + (r.aiSessions || 0), 0),
+      active: rows.filter(r => r.level === 'active').length,
+      moderate: rows.filter(r => r.level === 'moderate').length,
+      light: rows.filter(r => r.level === 'light').length,
+      inactive: rows.filter(r => r.level === 'inactive').length,
+      unknown: rows.filter(r => r.score == null).length,
+      total: rows.length,
+    };
+  }, [overview?.projects, projectDetailsCache]);
+
+  const unreachableProjects = useMemo(
+    () => (overview?.projects ?? []).filter((p: any) => projectScanState[p.path]?.status === 'unreachable'),
+    [overview?.projects, projectScanState],
+  );
 
   const aggregatedProjectLanguages = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -1283,6 +1457,36 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
     return agents;
   }, [workspaceAnalytics?.aiUsage?.byTool, overview?.aiUsage?.byTool]);
 
+  // ONE window for the whole hero. The headline numbers and the chart used to
+  // disagree: totals came from `aiUsage` (period-scoped) while the chart plotted
+  // a hardcoded 30 days, so the bars could never add up to the number above them.
+  const usageWindow = useMemo(() => {
+    const days = selectedPeriod === 'day' ? 1 : selectedPeriod === 'week' ? 7 : 30;
+    const end = subDays(new Date(), dateOffset * days);
+    const start = subDays(end, days - 1);
+    return {
+      days,
+      label: days === 1 ? 'today' : `last ${days} days`,
+      dates: eachDayOfInterval({ start, end }),
+    };
+  }, [selectedPeriod, dateOffset]);
+
+  const usageSeries = useMemo(() => {
+    const agents = aiAgents.filter(a => a.status !== 'inactive' && a.tokens > 0);
+    const series = agents.map(agent => {
+      let data = usageWindow.dates.map(d => {
+        const dayStr = format(d, 'yyyy-MM-dd');
+        return overview?.aiUsage?.byTool?.[agent.id]?.daily?.[dayStr]?.tokens || 0;
+      });
+      if (excludeOutliers) data = filterOutlierValues(data);
+      if (logScale) data = data.map(v => v === 0 ? null : v) as number[];
+      return { agent, data };
+    });
+    const total = series.reduce((s, r) => s + r.data.reduce((a, b) => a + (b || 0), 0), 0);
+    return { series, total, window: usageWindow };
+  }, [aiAgents, overview?.aiUsage, usageWindow, excludeOutliers, logScale]);
+
+
 
   function filterOutlierValues(values: number[], stddevMultiplier = 3): number[] {
     if (!excludeOutliers || values.length < 3) return values;
@@ -1331,7 +1535,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)} className="mt-6">
         <TabsList className="flex gap-1 p-1 bg-[var(--color-card)] rounded-lg w-fit">
           {TABS.map(({ key, label, icon: Icon }) => {
             const isActive = activeTab === key;
@@ -1362,97 +1566,132 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (
-        <div data-section="ide.overview" className="space-y-6 relative z-10">
-          {/* Live Pulse Grid - Replaces old navigate-away cards */}
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {[0, 1, 2, 3].map(idx => (
-                <Skeleton key={idx} className="h-24 bg-[var(--color-card)] rounded-lg" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {[
-                { label: 'Live Coding', value: codeActivity?.totalLinesAdded == null ? '—' : <NumberTicker value={codeActivity.totalLinesAdded} />, sub: codeActivity == null ? '—' : `-${fmtNum(codeActivity.totalLinesRemoved || 0)} lines · ${codeActivity.totalDurationMs == null ? '—' : fmtSec(codeActivity.totalDurationMs / 1000) + ' active'}`, icon: Code2, color: '#10b981', bg: 'bg-emerald-500/10' },
-                { label: 'AI Pulse', value: overview?.aiUsage?.totalTokens == null ? '—' : <NumberTicker value={overview.aiUsage.totalTokens} />, sub: overview?.aiUsage?.totalCost == null ? '—' : <CostValue value={overview.aiUsage.totalCost} />, icon: Sparkles, color: '#a855f7', bg: 'bg-violet-500/10' },
-                { label: 'Git Velocity', value: overview?.commits?.totalCommits == null ? '—' : <NumberTicker value={overview.commits.totalCommits} />, sub: 'commits this period', icon: GitCommit, color: '#f59e0b', bg: 'bg-amber-500/10' },
-                { label: 'Top Tool', value: topToolName || '—', icon: Cpu, color: '#3b82f6', bg: 'bg-blue-500/10' },
-              ].map((stat, idx) => (
-                <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}
-                  className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-4 flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center flex-shrink-0`}>
-                    <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
+        <div data-section="ide.overview" className="mt-6 space-y-6 relative z-10">
+          {/* Stat row — Live Coding / Git Velocity / Top Tool. AI volume lives in
+              the hero below, so it is deliberately NOT repeated here. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              {
+                label: 'Live coding',
+                icon: Code2,
+                value: codeActivity?.totalLinesAdded == null ? '—' : <NumberTicker value={codeActivity.totalLinesAdded} />,
+                sub: codeActivity == null ? '—' : (
+                  <span className="flex items-center gap-2">
+                    <span className="text-emerald-400">+{fmtNum(codeActivity.totalLinesAdded || 0)}</span>
+                    <span className="text-rose-400">−{fmtNum(codeActivity.totalLinesRemoved || 0)}</span>
+                    <span className="text-[var(--color-muted-foreground)]">
+                      {codeActivity.totalDurationMs == null ? '—' : `${fmtSec(codeActivity.totalDurationMs / 1000)} active`}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                label: 'Git velocity',
+                icon: GitCommit,
+                value: overview?.commits?.totalCommits == null ? '—' : <NumberTicker value={overview.commits.totalCommits} />,
+                sub: (
+                  <span className="flex items-center gap-2">
+                    <span className="text-emerald-400">+{fmtNum(overview?.commits?.totalAdditions || 0)}</span>
+                    <span className="text-rose-400">−{fmtNum(overview?.commits?.totalDeletions || 0)}</span>
+                  </span>
+                ),
+              },
+              {
+                label: 'Top tool',
+                icon: Cpu,
+                value: topToolName || '—',
+                sub: topToolName ? `${aiAgents.find(a => a.name === topToolName)?.sessions ?? 0} sessions` : 'no AI activity yet',
+              },
+            ].map((stat, idx) => (
+              <motion.div
+                key={stat.label}
+                {...enter()}
+                className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 flex items-start gap-3"
+              >
+                <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 flex items-center justify-center flex-shrink-0">
+                  <stat.icon className="w-4 h-4 text-[var(--page-accent)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">{stat.label}</div>
+                  <div className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-[var(--color-card-foreground)] leading-tight">
+                    {stat.value}
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-xl font-semibold tabular-nums tracking-tight text-white truncate">{stat.value}</div>
-                    <div className="text-xs text-zinc-400 truncate">{stat.label}</div>
-                    {stat.sub && <div className="text-[10px] text-zinc-500 truncate mt-0.5">{stat.sub}</div>}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
+                  <div className="text-[11px] text-[var(--color-muted-foreground)] mt-0.5 truncate">{stat.sub}</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
 
-          {/* AI & Projects Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* AI Usage Overview */}
-            <motion.div
-              data-tutorial="ide.usage"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-5"
-            >
-              <div className="flex items-center justify-between mb-6">
+          {/* HERO — AI tool usage is the headline number of this page. Everything
+              below it is context: what you wrote, what you committed, where. */}
+          <motion.div
+            data-section="ide.ai-usage"
+            data-tutorial="ide.usage"
+            {...enter()}
+            className="bg-[var(--color-card)] border border-[var(--page-accent)]/30 rounded-lg p-5"
+          >
+              <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
                 <div className="flex items-center gap-3">
-                  <Sparkles className="w-5 h-5 text-violet-400" />
+                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-[var(--page-accent)]" />
+                  </div>
                   <div>
-                    <div className="text-xl font-semibold">AI Tool Usage</div>
-                    <div className="text-sm text-zinc-500">Last 30 days</div>
+                    <h2 className="text-lg font-semibold text-[var(--color-card-foreground)] leading-tight">AI tool usage</h2>
+                    <p className="text-xs text-[var(--color-muted-foreground)]">Tokens per day across every connected tool · {usageSeries.window.label}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setLogScale(!logScale)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${
-                      logScale ? 'bg-cyan-500/20 text-cyan-400' : 'text-zinc-400 hover:text-white'
+                    aria-pressed={logScale}
+                    title="Logarithmic y-axis — use when one spike flattens the rest"
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
+                      logScale ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
                     }`}
                   >
-                    Log
+                    Log scale
                   </button>
                   <button
                     onClick={() => setExcludeOutliers(!excludeOutliers)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${
-                      excludeOutliers ? 'bg-amber-500/20 text-amber-400' : 'text-zinc-400 hover:text-white'
+                    aria-pressed={excludeOutliers}
+                    title="Hide outlier days so the trend is readable"
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
+                      excludeOutliers ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
                     }`}
                   >
-                    ♯ Out
+                    Hide outliers
                   </button>
                 </div>
               </div>
 
+              {/* Lead metrics — the answer before you read the chart */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                {[
+                  { label: 'Tokens · window total', value: usageSeries.total > 0 ? <TokenValue value={usageSeries.total} /> : '—', hero: true },
+                  { label: 'Spend', value: overview?.aiUsage?.totalCost == null ? '—' : <CostValue value={overview.aiUsage.totalCost} /> },
+                  { label: 'Sessions', value: fmtNum(aiAgents.reduce((s: number, a) => s + (a.sessions || 0), 0)) },
+                  { label: 'Messages', value: fmtNum(overview?.aiUsage?.totalMessages ?? aiAgents.reduce((s: number, a) => s + (a.messageCount || 0), 0)) },
+                ].map(m => (
+                  <div key={m.label} className={`rounded-lg border px-3 py-2 ${m.hero ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/[0.06]' : 'border-[var(--color-border)]'}`}>
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">{m.label}</div>
+                    <div className={`font-mono tabular-nums text-[var(--color-card-foreground)] leading-tight ${m.hero ? 'text-3xl font-semibold' : 'text-xl font-semibold'}`}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
               {aiAgents.filter(a => a.status !== 'inactive').length > 0 ? (
                 <>
-                  <div className="h-48 mb-6">
+                  <div className="h-56 mb-5">
                     {(() => {
-                      const activeAgents = aiAgents.filter(a => a.tokens > 0);
-                      const overviewDays = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() });
+                      // Same source as the Tokens metric above — they cannot drift.
                       const overviewChartData = {
-                        labels: overviewDays.map(d => format(d, 'MMM dd')),
-                        datasets: activeAgents.map((agent, idx) => {
-                          let data = overviewDays.map(d => {
-                            const dayStr = format(d, 'yyyy-MM-dd');
-                            return overview?.aiUsage?.byTool?.[agent.id]?.daily?.[dayStr]?.tokens || 0;
-                          });
-                          if (excludeOutliers) data = filterOutlierValues(data);
-                          if (logScale) data = data.map(v => v === 0 ? null : v) as number[];
-                          return {
-                            label: agent.name,
-                            data,
-                            backgroundColor: agent.color,
-                            ...(logScale ? {} : { stack: 'combined' }),
-                          };
-                        })
+                        labels: usageWindow.dates.map(d => format(d, 'MMM dd')),
+                        datasets: usageSeries.series.map(({ agent, data }) => ({
+                          label: agent.name,
+                          data,
+                          backgroundColor: agent.color,
+                          ...(logScale ? {} : { stack: 'combined' }),
+                        })),
                       };
                       const isStacked = !logScale;
                       return (
@@ -1462,12 +1701,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
-                              legend: { display: true, position: 'bottom', labels: { color: '#a1a1aa', padding: 8, usePointStyle: true } },
+                              legend: { display: true, position: 'bottom', labels: { color: cssToken('--color-muted-foreground'), padding: 8, usePointStyle: true } },
                               tooltip: {
-                                backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                                titleColor: '#fff',
-                                bodyColor: '#a1a1aa',
-                                borderColor: '#3f3f46',
+                                backgroundColor: cssToken('--color-card'),
+                                titleColor: cssToken('--color-card-foreground'),
+                                bodyColor: cssToken('--color-muted-foreground'),
+                                borderColor: cssToken('--color-border'),
                                 borderWidth: 1,
                                 callbacks: {
                                   label: (ctx: any) => {
@@ -1478,13 +1717,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               }
                             },
                             scales: {
-                              x: { stacked: isStacked, grid: { display: false }, ticks: { color: '#71717a', maxTicksLimit: 7 } },
+                              x: { stacked: isStacked, grid: { display: false }, ticks: { color: cssToken('--color-muted-foreground'), maxTicksLimit: 7 } },
                               y: {
                                 type: logScale ? 'logarithmic' as const : 'linear' as const,
                                 stacked: isStacked,
-                                grid: { color: '#27272a' },
+                                grid: { color: cssToken('--color-border') },
                                 ticks: {
-                                  color: '#71717a',
+                                  color: cssToken('--color-muted-foreground'),
                                   callback: (v: any) => {
                                     if (v === null) return '';
                                     return formatTokens(v);
@@ -1499,29 +1738,44 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     })()}
                   </div>
 
-                  <div className="space-y-3">
-                    {aiAgents.filter(a => a.status !== 'inactive').map((agent) => (
-                      <div key={agent.id} className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: agent.color + '22' }}>
-                            <Code2 className="w-4 h-4" style={{ color: agent.color }} />
+                  <div className="space-y-2">
+                    {(() => {
+                      const totalTokens = Math.max(1, aiAgents.reduce((s: number, a) => s + (a.tokens || 0), 0));
+                      return aiAgents.filter(a => a.status !== 'inactive').map((agent) => (
+                        <div key={agent.id} className="p-3 rounded-lg border border-[var(--color-border)]">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: agent.color }} />
+                              <span className="text-sm font-medium text-[var(--color-card-foreground)] truncate">{agent.name}</span>
+                              <span className="text-[11px] text-[var(--color-muted-foreground)] whitespace-nowrap">
+                                {agent.sessions} sessions · {agent.messageCount} msgs
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <div className="text-right">
+                                <div className="text-sm font-medium tabular-nums text-[var(--color-card-foreground)]"><TokenValue value={agent.tokens} /></div>
+                                <div className="text-[11px] tabular-nums text-[var(--color-muted-foreground)]"><CostValue value={agent.cost} /></div>
+                              </div>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${
+                                agent.status === 'active'
+                                  ? 'border-emerald-500/30 text-emerald-400'
+                                  : 'border-[var(--color-border)] text-[var(--color-muted-foreground)]'
+                              }`}>
+                                {agent.status}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-sm font-medium text-white">{agent.name}</div>
-                            <div className="text-xs text-zinc-500">{agent.sessions} sessions &middot; {agent.messageCount} msgs</div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className="h-1 flex-1 rounded-full bg-[var(--color-muted)] overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${((agent.tokens || 0) / totalTokens) * 100}%`, backgroundColor: agent.color }} />
+                            </div>
+                            <span className="text-[10px] tabular-nums text-[var(--color-muted-foreground)] w-9 text-right">
+                              {Math.round(((agent.tokens || 0) / totalTokens) * 100)}%
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={agent.status === 'active' ? 'default' : 'secondary'} className={agent.status === 'active' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-zinc-700 text-zinc-400 border-zinc-600'}>
-                            {agent.status}
-                          </Badge>
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-emerald-400"><CostValue value={agent.cost} /></div>
-                            <div className="text-xs text-zinc-500"><TokenValue value={agent.tokens} /></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </>
               ) : (
@@ -1535,67 +1789,248 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
             {/* Recent Projects */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg p-5"
+              {...enter()}
+              className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4"
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
-                  <Terminal className="w-5 h-5 text-emerald-400" />
+                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 flex items-center justify-center">
+                    <Terminal className="w-4 h-4 text-[var(--page-accent)]" />
+                  </div>
                   <div>
-                    <div className="text-xl font-semibold">Recent Projects</div>
-                    <div className="text-sm text-zinc-500">{overview?.projects?.length || 0} projects tracked</div>
+                    <h2 className="text-lg font-semibold text-[var(--color-card-foreground)] leading-tight">Recent projects</h2>
+                    <p className="text-xs text-[var(--color-muted-foreground)]">{overview?.projects?.length || 0} tracked</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setActiveTab('projects')}
-                  className="text-xs text-violet-400 hover:text-violet-300"
+                  className="text-xs text-[var(--page-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 rounded"
                 >
                   View all →
                 </button>
               </div>
 
               {overview?.projects && overview.projects.length > 0 ? (
-                <div className="space-y-3">
-                  {overview.projects.slice(0, 5).map((project: any) => (
-                    <div
-                      key={project.id}
-                      className="flex items-center justify-between p-3 bg-[var(--color-card)] rounded-lg hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                <div className="space-y-2">
+                  {overview.projects.slice(0, 5).map((project: any) => {
+                    const langs = projectLanguages[project.path];
+                    const health = projectDetailsCache[project.id]?.health?.healthScore;
+                    const sessions = projectDetailsCache[project.id]?.sessions?.length;
+                    return (
+                      <button
+                        key={project.id}
+                        onClick={() => {
+                          setExpandedProjects(new Set([project.id]));
+                          setActiveTab('projects');
+                        }}
+                        className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-lg border border-[var(--color-border)] hover:border-[var(--page-accent)]/40 hover:bg-[var(--color-muted)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[var(--color-card-foreground)] truncate">{project.name}</div>
+                          <div className="text-[11px] text-[var(--color-muted-foreground)] font-mono truncate">{project.path}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {sessions != null && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] tabular-nums">
+                              {sessions} sessions
+                            </span>
+                          )}
+                          {health != null && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md border tabular-nums ${
+                              health >= 80 ? 'border-emerald-500/30 text-emerald-400'
+                                : health >= 50 ? 'border-amber-500/30 text-amber-400'
+                                : 'border-rose-500/30 text-rose-400'
+                            }`}>
+                              {health}%
+                            </span>
+                          )}
+                          {project.vcs_type && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)]">
+                              {project.vcs_type}
+                            </span>
+                          )}
+                          {langs && langs.length > 0 ? (
+                            <>
+                              {langs.slice(0, 2).map((l) => (
+                                <span key={l.language} className="text-[10px] px-1.5 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] tabular-nums">
+                                  {l.language} {l.percentage}%
+                                </span>
+                              ))}
+                              {langs.length > 2 && (
+                                <span className="text-[10px] text-[var(--color-muted-foreground)]">+{langs.length - 2}</span>
+                              )}
+                            </>
+                          ) : project.primary_language ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)]">
+                              {project.primary_language}
+                            </span>
+                          ) : projectLanguagesLoading ? (
+                            <span className="text-[10px] text-[var(--color-muted-foreground)]">detecting…</span>
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {overview.projects.length > 5 && (
+                    <button
+                      onClick={() => setActiveTab('projects')}
+                      className="w-full text-xs text-[var(--page-accent)] hover:underline py-1"
                     >
-                      <div>
-                        <div className="text-sm font-medium text-white">{project.name}</div>
-                        <div className="text-xs text-zinc-500 truncate max-w-[200px]">{project.path}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {project.vcs_type && (
-                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-md flex items-center gap-1">
-                            <GitBranch className="w-3 h-3" />
-                            {project.vcs_type}
-                          </span>
-                        )}
-                        {(() => {
-                          const langs = projectLanguages[project.path];
-                          const detected = langs?.[0]?.language || project.primary_language;
-                          const pct = langs?.[0]?.percentage;
-                          if (detected) {
-                            return (
-                              <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-md">
-                                {detected}{pct !== undefined ? ` ${pct}%` : ''}
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-                    </div>
-                  ))}
+                      + {overview.projects.length - 5} more projects
+                    </button>
+                  )}
                 </div>
               ) : (
                 <EmptyState
                   icon={<Terminal className="w-12 h-12" />}
                   title="No projects tracked yet"
                   description="Add a project to get started"
+                />
+              )}
+            </motion.div>
+
+          {/* Languages + last-7-days activity */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <motion.div
+              {...enter()}
+              className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4"
+              data-section="ide.languages"
+            >
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--color-card-foreground)] leading-tight">Languages in your code</h3>
+                  <p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+                    Files by language, across projects that exist on this machine
+                  </p>
+                </div>
+                <Code2 className="w-4 h-4 text-[var(--page-accent)] flex-shrink-0" />
+              </div>
+
+              {aggregatedProjectLanguages.length > 0 ? (
+                <>
+                  <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-muted)]">
+                    {(() => {
+                      const total = aggregatedProjectLanguages.reduce((s: number, l: any) => s + l.count, 0) || 1;
+                      return aggregatedProjectLanguages.slice(0, 8).map((l: any, i: number) => (
+                        <div
+                          key={l.language}
+                          className={`${LANGUAGE_TONES[i % LANGUAGE_TONES.length]} h-full`}
+                          style={{ width: `${(l.count / total) * 100}%` }}
+                          title={`${l.language}: ${l.count} files`}
+                        />
+                      ));
+                    })()}
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    {(() => {
+                      const total = aggregatedProjectLanguages.reduce((s: number, l: any) => s + l.count, 0) || 1;
+                      return aggregatedProjectLanguages.slice(0, 6).map((l: any, i: number) => (
+                        <div key={l.language} className="flex items-center gap-2 text-xs">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${LANGUAGE_TONES[i % LANGUAGE_TONES.length]}`} />
+                          <span className="text-[var(--color-card-foreground)] flex-1 truncate">{l.language}</span>
+                          <span className="tabular-nums text-[var(--color-muted-foreground)]">{Math.round((l.count / total) * 100)}%</span>
+                          <span className="tabular-nums text-[var(--color-muted-foreground)] w-14 text-right">{l.count} files</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </>
+              ) : projectLanguagesLoading ? (
+                <div className="space-y-2" aria-busy="true">
+                  <Skeleton className="h-2.5 w-full rounded-full" />
+                  <Skeleton className="h-3 w-2/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[var(--color-border)] p-4">
+                  <p className="text-sm text-[var(--color-card-foreground)] font-medium">
+                    {unreachableProjects.length > 0
+                      ? `${unreachableProjects.length} of ${(overview?.projects?.length ?? 0)} project folders aren't on this machine`
+                      : 'No language data yet'}
+                  </p>
+                  <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+                    {unreachableProjects.length > 0
+                      ? 'Their saved paths point at a different machine, so files cannot be read. Re-add them with a local path to see languages.'
+                      : 'Add a project with a local folder path and its languages will be detected here.'}
+                  </p>
+                  {unreachableProjects.length > 0 && (
+                    <ul className="mt-2 space-y-0.5">
+                      {unreachableProjects.slice(0, 3).map((p: any) => (
+                        <li key={p.id} className="text-[11px] font-mono text-[var(--color-muted-foreground)] truncate">{p.path}</li>
+                      ))}
+                      {unreachableProjects.length > 3 && (
+                        <li className="text-[11px] text-[var(--color-muted-foreground)]">+{unreachableProjects.length - 3} more</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </motion.div>
+
+            <motion.div
+              {...enter()}
+              className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4"
+              data-section="ide.health"
+            >
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--color-card-foreground)] leading-tight">Last 7 days</h3>
+                  <p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+                    Commits and AI messages per project — the activity the score is built from
+                  </p>
+                </div>
+                <Activity className="w-4 h-4 text-[var(--page-accent)] flex-shrink-0" />
+              </div>
+
+              {activityRollup.total > 0 ? (
+                <>
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {[
+                      { label: 'Commits', value: activityRollup.totalCommits },
+                      { label: 'AI messages', value: activityRollup.totalAi },
+                      { label: 'Active projects', value: activityRollup.active + activityRollup.moderate + activityRollup.light },
+                    ].map(m => (
+                      <div key={m.label} className="rounded-lg border border-[var(--color-border)] px-3 py-2">
+                        <div className="font-mono text-xl font-semibold tabular-nums text-[var(--color-card-foreground)] leading-tight">{m.value}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-1.5">
+                    {activityRollup.rows.slice(0, 5).map(r => (
+                      <div key={r.id} className="flex items-center gap-2 text-xs">
+                        <span className="text-[var(--color-card-foreground)] truncate flex-1">{r.name}</span>
+                        {r.commits != null && (
+                          <span className="tabular-nums text-[var(--color-muted-foreground)]">{r.commits} commits</span>
+                        )}
+                        {r.aiSessions != null && (
+                          <span className="tabular-nums text-[var(--color-muted-foreground)]">{r.aiSessions} AI</span>
+                        )}
+                        <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${
+                          r.level === 'active' ? 'border-emerald-500/30 text-emerald-400'
+                            : r.level === 'moderate' ? 'border-amber-500/30 text-amber-400'
+                            : r.level === 'light' ? 'border-[var(--color-border)] text-[var(--color-muted-foreground)]'
+                            : 'border-[var(--color-border)] text-[var(--color-muted-foreground)]'
+                        }`}>
+                          {r.level ?? 'unknown'}
+                        </span>
+                        {r.score != null && (
+                          <span className="tabular-nums text-[var(--color-muted-foreground)] w-8 text-right">{r.score}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {activityRollup.unknown > 0 && (
+                    <p className="mt-2 text-[11px] text-[var(--color-muted-foreground)]">
+                      {activityRollup.unknown} project{activityRollup.unknown === 1 ? '' : 's'} still loading…
+                    </p>
+                  )}
+                </>
+              ) : (
+                <EmptyState
+                  icon={<Activity className="w-12 h-12" />}
+                  title="No projects to measure yet"
+                  description="Add a project and its weekly commits and AI messages appear here"
                 />
               )}
             </motion.div>
@@ -1609,7 +2044,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           data-section="ide.environment"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
+          className="mt-6 space-y-6"
         >
           {/* Toolbar */}
           <div className="flex items-center gap-2">
@@ -1691,7 +2126,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <div key={category} className="glass rounded-lg overflow-hidden">
                       <button
                         onClick={() => toggleCategory(category)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                        className="w-full flex items-center justify-between p-4 hover:bg-[var(--color-muted)] transition-colors"
                       >
                         <div className="flex items-center gap-3">
                           <Icon className="w-5 h-5 text-zinc-400" />
@@ -1703,7 +2138,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       {isExpanded && (
                         <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                           {(tools as any[]).map((tool: any) => (
-                            <div key={tool.id} className="flex items-center justify-between p-2.5 bg-[rgba(255,255,255,0.04)] rounded-lg">
+                            <div key={tool.id} className="flex items-center justify-between p-2.5 bg-[var(--color-muted)]/50 rounded-lg">
                               <span className="text-sm text-zinc-300">{tool.name}</span>
                               {tool.version && <span className="text-xs text-zinc-500 font-mono">v{tool.version}</span>}
                             </div>
@@ -1729,49 +2164,45 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           animate={{ opacity: 1, y: 0 }}
           className="mt-6 space-y-6"
         >
-          <motion.button
-            onClick={async () => {
-              const next = !showAddProject;
-              setShowAddProject(next);
-              if (next) {
-                if (window.deskflowAPI?.scanIdeDefaultProjects) {
-                  setLoadingQuickAdd(true);
-                  try {
-                    const result = await window.deskflowAPI.scanIdeDefaultProjects();
-                    setQuickAddProjects(result);
-                  } catch {}
-                  setLoadingQuickAdd(false);
-                }
-                if (savedCustomDirs.length > 0 && window.deskflowAPI?.scanCustomDirectory) {
-                  setScanningDirs(true);
-                  const results: Record<string, any[]> = {};
-                  for (const dir of savedCustomDirs) {
-                    try {
-                      const r = await window.deskflowAPI.scanCustomDirectory(dir);
-                      if (r.success) results[dir] = r.projects;
-                    } catch {}
-                  }
-                  setCustomDirResults(results);
-                  setScanningDirs(false);
-                }
-              }
-            }}
-          
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--page-accent)] text-zinc-950 font-medium rounded-lg transition-all duration-150 hover:brightness-110 hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
-            aria-label="Add new project"
-            whileTap={{ scale: 0.98 }}
-          >
-<Plus className="w-4 h-4" />
-            Add Project
-          </motion.button>
-
           {overview?.projects && overview.projects.length > 0 ? (
             <div>
-            {/* Expand / Collapse All + Language Stats Toggle */}
-            <div className="flex items-center gap-2 mb-4">
-              <Button
-                variant="outline"
-                size="sm"
+            {/* Toolbar — Add / Expand / Languages / sort, on one row */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <motion.button
+                onClick={async () => {
+                  const next = !showAddProject;
+                  setShowAddProject(next);
+                  if (next) {
+                    if (window.deskflowAPI?.scanIdeDefaultProjects) {
+                      setLoadingQuickAdd(true);
+                      try {
+                        const result = await window.deskflowAPI.scanIdeDefaultProjects();
+                        setQuickAddProjects(result);
+                      } catch {}
+                      setLoadingQuickAdd(false);
+                    }
+                    if (savedCustomDirs.length > 0 && window.deskflowAPI?.scanCustomDirectory) {
+                      setScanningDirs(true);
+                      const results: Record<string, any[]> = {};
+                      for (const dir of savedCustomDirs) {
+                        try {
+                          const r = await window.deskflowAPI.scanCustomDirectory(dir);
+                          if (r.success) results[dir] = r.projects;
+                        } catch {}
+                      }
+                      setCustomDirResults(results);
+                      setScanningDirs(false);
+                    }
+                  }
+                }}
+                className="flex items-center gap-2 min-h-11 px-4 text-sm font-medium rounded-lg bg-[var(--page-accent)] text-zinc-950 transition-colors hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                aria-label="Add new project"
+                whileTap={{ scale: 0.98 }}
+              >
+                <Plus className="w-4 h-4" />
+                Add project
+              </motion.button>
+              <button
                 onClick={() => {
                   if (expandedProjects.size === overview.projects.length) {
                     setExpandedProjects(new Set());
@@ -1780,24 +2211,40 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     setExpandedProjects(all);
                   }
                 }}
-                className="flex items-center gap-1.5"
+                className="flex items-center gap-1.5 min-h-11 px-4 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)] transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
               >
                 <ChevronDown className={`w-4 h-4 transition-transform ${expandedProjects.size === overview.projects.length ? 'rotate-180' : ''}`} />
-                {expandedProjects.size === overview.projects.length ? 'Collapse All' : 'Expand All'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
+                {expandedProjects.size === overview.projects.length ? 'Collapse all' : 'Expand all'}
+              </button>
+              <button
                 onClick={() => setShowLanguageStats(prev => !prev)}
-                className="flex items-center gap-1.5"
+                aria-pressed={showLanguageStats}
+                className={`flex items-center gap-1.5 min-h-11 px-4 text-sm font-medium rounded-lg border transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
+                  showLanguageStats
+                    ? 'border-[var(--page-accent)]/40 text-[var(--page-accent)] bg-[var(--page-accent)]/10'
+                    : 'border-[var(--color-border)] text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)]'
+                }`}
               >
                 <Code2 className="w-4 h-4" />
-                {showLanguageStats ? 'Hide' : 'Show'} Languages
-              </Button>
+                {showLanguageStats ? 'Hide' : 'Show'} languages
+              </button>
+              <span className="text-[11px] text-[var(--color-muted-foreground)] tabular-nums">
+                {sortedProjects.length} project{sortedProjects.length === 1 ? '' : 's'}
+              </span>
+              <select
+                value={projectSort}
+                onChange={(e) => setProjectSort(e.target.value as 'name' | 'health' | 'language')}
+                aria-label="Sort projects"
+                className="ml-auto min-h-11 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-card-foreground)] text-sm rounded-lg px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+              >
+                <option value="name">Name</option>
+                <option value="health">Health score</option>
+                <option value="language">Top language</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-              {overview.projects.map((project: any, idx: number) => {
+              {sortedProjects.map((project: any, idx: number) => {
                 const projectIde = overview?.ides?.find((ide: any) => ide.id === project.default_ide);
                 const isExpanded = expandedProjects.has(project.id);
                 const details = projectDetailsCache[project.id];
@@ -1806,85 +2253,132 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 return (
                 <motion.div
                   key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] rounded-lg overflow-hidden"
+                  {...enter()}
+                  className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden transition-colors duration-150 hover:border-[var(--page-accent)]/30"
                 >
                   {/* Card Header - Always Visible */}
-                  <div className="p-5">
-                    <div className="flex items-start justify-between">
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-white font-semibold truncate">{project.name}</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-[var(--color-card-foreground)] font-semibold truncate">{project.name}</h3>
                           {project.default_ide && (
-                            <span className="px-2 py-0.5 bg-violet-500/20 text-violet-400 text-xs rounded-full">
+                            <span className="px-1.5 py-0.5 text-[10px] rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)]">
                               {projectIde?.name || project.default_ide}
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-zinc-500 font-mono truncate mt-1">{project.path}</p>
-                        </div>
-                        {/* Language Stats - always visible when enabled */}
-                        {showLanguageStats && (() => {
-                        const langs = projectLanguages[project.path];
-                        if (langs && langs.length > 0) {
-                         const top = langs.slice(0, 2);
-                         const extra = langs.length - 2;
-                         return (
-                           <div className="flex items-center gap-1 flex-wrap justify-end">
-                             {top.map((l, i) => (
-                               <span key={l.language} className={`px-1.5 py-0.5 text-[10px] rounded-md font-medium ${
-                                 i === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-700 light:bg-zinc-200/50 text-zinc-400'
-                               }`}>
-                                 {l.language} {l.percentage}%
-                               </span>
-                             ))}
-                             {extra > 0 && (
-                               <span className="px-1.5 py-0.5 text-[10px] rounded-md bg-zinc-800 light:bg-zinc-200 text-zinc-500">
-                                 +{extra}
-                               </span>
-                             )}
-                           </div>
-                         );
-                        }
-                        if (project.primary_language) {
-                         return (
-                           <span className="px-1.5 py-0.5 text-[10px] rounded-md bg-emerald-500/20 text-emerald-400 font-medium">
-                             {project.primary_language}
-                           </span>
-                         );
-                        }
-                        return null;
-                        })()}
-                        <div className="flex items-center gap-2">
+                        <p className="text-[11px] text-[var(--color-muted-foreground)] font-mono truncate mt-1">{project.path}</p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={() => handleEditProjectClick(project)}
                           aria-label={`Edit ${project.name}`}
-                          className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
+                          className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-[var(--page-accent)] hover:bg-[var(--page-accent)]/10 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => toggleProjectExpand(project)}
+                          aria-expanded={isExpanded}
                           aria-label={isExpanded ? `Collapse ${project.name}` : `Expand ${project.name}`}
-                          className={`p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 light:bg-zinc-200 rounded-lg transition-colors duration-150 ${isExpanded ? 'rotate-180' : ''}`}
+                          className={`p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)] rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${isExpanded ? 'rotate-180' : ''}`}
                         >
                           <ChevronDown className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteClick(project)}
                           aria-label={`Delete ${project.name}`}
-                          className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
+
+                    {/* Collapsed stats — the card must stay informative when shut */}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-3">
+                      {details?.health?.healthScore !== undefined && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border tabular-nums ${
+                          details.health.healthScore >= 80 ? 'border-emerald-500/30 text-emerald-400'
+                            : details.health.healthScore >= 50 ? 'border-amber-500/30 text-amber-400'
+                            : 'border-rose-500/30 text-rose-400'
+                        }`}>
+                          health {details.health.healthScore}%
+                        </span>
+                      )}
+                      {isLoading && (
+                        <Skeleton className="h-4 w-16 rounded-md" />
+                      )}
+                      {details?.sessions?.length > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] tabular-nums">
+                          {details.sessions.length} sessions
+                        </span>
+                      )}
+                      {details?.tools?.length > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] tabular-nums">
+                          {details.tools.length} tools
+                        </span>
+                      )}
+                      {project.vcs_type && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)]">
+                          {project.vcs_type}
+                        </span>
+                      )}
+                      {showLanguageStats && (() => {
+                        const langs = projectLanguages[project.path];
+                        const scan = projectScanState[project.path];
+                        if (langs && langs.length > 0) {
+                          return (
+                            <>
+                              {langs.slice(0, 2).map(l => (
+                                <span key={l.language} className="text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted-foreground)] tabular-nums">
+                                  {l.language} {l.percentage}%
+                                </span>
+                              ))}
+                              {langs.length > 2 && (
+                                <span className="text-[10px] text-[var(--color-muted-foreground)] tabular-nums">+{langs.length - 2}</span>
+                              )}
+                            </>
+                          );
+                        }
+                        if (scan?.status === 'scanning' || (projectLanguagesLoading && !scan)) {
+                          return <Skeleton className="h-4 w-20 rounded-full" />;
+                        }
+                        // Say WHY there is nothing. "No languages detected" on a
+                        // folder this machine cannot even see is a lie.
+                        if (scan?.status === 'unreachable') {
+                          return (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-500/30 text-amber-400">
+                              folder not on this machine
+                            </span>
+                          );
+                        }
+                        if (scan?.status === 'error') {
+                          return (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-rose-500/30 text-rose-400">
+                              scan failed
+                            </span>
+                          );
+                        }
+                        if (project.primary_language) {
+                          return (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted-foreground)]">
+                              {project.primary_language} <span className="opacity-70">set manually</span>
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="text-[10px] text-[var(--color-muted-foreground)]">
+                            no code files matched a known language
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </div>
 
                   {isExpanded && (
-                  <div className="px-5 pb-5 space-y-4">
+                  <div className="px-4 pb-4 space-y-4 border-t border-[var(--color-border)] pt-4">
                     {/* Quick Actions Row */}
                     <div className="flex items-center gap-3 mt-4">
                       {(() => {
@@ -1892,23 +2386,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         return isRunning ? (
                           <button
                             onClick={() => handleStopProject(project.id)}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg transition-colors duration-150"
+                            className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-rose-500/30 text-rose-300 transition-colors hover:bg-rose-500/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60"
                           >
                             <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                            <span className="text-sm font-medium">Stop</span>
+                            <span className="font-medium">Stop</span>
                           </button>
                         ) : (
                           <button
                             onClick={() => handleRunProject(project)}
                             disabled={runningProjectLoading === project.id}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg transition-colors duration-150 disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg bg-[var(--page-accent)] text-zinc-950 transition-colors hover:brightness-110 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
                           >
                             {runningProjectLoading === project.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                               <Play className="w-4 h-4" />
                             )}
-                            <span className="text-sm font-medium">{runningProjectLoading === project.id ? 'Starting...' : 'Run'}</span>
+                            <span className="font-medium">{runningProjectLoading === project.id ? 'Starting…' : 'Run'}</span>
                           </button>
                         );
                       })()}
@@ -1920,10 +2414,10 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             handleEditProjectClick(project);
                           }
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 rounded-lg transition-colors duration-150"
+                        className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:bg-[var(--color-muted)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
                       >
                         <Monitor className="w-4 h-4" />
-                        <span className="text-sm font-medium">{project.default_ide ? 'Open in IDE' : 'Set IDE'}</span>
+                        <span className="font-medium">{project.default_ide ? 'Open in IDE' : 'Set IDE'}</span>
                       </button>
                       <button
                         onClick={() => {
@@ -1931,114 +2425,57 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           setWorkspaceProject(project);
                           setIsWorkspaceOpen(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 hover:bg-zinc-700 light:bg-zinc-200 border border-zinc-600 light:border-zinc-300/50 text-zinc-300 rounded-lg transition-colors duration-150"
+                        className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:bg-[var(--color-muted)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
                       >
                         <Terminal className="w-4 h-4" />
-                        <span className="text-sm font-medium">Open Workspace</span>
+                        <span className="font-medium">Open workspace</span>
                       </button>
                     </div>
 
-                    {/* Tags Row */}
-                    <div className="flex items-center gap-2 mt-4 flex-wrap">
-                      {project.vcs_type && (
-                        <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-lg flex items-center gap-1">
-                          <GitBranch className="w-3 h-3" />
-                          {project.vcs_type}
-                        </span>
-                      )}
-                      {(() => {
-                        const langs = projectLanguages[project.path];
-                        const isLoading = projectLanguagesLoading;
-                        if (langs && langs.length > 0) {
-                          const top = langs.slice(0, 3);
-                          const extra = langs.length - 3;
-                          const maxPct = top[0]?.percentage || 0;
-                          return (
-                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                              {top.map((l, i) => (
-                                <div key={l.language} className="group relative">
-                                  <span className={`px-2 py-1 text-xs rounded-lg inline-flex items-center gap-1.5 ${
-                                    i === 0
-                                      ? 'bg-emerald-500/20 text-emerald-400'
-                                      : 'bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400'
-                                  }`}>
-                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
-                                      backgroundColor: i === 0 ? '#34d399' : i === 1 ? '#60a5fa' : '#a78bfa'
-                                    }} />
-                                    {l.language}
-                                    <span className="text-[10px] opacity-70">{l.percentage}%</span>
-                                  </span>
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10">
-                                    <div className="bg-zinc-800 light:bg-zinc-100 border border-zinc-700 light:border-zinc-300 rounded-lg p-2 shadow-xl whitespace-nowrap">
-                                      {langs.slice(0, 5).map(l => (
-                                        <div key={l.language} className="flex items-center justify-between gap-3 text-[11px]">
-                                          <span className="text-zinc-300">{l.language}</span>
-                                          <span className="text-zinc-500">{l.count} files ({l.percentage}%)</span>
-                                        </div>
-                                      ))}
-                                      {langs.length > 5 && (
-                                        <div className="text-[10px] text-zinc-600 text-center mt-1">
-                                          +{langs.length - 5} more
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                              {extra > 0 && (
-                                <span className="text-[10px] text-zinc-600 px-1">
-                                  +{extra}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        }
-                        if (project.primary_language) {
-                          return (
-                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded-lg">
-                              {project.primary_language}
-                            </span>
-                          );
-                        }
-                        if (isLoading) {
-                          return (
-                            <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/30 text-zinc-500 text-xs rounded-lg flex items-center gap-1">
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              Detecting...
-                            </span>
-                          );
-                        }
-                        return null;
-                      })()}
-                      {details?.health?.healthScore !== undefined && (
-                        <span className={`px-2 py-1 text-xs rounded-lg flex items-center gap-1 ${
-                          details.health.healthScore >= 80 ? 'bg-green-500/20 text-green-400' :
-                          details.health.healthScore >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-red-500/20 text-red-400'
-                        }`}>
-                          <Activity className="w-3 h-3" />
-                          {details.health.healthScore}%
-                        </span>
-                      )}
-                      {details?.tools?.length > 0 && (
-                        <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400 text-xs rounded-lg">
-                          {details.tools.length} tools
-                        </span>
-                      )}
-                      {details?.sessions?.length > 0 && (
-                        <span className="px-2 py-1 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-400 text-xs rounded-lg">
-                          {details.sessions.length} sessions
-                        </span>
-                      )}
+                    {/* Language Breakdown */}
+                    {(() => {
+                      const langs = projectLanguages[project.path];
+                      if (!langs || langs.length === 0) return null;
+                      const total = langs.reduce((s: number, l: any) => s + (l.count || 0), 0) || 1;
+                      return (
+                        <div className="mt-4">
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Language breakdown</div>
+                          <div className="flex h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                            {langs.slice(0, 8).map((l: any, i: number) => (
+                              <div key={l.language} className={`${LANGUAGE_TONES[i % LANGUAGE_TONES.length]} h-full`} style={{ width: `${((l.count || 0) / total) * 100}%` }} title={`${l.language}: ${l.count} files (${l.percentage}%)`} />
+                            ))}
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                            {langs.slice(0, 6).map((l: any, i: number) => (
+                              <span key={l.language} className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
+                                <span className={`w-1.5 h-1.5 rounded-full ${LANGUAGE_TONES[i % LANGUAGE_TONES.length]}`} />
+                                {l.language} {l.percentage}%
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Repo link — health/sessions/tools/vcs/languages now live in
+                        the card header and the breakdown bar above, so repeating
+                        them here was pure duplication. */}
+                    <div className="flex items-center gap-3 mt-4 flex-wrap">
                       {project.repository_url && (
                         <a
                           href={project.repository_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1 text-zinc-500 hover:text-violet-400 transition-colors"
+                          className="inline-flex items-center gap-1.5 text-xs text-[var(--page-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
                         >
-                          <ExternalLink className="w-4 h-4" />
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Open repository
                         </a>
+                      )}
+                      {!project.repository_url && !project.vcs_type && (
+                        <span className="text-[11px] text-[var(--color-muted-foreground)]">
+                          No repository linked — add one to track commits for this project.
+                        </span>
                       )}
                     </div>
                   </div>
@@ -2052,12 +2489,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="border-t border-zinc-800 light:border-zinc-200 bg-[rgba(255,255,255,0.04)]"
+                        className="border-t border-[var(--color-border)] bg-[var(--color-muted)]/30"
                       >
                         <div className="p-5 space-y-5">
                           {isLoading ? (
                             <div className="flex items-center justify-center py-8">
-                              <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
+                              <Loader2 className="w-5 h-5 text-[var(--page-accent)] animate-spin" />
                               <span className="ml-2 text-zinc-400">Loading project details...</span>
                             </div>
                           ) : details ? (
@@ -2066,22 +2503,22 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Health Score</div>
-                                  <div className="text-xl font-bold text-white">{details.health?.healthScore || 0}<span className="text-sm text-zinc-500">/100</span></div>
+                                  <div className="text-xl font-bold text-[var(--color-card-foreground)]">{details.health?.healthScore || 0}<span className="text-sm text-zinc-500">/100</span></div>
                                   <div className="text-xs text-zinc-500 mt-1">{details.health?.activityLevel || 'unknown'}</div>
                                 </div>
                                 <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Terminal Sessions</div>
-                                  <div className="text-xl font-bold text-white">{details.sessions?.length || 0}</div>
+                                  <div className="text-xl font-bold text-[var(--color-card-foreground)]">{details.sessions?.length || 0}</div>
                                   <div className="text-xs text-zinc-500 mt-1">total</div>
                                 </div>
                                 <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Version Control</div>
-                                  <div className="text-sm font-medium text-white truncate">{project.vcs_type || 'None detected'}</div>
+                                  <div className="text-sm font-medium text-[var(--color-card-foreground)] truncate">{project.vcs_type || 'None detected'}</div>
                                   <div className="text-xs text-zinc-500 mt-1">{project.repository_url ? 'Connected' : 'No remote'}</div>
                                 </div>
                                 <div className="p-3 bg-[var(--color-card)] rounded-lg">
                                   <div className="text-xs text-zinc-500 mb-1">Repository</div>
-                                  <div className="text-sm font-medium text-white truncate">{project.repository_url ? project.repository_url.split('/').slice(-2).join('/') : 'Not linked'}</div>
+                                  <div className="text-sm font-medium text-[var(--color-card-foreground)] truncate">{project.repository_url ? project.repository_url.split('/').slice(-2).join('/') : 'Not linked'}</div>
                                   <div className="text-xs text-zinc-500 mt-1">{project.repository_url ? 'Connected' : 'None'}</div>
                                 </div>
                               </div>
@@ -2120,7 +2557,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     {details.presets.map((preset: any) => (
                                       <button
                                         key={preset.id}
-                                        className="px-3 py-1.5 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 text-xs rounded-lg transition-colors"
+                                        className="px-2.5 py-1 text-[11px] rounded-full border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:border-[var(--page-accent)]/40 hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
                                       >
                                         {preset.name}
                                       </button>
@@ -2138,7 +2575,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 {details.tools && details.tools.length > 0 ? (
                                   <div className="flex flex-wrap gap-2">
                                     {details.tools.map((tool: any) => (
-                                      <span key={tool.id} className="px-2 py-1 bg-zinc-800 light:bg-zinc-100 text-zinc-300 text-xs rounded-lg">
+                                      <span key={tool.id} className="px-2 py-1 text-[11px] rounded-full border border-[var(--color-border)] text-[var(--color-card-foreground)]">
                                         {tool.name}
                                       </span>
                                     ))}
@@ -2203,7 +2640,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           data-section="ide.git"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
+          className="mt-6 space-y-6"
         >
           {/* Project Selector & Sync */}
           <GlassCard className="flex items-center justify-between">
@@ -2225,9 +2662,29 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               className="flex items-center gap-2"
             >
               <GitCommit className={`w-4 h-4 ${syncingGit ? 'animate-spin' : ''}`} />
-              {syncingGit ? 'Syncing...' : 'Sync Commits'}
+              {syncingGit ? 'Syncing…' : 'Sync commits'}
             </Button>
           </GlassCard>
+
+          {/* Sync outcome. Previously a failed sync resolved with
+              {success:false} and the UI reported nothing, so an empty timeline
+              looked like "no commits yet" instead of "the sync never worked". */}
+          {gitSyncNotice && (
+            <div
+              role="status"
+              aria-live="polite"
+              className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-xs ${
+                gitSyncNotice.ok
+                  ? 'border-emerald-500/30 text-emerald-400'
+                  : 'border-amber-500/30 text-amber-400'
+              }`}
+            >
+              {gitSyncNotice.ok
+                ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+              <span>{gitSyncNotice.text}</span>
+            </div>
+          )}
 
           {/* DORA Metrics */}
           {doraMetrics && (
@@ -2271,16 +2728,39 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           {commitHistory.length > 0 && (() => {
             const dayMap: Record<string, number> = {};
             const changeMap: Record<string, { add: number; del: number }> = {};
-            const last30 = eachDayOfInterval({ start: subDays(new Date(), 29), end: new Date() });
 
+            // Commit dates are UTC instants ("2026-06-29T18:59:27.000Z"). Bucket
+            // them by LOCAL day — format() renders a Date in local time — so a
+            // commit made at 01:00 GMT+7 lands on the day YOU made it, not on
+            // the previous UTC day.
+            let skipped = 0;
+            let newest: Date | null = null;
             for (const c of commitHistory) {
-              const day = format(new Date(c.date), 'yyyy-MM-dd');
+              const when = new Date(c.date);
+              // One unparseable date used to throw RangeError inside format()
+              // and take the entire tab down with it.
+              if (isNaN(when.getTime())) { skipped++; continue; }
+              const day = format(when, 'yyyy-MM-dd');
               dayMap[day] = (dayMap[day] || 0) + 1;
               changeMap[day] = {
                 add: (changeMap[day]?.add || 0) + (c.additions || 0),
                 del: (changeMap[day]?.del || 0) + (c.deletions || 0),
               };
+              if (!newest || when > newest) newest = when;
             }
+
+            // The window used to be hardcoded to the last 30 days while the
+            // query returns the 50 NEWEST commits. With no commits in the last
+            // month that renders an empty chart directly above a full commit
+            // list — the two halves disagree. Follow the data instead.
+            const today = startOfDay(new Date());
+            const newestDay = newest ? startOfDay(newest) : today;
+            const daysStale = differenceInCalendarDays(today, newestDay);
+            const windowEnd = newestDay > today ? newestDay : today;
+            const windowStart = subDays(windowEnd, 29);
+            const last30 = eachDayOfInterval({ start: windowStart, end: windowEnd });
+            const windowLabel = `${format(windowStart, 'MMM d')} – ${format(windowEnd, 'MMM d')}`;
+            const gmtLabel = `GMT${new Date().getTimezoneOffset() <= 0 ? '+' : '-'}${Math.abs(new Date().getTimezoneOffset() / 60)}`;
 
             const labels = last30.map(d => format(d, 'MMM dd'));
             const days = last30.map(d => format(d, 'yyyy-MM-dd'));
@@ -2302,10 +2782,24 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   <div className="flex items-center gap-3 mb-4">
                     <GitCommit className="w-5 h-5 text-amber-400" />
                     <div>
-                      <div className="text-sm font-semibold">Commits per Day</div>
-                      <div className="text-xs text-zinc-500">Last 30 days</div>
+                      <div className="text-sm font-semibold">Commits per day</div>
+                      {/* The window follows the data, so name it. "Last 30 days"
+                          was a lie whenever the newest commit was older. */}
+                      <div className="text-xs text-zinc-500">
+                        {windowLabel} · {gmtLabel} · local days
+                      </div>
                     </div>
+                    {daysStale > 0 && (
+                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full border border-amber-500/30 text-amber-400">
+                        newest commit {daysStale === 1 ? 'yesterday' : `${daysStale}d ago`}
+                      </span>
+                    )}
                   </div>
+                  {skipped > 0 && (
+                    <div className="mb-3 text-[11px] px-2 py-1 rounded-lg border border-rose-500/30 text-rose-400">
+                      {skipped} commit{skipped === 1 ? '' : 's'} had an unreadable date and {skipped === 1 ? 'is' : 'are'} excluded from this chart.
+                    </div>
+                  )}
                   <div className="h-48">
                     <Bar
                       data={{
@@ -2472,7 +2966,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   }}
                   
                   whileTap={{ scale: 0.98 }}
-                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
+                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:hover:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
                 >
                   {loadingDiff ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Show Diff'}
                 </motion.button>
@@ -2487,8 +2981,12 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   const isExpanded = expandedCommit === commit.id;
                   const relativeDate = (() => {
                     const d = new Date(commit.date);
+                    if (isNaN(d.getTime())) return 'unknown date';
                     const now = new Date();
                     const diffMs = now.getTime() - d.getTime();
+                    // A commit timestamped in the future (clock skew, a bad
+                    // offset on ingest) otherwise renders "-3h ago".
+                    if (diffMs < 0) return 'just now';
                     const diffMins = Math.floor(diffMs / 60000);
                     if (diffMins < 1) return 'just now';
                     if (diffMins < 60) return `${diffMins}m ago`;
@@ -2603,7 +3101,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   onClick={() => navigator.clipboard.writeText(gitDiff)}
                   
                   whileTap={{ scale: 0.98 }}
-                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
+                  className="px-3 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:hover:bg-zinc-200 text-zinc-300 rounded-lg transition-colors"
                 >
                   Copy Diff
                 </motion.button>
@@ -2656,7 +3154,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <motion.button
                       onClick={() => navigator.clipboard.writeText(generatedCommitMsg)}
                       
-                      className="mt-2 px-2 py-1 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-400 rounded transition-colors"
+                      className="mt-2 px-2 py-1 text-xs bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:hover:bg-zinc-200 text-zinc-400 rounded transition-colors"
                     >
                       Copy Note
                     </motion.button>
@@ -2674,7 +3172,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           data-section="ide.analytics"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
+          className="mt-6 space-y-6"
         >
           <div className="flex items-center gap-3 mb-2">
             <BarChart3 className="w-5 h-5 text-violet-400" />
@@ -2716,7 +3214,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           data-section="ide.backup"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
+          className="mt-6 space-y-6"
         >
           <BackupTabPanel
             projectId={selectedProject}
@@ -3239,7 +3737,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 tokenDisplayMode === sub
                                   ? sub === 'input' ? 'bg-blue-500/20 text-blue-400'
                                     : sub === 'output' ? 'bg-emerald-500/20 text-emerald-400'
-                                    : 'bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 text-zinc-300'
+                                    : 'bg-zinc-700 light:bg-zinc-200/50 text-zinc-300'
                                   : 'text-zinc-500 hover:text-zinc-300'
                               }`}
                             >
@@ -3601,7 +4099,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <div className="bg-[var(--color-card)] rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-medium text-zinc-400">Model Breakdown</h4>
-                        <span className="text-[10px] text-zinc-500 bg-zinc-700 light:bg-zinc-200/50 light:bg-zinc-200/50 px-2 py-0.5 rounded">{periodLabel}</span>
+                        <span className="text-[10px] text-zinc-500 bg-zinc-700 light:bg-zinc-200/50 px-2 py-0.5 rounded">{periodLabel}</span>
                       </div>
                       <div className="space-y-2 max-h-48 overflow-y-auto">
                         {models.slice(0, 10).map((m: any, idx: number) => (
@@ -3683,7 +4181,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </h3>
                 <button
                   onClick={() => setShowHelpModal(false)}
-                  className="px-3 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 rounded-lg transition-colors"
+                  className="px-3 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:hover:bg-zinc-200 rounded-lg transition-colors"
                 >
                   Close
                 </button>
@@ -3804,7 +4302,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition text-sm ${
                                   isSel
                                     ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                    : 'bg-zinc-800 light:bg-zinc-100/80 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
+                                    : 'bg-zinc-800 light:bg-zinc-100/80 hover:bg-zinc-700 light:hover:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
                                 }`}
                               >
                                 <FolderOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -3891,7 +4389,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                   className={`flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-lg border transition text-xs ${
                                     isSel
                                       ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                      : 'bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
+                                      : 'bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:hover:bg-zinc-200 text-zinc-300 hover:text-white border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50'
                                   }`}
                                 >
                                   <span className="truncate max-w-[180px]">{p.name}</span>
@@ -3934,7 +4432,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       setScanningDirs(false);
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:bg-zinc-200 text-zinc-400 hover:text-white rounded-lg border border-dashed border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50 transition text-sm w-full justify-center"
+                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 light:bg-zinc-100 hover:bg-zinc-700 light:hover:bg-zinc-200 text-zinc-400 hover:text-white rounded-lg border border-dashed border-zinc-700 light:border-zinc-300 hover:border-indigo-500/50 transition text-sm w-full justify-center"
                 >
                   <FolderOpen className="w-4 h-4" />
                   Add Directory
@@ -3960,7 +4458,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         type="text"
                         value={newProject.path}
                         onChange={(e) => setNewProject({ ...newProject, path: e.target.value })}
-                        placeholder="C:\Projects\my-project"
+                        placeholder="/path/to/my-project"
                         className="flex-1 px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                       />
                       <button
@@ -4127,7 +4625,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               <button
                                 key={lang}
                                 onClick={() => handleLanguageSelect(lang)}
-                                className={`w-full text-left px-4 py-2 text-white hover:bg-zinc-700 light:bg-zinc-200 transition ${
+                                className={`w-full text-left px-4 py-2 text-white hover:bg-zinc-700 light:hover:bg-zinc-200 transition ${
                                   editProjectForm.primaryLanguage === lang ? 'bg-violet-500/20 text-violet-300' : ''
                                 }`}
                               >
@@ -4407,15 +4905,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('open-close-workspace-dialog'))}
-                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors"
-                  title="Close workspace"
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--page-accent)]/60"
+                  title="Exit workspace — save a checkpoint before leaving"
+                  aria-label="Exit workspace"
                 >
                   <X className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => setIsWorkspaceOpen(false)}
-                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors"
-                  title="Minimize workspace"
+                  onClick={async () => {
+                    // TerminalPage autosaves on a 2s debounce, and its cleanup
+                    // CANCELS the pending timer on unmount. Minimizing inside that
+                    // window used to drop the change silently — flush it first.
+                    try { await (window as any).__workspaceSave?.(); } catch { /* best effort */ }
+                    setIsWorkspaceOpen(false);
+                  }}
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--page-accent)]/60"
+                  title="Minimize workspace — hide it and keep every terminal running"
+                  aria-label="Minimize workspace"
                 >
                   <Minus className="w-4 h-4" />
                 </button>

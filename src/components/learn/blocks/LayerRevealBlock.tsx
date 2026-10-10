@@ -61,7 +61,7 @@ export function LayerRevealBlock({ meta, currentMastery = 'L0' }: Props) {
   }, [steps.length]);
 
   return (
-    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40">
+    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
         <div>

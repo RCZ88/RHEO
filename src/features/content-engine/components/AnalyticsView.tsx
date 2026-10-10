@@ -272,7 +272,7 @@ export function AnalyticsBody({ episodeId }: { episodeId?: number }) {
 
       {episodeId && (
         <div className="border-t border-white/[0.08] pt-6">
-          <button onClick={() => setShowCalibration((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-white/[0.08] bg-zinc-900/80 p-4 transition-colors hover:bg-white/[0.04]">
+          <button onClick={() => setShowCalibration((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-white/[0.08] bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] p-4 transition-colors hover:bg-white/[0.04]">
             <div className="flex items-center gap-2"><Target size={14} className="text-amber-400" /><span className="text-xs font-semibold text-zinc-100">Score Calibration</span><span className="text-[10px] text-zinc-500">— accuracy per criterion</span></div>
             <span className="text-[10px] text-zinc-500">{showCalibration ? 'Collapse' : 'Expand'}</span>
           </button>

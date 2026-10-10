@@ -21,7 +21,7 @@ function Shell({ children, onClose, wide }: { children: React.ReactNode; onClose
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: "rgba(3,5,10,.66)", backdropFilter: "blur(6px)" }} onClick={onClose} role="dialog" aria-modal="true">
       <motion.div
         initial={{ scale: 0.96, y: 12, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.97, y: 8, opacity: 0 }}
-        transition={{ type: "spring", damping: 26, stiffness: 380 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
         className={cx("w-full rounded-xl border overflow-hidden shadow-2xl max-h-[86vh] flex flex-col", wide ? "max-w-3xl" : "max-w-xl")}
         style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}
@@ -102,7 +102,7 @@ export function PresetsModal({ store, onClose, notify }: { store: Store; onClose
   return (
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Blocks size={17} /></div>
+        <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)", color: "var(--t-accent)" }}><Blocks size={17} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Preset gallery</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>One-click tab layouts with bootstrap commands</div></div>
         <div className="relative hidden sm:block w-44">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
@@ -166,7 +166,7 @@ export function WorkspacesModal({ store, onClose, onSave, notify }: { store: Sto
   return (
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, #a78bfa, #22d3ee)" }}><Boxes size={17} /></div>
+        <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)" }}><Boxes size={17} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Workspaces</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Snapshots of every open tab, split & pane — restore in one click</div></div>
         <button onClick={onSave} className="h-9 px-3.5 rounded-xl text-white text-[12.5px] font-semibold flex items-center gap-1.5 shrink-0" style={{ background: "var(--t-accent)" }}><Save size={14} />Save current</button>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
@@ -228,7 +228,7 @@ export function SaveWsModal({ store, onClose, notify }: { store: Store; onClose:
   return (
     <Shell onClose={onClose}>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: color }}><Save size={16} /></div>
+        <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)" }}><Save size={16} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Save workspace</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>{store.tabs.length} tabs · {store.tabs.reduce((a, t) => a + Object.keys(t.panes).length, 0)} panes will be snapshotted</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
@@ -257,10 +257,11 @@ export function NewTabModal({ store, onClose, notify }: { store: Store; onClose:
   const [icon, setIcon] = useState("terminal");
   const [shellId, setShellId] = useState(store.shell);
   const open = () => { store.newTab({ label: label.trim() || `shell ${store.tabs.length + 1}`, color, groupId, layout, icon, shell: shellId }); notify(`Opened “${label.trim() || "shell"}”`); onClose(); };
+  const alwaysAsk = store.newTabMode === "prompt";
   return (
     <Shell onClose={onClose}>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: color }}><Terminal size={16} /></div>
+        <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)" }}><Terminal size={16} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>New terminal tab</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Label, color-code, group, shell & split layout</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
@@ -283,6 +284,20 @@ export function NewTabModal({ store, onClose, notify }: { store: Store; onClose:
           <div className="grid grid-cols-3 gap-1.5 mt-1.5">
             {(["single", "dual-h", "dual-v", "triple", "quad", "sidebar"] as const).map((k) => <button key={k} onClick={() => setLayout(k)} className="h-8 rounded-lg border text-[11px] font-bold mono" style={{ borderColor: layout === k ? color : "var(--t-border)", color: layout === k ? color : "var(--t-muted)" }}>{k}</button>)}
           </div></div>
+        <label className="mt-3 flex items-center gap-2 cursor-pointer select-none" style={{ color: "var(--t-muted)" }}>
+          <input
+            type="checkbox"
+            checked={alwaysAsk}
+            onChange={(e) => store.setNewTabMode(e.target.checked ? "prompt" : "quick")}
+            className="accent-[var(--t-accent)]"
+          />
+          <span className="text-[11.5px]">Always ask when opening a new tab</span>
+        </label>
+        <p className="text-[10.5px] mt-1" style={{ color: "var(--t-muted)" }}>
+          {alwaysAsk
+            ? "Every new tab opens this dialog. The name itself is still optional."
+            : "New tabs open instantly with an auto-name. Use Rename, or tick this box to set one up each time."}
+        </p>
         <button onClick={open} className="w-full h-10 rounded-xl text-white text-[13px] font-bold flex items-center justify-center gap-2" style={{ background: color }}><Plus size={15} />Open tab</button>
       </div>
     </Shell>
@@ -295,7 +310,7 @@ export function SaveCmdModal({ store, initial, onClose, notify }: { store: Store
   const [command, setCommand] = useState(initial);
   const [desc, setDesc] = useState("");
   const [cat, setCat] = useState("Dev");
-  const [color, setColor] = useState("#22d3ee");
+  const [color, setColor] = useState("var(--t-accent)");
   const dyn = parseDynamicParams(command);
   useEffect(() => setCommand(initial), [initial]);
   const save = () => {
@@ -308,7 +323,7 @@ export function SaveCmdModal({ store, initial, onClose, notify }: { store: Store
   return (
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, #fbbf24, #f97316)" }}><Zap size={16} /></div>
+        <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)" }}><Zap size={16} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Save command</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Use <span className="mono font-semibold" style={{ color: "var(--t-accent)" }}>{`{{name}}`}</span>, <span className="mono font-semibold" style={{ color: "var(--t-accent)" }}>{`{{name:default}}`}</span> or <span className="mono font-semibold" style={{ color: "var(--t-accent)" }}>{`{{name|a|b}}`}</span> for dropdown inputs</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
@@ -328,7 +343,7 @@ export function SaveCmdModal({ store, initial, onClose, notify }: { store: Store
           <div className="space-y-1 mb-1 max-h-32 overflow-y-auto">
             {dyn.map((d) => <div key={d.name} className="flex items-center gap-2 text-[11.5px] mono"><span className="px-1.5 py-0.5 rounded font-bold shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}>{`{{${d.name}}}`}</span><span className="truncate" style={{ color: "var(--t-muted)" }}>{d.options.length ? `options: ${d.options.join(", ")}` : `default: ${d.def || "—"}`}</span></div>)}
           </div>
-          <div className="text-[11.5px] mono p-2.5 rounded-lg break-all mt-1" style={{ background: "var(--t-panel)", color: "#34d399" }}>$ {fillDynamic(command, {}) || "…"}</div>
+          <div className="text-[11.5px] mono p-2.5 rounded-lg break-all mt-1" style={{ background: "var(--t-panel)", color: "var(--pc-success)" }}>$ {fillDynamic(command, {}) || "…"}</div>
           <div className="flex gap-1.5 mt-1">
             <button onClick={() => setCommand((c) => c ? `${c} {{arg:val}}` : "{{arg:val}}") } className="flex-1 h-7 rounded-lg border text-[10.5px] font-bold" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>+ text input</button>
             <button onClick={() => setCommand((c) => c ? `${c} {{env|dev|staging|prod}}` : "{{env|dev|staging|prod}}")} className="flex-1 h-7 rounded-lg border text-[10.5px] font-bold" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>+ dropdown</button>
@@ -359,7 +374,7 @@ export function RunCmdModal({ store, cmd, onClose, notify }: { store: Store; cmd
   return (
     <Shell onClose={onClose}>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: cmd.color }}><Zap size={16} /></div>
+        <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)" }}><Zap size={16} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>{cmd.name}</div><div className="text-[11.5px] truncate" style={{ color: "var(--t-muted)" }}>{cmd.description}</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
@@ -373,11 +388,11 @@ export function RunCmdModal({ store, cmd, onClose, notify }: { store: Store; cmd
                 {p.options.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             ) : (
-              <input value={vals[p.name] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [p.name]: e.target.value }))} placeholder={p.def || `value for ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter") run(); }} className="w-full h-10 px-3 rounded-xl border text-[13px] mt-1 outline-none mono" style={{ background: "var(--t-bg)", borderColor: missing.some((m) => m.name === p.name) ? "#fb7185" : "var(--t-border)", color: "var(--t-fg)" }} />
+              <input value={vals[p.name] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [p.name]: e.target.value }))} placeholder={p.def || `value for ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter") run(); }} className="w-full h-10 px-3 rounded-xl border text-[13px] mt-1 outline-none mono" style={{ background: "var(--t-bg)", borderColor: missing.some((m) => m.name === p.name) ? "var(--pc-danger)" : "var(--t-border)", color: "var(--t-fg)" }} />
             )}
           </div>
         ))}
-        <div className="text-[12px] mono p-2.5 rounded-xl break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "#34d399" }}>$ {final}</div>
+        <div className="text-[12px] mono p-2.5 rounded-xl break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "var(--pc-success)" }}>$ {final}</div>
         <button onClick={run} className="w-full h-10 rounded-xl text-white text-[12.5px] font-semibold flex items-center justify-center gap-2" style={{ background: "var(--t-accent)" }}><Play size={14} />Execute in active pane</button>
       </div>
     </Shell>
@@ -408,7 +423,7 @@ export function ImportModal({ store, onClose, notify }: { store: Store; onClose:
   return (
     <Shell onClose={onClose} wide>
       <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: "linear-gradient(135deg, #34d399, #22d3ee)" }}><Import size={17} /></div>
+        <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)" }}><Import size={17} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-[15px]" style={{ color: "var(--t-fg)" }}>Import terminal history</div><div className="text-[11.5px]" style={{ color: "var(--t-muted)" }}>Paste copied terminal output — commands are auto-extracted from prompt lines</div></div>
         <button onClick={onClose} aria-label="close" className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0" style={{ color: "var(--t-muted)" }}><X size={16} /></button>
       </div>
@@ -441,8 +456,8 @@ export function ImportModal({ store, onClose, notify }: { store: Store; onClose:
           />
         </div>
         {result && (
-          <div className="rounded-xl border p-3 flex items-center gap-3" style={{ borderColor: result.imported > 0 ? "var(--t-accent)" : "#fb7185", background: "var(--t-bg)" }}>
-            <div className={`w-8 h-8 rounded-lg grid place-items-center ${result.imported > 0 ? "text-white" : "text-white"}`} style={{ background: result.imported > 0 ? "var(--t-accent)" : "#fb7185" }}>
+          <div className="rounded-xl border p-3 flex items-center gap-3" style={{ borderColor: result.imported > 0 ? "var(--t-accent)" : "var(--pc-danger)", background: "var(--t-bg)" }}>
+            <div className={`w-8 h-8 rounded-lg grid place-items-center ${result.imported > 0 ? "text-white" : "text-white"}`} style={{ background: result.imported > 0 ? "var(--t-accent)" : "var(--pc-danger)" }}>
               {result.imported > 0 ? <Check size={16} /> : <X size={16} />}
             </div>
             <div>

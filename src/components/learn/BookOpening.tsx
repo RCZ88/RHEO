@@ -50,8 +50,8 @@ export function BookOpening({ onComplete }: BookOpeningProps) {
           <div className="absolute inset-0 pointer-events-none" style={{ borderRadius: '0 5px 5px 0', opacity: 0.4, backgroundImage: 'radial-gradient(ellipse at 20% 30%, rgba(194,85,58,0.2), transparent 40%), radial-gradient(ellipse at 70% 60%, rgba(143,58,37,0.15), transparent 45%)' }} />
           <div className="absolute left-0 top-0 bottom-0 w-4 pointer-events-none" style={{ background: 'linear-gradient(to right, rgba(60,30,10,0.45), transparent)' }} />
           <div className="absolute inset-x-0 bottom-3 flex flex-col items-center opacity-40">
-            <div className="w-6 h-px mb-1" style={{ background: '#5a3a1a' }} />
-            <div className="text-[6px] tracking-[0.4em] uppercase" style={{ color: '#5a3a1a', fontFamily: 'ui-monospace' }}>Lyceum</div>
+            <div className="w-6 h-px mb-1" style={{ background: 'var(--ws-accent-text)' }} />
+            <div className="text-[6px] tracking-[0.4em] uppercase" style={{ color: 'var(--ws-accent-text)', fontFamily: 'ui-monospace' }}>Lyceum</div>
           </div>
         </div>
 
@@ -156,8 +156,8 @@ export function BookOpening({ onComplete }: BookOpeningProps) {
             <div className="absolute inset-0 pointer-events-none" style={{ borderRadius: '0 5px 5px 0', opacity: 0.4, backgroundImage: 'radial-gradient(ellipse at 80% 30%, rgba(194,85,58,0.2), transparent 40%), radial-gradient(ellipse at 30% 60%, rgba(143,58,37,0.15), transparent 45%)' }} />
             <div className="absolute right-0 top-0 bottom-0 w-5 pointer-events-none" style={{ background: 'linear-gradient(to left, rgba(60,30,10,0.45), transparent)' }} />
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex flex-col items-center opacity-45">
-              <div className="text-[7px] tracking-[0.4em] uppercase mb-1" style={{ color: '#5a3a1a', fontFamily: 'ui-monospace' }}>Ex Libris</div>
-              <div className="w-8 h-px" style={{ background: '#5a3a1a' }} />
+              <div className="text-[7px] tracking-[0.4em] uppercase mb-1" style={{ color: 'var(--ws-accent-text)', fontFamily: 'ui-monospace' }}>Ex Libris</div>
+              <div className="w-8 h-px" style={{ background: 'var(--ws-accent-text)' }} />
             </div>
           </div>
         </motion.div>

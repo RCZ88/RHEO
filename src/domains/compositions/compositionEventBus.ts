@@ -65,11 +65,27 @@ export class CompositionEventBus {
       dedupeKey, ttlMs,
     };
 
+    // `this.db` is truthy even after the connection is closed, and `prepare()`
+    // then throws "The database connection is not open". flushOutbox() already
+    // guards on `.open`; enqueue() did not, so any emit after shutdown logged
+    // an error. A closed DB also means the outbox is gone — stop the timer.
+    if (this.db && !this.db.open) {
+      this.stopFlushTimer();
+      this.db = null;
+    }
+
     if (this.db) {
-      this.db.prepare(`
-        INSERT INTO composition_event_outbox (topic, source, payload_json, dedupe_key, ttl_ms, status)
-        VALUES (?, ?, ?, ?, ?, 'pending')
-      `).run(topic, source, JSON.stringify(payload), dedupeKey || null, ttlMs || null);
+      try {
+        this.db.prepare(`
+          INSERT INTO composition_event_outbox (topic, source, payload_json, dedupe_key, ttl_ms, status)
+          VALUES (?, ?, ?, ?, ?, 'pending')
+        `).run(topic, source, JSON.stringify(payload), dedupeKey || null, ttlMs || null);
+      } catch (err) {
+        // Outbox persistence is best-effort: still deliver to live subscribers.
+        if (!/connection is not open|closed database/i.test(String(err?.message))) {
+          console.warn('[CompositionEventBus] enqueue persist failed:', err?.message || err);
+        }
+      }
     }
 
     this.emitSync(event);

@@ -4,6 +4,7 @@
 // Legacy chart.js / Tableau-10 palettes are frozen and must not be expanded.
 
 import { getCategoryStyle as _getCategoryStyle } from '../components/CategoryColors';
+import type { CategoryStyle } from '../components/CategoryColors';
 export type { CategoryStyle } from '../components/CategoryColors';
 export { CATEGORY_COLORS } from '../components/CategoryColors';
 export { getCategoryStyle } from '../components/CategoryColors';

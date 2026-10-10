@@ -1,12 +1,13 @@
 import { Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import SlideSidebar from './components/SlideSidebar';
 import Dashboard from './pages/Dashboard';
-import Decks from './pages/Decks';
+import Ingest from './pages/Ingest';
 import SlideViewer from './pages/SlideViewer';
 import ImageLab from './pages/ImageLab';
 import Transcriber from './pages/Transcriber';
 import WebDigest from './pages/WebDigest';
 import PromptForge from './pages/PromptForge';
+import Compose from './pages/Compose';
 import AuthVault from './pages/AuthVault';
 import Research from './pages/Research';
 
@@ -33,11 +34,14 @@ export default function LectureWorkspace() {
         <main className="p-4 sm:p-6 lg:p-8 max-w-[1200px] mx-auto w-full pb-24 md:pb-10">
           <Routes>
             <Route path="" element={<Dashboard />} />
-            <Route path="decks" element={<Decks />} />
+            {/* /decks stays as an alias so older links keep working. */}
+            <Route path="ingest" element={<Ingest />} />
+            <Route path="decks" element={<Ingest />} />
             <Route path="decks/:id" element={<SlideViewer />} />
             <Route path="image-lab" element={<ImageLab />} />
             <Route path="transcriber" element={<Transcriber />} />
             <Route path="web-digest" element={<WebDigest />} />
+            <Route path="compose" element={<Compose />} />
             <Route path="prompts" element={<PromptForge />} />
             <Route path="auth-vault" element={<AuthVault />} />
             <Route path="research" element={<Research />} />
@@ -46,13 +50,14 @@ export default function LectureWorkspace() {
         </main>
         {/* Mobile bottom nav. These were <a href={'#'+to}>, which only set a URL
             hash — tapping a tab did nothing and the active tab never highlighted. */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-8 border-t border-white/10 bg-[#0b0d16]/95 backdrop-blur-xl">
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-9 border-t border-white/10 bg-[#0b0d16]/95 backdrop-blur-xl">
           {[
             { to: '/lecture', label: 'Home' },
-            { to: '/lecture/decks', label: 'Decks' },
+            { to: '/lecture/ingest', label: 'Files' },
             { to: '/lecture/image-lab', label: 'OCR' },
             { to: '/lecture/transcriber', label: 'STT' },
             { to: '/lecture/web-digest', label: 'Web' },
+            { to: '/lecture/compose', label: 'Mix' },
             { to: '/lecture/prompts', label: 'Forge' },
             { to: '/lecture/auth-vault', label: 'Vault' },
             { to: '/lecture/research', label: 'R&D' },

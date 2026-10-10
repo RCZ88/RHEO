@@ -138,7 +138,7 @@ export function AddPromptModal({
       >
         {/* header */}
         <div className="flex items-center gap-2.5 px-5 pt-4 pb-3 shrink-0">
-          <div className="w-9 h-9 rounded-xl grid place-items-center text-white shrink-0" style={{ background: 'linear-gradient(135deg, #a78bfa, #22d3ee)' }}>
+          <div className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border" style={{ borderColor: "var(--t-border)" }}>
             <Sparkles size={17} />
           </div>
           <div className="flex-1 min-w-0">
@@ -249,8 +249,8 @@ export function AddPromptModal({
               )}
 
               {parseErr && (
-                <div className="rounded-lg p-3 border-l-2 text-[12px] leading-relaxed" style={{ borderColor: '#f87171', color: 'var(--t-fg)', background: 'color-mix(in srgb, #f87171 8%, transparent)' }}>
-                  <AlertTriangle size={14} style={{ color: '#f87171', flexShrink: 0, marginTop: 1 }} />
+                <div className="rounded-lg p-3 border-l-2 text-[12px] leading-relaxed" style={{ borderColor: 'var(--pc-danger)', color: 'var(--t-fg)', background: 'color-mix(in srgb, var(--pc-danger) 8%, transparent)' }}>
+                  <AlertTriangle size={14} style={{ color: 'var(--pc-danger)', flexShrink: 0, marginTop: 1 }} />
                   {parseErr}
                 </div>
               )}
@@ -301,7 +301,7 @@ export function AddPromptModal({
                   <div><span className="font-semibold text-[13px]" style={{ color: 'var(--t-fg)' }}>{parsed.title}</span><span className="text-[11px] ml-2" style={{ color: 'var(--t-muted)' }}>{parsed.summary}</span></div>
                   <div className="text-[12px]" style={{ color: 'var(--t-fg)' }}><span className="text-[10.5px] font-semibold uppercase tracking-wider block mb-0.5" style={{ color: 'var(--t-muted)' }}>What</span>{parsed.what}</div>
                   <div className="text-[12px]" style={{ color: 'var(--t-fg)' }}><span className="text-[10.5px] font-semibold uppercase tracking-wider block mb-0.5" style={{ color: 'var(--t-muted)' }}>When</span>{parsed.when}</div>
-                  <div className="rounded-lg p-2.5 border-l-2 text-[12px] leading-relaxed" style={{ borderColor: '#f87171', color: 'var(--t-fg)', background: 'color-mix(in srgb, #f87171 8%, transparent)' }}><span className="text-[10.5px] font-semibold uppercase tracking-wider block mb-0.5" style={{ color: 'var(--t-muted)' }}>Gotcha</span>{parsed.gotcha}</div>
+                  <div className="rounded-lg p-2.5 border-l-2 text-[12px] leading-relaxed" style={{ borderColor: 'var(--pc-danger)', color: 'var(--t-fg)', background: 'color-mix(in srgb, var(--pc-danger) 8%, transparent)' }}><span className="text-[10.5px] font-semibold uppercase tracking-wider block mb-0.5" style={{ color: 'var(--t-muted)' }}>Gotcha</span>{parsed.gotcha}</div>
                   {parsed.params.length > 0 && (
                     <div>
                       <span className="text-[10.5px] font-semibold uppercase tracking-wider block mb-1" style={{ color: 'var(--t-muted)' }}>Params</span>
@@ -317,7 +317,7 @@ export function AddPromptModal({
                   )}
                   <div>
                     <span className="text-[10.5px] font-semibold uppercase tracking-wider block mb-0.5" style={{ color: 'var(--t-muted)' }}>Safety</span>
-                    <div className="flex gap-2 text-[12px] leading-relaxed items-start"><AlertTriangle size={13} style={{ color: '#f87171', flexShrink: 0, marginTop: 2 }} /><span style={{ color: 'var(--t-fg)' }}>{parsed.safety}</span></div>
+                    <div className="flex gap-2 text-[12px] leading-relaxed items-start"><AlertTriangle size={13} style={{ color: 'var(--pc-danger)', flexShrink: 0, marginTop: 2 }} /><span style={{ color: 'var(--t-fg)' }}>{parsed.safety}</span></div>
                   </div>
                   {parsed.related.length > 0 && (
                     <div>

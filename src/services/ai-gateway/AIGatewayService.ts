@@ -141,8 +141,10 @@ export class AIGatewayService {
     const pw = this.playwrightStatus();
     if (!pw.available) {
       // Fallback: open login in system browser; session import stays manual.
+      // The reason is returned so the UI can explain WHY rather than leaving the
+      // user staring at a browser window that silently cannot drive anything.
       try { this.openExternal?.(adapter.loginUrl); } catch {}
-      return { success: true, mode: 'external', url: adapter.loginUrl };
+      return { success: true, mode: 'external', url: adapter.loginUrl, error: pw.error || undefined };
     }
     try {
       const entry = safeGet(() => this.vault.get(providerId));

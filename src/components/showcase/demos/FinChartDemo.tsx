@@ -14,7 +14,7 @@ export function FinChartDemo() {
       <svg viewBox="0 0 180 80" className="w-full max-w-[200px]">
         {candles.map((c, i) => (
           <g key={i}>
-            <line x1={c.x} y1={c.high} x2={c.x} y2={c.low} stroke={c.up ? '#6fb38f' : '#ef4444'} strokeWidth="1" />
+            <line x1={c.x} y1={c.high} x2={c.x} y2={c.low} stroke={c.up ? 'var(--color-mem-400)' : '#ef4444'} strokeWidth="1" />
             <rect x={c.x - 6} y={Math.min(c.open, c.close)} width="12" height={Math.abs(c.open - c.close) || 2} rx="1" fill={c.up ? '#6fb38f' : '#ef4444'} />
           </g>
         ))}

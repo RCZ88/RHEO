@@ -154,7 +154,7 @@ export default function FeatureLogicPanel() {
                             {f.mermaid && (
                               <div className="mt-2">
                                 <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold">Flow</span>
-                                <pre className="mt-1 text-[10px] text-zinc-400 bg-zinc-950/60 rounded-lg p-2.5 overflow-x-auto font-mono whitespace-pre-wrap ring-1 ring-zinc-800/40">
+                                <pre className="mt-1 text-[10px] text-zinc-400 bg-zinc-950 light:bg-[var(--ws-surface)]/60 rounded-lg p-2.5 overflow-x-auto font-mono whitespace-pre-wrap ring-1 ring-zinc-800/40">
                                   {f.mermaid}
                                 </pre>
                               </div>

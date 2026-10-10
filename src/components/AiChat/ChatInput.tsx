@@ -93,7 +93,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled,
   const slashArgs = slashMatch ? slashMatch[2] : '';
 
   return (
-    <div className="border-t border-zinc-800/60 p-3 bg-zinc-950/60">
+    <div className="border-t border-zinc-800/60 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/60">
       <div className="flex items-end gap-2">
         <div className="relative flex-1">
           <div
@@ -133,7 +133,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled,
           <button
             onClick={onOpenCommands}
             disabled={disabled}
-            className="grid place-items-center rounded-lg w-8 h-8 min-w-[44px] min-h-[44px] p-0 text-zinc-400 bg-zinc-900/60 ring-1 ring-zinc-800/60 hover:text-pink-300 hover:ring-pink-500/30 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="grid place-items-center rounded-lg w-8 h-8 min-w-[44px] min-h-[44px] p-0 text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-pink-300 hover:ring-pink-500/30 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
             title="Manage slash commands"
           >
             <Zap className="h-4 w-4" />

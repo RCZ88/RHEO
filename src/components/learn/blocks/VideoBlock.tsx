@@ -25,7 +25,7 @@ export function VideoBlock({ block, onAsk }: Props) {
         {!clicked ? (
           <button
             onClick={() => setClicked(true)}
-            className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 hover:bg-zinc-900/60 transition cursor-pointer"
+            className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] transition cursor-pointer"
           >
             <div className="text-center">
               <div className="text-4xl mb-2">▶️</div>

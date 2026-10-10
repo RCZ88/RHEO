@@ -57,6 +57,23 @@ function clean(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * A stable, re-findable handle on an element.
+ *
+ * If the element already carries a `data-df-locator`, reuse it. Otherwise stamp
+ * one derived from the page id and a counter. This is what makes a result click
+ * land on the right card: the harvester and the renderer agree on the selector,
+ * with a text probe as the fallback.
+ */
+let locSeq = 0;
+function locatorFor(pageId: string, el: HTMLElement): string {
+  const existing = el.getAttribute('data-df-locator');
+  if (existing) return existing;
+  const v = `${pageId}-${++locSeq}`;
+  el.setAttribute('data-df-locator', v);
+  return v;
+}
+
 /** Walk the rendered page once and emit one segment per heading-delimited block. */
 export function harvestSegments(root: HTMLElement, pageId: string): SearchableSegment[] {
   const out: SearchableSegment[] = [];
@@ -81,6 +98,7 @@ export function harvestSegments(root: HTMLElement, pageId: string): SearchableSe
       // Curated segments use rank 2.0/1.5/1.0; harvested content sits below them.
       section: section || undefined,
       rank: 0.5,
+      locator: `text:${clean(text).slice(0, 70)}`,
     });
     title = '';
   };
@@ -109,6 +127,7 @@ export function harvestSegments(root: HTMLElement, pageId: string): SearchableSe
         section: text,
         keywords: [text],
         rank: 0.6,
+        locator: locatorFor(pageId, el),
       });
       continue;
     }
@@ -158,6 +177,7 @@ export function harvestSegments(root: HTMLElement, pageId: string): SearchableSe
       text: text.slice(0, MAX_TEXT),
       section: label,
       rank: 0.4,
+      locator: locatorFor(pageId, el),
     });
   }
 

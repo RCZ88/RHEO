@@ -70,7 +70,7 @@ export function GoalLanguageParser({ onAccept, onCancel }: GoalLanguageParserPro
         value={text}
         onChange={e => setText(e.target.value)}
         placeholder="e.g. Practice guitar 3x a week for 20 minutes, but I travel so any 3 days is fine. Allow late completion with 1 day grace period."
-        className="w-full h-20 px-3 py-2 rounded-xl bg-zinc-900/80 border border-zinc-700/50 text-[12px] text-zinc-200 placeholder:text-zinc-600 resize-none focus:outline-none focus:border-violet-500/50"
+        className="w-full h-20 px-3 py-2 rounded-xl bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-[12px] text-zinc-200 placeholder:text-zinc-600 resize-none focus:outline-none focus:border-violet-500/50"
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); parse(); } }}
       />
 

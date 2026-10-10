@@ -34,13 +34,72 @@ export interface AfkPrefs {
   action: AfkAction;
   /** Master switch. Off = never cut, whatever the threshold. */
   enabled: boolean;
+  /**
+   * Absences shorter than this are discarded silently instead of prompting.
+   * Hardcoded to 60s in App.tsx until now, so there was no way to stop a
+   * coffee-cup bump from opening a dialog.
+   */
+  minPromptSeconds: number;
+  /**
+   * Absences up to this many minutes open with "I wasn't AFK" pre-selected.
+   * Hardcoded to 15 in App.tsx.
+   */
+  notAfkBelowMinutes: number;
+  /**
+   * Categories where being idle is the POINT — watching a film, playing a game.
+   * Hardcoded to Entertainment + Gaming in App.tsx.
+   */
+  passiveCategories: string[];
+  /**
+   * A new absence must persist this long before it counts as "away".
+   *
+   * The threshold is a single crossing, but real use is noisy: you brush the
+   * trackpad, glance at another window, come back. Requiring the absence to
+   * HOLD before anything happens means those never interrupt you. Raising the
+   * threshold alone does not help, because the moment you move the mouse the
+   * absence is over — the two knobs solve different halves of the problem.
+   */
+  holdSeconds: number;
 }
 
+/** THE default AFK threshold. Five minutes of no input before AFK is even
+ *  considered — anything shorter is not an absence, it is a coffee cup, and
+ *  prompting for it is what made people stop trusting the prompt.
+ *  Asserted by agent/probes/afk-prefs.probe.ts so it cannot silently drift. */
+export const AFK_DEFAULT_THRESHOLD_MINUTES = 5;
+
 export const AFK_DEFAULTS: AfkPrefs = {
-  thresholdMinutes: 5,
+  thresholdMinutes: AFK_DEFAULT_THRESHOLD_MINUTES,
   action: 'pause-only',
   enabled: true,
+  minPromptSeconds: 60,
+  notAfkBelowMinutes: 15,
+  passiveCategories: ['Entertainment', 'Gaming'],
+  holdSeconds: 90,
 };
+
+/**
+ * Mirrors `DEFAULT_CATEGORIES` in src/main.ts:313.
+ *
+ * Duplicated rather than imported because that array lives in the main process
+ * and this is a renderer module. If you change one, change the other —
+ * `clampCategories` filters against this list, so a category missing here is
+ * silently dropped from the user's saved value. That is exactly how 'Gaming'
+ * disappeared the first time round.
+ */
+export const ALL_CATEGORIES = [
+  'IDE', 'AI Tools', 'Browser', 'Entertainment', 'Communication',
+  'Design', 'Productivity', 'Tools', 'Education', 'Developer Tools',
+  'Search Engine', 'News', 'Shopping', 'Social Media', 'Gaming',
+  'Uncategorized', 'Other',
+] as const;
+
+export const AFK_MIN_HOLD_SECONDS = 0;
+export const AFK_MAX_HOLD_SECONDS = 600;
+export const AFK_MIN_PROMPT_SECONDS = 0;
+export const AFK_MAX_PROMPT_SECONDS = 600;
+export const AFK_MIN_NOT_AFK_MINUTES = 1;
+export const AFK_MAX_NOT_AFK_MINUTES = 120;
 
 export const AFK_MIN_MINUTES = 1;
 export const AFK_MAX_MINUTES = 60;
@@ -60,30 +119,75 @@ function clampMinutes(v: unknown): number {
   return Math.min(AFK_MAX_MINUTES, Math.max(AFK_MIN_MINUTES, Math.round(n)));
 }
 
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function clampCategories(v: unknown): string[] {
+  if (!Array.isArray(v)) return [...AFK_DEFAULTS.passiveCategories];
+  const known = new Set<string>(ALL_CATEGORIES);
+  const out = v
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0 && known.has(x));
+  // De-dupe so a hand-edited localStorage value can't produce duplicate chips.
+  return Array.from(new Set(out));
+}
+
+/**
+ * One normaliser for both read and write.
+ *
+ * `setAfkPrefs` used to inline its own clamping while `getAfkPrefs` had a
+ * separate copy — and the first attempt at this function called a `normalize`
+ * that did not exist, which is a ReferenceError on EVERY settings write. It
+ * passed `esbuild`, because esbuild only strips types and never resolves an
+ * identifier. Keep exactly one implementation.
+ */
+function normalize(p: unknown): AfkPrefs {
+  if (typeof p !== 'object' || p === null) return { ...AFK_DEFAULTS };
+  const r = p as Partial<AfkPrefs>;
+  return {
+    thresholdMinutes: clampMinutes(r.thresholdMinutes),
+    action: AFK_ACTIONS.some(a => a.value === r.action) ? (r.action as AfkAction) : AFK_DEFAULTS.action,
+    enabled: typeof r.enabled === 'boolean' ? r.enabled : AFK_DEFAULTS.enabled,
+    // Absent keys fall back to the previous hardcoded values, so a prefs blob
+    // written by an older build keeps working and gains the new keys on write.
+    minPromptSeconds: clampInt(
+      r.minPromptSeconds, AFK_MIN_PROMPT_SECONDS, AFK_MAX_PROMPT_SECONDS,
+      AFK_DEFAULTS.minPromptSeconds,
+    ),
+    notAfkBelowMinutes: clampInt(
+      r.notAfkBelowMinutes, AFK_MIN_NOT_AFK_MINUTES, AFK_MAX_NOT_AFK_MINUTES,
+      AFK_DEFAULTS.notAfkBelowMinutes,
+    ),
+    passiveCategories: clampCategories(r.passiveCategories),
+    holdSeconds: clampInt(r.holdSeconds, AFK_MIN_HOLD_SECONDS, AFK_MAX_HOLD_SECONDS, AFK_DEFAULTS.holdSeconds),
+  };
+}
+
+/**
+ * Has an absence lasted long enough to be worth interrupting about?
+ * Evaluated continuously by the detector, so a single brush of the mouse resets
+ * it rather than latching a decision made from one bad sample.
+ */
+export function absenceHasHeld(seconds: number, prefs: AfkPrefs = getAfkPrefs()): boolean {
+  return seconds >= prefs.holdSeconds;
+}
+
 export function getAfkPrefs(): AfkPrefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...AFK_DEFAULTS };
-    const p = JSON.parse(raw);
-    if (typeof p !== 'object' || p === null) return { ...AFK_DEFAULTS };
-    const action = AFK_ACTIONS.some(a => a.value === (p as AfkPrefs).action)
-      ? (p as AfkPrefs).action
-      : AFK_DEFAULTS.action;
-    return {
-      thresholdMinutes: clampMinutes((p as AfkPrefs).thresholdMinutes),
-      action,
-      enabled: typeof (p as AfkPrefs).enabled === 'boolean' ? (p as AfkPrefs).enabled : AFK_DEFAULTS.enabled,
-    };
+    return normalize(JSON.parse(raw));
   } catch {
     return { ...AFK_DEFAULTS };
   }
 }
 
 export function setAfkPrefs(patch: Partial<AfkPrefs>): AfkPrefs {
-  const next = { ...getAfkPrefs(), ...patch };
-  next.thresholdMinutes = clampMinutes(next.thresholdMinutes);
-  next.enabled = !!next.enabled;
-  if (!AFK_ACTIONS.some(a => a.value === next.action)) next.action = AFK_DEFAULTS.action;
+  const next = normalize({ ...getAfkPrefs(), ...patch });
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* private mode */ }
 
   // Mirror into userPreferences so the MAIN process can read it too. It cannot see
@@ -105,6 +209,30 @@ export function setAfkPrefs(patch: Partial<AfkPrefs>): AfkPrefs {
 /** Convenience for the places that only want milliseconds. */
 export function afkThresholdMs(prefs: AfkPrefs = getAfkPrefs()): number {
   return prefs.enabled ? prefs.thresholdMinutes * 60_000 : Infinity;
+}
+
+/**
+ * Should this absence raise the "While you were away" prompt at all?
+ *
+ * Was three separate `if`s in App.tsx with three hardcoded numbers. Centralised
+ * so the Settings controls and the detector cannot drift apart again.
+ */
+export function shouldPromptForAbsence(
+  elapsedSeconds: number,
+  prefs: AfkPrefs = getAfkPrefs(),
+): boolean {
+  return prefs.enabled && elapsedSeconds >= prefs.minPromptSeconds;
+}
+
+/** Does the current category mean "idle is expected"? Then never call it AFK. */
+export function isPassiveCategory(category: string | null | undefined, prefs: AfkPrefs = getAfkPrefs()): boolean {
+  if (!category) return false;
+  return prefs.passiveCategories.includes(category);
+}
+
+/** Open with "I wasn't AFK" already selected for short absences. */
+export function defaultsToNotAfk(elapsedSeconds: number, prefs: AfkPrefs = getAfkPrefs()): boolean {
+  return elapsedSeconds <= prefs.notAfkBelowMinutes * 60;
 }
 
 /**

@@ -30,7 +30,7 @@ export function StepTrigger({ selected, onSelect }: StepTriggerProps) {
           <div key={source}>
             <div className="flex items-center gap-2 mb-2">
               <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 light:text-stone-500">{meta.label}</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)]">{meta.label}</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {triggers.map(trigger => (
@@ -40,7 +40,7 @@ export function StepTrigger({ selected, onSelect }: StepTriggerProps) {
                   onClick={() => onSelect({ source: trigger.source, event: trigger.event, fields: trigger.fields })}
                   className={cn(
                     "flex flex-col items-start gap-1.5 rounded-xl p-3 text-left transition-all",
-                    "bg-zinc-900/40 ring-1 ring-zinc-800/60 hover:ring-zinc-700",
+                    "bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:ring-zinc-700",
                     selected?.event === trigger.event && selected?.source === trigger.source &&
                       "ring-2 ring-violet-500/50 bg-violet-500/5"
                   )}

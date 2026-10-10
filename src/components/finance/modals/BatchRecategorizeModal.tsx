@@ -50,7 +50,7 @@ export function BatchRecategorizeModal({ open, count, categories, busy, onCancel
             role="dialog"
             aria-modal="true"
             aria-label="Recategorize selected transactions"
-            className="w-full max-w-md rounded-xl border border-zinc-700/50 bg-zinc-900/95 backdrop-blur-xl p-5"
+            className="w-full max-w-md rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-[15px] font-semibold text-zinc-100">

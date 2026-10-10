@@ -115,14 +115,14 @@ export default function SmartSearchBar({
 
   return (
     <div
-      className="bg-zinc-900/30"
+      className="bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]"
       style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
       onClick={onClose}
     >
       <div
         style={{ width: '100%', maxWidth: 520, margin: '48px auto 0' }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-zinc-900/80 border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+        className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
       >
         {/* ── Search bar row ── */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 rounded-t-xl" style={{ borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>

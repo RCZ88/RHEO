@@ -24,6 +24,7 @@ import {
   ACTIVITY_PREFIX,
   ERROR_GLYPH,
   STATE_DOT,
+  WF_PALETTE,
   identityFor,
   stateWord,
   visualForAgent,
@@ -49,9 +50,9 @@ export interface AgentCharacterProps {
 
 function badgeFor(state: VisualAgent['state']): { char: string; color: string } | null {
   switch (state) {
-    case 'attention': return { char: '!', color: '#fbbf24' }; // amber-400
-    case 'error':     return { char: '×', color: '#f87171' }; // red-400
-    case 'completed': return { char: '✓', color: '#34d399' }; // emerald-400
+    case 'attention': return { char: '!', color: WF_PALETTE.warn }; // amber-400
+    case 'error':     return { char: '×', color: WF_PALETTE.err }; // red-400
+    case 'completed': return { char: '✓', color: WF_PALETTE.ok }; // emerald-400
     default:          return null;
   }
 }

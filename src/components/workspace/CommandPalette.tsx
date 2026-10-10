@@ -117,7 +117,7 @@ export function CommandPalette({ isOpen, onClose, activeTerminalId, onExecuteCom
 
       {/* Palette */}
       <div
-        className="relative w-full max-w-lg mx-4 rounded-xl bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/60 shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg mx-4 rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}

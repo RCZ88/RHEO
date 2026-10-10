@@ -125,7 +125,7 @@ export function MasteryStrip({ stats, onOpenNode, onOpenProfile }: Props) {
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
-                className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-zinc-700/50 bg-zinc-900 shadow-xl z-20 overflow-hidden"
+                className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-zinc-700/50 bg-zinc-900 light:bg-[var(--ws-surface-raised)] shadow-xl z-20 overflow-hidden"
               >
                 <div className="p-3 space-y-1.5 max-h-64 overflow-y-auto">
                   {stats.dueItems.slice(0, 8).map((item) => (

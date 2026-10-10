@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils"
-import { cva } from "class-variance-authority"
+import { cva, type VariantProps } from "class-variance-authority"
 import { motion } from "motion/react"
 
 const buttonVariants = cva(
@@ -10,7 +10,12 @@ const buttonVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80 light:bg-primary light:text-primary-foreground light:hover:bg-primary/90",
         outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground light:border-zinc-300 light:bg-white light:hover:bg-zinc-50",
+          // `light:border-zinc-300` was the DECORATIVE hairline weight. Measured
+          // against paper #f5f2ec it gives 1.21:1, and WCAG 1.4.11 requires 3:1
+          // for the boundary of an interactive control — the outline variant IS
+          // a control boundary, so it takes `zinc-400` (3.7:1). z-300/z-400 stay
+          // correct for separators and card edges; this is a button outline.
+          "border-border bg-background hover:bg-muted hover:text-foreground light:border-zinc-400 light:bg-white light:hover:bg-zinc-50",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80 light:bg-zinc-100 light:text-zinc-700 light:hover:bg-zinc-200",
         ghost:

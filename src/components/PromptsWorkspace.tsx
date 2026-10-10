@@ -144,7 +144,7 @@ export default function PromptsWorkspace({ projectId, sessions }: PromptsWorkspa
                 key={p.id}
                 variants={riseItem}
                 onClick={() => setSelectedPrompt(p)}
-                className="group w-full text-left rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800/60 hover:ring-zinc-700 hover:bg-zinc-900/80 transition-all duration-200 px-3 py-2.5"
+                className="group w-full text-left rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:ring-zinc-700 hover:bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] transition-all duration-200 px-3 py-2.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -205,12 +205,12 @@ export default function PromptsWorkspace({ projectId, sessions }: PromptsWorkspa
               <input type="range" min={0} max={100} value={selectedPrompt.progress}
                 onChange={e => handleProgressUpdate(selectedPrompt.id, parseInt(e.target.value))}
                 disabled={updatingProgress === selectedPrompt.id}
-                className="w-full h-1.5 rounded-full appearance-none bg-zinc-800 accent-[color:var(--page-accent)] cursor-pointer"
+                className="w-full h-1.5 rounded-full appearance-none bg-zinc-800 cursor-pointer"
               />
             </div>
 
             {selectedPrompt.sessionTopic && (
-              <div className="flex items-center gap-2 text-[11px] text-zinc-400 bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-[11px] text-zinc-400 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg px-3 py-2">
                 <TerminalIcon className="w-3.5 h-3.5 text-[color:var(--page-accent)]" />
                 <span>Session: {selectedPrompt.sessionTopic}</span>
               </div>
@@ -218,7 +218,7 @@ export default function PromptsWorkspace({ projectId, sessions }: PromptsWorkspa
 
             <div>
               <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Content</label>
-              <div className="bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-lg p-3 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto ws-scroll">{selectedPrompt.content}</div>
+              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg p-3 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto ws-scroll">{selectedPrompt.content}</div>
             </div>
 
             {selectedPrompt.resultSummary && (

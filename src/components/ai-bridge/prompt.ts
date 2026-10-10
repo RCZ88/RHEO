@@ -139,6 +139,8 @@ export interface BuildFormPromptArgs {
   frameMode?: 'strict' | 'flexible'
   /** Optional style template id (punchy/storyteller/...). Its directive is INJECTED into the prompt per the skill. */
   styleId?: string
+  /** Ids of the prompt sections the user has switched on. */
+  sections?: string[]
 }
 
 /**
@@ -154,6 +156,7 @@ export function buildFormPrompt({
   context,
   frameMode = 'strict',
   styleId,
+  sections = [],
 }: BuildFormPromptArgs): string {
   const fieldLines = fields
     .map((f) => {
@@ -167,6 +170,12 @@ export function buildFormPrompt({
   const ctxBlock = context ? `\nContext about this ${category} entry: ${context}` : ''
   const styleDirective = getStyleDirective(styleId)
   const styleBlock = styleDirective ? `\nStyle: ${styleDirective}` : ''
+  // BridgeForm already passes the enabled section ids; it also detects this exact
+  // line in the live preview, so the heading text is part of the contract.
+  const sectionLabels = sections.map((id) => sectionLabel(id))
+  const sectionBlock = sectionLabels.length
+    ? `\nInclude these sections: ${sectionLabels.join(', ')}`
+    : ''
   const modeLine =
     frameMode === 'strict'
       ? 'Every field is mandatory. Do not skip any field. Fill every [FILL THIS] slot.'

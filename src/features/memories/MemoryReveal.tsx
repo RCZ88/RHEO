@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, Tag } from 'lucide-react';
+import { X, Trash2, Tag, CalendarDays, StickyNote } from 'lucide-react';
 import type { LoadedMemory } from './useMemories';
 import { PersonChip } from './PersonChip';
 
@@ -10,6 +10,11 @@ interface MemoryRevealProps {
   onDelete: () => void;
   onUpdatePeople: (people: string[]) => void;
   onUpdateCaption: (caption: string) => void;
+  /** meta.date drives the timeline grouping AND On This Day — it was writable
+      via updateMeta but no UI ever exposed it, so a wrong EXIF date was
+      permanently wrong. */
+  onUpdateDate: (date: string) => void;
+  onUpdateNotes: (noteIds: string[]) => void;
 }
 
 const overlayMotion = { initial: { opacity: 0 }, animate: { opacity: 1 } };
@@ -20,9 +25,27 @@ const panelMotion = {
   transition: { duration: 0.3, delay: 0.15 },
 };
 
-export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpdateCaption }: MemoryRevealProps) {
+export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpdateCaption, onUpdateDate, onUpdateNotes }: MemoryRevealProps) {
   const [caption, setCaption] = useState(memory.meta.caption || '');
   const [personInput, setPersonInput] = useState('');
+  const [notes, setNotes] = useState<{ id: string; title: string }[]>([]);
+  const [noteQuery, setNoteQuery] = useState('');
+  const linkedNotes = memory.meta.noteIds || [];
+
+  /* Notes the memory can attach to. Loaded lazily so the overlay stays cheap. */
+  useEffect(() => {
+    let alive = true;
+    const api = (window as any).deskflowAPI;
+    if (!api?.notesList) return;
+    api.notesList({ includeDrafts: true })
+      .then((r: any) => {
+        if (!alive) return;
+        const rows = Array.isArray(r) ? r : (r?.data ?? r?.notes ?? []);
+        if (Array.isArray(rows)) setNotes(rows.filter((n: any) => n?.id));
+      })
+      .catch(() => { if (alive) setNotes([]); });
+    return () => { alive = false; };
+  }, [memory.meta.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -43,7 +66,7 @@ export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpda
           layoutId={`memory-${memory.meta.id}`}
           onClick={e => e.stopPropagation()}
           transition={layoutTransition}
-          className="relative w-full max-w-3xl max-h-[85vh] rounded-xl overflow-hidden bg-zinc-900 border border-zinc-700/50 flex flex-col"
+          className="relative w-full max-w-3xl max-h-[85vh] rounded-xl overflow-hidden bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 flex flex-col"
         >
           <div className="relative flex-1 min-h-0 bg-black flex items-center justify-center">
             {memory.meta.kind === 'video' ? (
@@ -68,8 +91,78 @@ export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpda
               placeholder="Add a caption for this memory"
               className="w-full bg-transparent text-[15px] text-[var(--text-primary)] placeholder:text-zinc-600 focus:outline-none"
             />
+            {/* Date — writable but previously unreachable from the UI. */}
+            <label className="flex items-center gap-2 pt-1">
+              <CalendarDays className="w-3.5 h-3.5 text-[var(--color-mem-400)]" />
+              <span className="text-[11px] text-[var(--text-muted)]">Date</span>
+              <input
+                type="date"
+                value={memory.meta.date || ''}
+                onChange={e => e.target.value && onUpdateDate(e.target.value)}
+                aria-label="Memory date"
+                className="bg-transparent text-[12px] text-[var(--text-primary)] focus:outline-none"
+              />
+            </label>
+
+            {/* Notes this memory belongs to. */}
+            <div className="pt-1 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <StickyNote className="w-3.5 h-3.5 text-[var(--color-mem-400)]" />
+                <span className="text-[11px] text-[var(--text-muted)]">Notes</span>
+              </div>
+              {linkedNotes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {linkedNotes.map(id => {
+                    const n = notes.find(x => x.id === id);
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-md border border-zinc-700 bg-zinc-900/60 text-[11px]">
+                        <span className="truncate">{n?.title || 'Note'}</span>
+                        <button
+                          type="button"
+                          aria-label="Detach note"
+                          onClick={() => onUpdateNotes(linkedNotes.filter(x => x !== id))}
+                          className="text-zinc-500 hover:text-zinc-200"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              <input
+                value={noteQuery}
+                onChange={e => setNoteQuery(e.target.value)}
+                placeholder="Attach a note by title"
+                aria-label="Search notes to attach"
+                className="w-full bg-transparent text-[12px] text-[var(--text-primary)] placeholder:text-zinc-600 focus:outline-none"
+              />
+              {noteQuery.trim() && (
+                <div className="max-h-32 overflow-y-auto space-y-0.5">
+                  {notes
+                    .filter(n => !linkedNotes.includes(n.id))
+                    .filter(n => (n.title || '').toLowerCase().includes(noteQuery.trim().toLowerCase()))
+                    .slice(0, 6)
+                    .map(n => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => { onUpdateNotes([...linkedNotes, n.id]); setNoteQuery(''); }}
+                        className="w-full text-left px-1.5 py-1 rounded text-[11px] text-[var(--text-primary)] hover:bg-[var(--color-muted)]"
+                      >
+                        {n.title || 'Untitled'}
+                      </button>
+                    ))}
+                  {notes.filter(n => !linkedNotes.includes(n.id))
+                    .filter(n => (n.title || '').toLowerCase().includes(noteQuery.trim().toLowerCase())).length === 0 && (
+                    <p className="px-1.5 py-1 text-[11px] text-zinc-600">No matching note.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Tag className="w-3.5 h-3.5 text-[#6fb38f]" />
+              <Tag className="w-3.5 h-3.5 text-[var(--color-mem-400)]" />
               {memory.meta.people.map(p => (
                 <PersonChip key={p} name={p} onRemove={() => onUpdatePeople(memory.meta.people.filter(x => x !== p))} />
               ))}

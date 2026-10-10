@@ -216,13 +216,55 @@ async function hasTool(bin: string): Promise<boolean> {
   return v;
 }
 
+/**
+ * Derive an app name from a window title when the compositor gives us nothing
+ * usable for `class`.
+ *
+ * Why this is needed: on KDE, XWayland windows (Electron/CEF apps such as RHEO
+ * itself) frequently expose `WM_CLASS` as the MACHINE HOSTNAME rather than an
+ * app name — RHEO's window reports class "czFedora888". Native Wayland clients
+ * sometimes report an empty class too. Either way the detector ends up with
+ * nothing but a title, and reporting the literal string "Unknown" is far worse
+ * than reporting what the window actually calls itself.
+ *
+ * Handles the common KDE title shapes:
+ *   "czFedora888 RHEO"              -> "RHEO"   (leading hostname stripped)
+ *   "Inbox — Thunderbird"           -> "Inbox"  (first segment)
+ *   "Slack | Acme"                  -> "Slack"
+ */
+export function nameFromTitle(title: string | null): string {
+  const raw = (title || '').trim();
+  if (!raw) return '';
+  let s = raw;
+  // Strip a leading hostname token (KDE/XWayland habit).
+  const host = (os.hostname() || '').trim();
+  if (host && s.toLowerCase().startsWith(host.toLowerCase() + ' ')) {
+    s = s.slice(host.length).trim();
+  }
+  // Prefer the part BEFORE a common title separator — that is the app name.
+  const seg = s.split(/\s+[—–|·•]\s+|\s+[-–—]\s+/)[0]?.trim() || s;
+  // A sane app name is short and not a full sentence.
+  const candidate = seg.length > 0 && seg.length <= 48 ? seg : s.slice(0, 48).trim();
+  return candidate;
+}
+
 function windowFrom(
   name: string,
   title: string | null,
   pid?: number,
 ): LinuxForegroundWindow | undefined {
-  const cleanName = (name || '').trim();
+  let cleanName = (name || '').trim();
   const cleanTitle = (title || '').trim();
+  // Treat an empty class, a bare hostname, or the literal "Unknown" as
+  // "no class available" and fall back to the title.
+  const host = (os.hostname() || '').trim();
+  if (
+    !cleanName ||
+    /^unknown$/i.test(cleanName) ||
+    (host && cleanName.toLowerCase() === host.toLowerCase())
+  ) {
+    cleanName = nameFromTitle(cleanTitle);
+  }
   if (!cleanName && !cleanTitle) return undefined;
   return {
     platform: 'linux',
@@ -231,16 +273,30 @@ function windowFrom(
   };
 }
 
-/** Prefer a real executable name (from /proc/<pid>/exe) over a WM_CLASS. */
-async function refineName(name: string, pid?: number): Promise<string> {
+/**
+ * Prefer a real executable name (from /proc/<pid>/exe) over the reported class.
+ *
+ * Electron/CEF apps all ship the same generic binary (`electron`, `chrome`,
+ * `cef_host`, ...), so the exe name is useless for identifying WHICH app it is.
+ * In that case we must fall back to the window title, because on KDE the class
+ * for those windows is often the machine hostname (e.g. RHEO -> "czFedora888").
+ */
+async function refineName(name: string, pid: number | undefined, title?: string | null): Promise<string> {
+  const host = (os.hostname() || '').trim();
+  const classIsUseless =
+    !name.trim() ||
+    /^unknown$/i.test(name.trim()) ||
+    (host && name.trim().toLowerCase() === host.toLowerCase());
   if (pid) {
     const exe = await executablePath(pid);
     if (exe) {
       const base = path.basename(exe);
-      // Electron/CEF apps all report a bare `electron`/`chrome` binary; keep the
-      // friendlier class name in that case and let the caller map it.
-      if (!/^(electron|chrome|chromium|cef_host|mono)$/i.test(base)) return base;
+      if (!/^(electron|chrome|chromium|cef_host|mono|wrapper)$/i.test(base)) return base;
     }
+  }
+  if (classIsUseless) {
+    const fromTitle = nameFromTitle(title ?? null);
+    if (fromTitle) return fromTitle;
   }
   return name;
 }
@@ -270,7 +326,7 @@ async function fromKdotool(): Promise<LinuxForegroundWindow | undefined> {
     ).catch(() => null);
     if (pidRes) pid = parsePid(String(pidRes.stdout).trim());
 
-    const refined = await refineName(name, pid);
+    const refined = await refineName(name, pid, title);
     return windowFrom(refined, title, pid);
   } catch {
     return undefined;
@@ -287,7 +343,7 @@ async function fromHyprctl(): Promise<LinuxForegroundWindow | undefined> {
     const data = JSON.parse(String(stdout));
     if (!data || (!data.class && !data.title)) return undefined;
     const pid = parsePid(String(data.pid || ''));
-    const refined = await refineName(String(data.class || ''), pid);
+    const refined = await refineName(String(data.class || ''), pid, String(data.title || ''));
     return windowFrom(refined, String(data.title || ''), pid);
   } catch {
     return undefined;
@@ -307,7 +363,7 @@ async function fromSwaymsg(): Promise<LinuxForegroundWindow | undefined> {
     const appName = String(node?.app?.name || '');
     const className = String(node?.window_properties?.class || '');
     const pid = parsePid(String(node?.pid || ''));
-    const refined = await refineName(appName || className, pid);
+    const refined = await refineName(appName || className, pid, String(node?.name || ''));
     return windowFrom(refined, String(node?.name || ''), pid);
   } catch {
     return undefined;
@@ -431,7 +487,7 @@ async function fromWmctrl(): Promise<LinuxForegroundWindow | undefined> {
  * stale running process is immediately obvious instead of silently producing
  * confusing traces (which cost several cycles of guessing).
  */
-export const LINUX_DETECT_BUILD = 'native-chain-v3-20260930';
+export const LINUX_DETECT_BUILD = 'native-chain-v4-titlefallback-20260930';
 
 /** Which strategy produced the last successful result (for diagnostics). */
 export let lastStrategyUsed: string | null = null;
@@ -555,4 +611,96 @@ export async function getLinuxForegroundWindow(): Promise<LinuxForegroundWindow 
   const w = await tryStrategy('wmctrl', fromWmctrl);
   if (w) return w;
   return tryStrategy('xprop', fromX11);
+}
+
+/**
+ * Where is the mouse pointer RIGHT NOW?
+ *
+ * Electron's `screen.getCursorScreenPoint()` is implemented in X11 terms, so on a NATIVE
+ * Wayland session it cannot see the pointer. The Halo island's hover machine called exactly
+ * that, caught the failure, and set its point to null — which is the same value the FSM uses
+ * for "the pointer is somewhere else". The result was the island never opening on hover on any
+ * Wayland desktop, with no error anywhere to explain it.
+ *
+ * This is the cursor counterpart to the window chain above: compositor-native strategies first
+ * (only these can see a native Wayland pointer), then XWayland as a degraded fallback.
+ *
+ * Measured on KDE Plasma: `kdotool getmouselocation` answers in 12-17ms, so the island's 40ms
+ * expanded poll can afford it — but only as a FALLBACK, never in front of the free in-process
+ * Electron call.
+ */
+export interface LinuxCursorPoint {
+  x: number;
+  y: number;
+}
+
+async function cursorFromKdotool(): Promise<LinuxCursorPoint | undefined> {
+  // Output shape: `x:1367 y:81 screen:0 window:{uuid}`
+  // NOTE: kdotool separates with a COLON, unlike every X11 tool this file already parses
+  // (`x=1367`). Reusing the `key=value` reader here silently returned undefined for every
+  // read, which is how "hover never opens on Wayland" survived a first attempt at the fix.
+  const out = await execFileAsync('kdotool', ['getmouselocation'], { timeout: COMMAND_TIMEOUT_MS });
+  const x = /(?:^|\s)x:\s*(-?\d+)/.exec(out.stdout)?.[1];
+  const y = /(?:^|\s)y:\s*(-?\d+)/.exec(out.stdout)?.[1];
+  if (x === undefined || y === undefined) return undefined;
+  return { x: Number(x), y: Number(y) };
+}
+
+export async function getLinuxCursorPoint(): Promise<LinuxCursorPoint | undefined> {
+  if (process.platform !== 'linux') return undefined;
+
+  // Compositor-native first, and only these can see a native Wayland pointer.
+  for (const name of ['kdotool', 'hyprctl', 'wlrctl']) {
+    if (!(await hasTool(name))) continue;
+    try {
+      if (name === 'kdotool') {
+        const p = await cursorFromKdotool();
+        if (p) return p;
+        continue;
+      }
+      // hyprctl / wlrctl expose the cursor differently; a miss just falls through.
+      const p = await cursorFromGeneric(name);
+      if (p) return p;
+    } catch {
+      // Try the next strategy. A missing cursor is not an error worth surfacing to the user.
+    }
+  }
+
+  // XWayland fallback: `xdotool getmouselocation` / `xdotool getmouselocation --shell`.
+  try {
+    if (await hasTool('xdotool')) {
+      const out = await execFileAsync('xdotool', ['getmouselocation'], { timeout: COMMAND_TIMEOUT_MS });
+      const x = propValue(out.stdout, 'X');
+      const y = propValue(out.stdout, 'Y');
+      if (x !== null && y !== null) {
+        const px = Number(x);
+        const py = Number(y);
+        if (Number.isFinite(px) && Number.isFinite(py)) return { x: px, y: py };
+      }
+    }
+  } catch {
+    /* nothing readable — caller treats undefined as "pointer unavailable" */
+  }
+  return undefined;
+}
+
+/** hyprctl / wlrctl cursor reads, kept separate so the KDE path stays the fast one. */
+async function cursorFromGeneric(tool: string): Promise<LinuxCursorPoint | undefined> {
+  if (tool === 'hyprctl') {
+    // `hyprctl cursorpos` -> "X, Y"
+    const out = await execFileAsync('hyprctl', ['cursorpos'], { timeout: COMMAND_TIMEOUT_MS });
+    const parts = out.stdout.split(',').map((s) => Number(s.trim()));
+    if (parts.length >= 2 && parts.every((n) => Number.isFinite(n))) {
+      return { x: parts[0], y: parts[1] };
+    }
+  }
+  if (tool === 'wlrctl') {
+    // `wlrctl pointer position` -> "X,Y"
+    const out = await execFileAsync('wlrctl', ['pointer', 'position'], { timeout: COMMAND_TIMEOUT_MS });
+    const parts = out.stdout.split(',').map((s) => Number(s.trim()));
+    if (parts.length >= 2 && parts.every((n) => Number.isFinite(n))) {
+      return { x: parts[0], y: parts[1] };
+    }
+  }
+  return undefined;
 }

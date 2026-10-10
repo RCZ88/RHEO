@@ -106,16 +106,16 @@ export function MyPlanCard({ onPlanningSaved }: MyPlanCardProps) {
           <textarea
             value={draft}
             onChange={e => handleEdit(e.target.value)}
-            className="w-full h-44 bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-lg p-3 text-xs text-zinc-100 font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 resize-y"
+            className="w-full h-44 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg p-3 text-xs text-zinc-100 font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 resize-y"
             placeholder="Write your plan in markdown..."
           />
         ) : (
-          <div className="max-h-44 overflow-y-auto rounded-lg bg-zinc-950/60 ring-1 ring-zinc-800/60 p-3 text-xs text-zinc-300 whitespace-pre-wrap">
+          <div className="max-h-44 overflow-y-auto rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-3 text-xs text-zinc-300 whitespace-pre-wrap">
             {content}
             <div className="flex items-center gap-2 mt-2">
               <button
                 onClick={() => setAddingItem(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
               >
                 <Sparkles className="w-3 h-3" />
                 Add item
@@ -127,7 +127,7 @@ export function MyPlanCard({ onPlanningSaved }: MyPlanCardProps) {
                   type="text"
                   value={newItemText}
                   onChange={e => setNewItemText(e.target.value)}
-                  className="flex-1 bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-lg px-2 py-1.5 text-xs text-zinc-100"
+                  className="flex-1 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg px-2 py-1.5 text-xs text-zinc-100"
                   placeholder="New plan item"
                 />
                 <button
@@ -144,7 +144,7 @@ export function MyPlanCard({ onPlanningSaved }: MyPlanCardProps) {
                 </button>
                 <button
                   onClick={() => { setAddingItem(false); setNewItemText(''); }}
-                  className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 text-zinc-400 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                  className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-400 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
                 >
                   Cancel
                 </button>

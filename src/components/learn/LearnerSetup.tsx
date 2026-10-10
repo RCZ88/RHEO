@@ -97,7 +97,7 @@ export function LearnerSetup({ open, onClose }: Props) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg mx-4 rounded-xl border border-zinc-700/50 bg-zinc-900 shadow-2xl overflow-hidden"
+        className="w-full max-w-lg mx-4 rounded-xl border border-zinc-700/50 bg-zinc-900 light:bg-[var(--ws-surface-raised)] shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-800">
@@ -429,7 +429,7 @@ function Q9({ knowledge, setKnowledge, lessonTitles }: { knowledge: SetupKnowled
               value={draft.statement}
               onChange={(e) => setDraft((d) => ({ ...d, statement: e.target.value }))}
               placeholder="e.g. I can implement gradient descent in NumPy and understand backpropagation end-to-end."
-              className="w-full px-2.5 py-2 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-200 text-[11px] leading-relaxed focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600 min-h-[56px] resize-y"
+              className="w-full px-2.5 py-2 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-200 text-[11px] leading-relaxed focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600 min-h-[56px] resize-y"
             />
           </div>
           <div className="flex gap-2">
@@ -449,7 +449,7 @@ function Q9({ knowledge, setKnowledge, lessonTitles }: { knowledge: SetupKnowled
                 value={draft.topic}
                 onChange={(e) => setDraft((d) => ({ ...d, topic: e.target.value }))}
                 placeholder="e.g. Deep Learning"
-                className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
               />
             </div>
             <div>
@@ -457,7 +457,7 @@ function Q9({ knowledge, setKnowledge, lessonTitles }: { knowledge: SetupKnowled
               <select
                 value={draft.level}
                 onChange={(e) => setDraft((d) => ({ ...d, level: e.target.value as MasteryLevel | '' }))}
-                className="px-2 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-300 text-[11px] focus:outline-none focus:border-clay-500/40"
+                className="px-2 py-1.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-300 text-[11px] focus:outline-none focus:border-clay-500/40"
               >
                 <option value="">—</option>
                 {(['L1', 'L2', 'L3', 'L4', 'L5'] as MasteryLevel[]).map((l) => <option key={l} value={l}>{l}</option>)}
@@ -480,13 +480,13 @@ function Q9({ knowledge, setKnowledge, lessonTitles }: { knowledge: SetupKnowled
               value={draft.keywords}
               onChange={(e) => setDraft((d) => ({ ...d, keywords: e.target.value }))}
               placeholder="gradient descent, backprop, neural nets"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
             />
           </div>
           <div>
             <label className="block text-[10px] font-medium text-zinc-500 mb-1">Your lessons</label>
             {lessonTitles.length === 0 ? (
-              <p className="text-[10px] text-zinc-600 bg-zinc-900/40 border border-zinc-700/30 rounded-lg px-2.5 py-2">
+              <p className="text-[10px] text-zinc-600 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-700/30 rounded-lg px-2.5 py-2">
                 No lessons yet — this entry will relate to every topic until you create lessons and tag them.
               </p>
             ) : (
@@ -498,7 +498,7 @@ function Q9({ knowledge, setKnowledge, lessonTitles }: { knowledge: SetupKnowled
                     className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-medium transition border ${
                       draft.linkedLessons.includes(title)
                         ? 'bg-clay-500/15 text-clay-300 border-clay-500/30'
-                        : 'bg-zinc-900/40 text-zinc-500 border-zinc-700/30 hover:text-zinc-300'
+                        : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/30 hover:text-zinc-300'
                     }`}
                   >
                     {title.slice(0, 22)}{title.length > 22 ? '…' : ''}

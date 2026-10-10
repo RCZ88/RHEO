@@ -15,6 +15,123 @@ const TABS = [
 
 type TabId = typeof TABS[number]['id'];
 
+/* ══════════════════════════════════════════════════════════════════════
+   PROJECT IDENTITY — the fix for "failed to detect a project" while the
+   user is demonstrably inside one.
+
+   THE BUG WAS NOT A COMPARISON. It was that this page had no notion of
+   "which project am I in" at all. It listed every row of `projects` and
+   auto-selected `projects[0]` — which `get-ide-projects-overview` orders
+   by `last_activity_at DESC`, i.e. *the most recently touched project*,
+   not *the project this app session is running*. Two consequences, both
+   silent:
+     1. It showed and backed up the WRONG project.
+     2. If the current project's row was missing or soft-deleted, the id
+        lookup returned undefined and the page rendered its empty state —
+        the exact "No IDE projects detected yet" that CZ reported while
+        sitting in the project.
+
+   The app DOES already know the answer, and writes it down: TerminalPage
+   persists the active project id to `localStorage['terminal-project']`
+   (TerminalPage.tsx:2204) and reads it back on mount (:2156). This page
+   never consulted it. That is the two-places-disagreeing shape from
+   MEMORY.md — except here one of the two places simply had no opinion.
+
+   We now read that key, match it against the list by ID first and by
+   NORMALISED PATH second, and — critically — if neither matches we say so
+   rather than silently substituting a different project. A backup aimed at
+   the wrong directory is worse than no backup: `restore` writes files.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/** The key TerminalPage.tsx:2204 writes and :2156 reads. Single source. */
+const CURRENT_PROJECT_KEY = 'terminal-project';
+
+function isWindowsPlatform(): boolean {
+  const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+  const plat = String(nav?.userAgentData?.platform || nav?.platform || '');
+  const ua = String(nav?.userAgent || '');
+  return /win/i.test(plat) || /windows/i.test(ua);
+}
+
+function isCaseInsensitiveFS(): boolean {
+  if (isWindowsPlatform()) return true;
+  const plat = String((typeof navigator !== 'undefined' && (navigator as any).userAgentData?.platform) || (typeof navigator !== 'undefined' && navigator.platform) || '');
+  return /mac/i.test(plat);
+}
+
+/**
+ * Textual path normaliser.
+ *
+ * LIMITATION, stated rather than hidden: the renderer has no `fs`, so this
+ * CANNOT resolve a symlink. Two paths that differ only by a symlinked
+ * ancestor compare unequal here unless the prefix is special-cased (see
+ * the /run/media note). A general realpath comparison needs a main-process
+ * IPC — out of this slice, see the report.
+ */
+function normalisePath(input: unknown): string {
+  if (typeof input !== 'string') return '';
+  let s = input.trim();
+  if (!s) return '';
+  // Rewrite separators ONLY where the OS treats them as separators. On POSIX
+  // a backslash is a legal FILENAME character, so rewriting it would turn
+  // "/tmp/we\ird" into the different directory "/tmp/we/ird".
+  if (isWindowsPlatform()) s = s.replace(/\\/g, '/');
+  s = s.replace(/\/{2,}/g, '/');
+  // Resolve "." and ".." TEXTUALLY. Safe because these are whole directory
+  // paths, and leading ".." can never climb above the root this way.
+  const isAbsolute = s.startsWith('/');
+  const out: string[] = [];
+  for (const seg of s.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') { out.pop(); continue; }
+    out.push(seg);
+  }
+  s = (isAbsolute ? '/' : '') + out.join('/');
+  if (s.length > 1) s = s.replace(/\/+$/, '');
+  // /run/media/<user>/<label> is the real systemd mount and /media/... is the
+  // compat symlink to it — the same directory under two names. This repo
+  // lives under /run/media/clementzhao/..., so a project registered via the
+  // /media spelling must still match. POSIX only: on Windows "run/media" is
+  // an ordinary first folder and collapsing it would be a false positive.
+  if (!isWindowsPlatform()) s = s.replace(/^\/run\/media(?=\/|$)/i, '/media');
+  return s;
+}
+
+/** True when two paths name the same directory, modulo the above. */
+function samePath(a: unknown, b: unknown): boolean {
+  const x = normalisePath(a);
+  const y = normalisePath(b);
+  if (!x || !y) return false;
+  return isCaseInsensitiveFS() ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+interface ProjectRow {
+  id: string;
+  name: string;
+  path: string;
+}
+
+function readCurrentProjectId(): string | null {
+  // All localStorage access is wrapped, per the hard invariant.
+  try {
+    const v = localStorage.getItem(CURRENT_PROJECT_KEY);
+    return v && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the project this app session is actually in, by the id the app
+ * itself persisted. Returns null — NEVER a guess — when it cannot be
+ * identified, because a backup aimed at the wrong directory is worse than
+ * no backup: `restore` writes files into it.
+ */
+function resolveCurrentProject(rows: ProjectRow[], appProjectId: string | null): ProjectRow | null {
+  if (!Array.isArray(rows) || !appProjectId) return null;
+  return rows.find((r) => r?.id === appProjectId) || null;
+}
+
 function fmtBytes(bytes: number): string {
   if (!bytes) return '0 B';
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -65,7 +182,7 @@ function TabBar({ active, onChange }: { active: TabId; onChange: (t: TabId) => v
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium transition-all ${
               activeTab
                 ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/30'
-                : 'bg-zinc-900/60 text-zinc-400 ring-1 ring-inset ring-zinc-800/70 hover:text-zinc-200'
+                : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-400 ring-1 ring-inset ring-zinc-800/70 hover:text-zinc-200'
             }`}
           >
             <Icon className="w-3.5 h-3.5" />
@@ -89,47 +206,120 @@ export default function BackupCenterPage() {
   const [tab, setTab] = useState<TabId>('database');
   const [status, setStatus] = useState<any>(null);
   const [snapshots, setSnapshots] = useState<AgentSnapshotRow[]>([]);
-  const [projects, setProjects] = useState<Array<{ id: string; name: string; path: string }>>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [schedules, setSchedules] = useState<Array<{ projectId: string; minutes: number; enabled: boolean; lastRunAt?: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** The project id the app itself recorded as current, or null if unknown. */
+  const [appProjectId, setAppProjectId] = useState<string | null>(null);
+  /** True when the app HAS a current project but we could not match it to a row. */
+  const [currentProjectUnmatched, setCurrentProjectUnmatched] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const api = window.deskflowAPI;
-      const [st, overview, sch, dbList, projBackups] = await Promise.all([
-        api?.backup.status() ?? null,
-        api?.getIDEProjectsOverview?.() ?? null,
-        api?.projectBackup.getSchedules?.() ?? null,
-        api?.backup.list() ?? [],
-        api?.projectBackup.list() ?? { success: true, data: [] },
+      /* allSettled, not all: one rejected call used to reject the whole
+         Promise.all, so a single IPC hiccup blanked EVERY panel on this page
+         and reported one opaque error. Each panel now degrades on its own and
+         the rest still load. */
+      const [stR, ovR, schR, dbR, pbR, prR] = await Promise.allSettled([
+        api?.backup.status() ?? Promise.resolve(null),
+        api?.getIDEProjectsOverview?.() ?? Promise.resolve(null),
+        api?.projectBackup.getSchedules?.() ?? Promise.resolve(null),
+        api?.backup.list?.() ?? Promise.resolve([]),
+        api?.projectBackup.list?.() ?? Promise.resolve({ success: true, data: [] }),
+        /* `get-projects` is a DEDICATED one-query handler (main.ts:13094) whose
+           catch can only mean "the projects table is unreachable". The overview
+           above is a ~250-line analytics handler that wraps the project list in
+           the SAME try/catch as ~15 unrelated queries — any one of them throwing
+           makes its catch return `projects: []`, i.e. "you have no projects".
+           Deriving the project LIST from an analytics endpoint is the mistake
+           that made this page say it could not find the project the user was
+           standing in. Ask the narrow handler first; keep the overview only as
+           a fallback so a failure there degrades to "no extra data", never to
+           "no projects". */
+        api?.getProjects?.() ?? Promise.resolve(null),
       ]);
+      const val = (r: PromiseSettledResult<any> | undefined, fb: any): any =>
+        r && r.status === 'fulfilled' && r.value != null ? r.value : fb;
+      /* GUARD THE ARRAY, NOT THE OBJECT. `overview?.projects` guards the
+         wrapper; if `projects` is present but is not an array (a single row
+         object, an object map) the first `.find`/`.map` throws one token later.
+         Normalise once, at the only write site, so every reader downstream is
+         safe by construction. */
+      const asRows = (v: any): ProjectRow[] =>
+        Array.isArray(v) ? v.filter((r: any) => r && typeof r.id === 'string' && r.id) : [];
+      const st: any = val(stR, null);
+      const overview: any = val(ovR, null);
+      const sch: any = val(schR, null);
+      const dbList: any = val(dbR, []);
+      const projBackups: any = val(pbR, { success: true, data: [] });
+      const failed = [stR, ovR, schR, dbR, pbR, prR].filter(r => r.status === 'rejected').length;
+      if (failed) console.warn(`[BackupCenter] ${failed} panel(s) failed to load; showing the rest.`);
       setStatus(st);
-      setProjects(overview?.projects || []);
-      // Auto-select first project only on initial load (when nothing is selected yet)
-      setSelectedProject(prev => {
-        if (prev) return prev; // keep user's selection
-        if (overview?.projects?.length) return overview.projects[0].id;
-        return null;
-      });
-      setSchedules(sch?.data || []);
 
-      const rows: AgentSnapshotRow[] = [];
-      for (const b of dbList || []) {
-        if (b.trigger === 'agent-session') {
-          rows.push({ kind: 'db', when: b.createdAt, label: 'Database snapshot', detail: `${b.totalRows} rows · ${fmtBytes(b.bytes)}` });
+      const fromDedicated = asRows(val(prR, null));
+      const fromOverview = asRows(overview?.projects);
+      const rows = fromDedicated.length ? fromDedicated : fromOverview;
+      if (!fromDedicated.length && fromOverview.length) {
+        console.warn('[BackupCenter] get-projects returned nothing; falling back to the overview payload.');
+      }
+      setProjects(rows);
+
+      /* ── Which project are we IN? ──────────────────────────────────────
+         Read the id the app persisted. Previously this page auto-selected
+         `projects[0]` — ordered by last_activity_at DESC, i.e. the most
+         recently *touched* project, which is not the same thing as the one
+         this session is running. */
+      const appId = readCurrentProjectId();
+      setAppProjectId(appId);
+      const current = resolveCurrentProject(rows, appId);
+      /* Only claim "unmatched" when we actually know there IS a current
+         project. No recorded id means first visit / terminal never opened —
+         falling back to the first project is correct there. */
+      setCurrentProjectUnmatched(Boolean(appId) && !current);
+
+      setSelectedProject(prev => {
+        if (prev && rows.some((r) => r.id === prev)) return prev; // keep user's explicit choice
+        if (current) return current.id;                          // the project we are actually in
+        if (!appId && rows.length) return rows[0].id;             // nothing recorded yet
+        return null;                                              // do NOT guess a different project
+      });
+
+      /* Schedules: `projectBackup:getSchedules` rejects outright when the
+         handler hands Electron a payload carrying a Node `timer`
+         (ProjectBackupService.cjs:265 returns live Map values). It also
+         disagrees between its two implementations — the .cjs returns
+         objects, src/main/backup/ProjectBackupService.ts:376 returns bare
+         id strings. Accept BOTH shapes rather than depending on which one
+         is loaded, and guard the array. */
+      const rawSched = val(sch, null);
+      const schedData: any[] = Array.isArray(rawSched) ? rawSched : Array.isArray(rawSched?.data) ? rawSched.data : [];
+      setSchedules(schedData
+        .map((s: any) => (typeof s === 'string' ? { projectId: s, minutes: 0, enabled: true, lastRunAt: null } : s))
+        .filter((s: any) => s && typeof s.projectId === 'string' && s.projectId));
+
+      const snapshotRows: AgentSnapshotRow[] = [];
+      if (Array.isArray(dbList)) {
+        for (const b of dbList) {
+          if (b?.trigger === 'agent-session') {
+            snapshotRows.push({ kind: 'db', when: b.createdAt || '', label: 'Database snapshot', detail: `${b.totalRows ?? 0} rows · ${fmtBytes(b.bytes)}` });
+          }
         }
       }
-      for (const p of projBackups?.data || []) {
-        if (p.trigger === 'agent-session') {
-          rows.push({ kind: 'project', when: p.timestamp, label: p.label, project: p.projectId, detail: `${p.fileCount} files · ${fmtBytes(p.totalSize)}` });
+      const pbData: any[] = Array.isArray(projBackups?.data) ? projBackups.data : [];
+      for (const p of pbData) {
+        if (p?.trigger === 'agent-session') {
+          snapshotRows.push({ kind: 'project', when: p.timestamp || '', label: p.label || 'Project snapshot', project: p.projectId, detail: `${p.fileCount ?? 0} files · ${fmtBytes(p.totalSize)}` });
         }
       }
-      rows.sort((a, b) => b.when.localeCompare(a.when));
-      setSnapshots(rows);
+      /* A manifest row can be missing its timestamp; `undefined.localeCompare`
+         threw here and blanked the whole tab. Coerce, then sort. */
+      snapshotRows.sort((a, b) => String(b.when || '').localeCompare(String(a.when || '')));
+      setSnapshots(snapshotRows);
     } catch (e: any) {
       setError(String(e.message || e));
     }
@@ -138,15 +328,55 @@ export default function BackupCenterPage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const selectedProjectPath = projects.find((p) => p.id === selectedProject)?.path || null;
-  const activeSchedule = schedules.find((s) => s.projectId === selectedProject);
+  /* Keep in step with the Terminal page, which owns this key and rewrites it
+     whenever the user switches project. Without this the page shows whatever
+     it found on mount, which is the original bug in another costume. */
+  useEffect(() => {
+    const sync = () => {
+      const id = readCurrentProjectId();
+      setAppProjectId(prev => (prev === id ? prev : id));
+      if (id) setSelectedProject(prev => (prev === id ? prev : id));
+    };
+    window.addEventListener('focus', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('focus', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
 
+  const selectedProjectRow = projects.find((p) => p.id === selectedProject) || null;
+  /* A schedule can carry the project it was created for as a PATH
+     (ProjectBackupService.cjs:285 persists `projectPath` alongside `projectId`).
+     Matching on id alone misses a schedule whose project row was re-created
+     under a new id for the same folder, which makes the page report
+     "Auto-backup: off" while a timer is in fact running against this
+     directory. Fall back to a normalised path comparison. */
+  const activeSchedule =
+    schedules.find((s) => s.projectId === selectedProject) ||
+    schedules.find((s) => samePath((s as any)?.projectPath, selectedProjectRow?.path)) ||
+    undefined;
+  /* Normalise before it leaves the renderer: `BackupTabPanel` and the scheduler
+     both hand this straight to `fs.existsSync` / `glob({cwd})`, and a trailing
+     separator or a doubled slash is a different STRING to every one of them.
+     The stored value is left untouched — we normalise the copy we pass on, we
+     do not rewrite the user's project. */
+  const selectedProjectPath = normalisePath(selectedProjectRow?.path) || null;
   const saveSchedule = async (minutes: number) => {
     if (!selectedProject || !selectedProjectPath) return;
     const res = await window.deskflowAPI?.projectBackup.schedule(selectedProject, minutes, selectedProjectPath);
     if (res?.success) {
-      const sch = await window.deskflowAPI?.projectBackup.getSchedules();
-      setSchedules(sch?.data || []);
+      /* Re-read through the same normaliser the loader uses; this call can
+         reject (see the getSchedules note in loadAll). */
+      try {
+        const sch = await window.deskflowAPI?.projectBackup.getSchedules();
+        const d: any = Array.isArray(sch) ? sch : Array.isArray(sch?.data) ? sch.data : [];
+        setSchedules(d
+          .map((s: any) => (typeof s === 'string' ? { projectId: s, minutes: 0, enabled: true, lastRunAt: null } : s))
+          .filter((s: any) => s && typeof s.projectId === 'string'));
+      } catch (e) {
+        console.warn('[BackupCenter] schedule refresh failed; keeping current view.', e);
+      }
     }
   };
 
@@ -198,12 +428,39 @@ export default function BackupCenterPage() {
 
         {tab === 'projects' && (
           <div className="space-y-4">
-            {projects.length === 0 ? (
+            {/* An EMPTY LIST and an UNRESOLVED CURRENT PROJECT are different
+                facts and must not render as the same sentence. The old code
+                collapsed both into "No IDE projects detected yet", which is
+                precisely the message CZ saw while demonstrably inside one. */}
+            {currentProjectUnmatched ? (
+              <div className="rounded-xl bg-amber-500/10 ring-1 ring-inset ring-amber-500/30 p-5 text-sm text-amber-200">
+                <div className="flex items-center gap-2 font-medium">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  The project you are working in is no longer registered
+                </div>
+                <p className="mt-2 text-xs text-amber-200/80">
+                  The Terminal is running with project id <code className="font-mono">{appProjectId}</code>, but that
+                  project is not in the list below — it was most likely removed, or its folder was moved or renamed.
+                  Backups are not offered for a project that cannot be resolved, because a backup taken against
+                  the wrong folder is worse than no backup at all.
+                </p>
+                <p className="mt-2 text-xs text-amber-200/80">
+                  Pick a project below to back that one up, or re-add this folder on the IDE Projects page.
+                </p>
+              </div>
+            ) : projects.length === 0 ? (
               <div className="rounded-xl bg-[rgba(24,24,27,0.60)] ring-1 ring-inset ring-zinc-800/70 p-8 text-center text-sm text-zinc-500">
                 No IDE projects detected yet. Open the IDE Projects page so a project is registered, then come back.
               </div>
             ) : (
               <>
+                {selectedProject && selectedProjectRow?.id === appProjectId && (
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Detected the project you are working in</span>
+                    <code className="font-mono text-zinc-400 truncate">{selectedProjectPath}</code>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Project</span>
                   {projects.map((p) => (
@@ -213,7 +470,7 @@ export default function BackupCenterPage() {
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                         selectedProject === p.id
                           ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/30'
-                          : 'bg-zinc-900/60 text-zinc-400 ring-1 ring-inset ring-zinc-800/70 hover:text-zinc-200'
+                          : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-400 ring-1 ring-inset ring-zinc-800/70 hover:text-zinc-200'
                       }`}
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
@@ -285,7 +542,7 @@ export default function BackupCenterPage() {
             ) : (
               <div className="space-y-2">
                 {snapshots.map((s, i) => (
-                  <div key={`${s.kind}-${s.when}-${i}`} className="rounded-xl ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/40 p-3 flex items-center gap-3">
+                  <div key={`${s.kind}-${s.when}-${i}`} className="rounded-xl ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3 flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${s.kind === 'db' ? 'bg-violet-500/15 text-violet-300' : 'bg-amber-500/15 text-amber-300'}`}>
                       {s.kind === 'db' ? <Database className="w-4 h-4" /> : <FolderArchive className="w-4 h-4" />}
                     </div>
@@ -384,7 +641,7 @@ function SetupTab({ status }: { status: any }) {
         <p className="text-xs text-zinc-500">
           Every verified backup is copied to a second location (USB drive, NAS, cloud folder) for off-machine safety.
         </p>
-        <div className="rounded-lg bg-zinc-900/60 ring-1 ring-inset ring-zinc-800/70 px-3 py-2 text-xs font-mono text-zinc-300 truncate">
+        <div className="rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 px-3 py-2 text-xs font-mono text-zinc-300 truncate">
           {mirrorDir || <span className="text-zinc-600">No mirror set — backups stay in the app folder only</span>}
         </div>
         <div className="flex gap-2">
@@ -427,7 +684,7 @@ function SetupTab({ status }: { status: any }) {
                 min={0}
                 value={retention[k]}
                 onChange={(e) => setRet(k, e.target.value)}
-                className="w-full mt-1 rounded-lg bg-zinc-900/60 ring-1 ring-inset ring-zinc-800/70 px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-emerald-500/40"
+                className="w-full mt-1 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-emerald-500/40"
               />
             </label>
           ))}

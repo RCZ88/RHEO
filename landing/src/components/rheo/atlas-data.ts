@@ -20,6 +20,86 @@ export type AtlasInstrument = {
   glyph: AtlasGlyph;
 };
 
+/**
+ * A REAL screenshot of the shipping app, per instrument.
+ *
+ * The Atlas modal used to render an abstract SVG glyph only — it was the one
+ * section on the page with no real footage, so "16 instruments" read as a
+ * promise rather than a product. Every path here points at a capture that
+ * actually exists in `public/media/`. Instruments with no shipped surface
+ * (marketplace, research-digest, trace, conductor) fall back to `null` and the
+ * modal keeps the glyph, because showing a wrong screenshot is worse than
+ * showing an honest glyph.
+ */
+export const ATLAS_MEDIA: Record<
+  string,
+  { src: string; alt: string; kind: "shot" } | null
+> = {
+  "external-tracking": {
+    src: "/media/app-activity.png",
+    alt: "The Activity record — every app and site, logged",
+    kind: "shot",
+  },
+  screenshots: {
+    src: "/media/app-console.png",
+    alt: "A real session with its captured screenshots filed alongside",
+    kind: "shot",
+  },
+  "mobile-companion": {
+    src: "/media/app-mobile.png",
+    alt: "The record on a phone-sized viewport",
+    kind: "shot",
+  },
+  "content-engine": {
+    src: "/media/app-studio.png",
+    alt: "The Overlay Studio content engine",
+    kind: "shot",
+  },
+  lyceum: {
+    src: "/media/app-learn.png",
+    alt: "A lesson open in Lyceum",
+    kind: "shot",
+  },
+  "ide-projects": {
+    src: "/media/app-ide.png",
+    alt: "IDE Projects tracking real work",
+    kind: "shot",
+  },
+  "session-search": {
+    src: "/media/app-database.png",
+    alt: "The local-first database browser, searching every session",
+    kind: "shot",
+  },
+  conductor: null,
+  trace: {
+    src: "/media/app-profiler.png",
+    alt: "The in-app profiler tracing real frames",
+    kind: "shot",
+  },
+  recordings: {
+    src: "/media/app-console.png",
+    alt: "A recorded terminal session",
+    kind: "shot",
+  },
+  "context-brain": {
+    src: "/media/app-ai.png",
+    alt: "The AI Assistant reading the real tracked record",
+    kind: "shot",
+  },
+  "research-digest": null,
+  finance: {
+    src: "/media/app-finance.png",
+    alt: "Finance with real transactions",
+    kind: "shot",
+  },
+  "life-phases": {
+    src: "/media/app-life.png",
+    alt: "Life — the week, with phases derived from the record",
+    kind: "shot",
+  },
+  marketplace: null,
+};
+
 export type AtlasGlyph =
   | "external-tracking"
   | "mobile"
@@ -33,7 +113,6 @@ export type AtlasGlyph =
   | "trace"
   | "context-brain"
   | "research-digest"
-  | "resume"
   | "finance"
   | "life-phases"
   | "marketplace";
@@ -122,13 +201,6 @@ export const ATLAS: AtlasInstrument[] = [
     status: "VISION",
     oneLiner: "Papers and feeds distilled into your knowledge base.",
     glyph: "research-digest",
-  },
-  {
-    id: "resume",
-    name: "Resume",
-    status: "SHIPPED",
-    oneLiner: "Your tracked work becomes an honest resume.",
-    glyph: "resume",
   },
   {
     id: "finance",

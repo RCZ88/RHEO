@@ -130,7 +130,7 @@ export function NodeSourcesPanel({ nodeId, open, onClose }: NodeSourcesPanelProp
         )}
 
           {sources.map(src => (
-            <div key={src.id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+            <div key={src.id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-3">
               {editing === src.id ? (
                 <div className="space-y-2">
                   <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}

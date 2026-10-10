@@ -23,7 +23,7 @@ export interface MemoryDraft {
 }
 
 const inputClass =
-  'h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-600'
+  'h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-600'
 
 const labelClass = 'mb-1.5 block text-[11px] uppercase tracking-wider text-zinc-500'
 
@@ -93,7 +93,7 @@ export function InlineGoldForm({
               'rounded-lg border px-3 py-2 text-left text-sm transition-colors',
               kind === 'longterm'
                 ? 'border-amber-400/40 bg-amber-400/10 text-amber-100'
-                : 'border-zinc-800 bg-zinc-950/40 text-zinc-400'
+                : 'border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40 text-zinc-400'
             )}
           >
             Long-term branch
@@ -106,7 +106,7 @@ export function InlineGoldForm({
               'rounded-lg border px-3 py-2 text-left text-sm transition-colors',
               kind === 'daily'
                 ? 'border-amber-400/40 bg-amber-400/10 text-amber-100'
-                : 'border-zinc-800 bg-zinc-950/40 text-zinc-400'
+                : 'border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40 text-zinc-400'
             )}
           >
             Daily goal
@@ -280,7 +280,7 @@ export function InlineMemoryForm({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Optional — why this moment matters."
-          className="min-h-20 w-full resize-none rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-600"
+          className="min-h-20 w-full resize-none rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-600"
         />
       </div>
 

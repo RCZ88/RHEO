@@ -106,7 +106,7 @@ export function WeeklyScheduleCard({ weekOffset = 0 }: WeeklyScheduleCardProps) 
                     <span className="dk-weekly-block-title">{s.title}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteEntry(s.id) }}
-                      className="ml-auto opacity-0 group-hover/block:opacity-100 transition-opacity text-zinc-500 hover:text-red-400 flex-shrink-0 light:text-stone-400"
+                      className="ml-auto opacity-0 group-hover/block:opacity-100 transition-opacity text-zinc-500 hover:text-red-400 flex-shrink-0 light:text-[var(--text-secondary)]"
                       title="Delete entry"
                     >
                       <Trash2 size={10} />
@@ -123,27 +123,27 @@ export function WeeklyScheduleCard({ weekOffset = 0 }: WeeklyScheduleCardProps) 
                       placeholder="Entry title..."
                       autoFocus
                       onKeyDown={e => { if (e.key === 'Enter') handleAddEntry(col.dayIdx); if (e.key === 'Escape') setAddingDay(null) }}
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: '#e4e4e7', outline: 'none', width: '100%' }}
+                      style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: '#e4e4e7', outline: 'none', width: '100%' }}
                     />
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       <input
                         type="time"
                         value={newEntry.start_time}
                         onChange={e => setNewEntry(p => ({ ...p, start_time: e.target.value }))}
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '2px 4px', fontSize: 10, color: '#a1a1aa', outline: 'none', width: 'fit-content' }}
+                        style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '2px 4px', fontSize: 10, color: '#a1a1aa', outline: 'none', width: 'fit-content' }}
                       />
                       <span style={{ fontSize: 10, color: '#52525b' }}>-</span>
                       <input
                         type="time"
                         value={newEntry.end_time}
                         onChange={e => setNewEntry(p => ({ ...p, end_time: e.target.value }))}
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '2px 4px', fontSize: 10, color: '#a1a1aa', outline: 'none', width: 'fit-content' }}
+                        style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '2px 4px', fontSize: 10, color: '#a1a1aa', outline: 'none', width: 'fit-content' }}
                       />
                     </div>
                     <select
                       value={newEntry.category}
                       onChange={e => setNewEntry(p => ({ ...p, category: e.target.value }))}
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '3px 6px', fontSize: 10, color: '#a1a1aa', outline: 'none' }}
+                      style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '3px 6px', fontSize: 10, color: '#a1a1aa', outline: 'none' }}
                     >
                       {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -151,13 +151,13 @@ export function WeeklyScheduleCard({ weekOffset = 0 }: WeeklyScheduleCardProps) 
                       <button
                         onClick={() => handleAddEntry(col.dayIdx)}
                         disabled={!newEntry.title.trim()}
-                        style={{ flex: 1, padding: '4px 0', borderRadius: 4, fontSize: 10, fontWeight: 600, background: newEntry.title.trim() ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: newEntry.title.trim() ? '#22d3ee' : '#52525b', border: 'none', cursor: newEntry.title.trim() ? 'pointer' : 'default' }}
+                        style={{ flex: 1, padding: '4px 0', borderRadius: 4, fontSize: 10, fontWeight: 600, background: newEntry.title.trim() ? 'rgba(34,211,238,0.15)' : 'var(--dk-chip-edge)', color: newEntry.title.trim() ? '#22d3ee' : '#52525b', border: 'none', cursor: newEntry.title.trim() ? 'pointer' : 'default' }}
                       >
                         Add
                       </button>
                       <button
                         onClick={() => setAddingDay(null)}
-                        style={{ padding: '4px 8px', borderRadius: 4, fontSize: 10, background: 'rgba(255,255,255,0.04)', color: '#71717a', border: 'none', cursor: 'pointer' }}
+                        style={{ padding: '4px 8px', borderRadius: 4, fontSize: 10, background: 'var(--dk-chip-edge)', color: '#71717a', border: 'none', cursor: 'pointer' }}
                       >
                         <X size={10} />
                       </button>
@@ -167,9 +167,9 @@ export function WeeklyScheduleCard({ weekOffset = 0 }: WeeklyScheduleCardProps) 
                   <button
                     onClick={() => setAddingDay(col.dayIdx)}
                     className="dk-weekly-add-btn"
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 4, fontSize: 10, color: '#52525b', background: 'transparent', border: '1px dashed rgba(255,255,255,0.08)', cursor: 'pointer', width: '100%', justifyContent: 'center', transition: 'all 0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 4, fontSize: 10, color: '#52525b', background: 'transparent', border: '1px dashed var(--dk-chip-edge)', cursor: 'pointer', width: '100%', justifyContent: 'center', transition: 'all 0.15s' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(34,211,238,0.3)'; e.currentTarget.style.color = '#22d3ee' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#52525b' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--dk-chip-edge)'; e.currentTarget.style.color = '#52525b' }}
                   >
                     <Plus size={10} /> Add
                   </button>

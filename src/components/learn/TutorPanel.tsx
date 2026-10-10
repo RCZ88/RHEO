@@ -211,7 +211,7 @@ export function TutorPanel({ open, onToggle, nodeId, question, onQuestionChange,
       animate={{ width: 320, opacity: 1 }}
       exit={{ width: 0, opacity: 0 }}
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      className="shrink-0 border-l border-zinc-800 bg-zinc-900/30 flex flex-col overflow-hidden"
+      className="shrink-0 border-l border-zinc-800 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] flex flex-col overflow-hidden"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
@@ -230,7 +230,7 @@ export function TutorPanel({ open, onToggle, nodeId, question, onQuestionChange,
       </div>
 
       {tutorConfig && (
-        <div className="px-4 py-1.5 border-b border-zinc-800/50 bg-zinc-900/40 shrink-0">
+        <div className="px-4 py-1.5 border-b border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] shrink-0">
           <p className="text-[10px] text-zinc-500 flex items-center gap-1.5">
             <span className="w-1 h-1 rounded-full bg-emerald-500/60" />
             Powered by <span className="text-zinc-400 font-medium">{tutorConfig.provider}</span> · <span className="text-zinc-400 font-medium">{tutorConfig.model}</span>

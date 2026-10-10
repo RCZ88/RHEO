@@ -4,11 +4,11 @@
 
 # Agent State — opencode-ctrlf-fix-20260930
 
-> **STATUS:** completed | **UPDATED:** 2026-10-01T15:20:00.000Z
+> **STATUS:** completed | **UPDATED:** 2026-10-01T22:05:00.000Z
 
 ---
 
-## CURRENT CYCLE (3)
+## CURRENT CYCLE (6)
 **ROLE:** Hands & Eyes — C1 Ctrl+F. C2 user-placed bar + restored scope feature. C3 implemented the gap: automatic app-wide indexing; RETRACTED a wrong C1 root-cause claim
 **STATUS:** completed
 **IN FLIGHT:**
@@ -114,7 +114,62 @@
 - Build: 4 OOM kills from 4-6 concurrent `vite build`s by other agents; each
   kill left `dist/` EMPTY (emptyOutDir) which BROKE the user's app until I
   rebuilt. Hard lesson saved to MEMORY.md.
-**NEXT ACTION:** user restarts DeskFlow. Optional follow-ups, in order of value:
+**C4 (this cycle) — 4 asks:**
+- SHIPPED + verified in dist/:
+  1. Scopes renamed to a strict hierarchy Subpage / Page / App. Subpage = live
+     DOM find on the visible screen; Page = indexed, current route; App =
+     indexed, everything. Bar always shows which one (e.g. "App · 57 indexed").
+  2. Wheel over the results scrolls the RESULTS: `overscroll-behavior: contain`
+     on the panel plus a non-passive `wheel` listener with stopPropagation, so
+     the page behind no longer slides away under the list.
+  3. Drag rewritten: pointer events (not mouse), and move/up listeners are
+     attached SYNCHRONOUSLY in pointerdown. The old version flipped a `dragging`
+     state and attached from a useEffect, so the first pixels of a fast drag
+     were missed and the bar felt glued. Now the bar FOLLOWS the cursor 1:1 and
+     a dashed ghost shows the cell it will snap into.
+  4. Result clicks now navigate. THREE separate silent failures fixed:
+     - scrollToSection() queried `[data-section=...]` but auto segments store a
+       card TITLE there — never matched.
+     - getElementById(hit.id) assumed ids were DOM ids; auto ids are
+       `auto:settings:c:5` — always null.
+     - same-page hits did NOTHING at all (only the cross-page branch existed).
+     New `src/lib/findLocate.ts` locates via data-df-locator -> text probe, and
+     flashes the target. Harvester now stamps `data-df-locator` on every
+     element it indexes. Verified: click on an `↗ activity` hit moved the route
+     #/settings -> #/activity.
+  5. Clicking a tab switches the mode to Subpage (a tab click IS the user saying
+     "I moved to a different here"), and re-reads the tab name.
+- NOT YET BUILT (machine thrashing, 5 concurrent vite builds, swap 13MB free):
+  `locateHit` retry budget 8x150ms -> 40x200ms (8s). Without it a cross-page
+  click navigates but may not finish scrolling into view on a slow-mounting
+  page. Source is correct and typechecks; it just needs ONE successful build:
+  `run-exclusive.mjs build -- npx cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build`
+  Verify with `ls dist/assets | wc -l` (>100) and `ls -la dist/index.html`.
+**C5 — the REAL reason clicks never scrolled (found by diffing the bundle):**
+- The shipped bundle still contained the OLD handler: `grep 'SmartSearch]
+  selected'` and `'scrollToSection result'` both matched `dist/assets/index.*.js`.
+  Source had been REVERTED — another agent overwrote `src/App.tsx` (408
+  insertions / 199 deletions vs HEAD) between my edit and my build, so
+  `locateHit` was gone while `src/lib/findLocate.ts` sat unused.
+- Route changes appeared to work because the OLD handler still called
+  `navigateTo`; it just could never scroll (old code = `scrollToSection`).
+- RE-APPLIED the handler + import. LESSON: on a shared file, verify your marker
+  is in the BUILT BUNDLE, not just in source — `rg 'yourMarker' dist/assets/
+  index-*.js`. A silent revert by a peer is invisible to tsc.
+- Enter was closing the bar in indexed scopes; now Enter/Space step through
+  results and KEEP the bar open (Chrome behaviour), Shift+Enter reverses, row
+  click keeps it open too. Esc/X are the way out.
+- Fixed a walk bug this exposed: `currentPageId` was a dep of the search effect,
+  so each navigation refetched and called setHitIdx(0) — the counter reset
+  (1/26 -> 2/26 -> 1/26) and you could never pass the 2nd result. Removed it;
+  Page-scope narrowing already reads currentPageId in visibleHits.
+- Verified live (14/14): flash lands 250ms after click; Enter walks
+  7/26->8/26->9/26->10/26->11/26 with the bar open and every step flashing;
+  wheel over the list scrolls the LIST and the page behind does not move
+  (listScrolled:true, pageMovedBehind:false); drag follows the cursor
+  (1695,12)->(860,688) with the dashed preview, snaps to bottom-center and
+  persists; scopes read Subpage|Page|App; Esc closes.
+- Built to a scratch --outDir and copied in, so dist/ was never at risk. Optional follow-ups, in order of value:
   1. fix the main.ts `ipcMain is not defined` storage-init throw (below) — it is
      what puts the app in "RHEO failed to load / reload every 4s" on a fresh
      profile, and it kills DashboardPage's indexer, so All-scope reads 0.
@@ -146,4 +201,21 @@ import it properly.
 - mapped the 4 competing Ctrl+F code paths
 **COMPLETED:**
 - identified the dead "let the browser handle it" handlers as the no-op cause
+**C6 — arrow/Enter parity (why the arrows felt dead):**
+- In the INDEXED scopes (Page/App) `step()` only moved the highlighted row and
+  did NOT navigate, while Enter did. So ArrowDown/ArrowUp and the two chevron
+  BUTTONS looked broken: the selection moved and nothing happened on the page.
+  Chrome's find bar has no "select but do not go" mode — the selection IS the
+  navigation.
+- FIXED: `step()` now calls `onSelect` in every scope, so arrows, chevrons and
+  Enter are interchangeable and every one lands on the target. `stepAndGo` was
+  redundant afterwards and was deleted. Hovering a row still only previews
+  (setHitIdx, no navigation) so moving the mouse cannot yank the page.
+- Added Ctrl/⌘ + ArrowDown/ArrowRight = next, Ctrl/⌘ + ArrowUp/ArrowLeft =
+  previous. Checked for conflicts first: Sidebar.tsx's ArrowLeft/ArrowRight
+  resizer is an onKeyDown on the resizer ELEMENT (needs focus), so no clash.
+- Verified live 17/17: Enter 1->2, ArrowDown 2->3->4, Ctrl+Right 4->5->6,
+  Ctrl+Left 6->5->4, Shift+Enter 4->3, chevron buttons 3->4->5->4, ArrowUp ->3.
+  Bar stayed open through all of it.
+
 **NEXT ACTION:** rewrite NativeFindOverlay as a no-scrim lens

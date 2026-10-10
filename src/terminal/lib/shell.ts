@@ -425,6 +425,43 @@ function runSingle(rawSeg: string, ctx: Ctx): Single {
   }
 }
 
+/**
+ * Commands whose output is PROCESS or MEMORY FACT.
+ *
+ * These must never be simulated. An AI agent diagnosing a slow or
+ * memory-hungry session reaches for `ps`, `free`, `top`, `pgrep` and
+ * `nvidia-smi` first, and a simulated response is worse than no response: it
+ * invents PIDs, invents per-process CPU percentages, and invents free memory.
+ * The previous code returned hardcoded strings for all of them from the DEMO
+ * path, and `demoMode` defaults to TRUE (useConsoleStore.ts:166), so a freshly
+ * opened Penguin Console was handing out fabricated diagnostics by default.
+ *
+ * In demo mode these are therefore delegated to the real system. Everything
+ * else (ls, tree, cowsay, neofetch, ...) is still simulated -- a fake directory
+ * listing is harmless, a fake process table is not.
+ */
+const FACT_COMMANDS = new Set([
+  'ps', 'free', 'pgrep', 'pidof', 'top', 'htop', 'btop',
+  'nvidia-smi', 'vmstat', 'iostat', 'swapon', 'uptime', 'lsof', 'fuser',
+]);
+
+/** Extract the command name, unwrapping sudo and `a && b` / pipes. */
+function baseCommand(raw: string): string {
+  let cmd = raw.trim().split(/\s*&&|\s*\|\|/)[0]?.trim().split('|')[0]?.trim().split(/\s+/)[0]?.toLowerCase() || '';
+  if (cmd === 'sudo') {
+    const inner = raw.trim().slice(4).trim();
+    return inner ? baseCommand(inner) : '';
+  }
+  return cmd;
+}
+
+/**
+ * Commands that need a TTY. A Console pane runs commands through
+ * `terminal:exec`, which spawns with stdin closed, so these would otherwise
+ * hang until the 20 s timeout and then be SIGKILLed -- returning nothing usable.
+ */
+const NEEDS_TTY = new Set(['top', 'htop', 'btop', 'vim', 'vi', 'nvim', 'nano', 'emacs', 'less', 'man', 'ssh', 'tmux', 'screen', 'watch', 'pstree', 'journalctl']);
+
 const SPECIAL_COMMANDS = new Set(["theme", "stats", "mcp", "workspace", "ws", "exit", "logout", "clear", "reset", "__CLEAR__", "__THEME__", "__STATS__", "__MCP__", "__WORKSPACE__", "__CLOSE_PANE__"]);
 
 async function callTerminalExec(command: string, cwd: string, env: Record<string, string> = {}): Promise<{ stdout: string; stderr: string; code: number; timedOut: boolean }> {
@@ -453,11 +490,32 @@ function isSpecialCommand(raw: string): boolean {
   return false;
 }
 
+/** True for commands whose output is process/memory FACT and must never be simulated. */
+export function isFactCommand(raw: string): boolean {
+  return FACT_COMMANDS.has(baseCommand(raw));
+}
+
 export async function execShellReal(raw: string, cwd: string, env: Record<string, string> = {}): Promise<ExecResult> {
   const t0 = performance.now();
   const cmd = raw.trim();
   const base: ExecResult = { lines: [], newCwd: cwd, exitCode: 0, durationMs: 4 };
   if (!cmd) return base;
+
+  // Interactive/TTY commands cannot work here (stdin is closed), and would hang
+  // until the exec budget expires. Say why, and offer the non-interactive form.
+  const ttyless = baseCommand(cmd);
+  if (NEEDS_TTY.has(ttyless) && (ttyless === 'top' || ttyless === 'htop' || ttyless === 'btop' || ttyless === 'pstree' || ttyless === 'watch')) {
+    const alt = ttyless === 'top' || ttyless === 'htop' || ttyless === 'btop'
+      ? 'try: ps aux --sort=-%cpu | head -20   (or: cat /proc/loadavg)'
+      : 'this pane runs commands without a TTY';
+    return {
+      lines: [
+        { type: 'error', text: `${ttyless} needs an interactive terminal; Console panes execute commands without one.` },
+        { type: 'success', text: alt },
+      ],
+      newCwd: cwd, exitCode: 0, durationMs: Math.max(4, Math.round(performance.now() - t0)),
+    };
+  }
 
   if (isSpecialCommand(cmd)) {
     return { ...execShell(cmd, cwd, env), durationMs: Math.round(performance.now() - t0) };
@@ -522,6 +580,9 @@ export async function execShellReal(raw: string, cwd: string, env: Record<string
 }
 
 export function execShell(raw: string, cwd: string, env: Record<string, string> = {}, opts: ExecOpts = {}): ExecResult {
+  // Synchronous signature, so the async real-delegation cannot happen here.
+  // The caller (useConsoleStore.ts:302) routes FACT_COMMANDS to execShellReal
+  // before reaching this function -- see isFactCommand() and its use there.
   const t0 = performance.now();
   const cmd = raw.trim();
   const base: ExecResult = { lines: [], newCwd: cwd, exitCode: 0, durationMs: 4 };

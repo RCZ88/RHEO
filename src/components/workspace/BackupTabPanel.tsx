@@ -288,7 +288,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
           <select
             value={autoBackupInterval}
             onChange={(e) => handleSchedule(Number(e.target.value))}
-            className="bg-zinc-900/60 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/40"
+            className="bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/40"
           >
             {INTERVAL_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -340,7 +340,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden border-b border-zinc-800/40"
               >
-                <div className="flex items-center gap-2 p-2 bg-zinc-900/40">
+                <div className="flex items-center gap-2 p-2 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
                   <span className="text-xs text-zinc-400">{selectedIds.size} selected</span>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -387,7 +387,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
                     group flex items-center gap-2 p-2.5 rounded-lg cursor-pointer transition-all
                     ${selectedBackup?.id === backup.id
                       ? 'bg-pink-500/10 border border-pink-500/20'
-                      : 'bg-zinc-900/40 border border-transparent hover:bg-zinc-800/40 hover:border-zinc-700/40'}
+                      : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-transparent hover:bg-zinc-800/40 hover:border-zinc-700/40'}
                   `}
                 >
                   <input
@@ -395,7 +395,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
                     checked={selectedIds.has(backup.id)}
                     onChange={() => toggleSelection(backup.id)}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 accent-pink-500 shrink-0"
+                    className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] accent-pink-500 shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -473,7 +473,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
 
               <BackupDiffViewer diff={diff} isLoading={isDiffing} />
 
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-4">
+              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <FolderTree className="w-4 h-4 text-zinc-400" />
                   <h3 className="text-sm font-semibold text-zinc-200">File Tree</h3>
@@ -509,7 +509,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+              className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
@@ -555,7 +555,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
+              className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
@@ -597,7 +597,7 @@ export function BackupTabPanel({ projectId, projectPath }: BackupTabPanelProps) 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/60 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
+              className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">

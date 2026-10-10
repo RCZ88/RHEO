@@ -65,7 +65,7 @@ export function VoiceFloatingPanel({
           <div
             className={`
               rounded-xl p-3
-              bg-zinc-900/95 backdrop-blur-xl
+              bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl
               border border-zinc-700/50
               shadow-xl shadow-black/20
               ${isError ? 'border-red-500/30' : ''}

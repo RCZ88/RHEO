@@ -170,7 +170,7 @@ export function FinChartBlock({ block, onAsk }: Props) {
       {error && (
         <div className="text-red-400 text-sm">
           <div>{error}</div>
-          <pre className="mt-2 text-xs bg-zinc-900/50 p-2 rounded overflow-x-auto">{block.spec}</pre>
+          <pre className="mt-2 text-xs bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-2 rounded overflow-x-auto">{block.spec}</pre>
           <button
             onClick={() => setRetry((r) => r + 1)}
             className="mt-2 text-xs font-medium text-clay-400 hover:text-clay-300 transition"

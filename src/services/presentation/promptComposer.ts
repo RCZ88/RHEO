@@ -1,3 +1,4 @@
+import { MODES } from './modeRegistry';
 // Prompt Composer — Converts content into structured slide plans
 // Follows RESULT.md spec: content → PlannedSlide[] → compiled prompt
 

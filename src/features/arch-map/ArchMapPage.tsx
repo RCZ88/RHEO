@@ -102,10 +102,52 @@ export default function ArchMapPage() {
   const loadMap = useCallback(async (force = false) => {
     setLoading(true);
     try {
-      const data = await (window as any).deskflowAPI?.archMap?.generate({ force });
-      if (data) setMapData(data);
+      const res = await (window as any).deskflowAPI?.archMap?.generate({ force });
+
+      // THE BUG: `archMap:generate` in main.ts:22785 returns
+      //   { success: true, data: { nodes, edges, stats } }
+      // but this used to do `setMapData(data)` — storing the WRAPPER. So
+      // `mapData.nodes` was ALWAYS undefined and the first `.filter` threw
+      // `Cannot read properties of undefined (reading 'filter')` on every
+      // single load. The page was not intermittently broken; it never worked.
+      //
+      // DEFAULT_SYSTEM_PROMPT.md §5c documents the return as `{ nodes, edges,
+      // stats }`, so the two sides genuinely disagree. Accept BOTH shapes
+      // rather than picking a winner: normalising here fixes the crash without
+      // changing an IPC contract that other code (or a future fix to main.ts)
+      // may still depend on.
+      if (res?.success === false) {
+        console.warn('arch-map:generate reported failure:', res?.error);
+        setMapData(null);
+        return;
+      }
+      const map = res?.data ?? res;
+      if (map && Array.isArray(map.nodes)) {
+        // NORMALISE ONCE, HERE, AT THE ONLY WRITE SITE.
+        //
+        // Guarding each read site is the wrong shape: there are six of them and
+        // a seventh arrives with every feature request, and `mapData?.nodes.find`
+        // shows why — the optional chain protects `mapData` but NOT `nodes`, so
+        // it still throws one token later. If `mapData` is only ever assigned a
+        // fully-formed object, every reader is safe by construction and no
+        // reader needs a guard at all.
+        setMapData({
+          ...map,
+          nodes: map.nodes,
+          edges: Array.isArray(map.edges) ? map.edges : [],
+          stats: map.stats ?? {},
+        });
+      } else {
+        // Malformed payload: degrade to empty instead of crashing the page on
+        // the next `.filter`. A guard on the OBJECT is not a guard on its
+        // fields — this is the same trap as the AFK threshold and the
+        // rankings UTC/local bugs in MEMORY.md.
+        console.warn('arch-map:generate returned no nodes array', map);
+        setMapData(null);
+      }
     } catch (e) {
       console.warn('arch-map:generate failed', e);
+      setMapData(null);
     } finally {
       setLoading(false);
     }
@@ -115,7 +157,10 @@ export default function ArchMapPage() {
 
   const filteredNodes = useMemo(() => {
     if (!mapData) return [];
-    let nodes = mapData.nodes;
+    // Guard the ARRAY, not just the wrapper. `if (!mapData)` passes happily
+    // when mapData exists but carries no nodes, and the next line throws.
+    let nodes = Array.isArray(mapData.nodes) ? mapData.nodes : [];
+    if (!nodes.length) return [];
     if (search) {
       const q = search.toLowerCase();
       nodes = nodes.filter((n) =>
@@ -134,9 +179,9 @@ export default function ArchMapPage() {
   const services = useMemo(() => filteredNodes.filter((n) => n.type === 'service'), [filteredNodes]);
 
   const getConnectedNodes = useCallback((nodeId: string) => {
-    if (!mapData) return [];
+    if (!mapData || !Array.isArray(mapData.nodes)) return [];
     const connected = new Set<string>();
-    for (const edge of mapData.edges) {
+    for (const edge of (Array.isArray(mapData.edges) ? mapData.edges : [])) {
       if (edge.from === nodeId) connected.add(edge.to);
       if (edge.to === nodeId) connected.add(edge.from);
     }
@@ -144,7 +189,7 @@ export default function ArchMapPage() {
   }, [mapData]);
 
   const getNodeEdges = useCallback((nodeId: string) => {
-    if (!mapData) return [];
+    if (!mapData || !Array.isArray(mapData.edges)) return [];
     return mapData.edges.filter((e) => e.from === nodeId || e.to === nodeId);
   }, [mapData]);
 
@@ -158,7 +203,7 @@ export default function ArchMapPage() {
   };
 
   const typeCounts = useMemo(() => {
-    if (!mapData) return {};
+    if (!mapData || !Array.isArray(mapData.nodes)) return {};
     const counts: Record<string, number> = {};
     for (const n of mapData.nodes) {
       counts[n.type] = (counts[n.type] || 0) + 1;
@@ -193,7 +238,7 @@ export default function ArchMapPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => loadMap(true)} disabled={loading} className="p-1.5 rounded-lg border border-zinc-700/50 bg-zinc-900/40 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 disabled:opacity-40 transition-all">
+          <button onClick={() => loadMap(true)} disabled={loading} className="p-1.5 rounded-lg border border-zinc-700/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 disabled:opacity-40 transition-all">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -207,7 +252,7 @@ export default function ArchMapPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search pages, components, features..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/50"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/50"
           />
         </div>
         <div className="flex items-center gap-1">
@@ -218,7 +263,7 @@ export default function ArchMapPage() {
               <button
                 key={type}
                 onClick={() => setSelectedType(selectedType === type ? null : type)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] border transition-all ${selectedType === type ? `${colors.bg} ${colors.border} ${colors.text}` : 'border-zinc-700/30 bg-zinc-900/30 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'}`}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] border transition-all ${selectedType === type ? `${colors.bg} ${colors.border} ${colors.text}` : 'border-zinc-700/30 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'}`}
               >
                 <Icon className="w-3 h-3" />
                 {count}
@@ -235,9 +280,9 @@ export default function ArchMapPage() {
           {pages.map((page) => {
             const colors = NODE_COLORS.page;
             const isExpanded = expandedPages.has(page.id);
-            const pageChildren = mapData?.edges
+            const pageChildren = (Array.isArray(mapData?.edges) ? mapData.edges : [])
               .filter((e) => e.from === page.id && e.type === 'render')
-              .map((e) => mapData.nodes.find((n) => n.id === e.to))
+              .map((e) => (Array.isArray(mapData?.nodes) ? mapData.nodes : []).find((n) => n.id === e.to))
               .filter(Boolean) as ArchNode[] || [];
             const pageIpcEdges = getNodeEdges(page.id).filter((e) => e.type === 'ipc');
 
@@ -306,7 +351,7 @@ export default function ArchMapPage() {
                               <button
                                 key={child.id}
                                 onClick={() => setSelectedNode(child)}
-                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border ${cc.border} bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors text-left`}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border ${cc.border} bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-800/50 transition-colors text-left`}
                               >
                                 <CIcon className={`w-2.5 h-2.5 ${cc.icon} shrink-0`} />
                                 <span className="text-[10px] text-zinc-300 truncate">{child.name}</span>
@@ -363,7 +408,7 @@ export default function ArchMapPage() {
                   <button
                     key={comp.id}
                     onClick={() => setSelectedNode(comp)}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-violet-500/20 bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors text-left"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-violet-500/20 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-800/50 transition-colors text-left"
                   >
                     <Box className="w-2.5 h-2.5 text-violet-400 shrink-0" />
                     <span className="text-[10px] text-zinc-300 truncate">{comp.name}</span>
@@ -390,7 +435,7 @@ export default function ArchMapPage() {
                   <button
                     key={svc.id}
                     onClick={() => setSelectedNode(svc)}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-amber-500/20 bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors text-left"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-amber-500/20 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-800/50 transition-colors text-left"
                   >
                     <Database className="w-2.5 h-2.5 text-amber-400 shrink-0" />
                     <span className="text-[10px] text-zinc-300 truncate">{svc.name}</span>
@@ -404,7 +449,7 @@ export default function ArchMapPage() {
 
         {/* Right: Detail Panel */}
         {selectedNode && (
-          <div className="w-80 shrink-0 rounded-xl border border-zinc-700/40 bg-zinc-900/60 p-3 overflow-y-auto">
+          <div className="w-80 shrink-0 rounded-xl border border-zinc-700/40 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] p-3 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 {(() => {

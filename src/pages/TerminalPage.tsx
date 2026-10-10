@@ -53,13 +53,15 @@ import PageContextPanel from '../components/PageContextPanel';
 import FeatureLogicPanel from '../components/workspace/FeatureLogicPanel';
 import ArchMapPage from '../features/arch-map/ArchMapPage';
 import { UserDictionaryPanel } from '../components/UserDictionaryPanel';
-import { HandbookWorkspace } from '../components/learn/HandbookWorkspace';
-import { HandbookReference } from '../components/learn/HandbookReference';
 import '@xterm/xterm/css/xterm.css';
 import { SelectionProvider, SelectionOverlay, SelectionToolbar, SelectionResultPanel, SelectionEngineActivator } from '../features/selection-engine';
 import { MousePointer2 } from 'lucide-react';
 import { TerminalSwitcher } from '../components/workspace/TerminalSwitcher';
-import { AgentAmbientAnimation } from '../components/terminal/AgentAmbientAnimation';
+// The old flat 2D workforce scene (AgentAmbientAnimation) is no longer mounted
+// here: WorkforcePanel replaces it with the isometric scene fed by the real
+// PTY event stream. The old scene is still reachable and unmodified at
+// src/components/terminal/AgentAmbientAnimation.tsx if it is ever wanted back.
+import { WorkforcePanel } from '../components/terminal/workforce/WorkforcePanel';
 import {
   buildWorkforceWorkers,
   summarizeWorkforce,
@@ -180,11 +182,6 @@ const SUBPAGE_LABELS: Record<string, string> = {
   'studio/skills': 'Studio / Skills',
   'studio/styles': 'Studio / Styles',
   'studio/design': 'Studio / Design',
-  'ai-gateway/status': 'AI Gateway / Status',
-  'ai-gateway/chat': 'AI Gateway / Chat',
-  'ai-gateway/providers': 'AI Gateway / Providers',
-  'ai-gateway/runs': 'AI Gateway / Runs',
-  'ai-gateway/settings': 'AI Gateway / Settings',
   'context/context': 'Context / Context',
   'context/context-maintenance': 'Context / Maintenance',
   'context/page-context': 'Context / Page Context',
@@ -240,7 +237,7 @@ function ModelSwitcher({ terminalId, agent }: { terminalId: string; agent: strin
         <ChevronDown className="w-3 h-3 opacity-70" />
       </button>
       {open ? (
-        <div className="absolute right-0 mt-1 z-50 w-56 max-h-72 overflow-auto rounded-xl bg-zinc-900 ring-1 ring-inset ring-zinc-700 shadow-none p-1">
+        <div className="absolute right-0 mt-1 z-50 w-56 max-h-72 overflow-auto rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-700 shadow-none p-1">
           <div className="flex items-center justify-between px-2 py-1 text-[10px] text-zinc-500">
             <span>{loading ? 'Detecting...' : (meta ? (meta.source === 'detected' ? 'Detected' : 'Suggested') : 'Models')}</span>
             {meta && !meta.installed ? <span className="text-amber-400">CLI not found</span> : null}
@@ -263,21 +260,56 @@ function ModelSwitcher({ terminalId, agent }: { terminalId: string; agent: strin
   );
 }
 
-function SessionResourceStats({ stats }: { stats?: { pid: number | null; alive: boolean; memMB: number; cpuPct: number; eventLoopLagMs: number; ts: number } }) {
-  if (!stats || !stats.alive) return null;
-  const laggy = stats.eventLoopLagMs > 200 || stats.cpuPct > 90;
-  const warm = !laggy && (stats.cpuPct > 60 || stats.memMB > 1500);
-  const healthColor = laggy ? 'text-red-400' : warm ? 'text-amber-400' : 'text-emerald-400';
-  const dotColor = laggy ? 'bg-red-500' : warm ? 'bg-amber-500' : 'bg-emerald-500';
-  const memLabel = stats.memMB >= 1024 ? (stats.memMB / 1024).toFixed(1) + ' GB' : Math.round(stats.memMB) + ' MB';
+function SessionResourceStats({ stats }: { stats?: {
+  pid: number | null;
+  alive: boolean;
+  /** RSS sum over the tree. Double-counts shared pages. */
+  memMB: number;
+  /** Sum of per-process PSS over the tree. Additive-correct; null until measured. */
+  pssMB?: number | null;
+  swapMB?: number | null;
+  /** Percent of ONE core, an inter-sample RATE (was a lifetime average before). */
+  cpuPct: number;
+  processCount?: number;
+  threadCount?: number;
+  state?: string;
+  eventLoopLagMs: number;
+  ts: number;
+} }) {
+  // `alive` means "not terminated". A workspace whose shell exited but whose
+  // descendants are still holding memory is NOT dead -- showing nothing would
+  // hide exactly the case worth looking at.
+  if (!stats || stats.alive === false) return null;
+  const shellGone = stats.state === 'shell_exited' || stats.state === 'orphaned' || stats.state === 'unattributed';
+  // These thresholds are reachable now. They were dead code before, because
+  // `cpuPct` came from `ps pcpu`, which is a lifetime average that decays
+  // toward zero and essentially never exceeds 90.
+  const cpuHot = stats.cpuPct > 90;
+  const laggy = stats.eventLoopLagMs > 200 || cpuHot;
+  const warm = !laggy && (stats.cpuPct > 60 || (stats.pssMB ?? stats.memMB) > 1500);
+  const memMb = stats.pssMB ?? stats.memMB;
+  const memLabel = memMb >= 1024 ? (memMb / 1024).toFixed(1) + ' GB' : Math.round(memMb) + ' MB';
+  const healthColor = shellGone ? 'text-amber-400' : laggy ? 'text-red-400' : warm ? 'text-amber-400' : 'text-emerald-400';
+  const dotColor = shellGone ? 'bg-amber-500' : laggy ? 'bg-red-500' : warm ? 'bg-amber-500' : 'bg-emerald-500';
+  const label = shellGone ? 'Shell gone' : laggy ? 'Laggy' : warm ? 'Busy' : 'Smooth';
   return (
-    <div className="flex items-center gap-2 mt-1" title={'PID ' + (stats.pid != null ? stats.pid : '?') + '  |  event-loop lag ' + Math.round(stats.eventLoopLagMs) + 'ms'}>
+    <div className="flex items-center gap-2 mt-1" title={[
+      'shell PID ' + (stats.pid != null ? stats.pid : '?'),
+      stats.state ? 'state: ' + stats.state : '',
+      stats.processCount ? stats.processCount + ' processes / ' + stats.threadCount + ' threads' : '',
+      'CPU is percent of one core over the sample interval',
+      stats.pssMB != null ? 'memory shown is PSS (shared pages divided)' : 'memory shown is RSS sum (shared pages double-counted)',
+      'event-loop lag ' + Math.round(stats.eventLoopLagMs) + 'ms is the DeskFlow main process, not this workspace',
+    ].filter(Boolean).join('  |  ')}>
       <span className={'flex items-center gap-1 text-[10px] font-medium ' + healthColor}>
         <span className={'w-1.5 h-1.5 rounded-full ' + dotColor + (laggy ? ' animate-pulse' : '')} />
-        {laggy ? 'Laggy' : warm ? 'Busy' : 'Smooth'}
+        {label}
       </span>
-      <span className="text-[10px] text-zinc-500 font-mono">{Math.round(stats.cpuPct)}% CPU</span>
-      <span className="text-[10px] text-zinc-500 font-mono">{memLabel}</span>
+      <span className="text-[10px] text-zinc-500 font-mono" title="percent of one cpu core">{Math.round(stats.cpuPct)}% CPU</span>
+      <span className="text-[10px] text-zinc-500 font-mono" title={stats.pssMB != null ? 'workspace PSS' : 'workspace RSS sum'}>{memLabel}</span>
+      {typeof stats.swapMB === 'number' && stats.swapMB > 0 && (
+        <span className="text-[10px] text-rose-400 font-mono" title="swap held by this process tree">{Math.round(stats.swapMB)} MB swap</span>
+      )}
     </div>
   );
 }
@@ -309,7 +341,7 @@ function ConfigGenerator({ agent, baseDir }: { agent: string; baseDir: string })
         <span>Configs</span>
       </button>
       {open ? (
-        <div className="absolute bottom-full mb-1 right-0 z-50 w-64 rounded-xl ring-1 ring-inset ring-zinc-700 bg-zinc-900 p-3 shadow-none">
+        <div className="absolute bottom-full mb-1 right-0 z-50 w-64 rounded-xl ring-1 ring-inset ring-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] p-3 shadow-none">
           <div className="text-[11px] font-semibold text-zinc-200 mb-2">Generate CLI configs</div>
           <div className="flex flex-col gap-1 mb-2">
             {(['project', 'global', 'custom'] as const).map((s) => (
@@ -349,7 +381,7 @@ const accentStyle = (accent: string): React.CSSProperties => ({ ['--page-accent'
 
 const WS_ICON_BTN = 'p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/80 transition-colors duration-150 active:scale-95';
 
-const WS_SELECT = 'h-7 w-full rounded-md bg-zinc-900 border border-zinc-800/60 px-2 pr-7 text-[11px] text-zinc-200 appearance-none bg-no-repeat bg-[right_0.5rem_center] hover:border-zinc-700 focus:border-[color:var(--page-accent)]/60 focus:ring-1 focus:ring-[color:var(--page-accent)]/25 focus:outline-none transition-colors duration-150';
+const WS_SELECT = 'h-7 w-full rounded-md bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 px-2 pr-7 text-[11px] text-zinc-200 appearance-none bg-no-repeat bg-[right_0.5rem_center] hover:border-zinc-700 focus:border-[color:var(--page-accent)]/60 focus:ring-1 focus:ring-[color:var(--page-accent)]/25 focus:outline-none transition-colors duration-150';
 
 const TAB_ACTIVE: Record<string, string> = {
 	green: 'text-green-400 border-green-500', emerald: 'text-emerald-400 border-emerald-500',
@@ -424,7 +456,7 @@ function Modal({ open, onClose, title, children, footer, width = 'max-w-md' }: {
 	if (!open) return null;
 	return (
 		<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[var(--z-overlay)] flex items-center justify-center p-4" onClick={onClose}>
-			<div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={accentStyle('cyan')} className={`w-full ${width} rounded-xl border border-zinc-800/60 bg-zinc-900 animate-[ws-modal-in_250ms_cubic-bezier(0.2,0,0,1)]`}>
+			<div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={accentStyle('cyan')} className={`w-full ${width} rounded-xl border border-zinc-800/60 bg-zinc-900 light:bg-[var(--ws-surface-raised)] animate-[ws-modal-in_250ms_cubic-bezier(0.2,0,0,1)]`}>
 				<header className="flex items-center justify-between px-4 h-11 border-b border-zinc-800/60">
 					<h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
 					<button onClick={onClose} className={WS_ICON_BTN}><X className="w-4 h-4" /></button>
@@ -438,7 +470,7 @@ function Modal({ open, onClose, title, children, footer, width = 'max-w-md' }: {
 
 function SectionCard({ accent, title, children }: { accent: string; title: string; children: React.ReactNode }) {
 	return (
-		<section style={accentStyle(accent)} className="rounded-xl ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/50 backdrop-blur-sm">
+		<section style={accentStyle(accent)} className="rounded-xl ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm">
 			<header className="flex items-center gap-1.5 px-3 h-9 border-b border-zinc-800/60">
 				<span className={`w-1.5 h-1.5 rounded-full ${ACCENT_STRIP[accent]}`} />
 				<span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{title}</span>
@@ -514,7 +546,7 @@ function WorkspacesPanel({ projectId, currentName, onLoad, onSaveCurrent }: {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="New workspace name…"
-            className="flex-1 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-green-500"
+            className="flex-1 px-2 py-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:border-green-500"
           />
           <button
             onClick={async () => { await onSaveCurrent(newName.trim() || undefined); setNewName(''); refresh(); }}
@@ -628,7 +660,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     return saved ? parseInt(saved) : 400;
   });
   const [isResizing, setIsResizing] = useState(false);
-  type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'ai-gateway' | 'context' | 'handbook';
+  type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'context';
   const [activeGroup, setActiveGroup] = useState<GroupKey>(() => {
     const saved = localStorage.getItem('terminal-activeGroup');
     return (saved as GroupKey) || 'setup';
@@ -921,6 +953,50 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     () => summarizeWorkforce(workforceWorkers),
     [workforceWorkers]
   );
+
+  // ── Workforce strip: expanded / collapsed, and WHY it matters ────────
+  // This used to be `<details open={workforceSummary.total <= 6}>`. Two real
+  // defects lived in those two attributes:
+  //
+  // 1. `<details>` HIDES its children but does not UNMOUNT them. The whole
+  //    isometric scene stayed mounted while "collapsed", so its
+  //    requestAnimationFrame loop kept running and kept calling a setState
+  //    every frame -- a full re-render of the SVG tree at 60 Hz, forever,
+  //    for something the user had closed. That is the lag.
+  // 2. `open={...}` made it a CONTROLLED attribute, so React re-applied the
+  //    count-derived value on every re-render that changed the worker count,
+  //    silently overriding the manual collapse. That is why it looked like it
+  //    could not stay closed.
+  //
+  // Now it is real conditional rendering: collapsed means the subtree is gone,
+  // so the rAF loop's cleanup runs and the cost is genuinely zero. State is the
+  // user's, persisted, and the count heuristic only ever supplies the FIRST
+  // default -- it can never override a choice already made.
+  const WORKFORCE_STRIP_KEY = 'terminal-workforce-strip-open';
+  const [workforceExpanded, setWorkforceExpanded] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(WORKFORCE_STRIP_KEY);
+      if (stored !== null) return stored === '1';
+    } catch { /* private mode / disabled storage: fall through to the default */ }
+    return true; // first visit: open, so the scene announces itself
+  });
+  // Once the user has touched it, their choice is final. `touched` is a ref
+  // rather than state so it never triggers a render.
+  const workforceChoiceMade = useRef(false);
+  useEffect(() => {
+    try { localStorage.setItem(WORKFORCE_STRIP_KEY, workforceExpanded ? '1' : '0'); } catch { /* non-fatal */ }
+  }, [workforceExpanded]);
+  // The old heuristic, kept only as the first-run default for an UNTOUCHED
+  // strip, and only downward: a huge worker count should not force the scene
+  // open over the terminals the user actually needs to see.
+  useEffect(() => {
+    if (workforceChoiceMade.current) return;
+    if (workforceSummary.total > 8) setWorkforceExpanded(false);
+  }, [workforceSummary.total]);
+  const toggleWorkforceStrip = useCallback(() => {
+    workforceChoiceMade.current = true;
+    setWorkforceExpanded((v) => !v);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
@@ -2289,7 +2365,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
 
       const activeSubtabs: Record<string, string> = {};
       try {
-        for (const key of ['setup', 'work', 'insights', 'studio', 'conductor', 'ai-gateway', 'context']) {
+        for (const key of ['setup', 'work', 'insights', 'studio', 'conductor', 'context']) {
           const v = localStorage.getItem(`workspace-subtab-${key}`);
           if (v) activeSubtabs[key] = v;
         }
@@ -2504,7 +2580,10 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     if (saveWorkspaceDebounce.current) clearTimeout(saveWorkspaceDebounce.current);
     saveWorkspaceDebounce.current = setTimeout(handleSaveWorkspace, 2000);
     return () => {
-      if (saveWorkspaceDebounce.current) clearTimeout(saveWorkspaceDebounce.current);
+      if (saveWorkspaceDebounce.current) {
+        clearTimeout(saveWorkspaceDebounce.current);
+        saveWorkspaceDebounce.current = null;
+      }
     };
   }, [propProjectId, selectedProject, sidebarWidth, activeGroup, terminalTabs, handleSaveWorkspace]);
 
@@ -2524,6 +2603,39 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
   }, [selectedSessionDetail, sessions]);
 
   const workspaceRestoredRef = useRef(false);
+
+  // Sessions change outside this component all the time — another window, the
+  // Conductor spawning a coworker, an autosave. loadSessions() only ran on mount,
+  // so anything created elsewhere stayed invisible until a manual reload. Re-read
+  // on the events that actually mutate the session table.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => { if (!cancelled) loadSessions(); };
+
+    const cleanups: Array<() => void> = [];
+    const api = window.deskflowAPI as any;
+    // Main broadcasts this when a prompt completes, and when the agent phase
+    // changes — both mean a session row moved.
+    try { cleanups.push(api?.onAiTaskUpdated?.(refresh) || (() => {})); } catch {}
+    try { cleanups.push(api?.onAgentReady?.(refresh) || (() => {})); } catch {}
+    try { cleanups.push(api?.onAgentIdle?.(refresh) || (() => {})); } catch {}
+    try { cleanups.push(api?.onAgentStatus?.(refresh) || (() => {})); } catch {}
+    // Conductor coworkorkers land as new sessions.
+    try { cleanups.push(api?.onConductorSnapshot?.(refresh) || (() => {})); } catch {}
+
+    // Belt and braces: a slow poll catches anything the events missed, and pauses
+    // while the window is hidden so it costs nothing in the background.
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      refresh();
+    }, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      for (const off of cleanups) { try { off?.(); } catch {} }
+    };
+  }, [loadSessions]);
 
   useEffect(() => {
     const wsProjectId = propProjectId || selectedProject;
@@ -2688,6 +2800,12 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
           agent: sessionInTerminal.agent,
           topic: sessionInTerminal.topic,
           workingDirectory: projects.find(p => p.id === selectedProject)?.path,
+          // CRITICAL: main defaults a missing status to 'active', so omitting it
+          // here silently re-marked every CLOSED session as live — which is why
+          // open-vs-closed could never be told apart downstream, and why a
+          // "closed" session could still look resumable-and-running.
+          status: 'completed',
+          terminalId: null,
         });
       }
       loadSessions();
@@ -2873,6 +2991,10 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
           terminalId: resolvedTerminalId,
           topic: session.topic,
           workingDirectory: proj?.path || '',
+          // Resuming re-opens the session. Without this the row keeps whatever
+          // status it had when it was closed (now 'completed'), so a live,
+          // running agent would be filtered out as closed everywhere downstream.
+          status: 'active',
         });
       }
 
@@ -3046,7 +3168,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     window.addEventListener('open-new-agent', handleOpenNewAgent);
     const handleSwitchSidebarTab = (e: CustomEvent) => {
       const tab = e.detail as string;
-      if (['setup', 'work', 'insights', 'studio', 'conductor', 'ai-gateway', 'context'].includes(tab)) {
+      if (['setup', 'work', 'insights', 'studio', 'conductor', 'context'].includes(tab)) {
         setActiveGroup(tab as GroupKey);
       }
     };
@@ -3099,10 +3221,10 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
     <PageShell page="terminal" className="flex-1 flex bg-black text-white !p-0 !space-y-0 relative overflow-hidden" data-workspace-root>
       <SelectionProvider>
       {/* Main Terminal Area */}
-      <div style={accentStyle('cyan')} className="flex-1 flex flex-col bg-zinc-950 relative">
+      <div style={accentStyle('cyan')} className="flex-1 flex flex-col bg-zinc-950 light:bg-[var(--ws-surface)] relative">
         
         {/* Terminal Tab Bar */}
-        <div className="flex items-center bg-zinc-950 border-b border-zinc-800/60 overflow-x-auto min-h-[36px]">
+        <div className="flex items-center bg-zinc-950 light:bg-[var(--ws-surface)] border-b border-zinc-800/60 overflow-x-auto min-h-[36px]">
           {(() => {
             const groups = extractGroups(terminalLayout);
             const tabToGroupMap: Record<string, number> = {};
@@ -3147,7 +3269,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-zinc-800 select-none transition-colors duration-150 ${
                     isActive
                       ? 'bg-zinc-800 text-white border-t-2 border-cyan-500'
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                      : 'bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
                   } ${isDragTarget ? 'opacity-60' : ''}`}
                 >
                   <Monitor className="w-3 h-3 text-green-500" />
@@ -3207,7 +3329,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
         </div>
 
         {/* Terminal Toolbar — Compose / Quick / Save */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950 border-b border-zinc-800/40">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950 light:bg-[var(--ws-surface)] border-b border-zinc-800/40">
           <button
             onClick={() => { setShowInstructionInput(false); setShowInstructionPanel(true); }}
             className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-xl text-[10px] font-semibold text-zinc-950 bg-green-500 hover:bg-green-400 transition-all duration-150 active:scale-95"
@@ -3223,6 +3345,8 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
           </button>
           <button
             onClick={async () => { await handleSaveWorkspace(); }}
+            aria-label="Save workspace"
+            title="Save workspace"
             className="inline-flex items-center gap-1.5 h-6 px-2 rounded-xl text-[10px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-all duration-150 active:scale-95 relative"
           >
             <Save className="w-3 h-3" />
@@ -3277,17 +3401,45 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               empty state, and it is collapsible so it never fights the terminals
               for vertical room on a short window. */}
           {workforceSummary.total > 0 && (
-            <details
-              open={workforceSummary.total <= 6}
-              className="shrink-0 border-b border-zinc-800/60 bg-zinc-950"
+            <div
+              className="shrink-0 border-b border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]"
             >
-              <summary className="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none list-none hover:bg-zinc-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--page-accent)]/60">
+              {/*
+                A real button, not a <summary>. Three reasons:
+                  - <details> does not unmount, so the scene kept animating
+                    behind a "closed" panel (see the state block above).
+                  - open={...} re-applied a count heuristic on every render
+                    and silently undid a manual collapse.
+                  - this is a toggle with a state, so it needs an accessible
+                    name and aria-expanded rather than a bare disclosure role.
+                The chevron rotates instead of swapping glyphs, so the control
+                keeps a stable optical size and does not reflow on toggle.
+              */}
+              <button
+                type="button"
+                onClick={toggleWorkforceStrip}
+                aria-expanded={workforceExpanded}
+                aria-controls="workforce-strip-panel"
+                title={workforceExpanded
+                  ? 'Hide the workforce scene — the terminal gets the space back'
+                  : 'Show the workforce scene'}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer select-none hover:bg-zinc-900/60 light:hover:bg-[var(--ws-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--page-accent)]/60"
+              >
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`w-3 h-3 shrink-0 text-zinc-600 transition-transform duration-150 ${workforceExpanded ? '' : '-rotate-90'}`}
+                />
                 <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
                   Workforce
                 </span>
                 <span className="text-[10px] text-zinc-600 tabular-nums">
-                  {workforceSummary.total} agent{workforceSummary.total !== 1 ? 's' : ''}
+                  {workforceSummary.open} open
                 </span>
+                {workforceSummary.closed > 0 && (
+                  <span className="text-[10px] text-zinc-600 tabular-nums">
+                    {workforceSummary.closed} closed
+                  </span>
+                )}
                 {workforceSummary.working > 0 && (
                   <span className="text-[10px] text-emerald-400 tabular-nums">
                     {workforceSummary.working} working
@@ -3304,32 +3456,42 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   </span>
                 )}
                 <div className="flex-1" />
-                <span className="text-[10px] text-zinc-700">collapse</span>
-              </summary>
-              <div className="px-3 pb-3">
-                <AgentAmbientAnimation
-                  sessions={sessions.map(s => ({
-                    id: s.id,
-                    agent: s.agent,
-                    status: s.status,
-                    topic: s.topic,
-                    terminalId: s.terminal_id ?? null,
-                  }))}
-                  phases={Object.fromEntries(
-                    workforceWorkers.map(w => [
-                      w.key,
-                      { phase: w.state, topic: w.topic ?? undefined },
-                    ])
-                  )}
-                  selectedSessionId={null}
-                  onSelectSession={(id) => {
-                    const w = workforceWorkers.find(x => x.key === id || x.sessionId === id);
-                    if (w?.terminalId) {
-                      setActiveTerminalId(w.terminalId);
-                      window.dispatchEvent(new CustomEvent('focus-terminal', { detail: { terminalId: w.terminalId } }));
-                    }
+                <span className="text-[10px] text-zinc-700">{workforceExpanded ? 'hide' : 'show'}</span>
+              </button>
+
+              {/* ONLY rendered while expanded. This is the whole point: an
+                  unmounted scene costs nothing -- no rAF loop, no per-frame
+                  setState, no SVG reconciliation. */}
+              {workforceExpanded && (
+              <div id="workforce-strip-panel" className="px-3 pb-3">
+                <WorkforcePanel
+                  // The isometric scene, driven by REAL classified events off
+                  // the PTY (see WorkforcePanel for the end-to-end flow). The
+                  // session list feeds only the fields that genuinely come
+                  // from a session row (tokens, cost, created_at, resume_id);
+                  // everything the worker is DOING comes from the event stream,
+                  // never from a guess.
+                  workers={workforceWorkers}
+                  sessions={sessions}
+                  className="pt-2"
+                  onFocusTerminal={(terminalId) => {
+                    setActiveTerminalId(terminalId);
+                    window.dispatchEvent(new CustomEvent('focus-terminal', { detail: { terminalId } }));
                   }}
-                  density="compact"
+                  onCloseTerminal={(terminalId) => closeTerminal(terminalId)}
+                  onResumeSession={async (sessionId) => {
+                    const s = sessions.find(x => x.id === sessionId);
+                    if (s) await handleResumeSession(s);
+                  }}
+                  // Plan §7: Conductor workers close the NODE, checkpointed
+                  // first, so the worktree is preserved — which is what lets
+                  // the confirm honestly promise "its worktree stays".
+                  onCloseConductor={async (missionId, nodeId) => {
+                    await window.deskflowAPI?.conductorCloseNode?.(missionId, nodeId, {
+                      reason: 'closed from the workforce scene',
+                      checkpointFirst: true,
+                    });
+                  }}
                 />
                 {/* Conductor roles/statuses the generic scene cannot show. */}
                 {workforceWorkers.some(w => w.conductor) && (
@@ -3354,7 +3516,8 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   </ul>
                 )}
               </div>
-            </details>
+              )}
+            </div>
           )}
           {terminalError && (
             <div className={`px-4 py-2 text-xs border-b flex items-center justify-between ${
@@ -3402,7 +3565,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
             </div>
           ))}
           {layoutLoading ? (
-            <div className="w-full h-full flex items-center justify-center bg-zinc-950">
+            <div className="w-full h-full flex items-center justify-center bg-zinc-950 light:bg-[var(--ws-surface)]">
               <LoadingState variant="spinner" />
             </div>
           ) : (
@@ -3411,7 +3574,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                 const groups = getGroupTrees(terminalLayout);
                 if (groups.length > 1) {
                   return (
-                    <div className="flex items-center gap-1 px-2 py-1 bg-zinc-950 border-b border-zinc-800/50">
+                    <div className="flex items-center gap-1 px-2 py-1 bg-zinc-950 light:bg-[var(--ws-surface)] border-b border-zinc-800/50">
                       {groups.map((_, i) => (
                         <button
                           key={i}
@@ -3514,7 +3677,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
         {/* Instruction Panel & Quick Input Overlays */}
         {showInstructionPanel && (
           <div className="absolute inset-x-0 top-[88px] bottom-0 z-[100] flex flex-col pointer-events-none">
-            <div className="pointer-events-auto mx-4 mt-2 max-h-[70vh] overflow-y-auto rounded-xl bg-zinc-900/95 ring-1 ring-inset ring-zinc-700/50 shadow-2xl shadow-black/60 backdrop-blur-md">
+            <div className="pointer-events-auto mx-4 mt-2 max-h-[70vh] overflow-y-auto rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-700/50 shadow-2xl shadow-black/60 backdrop-blur-md">
               <InstructionPanel
                 problems={allProblems}
                 requests={allRequests}
@@ -3532,7 +3695,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
 
         {showInstructionInput && (
           <div className="absolute inset-x-0 top-[88px] z-[100] flex flex-col pointer-events-none">
-            <div className="pointer-events-auto mx-4 mt-2 rounded-xl bg-zinc-900/95 ring-1 ring-inset ring-zinc-700/50 shadow-2xl shadow-black/60 backdrop-blur-md px-4 py-2">
+            <div className="pointer-events-auto mx-4 mt-2 rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-700/50 shadow-2xl shadow-black/60 backdrop-blur-md px-4 py-2">
               {quotedReferences.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2 px-0.5">
                   {quotedReferences.map((ref, i) => (
@@ -3552,7 +3715,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   ))}
                 </select>
                 <div className="flex-1 relative">
-                  <textarea ref={instructionTextareaRef} value={instructionText} onChange={(e) => setInstructionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendInstruction(); } }} rows={1} autoFocus placeholder="Type instruction... (Enter to send)" className="w-full px-3 py-1.5 bg-zinc-900/80 border border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 resize-none overflow-hidden" />
+                  <textarea ref={instructionTextareaRef} value={instructionText} onChange={(e) => setInstructionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendInstruction(); } }} rows={1} autoFocus placeholder="Type instruction... (Enter to send)" className="w-full px-3 py-1.5 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 resize-none overflow-hidden" />
                 </div>
                 <button onClick={sendInstruction} disabled={!instructionText.trim() || isSending} className="inline-flex items-center gap-1.5 h-7 px-3 rounded-xl text-[11px] font-semibold text-zinc-950 bg-green-500 hover:bg-green-400 transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
                   {isSending ? <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" /> : 'Send'}
@@ -3570,7 +3733,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
       {/* Sidebar */}
       {sidebarOpen && (
         <div 
-          className="relative shrink-0 bg-zinc-950 ws-sidebar-edge flex flex-row min-w-0 overflow-hidden"
+          className="relative shrink-0 bg-zinc-950 light:bg-[var(--ws-surface)] ws-sidebar-edge flex flex-row min-w-0 overflow-hidden"
           style={{ width: sidebarWidth }}
         >
           {/* Resize Handle */}
@@ -3680,7 +3843,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                       />
 
                       {/* ── Live Context Viewer ── */}
-                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900 overflow-hidden mt-3">
+                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900 light:bg-[var(--ws-surface-raised)] overflow-hidden mt-3">
                         <div className="flex items-center gap-1.5 mb-2 px-3 pt-3">
                           <span className={`w-1.5 h-1.5 rounded-full ${crossSessionSyncEnabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'}`} />
                           <h4 className="text-[11px] font-medium text-amber-300">Live Context</h4>
@@ -3738,7 +3901,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                       </div>
 
                       {/* ── Saved Workspaces ── */}
-                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900 overflow-hidden mt-3">
+                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900 light:bg-[var(--ws-surface-raised)] overflow-hidden mt-3">
                         <div className="flex items-center justify-between px-3 pt-3 pb-2">
                           <h4 className="text-[11px] font-medium text-orange-300">Saved Workspaces</h4>
                           <div className="flex gap-1">
@@ -3919,7 +4082,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                       ) : (
                                         <div className="space-y-1 max-h-48 overflow-y-auto">
                                           {sessionMessages.map((msg: any, i: number) => (
-                                            <div key={i} className={`px-2 py-1 rounded text-[10px] ${msg.role === 'assistant' ? 'bg-cyan-900/20 border-l-2 border-cyan-500/30' : msg.role === 'user' ? 'bg-blue-900/20 border-l-2 border-blue-500/30' : 'bg-zinc-900/50 border-l-2 border-zinc-500/30'}`}>
+                                            <div key={i} className={`px-2 py-1 rounded text-[10px] ${msg.role === 'assistant' ? 'bg-cyan-900/20 border-l-2 border-cyan-500/30' : msg.role === 'user' ? 'bg-blue-900/20 border-l-2 border-blue-500/30' : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-l-2 border-zinc-500/30'}`}>
                                               <span className="text-[9px] font-medium text-zinc-500 uppercase mr-1">{msg.role}</span>
                                               <span className="text-zinc-300">{stripAnsi(msg.content || '').slice(0, 200)}{stripAnsi(msg.content || '').length > 200 ? '...' : ''}</span>
                                             </div>
@@ -4039,7 +4202,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                   <div className="space-y-4">
                                     {sortedGroups.map(([sp, groupSessions]) => (
                                       <div key={sp}>
-                                        <div className="flex items-center gap-2 mb-2 sticky top-0 bg-zinc-900/90 backdrop-blur z-10 py-1">
+                                        <div className="flex items-center gap-2 mb-2 sticky top-0 bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] backdrop-blur z-10 py-1">
                                           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">{SUBPAGE_LABELS[sp] || sp}</span>
                                           <span className="text-[10px] text-zinc-600">{groupSessions.length} session{groupSessions.length !== 1 ? 's' : ''}</span>
                                         </div>
@@ -4052,7 +4215,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                                             return (
                                     <div key={session.id}
                                          onClick={async () => { setSelectedSessionDetail(session.id); setSessionMessages([]); try { const r = await window.deskflowAPI?.getSessionMessages?.(session.id, session.agent); if (r?.success) setSessionMessages(r.data || []); } catch {} }}
-                                         className="mb-2 p-2.5 bg-zinc-900/50 backdrop-blur-sm ring-1 ring-inset ring-zinc-800/70 rounded-xl group hover:ring-[color:var(--page-accent)]/35 hover:bg-zinc-900/70 transition-all duration-150 border-l-2 cursor-pointer"
+                                         className="mb-2 p-2.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm ring-1 ring-inset ring-zinc-800/70 rounded-xl group hover:ring-[color:var(--page-accent)]/35 hover:bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] transition-all duration-150 border-l-2 cursor-pointer"
                                          style={{ borderLeftColor: terminalInfo ? 'rgb(34 197 94 / 0.4)' : 'rgb(113 113 122 / 0.2)' }}
                                     >
                                       <div className="flex items-start justify-between">
@@ -4449,28 +4612,20 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                 { key: 'trace', icon: Activity, label: 'Trace' },
                 { key: 'budget', icon: Coins, label: 'Budget' },
                 { key: 'providers', icon: Zap, label: 'Providers' },
+                { key: 'gateway', icon: Globe, label: 'Gateway' },
                 { key: 'templates', icon: Sparkles, label: 'Templates' },
                 { key: 'settings', icon: Settings, label: 'Settings' },
               ]} storageKey="conductor" render={(sub) => {
                 return (
                   <GroupPanel accent="rose">
-                    <ConductorWorkspaceTab activeTab={sub} projectId={selectedProject || propProjectId || undefined} repoPath={propProjectPath} userBranch="main" />
-                  </GroupPanel>
-                );
-              }} />
-            )}
-
-            {activeGroup === 'ai-gateway' && (
-              <WorkspaceShell accent="cyan" tabs={[
-                { key: 'status', icon: Activity, label: 'Status' },
-                { key: 'chat', icon: MessageSquare, label: 'Chat' },
-                { key: 'providers', icon: Globe, label: 'Providers' },
-                { key: 'runs', icon: Clock, label: 'Runs' },
-                { key: 'settings', icon: Settings, label: 'Settings' },
-              ]} storageKey="ai-gateway" render={(sub) => {
-                return (
-                  <GroupPanel accent="cyan">
-                    <AIGatewayTab activeTab={sub} />
+                    sub === 'gateway'
+                      // The AI Gateway is conductor-only: it configures the agents
+                      // the Conductor dispatches. It was a full sidebar group,
+                      // which is why it needed its own destination for something
+                      // that is really a Conductor tab. `showTabs` is off because
+                      // WorkspaceShell already draws the strip.
+                      ? <AIGatewayTab activeTab="status" showTabs={false} />
+                      : <ConductorWorkspaceTab activeTab={sub} projectId={selectedProject || propProjectId || undefined} repoPath={propProjectPath} userBranch="main" />
                   </GroupPanel>
                 );
               }} />
@@ -4522,32 +4677,6 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               }} />
             )}
 
-            {activeGroup === 'handbook' && (
-              <WorkspaceShell accent="emerald" tabs={[
-                { key: 'handbook-sections', icon: BookOpen, label: 'Sections' },
-                { key: 'handbook-reference', icon: FileText, label: 'Reference' },
-                { key: 'handbook-practice', icon: TerminalIcon, label: 'Practice' },
-              ]} storageKey="handbook" render={(sub) => {
-                switch (sub) {
-                  case 'handbook-sections': return (
-                    <GroupPanel accent="emerald">
-                      <HandbookWorkspace />
-                    </GroupPanel>
-                  );
-                  case 'handbook-reference': return (
-                    <GroupPanel accent="emerald">
-                      <HandbookReference />
-                    </GroupPanel>
-                  );
-                  case 'handbook-practice': return (
-                    <GroupPanel accent="emerald">
-                      <HandbookWorkspace />
-                    </GroupPanel>
-                  );
-                  default: return null;
-                }
-              }} />
-            )}
 
 
             <NewSessionDialog
@@ -4840,7 +4969,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
 
             {showMessagesViewer && (
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[var(--z-overlay)]">
-                <div className="bg-zinc-900 border border-zinc-800/60 rounded-xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
+                <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 rounded-xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
                   <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/50">
                     <div className="flex items-center gap-2.5">
                       <div className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_4px_rgba(6,182,212,0.5)]" />
@@ -4856,7 +4985,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                         value={messagesSearchQuery}
                         onChange={(e) => setMessagesSearchQuery(e.target.value)}
                         placeholder="Search messages..."
-                        className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-colors duration-150"
+                        className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-colors duration-150"
                       />
                     </div>
                   </div>
@@ -4928,7 +5057,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               value={saveDialogName}
               onChange={(e) => setSaveDialogName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveCheckpointSubmit()}
-              className="w-full bg-zinc-950 border border-zinc-800/60 rounded px-3 py-2 text-white text-sm"
+              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded px-3 py-2 text-white text-sm"
               placeholder="e.g. Fix login bug"
               autoFocus
             />
@@ -4936,12 +5065,12 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
         </div>
       </Modal>
 
-      {/* Close Workspace Dialog — LAMINAR: flat bg-zinc-900/80 + hairline, no
+      {/* Close Workspace Dialog — LAMINAR: flat bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] + hairline, no
           backdrop-blur glassmorphism on chrome. L2 motion: opacity/transform only. */}
       {showCloseWorkspaceDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-zinc-900/80 animate-in fade-in-0 duration-150"
+            className="absolute inset-0 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] animate-in fade-in-0 duration-150"
             onClick={() => { if (!isExiting) setShowCloseWorkspaceDialog(false); }}
             aria-hidden="true"
           />
@@ -4951,7 +5080,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
             aria-labelledby="close-ws-title"
             aria-describedby="close-ws-desc"
             onKeyDown={(e) => { if (e.key === 'Escape' && !isExiting) setShowCloseWorkspaceDialog(false); }}
-            className="relative w-full max-w-sm rounded-xl bg-zinc-900 border border-[var(--ws-border)] p-4 shadow-lg animate-in fade-in-0 zoom-in-95 duration-150"
+            className="relative w-full max-w-sm rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-[var(--ws-border)] p-4 shadow-lg animate-in fade-in-0 zoom-in-95 duration-150"
           >
             <h2 id="close-ws-title" className="text-base font-semibold text-zinc-100">Exit workspace</h2>
             <p id="close-ws-desc" className="mt-1 text-sm text-zinc-400">
@@ -5048,7 +5177,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
         <>
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
           <div
-            className="fixed z-50 bg-zinc-900 border border-zinc-800/60 rounded-xl py-1 min-w-[180px]"
+            className="fixed z-50 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 rounded-xl py-1 min-w-[180px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <div className="px-2.5 py-1.5 text-[10px] text-zinc-500 border-b border-zinc-800/60">Open in Terminal</div>
@@ -5095,7 +5224,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               value={workspaceSaveAsName}
               onChange={(e) => setWorkspaceSaveAsName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && workspaceSaveAsName.trim() && handleSaveWorkspace(workspaceSaveAsName.trim()).then(() => setShowWorkspaceSaveAsDialog(false))}
-              className="w-full bg-zinc-950 border border-zinc-800/60 rounded px-3 py-2 text-white text-sm"
+              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded px-3 py-2 text-white text-sm"
               placeholder="e.g. Bug fixing session"
               autoFocus
             />
@@ -5123,7 +5252,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   await handleLoadWorkspace(ws.name);
                   setShowWorkspaceLoadDialog(false);
                 }}
-                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-colors ${ws.isActive ? 'bg-green-900/30 border border-green-700/50' : 'bg-zinc-900/50 border border-zinc-800/60 hover:bg-zinc-800/80'}`}
+                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-colors ${ws.isActive ? 'bg-green-900/30 border border-green-700/50' : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 hover:bg-zinc-800/80'}`}
               >
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${ws.isActive ? 'bg-green-400' : 'bg-zinc-600'}`} />
@@ -5162,7 +5291,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
 
       {/* Collapsed sidebar strip */}
       {!sidebarOpen && (
-        <div className="h-full w-12 bg-zinc-950 ws-sidebar-edge flex flex-col items-center gap-2 py-3">
+        <div className="h-full w-12 bg-zinc-950 light:bg-[var(--ws-surface)] ws-sidebar-edge flex flex-col items-center gap-2 py-3">
           <motion.button
             whileHover={{ scale: 1.2, y: -2 }}
             whileTap={{ scale: 0.9 }}
@@ -5517,7 +5646,7 @@ function FeaturesDialog({ onClose }: { onClose: () => void }) {
 
         <div className="grid grid-cols-2 gap-4">
           {FEATURES.map((group) => (
-            <div key={group.category} className={`bg-zinc-900/50 rounded-xl p-3 border-l-2 ${categoryColors[group.color]}`}>
+            <div key={group.category} className={`bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl p-3 border-l-2 ${categoryColors[group.color]}`}>
               <h3 className="text-sm font-semibold text-white mb-3">{group.category}</h3>
               <div className="space-y-2">
                 {group.items.map((item) => (

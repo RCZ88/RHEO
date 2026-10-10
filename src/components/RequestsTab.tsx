@@ -136,7 +136,7 @@ const RequestsTab: React.FC<{ projectId?: string; projectPath?: string; onNewReq
 
       {/* Project context */}
       {(displayPath || resolvedProject) ? (
-        <div className="rounded-lg bg-zinc-900/50 ring-1 ring-zinc-800/60 px-3 py-2">
+        <div className="rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 px-3 py-2">
           <div className="text-[11px] text-zinc-300 truncate font-medium" title={displayPath}>{resolvedProject?.name || 'Project'}</div>
           <div className="text-[10px] text-zinc-600 truncate mt-0.5">agent/REQUESTS.md</div>
         </div>
@@ -173,7 +173,7 @@ const RequestsTab: React.FC<{ projectId?: string; projectPath?: string; onNewReq
                     key={request.id}
                     variants={riseItem}
                     onClick={() => setSelectedRequest(request)}
-                    className={`group relative w-full text-left rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800/60 hover:ring-zinc-700 hover:bg-zinc-900/80 transition-all duration-200 p-3 pl-4 overflow-hidden before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${PRIORITY_RAIL[request.priority] || 'before:bg-zinc-600'}`}
+                    className={`group relative w-full text-left rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:ring-zinc-700 hover:bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] transition-all duration-200 p-3 pl-4 overflow-hidden before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${PRIORITY_RAIL[request.priority] || 'before:bg-zinc-600'}`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-mono text-zinc-500">#{request.id}</span>
@@ -244,7 +244,7 @@ const RequestDetailModal: React.FC<{
       {request.description && (
         <div className="mb-4">
           <div className="text-[11px] font-medium text-zinc-500 mb-1">Description</div>
-          <div className="text-[13px] text-zinc-300 bg-zinc-950/60 ring-1 ring-zinc-800/60 p-2.5 rounded-lg">{request.description}</div>
+          <div className="text-[13px] text-zinc-300 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-2.5 rounded-lg">{request.description}</div>
         </div>
       )}
 

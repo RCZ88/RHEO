@@ -1398,6 +1398,7 @@ export const CLASSIC_IDS = [
   'tier-breakdown',
   'pinned-activities',
   'goals-card',
+  'notes-card',
   'focus-card',
   'deadlines-card',
   'schedule-hero',

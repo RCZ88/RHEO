@@ -216,7 +216,7 @@ export function GapsListModal({
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
-            className="relative flex max-h-[75vh] w-full max-w-[560px] flex-col rounded-xl border border-white/10 bg-zinc-900/60 backdrop-blur-xl"
+            className="relative flex max-h-[75vh] w-full max-w-[560px] flex-col rounded-xl border border-white/10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl"
           >
             <div className="border-b border-white/10 p-5">
               <div className="flex items-start justify-between">

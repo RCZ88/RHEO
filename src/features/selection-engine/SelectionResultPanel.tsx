@@ -102,7 +102,7 @@ function SelectionCard({ selection, onRemove }: { selection: SelectionResult; on
       className="bg-zinc-800/60 rounded-lg border border-zinc-700/50 overflow-hidden">
       <div className="flex items-center gap-2 p-2.5">
         {selection.imageDataUrl && (
-          <div className="w-12 h-12 rounded-md overflow-hidden bg-zinc-900 shrink-0 border border-zinc-700/40">
+          <div className="w-12 h-12 rounded-md overflow-hidden bg-zinc-900 light:bg-[var(--ws-surface-raised)] shrink-0 border border-zinc-700/40">
             <img src={selection.imageDataUrl} alt="Selection" className="w-full h-full object-cover" />
           </div>
         )}
@@ -156,7 +156,7 @@ function SelectionCard({ selection, onRemove }: { selection: SelectionResult; on
                   <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
                     <Code2 className="w-3 h-3" /><span className="font-semibold uppercase tracking-wider">Element</span>
                   </div>
-                  <div className="bg-zinc-900/60 rounded-md p-2 space-y-1 text-[10px] font-mono text-zinc-300">
+                  <div className="bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-md p-2 space-y-1 text-[10px] font-mono text-zinc-300">
                     <div><span className="text-zinc-500">Tag:</span> {selection.element.tagName}</div>
                     {selection.element.id && <div><span className="text-zinc-500">ID:</span> {selection.element.id}</div>}
                     {selection.element.className && <div className="truncate"><span className="text-zinc-500">Class:</span> {selection.element.className}</div>}
@@ -174,7 +174,7 @@ function SelectionCard({ selection, onRemove }: { selection: SelectionResult; on
                     <Terminal className="w-3 h-3" /><span className="font-semibold uppercase tracking-wider">AI Prompt</span>
                   </div>
                   <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)}
-                    className="w-full h-28 bg-zinc-900/60 rounded-md p-2 text-[10px] font-mono text-zinc-300 border border-zinc-700/40 outline-none focus:border-cyan-500/50 resize-none" />
+                    className="w-full h-28 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-md p-2 text-[10px] font-mono text-zinc-300 border border-zinc-700/40 outline-none focus:border-cyan-500/50 resize-none" />
                   <div className="flex gap-1.5">
                     <button onClick={handleInjectToTerminal}
                       className="flex items-center gap-1 px-2 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[9px] hover:bg-cyan-500/20 transition-colors">
@@ -198,7 +198,7 @@ function SelectionCard({ selection, onRemove }: { selection: SelectionResult; on
                   <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
                     <Image className="w-3 h-3" /><span className="font-semibold uppercase tracking-wider">Preview</span>
                   </div>
-                  <div className="bg-zinc-900/60 rounded-md p-1.5 border border-zinc-700/30">
+                  <div className="bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-md p-1.5 border border-zinc-700/30">
                     <img src={selection.imageDataUrl} alt="Preview" className="w-full rounded max-h-40 object-contain" />
                   </div>
                 </div>
@@ -242,7 +242,7 @@ export function SelectionResultPanel() {
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       className="fixed top-16 right-4 z-[210] w-72" data-selection-overlay="true">
-      <div className="bg-zinc-900/95 backdrop-blur-xl rounded-xl border border-zinc-700/80 shadow-2xl overflow-hidden">
+      <div className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl border border-zinc-700/80 shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700/50">
           <div className="flex items-center gap-2">
             <Layers className="w-3.5 h-3.5 text-amber-400" />

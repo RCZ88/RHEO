@@ -1,20 +1,39 @@
 {
   "version": 1,
   "agents": {
-    "build-31992": {
-      "id": "build-31992",
-      "startedAt": 1790855491271,
-      "task": "npx cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
-      "pid": 31992,
-      "lastHeartbeat": 1790855551345
+    "opencode-extai-20260930": {
+      "id": "opencode-extai-20260930",
+      "startedAt": 1791638044705,
+      "task": "launch external AI in user browser with prompt ready",
+      "pid": 346882,
+      "lastHeartbeat": 1791638044784
     }
   },
-  "leases": {},
-  "locks": {
-    "build": {
-      "agent": "build-31992",
-      "since": 1790855491271,
-      "ttlMs": 1200000
+  "leases": {
+    "src/services/openExternalAi.ts": {
+      "agent": "opencode-extai-20260930",
+      "since": 1791638044789
+    },
+    "src/main.ts": {
+      "agent": "opencode-extai-20260930",
+      "since": 1791638044789
+    },
+    "src/preload.ts": {
+      "agent": "opencode-extai-20260930",
+      "since": 1791638044789
+    },
+    "browser-extension/background.js": {
+      "agent": "opencode-extai-20260930",
+      "since": 1791638044789
+    },
+    "src/components/ai-bridge/BridgeForm.tsx": {
+      "agent": "opencode-extai-20260930",
+      "since": 1791638044789
+    },
+    "src/components/ai-bridge/FieldAIButton.tsx": {
+      "agent": "opencode-extai-20260930",
+      "since": 1791638044789
     }
-  }
+  },
+  "locks": {}
 }

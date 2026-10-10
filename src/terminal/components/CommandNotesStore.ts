@@ -29,7 +29,33 @@ function load(): CommandNote[] {
   } catch { return []; }
 }
 
+let _lastWriteOk = true;
+
+function write(notes: CommandNote[]): boolean {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(notes));
+    _lastWriteOk = true;
+    return true;
+  } catch (e) {
+    _lastWriteOk = false;
+    // Quota exceeded / private mode: the note is NOT saved, and the caller must
+    // be able to say so instead of rendering a success that lost the data.
+    console.error('[CommandNotes] write failed', e);
+    return false;
+  }
+}
+
+/** Bumped on every mutation so consumers can mem without re-parsing storage. */
+let _version = 0;
+const listeners = new Set<() => void>();
+export function subscribeNotes(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; }
+export function notesVersion() { return _version; }
+function bump() { _version++; listeners.forEach((fn) => fn()); }
+
 export const commandNotes = {
+  /** True when the most recent write actually reached storage. */
+  lastWriteOk(): boolean { return _lastWriteOk; },
+
   list(): CommandNote[] {
     return load().sort((a, b) => b.savedAt - a.savedAt);
   },
@@ -53,7 +79,8 @@ export const commandNotes = {
     } else {
       notes.unshift(entry);
     }
-    localStorage.setItem(LS_KEY, JSON.stringify(notes));
+    if (!write(notes)) return entry;
+    bump();
     return entry;
   },
 
@@ -62,14 +89,14 @@ export const commandNotes = {
     const i = notes.findIndex(n => n.id === id);
     if (i < 0) return false;
     notes[i] = { ...notes[i], ...patch };
-    localStorage.setItem(LS_KEY, JSON.stringify(notes));
-    return true;
+    return write(notes);
   },
 
   remove(id: string): boolean {
     const notes = load().filter(n => n.id !== id);
-    localStorage.setItem(LS_KEY, JSON.stringify(notes));
-    return true;
+    const ok = write(notes);
+    if (ok) bump();
+    return ok;
   },
 
   clear(): void {

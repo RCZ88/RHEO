@@ -61,7 +61,7 @@ function HistoricalReorderPanel({ transactions, displayCurrency, baseCurrency, o
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1 mb-1">
-        <span className="text-[10px] text-zinc-500">Drag to reorder chronological order</span>
+        <span className="fin-label">Drag to reorder chronological order</span>
         <button onClick={handleSave} disabled={!dirty || saving}
           className="text-[10px] px-2 py-0.5 rounded-full transition-colors disabled:opacity-40"
           style={{ background: dirty ? 'rgba(139,92,246,0.2)' : 'transparent', color: dirty ? '#8B5CF6' : '#71717a' }}>
@@ -614,7 +614,7 @@ export function TransactionsTab({ transactions, accounts, categories, wallets, l
             onChange={(e) => setDateStart(e.target.value)}
             className="flex-1 bg-zinc-800/40 border border-zinc-700/30 rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition-colors"
           />
-          <span className="text-[10px] text-zinc-600">to</span>
+          <span className="fin-label">to</span>
           <input
             type="date"
             value={dateEnd}
@@ -632,7 +632,7 @@ export function TransactionsTab({ transactions, accounts, categories, wallets, l
         </div>
         <div className="flex items-center gap-1.5">
           <ArrowUpDown className="w-3 h-3 text-zinc-600 shrink-0" />
-          <span className="text-[10px] text-zinc-600">Sort:</span>
+          <span className="fin-label">Sort:</span>
           {(['date', 'amount', 'name'] as const).map(s => (
             <button key={s} onClick={() => { if (sortBy === s) setSortDir(d => d === 'desc' ? 'asc' : 'desc'); else { setSortBy(s); setSortDir('desc'); } }}
               className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${sortBy === s ? 'bg-zinc-700/60 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>
@@ -805,11 +805,11 @@ export function TransactionsTab({ transactions, accounts, categories, wallets, l
                                 </span>
                               )
                             )}
-                            <span className="text-[10px] text-zinc-600">
+                            <span className="fin-label">
                               {acct?.name}
                             </span>
                             {txn.time && (
-                              <span className="text-[10px] text-zinc-600">
+                              <span className="fin-label">
                                 {txn.time}
                               </span>
                             )}
@@ -828,12 +828,12 @@ export function TransactionsTab({ transactions, accounts, categories, wallets, l
                                 if (cryptoFee) {
                                   return <span className="text-[10px] text-red-400/70">{cryptoFee}</span>;
                                 }
-                                return <span className="text-[10px] text-zinc-500">fee: {fc(txn.fee)}</span>;
+                                return <span className="fin-label">fee: {fc(txn.fee)}</span>;
                               }
                               return null;
                             })()}
                             {txn.merchant && (
-                              <span className="text-[10px] text-zinc-500">{txn.merchant}</span>
+                              <span className="fin-label">{txn.merchant}</span>
                             )}
                           </div>
                         </div>
@@ -860,7 +860,7 @@ export function TransactionsTab({ transactions, accounts, categories, wallets, l
                                     {sign}{cryptoInfo.qty.toFixed(8).replace(/\.?0+$/, '')} <span className="text-[#8B5CF6]">{cryptoInfo.symbol}</span>
                                   </p>
                                   {fiatVal > 0 && (
-                                    <p className="text-[10px] text-zinc-500 tabular-nums">
+                                    <p className="fin-label tabular-nums">
                                       ≈ {fc(fiatVal)}
                                     </p>
                                   )}
@@ -1034,7 +1034,7 @@ export function TransactionsTab({ transactions, accounts, categories, wallets, l
                             {cat && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${cat.color}15`, color: cat.color }}>{cat.name}</span>
                             )}
-                            <span className="text-[10px] text-zinc-600">{acct?.name}</span>
+                            <span className="fin-label">{acct?.name}</span>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
@@ -1058,7 +1058,7 @@ export function TransactionsTab({ transactions, accounts, categories, wallets, l
                                     {sign}{cryptoInfo.qty.toFixed(8).replace(/\.?0+$/, '')} <span className="text-[#8B5CF6]">{cryptoInfo.symbol}</span>
                                   </p>
                                   {fiatVal > 0 && (
-                                    <p className="text-[10px] text-zinc-500 tabular-nums">
+                                    <p className="fin-label tabular-nums">
                                       ≈ {fc(fiatVal)}
                                     </p>
                                   )}

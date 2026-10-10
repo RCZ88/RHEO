@@ -24,12 +24,21 @@ export default function Preloader() {
       else {
         setTimeout(() => {
           setDone(true);
+          // Release the hero choreography. While this flag is set,
+          // `html[data-preload] .hero-enter` is animation-play-state: paused, so the
+          // entrance is WATCHED rather than spent behind this cover.
+          document.documentElement.removeAttribute("data-preload");
           window.dispatchEvent(new Event("rheo-preloader-done"));
         }, 80);
       }
     };
+    // Pause the hero entrance for as long as this covers it.
+    document.documentElement.setAttribute("data-preload", "1");
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.documentElement.removeAttribute("data-preload");
+    };
   }, []);
 
   return (

@@ -175,7 +175,7 @@ export function TerminalMiniMap({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="relative w-full bg-zinc-900 rounded border border-zinc-700 overflow-hidden h-full min-h-[60px]">
+      <div className="relative w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-700 overflow-hidden h-full min-h-[60px]">
         {groupCount === 0 ? (
           <div className="flex items-center justify-center h-[100px] text-[10px] text-zinc-600">
             No terminals
@@ -240,9 +240,9 @@ export function TerminalMiniMap({
         )}
         <div className="sticky bottom-0 left-0 right-0 flex flex-col gap-1 p-1 z-20">
           <div className="flex justify-center gap-1">
-            {dropMode === 'swap' && <span className="text-[9px] text-blue-400 bg-zinc-900/80 px-2 py-0.5 rounded">Swap</span>}
-            {dropMode === 'split-v' && <span className="text-[9px] text-green-400 bg-zinc-900/80 px-2 py-0.5 rounded">Split Vertically</span>}
-            {dropMode === 'split-h' && <span className="text-[9px] text-green-400 bg-zinc-900/80 px-2 py-0.5 rounded">Split Horizontally</span>}
+            {dropMode === 'swap' && <span className="text-[9px] text-blue-400 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] px-2 py-0.5 rounded">Swap</span>}
+            {dropMode === 'split-v' && <span className="text-[9px] text-green-400 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] px-2 py-0.5 rounded">Split Vertically</span>}
+            {dropMode === 'split-h' && <span className="text-[9px] text-green-400 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] px-2 py-0.5 rounded">Split Horizontally</span>}
           </div>
           
         </div>

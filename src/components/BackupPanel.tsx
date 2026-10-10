@@ -179,7 +179,7 @@ export default function BackupPanel() {
         ) : (
           <div className="p-3 space-y-2">
             {backups.map((b, i) => (
-              <div key={b.backupFile} className="rounded-lg ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/50 backdrop-blur-sm p-2.5 group hover:ring-zinc-700/50 transition-all duration-150">
+              <div key={b.backupFile} className="rounded-lg ring-1 ring-inset ring-zinc-800/70 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm p-2.5 group hover:ring-zinc-700/50 transition-all duration-150">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

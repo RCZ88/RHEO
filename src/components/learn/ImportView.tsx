@@ -37,7 +37,7 @@ export function ImportView({ importText, setImportText, onImport, onPickFile, on
 
       <div className="space-y-6">
         {/* Worked example */}
-        <div className="p-5 rounded-xl border border-zinc-700/40 bg-zinc-900/40 backdrop-blur-sm">
+        <div className="p-5 rounded-xl border border-zinc-700/40 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-zinc-200">Start with the worked example</h3>

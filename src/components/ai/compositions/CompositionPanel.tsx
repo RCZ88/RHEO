@@ -46,13 +46,13 @@ export function CompositionPanel() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-32 rounded-xl bg-zinc-900/30 animate-pulse motion-reduce:animate-none" />
+            <div key={i} className="h-32 rounded-xl bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] animate-pulse motion-reduce:animate-none" />
           ))}
         </div>
       ) : automations.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 text-zinc-500">
           <Zap size={36} className="mb-3 opacity-20" />
-          <p className="text-[13px]">No automations yet</p>
+          <p className="text-[13px]">Nothing here yet — an automation runs itself when you set one up, so add one and it starts on its own.</p>
           <p className="text-[11px] mt-1 text-zinc-600">Ask the AI to create one, or use the visual builder</p>
         </div>
       ) : (

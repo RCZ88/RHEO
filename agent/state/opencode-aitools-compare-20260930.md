@@ -3,70 +3,84 @@
 
 # Agent State — opencode-aitools-compare-20260930
 
-> **STATUS:** completed | **UPDATED:** 2026-10-01T01:20:00.000Z
+> **STATUS:** completed | **UPDATED:** 2026-10-01T23:25:00.000Z
 
 ---
 
-## CURRENT CYCLE (1)
-**ROLE:** Make the AI Tools detail view fully comparable in DROPDOWN mode (metric switch +
-multi tool/model select + combined-vs-split chart toggle), via the PAINT pipeline.
+## CURRENT CYCLE (2)
+**ROLE:** C1 multi tool/model compare (PAINT); C2 hermes session messages; C3 timezone display
 **STATUS:** completed
 **IN FLIGHT:**
-- (none — built; awaiting human relaunch for visual confirmation)
-**COMPLETED:**
-- ROOT CAUSE (verified, not guessed): the dropdown branch (was 2443-2532) contained
-  ZERO `aiChartMode` references. It inherited whatever the page-level metric was —
-  in practice 'tokens' — and had: a stat grid hardcoded to Tokens/Input/Output/Ratio/
-  Messages/Cost, a single-dataset `<Line>` with `legend.display:false`, no `chartType`
-  branch, and no model breakdown. So `modalSelectedModels` was unreachable and the
-  detail view was structurally ONE agent: `selectedAgent` is a single `string | null`
-  and the whole view is gated on `selectedAgent && selectedAgentDetail`.
-- New module-level `AgentComparePanel` (~250 lines) rendering: Tools|Models dimension
-  toggle, 4-metric selector + All/In/Out token sub-toggle (bound to the EXISTING
-  `aiChartMode`/`tokenDisplayMode`, so dropdown and page can never disagree), 7D/30D/All
-  range, a multi-select chip row, and a Combined|Split layout toggle.
-  - Combined = N series on one axis + a ranked total/share readout (answers "who wins").
-  - Split = small multiples, one chart per series (answers "how do they differ").
-  - Fill only when a single series — overlapping fills turn to mud.
-  - ONE shared 3-sigma outlier threshold computed from the summed column, applied to
-    every series. Per-series filtering would zero a spike in one tool while an
-    identical spike in another stayed visible = a comparison that lies.
-- New `modelDailyTotals` memo aggregates each model's DAILY series across ALL tools
-  (`byTool[x].modelDaily` is nested per tool, so models were only comparable inside the
-  one tool they were picked from). `isSaneDay`-guarded, matching every other date loop.
-- `compareSelection` seeded to `[selectedAgent]` via effect; empty = "all" (matches the
-  file's existing All-sentinel idiom). Layout persisted to `localStorage`
-  (`ai-compare-layout`). "All" range spans the UNION of selected entries' dates, not
-  just the anchor tool's.
-- Dropped `backdrop-blur-xl` from the dropdown panel — it is chrome, and LAMINAR §7.3
-  makes backdrop-blur on chrome a hard-gate FAIL.
-- PAINT: answered the 4 LAYER-0 questions, called the `@bklit` MCP (Gate B) and
-  **deliberately did not adopt** `@bklit/line-chart` — it is Recharts-based and this
-  file is 100% `react-chartjs-2` across 16 render sites, so adopting it would put two
-  chart engines in one view. Series colors reuse each tool's existing identity color
-  and the frozen `MODEL_COLORS`; no palette expanded. 7 chart colors lifted to named
-  module constants so no raw hex sits in a component body.
-**NEXT ACTION:** Human relaunches the app → AI Tools → click a tool → toggle
-  Popup/Dropdown → in the dropdown use Tools|Models, the metric selector, the chip
-  multi-select and Combined|Split.
-**NOTES:** Verified `tsc` delta against the pre-change baseline by copying both
-  versions INTO the project (so module resolution + `deskflow-api.d.ts` apply) and
-  comparing error MESSAGES with line numbers stripped — line numbers shift by ~550 so
-  a naive `comm` on raw lines reports ~20 phantom "new" errors. Result: zero new
-  error classes; the only count change is `deskflowAPI` 10→11, which is (a) a harness
-  artifact and (b) from the PREVIOUS cycle's Tools Config work, not this one.
-  `heatmapEmpty` undefined and the chart.js `weight:'500'` errors are pre-existing.
-  BUILD OK (exit 0) after taking the build lock; bundle `index.BlqwVyqG.js` verified
-  to contain the empty states, the Combined/Split tooltips and `modelDailyTotals`.
+- (none — built; awaiting human relaunch + a Sync click)
+**COMPLETED — C2 hermes messages (the "only 1 message" bug):**
+- ROOT CAUSE: `get-ai-session-messages` had branches for claude-code / opencode /
+  gemini / codex and **none for hermes**, so it always fell through to
+  `return { success:true, data: [] }`. Zero messages, for any hermes session.
+- Added a hermes branch reading the `messages` table of `~/.hermes/state.db`
+  (NOT the request_dump files — those are failed requests). Verified against the
+  real DB: session `20260829_002917_d24ba8` went from **0 -> 95 messages**
+  (3 user / 45 assistant / 47 tool). `active = 1` filters rows superseded by
+  compaction (state.db has _compressed_summary/compacted); `session_meta` skipped;
+  tool payloads are raw JSON so they get a 1200-char cap vs 8000 for prose;
+  ordered `id DESC LIMIT 400` then reversed, because one session has 3,583
+  messages and ASC+LIMIT would silently drop the end of the conversation.
+- `messages.token_count` is NULL for ALL 110,040 rows -> per-message token chips
+  are intentionally left unset rather than invented. Session totals come from the
+  sessions table via ai_usage.
+- `ROLE_STYLES` only had user/assistant, so hermes `tool` rows fell through to the
+  assistant style and every tool call was mislabelled "Assistant". Added a `tool`
+  style (Wrench / "Tool").
+**COMPLETED — C3 timezone (display-only, as the user specified):**
+- ROOT CAUSE 1, measured on a real stored value `2026-08-28 17:26:03`:
+  `new Date("2026-08-28 17:26:03")` -> `10:26:03Z`, i.e. SQLite's UTC text was
+  re-read as LOCAL, landing **exactly 7 hours behind** in WIB — the reported
+  symptom. A proper UTC parse gives `17:26:03Z`.
+- ROOT CAUSE 2, worse and previously unnoticed: `ai_usage.created_at` is SQLite
+  `CURRENT_TIMESTAMP` (UTC) and is the *ingest* time, never the session time. All
+  2,205 opencode rows share `2026-08-28 17:26:03` while their real session days
+  go back to 2026-04-02 — so every row in the history list rendered as the same
+  "1 month ago". The row's primary label now shows the session's OWN day
+  (`ai_usage.date`, already local-bucketed by `getLocalDateStr`); the recorded
+  instant stays in the tooltip, correctly UTC-parsed.
+- New `src/components/ai/lib/timeDisplay.ts`: `parseUtcInstant` (SQLite space-form
+  pinned to UTC; bare `YYYY-MM-DD` anchored at LOCAL midnight so it cannot slip a
+  day west of UTC; unix s vs ms heuristic), `toDisplayInstant`,
+  formatRelativeTime / formatFullDateTime / formatDayLabel / formatOffsetLabel,
+  offset clamped to ±16h, half-hour zones render (UTC+5:30).
+- Preference `aiDisplayTimezoneOffsetMinutes` + `get/set-ai-display-timezone-offset`
+  IPC + preload + d.ts. UI: a Globe button in the AI Tools toolbar showing the
+  current label (amber when non-zero) that expands to -1h / -15m / +15m / +1h /
+  Reset. Applied to the module store first so the list re-renders instantly;
+  the preference write is persistence only.
+- NOTHING on disk is rewritten: verified `parseUtcInstant(ca)` is byte-identical
+  at every offset. Calendar-day labels are deliberately NOT offset-adjustable —
+  shifting a day label would re-bucket data that is already correct.
+**NOTES / TRAPS HIT THIS CYCLE:**
+- `datetime.fromtimestamp(sa*1000)` in a throwaway python harness produced
+  "year must be in 1..9999, not 58627" and looked like a corrupt-timestamp bug in
+  my parser. It was the HARNESS: `fromtimestamp` takes seconds, the code
+  (correctly) does `new Date(sa*1000)` because the Date ctor takes ms. hermes
+  `started_at` is sane: 0 insane of 277. Don't "fix" the real code over this.
+- Simulated the whole sync on a COPY of the live DB rather than guessing:
+  274 hermes rows, date range 2026-08-29..2026-10-01, and the global dedup at
+  main.ts ~1985 deleted **0** rows (I had flagged it as a data-loss risk last
+  cycle — measured, it does not materialise on this data). byTool then shows
+  hermes 498,368,919 tok / 274 sessions / 47,774 msgs / last=2026-10-01 /
+  $0.00, ranking 3rd above gemini; 468M in the project-scoped view; 6 models;
+  4,693,551,932 cache-read.
+- The live DB still has **0 hermes rows** — the sync is user-triggered only. A
+  relaunch + Sync is required; nothing can land rows without that.
+- Build exit 3 = REFUSED (another agent held the lock); polled and retried.
 
 ---
 
-## HISTORY (previous 2 cycles, oldest first)
+## HISTORY (previous 1 cycle, oldest first)
 
-### Cycle 0 — 2026-10-01
-**ROLE:** investigation
+### Cycle 1 — 2026-10-01
+**ROLE:** Make the AI Tools detail view fully comparable in dropdown mode
 **STATUS:** completed
-**IN FLIGHT:** — none
-**COMPLETED:** Mapped the detail view; confirmed dropdown had no metric control and
-  was single-agent by construction; read PAINT + conflict-resolution + LAMINAR §5/§7.3.
-**NEXT ACTION:** implement.
+**COMPLETED:** AgentComparePanel (Tools|Models, 4 metrics + All/In/Out, 7D/30D/All,
+  multi-select chips, Combined|Split); modelDailyTotals cross-tool memo; seeding
+  effect; shared 3-sigma outlier threshold across series; dropped backdrop-blur.
+  BUILD OK, 0 new tsc errors vs baseline. Popup branch left intact.
+**NEXT ACTION:** C2 (hermes messages) — which is this cycle.

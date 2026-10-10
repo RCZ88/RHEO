@@ -8,6 +8,10 @@
 // - Defensive error handling for tabs.get ("No tab with id")
 
 const DESKFLOW_SERVER = 'http://localhost:54321';
+const DESKFLOW_ORIGINS = [
+  'http://localhost:54321/*',
+  'http://127.0.0.1:54321/*',
+];
 const ALARM_NAME = 'deskflowSync';
 // MV3 minimum alarm period: 0.5 min (30s) for unpacked extensions, 1 min installed.
 // Values below the minimum are silently clamped by Chrome, so 0.5 is the fastest
@@ -22,6 +26,13 @@ let state = {
   activeTabUrl: '',
   activeTabTitle: '',
   activeTabDomain: '',
+  /* HALO: private/incognito window flag. Added 2026-10-08 per the Halo spec section 6,
+   * which requires "Private window -> never the domain". Only the extension can know this:
+   * Chrome reports tab.incognito and Firefox reports tab.private, and by the time a URL
+   * reaches the main process the flag is gone. Chrome deliberately does NOT expose
+   * incognito state to extensions in incognito windows themselves, so this is best-effort
+   * and the Halo must treat `false` as "unknown", not "public". */
+  activeTabIsPrivate: false,
   sessionStart: Date.now(),
   lastPeriodicSync: Date.now(),  // Track last sync time for delta calculation
   isTrackingEnabled: true,
@@ -106,14 +117,29 @@ function detectBrowserName() {
   if (ua.includes('Brave')) return 'Brave';
   // Vivaldi
   if (ua.includes('Vivaldi')) return 'Vivaldi';
+  // ── FIREFOX FAMILY (checked BEFORE the plain-Firefox test) ────────────────
+  // ORDER IS LOAD-BEARING. Zen is Firefox-based, so `ua.includes('Firefox')`
+  // is TRUE on Zen and would return first, making us report "Firefox" while
+  // the OS foreground process is called "zen". That mismatch is what stopped
+  // all capture: our own focus poll compared "zen" against Firefox aliases
+  // ["firefox"], never matched, sent is_browser_focused:false, and the desktop
+  // app rejected every payload — so the stopwatch never moved.
+  //
+  // The old Zen check used navigator.userAgentData, which is a CHROMIUM-only
+  // API and therefore always undefined here. These signals are Firefox-safe.
+  if (/\bZen\b/i.test(ua)) return 'Zen';
+
   // Firefox
   if (ua.includes('Firefox')) return 'Firefox';
-  // Zen Browser ships a near-stock Chrome UA, so the brand list is the only tell.
-  try {
-    const brands = navigator.userAgentData && navigator.userAgentData.brands
-      ? navigator.userAgentData.brands.map(b => b.brand).join(' ') : '';
-    if (/Zen/i.test(brands)) return 'Zen';
-  } catch (e) { /* userAgentData unavailable - fall through */ }
+
+  // Firefox-family derivatives that ship a stock or near-stock Firefox UA.
+  // If the UA names one of these it wins over the generic Firefox answer.
+  const FIREFOX_DERIVATIVES = ['Floorp', 'LibreWolf', 'Waterfox', 'Mullvad',
+    'Ghost', 'Basilisk', 'Netscape', 'Pale Moon', 'Zen'];
+  for (const d of FIREFOX_DERIVATIVES) {
+    if (ua.includes(d)) return d;
+  }
+
   // Chrome (generic - keep last since many browsers include Chrome)
   if (ua.includes('Chrome')) return 'Chrome';
   // Safari (keep last since some Chrome-based browsers may include Safari)
@@ -121,7 +147,7 @@ function detectBrowserName() {
   return 'Unknown';
 }
 
-const BROWSER_NAME = detectBrowserName();
+let BROWSER_NAME = detectBrowserName();
 
 // Map browser brand names to OS process names (what active-win returns)
 // Key = BROWSER_NAME return value, values = possible process names (without .exe)
@@ -133,7 +159,10 @@ const BROWSER_PROCESS_NAMES = {
   'edge': ['msedge', 'edge'],
   'opera': ['opera'],
   'vivaldi': ['vivaldi'],
-  'firefox': ['firefox'],
+  // Include the Firefox-derivative processes: we run inside Firefox, but the OS
+  // calls our process by the fork's name (e.g. "zen"), so a bare ["firefox"]
+  // list can never match the foreground app.
+  'firefox': ['firefox', 'firefox-esr', 'zen', 'zen-browser', 'zenbrowser', 'floorp', 'librewolf', 'waterfox', 'mullvad', 'basilisk', 'ghost-browser'],
   'zen': ['zen', 'zen-browser', 'zenbrowser'],
   'arc': ['arc'],
   'safari': ['safari'],
@@ -185,7 +214,12 @@ async function identifyBrowser() {
     });
     console.log('[DeskFlow] 🏷️ Identified as:', BROWSER_NAME, 'profileId:', state.profileId);
   } catch (err) {
-    console.debug('[DeskFlow] Could not identify browser to server:', err.message);
+    // Not a debug message any more: this is the exact reason the desktop app
+    // shows nothing, so it must be loud enough to find in the console.
+    console.warn('[DeskFlow] ❌ Could not reach DeskFlow at ' + DESKFLOW_SERVER
+      + ' —', err && err.message);
+    console.warn('[DeskFlow]    If this says ERR_BLOCKED_BY_CLIENT / permission,'
+      + ' grant access in about:addons → DeskFlow Browser Bridge → Permissions.');
   }
 }
 
@@ -399,6 +433,7 @@ async function logPreviousSession(force = false) {
   const data = {
     url: state.activeTabUrl,
     domain: state.activeTabDomain,
+    isPrivate: state.activeTabIsPrivate,
     title: state.activeTabTitle,
     tab_id: state.activeTabId,
     timestamp: new Date(state.sessionStart).toISOString(),
@@ -442,6 +477,7 @@ async function periodicSync() {
   const data = {
     url: state.activeTabUrl,
     domain: state.activeTabDomain,
+    isPrivate: state.activeTabIsPrivate,
     title: state.activeTabTitle,
     tab_id: state.activeTabId,
     timestamp: new Date(state.lastPeriodicSync).toISOString(),
@@ -532,6 +568,7 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
     state.activeTabUrl = sanitizeUrl(tab.url);
     state.activeTabTitle = tab.title || extractDomain(tab.url);
     state.activeTabDomain = extractDomain(tab.url);
+    state.activeTabIsPrivate = isPrivateTab(tab);
     state.sessionStart = Date.now();
     state.lastPeriodicSync = Date.now(); // Reset sync time for new page
 
@@ -593,8 +630,119 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
 // (Replaces setInterval — survives SW suspension)
 // ========================================
 
+// MV3 kills an idle service worker (~30s) and revives it on the next event.
+// onStartup() only fires on browser launch / extension install, so a worker
+// revived by its own alarm came back with NONE of the runtime rebuilt:
+//   - `state` reset to module defaults, including isBrowserFocused = TRUE
+//   - focus polling never re-armed (setInterval dies with the worker)
+//   - loadState() never ran, so state.activeTabId was null
+//     → periodicSync() early-returns and the extension goes dormant.
+// Net effect: website tracking silently stops after a short idle period and
+// never recovers on its own. This rebuilds it on every wake.
+let runtimeReady = false;
+
+/**
+ * Firefox / Zen MV3: declared `host_permissions` are OPT-IN. Chrome grants them
+ * automatically at install; Firefox does not — the user must grant them, and
+ * until they do, every fetch() to localhost:54321 is blocked. That produced the
+ * worst possible failure: the extension installs cleanly, the app never sees a
+ * single request, and nothing anywhere reports an error.
+ *
+ * Chrome ignores the result (already granted), so this is safe cross-browser.
+ * Note Firefox requires permissions.request() to come from a user gesture in
+ * some builds, so we attempt it on install AND expose the same call from the
+ * popup button as the guaranteed-working path.
+ */
+let permissionRetryTimer = null;
+
+/**
+ * Ask until we have it.
+ *
+ * Firefox-family MV3 makes host_permissions opt-in, and Chrome ignores the whole
+ * call because it already granted them. The awkward part is that
+ * permissions.request() normally needs a user gesture — which used to mean the
+ * ONLY way to grant access was the popup, i.e. the one thing a new user cannot
+ * find. That is a circular dependency.
+ *
+ * So: try without a gesture on a short retry. Several Firefox versions do accept
+ * an unprompted request from an installed (non-temporary) extension, and the
+ * install-time permission prompt itself can grant it outright. Retry a few
+ * times so we catch whichever path the browser allows, then give up quietly and
+ * let the user finish it from about:addons (a path that never needs the popup).
+ */
+function schedulePermissionRetry(attempt = 0) {
+  if (attempt >= 6) {
+    console.warn('[DeskFlow] 🔒 Still no host permission after retries. Finish it in '
+      + 'about:addons → DeskFlow Browser Bridge → Permissions → allow localhost.');
+    return;
+  }
+  if (permissionRetryTimer) clearTimeout(permissionRetryTimer);
+  const delay = Math.min(2000 * Math.pow(2, attempt), 30000); // 2s,4s,8s,16s,30s,30s
+  permissionRetryTimer = setTimeout(async () => {
+    if (await ensureHostPermissions(false)) return;
+    schedulePermissionRetry(attempt + 1);
+  }, delay);
+}
+
+async function ensureHostPermissions(interactive = false) {
+  const api = (typeof browser !== 'undefined' && browser.permissions) ? browser : chrome;
+  try {
+    const granted = await api.permissions.contains({ origins: DESKFLOW_ORIGINS });
+    if (granted) {
+      if (permissionRetryTimer) { clearTimeout(permissionRetryTimer); permissionRetryTimer = null; }
+      return true;
+    }
+    // Try regardless of `interactive`. A rejected/unavailable request is caught
+    // below; asking costs nothing and may succeed unprompted.
+    const requested = await api.permissions.request({ origins: DESKFLOW_ORIGINS })
+      .catch(() => false);
+    if (requested) {
+      console.log('[DeskFlow] 🔓 Host permissions granted — can reach DeskFlow now.');
+      if (permissionRetryTimer) { clearTimeout(permissionRetryTimer); permissionRetryTimer = null; }
+      return true;
+    }
+    if (!interactive) {
+      console.log('[DeskFlow] 🔒 Host permissions not granted (Firefox MV3 opt-in).');
+      return false;
+    }
+    return false;
+  } catch (err) {
+    console.warn('[DeskFlow] permissions API unavailable:', err && err.message);
+    return false;
+  }
+}
+
+async function ensureRuntime(reason) {
+  try {
+    // Idempotent: loadState just re-reads chrome.storage.local, and
+    // startFocusCheckPolling clears its previous interval before arming.
+    await loadState();
+    startFocusCheckPolling();
+    await ensureHostPermissions(false);
+
+    chrome.alarms.clear(ALARM_NAME);
+    chrome.alarms.create(ALARM_NAME, { periodInMinutes: SYNC_PERIOD_MINUTES });
+
+    // Re-announce on every wake. This is the heartbeat that keeps the desktop
+    // app's "connected" state truthful — without it the app can only guess,
+    // and a profile looks disconnected while the extension is working fine.
+    await identifyBrowser();
+
+    runtimeReady = true;
+    console.log(`[DeskFlow] ♻️ Runtime ready (${reason}) · tab=${state.activeTabId ?? 'none'} focused=${state.isBrowserFocused}`);
+  } catch (err) {
+    console.warn('[DeskFlow] ensureRuntime failed:', err && err.message);
+  }
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_NAME) {
+    // Unconditional, not gated on runtimeReady: this is also the heartbeat that
+    // keeps the desktop app's "connected" state truthful. Gating it would let a
+    // long-lived worker stop re-announcing, and the app would eventually show a
+    // working extension as disconnected (its TTL is 60s, the alarm is 30s).
+    // Cost is one storage read + one localhost POST per tick.
+    await ensureRuntime(runtimeReady ? 'periodic tick' : 'service worker revived');
     await periodicSync();
   }
 });
@@ -621,10 +769,11 @@ async function onStartup() {
   // 4. Start focus check polling to monitor foreground app changes
   startFocusCheckPolling();
 
-  // 5. Set up periodic sync alarm (every ~5 seconds)
-  // Clear existing alarm first to avoid duplicates on reload
+  // 5. Set up periodic sync alarm. Shared with the service-worker revive path
+  //    (ensureRuntime) so the two can never drift apart again.
   chrome.alarms.clear(ALARM_NAME);
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: SYNC_PERIOD_MINUTES });
+  runtimeReady = true;
   console.log(`[DeskFlow] ⏰ Periodic sync alarm set (every ${SYNC_PERIOD_MINUTES * 60}s)`);
 
   // 6. If we had an active tab from before SW restart, verify it still exists
@@ -661,7 +810,12 @@ async function onStartup() {
 
 // Listen for extension runtime events
 chrome.runtime.onStartup.addListener(onStartup);
-chrome.runtime.onInstalled.addListener(onStartup);
+chrome.runtime.onInstalled.addListener(async () => {
+  await ensureHostPermissions(false);
+  schedulePermissionRetry(0);
+  await onStartup();
+});
+chrome.runtime.onStartup.addListener(() => { schedulePermissionRetry(0); });
 
 // Also run on service worker wake (handles SW being killed and restarted)
 onStartup();
@@ -692,6 +846,28 @@ async function checkTabFocus(tabId, domain) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender) => {
+  // Popup → background: the only reliable way to get a Firefox MV3 host-
+  // permission grant is from a real user gesture.
+  if (msg && msg.type === 'DESKFLOW_REQUEST_PERMISSIONS') {
+    return (async () => {
+      const granted = await ensureHostPermissions(true);
+      if (granted) { await ensureRuntime('permissions granted'); await identifyBrowser(); }
+      return { ok: granted };
+    })();
+  }
+  if (msg && msg.type === 'DESKFLOW_DIAGNOSE') {
+    // Tell the popup WHY nothing is arriving, instead of a silent no-op.
+    return (async () => {
+      const granted = await ensureHostPermissions(false);
+      let reachable = false, health = null;
+      try {
+        const r = await fetch(`${DESKFLOW_SERVER}/health`, { signal: AbortSignal.timeout(2500) });
+        reachable = r.ok;
+        health = await r.json().catch(() => null);
+      } catch (e) { health = { error: e && e.message }; }
+      return { ok: granted && reachable, permissions: granted, reachable, health };
+    })();
+  }
   if (msg?.type === 'FOCUS_CHECK' && sender.tab) checkTabFocus(sender.tab.id, msg.domain);
   if (msg?.type === 'FOCUS_BREAK') focusPost('/focus-break', { domain: msg.domain });
 
@@ -856,3 +1032,19 @@ chrome.runtime.onSuspend.addListener(async () => {
   // Persist any buffered captures to the retry queue before SW dies
   if (aiContextBuffer.length) await enqueueRetry(aiContextBuffer.splice(0));
 });
+
+/**
+ * Is this tab in a private / incognito window? Best-effort.
+ *
+ * Chrome exposes `tab.incognito` and Firefox exposes `tab.private`; they are different
+ * property names for the same fact, so both are read. Returns false when neither is
+ * present rather than guessing, and the Halo must treat that as UNKNOWN.
+ *
+ * Chrome does not run most extensions inside incognito windows at all unless the user has
+ * allowed it, so in practice this flag is often simply absent - which is exactly why the
+ * Halo needs a "Browser" fallback state rather than assuming a domain is safe to show.
+ */
+function isPrivateTab(tab) {
+  if (!tab) return false;
+  return tab.incognito === true || tab.private === true;
+}

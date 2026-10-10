@@ -1,4 +1,4 @@
-# Skill Router — Universal Skill Dispatcher v1.5.0
+# Skill Router — Universal Skill Dispatcher v1.7.0
 
 > **PURPOSE:** This is the master routing table for ALL skills in `agent/skills/`. It maps every task/scenario to the correct skill(s), enforces load order, and ensures no skill is forgotten. Load this skill FIRST whenever you begin a task.
 >
@@ -124,6 +124,7 @@ User task enters
 | loaded by `paint` P4 | `font-selection` | Never invent a font |
 | RECOMMENDED | `beautiful-charts` | Chart craft: form follows the question, axis/tooltip/legend discipline |
 | RECOMMENDED | `animation-stack` | Engine selection: GSAP choreography / Anime.js single-element / Motion default. One engine per element. |
+| RECOMMENDED | `apple-design` | **Motion FEEL, not motion looks.** Apple WWDC (Designing Fluid Interfaces) translated to web: interruptibility, velocity handoff, momentum projection, rubber-banding, pointer-down feedback, reduced-motion, optical typography. ⚠ **§4 bounce and §12 translucency are OVERRIDDEN by LAMINAR** — use for §1/§2/§3/§5/§6/§7/§9/§10/§14/§15 only. Load when the user says a motion/gesture/drag/swipe/sheet *feels wrong*, not for static visual design. |
 | RECOMMENDED | `google-stitch` | When the user mentions "mockup", "Stitch", "vibe design", "DESIGN.md" |
 
 **Load order:** `paint` ONLY. It sequences everything. If you must reason manually, the
@@ -194,9 +195,10 @@ See `agent/skills/paint/references/conflict-resolution.md` for the resolved rows
 | Priority | Skill | Why |
 |----------|-------|-----|
 | MANDATORY | Probe MCP (MCP server, not a skill) | Assertion-first runtime testing: `probe_open` (attach to the running app — NEVER launch manually) → `assert_*`/`wait_for`/`snapshot`/`read_console`. If no debug port, report NOT LAUNCHED. |
+| MANDATORY | `prove-it` | The CLAIM GATE. Run before writing any verdict: mount-proof, fixture honesty, precedent-by-shape, artifact freshness, teardown. Blocks `PASS` unless all evidence is quoted. |
 | RECOMMENDED | `recursive-playwright` | If you need an autonomous test-and-fix loop (test → fail → fix → retest) |
 
-**Load order:** Probe MCP wiring → recursive-playwright (if loop needed)
+**Load order:** Probe MCP wiring → `prove-it` → recursive-playwright (if loop needed)
 
 **Important:** An IPC probe is NOT proof the UI works. Test the real UI layer. Read `[TERMINAL_DEBUG]` / `[FIT-DBG]` / `[RESUME-DBG]` logs in renderer + main console.
 
@@ -251,6 +253,29 @@ See `agent/skills/paint/references/conflict-resolution.md` for the resolved rows
 
 ---
 
+## CATEGORY: EXTERNAL AI CAPTURE & TRANSCRIPTS
+
+> Trigger: message detection, provider selectors, SSE interception, the copy button,
+> transcript storage/export, Chat Library, or the external-AI subpage.
+
+| Priority | Skill | Why |
+|----------|-------|-----|
+| MANDATORY | `ai-chat-capture` | Per-site selector + same-origin-API fact base, the three capture laws (API-first, debounce-on-stability, real roles), the Provider Adapter contract, and the transcript-UI design contract |
+| MANDATORY | `paint` | **Only if** the change touches a rendered surface (browse / open / export / navigate) |
+| RECOMMENDED | `humancentred-UIUX` | The 5 states incl. the *partial/incomplete capture* state unique to this feature |
+
+**Load order:** `ai-chat-capture` → `paint` (if any UI) → `humancentred-UIUX` (if UI).
+
+**Hard rules this category inherits (all are silent-failure classes — nothing errors, it just stops working):**
+- `chrome.*` does **not** exist in a `world: "MAIN"` content script. Guarding on `chrome.runtime.id` there aborts the whole file.
+- Every provider response is **SSE/streaming** — `clone().json()` cannot read it. Debounce on DOM *stability* (~600ms), never on presence.
+- Every major chat UI **virtualizes**; a DOM scrape silently truncates long conversations and must be labelled incomplete.
+- A partial capture must **never** overwrite a complete one (`ingestConversation` deletes-then-reinserts).
+- Never default `role: 'assistant'` — it corrupts auto-title derivation ("Untitled") for every affected thread.
+
+
+---
+
 ### TERMINAL DEBUG
 **Trigger:** "text goes to shell", "agent:ready never fires", "system prompt not received", PTY/terminal/spawn failures
 **Goal:** Diagnose and fix terminal-agent communication failures
@@ -272,6 +297,34 @@ See `agent/skills/paint/references/conflict-resolution.md` for the resolved rows
 | MANDATORY | `app-detection` | 5-layer resolver: TITLE → MAP → INDEX → SCAN → KEEP. Never run layer 4 on normal poll. |
 
 **Load order:** app-detection only (single-skill scenario)
+
+---
+
+### LABS / EXPERIMENTAL FEATURE
+**Trigger:** "add a lab", "new experimental feature", "put it in Labs", "add to the labs hub", or any edit to `src/components/labs/labRegistry.ts` or `src/pages/LabsPage.tsx`
+**Goal:** Place the feature correctly and fill every `Lab` field honestly, with a navigable affordance
+
+| Priority | Skill | Why |
+|----------|-------|-----|
+| MANDATORY | `labs-feature` | Placement decision (sidebar rail vs `/labs` vs ⌘K-only), the mandatory `Lab` fields, the `validate:pages` baseline, and the LabPlate affordance rule. |
+| MANDATORY | `paint` | Only if the lab needs NEW UI. The card component already exists — do **not** re-run the design pipeline to add a registry entry. |
+| CONDITIONAL | `impeccable` | Only if you are changing the card's own layout or styling. |
+
+**Load order:** `labs-feature` first. It answers WHERE the thing goes before any code is written.
+
+> **The two rules agents get wrong here:**
+> 1. **New ≠ experimental.** A feature built inside the app's own design system is not
+>    automatically a Lab. Speech-to-Text/Transcripts is native and does not belong in
+>    Labs merely because it is recent. Labs is for surfaces built *outside* the design
+>    system that need a native hub to be honest about.
+> 2. **A diagnostic goes in neither the rail nor Labs** — ⌘K registry only. Putting one
+>    in the sidebar rail was tried and reverted: it is not a daily-driver surface.
+>
+> **Also:** `validate:pages` success is the **1-error baseline** (`/agentic` is pre-existing and
+> not yours). And do **not** import `PAGE_MANIFESTS` (or any page-registry symbol) into
+> `labRegistry.ts` — it type-checks, esbuilds clean, and then throws
+> `ReferenceError: PAGE_MANIFESTS is not defined` in the shipped bundle, because Vite
+> deconflicts the definition to `PAGE_MANIFESTS$1` and leaves your usage dangling.
 
 ---
 
@@ -376,6 +429,11 @@ See `agent/skills/paint/references/conflict-resolution.md` for the resolved rows
 8. **Conflict authority (design only):** `design/design.md` (LAMINAR) → live tokens in
    `src/index.css` → registry conventions → `paint` phase order → the sub-skills. When a
    sub-skill contradicts LAMINAR, LAMINAR wins and the sub-skill is noted as stale.
+9. **Claim verbs load `prove-it` from ANY category.** If you are about to write or say
+   FIXED / works / connected / wired / verified / done / shipped / live about something you
+   changed, `prove-it` fires regardless of which category got you here — including FIX and
+   COMMIT. Compile-clean is not a claim. A correct fix inside a stale artifact is a false
+   claim, and this repo has shipped one repeatedly.
 
 ## 5. Anti-Patterns — what NOT to do
 

@@ -107,7 +107,7 @@ export function DailyPlanCard({
               <button
                 onClick={onSuggest}
                 disabled={suggesting || saving}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-50 transition-colors"
               >
                 {suggesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {suggesting ? 'Generating...' : 'Suggest'}
@@ -224,7 +224,7 @@ export function DailyPlanCard({
           <p className="text-sm font-medium text-zinc-400 mb-1">Plan your day</p>
           <p className="text-xs text-zinc-500 max-w-[220px]">Tap Suggest to let AI propose goals based on your context.</p>
           {onSuggest && (
-            <button onClick={onSuggest} className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors">
+            <button onClick={onSuggest} className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800 hover:text-zinc-100 transition-colors">
               <Sparkles className="w-3 h-3" />
               Suggest Goals
             </button>

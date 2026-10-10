@@ -227,7 +227,7 @@ export function MapEditor({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="relative w-full aspect-square bg-zinc-900 rounded border border-zinc-700 overflow-hidden">
+      <div className="relative w-full aspect-square bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-700 overflow-hidden">
         <div className="absolute inset-2 grid grid-cols-2 gap-1">
           {panes.map((pane, idx) => (
             <DraggablePane

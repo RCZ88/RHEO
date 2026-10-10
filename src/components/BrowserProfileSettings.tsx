@@ -39,6 +39,42 @@ function relativeTime(dateStr: string): string {
 
 export default function BrowserProfileSettings() {
   const [profiles, setProfiles] = useState<BrowserProfile[]>([]);
+  // Paused profiles used to render as full stacked rows (only dimmed), so N
+  // stale profiles pushed everything else off-screen. They now collapse to a
+  // single line until asked for.
+  const [showPaused, setShowPaused] = useState(false);
+  const pausedCount = profiles.filter((p) => !p.is_active).length;
+  // Which browsers should have their app name REPLACED by the website. Persisted
+  // to the same `browsersWithExtension` pref main.ts already reads, so an explicit
+  // choice overrides auto-detection.
+  const [tracked, setTracked] = useState<string[] | null>(null);
+  const detectedBrowsers = Array.from(new Set(profiles.map((p) => p.browser_name).filter(Boolean))).sort();
+  // null = follow detection (previous behaviour). An array = explicit override.
+  const effective = tracked ?? detectedBrowsers;
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const saved = await window.deskflowAPI?.getPreference?.('browsersWithExtension');
+        if (alive && Array.isArray(saved)) setTracked(saved.map((s: any) => String(s).toLowerCase()));
+      } catch { /* fall back to auto-detection */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const toggleBrowser = useCallback(async (name: string) => {
+    const lower = name.toLowerCase();
+    const next = effective.includes(lower)
+      ? effective.filter((b) => b !== lower)
+      : [...effective, lower];
+    setTracked(next);
+    try {
+      await window.deskflowAPI?.setPreference?.('browsersWithExtension', next);
+    } catch (e: any) {
+      console.warn('[BrowserProfileSettings] persist failed:', e?.message || e);
+    }
+  }, [effective]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -135,8 +171,35 @@ export default function BrowserProfileSettings() {
 
   return (
     <div className="p-6 space-y-3">
-      <h3 className="text-sm font-semibold text-zinc-200 mb-3">Detected Browser Profiles</h3>
-      {profiles.map(profile => (
+      {detectedBrowsers.length > 0 && (
+        <div className="p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] mb-4">
+          <div className="text-sm font-medium text-zinc-300 mb-0.5">Track Websites For</div>
+          <p className="text-xs text-zinc-500 mb-2.5">
+            When one of these browsers is the active window, DeskFlow shows the website
+            instead of the app name. Leave all off to show app names only.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {detectedBrowsers.map((name) => {
+              const on = effective.includes(name.toLowerCase());
+              return (
+                <button
+                  key={name}
+                  onClick={() => toggleBrowser(name)}
+                  aria-pressed={on}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition border ${
+                    on
+                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                      : 'bg-white/[0.02] border-white/[0.06] text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {on ? '\u2713 ' : ''}{name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {profiles.filter((p) => showPaused || p.is_active).map(profile => (
         <div
           key={profile.id}
           className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
@@ -152,7 +215,7 @@ export default function BrowserProfileSettings() {
               style={{ backgroundColor: profile.color_tag }}
               title="Click to change color"
             />
-            <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 border border-white/10 rounded-lg p-1.5 z-10 shadow-xl">
+            <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-lg p-1.5 z-10 shadow-xl">
               {PROFILE_COLORS.map(c => (
                 <button
                   key={c}
@@ -260,6 +323,19 @@ export default function BrowserProfileSettings() {
           </div>
         </div>
       ))}
+      {pausedCount > 0 && (
+        showPaused ? (
+          <button onClick={() => setShowPaused(false)}
+            className="w-full text-xs text-zinc-500 hover:text-zinc-300 py-1.5 rounded-lg hover:bg-white/[0.03] transition">
+            Hide {pausedCount} paused
+          </button>
+        ) : (
+          <button onClick={() => setShowPaused(true)}
+            className="w-full text-xs text-zinc-500 hover:text-zinc-300 py-1.5 rounded-lg hover:bg-white/[0.03] transition">
+            + {pausedCount} paused profile{pausedCount === 1 ? '' : 's'}
+          </button>
+        )
+      )}
 
       <p className="text-[11px] text-zinc-600 mt-3 pt-3 border-t border-white/[0.04]">
         Profiles are auto-detected by the DeskFlow Browser Tracker extension. Install it in each browser to track multiple profiles independently.

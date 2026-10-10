@@ -193,7 +193,7 @@ export function MomentumScore({ goals = [], focusTimeMs = 0, className = '' }: M
 
           {/* Breakdown */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
               <div className="flex items-center gap-2">
                 <Flame size={12} className="text-orange-400" />
                 <span className="text-[12px] text-zinc-400">Streak</span>
@@ -202,7 +202,7 @@ export function MomentumScore({ goals = [], focusTimeMs = 0, className = '' }: M
                 {momentum.streak} days
               </span>
             </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
               <div className="flex items-center gap-2">
                 <Target size={12} className="text-violet-400" />
                 <span className="text-[12px] text-zinc-400">Completion</span>
@@ -211,7 +211,7 @@ export function MomentumScore({ goals = [], focusTimeMs = 0, className = '' }: M
                 {momentum.completionRate}%
               </span>
             </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
               <div className="flex items-center gap-2">
                 <Clock size={12} className="text-cyan-400" />
                 <span className="text-[12px] text-zinc-400">Focus</span>

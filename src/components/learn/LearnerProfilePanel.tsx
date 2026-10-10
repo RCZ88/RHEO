@@ -136,10 +136,10 @@ export function LearnerProfilePanel({ open, onClose, onRerunSetup }: Props) {
           exit={{ x: 320 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
-          className={`${expanded ? 'w-full max-w-none' : 'w-80'} h-full bg-zinc-900 border-l border-zinc-700/50 overflow-y-auto transition-all duration-300`}
+          className={`${expanded ? 'w-full max-w-none' : 'w-80'} h-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border-l border-zinc-700/50 overflow-y-auto transition-all duration-300`}
         >
           {/* Header */}
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-zinc-900">
+          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-zinc-900 light:bg-[var(--ws-surface-raised)]">
             <h2 className="font-serif text-lg font-semibold text-zinc-100">Your Profile</h2>
             <div className="flex items-center gap-1">
               <button onClick={() => setExpanded(!expanded)} className="text-zinc-500 hover:text-zinc-300 transition p-1" title={expanded ? 'Collapse' : 'Expand'}>
@@ -271,7 +271,7 @@ export function LearnerProfilePanel({ open, onClose, onRerunSetup }: Props) {
                           value={kbForm.statement}
                           onChange={(e) => setKbForm((f) => ({ ...f, statement: e.target.value }))}
                           placeholder="e.g. I can implement gradient descent in NumPy and understand backpropagation end-to-end."
-                          className="w-full px-2.5 py-2 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-200 text-[11px] leading-relaxed focus:outline-none focus:border-clay-500/40 focus:ring-2 focus:ring-clay-500/10 resize-y placeholder:text-zinc-600 min-h-[64px]"
+                          className="w-full px-2.5 py-2 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-200 text-[11px] leading-relaxed focus:outline-none focus:border-clay-500/40 focus:ring-2 focus:ring-clay-500/10 resize-y placeholder:text-zinc-600 min-h-[64px]"
                         />
                       </div>
                       <div className="flex gap-2">
@@ -291,7 +291,7 @@ export function LearnerProfilePanel({ open, onClose, onRerunSetup }: Props) {
                             value={kbForm.topic}
                             onChange={(e) => setKbForm((f) => ({ ...f, topic: e.target.value }))}
                             placeholder="e.g. Deep Learning"
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
                           />
                         </div>
                         <div>
@@ -299,7 +299,7 @@ export function LearnerProfilePanel({ open, onClose, onRerunSetup }: Props) {
                           <select
                             value={kbForm.level}
                             onChange={(e) => setKbForm((f) => ({ ...f, level: e.target.value as MasteryLevel | '' }))}
-                            className="px-2 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-300 text-[11px] focus:outline-none focus:border-clay-500/40"
+                            className="px-2 py-1.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-300 text-[11px] focus:outline-none focus:border-clay-500/40"
                           >
                             <option value="">—</option>
                             {(['L1', 'L2', 'L3', 'L4', 'L5'] as MasteryLevel[]).map((l) => <option key={l} value={l}>{l}</option>)}
@@ -322,13 +322,13 @@ export function LearnerProfilePanel({ open, onClose, onRerunSetup }: Props) {
                           value={kbForm.keywords}
                           onChange={(e) => setKbForm((f) => ({ ...f, keywords: e.target.value }))}
                           placeholder="gradient descent, backprop, neural nets"
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-200 text-[11px] focus:outline-none focus:border-clay-500/40 placeholder:text-zinc-600"
                         />
                       </div>
                       <div>
                         <label className="block text-[10px] font-medium text-zinc-500 mb-1">Your lessons</label>
                         {userLessons.titles.length === 0 ? (
-                          <p className="text-[10px] text-zinc-600 bg-zinc-900/40 border border-zinc-700/30 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] text-zinc-600 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-700/30 rounded-lg px-2.5 py-2">
                             No lessons yet — this entry will relate to every topic until you create lessons and tag them.
                           </p>
                         ) : (
@@ -340,7 +340,7 @@ export function LearnerProfilePanel({ open, onClose, onRerunSetup }: Props) {
                                 className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-medium transition border ${
                                   kbForm.linkedLessons.includes(title)
                                     ? 'bg-clay-500/15 text-clay-300 border-clay-500/30'
-                                    : 'bg-zinc-900/40 text-zinc-500 border-zinc-700/30 hover:text-zinc-300'
+                                    : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/30 hover:text-zinc-300'
                                 }`}
                               >
                                 {title.slice(0, 22)}{title.length > 22 ? '…' : ''}

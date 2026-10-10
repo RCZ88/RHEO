@@ -5,10 +5,10 @@ import {
   Target, Flame, Plus, Bell, Trash2, CheckCircle2, ChevronDown, ChevronUp,
   CalendarDays, Calendar, NotebookPen, TrendingUp, ChevronLeft, ChevronRight,
   Sparkles, Lightbulb, Timer, Code2, Activity, Pencil, X, Wand2, Clock,
+  RefreshCw, Layers,
 } from 'lucide-react';
 import { FieldAIButton } from '@/components/ai-bridge/FieldAIButton';
 import { WarmCard } from '../WarmCard';
-import { CalendarStrip } from '../../../components/goals/CalendarStrip';
 import { GoalCard, GoalCardSkeleton, GoalEmptyState, GoalErrorState } from '../../../components/goals/GoalCard';
 import { CriteriaBuilder } from '../../../components/goals/CriteriaBuilder';
 import type { CriteriaForm } from '../../../components/goals/CriteriaBuilder';
@@ -24,8 +24,12 @@ import { VoiceInputWrapper } from '../../../components/VoiceInputWrapper';
 import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
 import type { GoalStatus } from '../../../types/goals';
 import { Button } from '../../../components/ui/button';
+import { ConnectionExplorer } from '../../../components/goals/ConnectionExplorer';
+import { PhaseFormDialog } from '../../../components/life-river/phase-form-dialog';
+import { scaleOf } from '../../../lib/riverMath';
 import { loadCompletions } from '../../covenant/storage';
-import { CalendarSidebar } from '../../../components/goals/CalendarSidebar';
+import { GoalLanguageParser } from '@/components/goals/GoalLanguageParser';
+import { ProgressRing } from '@/components/ai/canvas/cards/ProgressRing';
 
 /* ═══════════════════ helpers ═══════════════════ */
 
@@ -59,6 +63,14 @@ function prettyDate(dateStr: string): string {
   if (dateStr === addDaysStr(todayStr(), -1)) return 'Yesterday';
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatPhaseRange(sy?: number|null, sm?: number|null, ey?: number|null, em?: number|null): string {
+  const start = sy ? `${MONTH_ABBR[(sm || 1) - 1] ?? ''} ${sy}` : '';
+  if (!ey) return start ? `${start} — present` : '';
+  const end = `${MONTH_ABBR[(em || 12) - 1] ?? ''} ${ey}`;
+  return start ? `${start} — ${end}` : end;
+}
+
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type CalendarSide = 'left' | 'right';
@@ -374,7 +386,7 @@ function WeekBoard({ weekDates, weekGoals, selectedDate, onPick, onToggleDay }: 
                   ? 'bg-amber-500/10 border-amber-500/30'
                   : isToday
                     ? 'bg-zinc-800/40 border-zinc-700/40'
-                    : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/30 hover:border-zinc-800/50'
+                    : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border-transparent hover:bg-zinc-800/30 hover:border-zinc-800/50'
               }`}
             >
               <span className={`text-[9px] uppercase tracking-wider ${isToday ? 'text-amber-400' : 'text-zinc-600'}`}>
@@ -500,7 +512,7 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             onKeyDown={e => e.key === 'Enter' && submit()}
             placeholder="Long-term goal title…"
-            className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"
+            className="w-full bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"
           />
           <FieldAIButton
             fieldName="title"
@@ -515,7 +527,7 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
             <select
               value={form.category}
               onChange={e => setForm(f => ({ ...f, category: e.target.value as GoalCategory }))}
-              className="flex-1 min-w-0 bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
+              className="flex-1 min-w-0 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
             >
               {Object.keys(CAT_META).map(k => (
                 <option key={k} value={k}>{CAT_META[k].label}</option>
@@ -524,7 +536,7 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
             <select
               value={form.priority}
               onChange={e => setForm(f => ({ ...f, priority: Number(e.target.value) }))}
-              className="bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
+              className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
             >
               {PRIORITY_OPTIONS.map(p => (
                 <option key={p.value} value={p.value}>{p.label}</option>
@@ -535,14 +547,14 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
             type="date"
             value={form.deadline}
             onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
-            className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 [color-scheme:dark] transition-colors"
+            className="w-full bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 [color-scheme:dark] transition-colors"
           />
           <input
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             onKeyDown={e => e.key === 'Enter' && submit()}
             placeholder="Description (optional)…"
-            className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"
+            className="w-full bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"
           />
           <FieldAIButton
             fieldName="description"
@@ -579,7 +591,7 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
             const serving = todayGoals.filter(g => g.parentIds?.includes(ltg.id) || g.parentId === ltg.id).length;
             const du = ltg.deadline ? daysUntil(ltg.deadline) : null;
             return (
-              <div key={ltg.id} className="group flex items-center gap-3 p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 hover:border-zinc-700/50 transition-colors">
+              <div key={ltg.id} className="group flex items-center gap-3 p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 hover:border-zinc-700/50 transition-colors">
                 <ProgressRing pct={ltg.progress ?? 0} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] text-zinc-300 truncate">{ltg.title}</div>
@@ -683,7 +695,7 @@ function ReflectionCard({ date, data, summary, onSave }: {
       {/* hard stats strip */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
         {tiles.map(t => (
-          <div key={t.label} className="rounded-lg bg-zinc-900/40 border border-zinc-800/40 px-2.5 py-2">
+          <div key={t.label} className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 px-2.5 py-2">
             <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-zinc-500 mb-1">
               <t.icon size={11} style={{ color: t.tint }} />
               {t.label}
@@ -756,6 +768,72 @@ function ReflectionCard({ date, data, summary, onSave }: {
 }
 
 /* — WeekReview: Mon→Sun hard-data recap with covenant streak dots — */
+function WeekReview({ weekDates, reflections }: {
+  weekDates: string[];
+  reflections: Record<string, DailyReflection>;
+}) {
+  const doneDates = covenantDoneDates();
+  const streak = covenantStreak();
+  const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const maxProd = Math.max(1, ...weekDates.map(d => reflections[d]?.productiveSec || 0));
+  const avgProd = weekDates.reduce((s, d) => s + (reflections[d]?.productiveSec || 0), 0) / 7;
+  const goalsSealed = weekDates.reduce((s, d) => s + (reflections[d]?.goals.completed || 0), 0);
+  const habitsKept = weekDates.reduce((s, d) => s + (reflections[d]?.habits.completed || 0), 0);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[12px] font-medium text-zinc-300 flex items-center gap-1.5">
+          <TrendingUp size={13} style={{ color: 'var(--page-accent)' }} aria-hidden />
+          This week, at a glance
+          <span className="warmth-serif italic text-zinc-600 font-normal">— Monday to Sunday</span>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {weekDates.map((d, i) => {
+          const ref = reflections[d];
+          const prod = ref?.productiveSec || 0;
+          const isToday = d === todayStr();
+          return (
+            <div key={d} className={`flex items-center gap-3 px-2.5 py-1.5 rounded-lg ${isToday ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]'}`}>
+              <div className="w-11 shrink-0">
+                <div className={`text-[9px] uppercase tracking-wider ${isToday ? 'text-amber-400' : 'text-zinc-600'}`}>{dow[i]}</div>
+                <div className={`text-[11px] font-semibold tabular-nums ${isToday ? 'text-amber-300' : 'text-zinc-500'}`}>{d.slice(5)}</div>
+              </div>
+              <div className="flex-1 h-2 rounded-full bg-zinc-800/60 overflow-hidden">
+                <motion.div
+                  /* LAMINAR §6 / PAINT Gate E: transform only, never width.
+                     scaleX from a left origin gives the same fill with no layout cost. */
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: Math.min(1, prod / maxProd) }}
+                  transition={{ duration: 0.5, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
+                  className="h-full w-full rounded-full origin-left"
+                  /* LAMINAR §7.1: no decorative chrome gradient — a flat amber fill
+                     reads the same at 2px and stops the card looking decorated. */
+                  style={{ backgroundColor: prod > 0 ? 'var(--color-amber-400)' : 'transparent' }}
+                />
+              </div>
+              <div className="w-12 text-right text-[11px] tabular-nums text-zinc-400">{prod > 0 ? formatTime(prod) : '—'}</div>
+              <div className="w-6 text-center text-[11px] tabular-nums text-emerald-400">{ref?.goals.completed || ''}</div>
+              <div className="w-5 text-center">
+                {doneDates.has(d)
+                  ? <Flame size={12} className="inline text-amber-400" aria-hidden />
+                  : <span className="text-zinc-700">·</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 pt-2.5 border-t border-zinc-800/50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+        <span>avg <span className="text-zinc-300 tabular-nums">{formatTime(Math.round(avgProd))}</span>/day</span>
+        <span><span className="text-emerald-400 tabular-nums">{goalsSealed}</span> routines sealed</span>
+        <span><span className="text-violet-400 tabular-nums">{habitsKept}</span> habits kept</span>
+        <span className="flex items-center gap-1"><Flame size={12} className="text-amber-400" aria-hidden /> <span className="text-amber-300 tabular-nums">{streak}</span> day streak</span>
+      </div>
+    </div>
+  );
+}
+
 export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const api = (window as any).deskflowAPI;
   const [side, toggleSide] = useCalendarSide();
@@ -768,6 +846,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const [reviewSummary, setReviewSummary] = useState('');
   const [reflection, setReflection] = useState<DailyReflection>(emptyReflection);
+  const [weekReflections, setWeekReflections] = useState<Record<string, DailyReflection>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -777,6 +856,42 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const [editCriteria, setEditCriteria] = useState<CriteriaForm>(defaultCriteria);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showSuggested, setShowSuggested] = useState(false);
+  /* D3 — Phases. These are the LONGEST time-horizon objects in the app (a
+     chapter of life), and Gold is the longitudinal tab, so this is their home.
+     3 phases already exist in the DB with nowhere to see them. */
+  const [phases, setPhases] = useState<any[]>([]);
+  const [phasesLoading, setPhasesLoading] = useState(true);
+  const [phasesError, setPhasesError] = useState<string | null>(null);
+  /* WHY A SEPARATE FLAG: `PhaseDrawer` is a DETAIL drawer — it renders nothing
+     at all when `phase` is null (phase-drawer.tsx returns a bare <Sheet/>).
+     This page used to wire "Add phase" to it, which is why the button looked
+     dead: it opened an empty panel. `PhaseFormDialog` is the real create/edit
+     form and is what the River already uses. Create, edit AND delete now all
+     go there, so the dead drawer and its state are gone. */
+  const [phaseFormOpen, setPhaseFormOpen] = useState(false);
+  const [phaseFormDraft, setPhaseFormDraft] = useState<any>(null);
+
+  const openPhaseForm = useCallback((existing: any | null) => {
+    setPhaseFormDraft(existing);
+    setPhaseFormOpen(true);
+  }, []);
+
+
+  const loadPhases = useCallback(async () => {
+    setPhasesError(null);
+    try {
+      const res = await api.lifePhaseGet?.();
+      if (res?.ok) setPhases(Array.isArray(res.data) ? res.data : []);
+      else setPhasesError(res?.error || 'RHEO could not load your phases.');
+    } catch {
+      setPhasesError('RHEO could not reach the phase store. Try again.');
+    } finally { setPhasesLoading(false); }
+  }, [api]);
+
+  useEffect(() => { loadPhases(); }, [loadPhases]);
+
+  const [hubEntity, setHubEntity] = useState<{ type: 'goal' | 'habit'; id: string; title: string } | null>(null);
+  const [connCounts, setConnCounts] = useState<Record<string, number>>({});
   const [showLangParser, setShowLangParser] = useState(false);
   // Schedule default = per-day (only the selected day's fixed blocks).
   // Toggle to show the whole week's fixed schedule at once.
@@ -802,7 +917,18 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
           map.set(g.id, g);
         }
       }
-      setGoals([...map.values()]);
+      const loaded = [...map.values()];
+      setGoals(loaded);
+      // Connection counts for the "N linked" chips. Best-effort: a failure here
+      // must not stop the goal list from rendering.
+      try {
+        const res = await api.goalGetConnectionsBulk?.(loaded.map((g: any) => g.id).filter(Boolean));
+        if (res?.success && res.counts) {
+          const flat: Record<string, number> = {};
+          for (const [k, v] of Object.entries(res.counts as Record<string, any>)) flat[k] = (v as any)?.total ?? 0;
+          setConnCounts(flat);
+        }
+      } catch { /* non-critical */ }
     } catch (e: any) { setError(e?.message || 'Failed to load goals'); }
     finally { setLoading(false); }
   }, [api]);
@@ -1063,6 +1189,37 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     return Array.from({ length: 7 }, (_, i) => addDaysStr(mon, i));
   }, [selectedDate]);
 
+  /* Week-at-a-glance data for WeekReview. One request per day of the visible
+     week, keyed by date; a failed day is simply absent from the map so the bar
+     renders empty rather than the whole card erroring. */
+  useEffect(() => {
+    if (!api?.getDailyReflection) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.all(weekDates.map(async d => {
+          try { return { d, res: await api.getDailyReflection(d) }; }
+          catch { return { d, res: null }; }
+        }));
+        if (cancelled) return;
+        const map: Record<string, DailyReflection> = {};
+        for (const { d, res } of results) {
+          if ((res as any)?.success) {
+            map[d] = {
+              productiveSec: (res as any).productiveSec || 0,
+              codingSec: (res as any).codingSec || 0,
+              goals: (res as any).goals || { total: 0, completed: 0 },
+              habits: (res as any).habits || { total: 0, completed: 0 },
+              reviewSummary: (res as any).reviewSummary || null,
+            };
+          }
+        }
+        setWeekReflections(map);
+      } catch { if (!cancelled) setWeekReflections({}); }
+    })();
+    return () => { cancelled = true; };
+  }, [weekDates, api]);
+
 
   const radarMarks = useMemo(() => {
     const m = new Map<string, RadarMark[]>();
@@ -1081,9 +1238,6 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   return (
     <div className="w-full max-w-[1600px] mx-auto">
       <GoldHeader date={selectedDate} done={doneCount} total={goals.length} tracked={tracked} bestStreak={bestStreak} />
-
-      <CalendarStrip selectedDate={selectedDate} onDateChange={setSelectedDate}
-        goalDates={new Set(Object.keys(weekGoals))} marks={radarMarks} weekGoals={weekGoals} />
 
       <AnimatePresence>
         {focusState?.isActive && (
@@ -1134,7 +1288,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
               <button
                 onClick={() => setShowLangParser(!showLangParser)}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all duration-150 ${
-                  showLangParser ? 'bg-violet-500/15 text-violet-300 border-violet-500/30' : 'bg-zinc-900/60 text-zinc-400 border-zinc-700/50 hover:border-zinc-600'
+                  showLangParser ? 'bg-violet-500/15 text-violet-300 border-violet-500/30' : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-400 border-zinc-700/50 hover:border-zinc-600'
                 }`}
               >
                 <Wand2 size={12} /> AI
@@ -1235,6 +1389,8 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                     <>
                       <GoalCard goal={goal} onToggle={handleToggle} onDelete={handleDelete} onEdit={handleEditStart}
                         longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
+                        linkedTotal={connCounts[goal.id]}
+                        onOpenConnections={g => setHubEntity({ type: goal.isHabit ? 'habit' : 'goal', id: g.id, title: g.title })}
                          />
                       {activeGoalIds.includes(goal.id) && goal.target.type === 'time' && (
                         <div className="absolute bottom-1.5 right-3 flex items-center gap-1 text-[10px] text-amber-400">
@@ -1270,7 +1426,7 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                   {suggestedGoals.map(goal => (
                     <div
                       key={goal.id}
-                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-dashed border-zinc-700/70 bg-zinc-900/30"
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-dashed border-zinc-700/70 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] text-zinc-300 truncate">{goal.title}</p>
@@ -1319,6 +1475,8 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
                     {completedDailies.map(goal => (
                       <GoalCard key={goal.id} goal={goal} onToggle={handleToggle} onDelete={handleDelete}
                         onEdit={handleEditStart} longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
+                        linkedTotal={connCounts[goal.id]}
+                        onOpenConnections={g => setHubEntity({ type: goal.isHabit ? 'habit' : 'goal', id: g.id, title: g.title })}
                          />
                     ))}
                   </motion.div>
@@ -1336,19 +1494,146 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
             <GoalAICoach onApply={async (proposal) => { await api.goalAiApplyProposal(proposal.goalId, proposal.newConfig || {}); loadGoals(selectedDate); }} onDismiss={() => {}} />
           </WarmCard>
         </div>
-
-        {/* Calendar sidebar (sticky 1/3; entrance choreography; side toggle) */}
-        <CalendarSidebar
-          side={side} onToggleSide={toggleSide}
-          selectedDate={selectedDate} onDateChange={setSelectedDate}
-          weekGoals={weekGoals} marks={radarMarks} goalDates={new Set(Object.keys(weekGoals))}
-          goals={goals} deadlines={deadlines} reminders={reminders}
-          schedule={schedule} longTermGoals={longTermGoals} />
       </div>
+
+      {/* ── D3: Phases — the long horizon. Distinct from the routines above
+             (which are outcomes you repeat) and from Schedule (the day). ── */}
+      <div className="mt-4">
+        <WarmCard>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-1.5">
+              <Layers size={13} style={{ color: 'var(--page-accent)' }} aria-hidden />
+              <span className="text-[13px] font-semibold text-zinc-100">Phases</span>
+              {!phasesLoading && !phasesError && phases.length > 0 && (
+                <span className="text-[10px] text-zinc-600 tabular-nums">{phases.length}</span>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openPhaseForm(null)}
+              className="gap-1.5"
+              data-lifephase="add-phase"
+            >
+              <Plus size={12} aria-hidden />
+              Add phase
+            </Button>
+          </div>
+
+          {phasesLoading ? (
+            <div className="space-y-2" aria-busy="true" aria-label="Loading phases">
+              {[0, 1].map(i => <div key={i} className="h-9 rounded-lg bg-zinc-800/50 animate-pulse" />)}
+            </div>
+          ) : phasesError ? (
+            <div role="alert" className="flex flex-col items-center gap-2 py-4 text-center">
+              <p className="text-[12px]" style={{ color: 'var(--error)' }}>{phasesError}</p>
+              <Button variant="outline" size="sm" onClick={() => { setPhasesLoading(true); loadPhases(); }} className="gap-1.5">
+                <RefreshCw size={12} aria-hidden />
+                Retry
+              </Button>
+            </div>
+          ) : phases.length === 0 ? (
+            /* Empty says what would be here, not "No data" (PAINT P5). */
+            <div className="py-6 text-center">
+              <Layers size={20} className="mx-auto mb-2 opacity-30" style={{ color: 'var(--page-accent)' }} aria-hidden />
+              <p className="text-[12px] text-zinc-200">No phases yet</p>
+              <p className="text-[11px] text-zinc-600 mt-1 mb-2 max-w-[240px] mx-auto">
+                A phase is a chapter of your life — a job, a move, a project that
+                spans months. Add one to see where your routines are taking you.
+              </p>
+              <Button
+                size="sm"
+                onClick={() => openPhaseForm(null)}
+                className="gap-1.5"
+                data-lifephase="add-first-phase"
+              >
+                <Plus size={12} aria-hidden />
+                Add your first phase
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {phases.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => openPhaseForm(p)}
+                  title="Edit this phase"
+                  className="w-full flex items-center gap-3 px-2.5 py-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50"
+                >
+                  <span
+                    className="w-1.5 h-8 rounded-full shrink-0"
+                    /* Phase colour is DATA (the user picked it), not chrome. */
+                    style={{ backgroundColor: p.color || 'var(--page-accent)' }}
+                    aria-hidden
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[12px] text-zinc-200 truncate">{p.title || 'Untitled phase'}</span>
+                    <span className="block text-[10px] text-zinc-600 truncate">
+                      {formatPhaseRange(p.startYear, p.startMonth, p.endYear, p.endMonth)}
+                      {p.description ? ` · ${p.description}` : ''}
+                    </span>
+                  </span>
+                  {/* The scale the user chose, so it stays visible and
+                      editable later instead of being a one-time decision. */}
+                  {p.scale && (
+                    <span
+                      className="shrink-0 rounded-full border border-zinc-800 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wide text-zinc-500"
+                      title={`${scaleOf(p.scale).label} detail — ${scaleOf(p.scale).blurb}`}
+                    >
+                      {scaleOf(p.scale).label}
+                    </span>
+                  )}
+                  <Pencil size={12} className="shrink-0 text-zinc-700" aria-hidden />
+                </button>
+              ))}
+            </div>
+          )}
+        </WarmCard>
+      </div>
+
+      {/* The real create/edit form — scale-aware, and what the "Add phase"
+          button was ALWAYS meant to open. */}
+      <PhaseFormDialog
+        open={phaseFormOpen}
+        onOpenChange={setPhaseFormOpen}
+        initial={phaseFormDraft}
+        allPhases={phases}
+        onSave={async (ph: any) => {
+          await api.lifePhaseSave?.(ph);
+          await loadPhases();
+          setPhaseFormOpen(false);
+        }}
+        onDelete={async (id: string) => {
+          await api.lifePhaseDelete?.(id);
+          await loadPhases();
+          setPhaseFormOpen(false);
+          setPhaseFormDraft(null);
+        }}
+      />
+
+      {/* `PhaseDrawer` is intentionally NOT used here. It is a detail drawer
+          that renders a bare <Sheet/> (no content) when `phase` is null, which
+          is exactly why "Add phase" looked dead before. Create, edit and
+          delete now all live in ONE surface: PhaseFormDialog. */}
 
       {/* Bottom full-width sections */}
       <ReflectionCard date={selectedDate} data={reflection} summary={reviewSummary}
         onSave={async s => { setReviewSummary(s); try { await api.saveGoalReview(selectedDate, s); } catch {} }} />
+
+      {/* Week at a glance — the Monday→Sunday hard-data recap. */}
+      <div className="mt-4">
+        <WarmCard>
+          <WeekReview weekDates={weekDates} reflections={weekReflections} />
+        </WarmCard>
+      </div>
+
+      {/* Goal hub — everything serving one goal, in one place */}
+      <ConnectionExplorer
+        entity={hubEntity}
+        isOpen={!!hubEntity}
+        onClose={() => setHubEntity(null)}
+      />
     </div>
   );
 }

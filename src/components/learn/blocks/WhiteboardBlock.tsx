@@ -34,7 +34,7 @@ export function WhiteboardBlock({ meta, onSave }: Props) {
   const excalidrawUrl = `https://excalidraw.com?theme=dark&embed=true${read_only ? '&readonly=true' : ''}`;
 
   return (
-    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40">
+    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800">
         <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
           <span className="text-base">✏️</span>
@@ -55,10 +55,10 @@ export function WhiteboardBlock({ meta, onSave }: Props) {
         )}
       </div>
       <div className="relative" style={{ width, height }}>
-        <iframe ref={iframeRef} src={excalidrawUrl} className="w-full h-full border-none" style={{ background: '#1c1917' }}
+        <iframe ref={iframeRef} src={excalidrawUrl} className="w-full h-full border-none" style={{ background: 'var(--ws-surface)' }}
           sandbox="allow-scripts allow-same-origin allow-popups" title="Whiteboard" />
         {!isLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-950 text-zinc-500 text-sm">
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-950 light:bg-[var(--ws-surface)] text-zinc-500 text-sm">
             Loading whiteboard...
           </div>
         )}

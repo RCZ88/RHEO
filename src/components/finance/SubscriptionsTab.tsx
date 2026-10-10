@@ -526,7 +526,7 @@ export function SubscriptionsTab({ subscriptions, wallets, categories = [], tran
             onClick={() => setHistorySub(null)}>
             <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
               onClick={e => e.stopPropagation()}
-              className="bg-zinc-900 border border-zinc-700/50 rounded-xl w-full max-w-md max-h-[80vh] flex flex-col">
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl w-full max-w-md max-h-[80vh] flex flex-col">
               <div className="flex items-center justify-between p-4 border-b border-zinc-800">
                 <div>
                   <h3 className="text-sm font-semibold text-white">{historySub.name}</h3>
@@ -605,7 +605,7 @@ export function SubscriptionsTab({ subscriptions, wallets, categories = [], tran
             onClick={() => setRecordPaySub(null)}>
             <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
               onClick={e => e.stopPropagation()}
-              className="bg-zinc-900 border border-zinc-700/50 rounded-xl w-full max-w-sm">
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl w-full max-w-sm">
               <div className="flex items-center justify-between p-4 border-b border-zinc-800">
                 <div>
                   <h3 className="text-sm font-semibold text-white">Record Payment</h3>

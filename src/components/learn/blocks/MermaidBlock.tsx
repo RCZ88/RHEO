@@ -89,7 +89,7 @@ export function MermaidBlock({ block, onAsk }: Props) {
           <div className="text-zinc-500 text-xs mb-2">{error}</div>
           <details className="group/details">
             <summary className="text-xs text-zinc-600 cursor-pointer hover:text-zinc-400 transition">Show diagram source</summary>
-            <pre className="mt-2 text-xs bg-zinc-900/80 p-3 rounded overflow-x-auto text-zinc-400 border border-zinc-800/50">{block.src}</pre>
+            <pre className="mt-2 text-xs bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] p-3 rounded overflow-x-auto text-zinc-400 border border-zinc-800/50">{block.src}</pre>
           </details>
         </div>
       )}

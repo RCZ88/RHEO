@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { HeartHandshake, Images, Layers, Map, BookOpen, Plus, FileClock, Pencil, Mic, Target, Sparkles, User, Network, Brain, Calendar } from 'lucide-react'
+import { HeartHandshake, Images, Layers, Map, BookOpen, Plus, FileClock, Pencil, Mic, Target, Sparkles, User, Network, Brain, Calendar, Activity} from 'lucide-react'
 
 
 import { cn } from '@/lib/utils'
@@ -18,15 +18,19 @@ import { NotesTab } from '@/components/life-river/NotesTab'
 import { LivingSubstrate } from '@/components/life-river/LivingSubstrate'
 import type { LensId } from '@/components/life-river/RingCanvas'
 import type { LifePhase } from '@/lib/riverMath'
+import lifePage from '@/pages/registry/pages/life'
+import { usePageSurface } from '@/pages/registry'
 import CovenantPage from '../../features/covenant/CovenantPage'
 import MemoriesPage from '../../features/memories/MemoriesPage'
 import GoldPage from '../../features/warmth/gold/GoldPage'
 import { SchedulePage } from '../../features/warmth/schedule/SchedulePage'
+import { TrainingPage } from '../../features/warmth/training/TrainingPage'
 import { HabitsPage } from '../../features/warmth/habits/HabitsPage'
 import { ProfileTab } from '../../components/life/ProfileTab'
 import { BrainManagementView } from './context-brain/BrainManagementView'
 import { NeuralFlow } from './context-brain/NeuralFlow'
 import { SelfOrchestrator } from './self/SelfOrchestrator'
+import { TimePanel } from '@/components/TimePanel'
 import { confetti } from '../../components/ui/confetti'
 import { NumberTicker } from '../../components/ui/number-ticker'
 import { DotPattern } from '../../components/ui/dot-pattern'
@@ -47,17 +51,22 @@ const toStr = (d: Date) =>
 const todayStr = () => toStr(new Date())
 
 type ViewMode = 'pages' | 'river'
-type PageTab = 'covenant' | 'memories' | 'gold' | 'notes' | 'schedule' | 'habits' | 'self'
+type PageTab = 'covenant' | 'memories' | 'gold' | 'notes' | 'schedule' | 'habits' | 'training' | 'self'
 
 const PAGE_TABS: { key: PageTab; label: string; icon: typeof HeartHandshake; accent: string }[] = [
   { key: 'covenant', label: 'Covenant', icon: HeartHandshake, accent: '#e8866b' },
-  { key: 'memories', label: 'Memories', icon: Images, accent: '#6fb38f' },
+  { key: 'memories', label: 'Memories', icon: Images, accent: 'var(--color-mem-400)' },
   { key: 'gold', label: 'Gold', icon: Layers, accent: '#fbbf24' },
   { key: 'notes', label: 'Notes', icon: BookOpen, accent: '#a78bfa' },
   { key: 'schedule', label: 'Schedule', icon: Calendar, accent: '#ec4899' },
   // 'habits' had a content branch but no tab button, so deep-linking to it
   // (the Deadlines dashboard widget) landed on invisible content.
   { key: 'habits', label: 'Habits', icon: Target, accent: '#34d399' },
+  // `var(--page-accent)` rather than a literal: the sibling tabs hardcode hex, but
+  // Training IS the Life signal hue, and `html.light[data-page="life"]` deliberately
+  // darkens it (#93331d) for contrast on cream. Following the token keeps the tab
+  // icon legible in both themes without adding a 6th hue.
+  { key: 'training', label: 'Training', icon: Activity, accent: 'var(--page-accent)' },
   { key: 'self', label: 'Self', icon: User, accent: '#8b5cf6' },
 ]
 
@@ -70,7 +79,7 @@ const crossfade = {
 
 const pillTransition = { type: 'spring' as const, stiffness: 400, damping: 32 }
 
-const SELF_CARD_CLASS = "rounded-xl border border-zinc-800/50 bg-zinc-900/50 backdrop-blur-xl p-6 shadow-2xl shadow-black/20"
+const SELF_CARD_CLASS = "rounded-xl border border-zinc-800/50 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-6 shadow-2xl shadow-black/20"
 
 function SelfStatStrip() {
   const [stats, setStats] = useState<{ episodes: number; entities: number; currentFacts: number } | null>(null)
@@ -123,48 +132,44 @@ export default function LifePage() {
   const covenant = useCovenant()
   const memories = useMemories()
 
-  console.log('%c[LifePage] v2.0 loaded', 'color: #fbbf24; font-weight: bold')
+  /* This used to sit in the render body, so it fired on EVERY re-render —
+     the console filled with the same line. A ref guard inside an effect means
+     exactly once per mount: React StrictMode remounts the same instance
+     (ref survives, still one line), while a real navigation creates a new
+     instance and logs again. */
+  const bootLogged = useRef(false)
+  useEffect(() => {
+    if (bootLogged.current) return
+    bootLogged.current = true
+    console.log('[LifePage] v2.0 loaded')
+  }, [])
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try { return (localStorage.getItem('life-view-mode') as ViewMode) || 'river' } catch { return 'river' }
   })
   const [pageTab, setPageTab] = useState<PageTab>('covenant')
 
-  // Deep-nav landing for the dashboard widget jump buttons.
+  // Deep-nav landing, delegated to the page registry.
   //
-  // navigateTo() (src/lib/deepNav.ts) writes the tab hint to
-  // localStorage['<route>-activeTab'] and the section to sessionStorage.
-  // The app uses a HashRouter, so `?tab=` lives in location.hash — NOT
-  // location.search — which is why reading the query alone never worked.
-  // Read both, in the same priority order navigateTo intends.
-  useEffect(() => {
-    const valid: PageTab[] = ['covenant', 'memories', 'gold', 'notes', 'schedule', 'habits', 'self']
-    let wanted: PageTab | null = null
-
-    // 1) hash query, e.g. #/life?tab=schedule
-    try {
-      const hash = window.location.hash || ''
-      const qIdx = hash.indexOf('?')
-      if (qIdx !== -1) {
-        const q = new URLSearchParams(hash.slice(qIdx + 1)).get('tab')
-        if (q && (valid as string[]).includes(q)) wanted = q as PageTab
-      }
-    } catch { /* ignore */ }
-
-    // 2) the deepNav hint key this app already writes
-    if (!wanted) {
-      try {
-        const hint = localStorage.getItem('/life-activeTab')
-        if (hint && (valid as string[]).includes(hint)) wanted = hint as PageTab
-        localStorage.removeItem('/life-activeTab')
-      } catch { /* ignore */ }
-    }
-
-    if (wanted) {
-      setPageTab(wanted)
-      setViewMode('pages')
-    }
-  }, [])
+  // This used to be a hand-rolled 30-line effect that read the hash query and
+  // localStorage and nothing else. It therefore never read
+  // `location.state.tab` — which is the channel a SAME-SESSION jump uses —
+  // so pressing Ctrl+K and choosing `Life -> Notes` navigated to /life and
+  // silently stayed on whatever tab was open. Combined with the palette having
+  // no `notes` row at all, Notes had no working deep-nav path from anywhere.
+  //
+  // `onTabRequest` fires once per navigation (keyed on `location.key`), which
+  // matters because /life -> /life does not change the pathname, so this
+  // component does not remount and a `useEffect([])` would never re-run.
+  // River mode has to be forced off: the seven tabs only render in `pages`
+  // mode, so arriving on a tab while the River is open would leave the tab
+  // set but nothing on screen.
+  usePageSurface(lifePage, {
+    onTabRequest: (tab) => {
+      setPageTab(tab as PageTab);
+      setViewMode('pages');
+    },
+  });
 
   const [lens, setLens] = useState<LensId>('phases')
   const [zoomStop, setZoomStop] = useState('Life')
@@ -481,9 +486,9 @@ export default function LifePage() {
   if (loading && phases.length === 0) {
     return (
       <div className="flex flex-col gap-4 p-5" data-page="life">
-        <div className="h-64 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40" />
-        <div className="h-40 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40" />
-        <div className="h-40 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40" />
+        <div className="h-64 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]" />
+        <div className="h-40 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]" />
+        <div className="h-40 animate-pulse rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]" />
       </div>
     )
   }
@@ -508,12 +513,12 @@ export default function LifePage() {
       <CurrentCanvas accent="#fbbf24" render={renderNetwork} />
       <div className="relative z-10">
       {/* ── Mode Toggle ── */}
-      <div className="sticky top-0 z-40 -mx-5 px-5 bg-zinc-900/20 backdrop-blur-md border-b border-zinc-800/50">
+      <div className="sticky top-0 z-40 -mx-5 px-5 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] backdrop-blur-md border-b border-zinc-800/50">
         <div className="flex items-center gap-2 py-2">
           <span className="text-[15px] font-semibold mr-2 text-[var(--text-primary)]">Life</span>
 
           {/* View mode toggle */}
-          <div className="flex gap-1 bg-zinc-800/50 p-0.5 rounded-lg">
+          <div className="flex gap-1 bg-zinc-800/50 p-0.5 rounded-lg" data-section="life.view-switch" data-tutorial="life.view-switch">
             {([
               { key: 'pages' as ViewMode, label: 'Pages', icon: Map },
               { key: 'river' as ViewMode, label: 'River', icon: Layers },
@@ -544,6 +549,8 @@ export default function LifePage() {
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               className="flex gap-1 ml-2 bg-zinc-800/50 p-0.5 rounded-lg"
+              data-section="life.tabs"
+              data-tutorial="life.tabs"
             >
               {PAGE_TABS.map(tab => (
                 <button
@@ -576,45 +583,63 @@ export default function LifePage() {
         <div className="flex-1 min-h-0 overflow-auto p-5">
           <AnimatePresence mode="wait">
             {pageTab === 'covenant' && (
-              <motion.div key="covenant" {...crossfade} className="max-w-3xl mx-auto">
+              <motion.div key="covenant" {...crossfade} className="w-full" data-section="life.covenant">
                 <CovenantPage embedded />
               </motion.div>
             )}
             {pageTab === 'memories' && (
-              <motion.div key="memories" {...crossfade} className="max-w-4xl mx-auto">
+              <motion.div key="memories" {...crossfade} className="w-full" data-section="life.memories">
                 <MemoriesPage embedded />
               </motion.div>
             )}
             {pageTab === 'gold' && (
-              <motion.div key="gold" {...crossfade} className="w-full">
+              <motion.div key="gold" {...crossfade} className="w-full" data-section="life.gold">
                 <GoldPage />
               </motion.div>
             )}
             {pageTab === 'notes' && (
-              <motion.div key="notes" {...crossfade} className="max-w-5xl mx-auto">
+              <motion.div key="notes" {...crossfade} className="w-full" data-section="life.notes" data-tutorial="life.notes">
                 <NotesTab />
               </motion.div>
             )}
             {pageTab === 'schedule' && (
-              <motion.div key="schedule" {...crossfade} className="w-full h-full">
+              <motion.div key="schedule" {...crossfade} className="w-full h-full" data-section="life.schedule">
                 <SchedulePage embedded />
               </motion.div>
             )}
             {pageTab === 'habits' && (
-              <motion.div key="habits" {...crossfade} className="max-w-5xl mx-auto">
+              <motion.div key="habits" {...crossfade} className="w-full" data-section="life.habits">
                 <HabitsPage />
               </motion.div>
             )}
+            {/* Training carries NO inline --page-accent override, deliberately. The
+                `data-page="life"` key in src/index.css already defines that custom
+                property, and it defines a DIFFERENT (darker) value under
+                `html.light[data-page="life"]` so the hue keeps contrast on the cream
+                light surface. Setting it inline here forced the dark-theme value onto
+                the light theme — which is exactly how a token gets defeated by a
+                literal that looks correct in the one theme you happen to be viewing. */}
+            {pageTab === 'training' && (
+              <motion.div key="training" {...crossfade} className="w-full relative" data-section="life.training">
+                <TrainingPage />
+              </motion.div>
+            )}
             {pageTab === 'self' && (
-              <motion.div key="self" {...crossfade} className="max-w-5xl mx-auto relative" style={{ ['--page-accent' as string]: '#8b5cf6' }}>
+              <motion.div key="self" {...crossfade} className="w-full relative" data-section="life.self" style={{ ['--page-accent' as string]: '#8b5cf6' }}>
                 <SelfOrchestrator />
+              </motion.div>
+            )}
+            {pageTab === 'self' && (
+              <motion.div key="time" {...crossfade} className="w-full mt-4 rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-4 light:bg-white/60 light:border-zinc-200" data-section="life.time">
+                <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">Time — timers, stopwatches & alarms</div>
+                <TimePanel />
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       ) : (
         /* ═══ NEW RIVER MODE ═══ */
-        <div className="flex flex-1 min-h-0 relative gap-6" ref={feedRef}>
+        <div className="flex flex-1 min-h-0 relative gap-6" ref={feedRef} data-section="life.river">
           {/* Living substrate — full-bleed Aether background */}
           <LivingSubstrate />
 
@@ -659,7 +684,7 @@ export default function LifePage() {
           </motion.div>
 
           <div className="flex-1 min-w-0 min-h-0 overflow-auto p-5 ws-scroll relative z-10">
-            <div className="mx-auto max-w-5xl space-y-8">
+            <div className="w-full space-y-8">
               <motion.div
                 initial={{ opacity: 0, y: 40 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -685,7 +710,8 @@ export default function LifePage() {
                 {/* Lens indicator — always visible */}
                 <div
                   data-lens-indicator
-                  className={`flex flex-col gap-3 rounded-xl border bg-zinc-900/75 backdrop-blur-xl px-5 py-4 md:flex-row md:items-center md:justify-between ${LENS_META[lens].activeClass}`}
+                  data-section="life.lenses"
+                  className={`flex flex-col gap-3 rounded-xl border bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl px-5 py-4 md:flex-row md:items-center md:justify-between ${LENS_META[lens].activeClass}`}
                 >
                   <div className="flex items-center gap-3">
                     <LensIcon className="h-4 w-4" />
@@ -711,7 +737,7 @@ export default function LifePage() {
                           className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] transition-colors ${
                             lens === key
                               ? Meta.activeClass
-                              : 'border-zinc-800 bg-zinc-950/40 text-zinc-500 hover:text-zinc-300'
+                              : 'border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40 text-zinc-500 hover:text-zinc-300'
                           }`}
                         >
                           <Icon className="h-3.5 w-3.5" />
@@ -725,6 +751,7 @@ export default function LifePage() {
                 {/* Quick-add toolbar — always visible */}
                 <div
                   data-quick-add
+                  data-section="life.quick-add"
                   className="grid grid-cols-2 gap-2 lg:grid-cols-4"
                 >
                   <button
@@ -732,7 +759,7 @@ export default function LifePage() {
                     className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
                       lens === 'phases'
                         ? 'border-amber-400/40 bg-amber-400/10 text-amber-100'
-                        : 'border-zinc-800 bg-zinc-900/75 text-zinc-300 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -751,7 +778,7 @@ export default function LifePage() {
                     className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
                       lens === 'covenant'
                         ? 'border-rose-400/40 bg-rose-500/10 text-rose-100'
-                        : 'border-zinc-800 bg-zinc-900/75 text-zinc-300 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -767,7 +794,7 @@ export default function LifePage() {
                     className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
                       lens === 'gold'
                         ? 'border-amber-400/40 bg-amber-500/10 text-amber-100'
-                        : 'border-zinc-800 bg-zinc-900/75 text-zinc-300 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -783,7 +810,7 @@ export default function LifePage() {
                     className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
                       lens === 'memories'
                         ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                        : 'border-zinc-800 bg-zinc-900/75 text-zinc-300 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -800,7 +827,7 @@ export default function LifePage() {
                   <span className="text-[11px] text-zinc-500">Add mode:</span>
                   <button
                     onClick={toggleRedirectMode}
-                    className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 text-[10px] text-zinc-400 hover:text-zinc-300 transition-colors"
+                    className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-2 text-[10px] text-zinc-400 hover:text-zinc-300 transition-colors"
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${redirectMode === 'instant' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     {redirectMode === 'instant' ? 'Instant' : 'Confirm'}
@@ -817,7 +844,7 @@ export default function LifePage() {
                     className={`rounded-xl border p-5 text-left transition-colors ${
                       lens === 'covenant'
                         ? 'border-rose-400/40 bg-rose-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
                     }`}
                   >
                     <div className="flex items-center gap-2 text-rose-300">
@@ -841,7 +868,7 @@ export default function LifePage() {
                     className={`rounded-xl border p-5 text-left transition-colors ${
                       lens === 'gold'
                         ? 'border-amber-400/40 bg-amber-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
                     }`}
                   >
                     <div className="flex items-center gap-2 text-amber-300">
@@ -865,7 +892,7 @@ export default function LifePage() {
                     className={`rounded-xl border p-5 text-left transition-colors ${
                       lens === 'memories'
                         ? 'border-emerald-400/40 bg-emerald-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
                     }`}
                   >
                     <div className="flex items-center gap-2 text-emerald-300">
@@ -888,7 +915,8 @@ export default function LifePage() {
                 {/* Draft shelf — always visible */}
                 <div
                   data-drafts-shelf
-                  className="rounded-xl border border-zinc-800 bg-zinc-900/75 backdrop-blur-xl p-5"
+                  data-section="life.drafts"
+                  className="rounded-xl border border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -915,7 +943,7 @@ export default function LifePage() {
                       {drafts.map((draft) => (
                         <div
                           key={draft.id}
-                          className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                          className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="min-w-0">
                             <p className="truncate text-sm text-zinc-200">
@@ -1043,7 +1071,7 @@ export default function LifePage() {
           {/* Confirm Redirect Dialog */}
           {confirmRedirect && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setConfirmRedirect(null)}>
-              <div className="w-full max-w-sm bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="w-full max-w-sm bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-base font-semibold text-zinc-100 mb-2">Switch to Pages mode?</h3>
                 <p className="text-[13px] text-zinc-400 mb-5">
                   Open the {confirmRedirect.label} page to create with all available fields.

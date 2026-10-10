@@ -1,14 +1,11 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Pause, Ban, Target, Timer } from 'lucide-react';
+import { formatStopwatch } from '../../lib/stopwatchStore';
 
-function formatDuration(ms: number): string {
-  if (!ms || !isFinite(ms)) return '00:00:00';
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
+// The clock format lives in lib/stopwatchStore next to the value it formats, so
+// the hero and the sidebar rail cannot drift apart. This file used to carry its
+// own copy of the same HH:MM:SS formatter — identical today, but two
+// implementations of one presentation rule is how they stop being identical.
 
 function getTimerColor(
   isDistracting: boolean,
@@ -146,7 +143,7 @@ export function StopwatchTimer({
             className="font-mono font-bold text-5xl lg:text-7xl xl:text-8xl truncate"
             style={{ lineHeight: '1', letterSpacing: '-0.02em', color: timerColor }}
           >
-            {formatDuration(displayTime.ms)}
+            {formatStopwatch(displayTime.ms)}
           </motion.div>
 
           {externalSessionRunning && selectedExternalActivity && (

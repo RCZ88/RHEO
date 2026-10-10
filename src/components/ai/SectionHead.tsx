@@ -45,7 +45,7 @@ export function SectionHead({
 				aria-hidden
 				className={cn(
 					"flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-					"bg-zinc-900/60 ring-1 ring-zinc-800/60",
+					"bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60",
 					a.text,
 				)}
 			>
@@ -79,7 +79,7 @@ export function SectionHead({
 						aria-hidden
 						animate={ { rotate: collapsed ? 0 : 180 } }
 						transition={ { duration: reduce ? 0 : MOTION.fast, ease: MOTION.ease } }
-						className="ml-1 text-zinc-500 light:text-stone-500"
+						className="ml-1 text-zinc-500 light:text-[var(--text-muted)]"
 					>
 						<ChevronDown size={16} />
 					</motion.span>

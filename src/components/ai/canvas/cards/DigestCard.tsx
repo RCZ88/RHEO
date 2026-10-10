@@ -38,7 +38,7 @@ export function DigestCard({ card, topics = [], loading, error, onGenerate, onCo
               {t.summary ? (
                 <span className="card-digest-summary">{t.summary.slice(0, 100)}...</span>
               ) : (
-                <span className="card-digest-summary" style={{ fontStyle: 'italic', opacity: 0.5 }}>No summary yet — refresh to generate</span>
+                <span className="card-digest-summary" style={{ fontStyle: 'italic', opacity: 0.5 }}>No summary for this range. Summaries are generated after a session completes. — refresh to generate</span>
               )}
             </li>
           ))}

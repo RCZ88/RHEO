@@ -1,7 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Download, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "./use-reduced-motion";
 import AsciiSurface from "./AsciiSurface";
 import DecryptedText from "./DecryptedText";
 import { RealClip, RealShot } from "./RealFootage";
@@ -50,15 +52,21 @@ type Screen = {
   label: string;
   still: string;
   alt: string;
-  /** caption drawn from the atlas instrument copy — the 180 words that used to
-   *  be their own section now sit next to the thing they describe */
+  /** <=9 words. The atlas's 180 words, compressed to sit next to the thing
+   *  they describe instead of occupying their own section. */
   caption: string;
   recordings?: Recording[];
 };
 
 const SCREENS: Screen[] = [
-  { id: "dashboard", label: "Dashboard", still: "/media/app-dashboard.png", alt: "The RHEO dashboard with a real day's tracked time", caption: "The whole day on one surface — depth, not duration.", recordings: [{ src: "/media/app-dashboard-idle.mp4", label: "IDLE" }, { src: "/media/app-timeline-24h.mp4", label: "24H TIMELINE" }] },
-  { id: "console", label: "Penguin Console", still: "/media/app-console.png", alt: "Penguin Console running real commands in a real shell", caption: "A real PTY. Real commands, real output, no wrapper.", recordings: [{ src: "/media/app-terminal-real.mp4", label: "PTY" }, { src: "/media/app-terminal-work.mp4", label: "REAL WORK" }] },
+  // RESULT.md CONTRADICTION, resolved toward "no capture twice" (the user's
+  // primary complaint). §2.2 spells out Dashboard as [STILL | IDLE | 24H
+  // TIMELINE], but §1.1 ALSO grants #act-record its own RealClip and §1.3 gives
+  // the gallery all 7 recordings. All three cannot hold. §1.2 decides it:
+  // "a capture serves its section's claim." The 24h-timeline clip IS the record
+  // loop, so #act-record owns it; the Dashboard screen shows IDLE.
+    { id: "dashboard", label: "Dashboard", still: "/media/app-dashboard.png", alt: "The RHEO dashboard with a real day's tracked time", caption: "The whole day on one surface — depth, not duration.", recordings: [{ src: "/media/app-dashboard-idle.mp4", label: "IDLE" }] },
+  { id: "console", label: "Penguin Console", still: "/media/app-console.png", alt: "Penguin Console running real commands in a real shell", caption: "A real PTY. Real commands, real output, no wrapper.", recordings: [{ src: "/media/app-terminal-real.mp4", label: "TERMINAL" }, { src: "/media/app-terminal-work.mp4", label: "REAL WORK" }] },
   { id: "activity", label: "Activity", still: "/media/app-activity.png", alt: "The raw record behind the timeline", caption: "Every app and site, logged. The record before it becomes anything." },
   { id: "insights", label: "Insights", still: "/media/app-insights.png", alt: "Insights showing real productive, neutral and distracting totals", caption: "Productive, neutral, distracting — weighted by depth.", recordings: [{ src: "/media/app-insights-detail.mp4", label: "DETAIL" }] },
   { id: "life", label: "Life", still: "/media/app-life.png", alt: "The Life page with a real week", caption: "The week, with its phases. Not a mood ring.", recordings: [{ src: "/media/app-life-week.mp4", label: "WEEK" }] },
@@ -77,13 +85,38 @@ const SCREENS: Screen[] = [
 ];
 
 /** The capture the ASCII seam re-reads. Must be a real file in public/media. */
-const ASCII_SOURCE = SCREENS[0];
+/**
+ * The capture the ASCII seam re-reads.
+ *
+ * CHOSEN BY MEASUREMENT, NOT BY POSITION. It was `SCREENS[0]` (the dashboard)
+ * because that was the path of least resistance, and the dashboard was then
+ * doing four jobs: strip slide, thumbnail tile, act-record poster, and seam
+ * source. GLM flagged it as the §0.5 smell in miniature.
+ *
+ * `probe-ascii-surface.mjs` measures ramp indices per capture — the seam's only
+ * job is glyph legibility, so the widest spread wins:
+ *
+ *   app-lecture.png    14/16   <- selected. peak 1.000, the only full-white pixel
+ *   app-ide.png        12/16
+ *   app-learn.png      12/16
+ *   app-life.png       12/16
+ *   app-profiler.png   12/16
+ *   app-dashboard.png  11/16   <- was used, not the widest
+ *   app-guide.png       9/16   <- genuinely the flattest field
+ *
+ * Selected BY ID, not index, so a future reorder cannot silently change which
+ * capture the seam claims.
+ */
+const ASCII_SOURCE = SCREENS.find((s) => s.id === "lecture")!;
 
 export default function Gallery() {
+  const reduced = usePrefersReducedMotion();
   const railRef = useRef<HTMLUListElement>(null);
   const [index, setIndex] = useState(0);
   const [atStart, setAtStart] = useState(true);
   const [AtEnd, setAtEnd] = useState(false);
+  // First slide index whose start-stop is unreachable, so it must be END-aligned.
+  const [tailFrom, setTailFrom] = useState(SCREENS.length);
   /** which recording of THIS screen is showing; null = the still */
   const [recording, setRecording] = useState<Recording | null>(null);
 
@@ -100,15 +133,38 @@ export default function Gallery() {
     if (!rail) return;
     const slide = rail.firstElementChild as HTMLElement | null;
     if (!slide) return;
-    const step = slide.offsetWidth + 24;
-    const i = Math.max(0, Math.min(SCREENS.length - 1, Math.round(rail.scrollLeft / step)));
+    const step = slide.offsetWidth + RAIL_GAP;
+    const maxScroll = rail.scrollWidth - rail.clientWidth;
+    // The tail slides are END-aligned, and the rail carries a `padding-right`
+    // (clamp(20px,4vw,64px) = 57.6px at 1440) used for the edge-bleed. An
+    // end-aligned snap therefore parks at maxScroll MINUS that padding — measured
+    // 7206 vs 7264, a 58px shortfall. Testing against maxScroll meant atEnd never
+    // fired, the readout stayed "16 / 17" with the last slide on screen, and the
+    // derived index rounded 7206/496 = 14.53 to 15.
+    const padEnd = parseFloat(getComputedStyle(rail).paddingRight) || 0;
+    const endStop = Math.max(0, maxScroll - padEnd);
+    const atEndNow = rail.scrollLeft >= endStop - 8;
+    // GLM R4: the tail slides are END-aligned, so they have no reachable start-stop.
+    // Dividing by `step` alone made the last two slides unreachable and left the
+    // readout claiming slide 16 with slide 17 half off-screen. At the end, the rail
+    // IS showing the last slide — so say so, instead of rounding a position that
+    // was never available.
+    const i = atEndNow
+      ? SCREENS.length - 1
+      : Math.max(0, Math.min(SCREENS.length - 1, Math.round(rail.scrollLeft / step)));
     if (i !== index) {
       setIndex(i);
       // never land on a new screen mid-recording
       setRecording(null);
     }
     setAtStart(rail.scrollLeft <= 8);
-    setAtEnd(rail.scrollLeft >= rail.scrollWidth - rail.clientWidth - 8);
+    setAtEnd(atEndNow);
+    // Recomputed on scroll and resize: the reachable range changes with viewport.
+    let firstUnreachable = SCREENS.length;
+    for (let n = 0; n < SCREENS.length; n++) {
+      if (n * step > maxScroll) { firstUnreachable = n; break; }
+    }
+    setTailFrom(firstUnreachable);
   }, [index]);
 
   useEffect(() => {
@@ -128,8 +184,15 @@ export default function Gallery() {
     const slide = rail?.firstElementChild as HTMLElement | null;
     if (!rail || !slide) return;
     const clamped = Math.max(0, Math.min(SCREENS.length - 1, i));
+    // Clamp to the real scroll range. The tail slides are END-aligned, so asking for
+    // `16 * step` overshoots maxScroll by 672px and the browser silently lands
+    // somewhere else entirely.
+    const step = slide.offsetWidth + RAIL_GAP;
+    const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    const padEnd = parseFloat(getComputedStyle(rail).paddingRight) || 0;
+    const target = clamped === SCREENS.length - 1 ? Math.max(0, maxScroll - padEnd) : clamped * step;
     rail.scrollTo({
-      left: clamped * (slide.offsetWidth + 24),
+      left: Math.min(target, maxScroll),
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
     setIndex(clamped);
@@ -212,19 +275,56 @@ export default function Gallery() {
           onKeyDown={onRailKey}
         >
           {SCREENS.map((s, i) => (
-            <li key={s.id} id={`gal-${s.id}`} role="option" aria-selected={i === index} className="gallery-slide" data-active={i === index}>
+            <li
+                key={s.id}
+                id={`gal-${s.id}`}
+                role="option"
+                aria-selected={i === index}
+                /* GLM R4: tail slides are END-aligned. Their start-stops exceed
+                   maxScroll (measured 7936 wanted vs 7264 available), so they can
+                   never be snapped flush-left; end-aligning them makes the rail's
+                   final state "slide 17 fully visible" instead of "slide 15 with
+                   two hanging". */
+                data-snap={i >= tailFrom && tailFrom < SCREENS.length ? "end" : undefined}
+                className="gallery-slide"
+                data-active={i === index}
+              >
+              {/* the plate (§3): invariant frame, invariant ratio, invariant
+                  caption position. Nothing overlays the image — the section is
+                  titled UNRETOUCHED, so any treatment on the pixels would
+                  contradict the claim. */}
+              {/* 240ms opacity crossfade. opacity is transform's sibling and
+                  allowed; animating the video element itself would be neither.
+                  Skipped entirely under reduced motion — an instant swap there
+                  is a different rendering path, not a 0ms fade. */}
+              <motion.div
+                key={`${s.id}-${recording?.src ?? "still"}`}
+                initial={{ opacity: reduced ? 1 : 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: reduced ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
+              >
               {i === index && recording ? (
                 <RealClip
                   src={recording.src}
                   poster={s.still}
                   alt={s.alt}
-                  caption={`REAL CAPTURE — ${recording.label}`}
+                  caption={`REAL RECORDING — ${recording.label}`}
+                  plate={plateLabel(s, i)}
                   ratio={16 / 10}
+                  priority={i < 3}
                   pauseControl
                 />
               ) : (
-                <RealShot src={s.still} alt={s.alt} caption={s.caption} ratio={16 / 10} />
+                <RealShot
+                  src={s.still}
+                  alt={s.alt}
+                  caption={`REAL CAPTURE — ${s.caption}`}
+                  plate={plateLabel(s, i)}
+                  ratio={16 / 10}
+                  priority={i < 3}
+                />
               )}
+              </motion.div>
             </li>
           ))}
         </ul>
@@ -249,12 +349,36 @@ export default function Gallery() {
                   aria-current={i === index ? "true" : undefined}
                   onClick={() => goTo(i)}
                 >
-                  <img src={s.still} alt={s.label} loading="lazy" decoding="async" />
-                  <span className="mono">{s.label}</span>
-                  {s.recordings ? <span className="thumb-dot" aria-label="has a recording" /> : null}
+                  <img
+                    src={s.still}
+                    alt=""
+                    width={2880}
+                    height={1800}
+                    loading={i < 6 ? "eager" : "lazy"}
+                    decoding="async"
+                  />
+                  <span className="mono">
+                    {String(i + 1).padStart(2, "0")} {s.label}
+                  </span>
+                  {s.recordings && s.recordings.length > 0 ? (
+                    <span className="rec-chip" title={`${s.recordings.length} recording${s.recordings.length > 1 ? "s" : ""}`}>
+                      <Play size={10} strokeWidth={2} aria-hidden />
+                      {s.recordings.length}
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}
+            {/* 18th cell — makes 18 divide 2/3/6 at every breakpoint, and gives the
+                index a terminal action instead of being a dead-end grid. */}
+            <li>
+              <a className="thumb thumb-cta" href="#download">
+                <span className="thumb-cta-mark" aria-hidden>
+                  <Download size={18} strokeWidth={1.25} />
+                </span>
+                <span className="mono">GET RHEO</span>
+              </a>
+            </li>
           </ul>
         </div>
 
@@ -278,6 +402,18 @@ export default function Gallery() {
       </div>
     </section>
   );
+}
+
+/**
+ * The rail's inter-slide gap. WAS a hardcoded 24 in two places while the CSS
+ * said 16 — GLM caught the drift in Round 2. Read from the live computed style
+ * so the JS and the stylesheet cannot disagree again.
+ */
+const RAIL_GAP = 16;
+
+/** The plate label (§3): position + name on line one. */
+function plateLabel(s: Screen, i: number) {
+  return `${String(i + 1).padStart(2, "0")} / ${SCREENS.length} — ${s.label.toUpperCase()}`;
 }
 
 function RailButton({ dir, disabled, onClick }: { dir: "prev" | "next"; disabled: boolean; onClick: () => void }) {

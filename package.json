@@ -2,21 +2,29 @@
   "name": "rheo",
   "productName": "RHEO",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "author": "DeskFlow Team",
   "desktopName": "rheo.desktop",
   "description": "Productivity time tracker for desktop apps and browser",
   "scripts": {
-    "dev": "vite",
-    "build:renderer": "vite build",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build && node scripts/build.mjs",
-    "start": "electron .",
-    "lint": "eslint .",
-    "preview": "vite preview",
+    "build": "node scripts/build-with-log.mjs",
+    "build:inner": "cross-env NODE_OPTIONS=--max-old-space-size=4096 node scripts/build.mjs",
+    "build:renderer": "vite build --outDir dist-tmp",
     "check:prompt": "node scripts/check-default-prompt.mjs",
-    "dist": "npm run build && electron-builder --win"
+    "dev": "vite",
+    "dist": "npm run build && electron-builder --win",
+    "lint": "eslint .",
+    "package": "electron-builder --linux AppImage --win nsis --publish never",
+    "preview": "vite preview",
+    "release": "./scripts/release.sh",
+    "release:publish": "./scripts/release.sh --publish",
+    "start": "cross-env ELECTRON_OZONE_PLATFORM_HINT=x11 electron .",
+    "start:wayland": "electron .",
+    "validate:pages": "node scripts/validate-page-manifests.mjs",
+    "validate:settings": "node scripts/validate-settings.mjs",
+    "automation:witness": "esbuild src/services/automation/AutomationBus.ts --bundle --platform=node --format=esm --outfile=dist-electron/automation-witness-bus.mjs --alias:@=./src --external:electron --log-level=warning && node scripts/w1-witness.mjs"
   },
   "build": {
     "appId": "com.rheo.app",
@@ -28,6 +36,12 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "browser-extension",
+        "to": "browser-extension"
+      }
+    ],
     "extraMetadata": {
       "main": "dist-electron/main.cjs"
     },
@@ -36,26 +50,54 @@
       "node_modules/active-win/**/*",
       "node_modules/better-sqlite3/**/*",
       "node_modules/bindings/**/*",
-      "node_modules/file-uri-to-path/**/*"
+      "node_modules/builder-util-runtime/**/*",
+      "node_modules/electron-updater/**/*",
+      "node_modules/file-uri-to-path/**/*",
+      "node_modules/js-yaml/**/*",
+      "node_modules/lazy-val/**/*"
     ],
     "npmRebuild": false,
     "nodeGypRebuild": false,
     "win": {
-      "target": "nsis",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "RHEO_AppIcon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
       "icon": "RHEO_AppIcon.icns"
     },
     "linux": {
-      "target": "AppImage",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icons",
       "category": "Utility",
       "maintainer": "DeskFlow Team",
-      "syncDesktopName": true
-    }
+      "syncDesktopName": true,
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "RCZ88",
+        "repo": "RHEO",
+        "releaseType": "release"
+      }
+    ]
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -95,6 +137,7 @@
     "d3-force-3d": "^3.0.6",
     "date-fns": "^4.1.0",
     "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.9",
     "exifr": "^7.1.3",
     "framer-motion": "^12.35.0",
     "html-to-image": "^1.11.13",
@@ -120,9 +163,13 @@
     "react-chartjs-2": "^5.3.1",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.30.4",
     "reaviz": "^16.2.2",
     "recharts": "^3.10.1",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "simple-icons": "^13.21.0",
     "sql.js": "^1.14.1",
     "sqlite3": "^6.0.1",

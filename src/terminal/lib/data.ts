@@ -2,8 +2,13 @@ import type { Appearance, MCPServer, Preset, SavedCommand, Shortcut, TermGroup, 
 
 export const uid = (p = "id") => `${p}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-4)}`;
 
+/* Tab identity colours. These were the fully-saturated Tailwind 400s, which in a
+   row of eight swatches read as a bag of sweets and fought the single signal
+   hue (LAMINAR §2). Pulled toward the app's own palette and stepped down in
+   chroma -- still distinguishable at a glance, no longer the loudest thing in
+   the inspector. */
 export const TAB_COLORS = [
-  "#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#fb7185", "#60a5fa", "#f97316", "#e879f9",
+  "#0e7490", "#4c4a8a", "#2f7d5e", "#9a6b12", "#9c4a58", "#3a6594", "#8a4a24", "#7a3f80",
 ];
 
 export const THEMES: ThemeDef[] = [

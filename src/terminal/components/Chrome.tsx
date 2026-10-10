@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, GitBranch, Maximize2, Minus, Pin, PinOff, Plus, Search, SplitSquareHorizontal, X } from "lucide-react";
+import { Boxes, Copy, GitBranch, Maximize2, Minus, Pin, Plus, Search, SplitSquareHorizontal, X } from "lucide-react";
 import type { Store } from "../hooks/useConsoleStore";
 import { TabIcon } from "./TabIcon";
 import { cx } from "../lib/utils";
@@ -53,7 +53,7 @@ export function TabStrip({ store, onNewTab }: { store: Store; onNewTab: () => vo
             onClick={() => store.setActiveTabId(t.id)}
             onDoubleClick={() => startRename(t.id, t.label)}
             onContextMenu={(e) => { e.preventDefault(); setCtx(ctx === t.id ? null : t.id); }}
-            className={cx("group relative flex items-center gap-2 pl-3 pr-1.5 h-10 rounded-xl border cursor-pointer select-none shrink-0 transition-all", active ? "shadow-lg" : "hover:border-[var(--t-accent)]", dragId === t.id && "tab-dragging", dropId === t.id && dragId !== t.id && "tab-drop-hint")}
+            className={cx("group relative flex items-center gap-2 pl-3 pr-1.5 h-10 rounded-xl border cursor-pointer select-none shrink-0 transition-colors", active ? "shadow-lg" : "hover:border-[var(--t-accent)]", dragId === t.id && "tab-dragging", dropId === t.id && dragId !== t.id && "tab-drop-hint")}
             style={{
               background: active ? "var(--t-panel2)" : "var(--t-panel)",
               borderColor: active ? t.color : "var(--t-border)",
@@ -128,34 +128,87 @@ export function LeftSidebar({ store, onPresets, onWorkspaces, onNewTab }: { stor
   };
   return (
     <div className="h-full flex flex-col min-h-0" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
-      <div className="p-3 pb-2 space-y-2">
-        <div className="flex gap-2">
-          <button onClick={onNewTab} title="New tab (Ctrl+Shift+T)" className="flex-1 h-9 rounded-xl text-[12.5px] font-semibold text-white flex items-center justify-center gap-1.5 transition hover:brightness-110" style={{ background: "var(--t-accent)" }}><Plus size={15} />New tab</button>
-          <button onClick={onPresets} className="h-9 px-3 rounded-xl border text-[12.5px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>Presets</button>
+      {/* ── SIDEBAR HEADER ────────────────────────────────────────────────
+          This was four competing controls stacked in a column: an oversized
+          full-width "New tab" button, a bordered "Presets" button, a filter
+          field, and then a WRAPPING ROW of group-filter pills (All 3 /
+          Development 1 / DevOps 1 / System 1 / Experiments 0) that changed
+          width and count every time a group was added. Five pills of noise
+          above a list of names.
+
+          It is now one compact toolbar plus ONE group control, so the sidebar
+          opens on navigation instead of on chrome. */}
+      <div className="px-2.5 pt-2.5 pb-2 flex flex-col gap-2 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onNewTab}
+            title="New tab (Ctrl+Shift+T)"
+            className="df-tool-btn h-8 px-2.5 rounded-lg text-[12px] font-medium flex items-center gap-1.5 shrink-0"
+            style={{ color: "var(--t-fg)" }}
+          >
+            <Plus size={13} />New tab
+          </button>
+          <button
+            onClick={onPresets}
+            title="Presets"
+            aria-label="Presets"
+            className="df-tool-btn h-8 w-8 rounded-lg grid place-items-center shrink-0"
+            style={{ color: "var(--t-muted)" }}
+          >
+            <Boxes size={14} />
+          </button>
+          <div className="flex-1" />
+          {/* ONE group control instead of N pills. Shows the active scope and
+              how many tabs it holds; the count is the useful part, the label is
+              the part you already know. */}
+          <button
+            onClick={() => store.setGroupFilter(store.groupFilter === "all" ? (store.groups[0]?.id ?? "all") : "all")}
+            title={store.groupFilter === "all" ? "Show one group" : "Show all groups"}
+            className="df-tool-btn h-8 px-2 rounded-lg text-[11px] mono flex items-center gap-1.5 shrink-0 tabular-nums"
+            style={{ color: "var(--t-muted)" }}
+          >
+            {store.groupFilter === "all"
+              ? <>All<span className="opacity-60">{store.tabs.length}</span></>
+              : <>{store.groups.find((g) => g.id === store.groupFilter)?.name ?? "Group"}<span className="opacity-60">{store.tabs.filter((t) => t.groupId === store.groupFilter).length}</span></>}
+          </button>
         </div>
+
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
-          <input value={store.tabSearch} onChange={(e) => store.setTabSearch(e.target.value)} placeholder="Filter tabs…" aria-label="filter tabs" className="w-full h-9 pl-8 pr-3 rounded-xl border text-[12.5px] outline-none focus:border-[var(--t-accent)] transition mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }} />
-        </div>
-        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="group filter">
-          {["all", ...store.groups.map((g) => g.id)].map((id) => {
-            const g = store.groups.find((x) => x.id === id);
-            const active = store.groupFilter === id;
-            const n = id === "all" ? store.tabs.length : store.tabs.filter((t) => t.groupId === id).length;
-            return (
-              <button key={id} onClick={() => store.setGroupFilter(id)} aria-pressed={active} className="flex items-center gap-1.5 h-7 pl-2 pr-2.5 rounded-lg text-[11px] font-semibold border transition" style={{
-                borderColor: active ? (g?.color ?? "var(--t-accent)") : "var(--t-border)",
-                background: active ? `color-mix(in srgb, ${g?.color ?? "var(--t-accent)"} 16%, transparent)` : "transparent",
-                color: active ? (g?.color ?? "var(--t-accent)") : "var(--t-muted)",
-              }}>
-                {g && <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />}
-                {id === "all" ? "All" : g?.name} <span className="mono opacity-70">{n}</span>
-              </button>
-            );
-          })}
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--t-muted)" }} />
+          <input
+            value={store.tabSearch}
+            onChange={(e) => store.setTabSearch(e.target.value)}
+            placeholder="Filter tabs"
+            aria-label="filter tabs"
+            className="w-full h-8 pl-8 pr-7 rounded-lg text-[12px] outline-none border transition-colors"
+            style={{ background: "var(--df-plane-3, var(--t-bg))", borderColor: "var(--t-border)", color: "var(--t-fg)" }}
+          />
+          {store.tabSearch && (
+            <button
+              onClick={() => store.setTabSearch("")}
+              aria-label="clear filter"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded grid place-items-center hover:bg-[var(--t-fg)]/[0.07]"
+              style={{ color: "var(--t-muted)" }}
+            >
+              <X size={11} />
+            </button>
+          )}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3 min-h-0">
+
+      {/* The sidebar needs a SPINE, otherwise the nav is one undifferentiated
+          stack of names and the group headers read as more rows rather than as
+          structure. */}
+      <div className="flex-1 overflow-y-auto px-2.5 pb-3 space-y-2 min-h-0">
+        <div className="df-section-label flex items-center gap-1.5 px-0.5">
+          <span className="text-[9px] mono uppercase tracking-[0.09em]" style={{ color: "var(--t-muted)" }}>
+            Tabs
+          </span>
+          <span className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
+          <span className="text-[9px] mono tabular-nums" style={{ color: "var(--t-muted)" }}>
+            {store.tabs.length}
+          </span>
+        </div>
         {store.groups.filter((g) => store.groupFilter === "all" || g.id === store.groupFilter).map((g) => {
           const gtabs = store.tabs.filter((t) => t.groupId === g.id && t.label.toLowerCase().includes(store.tabSearch.toLowerCase()));
           if (!gtabs.length && !g.collapsed) return null;
@@ -174,25 +227,62 @@ export function LeftSidebar({ store, onPresets, onWorkspaces, onNewTab }: { stor
                 {gtabs.map((t) => {
                   const active = t.id === store.activeTabId;
                   return (
-                    <div key={t.id} onClick={() => store.setActiveTabId(t.id)} className="rounded-xl border p-2.5 cursor-pointer transition hover:border-[var(--t-accent)]" style={{ background: active ? "var(--t-panel2)" : "transparent", borderColor: active ? t.color : "var(--t-border)" }}>
-                      <div className="flex items-center gap-2">
-                        {t.pinned ? <Pin size={12} className="shrink-0 fill-current" style={{ color: t.color }} /> : <TabIcon name={t.icon} size={14} className="shrink-0" />}
-                        <span className="text-[12.5px] font-semibold truncate flex-1" style={{ color: "var(--t-fg)" }}>{t.label}</span>
-                        <button title={t.pinned ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); store.togglePin(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-white/10" style={{ color: t.pinned ? t.color : "var(--t-muted)" }}>{t.pinned ? <PinOff size={12} /> : <Pin size={12} />}</button>
-                        <button title="Duplicate" onClick={(e) => { e.stopPropagation(); store.duplicateTab(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-white/10" style={{ color: "var(--t-muted)" }}><Copy size={12} /></button>
-                        <button title="Close" onClick={(e) => { e.stopPropagation(); store.closeTab(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-red-500/80 hover:text-white" style={{ color: "var(--t-muted)" }}><X size={12} /></button>
-                      </div>
-                      {t.note && <div className="text-[10.5px] mt-1 italic truncate" style={{ color: "var(--t-muted)" }}>“{t.note}”</div>}
-                      <div className="mt-1.5 space-y-1">
-                        {Object.values(t.panes).map((p) => (
-                          <button key={p.id} onClick={(e) => { e.stopPropagation(); store.setActiveTabId(t.id); store.focusPane(t.id, p.id); }} className="w-full flex items-center gap-1.5 text-[10.5px] mono px-1.5 py-1 rounded-md transition hover:bg-white/5" style={{ color: "var(--t-muted)", outline: t.activePaneId === p.id ? `1px solid ${t.color}55` : "1px solid transparent", background: t.activePaneId === p.id ? `${t.color}0d` : undefined }}>
-                            <GitBranch size={10} className="shrink-0" />
-                            <span className="truncate flex-1 text-left">{p.cwd.replace("/home/user", "~")}</span>
-                            <span onClick={(e) => { e.stopPropagation(); copyCwd(p.id, p.cwd); }} className="shrink-0 hover:text-[var(--t-fg)]">{copied === p.id ? <Check size={11} /> : null}</span>
-                            <span className="shrink-0 opacity-60">{p.cmdHistory.length}⌁</span>
-                          </button>
-                        ))}
-                      </div>
+                    /* ── ONE ROW PER TAB. ──────────────────────────────────────
+                       This used to be a bordered card with the pane list
+                       NESTED INSIDE it, so each navigation item rendered as a
+                       small multi-row widget. Three tabs became nine competing
+                       blocks of chrome, and the sidebar read as "a pile of
+                       little components" rather than as navigation -- which is
+                       the inversion you spotted: the nav was weaker than the
+                       panels it navigates to.
+
+                       Navigation is now one flat row per destination, with the
+                       pane detail demoted to a single quiet meta line, and the
+                       row actions revealed on hover so a resting sidebar shows
+                       only names. Selection is an accent LEFT BAR, not a second
+                       bordered box -- the same language the inspector uses. */
+                    <div
+                      key={t.id}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => store.setActiveTabId(t.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); store.setActiveTabId(t.id); } }}
+                      className="group/nav relative flex items-center gap-2 h-9 pl-2.5 pr-1.5 rounded-lg cursor-pointer transition-colors"
+                      style={{
+                        background: active ? "color-mix(in srgb, var(--t-accent) 11%, transparent)" : "transparent",
+                      }}
+                    >
+                      {active && (
+                        <span aria-hidden="true" className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full" style={{ background: "var(--t-accent)" }} />
+                      )}
+                      <span className="shrink-0" style={{ color: active ? "var(--t-accent)" : "var(--t-muted)" }}>
+                        {t.pinned ? <Pin size={13} className="fill-current" /> : <TabIcon name={t.icon} size={14} />}
+                      </span>
+                      <span className="text-[13px] truncate flex-1" style={{ color: "var(--t-fg)", fontWeight: active ? 600 : 500 }}>
+                        {t.label}
+                      </span>
+                      <span className="text-[10px] mono shrink-0 tabular-nums" style={{ color: "var(--t-muted)" }}>
+                        {Object.keys(t.panes).length}⌁
+                      </span>
+                      <span className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/nav:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <button title={t.pinned ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); store.togglePin(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-[var(--t-fg)]/[0.07]" aria-label={`Pin ${t.label}`}><Pin size={11} /></button>
+                        <button title="Duplicate" onClick={(e) => { e.stopPropagation(); store.duplicateTab(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-[var(--t-fg)]/[0.07]" aria-label={`Duplicate ${t.label}`}><Copy size={11} /></button>
+                        <button title="Close" onClick={(e) => { e.stopPropagation(); store.closeTab(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-[var(--pc-danger)]/15 hover:text-[var(--pc-danger)]" aria-label={`Close ${t.label}`}><X size={12} /></button>
+                      </span>
+                      {/* pane detail: ONE quiet meta line, not a nested list */}
+                      {Object.values(t.panes).length > 0 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); const p0 = Object.values(t.panes)[0]; store.setActiveTabId(t.id); store.focusPane(t.id, p0.id); copyCwd(p0.id, p0.cwd); }}
+                          title="Focus pane & copy its path"
+                          className="absolute left-2.5 right-2 top-full text-[10px] mono truncate text-left leading-none hover:text-[var(--t-fg)] transition-colors"
+                          style={{ color: "var(--t-muted)", opacity: 0.75 }}
+                        >
+                          {copied === Object.values(t.panes)[0].id ? <span style={{ color: "var(--pc-success)" }}>copied ✓</span> : <>
+                            {Object.values(t.panes)[0].cwd.replace("/home/user", "~")}
+                            {Object.keys(t.panes).length > 1 ? `  +${Object.keys(t.panes).length - 1} more` : ""}
+                          </>}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -243,10 +333,10 @@ export function BottomBar({ store }: { store: Store }) {
       <span className="hidden md:flex items-center gap-1"><GitBranch size={11} />{pane?.cwd.replace("/home/user", "~")}</span>
       <span className="hidden lg:inline">{store.shell} · main* ⇅ 0</span>
       <div className="flex-1" />
-      {store.broadcastTabId && <span className="font-semibold" style={{ color: "#fb7185" }}>● BROADCAST</span>}
+      {store.broadcastTabId && <span className="font-semibold" style={{ color: "var(--pc-danger)" }}>● BROADCAST</span>}
       <span>{store.distro.split(" ")[0].toLowerCase()} · utf-8</span>
       <span className="hidden sm:inline" style={{ color: "var(--t-accent)" }}>⬡ mcp:{mcpOn}/{store.mcp.length}</span>
-      <span className="hidden sm:inline">{store.theme.name}</span>
+      <span className="hidden sm:inline" title="Shell syntax colours only — the console chrome follows the app theme">syntax: {store.theme.name}</span>
       <span className="flex items-center gap-1"><Minus size={10} />{store.stats.total} cmds</span>
       <span className="hidden md:inline opacity-70">Ctrl+K palette · Ctrl+Shift+S workspace</span>
     </div>

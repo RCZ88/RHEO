@@ -96,15 +96,15 @@ export function FinanceOverviewSection() {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/60 p-3.5">
+              <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 p-3.5">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Net Worth</span>
                 <p className={`text-lg font-bold tabular-nums mt-1 ${trendColor}`}>{fmt(netWorth)}</p>
               </div>
-              <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/60 p-3.5">
+              <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 p-3.5">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Income</span>
                 <p className="text-lg font-bold tabular-nums mt-1 text-emerald-400">{fmt(income)}</p>
               </div>
-              <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/60 p-3.5">
+              <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 p-3.5">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Spending</span>
                 <p className="text-lg font-bold tabular-nums mt-1 text-[#fb7185]">{fmt(expense)}</p>
               </div>

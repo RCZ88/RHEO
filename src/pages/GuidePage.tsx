@@ -39,9 +39,16 @@ export default function GuidePage() {
 
   return (
     <PageShell page="guide" variant="sticky-header">
-      <div className="flex flex-col h-full bg-[#0a0a0a]">
+      {/* `bg-[#0a0a0a]` was a raw hex with NO light variant at all, so in Warm
+          Paper the Guide's entire surface stayed near-black — the page the user
+          reported as "still black on the light mode". It is now the paper token.
+
+          No grey is introduced: `--ws-surface` is S0 paper #f5f2ec (design.md §11
+          "bone/oat, never cool grey"), and `--ws-surface-raised` is S1 card
+          #fcfbf8. Both are warm, and they are the only surfaces this root needs. */}
+      <div className="flex flex-col h-full light:bg-[var(--ws-surface-raised)]">
         {/* Tab Switcher Header */}
-        <div className="flex items-center gap-1 p-2 bg-zinc-900/30 border-b border-zinc-800/60 shrink-0">
+        <div className="flex items-center gap-1 p-2 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border-b border-zinc-800/60 shrink-0">
           <button
             onClick={() => switchTab('tutorial')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -77,6 +84,7 @@ export default function GuidePage() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
                 className="h-full flex flex-col"
+                data-section="guide.tutorial"
               >
                 <TutorialPage noShell />
               </motion.div>
@@ -88,6 +96,7 @@ export default function GuidePage() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
                 className="h-full flex flex-col"
+                data-section="guide.specs"
               >
                 <FeatureSpecViewer noShell />
               </motion.div>

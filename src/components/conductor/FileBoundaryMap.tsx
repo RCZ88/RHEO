@@ -21,7 +21,7 @@ export function FileBoundaryMap({ nodes }: { nodes: any[] }) {
         <p className="text-[10px] text-zinc-500 py-4 text-center">No file boundaries defined</p>
       )}
       {Object.entries(fileMap).map(([filePath, info]) => (
-        <div key={filePath} className={`flex items-center gap-2 py-2 px-3 rounded-lg ${info.overlap ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70'}`}>
+        <div key={filePath} className={`flex items-center gap-2 py-2 px-3 rounded-lg ${info.overlap ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70'}`}>
           <FileText className={`w-3.5 h-3.5 shrink-0 ${info.overlap ? 'text-amber-400' : 'text-zinc-500'}`} />
           <span className="text-xs text-zinc-200 flex-1 truncate">{filePath}</span>
           {info.overlap && <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />}

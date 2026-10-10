@@ -1,80 +1,18 @@
-"use strict";
-var __importDefault = function (mod) {
-    return (mod && mod.__importDefault) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-
-// Linux fallback for getting the foreground window when active-win fails.
-// Uses xdotool + ps to reconstruct { owner: { name, path }, title }.
-
-const child_process_1 = require("child_process");
-const util_1 = require("util");
-
-const exec = util_1.promisify(child_process_1.exec);
-
-interface OwnerInfo {
-    name: string;
-    path: string;
-}
-
-interface ForegroundWindow {
-    owner: OwnerInfo;
-    title: string;
-}
-
-/**
- * Returns the current Linux foreground window info, or null if unavailable.
- * Tries xdotool first; falls back to empty result on any failure.
- */
-async function getLinuxForegroundWindow(): Promise<ForegroundWindow | null> {
-    try {
-        // Get the active window ID
-        const idOut = await exec("xdotool getactivewindow 2>/dev/null");
-        const winId = (idOut.stdout || "").trim();
-        if (!winId) return null;
-
-        // Get the window title
-        let title = "";
-        try {
-            const titleOut = await exec(`xdotool getwindowname ${winId} 2>/dev/null`);
-            title = (titleOut.stdout || "").trim();
-        } catch {
-            // title lookup failed — continue with empty title
-        }
-        if (!title) {
-            // Fallback: try xprop
-            try {
-                const propOut = await exec(`xprop -id ${winId} WM_NAME 2>/dev/null`);
-                const match = (propOut.stdout || "").match(/WM_NAME\\("?([^"]*)"?\\)/);
-                if (match) title = match[1] || "";
-            } catch {
-                // xprop also failed
-            }
-        }
-
-        // Get the owning process PID, then resolve name + path
-        let owner: OwnerInfo = { name: "", path: "" };
-        try {
-            const pidOut = await exec(`xdotool getwindowpid ${winId} 2>/dev/null`);
-            const pid = (pidOut.stdout || "").trim();
-            if (pid) {
-                // Process name
-                try {
-                    const cmdOut = await exec(`ps -p ${pid} -o comm= 2>/dev/null`);
-                    owner.name = (cmdOut.stdout || "").trim();
-                } catch { /* ignore */ }
-                // Process executable path
-                try {
-                    const exeOut = await exec(`readlink -f /proc/${pid}/exe 2>/dev/null`);
-                    owner.path = (exeOut.stdout || "").trim();
-                } catch { /* ignore */ }
-            }
-        } catch { /* ignore */ }
-
-        return { owner, title };
-    } catch {
-        return null;
-    }
-}
-
-exports.getLinuxForegroundWindow = getLinuxForegroundWindow;
+// This file used to be an 80-line stale CommonJS build artifact that had been
+// committed by mistake as TypeScript source: it contained tsc's `__importDefault`
+// boilerplate, `Object.defineProperty(exports, "__esModule")`, and a bare
+// `exports.getLinuxForegroundWindow = ...`. Under package.json's `"type": "module"`
+// that is a real defect, not a cosmetic warning — `exports` does not exist in ESM,
+// so the line was treated as an assignment to an undeclared global.
+//
+// It was also INCOMPLETE: src/main.ts uses five symbols from this module and the
+// file defined one. The real implementation is src/linuxForeground.ts (614 lines),
+// which exports all five:
+//
+//     getLinuxForegroundWindow · lastStrategyUsed · lastStrategyTrace
+//     probeLinuxTrackingEnvironment · LINUX_DETECT_BUILD
+//
+// scripts/build.mjs compiles every .ts under src/main/ into dist-electron/main/, so
+// the stale copy was being shipped alongside the real one. Re-export the real module
+// instead of keeping a divergent second copy of it.
+export * from '../linuxForeground'

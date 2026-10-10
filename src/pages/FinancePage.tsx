@@ -26,10 +26,9 @@ import { AuditLogTab } from '../components/finance/AuditLogTab';
 import { PeopleTab } from '../components/finance/PeopleTab';
 import BudgetExpensesDashboard from '../components/finance/budget-expenses/BudgetExpensesDashboard';
 import { BudgetTab } from '../components/finance/BudgetTab';
-import { NetWorthLineChart } from '../components/finance/NetWorthLineChart';
-import { IncomeExpenseBarChart } from '../components/finance/IncomeExpenseBarChart';
-import { SpendingCategoryChart } from '../components/finance/SpendingCategoryChart';
+import { LoadingState } from '../components/LoadingState';
 import { followThroughReceivable, netWorthWithReceivable } from '../lib/netWorth';
+import { walletBalance } from '../components/finance/_fx/walletBalance';
 import {
   BankTransactionModal, DebitTransactionModal, CreditTransactionModal,
   CryptoTransactionModal, PhysicalTransactionModal, CashTransactionModal, EwalletTransactionModal, PrepaidCardTransactionModal,
@@ -77,6 +76,14 @@ export function FinancePage() {
   useEffect(() => { startPhaseClock(); }, []);
   const [isLocked, setIsLocked] = useState(true);
   const [isFirstTime, setIsFirstTime] = useState(false);
+  // UNDECIDED is a third state, and it must not be drawn as "locked". The
+  // backend cannot read the credential until the database is open (the finance
+  // handlers are registered before it is), so the first second of every launch
+  // is genuinely unknown. Rendering the password screen during that window and
+  // then clearing it when the real answer arrives produced a password prompt
+  // that dismissed itself — which reads as broken, and with remember-device
+  // enabled it did exactly that. Show nothing assertive until we know.
+  const [lockUndecided, setLockUndecided] = useState(true);
   const [lockError, setLockError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FinanceTabKey>('overview');
   const location = useLocation();
@@ -193,7 +200,9 @@ export function FinancePage() {
       window.deskflowAPI.financeGetSecuritySettings().then(setSecuritySettings);
       window.deskflowAPI.financeGetPasswordRequirements().then(setPasswordRequirements);
       window.deskflowAPI.financeGetLockState().then((state: any) => {
-        if (state) {
+        // Never assign a non-number: the lock screen's attempt indicator maps
+        // `i < attemptsLeft`, so `undefined` painted all three segments red.
+        if (state && typeof state.attemptsLeft === 'number') {
           setAttemptsLeft(state.attemptsLeft);
         }
       }).catch(() => {});
@@ -201,33 +210,87 @@ export function FinancePage() {
   }, []);
 
   useEffect(() => {
-    if (securitySettings) {
-      if (securitySettings.locked) {
-        setIsLocked(true);
-      } else if (securitySettings.rememberDevice && securitySettings.rememberDeviceExpiry && Date.now() < securitySettings.rememberDeviceExpiry) {
-        setIsLocked(false);
-      }
-      if (securitySettings.displayCurrency) {
-        setDisplayCurrency(securitySettings.displayCurrency);
-        setBaseCurrency(securitySettings.displayCurrency);
-      }
+    // An undetermined payload means the backend has not read the credential yet
+    // (the DB is opened after the handlers are registered). Deciding from it
+    // either way is wrong — "not locked yet" permanently unlocks the page, and
+    // so does the isFirstTime branch in checkSetup(). Wait for a real answer.
+    if (!securitySettings || securitySettings.determined === false) return;
+    setLockUndecided(false);
+    if (securitySettings.locked) {
+      setIsLocked(true);
+    } else {
+      // The missing `else`. This chain only ever released the lock when
+      // rememberDevice was set, so any other unlocked state fell through
+      // with no branch at all and the page stayed on the lock screen for
+      // the whole session — the backend said "unlocked", the UI said
+      // "locked", and nothing could recover it but the password.
+      setIsLocked(false);
     }
+    if (securitySettings.displayCurrency) {
+      setDisplayCurrency(securitySettings.displayCurrency);
+      setBaseCurrency(securitySettings.displayCurrency);
+    }
+  }, [securitySettings]);
+
+// If the backend could not read the credential on the first try (the database
+  // is opened AFTER the finance handlers are registered, so the renderer's very
+  // first read can legitimately land in that window), nothing would ever
+  // replace it — a user with no password would sit on the lock screen forever,
+//  and a user with one would sit there correctly but with no data.
+//
+// The ladder runs to ~15s, not ~4s: schema migrations on a large DB run on
+// startup and can take longer than that, and the tail of this ladder is
+// precisely the case that decides whether the app is usable at all. It also
+// re-asks whenever the window regains focus, so a user who alt-tabs away
+// during a slow boot still gets a correct answer.
+  useEffect(() => {
+    if (!securitySettings || securitySettings.determined !== false) return;
+    let cancelled = false;
+    const delays = [150, 400, 900, 2000, 4000, 8000, 12000, 15000];
+    const reask = () => {
+      if (cancelled) return;
+      window.deskflowAPI?.financeGetSecuritySettings?.()
+        .then((next: any) => { if (!cancelled && next) setSecuritySettings(next); })
+        .catch(() => {});
+    };
+    const timers = delays.map((ms) => setTimeout(reask, ms));
+    const onFocus = () => {
+      if (!cancelled && securitySettings?.determined === false) reask();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [securitySettings]);
 
   const checkSetup = async () => {
     try {
-      const result = await window.deskflowAPI?.financeCheckPasswordSetup();
-      if (result) {
-        const setupResult = result as { hasPassword: boolean };
-        setIsFirstTime(!setupResult.hasPassword);
-        if (!setupResult.hasPassword) {
-          setIsLocked(false);
-        } else {
-          setIsLocked(true);
-        }
+      const result = await window.deskflowAPI?.financeCheckPasswordSetup() as
+        { hasPassword?: boolean; determined?: boolean; locked?: boolean } | undefined;
+      if (!result) {
+        // No answer at all — keep the safe default (locked), never open.
+        setIsLocked(true);
+        return;
       }
+      if (result.determined === false) return;   // still unknown; the retry owns it
+      setLockUndecided(false);
+      // "No password" is only believable if the backend actually READ the
+      // credential. A blank read (DB not open yet) used to be taken as
+      // first-run: setIsLocked(false) AND setIsFirstTime(true), and since the
+      // gate is `if (isLocked && !isFirstTime)` that combination makes the
+      // lock screen unreachable for the rest of the session. That is why the
+      // lock "unlocked itself" on every restart and only came back after the
+      // password was changed.
+      setLockUndecided(false);
+      setIsFirstTime(!result.hasPassword);
+      if (result.hasPassword) setIsLocked(!!result.locked);
+      else setIsLocked(false);
     } catch {
-      setIsFirstTime(true);
+      setIsFirstTime(false);
       setIsLocked(true);
     }
   };
@@ -943,35 +1006,12 @@ export function FinancePage() {
       const walletSum = wallets
         .filter(w => w.account_id === a.id && !w.is_archived)
         .reduce((ws, w) => {
-          let total = 0;
-          if ((w.type === 'physical' || w.type === 'cash') && w.metadata?.denominations) {
-            // Physical: normalize denominations format (array or record)
-            const denoms = w.metadata.denominations;
-            if (Array.isArray(denoms)) {
-              total = denoms.reduce((sx: number, d: any) => sx + (d.value || 0) * (d.count || 0), 0);
-            } else if (typeof denoms === 'object') {
-              total = Object.entries(denoms).reduce((sx: number, [val, cnt]: [string, any]) => sx + (parseFloat(val) || 0) * (Number(cnt) || 0), 0);
-            } else {
-              total = w.balance ?? 0;
-            }
-          } else if ((w.type === 'crypto' || w.type === 'investment') && w.metadata?.assets) {
-            // Crypto: use wallet.balance (available fiat) + market value of assets
-            total = w.balance ?? 0;
-            try {
-              const assets = typeof w.metadata.assets === 'string' ? JSON.parse(w.metadata.assets) : w.metadata.assets;
-              if (Array.isArray(assets)) {
-                // Try to compute market value from assets (amount * price if available)
-                const marketValue = assets.reduce((cs: number, a: any) => {
-                  const amt = Number(a.amount) || 0;
-                  const price = Number(a.currentPrice || a.price || a.avg_buy_price || a.avgBuyPrice) || 0;
-                  return cs + (amt * price);
-                }, 0);
-                if (marketValue > 0) total += marketValue;
-              }
-            } catch { /* ignore */ }
-          } else {
-            total = w.balance ?? 0;
-          }
+          // Delegates to the SHARED derivation. This block used to be a
+          // third independent copy of "what is in this wallet", and it read
+          // `w.metadata.denominations` while `metadata` is typed `string |
+          // null` — so that branch never ran and the header could disagree
+          // with the dashboard's accounts row about the same cash wallet.
+          const total = walletBalance(w);
           return ws + convertAmount(total, w.currency || baseCurrency, displayCurrency);
         }, 0);
       return s + walletSum;
@@ -1002,6 +1042,18 @@ export function FinancePage() {
     const cappedPct = Math.max(-100, Math.min(1000, pct));
     return { value: diff, percent: cappedPct };
   }, [monthlyTrends]);
+
+  // UNDECIDED. The backend has not been able to read the credential yet, so
+  // there is nothing honest to ask for. A spinner is correct; a password field
+  // is not. Rendering the lock screen here and clearing it 150ms later is what
+  // made the prompt "unlock itself".
+  if (lockUndecided) {
+    return (
+      <div className="flex h-full items-center justify-center" style={{ ['--page-accent' as string]: '#10b981' }}>
+        <LoadingState variant="spinner" />
+      </div>
+    );
+  }
 
   if (isLocked && !isFirstTime) {
     return (
@@ -1052,7 +1104,7 @@ export function FinancePage() {
       <div className="relative z-10">
       <AuroraBackground />
 
-      <div className="relative isolate min-h-full px-6 pt-4 pb-28 mx-auto w-full max-w-full">
+      <div className="relative isolate min-h-full px-6 pt-4 pb-28 mx-auto w-full max-w-[1600px]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
@@ -1209,17 +1261,16 @@ export function FinancePage() {
                     error={fetchError}
                     onRetry={fetchData}
                     onCreateAccount={handleCreateAccount}
-                    onAddTransaction={handleAddTransaction}
                     onDeleteTransaction={handleDeleteTransaction}
                     onVerifyPassword={handleUnlock}
                     categories={categories}
                     wallets={wallets}
-                    subscriptions={subscriptions}
                     displayCurrency={displayCurrency}
                     baseCurrency={baseCurrency}
                     currentNetWorth={netWorthTotal}
                     onBehalfOfSummary={onBehalfOfSummary}
                     onRecordFtRepayment={handleRecordFtRepayment}
+                    budgetStatus={budgetStatus}
                   />
                 </motion.div>
               )}

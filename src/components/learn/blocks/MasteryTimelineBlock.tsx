@@ -29,7 +29,7 @@ const LEVEL_COLORS: Record<string, string> = {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload) return null;
   return (
-    <div className="rounded-lg border border-zinc-800 p-3 text-[13px] shadow-lg" style={{ background: '#1c1917' }}>
+    <div className="rounded-lg border border-zinc-800 p-3 text-[13px] shadow-lg" style={{ background: 'var(--ws-surface-overlay)' }}>
       <div className="font-medium text-zinc-100 mb-1.5">{new Date(label).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
       {payload.map((entry: any, i: number) => (
         <div key={i} className="flex items-center gap-1.5 mb-0.5 text-zinc-400">
@@ -55,7 +55,7 @@ export function MasteryTimelineBlock({ meta, events, series }: Props) {
   }, [series]);
 
   return (
-    <div className="rounded-xl border border-zinc-800 p-4 bg-zinc-900/40">
+    <div className="rounded-xl border border-zinc-800 p-4 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-[15px] font-medium text-zinc-100">Mastery Progression</h3>

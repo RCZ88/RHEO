@@ -126,7 +126,7 @@ export default function WorkspacesPage() {
                       key={`${w.projectId}-${w.name}`}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-between px-4 py-3 bg-zinc-900/80 border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors"
+                      className="flex items-center justify-between px-4 py-3 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">

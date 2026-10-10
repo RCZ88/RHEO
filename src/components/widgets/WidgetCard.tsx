@@ -65,7 +65,7 @@ export function WidgetCard({
   return (
     <div
       className={clsx(
-        "relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900 p-5",
+        "relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900 light:bg-[var(--ws-surface-raised)] p-5",
         hoverable && "hover:border-zinc-700 transition-colors duration-200",
         className
       )}

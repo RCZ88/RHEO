@@ -185,13 +185,13 @@ export default function ComponentBrowserModal({ open, onClose, libraryId, onAddC
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950 light:bg-[var(--ws-surface)]/80 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.97 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-3xl max-h-[80vh] rounded-xl bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/60 flex flex-col overflow-hidden"
+            className="w-full max-w-3xl max-h-[80vh] rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-zinc-800/60">
@@ -316,7 +316,7 @@ export default function ComponentBrowserModal({ open, onClose, libraryId, onAddC
                             </div>
                           ) : (
                             (componentDetails[item.slug]?.code || item.code) && (
-                              <pre className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/40
+                              <pre className="p-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/40
                                 text-xs text-zinc-400 font-mono overflow-x-auto max-h-48 overflow-y-auto">
                                 {componentDetails[item.slug]?.code || item.code}
                               </pre>

@@ -105,7 +105,14 @@ export class CompositionEngineManager {
   emitEvent(topic: string, payload?: any) {
     try {
       this.eventBus.enqueue(topic, topic.split('.')[0], payload);
-    } catch (err) { console.error('[CompositionEngine] emitEvent failed', err); }
+    } catch (err) {
+      // Shutting down: the outbox DB is closed and the flush timer is stopped.
+      // That is expected, not an error worth logging every tick.
+      const msg = String((err as any)?.message || err);
+      if (!/connection is not open|closed database/i.test(msg)) {
+        console.error('[CompositionEngine] emitEvent failed', err);
+      }
+    }
   }
 
   /**

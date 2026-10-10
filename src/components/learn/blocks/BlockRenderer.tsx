@@ -148,7 +148,7 @@ export const BlockRenderer = React.memo(function BlockRenderer({ block, onAsk, o
             <FileCode2 className="w-3 h-3" />
           </button>
           {showSource && (
-            <div className="mt-2 rounded-lg border border-zinc-800/60 bg-zinc-950/80 overflow-hidden">
+            <div className="mt-2 rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/80 overflow-hidden">
               <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800/50">
                 <span className="text-[10px] font-mono text-zinc-500">block:{block.id}</span>
                 <span className="text-[10px] font-mono text-zinc-600">{block.type}</span>
@@ -173,7 +173,7 @@ export const BlockRenderer = React.memo(function BlockRenderer({ block, onAsk, o
         <FileCode2 className="w-3 h-3" />
       </button>
       {showSource && (
-        <div className="mt-2 rounded-lg border border-zinc-800/60 bg-zinc-950/80 overflow-hidden">
+        <div className="mt-2 rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/80 overflow-hidden">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800/50">
             <span className="text-[10px] font-mono text-zinc-500">block:{block.id}</span>
             <span className="text-[10px] font-mono text-zinc-600">{block.type}</span>

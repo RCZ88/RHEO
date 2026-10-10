@@ -101,7 +101,7 @@ export function WeeklyGoalsView({ weekGoals, weekDates, selectedDate, onToggle, 
                         className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
                           goal.status === 'done'
                             ? 'bg-emerald-500/5 border border-emerald-500/10'
-                            : 'bg-zinc-900/30 border border-zinc-800/30 hover:border-zinc-700/40'
+                            : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30 hover:border-zinc-700/40'
                         }`}
                       >
                         <button

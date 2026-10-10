@@ -35,6 +35,11 @@ function verifyPassword(password: string, stored: string): Promise<boolean> {
 const PairBody = z.object({
   code: z.string().regex(/^[A-Z0-9]{8}$/).optional(),
   email: z.string().email().optional(),
+  // Only meaningful together with `email`, and only used to PROVE ownership of an
+  // existing account. It was absent before, which is part of why reusing an email
+  // was unauthenticated: the endpoint had no way to check a password even in
+  // principle.
+  password: z.string().min(8).max(200).optional(),
   deviceName: z.string().optional(),
   platform: z.string().optional(),
 })
@@ -56,7 +61,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() })
     }
-    const { code, email, deviceName, platform } = parsed.data
+    const { code, email, password, deviceName, platform } = parsed.data
     const db = getDb()
 
     let relayHost: string | null = null
@@ -117,18 +122,60 @@ export async function authRoutes(app: FastifyInstance) {
       }
     } else {
       // ── Find or create user (legacy flow) ─────────────────────────
+      //
+      // SECURITY: this branch used to do `SELECT id FROM users WHERE email = ?` and
+      // hand that user_id straight back, with no password check. Since /v1/auth/pair
+      // is unauthenticated by design, knowing someone's email address was enough to
+      // be issued a valid token FOR THEIR ACCOUNT — verified live: a request with
+      // only {"email":"victim@example.com"} got a token for the victim's user_id,
+      // read their synced rows, and injected a row of its own.
+      //
+      // An email is a lookup key, not a credential. Reusing an account therefore
+      // requires proving ownership of it:
+      //   • password present on the account -> require the correct password
+      //   • no password yet (legacy/anonymous account) -> allow, and SET one so the
+      //     next join must present it
+      // A fresh email still creates a new account, which is what pairing is for.
       if (email) {
         const existing = await db.execute({
-          sql: "SELECT id FROM users WHERE email = ?",
+          sql: "SELECT id, password_hash FROM users WHERE email = ?",
           args: [email],
         })
         if (existing.rows.length > 0) {
-          userId = existing.rows[0].id as string
+          const found = existing.rows[0] as unknown as { id: string; password_hash: string | null }
+          const hasPassword = !!found.password_hash
+
+          if (hasPassword && !password) {
+            // Do NOT create a device or a token for someone who cannot prove who
+            // they are. This is the account-takeover path.
+            return reply.status(401).send({
+              error: "password_required",
+              hint: "This account has a password. Sign in with /v1/auth/login, or use a pairing code.",
+            })
+          }
+
+          if (hasPassword && !(await verifyPassword(password as string, found.password_hash as string))) {
+            return reply.status(401).send({ error: "invalid_credentials" })
+          }
+
+          userId = found.id
+
+          if (!hasPassword && password) {
+            // Legacy account being upgraded to a password-protected one.
+            await db.execute({
+              sql: "UPDATE users SET password_hash = ?, updated_at = unixepoch() WHERE id = ?",
+              args: [await hashPassword(password as string), userId],
+            })
+          }
         } else {
           userId = randomUUID()
           await db.execute({
-            sql: "INSERT INTO users (id, email) VALUES (?, ?)",
-            args: [userId, email],
+            sql: "INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)",
+            args: [
+              userId,
+              email,
+              password ? await hashPassword(password) : null,
+            ],
           })
         }
       } else {

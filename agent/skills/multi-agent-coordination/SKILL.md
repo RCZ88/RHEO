@@ -30,7 +30,7 @@ All of it lives in one directory:
 ```
 agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/
 ├── coord.mjs              register · status · claim · release · heartbeat · lock · done
-├── run-exclusive.mjs      build / app / deps singletons — USE THESE, never bare npm
+├── run-exclusive.mjs      app / deps singletons — USE THESE, never bare npm
 ├── db-guard.mjs           single DB writer (backs up first)
 └── registry.json          shared state (agents, leases, locks)
 ```
@@ -82,19 +82,21 @@ node $COORD done --agent "$AGENT_ID"
 
 | Resource | Why it's exclusive | Use instead of |
 |---|---|---|
-| `dist/` | Vite **replaces** it; two builds interleave and corrupt it | `run-exclusive.mjs build -- node scripts/build.mjs` |
+| `dist/` | Vite **replaces** it; two builds interleave and corrupt it | **CZ only — agents never build (§0-0 Option B)** |
 | App process | Owns the DB; second instance = two writers | `run-exclusive.mjs app -- npm start` |
 | Database | better-sqlite3 is single-writer | `db-guard.mjs run -- <cmd>` |
 | `node_modules` | concurrent install corrupts it | `run-exclusive.mjs deps -- npm ci` |
 
-```bash
-COORD=agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination
-node $COORD/run-exclusive.mjs build -- node scripts/build.mjs
-```
+> **BUILD (Option B, CZ 2026-10-02): an agent does NOT build.** `package.json:14`
+> permits an 8192 MB V8 heap on a box with ~4 GB available — 12 global OOMs in 24 h,
+> VS Code/Electron/Spotify killed as collateral. **CZ** runs `npm run build` (which
+> self-logs to `agent/logs/build.log`). **Never** invoke `run-exclusive.mjs build`.
 
-**Queue, don't race.** If `status` shows a `build` lock, that is a live build. Wait it
-out — poll `pgrep -f "vite build|scripts/build.mjs"` — rather than starting a second
-one. Colliding builds produce half-written `dist/`, which shows up as a black screen.
+**Never race, never poll.** A `build` lock in `status` means CZ is building right now.
+Your move is to **report it and continue with scoped checks** (`tsc --noEmit` filtered
+to your paths, scoped `esbuild --bundle --outfile=/dev/null`, `npm run validate:pages`).
+A `sleep 15 && retry` loop is **banned** (§0.6b): it was the OOM generator — it
+relaunched another 8 GB build 15 s after each OOM.
 
 ---
 
@@ -199,7 +201,7 @@ Always report which files you committed and which you deliberately left alone.
 - `git checkout -- <file>` / `git restore` on a file you did not write
 - `git reset --hard` / `git clean -fd`
 - Editing a file whose claim was **DENIED**
-- Running `npm run build` / `npm start` outside the wrappers
+- Running `npm run build` at all (CZ builds — §0-0 Option B), or `npm start` outside the wrapper
 - Killing processes you did not start (`Get-Process`/`pkill` on all electron)
 - Destructive SQL without `db-guard.mjs backup` first
 - Assuming "it built" — always re-check `dist/index.html` and the asset count, because

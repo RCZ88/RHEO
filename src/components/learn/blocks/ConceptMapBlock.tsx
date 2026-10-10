@@ -93,7 +93,7 @@ export function ConceptMapBlock({ meta }: Props) {
   const [zoom, setZoom] = useState(1);
 
   return (
-    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40">
+    <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
         <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
           <span className="text-base">🗺️</span>

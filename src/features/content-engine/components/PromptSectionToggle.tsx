@@ -18,6 +18,34 @@ const PROMPT_SECTIONS = [
   { id: 'format', label: 'Output Format', description: 'JSON schema, field requirements, strictness', defaultOn: true },
 ]
 
+/** Shape of one toggleable prompt section. */
+export type PromptSection = (typeof PROMPT_SECTIONS)[number]
+
+/**
+ * Which sections apply to a given prompt type.
+ *
+ * PromptBuilder calls this on every render and maps `defaultEnabled`, so each
+ * entry must expose that flag. Only the sections that genuinely apply to the
+ * prompt are returned — 'format' is universal, the rest are picked per type.
+ */
+const SECTIONS_BY_PROMPT_TYPE: Record<string, string[]> = {
+  classify: ['format'],
+  synthesize: ['hooks', 'niche', 'format'],
+  script: ['retention', 'visual', 'sound', 'hooks', 'format'],
+  gates: ['scoring', 'format'],
+  seo: ['seo', 'format'],
+  analytics: ['scoring', 'format'],
+  lessons: ['lessons', 'reflection', 'format'],
+  reflection: ['reflection', 'format'],
+  frameworks: ['frameworks', 'format'],
+}
+
+export function getSectionsForPromptType(promptType: string): (PromptSection & { defaultEnabled: boolean })[] {
+  const ids = SECTIONS_BY_PROMPT_TYPE[promptType]
+  if (!ids) return []
+  return PROMPT_SECTIONS.filter((s) => ids.includes(s.id)).map((s) => ({ ...s, defaultEnabled: s.defaultOn }))
+}
+
 // Style templates — injected as directives in the prompt
 const STYLE_TEMPLATES = [
   { id: 'punchy', label: 'Punchy Short', directive: 'TONE: Conversational, punchy, zero filler. Every sentence earns its place.' },

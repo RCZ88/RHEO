@@ -254,7 +254,7 @@ export function FieldAIButton({
 
   // ---- SEND / PASTE ----
   return (
-    <div className={cn('mt-1 rounded-xl border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm p-2.5 space-y-2.5', className)}>
+    <div className={cn('mt-1 rounded-xl border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm p-2.5 space-y-2.5', className)}>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium text-zinc-300">Fill “{label}” from external AI</span>
         <button
@@ -370,7 +370,7 @@ export function FieldAIButton({
           <textarea
             value={pasteValue}
             onChange={(e) => setPasteValue(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-950/60 p-1.5 text-[11px] text-zinc-200 resize-none font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-1.5 text-[11px] text-zinc-200 resize-none font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
             rows={4}
             placeholder="Paste the AI's JSON response here…"
           />

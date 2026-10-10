@@ -65,7 +65,7 @@ export function HeatmapBlock({ data, meta, onCellClick }: Props) {
   };
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-4">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-medium text-zinc-100">Study Activity</h3>
@@ -112,7 +112,7 @@ export function HeatmapBlock({ data, meta, onCellClick }: Props) {
           style={{
             left: tooltipPos.x + 12,
             top: tooltipPos.y - 12,
-            background: '#1c1917',
+            background: 'var(--ws-surface-overlay)',
             minWidth: '180px',
           }}
         >

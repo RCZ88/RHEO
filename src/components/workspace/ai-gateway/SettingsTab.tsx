@@ -6,13 +6,22 @@ import { gatewayApi } from './gatewayApi';
 
 export function SettingsTab() {
   const [pw, setPw] = useState<{ available: boolean; error: string | null } | null>(null);
+  const [probeError, setProbeError] = useState<string | null>(null);
 
-  useEffect(() => {
-    gatewayApi.playwrightStatus().then((r) => { if (r.success && r.data) setPw(r.data); });
-  }, []);
+  const probe = () => {
+    // aigateway:playwright-status returns a BARE {available,error} object with no
+    // `success` field (main.ts:7803), so this branch never ran before gatewayApi
+    // learned to normalise it — the badge sat on "checking…" forever.
+    gatewayApi.playwrightStatus().then((r) => {
+      if (r.success && r.data) { setPw(r.data); setProbeError(null); }
+      else setProbeError(r.error || `${r.channel} returned an unusable payload`);
+    });
+  };
+
+  useEffect(probe, []);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 min-w-0">
       <WorkspaceSection title="Engine">
         <WorkspaceCard variant="default">
           <div className="flex items-center gap-2 mb-1.5">
@@ -32,7 +41,12 @@ export function SettingsTab() {
             bundled Chromium; uses headless mode only when no display is present.
           </p>
           {pw && !pw.available && (
-            <p className="text-[10px] text-orange-200/90 mt-1.5 font-mono break-words">{pw.error}</p>
+            <p className="text-[10px] text-orange-200/90 mt-1.5 font-mono break-words whitespace-pre-wrap">{pw.error}</p>
+          )}
+          {probeError && (
+            <p className="text-[10px] text-red-300/90 mt-1.5 font-mono break-words whitespace-pre-wrap">
+              {probeError}
+            </p>
           )}
         </WorkspaceCard>
       </WorkspaceSection>

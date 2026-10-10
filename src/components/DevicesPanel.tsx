@@ -248,7 +248,7 @@ export function DevicesPanel() {
             <span className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider">Revoked</span>
           </div>
           {revokedDevices.map(device => (
-            <div key={device.id} className="px-3 py-2 rounded-lg bg-zinc-900/30 border border-zinc-800/20 opacity-50">
+            <div key={device.id} className="px-3 py-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/20 opacity-50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-zinc-800/40 flex items-center justify-center text-zinc-600">
                   {platformIcon(device.platform)}

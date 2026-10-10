@@ -91,7 +91,7 @@ export function VaultSeal({ size = 120, animate = true, status = 'locked' }: Vau
         style={{
           width: size * 0.42,
           height: size * 0.42,
-          background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,78,59,0.3))',
+          background: 'linear-gradient(135deg, var(--fx-vault-grad-a), var(--fx-vault-grad-b))',
           border: `1.5px solid ${colors.core}40`,
           backdropFilter: 'blur(8px)',
         }}

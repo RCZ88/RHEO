@@ -52,7 +52,7 @@ export function TypewriterText({ text, speed = 90, onDone, className }: Typewrit
 
   return (
     <span className={cn("whitespace-pre-wrap", className)}>
-      <MarkdownRenderer content={visibleText} />
+      <MarkdownRenderer content={visibleText} settled={!isStreaming} />
       {isStreaming && (
         <span className="ml-0.5 inline-block h-3.5 w-px translate-y-0.5 animate-pulse bg-pink-400 motion-reduce:animate-none" />
       )}

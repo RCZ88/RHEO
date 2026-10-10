@@ -44,10 +44,10 @@ export function JourneyPath({ versionsCount, hasBuilderProgress }: JourneyPathPr
                 disabled={isLocked}
                 className={`relative overflow-hidden flex-1 rounded-xl border p-4 text-left transition-all duration-200 ${
                   isLocked
-                    ? 'border-zinc-800/40 opacity-40 cursor-not-allowed bg-zinc-900/40'
+                    ? 'border-zinc-800/40 opacity-40 cursor-not-allowed bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]'
                     : isDone
                     ? `border-${step.color}-500/30 bg-gradient-to-br ${step.from} ${step.to} backdrop-blur-xl cursor-pointer hover:border-${step.color}-500/50`
-                    : `border-zinc-800/60 bg-zinc-900/60 backdrop-blur-xl cursor-pointer hover:border-[var(--page-accent)]/30`
+                    : `border-zinc-800/60 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl cursor-pointer hover:border-[var(--page-accent)]/30`
                 }`}
               >
                 {/* Status glow for done */}

@@ -101,7 +101,7 @@ export function FocusGroupEditor({ open, onOpenChange, group, onSave }: FocusGro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-zinc-950 border border-zinc-800/60 max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-md bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 max-h-[85vh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-[var(--page-accent)]" />

@@ -81,7 +81,7 @@ export function StopwatchPanelC({
       </div>
 
       {/* Status pill with pulsing ring */}
-      <div className="flex items-center justify-center gap-2 mb-4 px-4 py-2 rounded-xl bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50">
+      <div className="flex items-center justify-center gap-2 mb-4 px-4 py-2 rounded-xl bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/50">
         <div className="relative">
           <div className={`w-2.5 h-2.5 rounded-full ${isProductive ? 'bg-emerald-400' : isDistracting ? 'bg-rose-400' : 'bg-zinc-600'}`} />
           {isProductive && (
@@ -116,7 +116,7 @@ export function StopwatchPanelC({
               whileHover={{ y: -1, scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={onPauseToggle}
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm text-zinc-300 hover:border-pink-500/30 hover:bg-pink-500/5 hover:shadow-[0_0_16px_-4px_rgba(236,72,153,0.15)] transition-all duration-300"
+              className="min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm text-zinc-300 hover:border-pink-500/30 hover:bg-pink-500/5 hover:shadow-[0_0_16px_-4px_rgba(236,72,153,0.15)] transition-all duration-300"
             >
               <Pause size={14} />
               <span className="text-[11px] font-mono uppercase">Pause</span>
@@ -125,7 +125,7 @@ export function StopwatchPanelC({
               whileHover={{ y: -1, scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={onStop}
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm text-zinc-300 hover:border-rose-500/30 hover:bg-rose-500/5 hover:shadow-[0_0_16px_-4px_rgba(244,63,94,0.15)] transition-all duration-300"
+              className="min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm text-zinc-300 hover:border-rose-500/30 hover:bg-rose-500/5 hover:shadow-[0_0_16px_-4px_rgba(244,63,94,0.15)] transition-all duration-300"
             >
               <Square size={14} />
               <span className="text-[11px] font-mono uppercase">Stop</span>
@@ -146,7 +146,7 @@ export function StopwatchPanelC({
           whileHover={{ y: -1, scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           onClick={onReset}
-          className="min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm text-zinc-500 hover:border-zinc-600 hover:shadow-[0_0_12px_-4px_rgba(113,113,122,0.1)] transition-all duration-300"
+          className="min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm text-zinc-500 hover:border-zinc-600 hover:shadow-[0_0_12px_-4px_rgba(113,113,122,0.1)] transition-all duration-300"
         >
           <RotateCw size={14} />
           <span className="text-[11px] font-mono uppercase">Reset</span>
@@ -155,7 +155,7 @@ export function StopwatchPanelC({
 
       {/* Bottom meta — glass pills */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 p-3">
+        <div className="rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 p-3">
           <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-600 mb-1">Today</div>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono text-zinc-500">Productive</span>
@@ -166,7 +166,7 @@ export function StopwatchPanelC({
             <span className="text-[13px] font-mono font-medium text-rose-400 tabular-nums">{fmtShort(distractingMs)}</span>
           </div>
         </div>
-        <div className="rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 p-3">
+        <div className="rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 p-3">
           <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-600 mb-1">Tracked</div>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono text-zinc-500 flex items-center gap-1">

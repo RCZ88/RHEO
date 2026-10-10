@@ -23,7 +23,7 @@ export class SelfErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       // Same StatusScreen as the app-wide boundary and the 404 — one style.
       return (
-        <div className="rounded-xl border border-white/10 bg-zinc-900/40">
+        <div className="rounded-xl border border-white/10 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
           <StatusScreen
             tone="error"
             eyebrow="Self tab"

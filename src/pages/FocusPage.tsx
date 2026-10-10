@@ -232,7 +232,7 @@ export default function FocusPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/50 border border-zinc-800/50 mb-6 w-fit">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 mb-6 w-fit">
           {[
             { key: 'goals', label: 'Goals', icon: Target },
             { key: 'stats', label: 'Stats', icon: BarChart3 },
@@ -272,13 +272,13 @@ export default function FocusPage() {
                       value={newGoal.title}
                       onChange={e => setNewGoal(p => ({ ...p, title: e.target.value }))}
                       placeholder="What do you want to achieve?"
-                      className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-10 font-sans"
+                      className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-10 font-sans"
                     />
                     <Input
                       value={newGoal.description}
                       onChange={e => setNewGoal(p => ({ ...p, description: e.target.value }))}
                       placeholder="Add details (optional)"
-                      className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-10 font-sans"
+                      className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-10 font-sans"
                     />
                     <div className="flex items-center gap-2">
                       <Select value={newGoal.category} onValueChange={v => setNewGoal(p => ({ ...p, category: v as GoalCategory }))} className="flex-1">
@@ -301,7 +301,7 @@ export default function FocusPage() {
                             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium border transition-all flex-1 ${
                               newGoal.targetType === t.value
                                 ? 'bg-violet-500/10 text-violet-400 border-violet-500/30'
-                                : 'bg-zinc-900/50 text-zinc-400 border-zinc-800/50 hover:border-zinc-700/50'
+                                : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] text-zinc-400 border-zinc-800/50 hover:border-zinc-700/50'
                             }`}
                           >
                             <t.icon size={13} />
@@ -317,11 +317,11 @@ export default function FocusPage() {
                         <div className="flex items-center gap-2">
                           <Input type="number" min={0} max={23} value={newGoal.targetHours}
                             onChange={e => setNewGoal(p => ({ ...p, targetHours: parseInt(e.target.value) || 0 }))}
-                            className="w-20 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-9 font-mono" />
+                            className="w-20 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-9 font-mono" />
                           <span className="text-[11px] text-zinc-500">hours</span>
                           <Input type="number" min={0} max={59} value={newGoal.targetMinutes}
                             onChange={e => setNewGoal(p => ({ ...p, targetMinutes: parseInt(e.target.value) || 0 }))}
-                            className="w-20 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-9 font-mono" />
+                            className="w-20 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-9 font-mono" />
                           <span className="text-[11px] text-zinc-500">min</span>
                         </div>
                       </div>
@@ -370,7 +370,7 @@ export default function FocusPage() {
             {loading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map(i => (
-                  <div key={i} className="h-20 bg-zinc-900/30 rounded-xl animate-pulse" />
+                  <div key={i} className="h-20 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] rounded-xl animate-pulse" />
                 ))}
               </div>
             ) : activeGoals.length === 0 ? (
@@ -531,7 +531,7 @@ export default function FocusPage() {
                     >
                       <div className="space-y-2">
                         {completedGoals.map(goal => (
-                          <div key={goal.id} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/20 border border-zinc-800/30 opacity-60">
+                          <div key={goal.id} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30 opacity-60">
                             <Check size={14} className="text-emerald-500" />
                             <span className="text-[13px] text-zinc-500 line-through font-sans flex-1">{goal.title}</span>
                             <span className="text-[10px] text-zinc-600 font-sans">{goal.period}</span>

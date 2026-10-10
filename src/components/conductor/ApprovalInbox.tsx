@@ -18,7 +18,7 @@ export default function ApprovalInbox({ escalations, onResolve }: ApprovalInboxP
   return (
     <div className="space-y-2">
       {escalations.map((e: EscalationItemVM) => (
-        <div key={e.id} className="border border-zinc-700 rounded-lg p-2.5 bg-zinc-900/50">
+        <div key={e.id} className="border border-zinc-700 rounded-lg p-2.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]">
           <div className="flex items-start gap-1.5 mb-2">
             <AlertTriangle size={12} className="mt-0.5 text-amber-400 flex-shrink-0" />
             <span className="text-[11px] text-zinc-200">{e.title || 'Pending approval'}</span>

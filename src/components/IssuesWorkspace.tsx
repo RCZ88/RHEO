@@ -153,7 +153,7 @@ export default function IssuesWorkspace({ projectId, projectPath, projects, onSe
   return (
     <div className="flex flex-col h-full">
       {/* Sub-tab bar */}
-      <div className="flex items-center gap-1 px-1 py-1.5 bg-zinc-900/60 border border-zinc-800/50 rounded-lg mb-3">
+      <div className="flex items-center gap-1 px-1 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 rounded-lg mb-3">
         {SUB_TABS.map(tab => (
           <button
             key={tab.key}
@@ -308,8 +308,8 @@ function ProblemCard({ problem, onClick }: { problem: Problem; onClick: () => vo
   return (
     <div
       onClick={onClick}
-      className={`bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-3
-        hover:border-zinc-700/50 hover:bg-zinc-900/60 transition-all cursor-pointer
+      className={`bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/50 rounded-xl p-3
+        hover:border-zinc-700/50 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] transition-all cursor-pointer
         border-l-2 ${priority.border}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -350,8 +350,8 @@ function RequestCard({ request, onClick }: { request: Request; onClick: () => vo
   return (
     <div
       onClick={onClick}
-      className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-3
-        hover:border-zinc-700/50 hover:bg-zinc-900/60 transition-all cursor-pointer"
+      className="bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/50 rounded-xl p-3
+        hover:border-zinc-700/50 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] transition-all cursor-pointer"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -403,7 +403,7 @@ function ProblemDetailModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-purple-500/15 flex items-center justify-center">
@@ -474,7 +474,7 @@ function ProblemDetailModal({
                 onChange={e => setInstructions(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSend()}
                 placeholder="Type instruction..."
-                className="flex-1 bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50"
+                className="flex-1 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50"
               />
               <button
                 onClick={handleSend}
@@ -497,7 +497,7 @@ function ProblemDetailModal({
               onBlur={handleSaveNotes}
               rows={2}
               placeholder="Add notes..."
-              className="w-full bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
+              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
             />
           </VoiceInputWrapper>
         </div>
@@ -547,7 +547,7 @@ function RequestDetailModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center">
@@ -573,7 +573,7 @@ function RequestDetailModal({
                   value={desc}
                   onChange={e => setDesc(e.target.value)}
                   rows={3}
-                  className="w-full bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-300 focus:outline-none focus:border-pink-500/50 resize-none"
+                  className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-300 focus:outline-none focus:border-pink-500/50 resize-none"
                 />
               </VoiceInputWrapper>
               <div className="flex gap-2">
@@ -584,7 +584,7 @@ function RequestDetailModal({
           ) : (
             <div
               onClick={() => setEditingDesc(true)}
-              className="bg-zinc-950 border border-zinc-800/50 rounded-lg px-3 py-2 text-[11px] text-zinc-400 cursor-text hover:border-zinc-700/50 transition-colors min-h-[2.5rem]"
+              className="bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/50 rounded-lg px-3 py-2 text-[11px] text-zinc-400 cursor-text hover:border-zinc-700/50 transition-colors min-h-[2.5rem]"
             >
               {request.description || 'No description — click to add...'}
             </div>
@@ -627,7 +627,7 @@ function RequestDetailModal({
             <select
               value={linkId}
               onChange={e => setLinkId(e.target.value)}
-              className="flex-1 bg-zinc-950 border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-pink-500/50"
+              className="flex-1 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-pink-500/50"
             >
               <option value="">Link a problem...</option>
               {allProblems.filter(p => !request.linked_problems.includes(p.id)).map(p => (
@@ -667,25 +667,25 @@ function NewProblemDialog({ onClose, onCreate, projectId, projectPath }: {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+      <div className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <h2 className="text-sm font-semibold text-zinc-100 mb-4">New Problem</h2>
         <div className="space-y-3">
           <input
             type="text" value={title} onChange={e => setTitle(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder="Brief description" autoFocus
-            className="w-full bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50"
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50"
           />
           <div className="flex gap-3">
             <select value={priority} onChange={e => setPriority(e.target.value)}
-              className="flex-1 bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/50">
+              className="flex-1 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/50">
               <option value="critical">Critical</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
             <select value={category} onChange={e => setCategory(e.target.value)}
-              className="flex-1 bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/50">
+              className="flex-1 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/50">
               <option value="">Category</option>
               <option value="terminal">Terminal</option>
               <option value="dashboard">Dashboard</option>
@@ -720,24 +720,24 @@ function NewRequestDialog({ onClose, onCreate, projectId }: {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+      <div className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <h2 className="text-sm font-semibold text-zinc-100 mb-4">New Request</h2>
         <div className="space-y-3">
           <input
             type="text" value={title} onChange={e => setTitle(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder="Brief description" autoFocus
-            className="w-full bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50"
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50"
           />
           <VoiceInputWrapper>
             <textarea
               value={description} onChange={e => setDescription(e.target.value)}
               rows={2} placeholder="What was requested?"
-              className="w-full bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
+              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
             />
           </VoiceInputWrapper>
           <select value={priority} onChange={e => setPriority(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/50">
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-pink-500/50">
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
@@ -828,7 +828,7 @@ function CombinedChecklist({
           <select
             value={filterMode}
             onChange={e => setFilterMode(e.target.value as any)}
-            className="text-[10px] bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-zinc-300"
+            className="text-[10px] bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded px-2 py-1 text-zinc-300"
           >
             <option value="all">All</option>
             <option value="active">Active</option>
@@ -838,13 +838,13 @@ function CombinedChecklist({
           <div className="flex rounded border border-zinc-700/50 overflow-hidden">
             <button
               onClick={() => setSortBy('priority')}
-              className={`text-[10px] px-2 py-0.5 ${sortBy === 'priority' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-zinc-900/70 text-zinc-500'}`}
+              className={`text-[10px] px-2 py-0.5 ${sortBy === 'priority' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] text-zinc-500'}`}
             >
               Priority
             </button>
             <button
               onClick={() => setSortBy('recent')}
-              className={`text-[10px] px-2 py-0.5 ${sortBy === 'recent' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-zinc-900/70 text-zinc-500'}`}
+              className={`text-[10px] px-2 py-0.5 ${sortBy === 'recent' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] text-zinc-500'}`}
             >
               Recent
             </button>
@@ -852,14 +852,14 @@ function CombinedChecklist({
 
           <button
             onClick={() => setGroupByParent(!groupByParent)}
-            className={`text-[10px] px-2 py-0.5 rounded border ${groupByParent ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-zinc-900/70 text-zinc-500 border-zinc-700/50'}`}
+            className={`text-[10px] px-2 py-0.5 rounded border ${groupByParent ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50'}`}
           >
             {groupByParent ? 'Grouped' : 'Flat'}
           </button>
 
           <button
             onClick={() => setShowChecklistSettings(!showChecklistSettings)}
-            className={`text-[10px] px-2 py-0.5 rounded border ${showChecklistSettings ? 'bg-zinc-800 text-zinc-300 border-zinc-600/50' : 'bg-zinc-900/70 text-zinc-500 border-zinc-700/50'}`}
+            className={`text-[10px] px-2 py-0.5 rounded border ${showChecklistSettings ? 'bg-zinc-800 text-zinc-300 border-zinc-600/50' : 'bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50'}`}
           >
             Settings
           </button>
@@ -872,7 +872,7 @@ function CombinedChecklist({
 
       {/* ── Settings panel ── */}
       {showChecklistSettings && (
-        <div className="bg-zinc-900/40 rounded-lg border border-zinc-800/50 p-3 space-y-2.5">
+        <div className="bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] rounded-lg border border-zinc-800/50 p-3 space-y-2.5">
           <h4 className="text-[11px] font-semibold text-zinc-400">Checklist Settings</h4>
 
           <div className="flex items-center justify-between">
@@ -955,7 +955,7 @@ function CombinedChecklist({
         return (
           <div
             key={group.parentId}
-            className="bg-zinc-900/40 rounded-lg border border-zinc-800/50 overflow-hidden"
+            className="bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] rounded-lg border border-zinc-800/50 overflow-hidden"
           >
             {/* Group header */}
             <div
@@ -1013,7 +1013,7 @@ function CombinedChecklist({
                   return (
                     <div
                       key={check.checkId}
-                      className="rounded border border-zinc-800/30 bg-zinc-950/40"
+                      className="rounded border border-zinc-800/30 bg-zinc-950 light:bg-[var(--ws-surface)]/40"
                     >
                       <div
                         className="flex items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-zinc-800/20 transition-colors"

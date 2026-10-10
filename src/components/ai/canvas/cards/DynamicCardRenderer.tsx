@@ -25,8 +25,8 @@ export function DynamicCardRenderer({ component, onDismiss, onAction, isBuilding
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/50 light:border-[var(--ws-border)]">
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles size={12} style={{ color: accent.hex }} />
-          <span className="text-xs font-semibold text-white truncate light:text-stone-900">{component.title}</span>
-          {component.subtitle && <span className="text-[10px] text-zinc-500 truncate light:text-stone-500">{component.subtitle}</span>}
+          <span className="text-xs font-semibold text-white truncate light:text-[var(--text-primary)]">{component.title}</span>
+          {component.subtitle && <span className="text-[10px] text-zinc-500 truncate light:text-[var(--text-muted)]">{component.subtitle}</span>}
         </div>
         <div className="flex items-center gap-1">
           <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 font-medium">AI</span>
@@ -47,7 +47,7 @@ export function DynamicCardRenderer({ component, onDismiss, onAction, isBuilding
               className={cn('text-[10px] px-2.5 py-1 rounded-lg font-medium transition-colors',
                 a.variant === 'primary' ? 'bg-violet-500/20 text-violet-300 hover:bg-violet-500/30' :
                 a.variant === 'danger' ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' :
-                'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white light:bg-stone-100 light:text-stone-600 light:hover:bg-stone-200/70'
+                'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white light:bg-[var(--ws-surface-raised)] light:text-[var(--text-secondary)] light:hover:bg-stone-200/70'
               )}>
               {a.label}
             </button>
@@ -63,8 +63,8 @@ function DataRenderer({ data, accent }: { data: DynamicComponentData; accent: st
     case 'card':
       return (
         <div className="space-y-2">
-          <p className="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed light:text-stone-700">{data.body}</p>
-          {data.footer && <p className="text-[10px] text-zinc-500 light:text-stone-500">{data.footer}</p>}
+          <p className="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed light:text-[var(--text-secondary)]">{data.body}</p>
+          {data.footer && <p className="text-[10px] text-zinc-500 light:text-[var(--text-muted)]">{data.footer}</p>}
           {data.badge && (
             <span className="inline-block text-[10px] px-2 py-0.5 rounded-full" style={{ background: data.badge.color + '20', color: data.badge.color }}>
               {data.badge.label}
@@ -79,7 +79,7 @@ function DataRenderer({ data, accent }: { data: DynamicComponentData; accent: st
             {data.format === 'currency' ? `$${data.value.toLocaleString()}` : data.format === 'percent' ? `${data.value}%` : data.value.toLocaleString()}
           </div>
           {data.trend && (
-            <div className={cn('text-[10px] font-medium', data.trend.direction === 'up' ? 'text-emerald-400' : data.trend.direction === 'down' ? 'text-red-400' : 'text-zinc-500 light:text-stone-500')}>
+            <div className={cn('text-[10px] font-medium', data.trend.direction === 'up' ? 'text-emerald-400' : data.trend.direction === 'down' ? 'text-red-400' : 'text-zinc-500 light:text-[var(--text-muted)]')}>
               {data.trend.direction === 'up' ? '↑' : data.trend.direction === 'down' ? '↓' : '→'} {data.trend.delta}
             </div>
           )}
@@ -91,9 +91,9 @@ function DataRenderer({ data, accent }: { data: DynamicComponentData; accent: st
         <div className="space-y-1.5">
           {data.items.map(item => (
             <div key={item.id} className="flex items-center gap-2 text-xs">
-              <span className={cn('w-1.5 h-1.5 rounded-full', item.done ? 'bg-emerald-400' : 'bg-zinc-600 light:bg-stone-300')} />
-              <span className="text-zinc-300 flex-1 light:text-stone-700">{item.label}</span>
-              {item.meta && <span className="text-zinc-500 text-[10px] light:text-stone-500">{item.meta}</span>}
+              <span className={cn('w-1.5 h-1.5 rounded-full', item.done ? 'bg-emerald-400' : 'bg-zinc-600 light:bg-[var(--ws-border)]')} />
+              <span className="text-zinc-300 flex-1 light:text-[var(--text-secondary)]">{item.label}</span>
+              {item.meta && <span className="text-zinc-500 text-[10px] light:text-[var(--text-muted)]">{item.meta}</span>}
             </div>
           ))}
         </div>
@@ -105,11 +105,11 @@ function DataRenderer({ data, accent }: { data: DynamicComponentData; accent: st
         <div className="overflow-x-auto">
           <table className="w-full text-[10px]">
             <thead><tr className="border-b border-zinc-800 light:border-[var(--ws-border)]">
-              {data.columns.map(col => <th key={col.key} className="text-left text-zinc-500 font-medium py-1 px-2 light:text-stone-500">{col.label}</th>)}
+              {data.columns.map(col => <th key={col.key} className="text-left text-zinc-500 font-medium py-1 px-2 light:text-[var(--text-muted)]">{col.label}</th>)}
             </tr></thead>
             <tbody>{data.rows.map((row, i) => (
               <tr key={i} className="border-b border-zinc-800/50 light:border-[var(--ws-border)]">
-                {data.columns.map(col => <td key={col.key} className="text-zinc-300 py-1 px-2 light:text-stone-700">{row[col.key]}</td>)}
+                {data.columns.map(col => <td key={col.key} className="text-zinc-300 py-1 px-2 light:text-[var(--text-secondary)]">{row[col.key]}</td>)}
               </tr>
             ))}</tbody>
           </table>
@@ -121,10 +121,10 @@ function DataRenderer({ data, accent }: { data: DynamicComponentData; accent: st
           {data.events.map(ev => (
             <div key={ev.id} className="flex items-start gap-2">
               <span className={cn('w-2 h-2 rounded-full mt-1 shrink-0',
-                ev.status === 'done' ? 'bg-emerald-400' : ev.status === 'active' ? 'bg-violet-400' : 'bg-zinc-600 light:bg-stone-300')} />
+                ev.status === 'done' ? 'bg-emerald-400' : ev.status === 'active' ? 'bg-violet-400' : 'bg-zinc-600 light:bg-[var(--ws-border)]')} />
               <div>
-                <div className="text-xs text-zinc-300 light:text-stone-700">{ev.label}</div>
-                <div className="text-[10px] text-zinc-500 light:text-stone-500">{ev.time}</div>
+                <div className="text-xs text-zinc-300 light:text-[var(--text-secondary)]">{ev.label}</div>
+                <div className="text-[10px] text-zinc-500 light:text-[var(--text-muted)]">{ev.time}</div>
               </div>
             </div>
           ))}
@@ -135,8 +135,8 @@ function DataRenderer({ data, accent }: { data: DynamicComponentData; accent: st
         <div className="space-y-3">
           {data.fields.map(f => (
             <div key={f.name}>
-              <label className="text-[10px] text-zinc-500 mb-1 block light:text-stone-500">{f.label}</label>
-              <div className="text-xs text-zinc-400 bg-zinc-900/50 rounded-lg px-3 py-2 border border-zinc-800 light:bg-[var(--ws-surface-sunken)] light:text-stone-600 light:border-[var(--ws-border)]">
+              <label className="text-[10px] text-zinc-500 mb-1 block light:text-[var(--text-muted)]">{f.label}</label>
+              <div className="text-xs text-zinc-400 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-lg px-3 py-2 border border-zinc-800 light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)] light:border-[var(--ws-border)]">
                 {f.placeholder || '—'}
               </div>
             </div>
@@ -144,7 +144,7 @@ function DataRenderer({ data, accent }: { data: DynamicComponentData; accent: st
         </div>
       )
     default:
-      return <div className="text-[10px] text-zinc-500 light:text-stone-500">Unknown component type</div>
+      return <div className="text-[10px] text-zinc-500 light:text-[var(--text-muted)]">Unknown component type</div>
   }
 }
 

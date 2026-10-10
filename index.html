@@ -5,13 +5,91 @@
     <link rel="icon" href="/deskflow-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RHEO</title>
+    <!-- ── THEME CLASS, APPLIED BEFORE FIRST PAINT ───────────────────────────
+         WHY THIS SCRIPT EXISTS
+         src/lib/theme.ts reads `df-theme` from localStorage and toggles the
+         `light` class on <html>. But theme.ts is part of the MODULE BUNDLE, so
+         that class was not applied until the bundle had parsed, downloaded and
+         evaluated — which is AFTER #df-startup (the loading screen) had already
+         painted. Result: every launch showed a dark loading screen and then
+         snapped to cream. On a light profile that is a full-screen dark flash on
+         every single start.
+
+         So the class has to be set HERE, synchronously, in <head>, before the
+         body exists. This block must stay in sync with resolveTheme() in
+         src/lib/theme.ts — same key, same three values, same system fallback.
+         If you change one, change the other. theme.ts still runs afterwards and
+         re-applies the identical value, so there is no conflict. -->
+    <script>
+      (function () {
+        var pref = 'system';
+        try { var v = localStorage.getItem('df-theme'); if (v === 'light' || v === 'dark' || v === 'system') pref = v; } catch (e) {}
+        var light = pref === 'light';
+        if (pref === 'system') {
+          try { light = window.matchMedia('(prefers-color-scheme: light)').matches; } catch (e) { light = false; }
+        }
+        try { document.documentElement.classList.toggle('light', light); } catch (e) {}
+      })();
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <!-- FALLBACK STYLES: only visible when the main JS bundle fails to load -->
     <style>
-      html { background: #121212; }
-      body { margin: 0; background: #121212; min-height: 100vh; }
-      #root { min-height: 100vh; background: #121212; }
-      #df-fallback { display: none; }
+      /* These three are the BASE background behind every page. They were
+         hardcoded `#121212`, which is why light mode still showed a black app
+         even after every surface above them was themed: #root paints opaque
+         #121212 at 100vh, so anything not explicitly painted let black through.
+         Now driven by the token contract, matching #df-startup below which
+         already did this. The literal stays as the fallback value, so if this
+         stylesheet or the app bundle ever fails to load the safety net behaves
+         EXACTLY as before — dark, visible, never a white flash. Do not remove
+         these rules; they are the last line of defence against a black screen. */
+      html { background: var(--color-background, #121212); }
+      body { margin: 0; background: var(--color-background, #121212); min-height: 100vh; }
+      #root { min-height: 100vh; background: var(--color-background, #121212); }
+      /* Explicit light-mode guard: if the app CSS loaded but the `.light`
+         class has not been applied to <html> yet, we would otherwise flash a
+         dark field on a light launch. Follows the same fallback discipline. */
+      html.light, html.light body, html.light #root { background: #f5f2ec; }
+      /* ── #df-fallback — the ONE error screen, in pure HTML ────────────────
+         Hand-ported from src/components/StatusScreen.tsx so this screen and
+         the React one are visually identical: same structure (mono eyebrow →
+         18px headline → one plain sentence → collapsed "Show message"
+         disclosure → exactly one primary action → the same five escape routes
+         in the same order), same rose signal hue, same zinc surfaces, radii
+         8/12, Inter + JetBrains Mono, L1 motion (colour only). No emoji, no
+         backdrop-blur, no gradients (LAMINAR §2 §3 §4 §7).
+         It is duplicated rather than imported because it must work BEFORE the
+         bundle has loaded — StatusScreen does not exist yet at this point.
+         Keep the two in sync: change StatusScreen, change this.
+         Its BEHAVIOUR (error capture, auto-reload ladder) is unchanged. */
+      #df-fallback { display: none; position: fixed; inset: 0; z-index: 99999; align-items: center; justify-content: center; box-sizing: border-box; padding: 40px 24px; background: var(--ws-surface, var(--color-background, #09090b)); color: #a1a1aa; font-family: Inter, system-ui, sans-serif; }
+      .df-fb-inner { width: 100%; max-width: 520px; }
+      .df-fb-hero { display: flex; align-items: flex-start; gap: 16px; }
+      .df-fb-tile { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 12px; border: 1px solid rgba(244, 63, 94, .3); background: rgba(244, 63, 94, .1); color: #fb7185; }
+      .df-fb-headings { min-width: 0; padding-top: 2px; }
+      .df-fb-eyebrow { display: block; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: #52525b; }
+      .df-fb-title { margin: 4px 0 0; font-size: 18px; font-weight: 600; line-height: 1.25; color: #f4f4f5; }
+      .df-fb-desc { margin: 16px 0 0; max-width: 60ch; font-size: 13px; line-height: 1.6; color: #a1a1aa; }
+      .df-fb-detail { margin-top: 20px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: rgba(24, 24, 27, .6); }
+      .df-fb-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, .1); padding: 8px 12px; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; color: #52525b; }
+      .df-fb-copy { border: 0; background: transparent; cursor: pointer; padding: 4px 8px; border-radius: 6px; font: inherit; color: #fb7185; transition: color .15s, background-color .15s; }
+      .df-fb-copy:hover { color: #fda4af; background: #27272a; }
+      .df-fb-detail-body { padding: 8px 12px; }
+      .df-fb-summary { cursor: pointer; list-style: none; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: #71717a; transition: color .15s; }
+      .df-fb-summary::-webkit-details-marker { display: none; }
+      .df-fb-summary:hover { color: #d4d4d8; }
+      .df-fb-stack { margin: 8px 0 0; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 11px; line-height: 1.5; color: #fb7185; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow: auto; }
+      .df-fb-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 24px; }
+      .df-fb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color .15s, color .15s, transform .15s; }
+      .df-fb-btn-primary { border: 0; background: #f4f4f5; color: #18181b; }
+      .df-fb-btn-primary:hover { background: #ffffff; }
+      .df-fb-btn:active { transform: scale(.98); }
+      .df-fb-go { margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, .1); padding-top: 20px; }
+      .df-fb-go-label { margin: 0; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; color: #52525b; }
+      .df-fb-go-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+      .df-fb-go-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 8px; background: transparent; color: #a1a1aa; font-family: inherit; font-size: 12px; cursor: pointer; transition: background-color .15s, color .15s, border-color .15s; }
+      .df-fb-go-btn:hover { border-color: rgba(255, 255, 255, .2); background: #18181b; color: #e4e4e7; }
+      @media (prefers-reduced-motion: reduce) { .df-fb-btn, .df-fb-copy, .df-fb-go-btn, .df-fb-summary { transition: none; } .df-fb-btn:active { transform: none; } }
       #df-startup { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: var(--color-background, #09090b); color: var(--color-foreground, #fafafa); font-family: Inter, system-ui, sans-serif; }
       #df-startup[hidden] { display: none; }
       .df-startup-content { width: min(520px, calc(100vw - 48px)); box-sizing: border-box; padding: 20px; border: 1px solid var(--color-border, #27272a); border-radius: 12px; background: var(--color-card, #18181b); }
@@ -20,6 +98,26 @@
       .df-startup-spinner { width: 16px; height: 16px; flex: none; animation: df-startup-spin 1s linear infinite; }
       @keyframes df-startup-spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .df-startup-spinner { animation: none; } }
+      /* ── LIGHT MODE FOR THE LOADING SCREEN ────────────────────────────────
+         The rules above are written `var(--token, DARK_LITERAL)`. The token
+         comes from the app stylesheet, which in dev is injected by Vite's JS
+         runtime — i.e. it is NOT defined at the moment this screen paints. So
+         the literal is what actually renders, and every one of them is dark.
+         Applying `.light` on <html> alone did therefore nothing here.
+
+         These overrides set the light values DIRECTLY on the loading screen, so
+         it is correct on first paint with or without the app stylesheet. They
+         are the same values as the `html.light` block in src/index.css:
+           paper #f5f2ec · card #fcfbf8 · ink #1c1917 · muted #57534e
+           hairline rgb(28 25 23 / 0.10) · signal teal #0e7490
+         Design law (design/design.md §11): light is WARM PAPER, depth comes
+         from HAIRLINES never shadow, and the ONE signal hue is deep teal —
+         which is why the spinner takes the accent in light and stays neutral
+         in dark. Do not add a second hue here. */
+      html.light #df-startup { background: #f5f2ec; color: #1c1917; }
+      html.light .df-startup-content { border-color: rgb(28 25 23 / 0.10); background: #fcfbf8; }
+      html.light .df-startup-status { color: #57534e; }
+      html.light .df-startup-spinner { color: #0e7490; }
     </style>
   </head>
   <body>
@@ -34,19 +132,50 @@
     </div>
     <div id="root"></div>
 
-    <!-- FALLBACK OVERLAY: visible when JS fails to load or crashes before mount.
-         Auto-reloads the page up to 3 times with escalating delays, then gives up
-         and shows a static message so the user is never stuck on a blank/error screen. -->
-    <div id="df-fallback" style="display:none;align-items:center;justify-content:center;min-height:100vh;background:#121212;color:#a1a1aa;font-family:Inter,sans-serif;padding:24px;box-sizing:border-box;text-align:center;flex-direction:column;gap:12px;position:fixed;inset:0;z-index:99999;">
-      <div style="font-size:48px;margin-bottom:8px;">⚠</div>
-      <div style="font-size:18px;font-weight:600;color:#e4e4e7;">RHEO failed to load</div>
-      <div id="df-error-msg" style="font-size:13px;color:#ef4444;max-width:500px;line-height:1.5;font-family:monospace;word-break:break-all;">The application could not start. Reloading…</div>
-      <pre id="df-error-stack" style="display:none;font-size:11px;color:#71717a;max-width:500px;line-height:1.4;text-align:left;background:#1a1a1a;padding:12px;border-radius:8px;overflow:auto;max-height:200px;font-family:monospace;white-space:pre-wrap;word-break:break-all;"></pre>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px;">
-        <button onclick="copyError()" id="df-copy-btn" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#27272a;color:#e4e4e7;font-size:13px;cursor:pointer;">Copy Error</button>
-        <button onclick="location.reload()" style="padding:10px 24px;border-radius:8px;border:1px solid #3f3f46;background:#27272a;color:#e4e4e7;font-size:13px;cursor:pointer;">Reload Now</button>
+    <!-- THE ERROR SCREEN — one of them, in every state of the app.
+         When React is mounted, that screen is src/components/StatusScreen.tsx
+         (via ErrorBoundary / NotFoundPage / SelfErrorBoundary). When React has
+         NOT mounted — bundle failed to load, or it crashed before it could
+         render — this overlay takes its place, built from the same tokens and
+         the same copy so the two are visually one screen.
+         Do not add a third error style. Extend StatusScreen, then port it here. -->
+    <div id="df-fallback" role="alert" aria-live="polite">
+      <div class="df-fb-inner">
+        <div class="df-fb-hero">
+          <span class="df-fb-tile" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          </span>
+          <span class="df-fb-headings">
+            <span class="df-fb-eyebrow" id="df-fallback-eyebrow">FAULT · start</span>
+            <h1 class="df-fb-title">RHEO failed to start</h1>
+          </span>
+        </div>
+
+        <p class="df-fb-desc" id="df-error-msg">The application could not start. Reloading&hellip;</p>
+
+        <div class="df-fb-detail">
+          <div class="df-fb-detail-head">
+            <span>Error message</span>
+            <button type="button" class="df-fb-copy" id="df-copy-btn" onclick="copyError()">Copy</button>
+          </div>
+          <details class="df-fb-detail-body" id="df-error-details">
+            <summary class="df-fb-summary">Show message</summary>
+            <pre class="df-fb-stack" id="df-error-stack"></pre>
+          </details>
+        </div>
+
+        <div class="df-fb-actions">
+          <button type="button" class="df-fb-btn df-fb-btn-primary" onclick="attemptReload()">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            Reload app
+          </button>
+        </div>
+
+        <div class="df-fb-go">
+          <p class="df-fb-go-label">Go to</p>
+          <div class="df-fb-go-row"></div>
+        </div>
       </div>
-      <div style="font-size:11px;color:#52525b;margin-top:4px;">If this persists, rebuild the app: <code style="background:#27272a;padding:2px 6px;border-radius:4px;">node scripts/build.mjs</code></div>
     </div>
 
     <script>
@@ -59,6 +188,28 @@
       window.__DF_RELOAD_COUNT = 0;
       window.__DF_MAX_RELOADS = 3;
       window.__DF_RELOAD_TIMER = null;
+      window.__DF_COPY_TIMER = null;
+      // Mirrors STATUS_DESTINATIONS in src/components/StatusScreen.tsx — the same
+      // five, in the same order, with the same icons. Keep the two in sync.
+      var DF_DESTINATIONS = [
+        { label: 'Dashboard', path: '/', icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
+        { label: 'Activity', path: '/activity', icon: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
+        { label: 'Terminal', path: '/terminal', icon: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>' },
+        { label: 'IDE', path: '/ide', icon: '<path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>' },
+        { label: 'Settings', path: '/settings', icon: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>' }
+      ];
+      function renderDestinations() {
+        var row = document.querySelector('#df-fallback .df-fb-go-row');
+        if (!row || row.childElementCount > 0) return;
+        DF_DESTINATIONS.forEach(function (d) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'df-fb-go-btn';
+          b.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d.icon + '</svg>' + d.label;
+          b.addEventListener('click', function () { window.navigateTo(d.path); });
+          row.appendChild(b);
+        });
+      }
       window.addEventListener('rheo:boot-ready', function() {
         document.documentElement.dataset.bootReady = 'true';
       });
@@ -74,20 +225,27 @@
 
       function showFallback(msg, err) {
         var fb = document.getElementById('df-fallback');
+        var eb = document.getElementById('df-fallback-eyebrow');
         var em = document.getElementById('df-error-msg');
+        var ed = document.getElementById('df-error-details');
         var es = document.getElementById('df-error-stack');
         var cb = document.getElementById('df-copy-btn');
         if (fb) fb.style.display = 'flex';
+        if (eb) eb.textContent = err ? 'FAULT \u00b7 preload' : 'FAULT \u00b7 start';
         if (em) {
           if (msg && String(msg).length > 0) em.textContent = String(msg);
-          else em.textContent = 'Unknown error';
+          else em.textContent = 'The application could not start.';
         }
         window.__DESKFLOW_LAST_ERROR = err || msg || 'Unknown error';
         if (es && err && err.stack) {
           es.textContent = err.stack;
-          es.style.display = 'block';
+          if (ed) ed.open = true;
         }
-        if (cb) cb.textContent = 'Copy Error';
+        if (cb) {
+          cb.textContent = 'Copy';
+          if (window.__DF_COPY_TIMER) { clearTimeout(window.__DF_COPY_TIMER); window.__DF_COPY_TIMER = null; }
+        }
+        renderDestinations();
         // Trigger auto-reload on first failure — give the app a chance to recover.
         attemptReload();
       }
@@ -127,7 +285,10 @@
         if (!text) text = document.getElementById('df-error-msg')?.textContent || 'Unknown error';
         navigator.clipboard.writeText(text).then(function() {
           var cb = document.getElementById('df-copy-btn');
-          if (cb) cb.textContent = 'Copied!';
+          if (!cb) return;
+          cb.textContent = 'Copied';
+          if (window.__DF_COPY_TIMER) clearTimeout(window.__DF_COPY_TIMER);
+          window.__DF_COPY_TIMER = setTimeout(function() { cb.textContent = 'Copy'; }, 2000);
         });
       };
 

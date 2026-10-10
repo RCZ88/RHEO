@@ -1,4 +1,5 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
+import { sample, aggregateBias } from './physics/noiseField'
 
 /**
  * NeuralFlow — ambient background for the Self page.
@@ -7,7 +8,14 @@ import { useRef, useEffect } from 'react'
  * Runs on a 2D canvas, no dependencies beyond React.
  * Uses requestAnimationFrame, pauses on document.hidden.
  */
-export function NeuralFlow({ opacity = 0.5 }: { opacity?: number }) {
+export function NeuralFlow({ opacity = 0.5, dataPoints = [], respectReducedMotion = true }: {
+  opacity?: number;
+  /** Settled graph nodes. The field is biased toward them so the ambient layer
+      is about the brain data instead of independent decoration (spec §4.4). */
+  dataPoints?: Array<{ x?: number; y?: number; strength?: number }>;
+  /** When false, render one static sampled frame instead of animating. */
+  respectReducedMotion?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -34,8 +42,14 @@ export function NeuralFlow({ opacity = 0.5 }: { opacity?: number }) {
     resize()
     window.addEventListener('resize', resize)
 
+    // Bias the field toward where the graph actually is. Degree drives
+    // strength, so dense regions pull the flow harder (spec §3 data flow).
+    const biasPts = dataPoints
+      .filter(n => typeof n.x === 'number' && typeof n.y === 'number')
+      .map(n => ({ x: n.x as number, y: n.y as number, strength: n.strength ?? 0.2 }));
+
     const pts: Array<{ x: number; y: number; vx: number; vy: number; hue: number }> = []
-    const NUM_PTS = 120
+    const NUM_PTS = 340
     const SEED = 42
     let rng = SEED
     function rand() { rng = (rng * 16807) % 2147483647; return (rng - 1) / 2147483646 }
@@ -57,14 +71,14 @@ export function NeuralFlow({ opacity = 0.5 }: { opacity?: number }) {
       ctx.clearRect(0, 0, W, H)
 
       for (const p of pts) {
-        // Field: swirling flow derived from position
-        const angle = Math.sin(p.y * 0.005 + t * 0.0004) * 0.8
-          + Math.cos(p.x * 0.004 - t * 0.0003) * 0.8
-          + Math.sin((p.x + p.y) * 0.002 + t * 0.0002) * 0.4
-        const mag = 0.6
+        // Field: divergence-free curl noise from noiseField.ts. This REPLACES
+        // the old ad-hoc sin/cos swirl, which was not a flow field at all.
+        const [fx, fy] = sample(p.x * 0.0022, p.y * 0.0022, t * 0.00016)
+        const bias = biasPts.length ? aggregateBias(p.x, p.y, biasPts, 160) : 0
+        const mag = 0.6 + bias * 1.6
 
-        p.vx += Math.cos(angle) * mag * 0.02
-        p.vy += Math.sin(angle) * mag * 0.02
+        p.vx += fx * mag * 0.02
+        p.vy += fy * mag * 0.02
         // Damping
         p.vx *= 0.98
         p.vy *= 0.98
@@ -81,13 +95,13 @@ export function NeuralFlow({ opacity = 0.5 }: { opacity?: number }) {
         if (p.y < -10) p.y = H + 10
         if (p.y > H + 10) p.y = -10
 
-        const nx = p.x + p.vx * 8
+        const nx = p.x + p.vx * 26
         const ny = p.y + p.vy * 8
 
-        const alpha = (0.04 + 0.03 * Math.sin(t * 0.0008 + p.x * 0.008 + p.y * 0.006)) * opacity
+        const alpha = (0.16 + 0.10 * Math.sin(t * 0.0008 + p.x * 0.008 + p.y * 0.006)) * opacity
 
         ctx.strokeStyle = `hsla(${p.hue}, 45%, 55%, ${alpha})`
-        ctx.lineWidth = 0.6
+        ctx.lineWidth = 1.15
         ctx.beginPath()
         ctx.moveTo(p.x, p.y)
         ctx.lineTo(nx, ny)
@@ -95,15 +109,16 @@ export function NeuralFlow({ opacity = 0.5 }: { opacity?: number }) {
       }
 
       t += 1
-      raf = requestAnimationFrame(draw)
+      if (respectReducedMotion) raf = requestAnimationFrame(draw)
     }
-    raf = requestAnimationFrame(draw)
+    if (!respectReducedMotion) draw()
+    else raf = requestAnimationFrame(draw)
 
     return () => {
       window.removeEventListener('resize', resize)
       cancelAnimationFrame(raf)
     }
-  }, [opacity])
+  }, [opacity, dataPoints, respectReducedMotion])
 
   return (
     <div ref={containerRef} className="w-full h-full pointer-events-none">

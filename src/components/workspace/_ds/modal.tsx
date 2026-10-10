@@ -87,7 +87,7 @@ export function ModalShell({
             exit={PANEL_EXIT}
             transition={{ duration: reduce ? 0 : DUR.normal, ease: EASE_OUT as any }}
             onClick={(e) => e.stopPropagation()}
-            className={`relative w-full ${maxWidth} max-h-[85vh] flex flex-col rounded-xl bg-zinc-900/95 backdrop-blur-xl ring-1 ring-zinc-800/60 shadow-2xl shadow-black/50 overflow-hidden ${className}`}
+            className={`relative w-full ${maxWidth} max-h-[85vh] flex flex-col rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl ring-1 ring-zinc-800/60 shadow-2xl shadow-black/50 overflow-hidden ${className}`}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800/50 shrink-0">
@@ -188,13 +188,13 @@ export function FormField({
 // ---- FormInput --------------------------------------------------------------
 // Consistent input for modals. Accent-driven focus ring.
 export const FORM_INPUT =
-  'w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent,#2dd4bf)]/40 focus:border-[color:var(--page-accent,#2dd4bf)]/40 transition-all duration-150';
+  'w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent,#2dd4bf)]/40 focus:border-[color:var(--page-accent,#2dd4bf)]/40 transition-all duration-150';
 
 export const FORM_SELECT =
-  'w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 appearance-none focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent,#2dd4bf)]/40 focus:border-[color:var(--page-accent,#2dd4bf)]/40 transition-all duration-150 cursor-pointer';
+  'w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 appearance-none focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent,#2dd4bf)]/40 focus:border-[color:var(--page-accent,#2dd4bf)]/40 transition-all duration-150 cursor-pointer';
 
 export const FORM_TEXTAREA =
-  'w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent,#2dd4bf)]/40 focus:border-[color:var(--page-accent,#2dd4bf)]/40 transition-all duration-150 resize-none';
+  'w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[color:var(--page-accent,#2dd4bf)]/40 focus:border-[color:var(--page-accent,#2dd4bf)]/40 transition-all duration-150 resize-none';
 
 // ---- Section Divider --------------------------------------------------------
 // Used inside modals to separate logical sections.

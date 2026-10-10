@@ -27,6 +27,28 @@
   --dk-elev-3: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08);
   --dk-elev-4: 0 16px 48px rgba(0,0,0,0.60), 0 0 0 1px rgba(255,255,255,0.10);
 
+  /* ── Polka-dot field (the canvas spatial reference) ──
+     MEASURED, not guessed. Drawn as white @0.16 over --dk-bg-deep it renders
+     rgb(46,46,48) = 1.494:1 against the field. In light mode white @0.16 over
+     paper is 1.05:1 — literally invisible, which is the reported bug. The
+     light value below is ink @0.19, which measures 1.494:1 as well: the SAME
+     perceived dot strength in both themes. Copying 0.16 verbatim would have
+     looked ~7% weaker because white and ink are not equiluminant. */
+  --dk-dot: rgba(255, 255, 255, 0.16);
+
+  /* ── In-card chips (a control sitting one step above the card face) ──
+     Three canvas cards wrote these as inline `rgba(255,255,255,0.06)` /
+     `0.10`. An inline style has no variant system, so on the light card
+     face (#ffffff) they composited to a flat 1.000:1 — the chips, their
+     borders and their text simply did not exist.
+     The light values are ink at the alpha that MEASURES the same contrast
+     against a white face that white-at-these-alphas measures against the dark
+     face, so a chip looks the same in both themes instead of merely existing:
+       fill  dark 1.134:1  ->  light ink@0.06 1.129:1  (delta 0.004)
+       edge  dark 1.277:1  ->  light ink@0.12 1.281:1  (delta 0.004) */
+  --dk-chip:       rgba(255, 255, 255, 0.06);
+  --dk-chip-edge:  rgba(255, 255, 255, 0.10);
+
   /* ── Sheen — specular edge highlight ── */
   --dk-sheen: inset 0 1px 0 rgba(255,255,255,0.05);
 
@@ -407,6 +429,13 @@ html.light .dk-glass-inset {
 }
 
 /* Light-mode buttons / controls */
+/* the same measured 1.494:1 dot strength, ink instead of white */
+html.light {
+  --dk-dot: rgba(28, 25, 23, 0.19);
+  --dk-chip: rgba(28, 25, 23, 0.06);
+  --dk-chip-edge: rgba(28, 25, 23, 0.12);
+}
+
 html.light .dk-btn { background: rgba(28,25,23,0.05); }
 html.light .dk-btn:hover { background: rgba(28,25,23,0.09); }
 html.light .dk-btn:active { background: rgba(28,25,23,0.04); }

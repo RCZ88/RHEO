@@ -63,15 +63,15 @@ export function LearnWidget({ stats, loading, error }: LearnWidgetProps) {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <div className="p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/50 text-center">
+        <div className="p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-center">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Due</div>
           <div className="text-[18px] font-display font-bold text-zinc-100 tabular-nums">{dueCount}</div>
         </div>
-        <div className="p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/50 text-center">
+        <div className="p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-center">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Mastery</div>
           <div className="text-[18px] font-display font-bold text-zinc-100 tabular-nums">{masteryPercent}%</div>
         </div>
-        <div className="p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/50 text-center">
+        <div className="p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-center">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Streak</div>
           <div className="text-[18px] font-display font-bold text-zinc-100 tabular-nums">{streak}d</div>
         </div>

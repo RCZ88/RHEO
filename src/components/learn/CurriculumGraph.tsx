@@ -169,7 +169,7 @@ export function CurriculumGraph({ nodes, progress, selectedNode, onSelectNode, o
       </div>
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto ws-scroll bg-zinc-900/20"
+        className="flex-1 overflow-auto ws-scroll bg-zinc-900/20 light:bg-[var(--ws-surface-raised)]"
         onWheel={handleWheel}
       >
         <svg

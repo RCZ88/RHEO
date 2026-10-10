@@ -67,7 +67,7 @@ export function LifeRiver({ className }: LifeRiverProps) {
     const text = await store.summarize()
     setSummaryBusy(false)
     if (text) showToast('Journey summarized')
-    else showToast('Summary failed ΓÇö check your AI provider')
+    else showToast('Summary failed — check your AI provider')
   }
 
   return (
@@ -215,7 +215,7 @@ export function LifeRiver({ className }: LifeRiverProps) {
               role="status"
               aria-live="polite"
               data-lifephase="river-toast"
-              className="fixed right-4 top-4 z-[120] rounded-lg border border-white/10 bg-zinc-900/95 px-3 py-2 text-[12px] text-zinc-200 shadow-xl backdrop-blur"
+              className="fixed right-4 top-4 z-[120] rounded-lg border border-white/10 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] px-3 py-2 text-[12px] text-zinc-200 shadow-xl backdrop-blur"
             >
               {toast}
             </motion.div>

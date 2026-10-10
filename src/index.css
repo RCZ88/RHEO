@@ -1,8 +1,90 @@
+/* ── BLACK SCRIMS — the one that made the Lecture pages unreadable ──────────────
+ *
+ * The alpha-variant net below handles white/zinc/stone/gray. It does NOT handle
+ * BLACK, and that omission is what broke the whole Lecture feature: 205 `bg-black/NN`
+ * panels across the app (77 of them at /60) stayed `rgba(0,0,0,N)` on Warm Paper.
+ *
+ * That alone is only "a grey panel". The real damage is the INTERACTION with the
+ * semantic-text net: those panels carry light-theme text (`text-amber-400`,
+ * `text-emerald-300`, …) which the net correctly re-routes to `--warning` /
+ * `--success` — the DARK values light mode uses. So a correctly-remediated label
+ * landed on an unremediated dark panel: **black text on a black panel.**
+ *
+ * Two mappings, because `bg-black/NN` is doing two different jobs:
+ *   • low alphas (≤40) are PANELS — a recessed field. On paper a panel is a step
+ *     DOWN the warm ladder, not a shadow: `--ws-surface-sunken` at the same alpha.
+ *   • high alphas (≥45) are SCRIMS — a modal backdrop meant to push content away.
+ *     Those want the theme's veil token, which is `rgb(28 25 23 / 0.32)` on light
+ *     and near-opaque on dark.
+ *
+ * Same specificity discipline: one `:where()`, so (0,1,1). Beats Tailwind's (0,1,0)
+ * so it applies; loses to an explicit `light:` (0,2,0). hover:/focus: excluded. */
+html.light :where([class*="bg-black/15"]) {
+	background-color: color-mix(in srgb, var(--ws-surface-sunken) 15%, transparent);
+}
+
+html.light :where([class*="bg-black/20"]) {
+	background-color: color-mix(in srgb, var(--ws-surface-sunken) 20%, transparent);
+}
+
+html.light :where([class*="bg-black/25"]) {
+	background-color: color-mix(in srgb, var(--ws-surface-sunken) 25%, transparent);
+}
+
+html.light :where([class*="bg-black/30"]) {
+	background-color: color-mix(in srgb, var(--ws-surface-sunken) 30%, transparent);
+}
+
+html.light :where([class*="bg-black/40"]) {
+	background-color: color-mix(in srgb, var(--ws-surface-sunken) 40%, transparent);
+}
+
+html.light :where([class*="bg-black/45"]) {
+	background-color: var(--ws-scrim);
+}
+
+html.light :where([class*="bg-black/50"]) {
+	background-color: var(--ws-scrim);
+}
+
+html.light :where([class*="bg-black/60"]) {
+	background-color: var(--ws-scrim);
+}
+
+html.light :where([class*="bg-black/70"]) {
+	background-color: var(--ws-scrim);
+}
+
+html.light :where([class*="bg-black/80"]) {
+	background-color: var(--ws-scrim);
+}
+
+html.light :where([class*="bg-black/90"]) {
+	background-color: var(--ws-scrim);
+}
+
 @import "tailwindcss";
+/* Tailwind's auto-source scan reads EVERY non-gitignored file in the repo. The
+   agent/ tree is a pile of markdown session logs, and they quote real class names
+   inside prose -- e.g. `light:bg-[var(--ws-surface-*)]` with a literal asterisk.
+   Tailwind believed it, emitted the rule, and Lightning CSS then died on
+   `var(--ws-surface-*)` -> "Unexpected token Delim('*')", failing the whole
+   renderer build. agent/ is NOT gitignored, so it must be excluded here.
+   Do not remove: the error names no file, and it looks like a CSS bug. */
+@source not "../agent";
+@source not "../*.md";
 @import "./styles/finance-glass.css";
+/* /finance design contract: 5-step type scale, one signal hue, token-only colour. */
+@import "./styles/finance-ledger.css";
 @import "./components/ai/design-tokens.css";
 /* THE scrollbar + textbox contract. One file owns both — see surface.css. */
 @import "./styles/surface.css";
+/* KaTeX stylesheet for math in AI chat responses (rehype-katex). Imported at the
+   top level, NOT via a lazy import() inside a component: a failed lazy KaTeX
+   chunk once restarted the entire app (see learn/blocks/MathBlock.tsx header).
+   A static CSS import cannot fail at runtime — the bundler either emits it or
+   the build fails, which is the correct place for that failure. */
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant light (&:is(.light *));
@@ -10,6 +92,10 @@
 @theme {
 	--ws-surface: #09090b;
 	--ws-surface-raised: #18181b;
+	/* Figma §3 `bg/hover` — the selected-tab and button-hover fill.
+	   Paired with raised on purpose: a hover fill must be one step off its own
+	   background in BOTH themes or the tab rail reads as broken on one of them. */
+	--ws-surface-hover: #27272a;
 	--ws-border: rgb(39 39 42 / 0.6);
 	--ws-border-strong: rgb(63 63 70 / 0.6);
 	--ws-accent: #06b6d4;
@@ -19,6 +105,13 @@
 
 	--color-clay-300: #f0a892;
 	--color-clay-400: #e8866b;
+
+	/* Memories accent. Was hardcoded as #6fb38f across 7 files in
+	   src/features/memories/, which is a light sage made for a DARK field — it
+	   measured 2.21:1 on Warm Paper, i.e. unreadable as text. Tokenised for the
+	   same reason --color-clay is: one place decides, and the light scope can
+	   re-chroma it. The light value is darkened to clear 4.5:1 on #f5f2ec. */
+	--color-mem-400: #6fb38f;
 	--color-clay-500: #d96846;
 	--color-clay-600: #c2553a;
 	--color-sage-400: #6fb38f;
@@ -58,143 +151,1911 @@
 	--resume-accent: #6366f1;
 }
 
-/* ===== Light mode CSS variable overrides ===== */
-.light,
-[data-theme="light"] {
-	--color-background: #fafafa;
-	--color-foreground: #18181b;
-	--color-card: #ffffff;
-	--color-card-foreground: #18181b;
-	--color-popover: #ffffff;
-	--color-popover-foreground: #18181b;
-	--color-primary: #22c55e;
-	--color-primary-foreground: #ffffff;
-	--color-secondary: #f4f4f5;
-	--color-secondary-foreground: #18181b;
-	--color-muted: #f4f4f5;
-	--color-muted-foreground: #71717a;
-	--color-accent: #f4f4f5;
-	--color-accent-foreground: #18181b;
-	--color-destructive: #ef4444;
-	--color-destructive-foreground: #ffffff;
-	--color-border: #e4e4e7;
-	--color-input: #e4e4e7;
-	--color-ring: #22c55e;
-
-	--ws-surface: #fafafa;
-	--ws-surface-raised: #ffffff;
-	--ws-border: rgb(228 228 231 / 0.8);
-	--ws-border-strong: rgb(200 200 205 / 0.8);
-
-	--splash-field: #fafafa;
-	--splash-hairline: rgba(0, 0, 0, 0.08);
-	--splash-mono: rgba(0, 0, 0, 0.45);
-	--splash-caption: rgba(0, 0, 0, 0.35);
-
-	--bg-primary: #fafafa;
-	--bg-secondary: #f4f4f5;
-	--bg-glass: rgba(255, 255, 255, 0.72);
-	--bg-glass-heavy: rgba(255, 255, 255, 0.88);
-	--border-glass: rgba(228, 228, 231, 0.6);
-	--text-primary: #18181b;
-	--text-secondary: #52525b;
-	--text-muted: #a1a1aa;
-	--text-disabled: #d4d4d8;
-	--accent-primary: #22c55e;
-	--accent-foreground: #ffffff;
-	--danger: #ef4444;
-	--muted-foreground: #71717a;
-	--border-default: #e4e4e7;
-	--border-strong: #d4d4d8;
-	--border-light: #f4f4f5;
-	--sidebar-bg: #ffffff;
-	--sidebar-border: #e4e4e7;
-	--highlight-bg: #f0fdf4;
-	--highlight-border: #bbf7d0;
-	--chart-line: #22c55e;
-	--chart-fill: rgba(34, 197, 94, 0.12);
-	--chart-grid: #e4e4e7;
-	--chart-text: #52525b;
-	--badge-foreground: #18181b;
-	--row-even: #fafafa;
-	--row-odd: #ffffff;
-	--row-hover: #f4f4f5;
-	--row-stripe: #fafafa;
-	--radio-bg: #f4f4f5;
-	--radio-border: #e4e4e7;
-	--toggle-bg: #e4e4e7;
-	--toggle-active: #22c55e;
-	--toggle-active-foreground: #ffffff;
-	--scrollbar-thumb: #d4d4d8;
-	--scrollbar-track: #f4f4f5;
-	--scrollbar-thumb-hover: #a1a1aa;
-	--input-bg: #ffffff;
-	--input-border: #e4e4e7;
-	--input-ring: #22c55e;
-	--preview-bg: #ffffff;
-	--preview-text: #18181b;
-	--preview-border: #e4e4e7;
-	--preview-highlight: #fef3c7;
-	--preview-accent: #6366f1;
-	--preview-shadow: rgba(0, 0, 0, 0.06);
-	--slider-bg: #e4e4e7;
-	--slider-thumb: #22c55e;
-	--slider-thumb-border: #ffffff;
-	--sidebar-active-bg: #f0fdf4;
-	--sidebar-active-fg: #16a34a;
-	--sidebar-inactive-fg: #71717a;
-	--sidebar-hover-bg: #f4f4f5;
-	--desktop-bg: #fafafa;
-	--desktop-primary: #22c55e;
-	--desktop-foreground: #18181b;
-	--desktop-ring: #22c55e;
-	--desktop-border: #e4e4e7;
-}
-
-/* ============ LIGHT MODE SPEC (R-12/R-16) — appended ============ */
-/* Surface hierarchy: S0 paper → S1 card → S2 overlay → S3 sunken → S4 veil (R-13: hairlines only, no shadow) */
+/* ============================================================================
+ * LIGHT MODE — the single, complete light contract (R-12 / R-16)
+ * ============================================================================
+ *
+ * WHY THIS BLOCK IS NOW ONE BLOCK
+ * --------------------------------
+ * Light mode used to be defined TWICE in this file: a `.light` block of ~85
+ * cool-zinc tokens with a GREEN `#22c55e` accent, and an `html.light` block of
+ * ~34 warm tokens with a TEAL `#0e7490` accent. Both were live. `html.light`
+ * won on specificity for the 34 tokens it defined, and the other ~76 kept the
+ * cool-zinc/green values — so the app rendered warm cream cards sitting on
+ * cool zinc borders, next to teal headers and green toggles. That is why light
+ * mode "looked like dark mode translated to white": it was two palettes
+ * interleaved, not one design.
+ *
+ * THE LAW (design/design.md §11)
+ * ------------------------------
+ * Light is WARM PAPER, not snow. Depth comes from HAIRLINES, never shadow —
+ * a light surface has no ambient occlusion to sell, so a drop shadow is a
+ * lie. One signal hue (deep teal) per surface. Green is SEMANTIC ONLY
+ * (success); it is never the accent. That last rule is why every `#22c55e`
+ * below is now teal: the accent and the success state were fighting.
+ *
+ * CONTRAST (impeccable §: 4.5:1 body, 3:1 large/UI)
+ * --------------------------------------------------
+ * Every text token below clears 4.5:1 on ALL FOUR surfaces (paper #f5f2ec,
+ * card #fcfbf8, overlay #ffffff, sunken #edeae2) — measured, not eyeballed.
+ * Two deliberate consequences:
+ *   - `--accent-primary` (#0e7490) is 4.46:1 on the sunken surface, so it is a
+ *     FILL token (borders, tracks, slider thumbs — 3:1 rule, it passes 4.46
+ *     there). Accent-coloured TEXT must use `--ws-accent-text` (#0b5c73,
+ *     6.26:1) instead. Never render #0e7490 as small text on sunken.
+ *   - `--text-disabled` (#a8a29e, 2.26:1) is intentionally below 4.5:1 —
+ *     WCAG exempts disabled controls. Do not "fix" it; use --text-faint
+ *     (#6f665e, 4.67:1 on sunken) for de-emphasised text that is still read.
+ * ========================================================================== */
 html.light {
+	/* ── S0 paper → S1 card → S2 overlay → S3 sunken → S4 veil ─────────── */
 	--ws-surface: #f5f2ec;
 	--ws-surface-raised: #fcfbf8;
+	/* Figma §3 `bg/hover`, Warm Paper. Same pairing rule as the dark scope. */
+	--ws-surface-hover: #efeadd;
 	--ws-surface-overlay: #ffffff;
 	--ws-surface-sunken: #edeae2;
 	--ws-veil: rgb(28 25 23 / 0.04);
 	--ws-scrim: rgb(28 25 23 / 0.32);
 
-	--ws-border: rgb(28 25 23 / 0.08);
-	--ws-border-strong: rgb(28 25 23 / 0.17);
+	/* Hairlines. Light needs MORE alpha than dark to read as an edge, because
+a dark hairline disappears into a bright field where a light one does
+  	   not. 0.08 was invisible on cream — raised to 0.10 / 0.20.
+  	   0.20 was STILL invisible as a CONTROL BOUNDARY: measured against this theme's
+  	   surface (#f5f2ec) it composites to rgb(202 199 193) = 1.51:1, where WCAG 1.4.11
+  	   requires 3:1 for the boundary of an interactive control. That is the "the switches
+  	   are not visible at all" report. Raised to 0.60, which is what the DARK theme
+  	   already uses (line 29) — so the two themes now agree, and at 0.60 the light
+  	   boundary measures 3.77:1. Decorative hairlines (`--ws-border`) are untouched. */
+  	--ws-border: rgb(28 25 23 / 0.10);
+  	--ws-border-strong: rgb(28 25 23 / 0.60);
 
-	--ws-accent: #0e7490;
-	--ws-accent-hover: #155e75;
-	--ws-focus: #0e7490;
-
+	/* ── Ink ───────────────────────────────────────────────────────────── */
 	--text-primary: #1c1917;
 	--text-secondary: #44403c;
 	--text-muted: #57534e;
-	--text-faint: #82796f;
+	--text-faint: #6f665e;
+	--text-disabled: #a8a29e;
+	--muted-foreground: #57534e;
 
+	/* ── Signal: deep teal ─────────────────────────────────────────────── */
+	--ws-accent: #0e7490;
+	--ws-accent-hover: #155e75;
+	--ws-accent-text: #0b5c73;
+	--ws-focus: #0e7490;
+
+	/* ── Semantic (darkened one step for 4.5:1 on cream) ──────────────── */
+	--success: #166534;
+	--warning: #92400e;
+	--error: #b91c1c;
+	--info: #1d4ed8;
+	--success-muted: rgb(22 101 52 / 0.10);
+	--warning-muted: rgb(146 64 14 / 0.10);
+	--error-muted: rgb(185 28 28 / 0.10);
+	--info-muted: rgb(29 78 216 / 0.10);
+	--danger: #b91c1c;
+
+	/* ── shadcn-compatible aliases ──────────────────────────────────────
+	   Every one of these pointed at GREEN in the old block. They now all
+	   resolve to the teal signal, which is what kills the green/teal clash
+	   across ~12 toggle / slider / ring / chart call sites at once. */
+	--color-background: #f5f2ec;
+	--color-foreground: #1c1917;
 	--color-card: #fcfbf8;
+	--color-card-foreground: #1c1917;
 	--color-card-raised: #ffffff;
 	--color-card-sunken: #edeae2;
+	--color-popover: #ffffff;
+	--color-popover-foreground: #1c1917;
+	--color-primary: #0e7490;
+	--color-primary-foreground: #ffffff;
+	--color-secondary: #edeae2;
+	--color-secondary-foreground: #1c1917;
+	--color-muted: #edeae2;
+	--color-muted-foreground: #57534e;
+	--color-accent: #edeae2;
+	--color-accent-foreground: #1c1917;
+	--color-destructive: #b91c1c;
+	--color-destructive-foreground: #ffffff;
+	--color-border: rgb(28 25 23 / 0.10);
+	--color-input: rgb(28 25 23 / 0.14);
+	--color-ring: #0e7490;
 
+	/* ── Legacy bg-* layer (kept: still referenced) ─────────────────────── */
+	--bg-primary: #f5f2ec;
+	--bg-secondary: #edeae2;
+	--bg-glass: rgb(252 251 248 / 0.82);
+	--bg-glass-heavy: rgb(252 251 248 / 0.94);
+	--border-glass: rgb(28 25 23 / 0.10);
 	--accent-primary: #0e7490;
 	--accent-hover: #155e75;
+	--accent-foreground: #ffffff;
 
-	--resume-success: #15803d;
-	--resume-warning: #b45309;
+	/* ── Borders ───────────────────────────────────────────────────────── */
+	--border-default: rgb(28 25 23 / 0.10);
+	--border-subtle: rgb(28 25 23 / 0.10);
+	--border-strong: rgb(28 25 23 / 0.20);
+	--border-light: #edeae2;
+
+	/* ── Chrome: sidebar / desktop ────────────────────────────────────────
+	   The sidebar is a SIDE surface, so it sits one step off the paper field
+	   (raised) rather than matching it exactly — otherwise the app edge
+	   disappears and the chrome reads as part of the page content. */
+	--sidebar-bg: #fcfbf8;
+	--sidebar-border: rgb(28 25 23 / 0.10);
+	--sidebar-active-bg: rgb(14 116 144 / 0.09);
+	--sidebar-active-fg: #0b5c73;
+	--sidebar-inactive-fg: #6f665e;
+	--sidebar-hover-bg: rgb(28 25 23 / 0.045);
+	--desktop-bg: #f5f2ec;
+	--desktop-primary: #0e7490;
+	--desktop-foreground: #1c1917;
+	--desktop-ring: #0e7490;
+	--desktop-border: rgb(28 25 23 / 0.10);
+
+	/* ── Rows / tables: the zebra must be a warm value, not cool grey ───── */
+	--row-odd: #fcfbf8;
+	--row-even: #f5f2ec;
+	--row-stripe: #f5f2ec;
+	--row-hover: rgb(14 116 144 / 0.06);
+	--badge-foreground: #1c1917;
+
+	/* ── Controls ─────────────────────────────────────────────────────── */
+	--input-bg: #ffffff;
+	--input-border: rgb(28 25 23 / 0.14);
+	--input-ring: #0e7490;
+	--radio-bg: #ffffff;
+	--radio-border: rgb(28 25 23 / 0.22);
+	--toggle-bg: #d6d0c6;
+	--toggle-active: #0e7490;
+	--toggle-active-foreground: #ffffff;
+	--slider-bg: #d6d0c6;
+	--slider-thumb: #0e7490;
+	--slider-thumb-border: #ffffff;
+
+	/* ── Scrollbar ─────────────────────────────────────────────────────── */
+	--scrollbar-thumb: rgb(28 25 23 / 0.18);
+	--scrollbar-track: #edeae2;
+	--scrollbar-thumb-hover: rgb(28 25 23 / 0.30);
+
+	/* ── Charts: grid must recede, the line must not glow ─────────────── */
+	--chart-line: #0e7490;
+	--chart-fill: rgb(14 116 144 / 0.12);
+	--chart-grid: rgb(28 25 23 / 0.10);
+	--chart-text: #57534e;
+
+	/* ── Highlight / search ───────────────────────────────────────────── */
+	--highlight-bg: rgb(14 116 144 / 0.09);
+	--highlight-border: rgb(14 116 144 / 0.32);
+
+	/* ── Preview surfaces ─────────────────────────────────────────────── */
+	--preview-bg: #ffffff;
+	--preview-text: #1c1917;
+	--preview-border: rgb(28 25 23 / 0.10);
+	--preview-highlight: #fef3c7;
+	--preview-accent: #4338ca;
+	--preview-shadow: rgb(28 25 23 / 0.08);
+	--resume-preview-bg: #ffffff;
+	--resume-preview-text: #1a1a2e;
+
+	/* ── Splash ───────────────────────────────────────────────────────── */
+	--splash-field: #f5f2ec;
+	--splash-hairline: rgb(28 25 23 / 0.10);
+	--splash-mono: rgb(28 25 23 / 0.50);
+	--splash-caption: rgb(28 25 23 / 0.40);
+
+	/* ── Resume scoring ───────────────────────────────────────────────── */
+	--resume-success: #166534;
+	--resume-warning: #92400e;
 	--resume-danger: #b91c1c;
 	--resume-info: #1d4ed8;
-	--resume-score-high: #15803d;
-	--resume-score-mid: #a16207;
+	--resume-score-high: #166534;
+	--resume-score-mid: #92400e;
 	--resume-score-low: #b91c1c;
 
+	/* ── Named hues, re-chroma'd for a light field ─────────────────────── */
 	--color-clay-300: #e8866b;
 	--color-clay-400: #d96846;
+	--color-mem-400: #2f6b4f; /* 5.63:1 on #f5f2ec; was 2.21:1 */
 	--color-clay-500: #b4472a;
 	--color-clay-600: #93331d;
 	--color-sage-400: #3f7d5f;
-	--color-amber-400: #d97706;
+	--color-amber-400: #b45309;
 	--color-sky-400: #2b7d99;
+
+/* ── Tailwind zinc ramp: INTENTIONALLY NOT remapped. Read this before
+	   "fixing" light mode by inverting it. ─────────────────────────────────
+	   The obvious trick is to remap `--color-zinc-*` inside `html.light`, so
+	   the ~19,500 hardcoded `bg-zinc-900` / `text-zinc-100` call sites
+	   re-theme from this one block. That was tried and REVERTED: it collides
+	   with the codebase's actual convention.
+
+	   This codebase expresses light mode with `light:` variants — 1,723 of
+	   them exist, against only 2 `dark:` variants. 430 of those `light:`
+	   variants reference zinc/gray/neutral/slate values, and they were written
+	   against the ORIGINAL ramp meaning (zinc-100/200/300 = light greys:
+	   `light:bg-zinc-100`, `light:border-zinc-300`). Inverting the ramp makes
+	   those 430 resolve to INK instead — `light:bg-zinc-100` becomes a dark
+	   background. Shipping the inversion would have traded 430 working
+	   surfaces for 13,938 speculative ones.
+
+	   The ramp cannot serve both meanings at once: zinc-100 has to be
+	   near-white (dark-mode primary text) AND light grey (light-mode
+	   background). Any single mapping picks a side.
+
+	   So light mode is expressed the way this codebase already expresses it:
+	   the token contract below (which is unconditional and correct), plus
+	   `light:` overrides on components. The alpha-modified utilities
+	   (`bg-zinc-800/50` -> literal `#27272a80`, 5,628 sites) must be
+	   migrated per-component either way; the ramp never covered them. */
+
+	/* ── Title bar (window chrome) ─────────────────────────────────────── */
+	--titlebar-bg: #fcfbf8;
+	--titlebar-bg-unfocused: #f2efe8;
+	--titlebar-border: rgb(28 25 23 / 0.10);
+
+	/* ── Productivity tiers (semantic, so they stay green/blue/red) ────── */
+	--tier-productive: #166534;
+	--tier-neutral: #1d4ed8;
+	--tier-distracting: #b91c1c;
+	--tier-productive-muted: rgb(22 101 52 / 0.10);
+	--tier-neutral-muted: rgb(29 78 216 / 0.10);
+	--tier-distracting-muted: rgb(185 28 28 / 0.10);
+}
+
+/* ============================================================================
+ * LIGHT-MODE GLOBAL UTILITY REMAP — the fix for "text is invisible".
+ * ============================================================================
+ * The app carries ~11,600 hardcoded TEXT utilities and ~19,500 background
+ * utilities that are DARK BY CONSTRUCTION (`text-white`, `text-zinc-100`,
+ * `bg-zinc-900`). On a light field `text-white` and `text-zinc-100` render as
+ * white-on-white — which is exactly the "most of the text is invisible" bug.
+ *
+ * WHY A GLOBAL OVERRIDE AND NOT 700 FILE EDITS:
+ *   A per-file codemod already produced 868 broken tokens in one pass (regex
+ *   matched inside `bg-zinc-900/60` and inside existing `light:` variants).
+ *   Editing 700 files for 11,600 sites is strictly worse: slower, and a new
+ *   component added tomorrow would be dark again. ONE override block covers
+ *   every usage — present AND future.
+ *
+ * THE CASCADE TRICK (this is the important part):
+ *   `:where()` contributes ZERO specificity, so each rule below sits at
+ *   (0,1,1). That places it EXACTLY between:
+ *     bare utility      (0,1,0)  ->  overridden here          ✓
+ *     this block        (0,1,1)
+ *     explicit light:…  (0,2,0)  ->  still WINS (author intent preserved)  ✓
+ *   So a hand-written `light:text-zinc-900` on a component always beats this
+ *   blanket, and nothing here can regress a deliberate light choice. No
+ *   !important anywhere.
+ *
+ * SCOPE: this is the catch-all for TEXT, a safety-net for background and
+ * border. It deliberately does NOT invent per-component hierarchy — that is
+ * what the explicit `light:` variants and the token contract are for. If a
+ * component still looks wrong here, the fix is an explicit `light:` variant on
+ * that component, not another rule in this block.
+ * ========================================================================== */
+
+/* ── Text: flip the dark-mode type ramp onto the warm ink scale ───────────── */
+/* `.text-white` on a DARK surface is invisible on paper -> flip to ink. */
+html.light :where(.text-white,
+	.text-white\/95, .text-white\/90, .text-white\/85, .text-white\/80,
+	.text-white\/75, .text-white\/70, .text-white\/60) {
+	color: var(--text-primary);
+}
+
+/* ── COLOUR RAMPS: 100..500 are all dark-theme shades ────────────────────
+ * Every text net above covers a NEUTRAL ramp (zinc/stone/gray/white). None
+ * covered a COLOUR ramp, which is why 23 sites failed while the neutrals
+ * audited clean: `text-violet-200` rendered at **1.02:1** on cream — the worst
+ * value in the app, and one missing rule rather than 23 separate mistakes. A
+ * 100..500 shade exists to be legible ON a dark fill; on paper the same shade
+ * is the lightest thing on screen, so the ramp is walked DOWN to ink.
+ *
+ * Deliberately NOT touched: 600 and darker. Those already clear 4.5:1 on
+ * cream and are widely used as accents on tinted buttons, where remapping
+ * them to ink would destroy the affordance.
+ *
+ * WHY ONE RULE PER RAMP, AND WHY THE COMMAS ARE LOAD-BEARING:
+ * the first attempt wrote all 20 ramps as a single `:where()`. It was wrong
+ * twice over — a leading comma after `:where(` and TAB-separated selectors,
+ * neither of which is a comma. In CSS a missing comma between selectors is a
+ * DESCENDANT COMBINATOR, not a syntax error: the rule parses, esbuild exits 0,
+ * and it matches nothing at all. Silent, total, and invisible to a build.
+ * The neighbouring accent net below had exactly this defect and had been dead
+ * the whole time. Small per-ramp rules with explicit commas are the fix.
+ */
+
+/* violet */
+html.light :where(.text-violet-100,
+	.text-violet-100\/90,
+	.text-violet-100\/80,
+	.text-violet-100\/70,
+	.text-violet-100\/60,
+	.text-violet-100\/50,
+	.text-violet-100\/40,
+	.text-violet-200,
+	.text-violet-200\/90,
+	.text-violet-200\/80,
+	.text-violet-200\/70,
+	.text-violet-200\/60,
+	.text-violet-200\/50,
+	.text-violet-200\/40,
+	.text-violet-300,
+	.text-violet-300\/90,
+	.text-violet-300\/80,
+	.text-violet-300\/70,
+	.text-violet-300\/60,
+	.text-violet-300\/50,
+	.text-violet-300\/40,
+	.text-violet-400,
+	.text-violet-400\/90,
+	.text-violet-400\/80,
+	.text-violet-400\/70,
+	.text-violet-400\/60,
+	.text-violet-400\/50,
+	.text-violet-400\/40,
+	.text-violet-500,
+	.text-violet-500\/90,
+	.text-violet-500\/80,
+	.text-violet-500\/70,
+	.text-violet-500\/60,
+	.text-violet-500\/50,
+	.text-violet-500\/40) {
+	color: var(--text-primary);
+}
+
+/* purple */
+html.light :where(.text-purple-100,
+	.text-purple-100\/90,
+	.text-purple-100\/80,
+	.text-purple-100\/70,
+	.text-purple-100\/60,
+	.text-purple-100\/50,
+	.text-purple-100\/40,
+	.text-purple-200,
+	.text-purple-200\/90,
+	.text-purple-200\/80,
+	.text-purple-200\/70,
+	.text-purple-200\/60,
+	.text-purple-200\/50,
+	.text-purple-200\/40,
+	.text-purple-300,
+	.text-purple-300\/90,
+	.text-purple-300\/80,
+	.text-purple-300\/70,
+	.text-purple-300\/60,
+	.text-purple-300\/50,
+	.text-purple-300\/40,
+	.text-purple-400,
+	.text-purple-400\/90,
+	.text-purple-400\/80,
+	.text-purple-400\/70,
+	.text-purple-400\/60,
+	.text-purple-400\/50,
+	.text-purple-400\/40,
+	.text-purple-500,
+	.text-purple-500\/90,
+	.text-purple-500\/80,
+	.text-purple-500\/70,
+	.text-purple-500\/60,
+	.text-purple-500\/50,
+	.text-purple-500\/40) {
+	color: var(--text-primary);
+}
+
+/* indigo */
+html.light :where(.text-indigo-100,
+	.text-indigo-100\/90,
+	.text-indigo-100\/80,
+	.text-indigo-100\/70,
+	.text-indigo-100\/60,
+	.text-indigo-100\/50,
+	.text-indigo-100\/40,
+	.text-indigo-200,
+	.text-indigo-200\/90,
+	.text-indigo-200\/80,
+	.text-indigo-200\/70,
+	.text-indigo-200\/60,
+	.text-indigo-200\/50,
+	.text-indigo-200\/40,
+	.text-indigo-300,
+	.text-indigo-300\/90,
+	.text-indigo-300\/80,
+	.text-indigo-300\/70,
+	.text-indigo-300\/60,
+	.text-indigo-300\/50,
+	.text-indigo-300\/40,
+	.text-indigo-400,
+	.text-indigo-400\/90,
+	.text-indigo-400\/80,
+	.text-indigo-400\/70,
+	.text-indigo-400\/60,
+	.text-indigo-400\/50,
+	.text-indigo-400\/40,
+	.text-indigo-500,
+	.text-indigo-500\/90,
+	.text-indigo-500\/80,
+	.text-indigo-500\/70,
+	.text-indigo-500\/60,
+	.text-indigo-500\/50,
+	.text-indigo-500\/40) {
+	color: var(--text-primary);
+}
+
+/* blue */
+html.light :where(.text-blue-100,
+	.text-blue-100\/90,
+	.text-blue-100\/80,
+	.text-blue-100\/70,
+	.text-blue-100\/60,
+	.text-blue-100\/50,
+	.text-blue-100\/40,
+	.text-blue-200,
+	.text-blue-200\/90,
+	.text-blue-200\/80,
+	.text-blue-200\/70,
+	.text-blue-200\/60,
+	.text-blue-200\/50,
+	.text-blue-200\/40,
+	.text-blue-300,
+	.text-blue-300\/90,
+	.text-blue-300\/80,
+	.text-blue-300\/70,
+	.text-blue-300\/60,
+	.text-blue-300\/50,
+	.text-blue-300\/40,
+	.text-blue-400,
+	.text-blue-400\/90,
+	.text-blue-400\/80,
+	.text-blue-400\/70,
+	.text-blue-400\/60,
+	.text-blue-400\/50,
+	.text-blue-400\/40,
+	.text-blue-500,
+	.text-blue-500\/90,
+	.text-blue-500\/80,
+	.text-blue-500\/70,
+	.text-blue-500\/60,
+	.text-blue-500\/50,
+	.text-blue-500\/40) {
+	color: var(--text-primary);
+}
+
+/* sky */
+html.light :where(.text-sky-100,
+	.text-sky-100\/90,
+	.text-sky-100\/80,
+	.text-sky-100\/70,
+	.text-sky-100\/60,
+	.text-sky-100\/50,
+	.text-sky-100\/40,
+	.text-sky-200,
+	.text-sky-200\/90,
+	.text-sky-200\/80,
+	.text-sky-200\/70,
+	.text-sky-200\/60,
+	.text-sky-200\/50,
+	.text-sky-200\/40,
+	.text-sky-300,
+	.text-sky-300\/90,
+	.text-sky-300\/80,
+	.text-sky-300\/70,
+	.text-sky-300\/60,
+	.text-sky-300\/50,
+	.text-sky-300\/40,
+	.text-sky-400,
+	.text-sky-400\/90,
+	.text-sky-400\/80,
+	.text-sky-400\/70,
+	.text-sky-400\/60,
+	.text-sky-400\/50,
+	.text-sky-400\/40,
+	.text-sky-500,
+	.text-sky-500\/90,
+	.text-sky-500\/80,
+	.text-sky-500\/70,
+	.text-sky-500\/60,
+	.text-sky-500\/50,
+	.text-sky-500\/40) {
+	color: var(--text-primary);
+}
+
+/* cyan */
+html.light :where(.text-cyan-100,
+	.text-cyan-100\/90,
+	.text-cyan-100\/80,
+	.text-cyan-100\/70,
+	.text-cyan-100\/60,
+	.text-cyan-100\/50,
+	.text-cyan-100\/40,
+	.text-cyan-200,
+	.text-cyan-200\/90,
+	.text-cyan-200\/80,
+	.text-cyan-200\/70,
+	.text-cyan-200\/60,
+	.text-cyan-200\/50,
+	.text-cyan-200\/40,
+	.text-cyan-300,
+	.text-cyan-300\/90,
+	.text-cyan-300\/80,
+	.text-cyan-300\/70,
+	.text-cyan-300\/60,
+	.text-cyan-300\/50,
+	.text-cyan-300\/40,
+	.text-cyan-400,
+	.text-cyan-400\/90,
+	.text-cyan-400\/80,
+	.text-cyan-400\/70,
+	.text-cyan-400\/60,
+	.text-cyan-400\/50,
+	.text-cyan-400\/40,
+	.text-cyan-500,
+	.text-cyan-500\/90,
+	.text-cyan-500\/80,
+	.text-cyan-500\/70,
+	.text-cyan-500\/60,
+	.text-cyan-500\/50,
+	.text-cyan-500\/40) {
+	color: var(--text-primary);
+}
+
+/* teal */
+html.light :where(.text-teal-100,
+	.text-teal-100\/90,
+	.text-teal-100\/80,
+	.text-teal-100\/70,
+	.text-teal-100\/60,
+	.text-teal-100\/50,
+	.text-teal-100\/40,
+	.text-teal-200,
+	.text-teal-200\/90,
+	.text-teal-200\/80,
+	.text-teal-200\/70,
+	.text-teal-200\/60,
+	.text-teal-200\/50,
+	.text-teal-200\/40,
+	.text-teal-300,
+	.text-teal-300\/90,
+	.text-teal-300\/80,
+	.text-teal-300\/70,
+	.text-teal-300\/60,
+	.text-teal-300\/50,
+	.text-teal-300\/40,
+	.text-teal-400,
+	.text-teal-400\/90,
+	.text-teal-400\/80,
+	.text-teal-400\/70,
+	.text-teal-400\/60,
+	.text-teal-400\/50,
+	.text-teal-400\/40,
+	.text-teal-500,
+	.text-teal-500\/90,
+	.text-teal-500\/80,
+	.text-teal-500\/70,
+	.text-teal-500\/60,
+	.text-teal-500\/50,
+	.text-teal-500\/40) {
+	color: var(--text-primary);
+}
+
+/* emerald */
+html.light :where(.text-emerald-100,
+	.text-emerald-100\/90,
+	.text-emerald-100\/80,
+	.text-emerald-100\/70,
+	.text-emerald-100\/60,
+	.text-emerald-100\/50,
+	.text-emerald-100\/40,
+	.text-emerald-200,
+	.text-emerald-200\/90,
+	.text-emerald-200\/80,
+	.text-emerald-200\/70,
+	.text-emerald-200\/60,
+	.text-emerald-200\/50,
+	.text-emerald-200\/40,
+	.text-emerald-300,
+	.text-emerald-300\/90,
+	.text-emerald-300\/80,
+	.text-emerald-300\/70,
+	.text-emerald-300\/60,
+	.text-emerald-300\/50,
+	.text-emerald-300\/40,
+	.text-emerald-400,
+	.text-emerald-400\/90,
+	.text-emerald-400\/80,
+	.text-emerald-400\/70,
+	.text-emerald-400\/60,
+	.text-emerald-400\/50,
+	.text-emerald-400\/40,
+	.text-emerald-500,
+	.text-emerald-500\/90,
+	.text-emerald-500\/80,
+	.text-emerald-500\/70,
+	.text-emerald-500\/60,
+	.text-emerald-500\/50,
+	.text-emerald-500\/40) {
+	color: var(--text-primary);
+}
+
+/* green */
+html.light :where(.text-green-100,
+	.text-green-100\/90,
+	.text-green-100\/80,
+	.text-green-100\/70,
+	.text-green-100\/60,
+	.text-green-100\/50,
+	.text-green-100\/40,
+	.text-green-200,
+	.text-green-200\/90,
+	.text-green-200\/80,
+	.text-green-200\/70,
+	.text-green-200\/60,
+	.text-green-200\/50,
+	.text-green-200\/40,
+	.text-green-300,
+	.text-green-300\/90,
+	.text-green-300\/80,
+	.text-green-300\/70,
+	.text-green-300\/60,
+	.text-green-300\/50,
+	.text-green-300\/40,
+	.text-green-400,
+	.text-green-400\/90,
+	.text-green-400\/80,
+	.text-green-400\/70,
+	.text-green-400\/60,
+	.text-green-400\/50,
+	.text-green-400\/40,
+	.text-green-500,
+	.text-green-500\/90,
+	.text-green-500\/80,
+	.text-green-500\/70,
+	.text-green-500\/60,
+	.text-green-500\/50,
+	.text-green-500\/40) {
+	color: var(--text-primary);
+}
+
+/* lime */
+html.light :where(.text-lime-100,
+	.text-lime-100\/90,
+	.text-lime-100\/80,
+	.text-lime-100\/70,
+	.text-lime-100\/60,
+	.text-lime-100\/50,
+	.text-lime-100\/40,
+	.text-lime-200,
+	.text-lime-200\/90,
+	.text-lime-200\/80,
+	.text-lime-200\/70,
+	.text-lime-200\/60,
+	.text-lime-200\/50,
+	.text-lime-200\/40,
+	.text-lime-300,
+	.text-lime-300\/90,
+	.text-lime-300\/80,
+	.text-lime-300\/70,
+	.text-lime-300\/60,
+	.text-lime-300\/50,
+	.text-lime-300\/40,
+	.text-lime-400,
+	.text-lime-400\/90,
+	.text-lime-400\/80,
+	.text-lime-400\/70,
+	.text-lime-400\/60,
+	.text-lime-400\/50,
+	.text-lime-400\/40,
+	.text-lime-500,
+	.text-lime-500\/90,
+	.text-lime-500\/80,
+	.text-lime-500\/70,
+	.text-lime-500\/60,
+	.text-lime-500\/50,
+	.text-lime-500\/40) {
+	color: var(--text-primary);
+}
+
+/* yellow */
+html.light :where(.text-yellow-100,
+	.text-yellow-100\/90,
+	.text-yellow-100\/80,
+	.text-yellow-100\/70,
+	.text-yellow-100\/60,
+	.text-yellow-100\/50,
+	.text-yellow-100\/40,
+	.text-yellow-200,
+	.text-yellow-200\/90,
+	.text-yellow-200\/80,
+	.text-yellow-200\/70,
+	.text-yellow-200\/60,
+	.text-yellow-200\/50,
+	.text-yellow-200\/40,
+	.text-yellow-300,
+	.text-yellow-300\/90,
+	.text-yellow-300\/80,
+	.text-yellow-300\/70,
+	.text-yellow-300\/60,
+	.text-yellow-300\/50,
+	.text-yellow-300\/40,
+	.text-yellow-400,
+	.text-yellow-400\/90,
+	.text-yellow-400\/80,
+	.text-yellow-400\/70,
+	.text-yellow-400\/60,
+	.text-yellow-400\/50,
+	.text-yellow-400\/40,
+	.text-yellow-500,
+	.text-yellow-500\/90,
+	.text-yellow-500\/80,
+	.text-yellow-500\/70,
+	.text-yellow-500\/60,
+	.text-yellow-500\/50,
+	.text-yellow-500\/40) {
+	color: var(--text-primary);
+}
+
+/* amber */
+html.light :where(.text-amber-100,
+	.text-amber-100\/90,
+	.text-amber-100\/80,
+	.text-amber-100\/70,
+	.text-amber-100\/60,
+	.text-amber-100\/50,
+	.text-amber-100\/40,
+	.text-amber-200,
+	.text-amber-200\/90,
+	.text-amber-200\/80,
+	.text-amber-200\/70,
+	.text-amber-200\/60,
+	.text-amber-200\/50,
+	.text-amber-200\/40,
+	.text-amber-300,
+	.text-amber-300\/90,
+	.text-amber-300\/80,
+	.text-amber-300\/70,
+	.text-amber-300\/60,
+	.text-amber-300\/50,
+	.text-amber-300\/40,
+	.text-amber-400,
+	.text-amber-400\/90,
+	.text-amber-400\/80,
+	.text-amber-400\/70,
+	.text-amber-400\/60,
+	.text-amber-400\/50,
+	.text-amber-400\/40,
+	.text-amber-500,
+	.text-amber-500\/90,
+	.text-amber-500\/80,
+	.text-amber-500\/70,
+	.text-amber-500\/60,
+	.text-amber-500\/50,
+	.text-amber-500\/40) {
+	color: var(--text-primary);
+}
+
+/* orange */
+html.light :where(.text-orange-100,
+	.text-orange-100\/90,
+	.text-orange-100\/80,
+	.text-orange-100\/70,
+	.text-orange-100\/60,
+	.text-orange-100\/50,
+	.text-orange-100\/40,
+	.text-orange-200,
+	.text-orange-200\/90,
+	.text-orange-200\/80,
+	.text-orange-200\/70,
+	.text-orange-200\/60,
+	.text-orange-200\/50,
+	.text-orange-200\/40,
+	.text-orange-300,
+	.text-orange-300\/90,
+	.text-orange-300\/80,
+	.text-orange-300\/70,
+	.text-orange-300\/60,
+	.text-orange-300\/50,
+	.text-orange-300\/40,
+	.text-orange-400,
+	.text-orange-400\/90,
+	.text-orange-400\/80,
+	.text-orange-400\/70,
+	.text-orange-400\/60,
+	.text-orange-400\/50,
+	.text-orange-400\/40,
+	.text-orange-500,
+	.text-orange-500\/90,
+	.text-orange-500\/80,
+	.text-orange-500\/70,
+	.text-orange-500\/60,
+	.text-orange-500\/50,
+	.text-orange-500\/40) {
+	color: var(--text-primary);
+}
+
+/* rose */
+html.light :where(.text-rose-100,
+	.text-rose-100\/90,
+	.text-rose-100\/80,
+	.text-rose-100\/70,
+	.text-rose-100\/60,
+	.text-rose-100\/50,
+	.text-rose-100\/40,
+	.text-rose-200,
+	.text-rose-200\/90,
+	.text-rose-200\/80,
+	.text-rose-200\/70,
+	.text-rose-200\/60,
+	.text-rose-200\/50,
+	.text-rose-200\/40,
+	.text-rose-300,
+	.text-rose-300\/90,
+	.text-rose-300\/80,
+	.text-rose-300\/70,
+	.text-rose-300\/60,
+	.text-rose-300\/50,
+	.text-rose-300\/40,
+	.text-rose-400,
+	.text-rose-400\/90,
+	.text-rose-400\/80,
+	.text-rose-400\/70,
+	.text-rose-400\/60,
+	.text-rose-400\/50,
+	.text-rose-400\/40,
+	.text-rose-500,
+	.text-rose-500\/90,
+	.text-rose-500\/80,
+	.text-rose-500\/70,
+	.text-rose-500\/60,
+	.text-rose-500\/50,
+	.text-rose-500\/40) {
+	color: var(--text-primary);
+}
+
+/* pink */
+html.light :where(.text-pink-100,
+	.text-pink-100\/90,
+	.text-pink-100\/80,
+	.text-pink-100\/70,
+	.text-pink-100\/60,
+	.text-pink-100\/50,
+	.text-pink-100\/40,
+	.text-pink-200,
+	.text-pink-200\/90,
+	.text-pink-200\/80,
+	.text-pink-200\/70,
+	.text-pink-200\/60,
+	.text-pink-200\/50,
+	.text-pink-200\/40,
+	.text-pink-300,
+	.text-pink-300\/90,
+	.text-pink-300\/80,
+	.text-pink-300\/70,
+	.text-pink-300\/60,
+	.text-pink-300\/50,
+	.text-pink-300\/40,
+	.text-pink-400,
+	.text-pink-400\/90,
+	.text-pink-400\/80,
+	.text-pink-400\/70,
+	.text-pink-400\/60,
+	.text-pink-400\/50,
+	.text-pink-400\/40,
+	.text-pink-500,
+	.text-pink-500\/90,
+	.text-pink-500\/80,
+	.text-pink-500\/70,
+	.text-pink-500\/60,
+	.text-pink-500\/50,
+	.text-pink-500\/40) {
+	color: var(--text-primary);
+}
+
+/* fuchsia */
+html.light :where(.text-fuchsia-100,
+	.text-fuchsia-100\/90,
+	.text-fuchsia-100\/80,
+	.text-fuchsia-100\/70,
+	.text-fuchsia-100\/60,
+	.text-fuchsia-100\/50,
+	.text-fuchsia-100\/40,
+	.text-fuchsia-200,
+	.text-fuchsia-200\/90,
+	.text-fuchsia-200\/80,
+	.text-fuchsia-200\/70,
+	.text-fuchsia-200\/60,
+	.text-fuchsia-200\/50,
+	.text-fuchsia-200\/40,
+	.text-fuchsia-300,
+	.text-fuchsia-300\/90,
+	.text-fuchsia-300\/80,
+	.text-fuchsia-300\/70,
+	.text-fuchsia-300\/60,
+	.text-fuchsia-300\/50,
+	.text-fuchsia-300\/40,
+	.text-fuchsia-400,
+	.text-fuchsia-400\/90,
+	.text-fuchsia-400\/80,
+	.text-fuchsia-400\/70,
+	.text-fuchsia-400\/60,
+	.text-fuchsia-400\/50,
+	.text-fuchsia-400\/40,
+	.text-fuchsia-500,
+	.text-fuchsia-500\/90,
+	.text-fuchsia-500\/80,
+	.text-fuchsia-500\/70,
+	.text-fuchsia-500\/60,
+	.text-fuchsia-500\/50,
+	.text-fuchsia-500\/40) {
+	color: var(--text-primary);
+}
+
+/* red */
+html.light :where(.text-red-100,
+	.text-red-100\/90,
+	.text-red-100\/80,
+	.text-red-100\/70,
+	.text-red-100\/60,
+	.text-red-100\/50,
+	.text-red-100\/40,
+	.text-red-200,
+	.text-red-200\/90,
+	.text-red-200\/80,
+	.text-red-200\/70,
+	.text-red-200\/60,
+	.text-red-200\/50,
+	.text-red-200\/40,
+	.text-red-300,
+	.text-red-300\/90,
+	.text-red-300\/80,
+	.text-red-300\/70,
+	.text-red-300\/60,
+	.text-red-300\/50,
+	.text-red-300\/40,
+	.text-red-400,
+	.text-red-400\/90,
+	.text-red-400\/80,
+	.text-red-400\/70,
+	.text-red-400\/60,
+	.text-red-400\/50,
+	.text-red-400\/40,
+	.text-red-500,
+	.text-red-500\/90,
+	.text-red-500\/80,
+	.text-red-500\/70,
+	.text-red-500\/60,
+	.text-red-500\/50,
+	.text-red-500\/40) {
+	color: var(--text-primary);
+}
+
+/* stone */
+html.light :where(.text-stone-100,
+	.text-stone-100\/90,
+	.text-stone-100\/80,
+	.text-stone-100\/70,
+	.text-stone-100\/60,
+	.text-stone-100\/50,
+	.text-stone-100\/40,
+	.text-stone-200,
+	.text-stone-200\/90,
+	.text-stone-200\/80,
+	.text-stone-200\/70,
+	.text-stone-200\/60,
+	.text-stone-200\/50,
+	.text-stone-200\/40,
+	.text-stone-300,
+	.text-stone-300\/90,
+	.text-stone-300\/80,
+	.text-stone-300\/70,
+	.text-stone-300\/60,
+	.text-stone-300\/50,
+	.text-stone-300\/40,
+	.text-stone-400,
+	.text-stone-400\/90,
+	.text-stone-400\/80,
+	.text-stone-400\/70,
+	.text-stone-400\/60,
+	.text-stone-400\/50,
+	.text-stone-400\/40,
+	.text-stone-500,
+	.text-stone-500\/90,
+	.text-stone-500\/80,
+	.text-stone-500\/70,
+	.text-stone-500\/60,
+	.text-stone-500\/50,
+	.text-stone-500\/40) {
+	color: var(--text-primary);
+}
+
+/* gray */
+html.light :where(.text-gray-100,
+	.text-gray-100\/90,
+	.text-gray-100\/80,
+	.text-gray-100\/70,
+	.text-gray-100\/60,
+	.text-gray-100\/50,
+	.text-gray-100\/40,
+	.text-gray-200,
+	.text-gray-200\/90,
+	.text-gray-200\/80,
+	.text-gray-200\/70,
+	.text-gray-200\/60,
+	.text-gray-200\/50,
+	.text-gray-200\/40,
+	.text-gray-300,
+	.text-gray-300\/90,
+	.text-gray-300\/80,
+	.text-gray-300\/70,
+	.text-gray-300\/60,
+	.text-gray-300\/50,
+	.text-gray-300\/40,
+	.text-gray-400,
+	.text-gray-400\/90,
+	.text-gray-400\/80,
+	.text-gray-400\/70,
+	.text-gray-400\/60,
+	.text-gray-400\/50,
+	.text-gray-400\/40,
+	.text-gray-500,
+	.text-gray-500\/90,
+	.text-gray-500\/80,
+	.text-gray-500\/70,
+	.text-gray-500\/60,
+	.text-gray-500\/50,
+	.text-gray-500\/40) {
+	color: var(--text-primary);
+}
+
+/* slate */
+html.light :where(.text-slate-100,
+	.text-slate-100\/90,
+	.text-slate-100\/80,
+	.text-slate-100\/70,
+	.text-slate-100\/60,
+	.text-slate-100\/50,
+	.text-slate-100\/40,
+	.text-slate-200,
+	.text-slate-200\/90,
+	.text-slate-200\/80,
+	.text-slate-200\/70,
+	.text-slate-200\/60,
+	.text-slate-200\/50,
+	.text-slate-200\/40,
+	.text-slate-300,
+	.text-slate-300\/90,
+	.text-slate-300\/80,
+	.text-slate-300\/70,
+	.text-slate-300\/60,
+	.text-slate-300\/50,
+	.text-slate-300\/40,
+	.text-slate-400,
+	.text-slate-400\/90,
+	.text-slate-400\/80,
+	.text-slate-400\/70,
+	.text-slate-400\/60,
+	.text-slate-400\/50,
+	.text-slate-400\/40,
+	.text-slate-500,
+	.text-slate-500\/90,
+	.text-slate-500\/80,
+	.text-slate-500\/70,
+	.text-slate-500\/60,
+	.text-slate-500\/50,
+	.text-slate-500\/40) {
+	color: var(--text-primary);
+}
+
+/* …EXCEPT on a saturated accent button, where white IS the correct label
+   colour in both themes (dark ink on `bg-emerald-500` / `bg-pink-500` /
+   `bg-[var(--page-accent)]` reads as a design regression and fails contrast on
+   some hues). This rule has the SAME (0,1,1) specificity as the one above but
+   comes LATER, so it wins on the coloured-button subset only — no !important,
+   no fragile `:not()` chain.
+   NOTE: a `:not(:where([class*=…]))` chain was tried here first and the
+   browser DROPPED THE ENTIRE RULE (only 1 of the 2 :where(.text-white…) rules
+   parsed) — complex selector lists inside :not() are not safe. A plain
+   override + a later equal-specificity re-assert is the robust form. */
+html.light :where(
+	[class*="bg-emerald"].text-white, [class*="bg-green"].text-white,
+	[class*="bg-pink"].text-white, [class*="bg-rose"].text-white,
+	[class*="bg-red"].text-white, [class*="bg-amber"].text-white,
+	[class*="bg-orange"].text-white, [class*="bg-violet"].text-white,
+	[class*="bg-purple"].text-white, [class*="bg-fuchsia"].text-white,
+	[class*="bg-indigo"].text-white, [class*="bg-blue"].text-white,
+	[class*="bg-sky"].text-white, [class*="bg-cyan"].text-white,
+	[class*="bg-teal"].text-white, [class*="bg-lime"].text-white,
+	[class*="bg-clay"].text-white, [class*="bg-sage"].text-white,
+	[class*="bg-[var(--page-accent)]"].text-white,
+	[class*="bg-[var(--ws-accent)]"].text-white,
+	[class*="bg-[var(--accent"].text-white,
+	[class*="bg-[var(--tier"].text-white,
+	.text-white[class*="bg-emerald"], .text-white[class*="bg-green"],
+	.text-white[class*="bg-pink"], .text-white[class*="bg-rose"],
+	.text-white[class*="bg-red"], .text-white[class*="bg-amber"],
+	.text-white[class*="bg-orange"], .text-white[class*="bg-violet"],
+	.text-white[class*="bg-purple"], .text-white[class*="bg-fuchsia"],
+	.text-white[class*="bg-indigo"], .text-white[class*="bg-blue"],
+	.text-white[class*="bg-sky"], .text-white[class*="bg-cyan"],
+	.text-white[class*="bg-teal"], .text-white[class*="bg-lime"],
+	.text-white[class*="bg-clay"], .text-white[class*="bg-sage"],
+	.text-white[class*="bg-[var(--page-accent)]"],
+	.text-white[class*="bg-[var(--ws-accent)]"],
+	.text-white[class*="bg-[var(--accent"], .text-white[class*="bg-[var(--tier"]
+) {
+	color: #ffffff;
+}
+html.light :where(.text-zinc-50, .text-zinc-100, .text-zinc-200,
+	.text-white\/50, .text-white\/45, .text-white\/40, .text-white\/35) {
+	color: var(--text-primary);
+}
+html.light :where(.text-zinc-300, .text-white\/30, .text-white\/25, .text-white\/20) {
+	color: var(--text-secondary);
+}
+html.light :where(.text-zinc-400, .text-zinc-500) {
+	color: var(--text-muted);
+}
+html.light :where(.text-zinc-600, .text-zinc-700,
+	.text-white\/15, .text-white\/10, .text-white\/5) {
+	color: var(--text-faint);
+}
+/* zinc-800/900/950 are already dark in dark mode — near-black. They are used
+   as dark text on light cards; on the paper field they need no change, but we
+   pin them to ink so they never inherit a lighter warm value by accident. */
+html.light :where(.text-zinc-800, .text-zinc-900, .text-zinc-950) {
+	color: var(--text-primary);
+}
+
+/* ── Background: safety net BELOW the codemod's explicit light: variants ────
+   Most surfaces already carry an explicit `light:bg-[var(--ws-surface-*)]`
+   (0,2,0) from the sweep, which wins over these. These catch whatever was
+   missed. Alpha variants flatten to the solid warm surface — a translucent
+   warm surface over paper reads as mud, per design.md §11. */
+html.light :where(.bg-white) { background-color: var(--ws-surface-overlay); }
+html.light :where(.bg-black) { background-color: var(--ws-surface); }
+html.light :where(.bg-zinc-950) { background-color: var(--ws-surface); }
+html.light :where(.bg-zinc-900) { background-color: var(--ws-surface-raised); }
+
+/* ── The deepest rung: bg-zinc-950 ───────────────────────────────────────
+ * The bare-surface net above stops at `bg-zinc-900`, but `bg-zinc-950` is what
+ * full-bleed lock/overlay surfaces actually use (`AfkPromptModal.tsx:794`
+ * region, `FinanceLockScreen.tsx:268,521`). It was therefore the one dark value
+ * with NO light counterpart at all — the overlay stayed ink-black while its text
+ * was correctly remapped to dark ink. Same failure, one shade further down:
+ * black on black. */
+html.light :where(.bg-zinc-950) { background-color: var(--ws-surface); }
+
+/* ── Bracket-notation alphas: `border-white/[0.10]` ───────────────────────
+ * Tailwind accepts two spellings of an alpha value and they compile to two
+ * DIFFERENT class names:
+ *     border-white/10      -> .border-white\/10
+ *     border-white/[0.10]  -> .border-white\/\[0\.10\]
+ * Every alpha net in this file enumerates the slash-digit spelling, so the
+ * bracket spelling slipped through all of them. The failure is invisible in
+ * review (it reads as "border-white/10", which IS covered) and on paper it is a
+ * `rgba(255,255,255,0.10)` hairline on cream — i.e. no border at all, so locked
+ * panels lose their edges.
+ *
+ * There is no way to enumerate `[0.10]` with `:where()`, so this uses an
+ * attribute selector instead. That lands at (0,2,1) rather than (0,1,1) —
+ * still below any explicit `light:` variant (0,2,0)+, which continues to win. */
+html.light [class*="border-white/["] { border-color: var(--ws-border); }
+html.light :where(.bg-zinc-800) { background-color: var(--ws-surface-sunken); }
+
+/* ── ALPHA VARIANTS — the reason light mode looked broken everywhere ────────────
+ *
+ * The five rules above only ever matched the BARE class names, and a Tailwind
+ * opacity variant is a DIFFERENT class name. An element carrying `bg-zinc-900/30`
+ * has exactly one class token — `bg-zinc-900/30` — which `.bg-zinc-900` cannot
+ * match, so every translucent dark surface silently stayed dark grey on cream
+ * paper. Measured on the surfaces the user reported: 50 occurrences in
+ * InsightsPage, 94 in AIToolsTab, plus the dashboard widgets and the shortcut
+ * hint. That is "the cards, the charts, the bars, everything is grey, I can't
+ * see anything".
+ *
+ * The comment above claimed alpha variants were handled. They were not — the
+ * selectors said otherwise. This block is what actually implements it.
+ *
+ * ── WHY THESE ARE WARM, NOT GREY ──────────────────────────────────────────────
+ * Every value here is a Warm Paper token from design.md §11's S0→S4 ladder
+ * (`--ws-surface` #f5f2ec bone → `--ws-surface-raised` #fcfbf8 → `--ws-surface-sunken`
+ * #edeae2). §11 is explicit: "Base is bone/oat, never `#fff` and never cool
+ * grey." Translating zinc into a *different* neutral would reproduce the exact
+ * coldness being complained about; the fix is to translate it into the warm
+ * ladder, which is what the token contract is for.
+ *
+ * ── WHY EVERYTHING IS INSIDE ONE `:where()` ───────────────────────────────────
+ * `:where()` contributes ZERO specificity regardless of what it contains. So
+ * this selector computes to (0,1,1) — `html` + `.light` — which is deliberately
+ * placed between:
+ *   • Tailwind's own `bg-zinc-900/30`            (0,1,0) — net must BEAT this
+ *   • a per-component `light:bg-[var(--ws-surface-*)]` (0,2,0) — net must LOSE
+ * That window is the whole reason the codemod on the named surfaces is safe: the
+ * explicit tokens win, and this only catches what the codemod missed. Writing the
+ * `:not()` exclusions OUTSIDE a `:where()` would add (0,1,0) each, pushing the net
+ * to (0,3,1) and silently overriding every explicit `light:` variant in the app.
+ *
+ * ── WHY `hover:`/`focus:` ARE EXCLUDED ────────────────────────────────────────
+ * An interactive state is a deliberate signal, not a surface to be corrected.
+ * `[class*="bg-zinc-900"]` also matches the token `hover:bg-zinc-900/50`, so
+ * without these exclusions the net would flatten every hover on the app into the
+ * same solid card and the feedback would stop reading as feedback. */
+html.light :where(
+	[class*="bg-zinc-950"]:not([class*="hover:bg-zinc-950"]):not([class*="focus:bg-zinc-950"]),
+	[class*="bg-zinc-900"]:not([class*="hover:bg-zinc-900"]):not([class*="focus:bg-zinc-900"]),
+	[class*="bg-zinc-800"]:not([class*="hover:bg-zinc-800"]):not([class*="focus:bg-zinc-800"])
+) {
+	background-color: var(--ws-surface-raised);
+}
+
+/* 950 is the deepest field in the stack, so it maps one step further down the
+   ladder than 900/800. Split out because the shared rule above would flatten all
+   three to the same value and lose that ordering. */
+html.light :where(
+	[class*="bg-zinc-950"]:not([class*="hover:bg-zinc-950"]):not([class*="focus:bg-zinc-950"])
+) {
+	background-color: var(--ws-surface);
+}
+
+/* ── SEMANTIC TEXT — the biggest light-mode legibility defect ─────────────────
+ *
+ * `agent/probes/contrast-audit.mjs` measured this across 1,069 files and 32,398
+ * className attributes: 1,184 elements put DARK-MODE text colours on the Warm
+ * Paper field. The top offenders alone were
+ *
+ *     239 x text-amber-400        60 x text-cyan-400      57 x text-amber-300
+ *      36 x text-amber-400 on bg-amber-500/10          32 x text-emerald-300
+ *
+ * Every one of those is a 300/400-shade hue — legible on #09090b, and about
+ * 1.9:1 on #f5f2ec, i.e. invisible. They are dark-theme *semantic* colours and
+ * they never had a light counterpart.
+ *
+ * The app ALREADY has theme-aware semantic tokens, darkened one step precisely
+ * so they pass on cream (design.md §11: light semantic = #166534 / #92400e /
+ * #b91c1c / #1d4ed8). So the fix is not a new palette — it is routing the hue
+ * utilities to the token that is already correct in both themes. `text-amber-400`
+ * is literally asking for "warning"; `--warning` already answers that in both
+ * themes, and #fbbf24 (dark) stays #fbbf24 because the dark token IS #fbbf24.
+ *
+ * Why the blanks are the bug: the existing remaps at :405-:422 cover bare
+ * NEUTRALS (`.text-white`, `.text-zinc-100`). They do not cover HUES, because
+ * on the dark theme a hue needs no remap — which is exactly why nobody noticed.
+ *
+ * Same specificity discipline as the background net: everything inside one
+ * `:where()` so this computes to (0,1,1). That beats Tailwind's own (0,1,0)
+ * utility — so it actually applies — and loses to any explicit `light:text-`
+ * (0,2,0), so a deliberate per-component choice still wins.
+ *
+ * `hover:`/`focus:` are excluded for the same reason as the background net: an
+ * interactive state is a signal, not a surface to be corrected. */
+html.light :where(
+	[class~="text-amber-500"]:not([class*="hover:text-amber-500"]),
+	[class~="text-amber-400"]:not([class*="hover:text-amber-400"]),
+	[class~="text-amber-300"]:not([class*="hover:text-amber-300"]),
+	[class~="text-amber-200"]:not([class*="hover:text-amber-200"])
+) { color: var(--warning); }
+
+html.light :where(
+	[class~="text-emerald-500"]:not([class*="hover:text-emerald-500"]),
+	[class~="text-emerald-400"]:not([class*="hover:text-emerald-400"]),
+	[class~="text-emerald-300"]:not([class*="hover:text-emerald-300"]),
+	[class~="text-emerald-200"]:not([class*="hover:text-emerald-200"]),
+	[class~="text-green-400"]:not([class*="hover:text-green-400"]),
+	[class~="text-green-300"]:not([class*="hover:text-green-300"])
+) { color: var(--success); }
+
+html.light :where(
+	[class~="text-red-400"]:not([class*="hover:text-red-400"]),
+	[class~="text-red-300"]:not([class*="hover:text-red-300"]),
+	[class~="text-rose-400"]:not([class*="hover:text-rose-400"]),
+	[class~="text-rose-300"]:not([class*="hover:text-rose-300"])
+) { color: var(--error); }
+
+html.light :where(
+	[class~="text-cyan-400"]:not([class*="hover:text-cyan-400"]),
+	[class~="text-cyan-300"]:not([class*="hover:text-cyan-300"]),
+	[class~="text-sky-400"]:not([class*="hover:text-sky-400"]),
+	[class~="text-sky-300"]:not([class*="hover:text-sky-300"]),
+	[class~="text-blue-400"]:not([class*="hover:text-blue-400"]),
+	[class~="text-blue-300"]:not([class*="hover:text-blue-300"])
+) { color: var(--info); }
+
+/* Alpha variants. The blanket above cannot read the alpha out of the class name,
+ * so these are routed at a fixed legible alpha rather than the original — the
+ * alternative is leaving ~300 elements at 1.0:1 because their class happens to
+ * carry a slash. `--text-secondary` is the muted-but-readable ink, so a faded
+ * label stays faded without becoming unreadable. */
+html.light :where(
+	[class*="text-amber-500/"], [class*="text-emerald-500/"], [class*="text-amber-400/"], [class*="text-amber-300/"],
+	[class*="text-emerald-400/"], [class*="text-emerald-300/"],
+	[class*="text-green-400/"],
+	[class*="text-red-400/"], [class*="text-red-300/"],
+	[class*="text-rose-400/"], [class*="text-rose-300/"],
+	[class*="text-cyan-400/"], [class*="text-cyan-300/"],
+	[class*="text-sky-400/"], [class*="text-blue-400/"], [class*="text-blue-300/"]
+):not([class*="hover:text-"]) {
+	color: color-mix(in srgb, var(--text-secondary) 92%, transparent);
+}
+
+
+/* ── THE 100/200/300 TAIL ──────────────────────────────────────────────────────
+ * The two nets above start at 200/300 on the hue families and at 400 on the
+ * neutrals. The contrast audit's remaining offenders are the light end of both:
+ * `text-gray-300` and `text-stone-200/300` are pale neutrals that were never in a
+ * blanket (index.css's list stops at zinc-200), and `text-violet-300`,
+ * `text-pink-300`, `text-rose-200`, `text-amber-100` are one or two shades below
+ * where the family nets start. All of them measure 1.0-2.2:1 on paper.
+ *
+ * `--text-secondary` is used rather than an accent token here on purpose: these
+ * are decorative labels and metadata, not state. Inheriting a hue would fight the
+ * one-signal-hue rule; inheriting ink just makes them readable. */
+html.light :where(
+	[class~="text-stone-100"], [class~="text-orange-300"], [class~="text-sky-200"],
+	[class~="text-gray-300"], [class~="text-stone-200"], [class~="text-stone-300"],
+	[class~="text-amber-100"], [class~="text-rose-200"], [class~="text-pink-300"],
+	[class~="text-violet-300"], [class~="text-purple-300"]
+):not([class*="hover:text-"]) {
+	color: var(--text-secondary);
+}
+
+/* Alpha variants of the same tail, including the 500 shades the semantic net
+ * missed (`text-amber-500/70` measured 1.3:1 on the sleep panels). */
+html.light :where(
+	[class*="text-amber-500/"], [class*="text-emerald-500/"], [class*="text-green-500/"],
+	[class*="text-violet-300/"], [class*="text-violet-400/"], [class*="text-pink-300/"],
+	[class*="text-rose-200/"], [class*="text-amber-100/"], [class*="text-gray-300/"],
+	[class*="text-stone-200/"], [class*="text-stone-300/"], [class*="text-purple-300/"],
+	[class*="text-violet-200/"], [class*="text-violet-500/"], [class*="text-pink-500/"],
+	[class*="text-indigo-400/"], [class*="text-indigo-300/"], [class*="text-orange-300/"]
+):not([class*="hover:text-"]) {
+	color: color-mix(in srgb, var(--text-secondary) 92%, transparent);
+}
+
+/* ── ACCENT-FAMILY TEXT — 380 sites ────────────────────────────────────────────
+ *
+ * The semantic net above covers amber/emerald/red/cyan because those mean a
+ * STATE. These are the DECORATIVE half of the palette — violet, purple, indigo,
+ * fuchsia, pink, teal, lime — and they never had a light branch either, for the
+ * same reason: on dark a 300/400 hue is already legible, so there was nothing to
+ * fix and therefore nothing written.
+ *
+ * On paper they measure 1.3-2.2:1, i.e. gone. They route to `--ws-accent-text`,
+ * which is #0b5c73 on light and the dark accent ink on dark, and which exists
+ * precisely for "accent-coloured TEXT" — design.md §11 is explicit that accent as
+ * a FILL and accent as TEXT are different tokens. The dark side keeps its hues.
+ */
+html.light :where(
+	[class~="text-violet-200"], [class~="text-purple-200"], [class~="text-indigo-200"], [class~="text-fuchsia-200"], [class~="text-pink-200"], [class~="text-teal-200"], [class~="text-lime-200"],
+	[class~="text-violet-300"], [class~="text-purple-300"], [class~="text-indigo-300"], [class~="text-fuchsia-300"], [class~="text-pink-300"], [class~="text-teal-300"], [class~="text-lime-300"],
+	[class~="text-violet-400"], [class~="text-purple-400"], [class~="text-indigo-400"], [class~="text-fuchsia-400"], [class~="text-pink-400"], [class~="text-teal-400"], [class~="text-lime-400"]
+):not([class*="hover:text-"]) {
+	color: var(--ws-accent-text);
+}
+
+/* ── ALPHA-VARIANT LEAK — the second way light mode breaks, and the biggest ──
+ *
+ * `agent/probes/dark-leak-audit.mjs` counted 472 of these. A Tailwind alpha
+ * variant is a DIFFERENT class name from its bare form, so the remaps at :361 and
+ * :405 (which list `.text-white`, `.text-zinc-100`, …) cannot match
+ * `text-white/80`. On Warm Paper every one of those kept its dark-theme value —
+ * pale text, an invisible border, a white veil on a cream field.
+ *
+ * The bug was invisible for years because it looks CORRECT on dark: `text-white/80`
+ * on #09090b is exactly what an author intended. It only fails on the one theme
+ * those rules were never written for.
+ *
+ * ── WHY ONE RULE PER ALPHA RATHER THAN ONE SHARED RULE ─────────────────────────
+ * CSS cannot read the number out of a class name, so a single blanket would have to
+ * pick one opacity for all 18 alphas in use — which would either make `text-white/5`
+ * a solid ink slab or leave `text-white/80` unreadable. Each alpha therefore gets
+ * its own declaration that reproduces the exact opacity the author chose, only on
+ * the theme-appropriate colour. The DELIBERATE faintness survives; the illegibility
+ * does not.
+ *
+ * `--text-muted` is #8b8b94 on dark and #57534e on light — already theme-aware and
+ * already ≥4.5:1 on all four light surfaces. `--ws-border-strong` is the light
+ * theme's control-boundary hairline (0.60 alpha, 3.77:1), which is the correct
+ * light-mode stand-in for a 10%-white border that is currently 0% visible.
+ *
+ * Same specificity discipline throughout: one `:where()` => (0,1,1). Beats
+ * Tailwind's utility (0,1,0) so it applies; loses to an explicit `light:` (0,2,0)
+ * so a deliberate per-component choice still wins. `hover:`/`focus:` are excluded:
+ * an interactive state is a signal, not a surface to correct. */
+
+html.light :where(
+	[class*="text-white/5"],
+	[class*="text-zinc-50/5"],
+	[class*="text-zinc-100/5"],
+	[class*="text-zinc-200/5"],
+	[class*="text-zinc-300/5"],
+	[class*="text-stone-100/5"],
+	[class*="text-stone-200/5"],
+	[class*="text-stone-300/5"],
+	[class*="text-gray-100/5"],
+	[class*="text-gray-200/5"],
+	[class*="text-gray-300/5"]
+) { text-color: color-mix(in srgb, var(--text-muted) 5%, transparent); }
+
+html.light :where(
+	[class*="text-white/10"],
+	[class*="text-zinc-50/10"],
+	[class*="text-zinc-100/10"],
+	[class*="text-zinc-200/10"],
+	[class*="text-zinc-300/10"],
+	[class*="text-stone-100/10"],
+	[class*="text-stone-200/10"],
+	[class*="text-stone-300/10"],
+	[class*="text-gray-100/10"],
+	[class*="text-gray-200/10"],
+	[class*="text-gray-300/10"]
+) { text-color: color-mix(in srgb, var(--text-muted) 10%, transparent); }
+
+html.light :where(
+	[class*="text-white/15"],
+	[class*="text-zinc-50/15"],
+	[class*="text-zinc-100/15"],
+	[class*="text-zinc-200/15"],
+	[class*="text-zinc-300/15"],
+	[class*="text-stone-100/15"],
+	[class*="text-stone-200/15"],
+	[class*="text-stone-300/15"],
+	[class*="text-gray-100/15"],
+	[class*="text-gray-200/15"],
+	[class*="text-gray-300/15"]
+) { text-color: color-mix(in srgb, var(--text-muted) 15%, transparent); }
+
+html.light :where(
+	[class*="text-white/20"],
+	[class*="text-zinc-50/20"],
+	[class*="text-zinc-100/20"],
+	[class*="text-zinc-200/20"],
+	[class*="text-zinc-300/20"],
+	[class*="text-stone-100/20"],
+	[class*="text-stone-200/20"],
+	[class*="text-stone-300/20"],
+	[class*="text-gray-100/20"],
+	[class*="text-gray-200/20"],
+	[class*="text-gray-300/20"]
+) { text-color: color-mix(in srgb, var(--text-muted) 20%, transparent); }
+
+html.light :where(
+	[class*="text-white/25"],
+	[class*="text-zinc-50/25"],
+	[class*="text-zinc-100/25"],
+	[class*="text-zinc-200/25"],
+	[class*="text-zinc-300/25"],
+	[class*="text-stone-100/25"],
+	[class*="text-stone-200/25"],
+	[class*="text-stone-300/25"],
+	[class*="text-gray-100/25"],
+	[class*="text-gray-200/25"],
+	[class*="text-gray-300/25"]
+) { text-color: color-mix(in srgb, var(--text-muted) 25%, transparent); }
+
+html.light :where(
+	[class*="text-white/30"],
+	[class*="text-zinc-50/30"],
+	[class*="text-zinc-100/30"],
+	[class*="text-zinc-200/30"],
+	[class*="text-zinc-300/30"],
+	[class*="text-stone-100/30"],
+	[class*="text-stone-200/30"],
+	[class*="text-stone-300/30"],
+	[class*="text-gray-100/30"],
+	[class*="text-gray-200/30"],
+	[class*="text-gray-300/30"]
+) { text-color: color-mix(in srgb, var(--text-muted) 30%, transparent); }
+
+html.light :where(
+	[class*="text-white/35"],
+	[class*="text-zinc-50/35"],
+	[class*="text-zinc-100/35"],
+	[class*="text-zinc-200/35"],
+	[class*="text-zinc-300/35"],
+	[class*="text-stone-100/35"],
+	[class*="text-stone-200/35"],
+	[class*="text-stone-300/35"],
+	[class*="text-gray-100/35"],
+	[class*="text-gray-200/35"],
+	[class*="text-gray-300/35"]
+) { text-color: color-mix(in srgb, var(--text-muted) 35%, transparent); }
+
+html.light :where(
+	[class*="text-white/40"],
+	[class*="text-zinc-50/40"],
+	[class*="text-zinc-100/40"],
+	[class*="text-zinc-200/40"],
+	[class*="text-zinc-300/40"],
+	[class*="text-stone-100/40"],
+	[class*="text-stone-200/40"],
+	[class*="text-stone-300/40"],
+	[class*="text-gray-100/40"],
+	[class*="text-gray-200/40"],
+	[class*="text-gray-300/40"]
+) { text-color: color-mix(in srgb, var(--text-muted) 40%, transparent); }
+
+html.light :where(
+	[class*="text-white/45"],
+	[class*="text-zinc-50/45"],
+	[class*="text-zinc-100/45"],
+	[class*="text-zinc-200/45"],
+	[class*="text-zinc-300/45"],
+	[class*="text-stone-100/45"],
+	[class*="text-stone-200/45"],
+	[class*="text-stone-300/45"],
+	[class*="text-gray-100/45"],
+	[class*="text-gray-200/45"],
+	[class*="text-gray-300/45"]
+) { text-color: color-mix(in srgb, var(--text-muted) 45%, transparent); }
+
+html.light :where(
+	[class*="text-white/50"],
+	[class*="text-zinc-50/50"],
+	[class*="text-zinc-100/50"],
+	[class*="text-zinc-200/50"],
+	[class*="text-zinc-300/50"],
+	[class*="text-stone-100/50"],
+	[class*="text-stone-200/50"],
+	[class*="text-stone-300/50"],
+	[class*="text-gray-100/50"],
+	[class*="text-gray-200/50"],
+	[class*="text-gray-300/50"]
+) { text-color: color-mix(in srgb, var(--text-muted) 50%, transparent); }
+
+html.light :where(
+	[class*="text-white/55"],
+	[class*="text-zinc-50/55"],
+	[class*="text-zinc-100/55"],
+	[class*="text-zinc-200/55"],
+	[class*="text-zinc-300/55"],
+	[class*="text-stone-100/55"],
+	[class*="text-stone-200/55"],
+	[class*="text-stone-300/55"],
+	[class*="text-gray-100/55"],
+	[class*="text-gray-200/55"],
+	[class*="text-gray-300/55"]
+) { text-color: color-mix(in srgb, var(--text-muted) 55%, transparent); }
+
+html.light :where(
+	[class*="text-white/60"],
+	[class*="text-zinc-50/60"],
+	[class*="text-zinc-100/60"],
+	[class*="text-zinc-200/60"],
+	[class*="text-zinc-300/60"],
+	[class*="text-stone-100/60"],
+	[class*="text-stone-200/60"],
+	[class*="text-stone-300/60"],
+	[class*="text-gray-100/60"],
+	[class*="text-gray-200/60"],
+	[class*="text-gray-300/60"]
+) { text-color: color-mix(in srgb, var(--text-muted) 60%, transparent); }
+
+html.light :where(
+	[class*="text-white/65"],
+	[class*="text-zinc-50/65"],
+	[class*="text-zinc-100/65"],
+	[class*="text-zinc-200/65"],
+	[class*="text-zinc-300/65"],
+	[class*="text-stone-100/65"],
+	[class*="text-stone-200/65"],
+	[class*="text-stone-300/65"],
+	[class*="text-gray-100/65"],
+	[class*="text-gray-200/65"],
+	[class*="text-gray-300/65"]
+) { text-color: color-mix(in srgb, var(--text-muted) 65%, transparent); }
+
+html.light :where(
+	[class*="text-white/70"],
+	[class*="text-zinc-50/70"],
+	[class*="text-zinc-100/70"],
+	[class*="text-zinc-200/70"],
+	[class*="text-zinc-300/70"],
+	[class*="text-stone-100/70"],
+	[class*="text-stone-200/70"],
+	[class*="text-stone-300/70"],
+	[class*="text-gray-100/70"],
+	[class*="text-gray-200/70"],
+	[class*="text-gray-300/70"]
+) { text-color: color-mix(in srgb, var(--text-muted) 70%, transparent); }
+
+html.light :where(
+	[class*="text-white/75"],
+	[class*="text-zinc-50/75"],
+	[class*="text-zinc-100/75"],
+	[class*="text-zinc-200/75"],
+	[class*="text-zinc-300/75"],
+	[class*="text-stone-100/75"],
+	[class*="text-stone-200/75"],
+	[class*="text-stone-300/75"],
+	[class*="text-gray-100/75"],
+	[class*="text-gray-200/75"],
+	[class*="text-gray-300/75"]
+) { text-color: color-mix(in srgb, var(--text-muted) 75%, transparent); }
+
+html.light :where(
+	[class*="text-white/80"],
+	[class*="text-zinc-50/80"],
+	[class*="text-zinc-100/80"],
+	[class*="text-zinc-200/80"],
+	[class*="text-zinc-300/80"],
+	[class*="text-stone-100/80"],
+	[class*="text-stone-200/80"],
+	[class*="text-stone-300/80"],
+	[class*="text-gray-100/80"],
+	[class*="text-gray-200/80"],
+	[class*="text-gray-300/80"]
+) { text-color: color-mix(in srgb, var(--text-muted) 80%, transparent); }
+
+html.light :where(
+	[class*="text-white/85"],
+	[class*="text-zinc-50/85"],
+	[class*="text-zinc-100/85"],
+	[class*="text-zinc-200/85"],
+	[class*="text-zinc-300/85"],
+	[class*="text-stone-100/85"],
+	[class*="text-stone-200/85"],
+	[class*="text-stone-300/85"],
+	[class*="text-gray-100/85"],
+	[class*="text-gray-200/85"],
+	[class*="text-gray-300/85"]
+) { text-color: color-mix(in srgb, var(--text-muted) 85%, transparent); }
+
+html.light :where(
+	[class*="text-white/90"],
+	[class*="text-zinc-50/90"],
+	[class*="text-zinc-100/90"],
+	[class*="text-zinc-200/90"],
+	[class*="text-zinc-300/90"],
+	[class*="text-stone-100/90"],
+	[class*="text-stone-200/90"],
+	[class*="text-stone-300/90"],
+	[class*="text-gray-100/90"],
+	[class*="text-gray-200/90"],
+	[class*="text-gray-300/90"]
+) { text-color: color-mix(in srgb, var(--text-muted) 90%, transparent); }
+
+
+html.light :where(
+	[class*="border-white/5"],
+	[class*="border-zinc-50/5"],
+	[class*="border-zinc-100/5"],
+	[class*="border-zinc-200/5"],
+	[class*="border-zinc-300/5"],
+	[class*="border-stone-100/5"],
+	[class*="border-stone-200/5"],
+	[class*="border-stone-300/5"],
+	[class*="border-gray-100/5"],
+	[class*="border-gray-200/5"],
+	[class*="border-gray-300/5"]
+) { border-color: color-mix(in srgb, var(--ws-border-strong) 5%, transparent); }
+
+html.light :where(
+	[class*="border-white/10"],
+	[class*="border-zinc-50/10"],
+	[class*="border-zinc-100/10"],
+	[class*="border-zinc-200/10"],
+	[class*="border-zinc-300/10"],
+	[class*="border-stone-100/10"],
+	[class*="border-stone-200/10"],
+	[class*="border-stone-300/10"],
+	[class*="border-gray-100/10"],
+	[class*="border-gray-200/10"],
+	[class*="border-gray-300/10"]
+) { border-color: color-mix(in srgb, var(--ws-border-strong) 10%, transparent); }
+
+html.light :where(
+	[class*="border-white/15"],
+	[class*="border-zinc-50/15"],
+	[class*="border-zinc-100/15"],
+	[class*="border-zinc-200/15"],
+	[class*="border-zinc-300/15"],
+	[class*="border-stone-100/15"],
+	[class*="border-stone-200/15"],
+	[class*="border-stone-300/15"],
+	[class*="border-gray-100/15"],
+	[class*="border-gray-200/15"],
+	[class*="border-gray-300/15"]
+) { border-color: color-mix(in srgb, var(--ws-border-strong) 15%, transparent); }
+
+html.light :where(
+	[class*="border-white/20"],
+	[class*="border-zinc-50/20"],
+	[class*="border-zinc-100/20"],
+	[class*="border-zinc-200/20"],
+	[class*="border-zinc-300/20"],
+	[class*="border-stone-100/20"],
+	[class*="border-stone-200/20"],
+	[class*="border-stone-300/20"],
+	[class*="border-gray-100/20"],
+	[class*="border-gray-200/20"],
+	[class*="border-gray-300/20"]
+) { border-color: color-mix(in srgb, var(--ws-border-strong) 20%, transparent); }
+
+html.light :where(
+	[class*="border-white/25"],
+	[class*="border-zinc-50/25"],
+	[class*="border-zinc-100/25"],
+	[class*="border-zinc-200/25"],
+	[class*="border-zinc-300/25"],
+	[class*="border-stone-100/25"],
+	[class*="border-stone-200/25"],
+	[class*="border-stone-300/25"],
+	[class*="border-gray-100/25"],
+	[class*="border-gray-200/25"],
+	[class*="border-gray-300/25"]
+) { border-color: color-mix(in srgb, var(--ws-border-strong) 25%, transparent); }
+
+html.light :where(
+	[class*="border-white/30"],
+	[class*="border-zinc-50/30"],
+	[class*="border-zinc-100/30"],
+	[class*="border-zinc-200/30"],
+	[class*="border-zinc-300/30"],
+	[class*="border-stone-100/30"],
+	[class*="border-stone-200/30"],
+	[class*="border-stone-300/30"],
+	[class*="border-gray-100/30"],
+	[class*="border-gray-200/30"],
+	[class*="border-gray-300/30"]
+) { border-color: color-mix(in srgb, var(--ws-border-strong) 30%, transparent); }
+
+html.light :where(
+	[class*="border-white/40"],
+	[class*="border-zinc-50/40"],
+	[class*="border-zinc-100/40"],
+	[class*="border-zinc-200/40"],
+	[class*="border-zinc-300/40"],
+	[class*="border-stone-100/40"],
+	[class*="border-stone-200/40"],
+	[class*="border-stone-300/40"],
+	[class*="border-gray-100/40"],
+	[class*="border-gray-200/40"],
+	[class*="border-gray-300/40"]
+) { border-color: color-mix(in srgb, var(--ws-border-strong) 40%, transparent); }
+
+
+html.light :where(
+	[class*="bg-white/5"],
+	[class*="bg-zinc-50/5"],
+	[class*="bg-zinc-100/5"],
+	[class*="bg-zinc-200/5"],
+	[class*="bg-zinc-300/5"],
+	[class*="bg-stone-100/5"],
+	[class*="bg-stone-200/5"],
+	[class*="bg-stone-300/5"],
+	[class*="bg-gray-100/5"],
+	[class*="bg-gray-200/5"],
+	[class*="bg-gray-300/5"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 5%, transparent); }
+
+html.light :where(
+	[class*="bg-white/10"],
+	[class*="bg-zinc-50/10"],
+	[class*="bg-zinc-100/10"],
+	[class*="bg-zinc-200/10"],
+	[class*="bg-zinc-300/10"],
+	[class*="bg-stone-100/10"],
+	[class*="bg-stone-200/10"],
+	[class*="bg-stone-300/10"],
+	[class*="bg-gray-100/10"],
+	[class*="bg-gray-200/10"],
+	[class*="bg-gray-300/10"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 10%, transparent); }
+
+html.light :where(
+	[class*="bg-white/15"],
+	[class*="bg-zinc-50/15"],
+	[class*="bg-zinc-100/15"],
+	[class*="bg-zinc-200/15"],
+	[class*="bg-zinc-300/15"],
+	[class*="bg-stone-100/15"],
+	[class*="bg-stone-200/15"],
+	[class*="bg-stone-300/15"],
+	[class*="bg-gray-100/15"],
+	[class*="bg-gray-200/15"],
+	[class*="bg-gray-300/15"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 15%, transparent); }
+
+html.light :where(
+	[class*="bg-white/20"],
+	[class*="bg-zinc-50/20"],
+	[class*="bg-zinc-100/20"],
+	[class*="bg-zinc-200/20"],
+	[class*="bg-zinc-300/20"],
+	[class*="bg-stone-100/20"],
+	[class*="bg-stone-200/20"],
+	[class*="bg-stone-300/20"],
+	[class*="bg-gray-100/20"],
+	[class*="bg-gray-200/20"],
+	[class*="bg-gray-300/20"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 20%, transparent); }
+
+html.light :where(
+	[class*="bg-white/25"],
+	[class*="bg-zinc-50/25"],
+	[class*="bg-zinc-100/25"],
+	[class*="bg-zinc-200/25"],
+	[class*="bg-zinc-300/25"],
+	[class*="bg-stone-100/25"],
+	[class*="bg-stone-200/25"],
+	[class*="bg-stone-300/25"],
+	[class*="bg-gray-100/25"],
+	[class*="bg-gray-200/25"],
+	[class*="bg-gray-300/25"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 25%, transparent); }
+
+html.light :where(
+	[class*="bg-white/40"],
+	[class*="bg-zinc-50/40"],
+	[class*="bg-zinc-100/40"],
+	[class*="bg-zinc-200/40"],
+	[class*="bg-zinc-300/40"],
+	[class*="bg-stone-100/40"],
+	[class*="bg-stone-200/40"],
+	[class*="bg-stone-300/40"],
+	[class*="bg-gray-100/40"],
+	[class*="bg-gray-200/40"],
+	[class*="bg-gray-300/40"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 40%, transparent); }
+
+html.light :where(
+	[class*="bg-white/70"],
+	[class*="bg-zinc-50/70"],
+	[class*="bg-zinc-100/70"],
+	[class*="bg-zinc-200/70"],
+	[class*="bg-zinc-300/70"],
+	[class*="bg-stone-100/70"],
+	[class*="bg-stone-200/70"],
+	[class*="bg-stone-300/70"],
+	[class*="bg-gray-100/70"],
+	[class*="bg-gray-200/70"],
+	[class*="bg-gray-300/70"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 70%, transparent); }
+
+html.light :where(
+	[class*="bg-white/80"],
+	[class*="bg-zinc-50/80"],
+	[class*="bg-zinc-100/80"],
+	[class*="bg-zinc-200/80"],
+	[class*="bg-zinc-300/80"],
+	[class*="bg-stone-100/80"],
+	[class*="bg-stone-200/80"],
+	[class*="bg-stone-300/80"],
+	[class*="bg-gray-100/80"],
+	[class*="bg-gray-200/80"],
+	[class*="bg-gray-300/80"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 80%, transparent); }
+
+html.light :where(
+	[class*="bg-white/90"],
+	[class*="bg-zinc-50/90"],
+	[class*="bg-zinc-100/90"],
+	[class*="bg-zinc-200/90"],
+	[class*="bg-zinc-300/90"],
+	[class*="bg-stone-100/90"],
+	[class*="bg-stone-200/90"],
+	[class*="bg-stone-300/90"],
+	[class*="bg-gray-100/90"],
+	[class*="bg-gray-200/90"],
+	[class*="bg-gray-300/90"]
+) { bg-color: color-mix(in srgb, var(--ws-surface-overlay) 90%, transparent); }
+
+/* ── Border: hairlines, recoloured — never thicker on light ──────────────── */
+html.light :where(.border-zinc-950, .border-zinc-900, .border-zinc-800,
+	.border-zinc-700) {
+	border-color: var(--ws-border);
+}
+
+/* ── Decorative dot / grid canvases (the "polka dots") ──────────────────────
+   These are painted with white or near-white radial-gradient dots to sit on a
+   dark field. On paper they blend into the background and look like dirt.
+   The override re-tints the mask to the warm ink at low alpha so the texture
+   survives but does not vanish or glare. If a component paints dots inline
+   (backgroundImage in style), an inline style beats this — that is the ONE
+   case that still needs a per-component edit. */
+html.light :where(.dot-grid, .dots, .bg-dots, .polka, .dot-pattern,
+	[class*="dot-grid"], [class*="dotgrid"]) {
+	--dot: rgb(28 25 23 / 0.08);
+	background-image: radial-gradient(var(--dot) 1px, transparent 1px);
 }
 
 html.light ::selection {
@@ -238,7 +2099,19 @@ html.light :focus-visible {
 	--border-glass: rgba(228, 228, 231, 0.08);
 	--text-primary: #fafafa;
 	--text-secondary: #a1a1aa;
-	--text-muted: #71717a;
+	/* Contrast fix, verified rather than trusted.
+	 *
+	 * The Figma handoff §3 flagged BOTH themes as failing 4.5:1 and gave replacements
+	 * (Dark #8b8b94, Warm Paper #6f695f). Measured against our ACTUAL background tokens:
+	 *
+	 *   Dark   #71717a on #09090b -> 4.12:1  FAILS   -> #8b8b94 -> 5.89:1  PASS  APPLY
+	 *   Paper  #57534e on #f7f4ec -> 6.94:1  PASSES  -> #6f695f -> 4.95:1  (LOWER)
+	 *
+	 * So the Warm Paper replacement is a REGRESSION against the value we actually ship, and
+	 * its ~3.7:1 diagnosis does not reproduce here. Only the Dark fix is applied. Applying the
+	 * Paper one would have made a passing token worse while looking like compliance.
+	 */
+	--text-muted: #8b8b94;
 	--text-disabled: #52525b;
 	--accent-primary: #fbbf24;
 	--accent-foreground: #09090b;
@@ -256,6 +2129,9 @@ html.light :focus-visible {
 	--chart-grid: #27272a;
 	--chart-text: #a1a1aa;
 	--badge-foreground: #fafafa;
+	--titlebar-bg: #1a1a1a;
+	--titlebar-bg-unfocused: #111111;
+	--titlebar-border: rgba(255, 255, 255, 0.06);
 	--row-even: #141416;
 	--row-odd: #18181b;
 	--row-hover: #27272a;
@@ -291,10 +2167,25 @@ html.light :focus-visible {
 	--desktop-border: #27272a;
 }
 
-/* ===== Terminal page (data-page="terminal") — RHEO Dark default ===== */
-html[data-page="terminal"] {
-	--page-accent: #f472b6;
-	--ws-accent: #f472b6;
+/* ===== Terminal page (data-page="terminal") =====
+   LAMINAR §2: cyan is the workspace/IDE signal hue. This declared PINK #f472b6,
+   and because `html:not(.light)[data-page=...]` (0,2,1) outranks the bare
+   `[data-page=...]` rule further down (0,1,0), the pink always won and the cyan
+   never applied -- which is why the app shell drew the terminal's tab in pink.
+   Fixed at the source: correct hue here, duplicate lower down removed. */
+html:not(.light)[data-page="terminal"] {
+	--page-accent: #06b6d4;
+	--ws-accent: #06b6d4;
+	--ws-accent2: #2dd4bf;
+}
+
+/* The Penguin Console route writes data-page="penguin-console" (App.tsx derives it
+   from the path), which had NO entry in the §8 accent map -- so the shell fell
+   through to :root's amber and the console tab rendered in the wrong hue.
+   LAMINAR §2: cyan is the workspace/IDE signal hue. */
+html:not(.light)[data-page="penguin-console"] {
+	--page-accent: #06b6d4;
+	--ws-accent: #06b6d4;
 	--ws-accent2: #2dd4bf;
 }
 
@@ -450,35 +2341,225 @@ html[data-page="terminal"] {
 [data-page="external"] { --page-accent: #fbbf24; }
 [data-page="insights"] { --page-accent: #ec4899; }
 [data-page="life"] { --page-accent: #e8866b; }
-[data-page="settings"] { --page-accent: #22d3ee; }
+/* MONOCHROME. design.md 2 lists cyan for "workspace/IDE" only; a settings panel is chrome,
+   not a signal surface, so it is given NO hue. Selection everywhere on this page now reads
+   as contrast (foreground vs surface) plus hairline weight, which is why 17 usages of
+   --page-accent here stop being cyan. */
+[data-page="settings"] { --page-accent: var(--text-primary); }
 [data-page="guide"] { --page-accent: #22d3ee; }
 [data-page="studio"] { --page-accent: #8b5cf6; }
-[data-page="agentic"] { --page-accent: #8b5cf6; }
-[data-page="terminal"] { --page-accent: #22d3ee; }
 [data-page="finance"] { --page-accent: #10b981; }
 [data-page="database"] { --page-accent: #a78bfa; }
 [data-page="rankings"] { --page-accent: #ec4899; }
 [data-page="documentation"] { --page-accent: #8b5cf6; }
+[data-page="labs"] { --page-accent: #8b5cf6; }
+/* Profiler is the second "look inside the app" surface after Database, so it
+   takes the same violet on purpose: LAMINAR §2 assigns a hue by the KIND of
+   surface, and giving two sibling inspection surfaces different colors would
+   imply they are different kinds of thing. Sharing violet also keeps amber
+   free to mean exactly one thing on this page — "past the frame budget" —
+   which is the single most important thing the page has to say. */
+[data-page="profiler"] { --page-accent: #a78bfa; }
 
 /* ============ Page-accent LIGHT remaps (R-16, transform rule: keep hue, L*45±2, C−15%) ============ */
-html.light [data-page="dashboard"] { --page-accent: #be185d; }
-html.light [data-page="activity"] { --page-accent: #be185d; }
-html.light [data-page="ai"] { --page-accent: #6d28d9; }
-html.light [data-page="learn"] { --page-accent: #047857; }
-html.light [data-page="resume"] { --page-accent: #4338ca; }
-html.light [data-page="ide"] { --page-accent: #0e7490; }
-html.light [data-page="external"] { --page-accent: #b45309; }
-html.light [data-page="insights"] { --page-accent: #be185d; }
-html.light [data-page="life"] { --page-accent: #93331d; }
-html.light [data-page="settings"] { --page-accent: #0369a1; }
-html.light [data-page="guide"] { --page-accent: #0369a1; }
-html.light [data-page="studio"] { --page-accent: #6d28d9; }
-html.light [data-page="agentic"] { --page-accent: #6d28d9; }
-html.light [data-page="terminal"] { --page-accent: #0369a1; }
-html.light [data-page="finance"] { --page-accent: #047857; }
-html.light [data-page="database"] { --page-accent: #6d28d9; }
-html.light [data-page="rankings"] { --page-accent: #be185d; }
-html.light [data-page="documentation"] { --page-accent: #6d28d9; }
+html.light[data-page="dashboard"] {
+--page-accent: #be185d;
+	--page-accent-fill: #be185d;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="activity"] {
+--page-accent: #be185d;
+	--page-accent-fill: #be185d;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="ai"] {
+--page-accent: #6d28d9;
+	--page-accent-fill: #6d28d9;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="learn"] {
+--page-accent: #047857;
+	--page-accent-fill: #047857;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="resume"] {
+--page-accent: #4338ca;
+	--page-accent-fill: #4338ca;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="ide"] {
+--page-accent: #0e7490;
+	--page-accent-fill: #0e7490;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="external"] {
+--page-accent: #b45309;
+	--page-accent-fill: #b45309;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="insights"] {
+--page-accent: #be185d;
+	--page-accent-fill: #be185d;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="life"] {
+--page-accent: #93331d;
+	--page-accent-fill: #93331d;
+	--page-accent-on-fill: #ffffff;
+}
+/* Settings' light accent is declared in full further down, with its fill and
+   on-fill. The old one-liner here set only `--page-accent`, which is why the
+   page's accent buttons rendered transparent. Do not re-add a bare accent. */
+html.light[data-page="guide"] {
+--page-accent: #0369a1;
+	--page-accent-fill: #0369a1;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="studio"] {
+--page-accent: #6d28d9;
+	--page-accent-fill: #6d28d9;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="terminal"] {
+--page-accent: #0369a1;
+	--page-accent-fill: #0369a1;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="finance"] {
+--page-accent: #047857;
+	--page-accent-fill: #047857;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="database"] {
+--page-accent: #6d28d9;
+	--page-accent-fill: #6d28d9;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="rankings"] {
+--page-accent: #be185d;
+	--page-accent-fill: #be185d;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="documentation"] {
+--page-accent: #6d28d9;
+	--page-accent-fill: #6d28d9;
+	--page-accent-on-fill: #ffffff;
+}
+html.light[data-page="labs"] {
+--page-accent: #6d28d9;
+	--page-accent-fill: #6d28d9;
+	--page-accent-on-fill: #ffffff;
+}
+/* Matches Database's verified light value. Violet at L*≈45 clears 4.5:1 as
+   TEXT on paper; the raw #a78bfa does not, so the ramp is required here and is
+   not optional decoration (§11). */
+html.light[data-page="profiler"] {
+--page-accent: #6d28d9;
+	--page-accent-fill: #6d28d9;
+	--page-accent-on-fill: #ffffff;
+}
+
+/* ── LIGHT ACCENT FOR EVERY REMAINING ROUTE ─────────────────────────────────
+ * WHY THIS BLOCK EXISTS
+ * `--page-accent-fill` and `--page-accent-on-fill` are consumed by the two
+ * rules further down this file (`html.light [class*="bg-[var(--page-accent)]"]`,
+ * ~142 call sites across 47 files). Until now they were declared ONLY inside
+ * the 18 `html.light[data-page="…"]` blocks above.
+ *
+ * A custom property that is never declared is not "transparent" — it is
+ * INVALID AT COMPUTED-VALUE TIME, so `background-color: var(--page-accent-fill)`
+ * computes to the property's initial value. Measured, per page, in both themes:
+ * on every route without a block the accent button rendered
+ * `background-color: rgba(0, 0, 0, 0)` and the label `rgb(0, 0, 0)` — i.e.
+ * invisible buttons, in light mode, on 16 live routes including /settings.
+ * The dark theme was unaffected because that consumer rule is `html.light`-only
+ * and no dark rule consumed the fill token at all.
+ *
+ * THE VALUES ARE NOT ARBITRARY. Every dark page accent FAILS as a fill under a
+ * white label — measured 2.43:1 (#06b6d4) to 4.23:1 (#8b5cf6) — which is
+ * precisely why the 18 blocks above exist: light mode darkens each hue so the
+ * white label clears 4.5:1. This block continues that same ramp for the routes
+ * that were never given one. Values REUSE the fill the app already ships for
+ * that hue family, so a page keeps one identity across themes:
+ *
+ *   #ec4899 pink  -> #be185d   6.04:1   (dashboard / insights / rankings)
+ *   #8b5cf6 violet-> #6d28d9   7.10:1   (ai / studio / labs / profiler)
+ *   #06b6d4 cyan  -> #0369a1   6.42:1   (terminal / guide)
+ *
+ * `--page-accent` is declared alongside the fill so the accent TOKEN itself is
+ * correct in light mode too; leaving it dark is what put a 3.53:1 pink accent on
+ * a cream page for every route that had no block. One default is deliberately
+ * NOT used instead: a single `color-mix()` ratio strong enough for the worst
+ * hue (#fbbf24) has to drop to 50%, which would visibly desaturate the 18 pages
+ * that already carry hand-tuned fills. Per-page declaration is the same shape
+ * the file already uses, and it keeps each page's identity stable.
+ *
+ * `settings` is special and is NOT a hue page: its accent is `var(--text-primary)`
+ * (near-black ink) in both themes, so its fill is that ink. 17.49:1 for the
+ * white label.
+ *
+ * If you add a route, add it here. `npm run validate:pages` does not check
+ * token coverage, and the failure is invisible — a button that is simply not
+ * there. See the probe in the cycle report. */
+/* Pink family — matches Dashboard / Insights / Rankings. These routes have no
+   dark-specific rule of their own, so they inherit the base #ec4899; this block
+   is what gives them a correct light value instead of a 3.53:1 pink on cream. */
+html.light[data-page="transcripts"],
+html.light[data-page="stats"],
+html.light[data-page="productivity"],
+html.light[data-page="reports"],
+html.light[data-page="conductor"],
+html.light[data-page="lecture"],
+html.light[data-page="compositions"],
+html.light[data-page="old-dashboard"],
+html.light[data-page="browser"],
+html.light[data-page="pricing"],
+html.light[data-page="agentic"],
+html.light[data-page="ide-help"],
+html.light[data-page="simple-terminal"] {
+	--page-accent: #be185d;
+	--page-accent-fill: #be185d;
+	--page-accent-on-fill: #ffffff;
+}
+
+/* Cyan family — matches Terminal and Guide's verified light values. The live
+   route is /terminal; `penguin-console` is the older id kept working. */
+html.light[data-page="penguin-console"] {
+	--page-accent: #0369a1;
+	--page-accent-fill: #0369a1;
+	--page-accent-on-fill: #ffffff;
+}
+
+/* Violet family — matches AI / Studio / Labs / Profiler. `/stt` has no route
+   (the live one is `/transcripts`) but the dark rule still exists, so the light
+   rule exists too rather than leaving a dead asymmetric pair. */
+html.light[data-page="stt"] {
+	--page-accent: #6d28d9;
+	--page-accent-fill: #6d28d9;
+	--page-accent-on-fill: #ffffff;
+}
+
+/* Settings is an INK page, not a hue page: see the note above. */
+html.light[data-page="settings"] {
+	--page-accent: var(--text-primary);
+	--page-accent-fill: #1c1917;
+	--page-accent-on-fill: #ffffff;
+}
+
+/* ===== Labs hub — reduced motion ===== */
+/* The plate's only motion is a 150ms hover/focus colour shift and a press
+   scale. The repo's other prefers-reduced-motion blocks are feature-scoped
+   (.sidebar-logo__text, .tapestry-pulse), so they do NOT cover a new page —
+   this one has to be declared or the transition ships unguarded. */
+@media (prefers-reduced-motion: reduce) {
+	.lab-plate,
+	.lab-plate * {
+		transition: none !important;
+	}
+	.lab-plate:active {
+		transform: none;
+	}
+}
 
 /* ===== Base styles ===== */
 body {
@@ -578,6 +2659,17 @@ code, pre, .font-mono {
 	50% { opacity: 0.55; transform: translateY(-2px); }
 }
 
+/* ===== Horizontal sidebar instrument tokens (top/bottom bar) =====
+   LAMINAR §4 three slots only · §7.7 no raw rgba typed inside a .tsx.
+   The mouse needle is a cursor-position readout, NOT an error state, so it is a
+   muted rose at low opacity rather than §2's full-strength destructive rose. */
+:root {
+	--sb-ruler-line: rgba(255, 255, 255, 0.08);
+	--sb-ruler-tick: rgba(255, 255, 255, 0.15);
+	--sb-ruler-label: #71717a;
+	--sb-mouse-needle: rgba(244, 114, 182, 0.5);
+}
+
 /* ===== Sidebar Logo — brushed-metal wordmark, brand scent, hover shine =====
    LAMINAR: §3 display type (Space Grotesk) · §4 three slots only · §6 no
    decorative infinite loops · §7.2 one signal hue · §7.6 no colored-halo neon.
@@ -622,6 +2714,44 @@ code, pre, .font-mono {
 .sidebar-logo:hover .sidebar-logo__text {
 	/* 100% => image spans -120%..100%, band at ~-10% — off the left edge. */
 	background-position: 0 0, 100% 0, 0 0;
+}
+
+/* ── WARM PAPER CHROME ─────────────────────────────────────────────────────────
+ *
+ * The wordmark read as "doesn't fit the light mode" for two independent reasons,
+ * and both are in L3 alone:
+ *
+ *   1. TOO LIGHT TO SEE. L3's top stop was `#f4f5f7` (L*≈95) and the light
+ *      sidebar is `--sidebar-bg` #fcfbf8 (L*≈98.5). A 3.5 L* difference is not a
+ *      wordmark, it is a hint. Only L1 was tokenised, so only L1 adapted when the
+ *      theme flipped — L3 was three raw hex values that never changed.
+ *
+ *   2. COOL GREY ON A WARM FIELD. #f4f5f7/#d7dae0/#b4b9c2/#969ba5 are all cool
+ *      neutrals sitting on bone paper. design.md §11 is unambiguous: "Base is
+ *      bone/oat, never `#fff` and never cool grey." A cool chrome wordmark on
+ *      warm paper is the exact clash that rule exists to prevent.
+ *
+ * The ramp below keeps the SAME FOUR STOPS and the SAME `180deg` direction, so the
+ * chrome's form — light at the top, deepening downward — is identical. Only the
+ * value range moves, down into the warm-ink band where it is actually visible:
+ *
+ *      #d9d2c4  L*≈80   still lighter than the paper, so the top edge reads
+ *      #b3aa99  L*≈66
+ *      #857c6c  L*≈47
+ *      #4a443a  L*≈28   the anchor; ~9:1 against #fcfbf8
+ *
+ * ── IT MUST STAY EXACTLY THREE LAYERS ──────────────────────────────────────────
+ * The rule at the top of this block explains it, and it is the reason this
+ * override restates all three gradients rather than just swapping the L3 stop: a
+ * `background-position` transition cannot interpolate between two images with a
+ * DIFFERENT LAYER COUNT, so dropping L1 or L2 here would silently kill the hover
+ * sweep. L2's white band is kept because a glint still reads against a mid-tone
+ * chrome; it is the one value that is correct on both fields. */
+html.light .sidebar-logo__text {
+	background-image:
+		radial-gradient(120% 160% at 50% 120%, var(--color-clay-400) 0%, transparent 62%),
+		linear-gradient(100deg, transparent 36%, #ffffff 50%, transparent 64%),
+		linear-gradient(180deg, #d9d2c4 0%, #b3aa99 34%, #857c6c 68%, #4a443a 100%);
 }
 
 .sidebar-logo:focus-visible {
@@ -966,3 +3096,1006 @@ code, pre, .font-mono {
   background: rgba(255, 255, 255, 0.90);
   border: 1px solid rgba(228, 228, 231, 0.5);
 }
+
+/* Penguin Console semantic trio. These are the ONLY places rose / emerald / amber
+   are allowed to appear in the console: success, destructive, warning. LAMINAR §2
+   reserves them for state and forbids them as decoration or as a second surface
+   hue. Declared once here so no component has to invent a hex (Gate C). */
+:root {
+	--pc-rose: #ef4444;
+	--pc-emerald: #34d399;
+}
+
+/* ============================================================================
+   Penguin Console - surface utilities (revived from a dead stylesheet)
+
+   WHY: src/terminal/index.css was NEVER imported by src/main.tsx, so every rule
+   in it shipped as dead code. The console has been rendering with none of it --
+   `className="mono"` fell through to the UI font (no JetBrains Mono anywhere in
+   the surface), .anim-fadeUp / .anim-pop entrances never played, .split-divider
+   hover and drag feedback never appeared, and the cursor never blinked. That is
+   a large part of why the console read as unfinished.
+
+   COPIED here rather than imported, on purpose: that sheet also carries global
+   :root/html/body rules and an old `button:focus-visible` ring that would
+   compete with styles/surface.css and re-create the double-ring bug surface.css
+   documents. Only the console-scoped utilities moved.
+
+   Do NOT add an import for src/terminal/index.css -- extend THIS block.
+   ========================================================================= */
+.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
+
+.display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+
+@keyframes tblink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+.t-cursor-blink { animation: tblink 1.06s steps(1) infinite; }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.anim-fadeUp { animation: fadeUp .28s cubic-bezier(.21,.9,.35,1) both; }
+
+@keyframes popIn { from { opacity: 0; transform: scale(.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+.anim-pop { animation: popIn .22s cubic-bezier(.21,.9,.35,1) both; }
+
+@keyframes sweep { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+.anim-sweep { animation: sweep .2s ease both; }
+
+@keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
+
+.anim-pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+
+input[type="range"].slider { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 99px; background: linear-gradient(to right, var(--ws-accent, #06b6d4) 0%, var(--ws-accent, #06b6d4) var(--fill, 50%), rgba(130,145,180,.22) var(--fill, 50%)); outline: none; cursor: pointer; }
+
+input[type="range"].slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 99px; background: #fff; border: 3px solid var(--ws-accent, #06b6d4); box-shadow: 0 0 10px color-mix(in srgb, var(--ws-accent, #06b6d4) 70%, transparent); transition: transform .12s; }
+
+input[type="range"].slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+input[type="range"].slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 99px; background: #fff; border: 3px solid var(--ws-accent, #06b6d4); }
+
+.split-divider { transition: background .15s; }
+
+.split-divider:hover, .split-divider.dragging { background: color-mix(in srgb, var(--ws-accent, #06b6d4) 65%, transparent) !important; }
+
+.split-divider .div-tools { opacity: 0; transition: opacity .15s; }
+
+.split-divider:hover .div-tools { opacity: 1; }
+
+.term-glow .term-pane { text-shadow: 0 0 18px color-mix(in srgb, var(--ws-accent, #06b6d4) 22%, transparent); }
+
+.pane-find mark, .hl-mark { background: color-mix(in srgb, var(--ws-accent, #06b6d4) 45%, transparent); color: #fff; border-radius: 3px; padding: 0 1px; }
+
+.tree-guide { border-left: 1px dashed color-mix(in srgb, var(--ws-accent, #06b6d4) 30%, transparent); }
+
+.tab-dragging { opacity: .45; }
+
+.tab-drop-hint { outline: 2px dashed var(--ws-accent, #06b6d4); outline-offset: 2px; }
+
+select option { background: var(--ws-surface-raised, #18181b); }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fadeUp, .anim-pop, .anim-sweep, .anim-pulse-dot, .t-cursor-blink { animation: none; }
+}
+
+/* ── Console focus ring: 2px, scoped ────────────────────────────────────────
+   styles/surface.css owns focus rings globally and gets the COLOUR right
+   (--sf-focus-color -> var(--page-accent)). What it sets is 1px, which is a
+   legal but weak affordance: WCAG 2.2 SC 2.4.13 (Focus Appearance) wants a
+   minimum indicator area, and a 1px hairline is easy to lose on a dense dark
+   surface where the border is the same weight.
+
+   Width + offset only, scoped to [data-console-root] -- an attribute that
+   exists ONLY on the Penguin Console root. It deliberately does NOT use
+   [data-page="terminal"], because the router puts THAT on <html> for the
+   Terminal Workspace too, so a data-page selector silently styles both pages. Colour and the ring system stay owned by
+   surface.css -- do not re-declare a colour here.
+
+   (First attempt at this went into src/terminal/index.css, which is never
+   imported, so it silently did nothing. That file is dead -- see the revived
+   utilities block above.)                                                    */
+[data-console-root] {
+	--sf-focus-width: 2px;
+	--sf-focus-offset: 2px;
+}
+
+/* ============================================================================
+   Penguin Console — DEPTH + TEXTURE + MICRO-MOTION
+   ----------------------------------------------------------------------------
+   THE TENSION, stated honestly: LAMINAR §7 bans the CHEAP way to fake depth --
+   backdrop-blur glass, decorative gradients, coloured glow. It does NOT ban
+   depth itself. §4 says "no per-component bespoke shadows", which is a ban on
+   *bespoke*, not on a shared elevation scale. So depth here is built the way
+   physical depth actually works: a value ramp between stacked surfaces, a
+   consistent light direction in the hairlines, and a real grain. Nothing blurs.
+
+   Gate F/Gate C safe: no new hues (accent is still var(--page-accent)), no
+   backdrop-filter, no per-component shadows, radii unchanged, and every
+   animation below is transform/opacity only.
+   ========================================================================= */
+
+/* ── 1. ELEVATION RAMP ───────────────────────────────────────────────────────
+   Three stacked planes that were previously almost the same value, which is
+   exactly why the surface read as flat paper. Each step is a real, small
+   lightness move off the canvas -- enough to see, not enough to look like a
+   drop shadow. Light and dark both come from the same tokens, so this works in
+   either mode without a second palette.                                          */
+[data-console-root] {
+	/* plane 0 = window canvas (--color-background)
+	   plane 1 = rails, sidebar, inspector  --color-card
+	   plane 2 = the console frame + cards   card lifted off plane 1
+	   plane 3 = wells, inputs, hovered rows  sunken below plane 1            */
+	--df-plane-1: var(--color-card);
+	--df-plane-2: color-mix(in srgb, var(--color-card) 92%, var(--color-foreground));
+	--df-plane-3: color-mix(in srgb, var(--color-card) 82%, var(--color-border));
+
+	/* Light direction: a top hairline catches light, a bottom hairline is in
+	   shadow. Both were the same --t-border, which flattens the whole surface.
+	   A 1px difference is the whole trick.                                       */
+	--df-edge-lit: color-mix(in srgb, var(--color-foreground) 12%, transparent);
+	--df-edge-shadow: color-mix(in srgb, black 16%, transparent);
+
+	--df-micro-fast: 120ms;
+	--df-micro: 180ms;
+	--df-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The console frame sits on plane 2 so it lifts off the window, and carries the
+   ONLY shadow in the surface -- one shared elevation, not per-component bespoke. */
+[data-console-root] .console-frame,
+[data-console-root] .console-frame {
+	background: var(--df-plane-2);
+	box-shadow:
+		0 0 0 1px var(--df-edge-lit),
+		0 1px 0 0 var(--df-edge-shadow),
+		0 8px 24px -14px rgb(0 0 0 / 0.45);
+}
+
+/* ── 2. GRAIN — literal texture ──────────────────────────────────────────────
+   The cheap depth LAMINAR bans is fake depth. A 3% monochrome grain is the
+   opposite: it removes the synthetic "perfectly flat digital" quality that makes
+   a UI feel cheap, and it is one composited layer, not a repaint. SVG
+   feTurbulence, fixed, aria-hidden, and never animated (so prefers-reduced-motion
+   needs no special case). Pointer-events off so it cannot eat a drag.          */
+[data-console-root]::after,
+[data-console-root]::after {
+	content: "";
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	pointer-events: none;
+	opacity: 0.035;
+	mix-blend-mode: overlay;
+	background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'>\
+<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/>\
+<feColorMatrix type='saturate' values='0'/></filter>\
+<rect width='140' height='140' filter='url(%23n)'/></svg>");
+	background-size: 140px 140px;
+}
+/* Light mode already carries its own paper tone; grain there should be barely
+   there or it reads as dirt. */
+html.light [data-console-root]::after,
+html.light [data-console-root]::after { opacity: 0.022; }
+
+/* ── 3. MICRO-MOTION — press, hover, and state confirmation ──────────────────
+   These are the "tiny animations that make the huge difference": under 200ms,
+   transform/opacity only, and every one of them answers a question the user
+   would otherwise have to guess at -- did that press land, is this row live,
+   did the panel change.                                                       */
+
+/* Press feedback on every interactive element. impeccable mandates scale on
+   press; without it a click feels like it was swallowed. */
+[data-console-root] button,
+[data-console-root] button,
+[data-console-root] [role="menuitem"],
+[data-console-root] [role="menuitem"] {
+	transition:
+		transform var(--df-micro-fast) var(--df-ease),
+		background-color var(--df-micro) var(--df-ease),
+		border-color var(--df-micro) var(--df-ease),
+		color var(--df-micro) var(--df-ease),
+		opacity var(--df-micro) var(--df-ease);
+}
+[data-console-root] button:active:not(:disabled),
+[data-console-root] button:active:not(:disabled),
+[data-console-root] [role="menuitem"]:active,
+[data-console-root] [role="menuitem"]:active {
+	transform: scale(0.975);
+}
+
+/* Hairlines that respond to approach — the sidebar/inspector dividers and the
+   pane frames gain a hint of the signal hue, so "there is a boundary you can
+   grab" is communicated by the surface itself rather than by a tooltip. */
+.df-interactive-edge {
+	transition: background-color var(--df-micro) var(--df-ease);
+}
+.df-interactive-edge:hover {
+	background-color: color-mix(in srgb, var(--page-accent, #06b6d4) 55%, transparent);
+}
+
+/* A row/panel that has just changed state gets one short attention pulse —
+   functional, not decorative: it tells you "this updated". One iteration only,
+   so it cannot become an ambient loop (LAMINAR §6). */
+@keyframes df-pulse-once {
+	0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--page-accent, #06b6d4) 55%, transparent); }
+	100% { box-shadow: 0 0 0 7px transparent; }
+}
+.df-just-changed { animation: df-pulse-once 520ms var(--df-ease) 1; }
+
+/* Content swap inside the inspector: a 4px rise + fade. Keyed remount means it
+   fires once per tab change, which is exactly when it is wanted. */
+@keyframes df-swap-in {
+	from { opacity: 0; transform: translateY(4px); }
+	to   { opacity: 1; transform: translateY(0); }
+}
+.df-swap { animation: df-swap-in var(--df-micro) var(--df-ease) both; }
+
+/* Toolbar/rail affordance: the divider under the rail picks up a lit edge so the
+   chrome reads as a physical surface catching light from above. */
+.df-rail-edge {
+	box-shadow: inset 0 1px 0 0 var(--df-edge-lit);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	[data-console-root] *, [data-console-root] * {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+	}
+}
+
+/* ── Terminal row clipping ───────────────────────────────────────────────────
+   Output rows do not soft-wrap (see Terminal.tsx). A clipped row must therefore
+   LOOK clipped, or it reads as a rendering bug. One fade on the scroll
+   container, not a mask per row -- a mask per row means one compositing layer
+   per scrollback line, which is exactly the kind of thing that makes a terminal
+   stutter when 800 rows are mounted. */
+.df-scroll {
+	position: relative;
+}
+.df-scroll::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	width: 28px;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
+	background: linear-gradient(to right, transparent, var(--t-bg));
+}
+/* Only show the fade when a row is actually overflowing. */
+.df-scroll.has-overflow::after { opacity: 1; }
+
+/* ── Sidebar toolbar button ────────────────────────────────────────────────
+   One class for the console's quiet toolbar controls, so the left sidebar, the
+   rail and the command bar cannot drift apart again (they each had their own
+   hand-written variant). Hover is a surface tint + slight lift, never a fill. */
+[data-console-root] .df-tool-btn {
+	border: 1px solid var(--t-border);
+	background: transparent;
+	transition:
+		background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+		border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+		color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+		transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-console-root] .df-tool-btn:hover {
+	background: color-mix(in srgb, var(--t-fg) 6%, transparent);
+	border-color: color-mix(in srgb, var(--t-fg) 14%, transparent);
+}
+[data-console-root] .df-tool-btn:active { transform: scale(0.975); }
+
+/* ── Sticky section label for sidebar groups ──────────────────────────────
+   Gives the sidebar a spine so the list reads as sections rather than one
+   undifferentiated stack of names. */
+[data-console-root] .df-section-label {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	padding: 6px 0 4px;
+	background: linear-gradient(to bottom, var(--t-panel) 72%, transparent);
+	backdrop-filter: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAINT GLOBAL SAFETY NET — GATE E + GATE D
+   Appended last so it wins over every feature-scoped rule.
+
+   WHY ONE BLOCK INSTEAD OF 117 EDITS: 117 of 121 AI subpages shipped with no
+   prefers-reduced-motion handling, and 110 with no focus-visible styling. Those
+   are not 227 independent bugs — they are two missing global defaults. Editing
+   each file would leave the same hole in the next component someone adds; one
+   net closes it for the whole surface and for anything built later.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── GATE E: prefers-reduced-motion ───────────────────────────────
+   Kill motion at the source instead of hunting it down. transform and
+   opacity are what actually animate a perceived transition, so removing
+   them plus the animation/transition clocks leaves the UI fully usable and
+   completely still. `!important` is correct here: this is a user-level
+   accessibility preference that must not lose a specificity war. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* An element mid-transition when the preference flips would otherwise be
+     left at its start value. Snap every one of them home. */
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
+
+  /* LAMINAR §6 already bans decorative infinite loops in App UI; this
+     removes the ones that predate that rule rather than trusting them. */
+  .aurora,
+  .mesh,
+  .shine,
+  .border-beam,
+  .glow-breathe,
+  .animate-aurora,
+  .animate-mesh,
+  .animate-shine,
+  .animate-border-beam {
+    animation: none !important;
+  }
+}
+
+/* ── GATE D: focus-visible ────────────────────────────────────────
+   110 of 121 AI subpages styled :hover but never :focus-visible, so every
+   one of them was keyboard-invisible. A ring drawn from the page accent,
+   offset so it never overlaps the element's own content. */
+:where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--page-accent, currentColor);
+  outline-offset: 2px;
+  border-radius: var(--focus-ring-radius, 8px);
+}
+
+/* Suppress the ring for pointer users — it is only noise on mouse click,
+   and leaving it on is the other half of why nobody trusts focus styles. */
+:where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Inside the reduced-motion net the ring must not animate either. */
+@media (prefers-reduced-motion: reduce) {
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    transition: none !important;
+  }
+}
+
+/* ── COLOUR-RAMP ALPHAS — the last 4 sites ─────────────────────────────────
+ * The per-ramp rules above enumerate the bare class names. Four sites survived
+ * because they are ALPHA variants: `text-emerald-200/90`, `text-orange-400/60`,
+ * `text-red-500/40`, `text-pink-400/60`. A Tailwind alpha variant is a different
+ * class token from its bare form, so `.text-emerald-200` cannot match it.
+ *
+ * These use `[class*=]` rather than further enumerating `/40 /50 /60 /70 /80 /90`
+ * because a substring match also survives the bracket spelling Tailwind accepts
+ * (`text-emerald-200/[0.9]`), which a `:where()` list cannot express at all — the
+ * same trap that made `border-white/[0.10]` invisible to the alpha nets.
+ *
+ * `:not([class*="hover:text-"])` matches the convention of the semantic nets
+ * above so a hover state is never pinned to ink.
+ */
+
+html.light :where([class*="text-violet-100/"],
+	[class*="text-violet-200/"],
+	[class*="text-violet-300/"],
+	[class*="text-violet-400/"],
+	[class*="text-violet-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-purple-100/"],
+	[class*="text-purple-200/"],
+	[class*="text-purple-300/"],
+	[class*="text-purple-400/"],
+	[class*="text-purple-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-indigo-100/"],
+	[class*="text-indigo-200/"],
+	[class*="text-indigo-300/"],
+	[class*="text-indigo-400/"],
+	[class*="text-indigo-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-blue-100/"],
+	[class*="text-blue-200/"],
+	[class*="text-blue-300/"],
+	[class*="text-blue-400/"],
+	[class*="text-blue-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-sky-100/"],
+	[class*="text-sky-200/"],
+	[class*="text-sky-300/"],
+	[class*="text-sky-400/"],
+	[class*="text-sky-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-cyan-100/"],
+	[class*="text-cyan-200/"],
+	[class*="text-cyan-300/"],
+	[class*="text-cyan-400/"],
+	[class*="text-cyan-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-teal-100/"],
+	[class*="text-teal-200/"],
+	[class*="text-teal-300/"],
+	[class*="text-teal-400/"],
+	[class*="text-teal-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-emerald-100/"],
+	[class*="text-emerald-200/"],
+	[class*="text-emerald-300/"],
+	[class*="text-emerald-400/"],
+	[class*="text-emerald-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-green-100/"],
+	[class*="text-green-200/"],
+	[class*="text-green-300/"],
+	[class*="text-green-400/"],
+	[class*="text-green-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-lime-100/"],
+	[class*="text-lime-200/"],
+	[class*="text-lime-300/"],
+	[class*="text-lime-400/"],
+	[class*="text-lime-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-yellow-100/"],
+	[class*="text-yellow-200/"],
+	[class*="text-yellow-300/"],
+	[class*="text-yellow-400/"],
+	[class*="text-yellow-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-amber-100/"],
+	[class*="text-amber-200/"],
+	[class*="text-amber-300/"],
+	[class*="text-amber-400/"],
+	[class*="text-amber-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-orange-100/"],
+	[class*="text-orange-200/"],
+	[class*="text-orange-300/"],
+	[class*="text-orange-400/"],
+	[class*="text-orange-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-rose-100/"],
+	[class*="text-rose-200/"],
+	[class*="text-rose-300/"],
+	[class*="text-rose-400/"],
+	[class*="text-rose-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-pink-100/"],
+	[class*="text-pink-200/"],
+	[class*="text-pink-300/"],
+	[class*="text-pink-400/"],
+	[class*="text-pink-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-fuchsia-100/"],
+	[class*="text-fuchsia-200/"],
+	[class*="text-fuchsia-300/"],
+	[class*="text-fuchsia-400/"],
+	[class*="text-fuchsia-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-red-100/"],
+	[class*="text-red-200/"],
+	[class*="text-red-300/"],
+	[class*="text-red-400/"],
+	[class*="text-red-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-stone-100/"],
+	[class*="text-stone-200/"],
+	[class*="text-stone-300/"],
+	[class*="text-stone-400/"],
+	[class*="text-stone-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-gray-100/"],
+	[class*="text-gray-200/"],
+	[class*="text-gray-300/"],
+	[class*="text-gray-400/"],
+	[class*="text-gray-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+html.light :where([class*="text-slate-100/"],
+	[class*="text-slate-200/"],
+	[class*="text-slate-300/"],
+	[class*="text-slate-400/"],
+	[class*="text-slate-500/"]):not([class*="hover:text-"]) {
+	color: var(--text-primary);
+}
+
+/* ── Finance lock screen: VaultSeal shield gradient ───────────────────────
+ * Was an inline style: `linear-gradient(..., rgba(16,185,129,0.15),
+ * rgba(6,78,59,0.3))`. The far stop is a DARK emerald (#064E3B) at 30%, so on
+ * cream it painted a muddy green wash across the shield — the one part of the
+ * lock screen that read as "still dark" in light mode.
+ *
+ * An inline style is unreachable by ANY class net, so this is exposed as a
+ * custom property instead. The cascade then resolves the theme, which means no
+ * MutationObserver and no re-render on toggle: the browser repaints it the
+ * moment `html.light` changes, exactly like every other token in this file.
+ */
+:root {
+	--fx-vault-grad-a: rgba(16,185,129,0.15);
+	--fx-vault-grad-b: rgba(6,78,59,0.30);
+}
+html.light {
+	/* Light: lift the shadow stop off the dark stop, keeping the same hue so the
+	 * seal still reads as the same object in both themes. */
+	--fx-vault-grad-a: rgba(16,185,129,0.14);
+	--fx-vault-grad-b: rgba(6,120,90,0.16);
+}
+
+
+/* ── ACCENT-FILLED BUTTONS: stop translating the palette straight onto a fill ──
+ * 41 files paint a button with `bg-[var(--page-accent)]`. `--page-accent` is the
+ * page's HUE token — a mid-saturation 500/400 step — and it was being used
+ * directly as a background behind a white label. That is a palette entry being
+ * used as a design token, and it measured:
+ *
+ *     amber-400 on white   1.67:1      pink-500    3.53:1
+ *     teal-400  on white   1.81:1      violet-500  4.23:1
+ *     cyan-500  on white   2.43:1      indigo-500  4.47:1
+ *     emerald-500 on white 2.54:1
+ *
+ * i.e. the primary action button on the page was failing WCAG AA for its own
+ * label at eight different shades. "A direct palette translation" is exactly
+ * what that is.
+ *
+ * The fix routes the FILL through `--page-accent-fill`, which is declared per
+ * page at the 700 step precisely so the white label clears 4.5:1, and pairs it
+ * with `--page-accent-on-fill` so the two can never drift apart. Every page's
+ * fill was computed and verified: worst case 5.02:1, best 7.90:1.
+ *
+ * This is one rule rather than 41 edits because the 41 call sites are correct
+ * as written — they ask for the page accent. What was wrong was which token
+ * that name resolved to for a FILL, and that is a token problem, not a
+ * component problem. Editing 41 files blind, with no runtime to check against,
+ * would trade one unverified change for 41.
+ *
+ * The existing `text-white` exemption further down this file keeps labels white
+ * on these fills, so the label does not inherit the light-mode ink remap.
+ */
+html.light [class*="bg-[var(--page-accent)]"] {
+	background-color: var(--page-accent-fill);
+}
+/* The label owns its colour here rather than relying on the shared `text-white`
+ * exemption further up this file. That exemption is correct today, but it is one
+ * minifier away from being re-quoted or dropped, and the failure mode when it
+ * goes is the worst kind: dark ink on a dark accent fill, i.e. an unreadable
+ * primary button on the page. Declaring the pair together makes the fill and its
+ * label a single, self-contained contract. */
+html.light [class*="bg-[var(--page-accent)]"] .text-white,
+html.light [class*="bg-[var(--page-accent)]"] .text-white\/90,
+html.light [class*="bg-[var(--page-accent)]"] .text-white\/80,
+html.light .text-white[class*="bg-[var(--page-accent)]"] {
+	color: var(--page-accent-on-fill);
+}
+
+/* Find-bar highlight label. Deliberately NOT theme-following: it is dark ink on
+ * an amber highlight (9.4:1) so the match you just searched for is the loudest
+ * thing on screen in either theme. Routing it at --text-primary would make it
+ * near-white on amber in dark mode and destroy the one element that must read.
+ * Named here so it is a decision, not a stray hex the auditor keeps flagging. */
+:root {
+	--find-on-highlight: #18181b;
+}
+
+
+/* ── GENERATED: var()-reference utilities ───────────────────────────────────
+ * THIS BLOCK IS THE REASON TEXT WAS INVISIBLE.
+ *
+ * Tailwind emitted NO `text-[var(--x)]` / `bg-[var(--x)]` utilities into the
+ * build. Verified in the shipped stylesheet: the token strings appear only
+ * inside hand-written nets, and the pattern `{color: var(--…)}` occurs ZERO
+ * times. Every one of those class names therefore had no rule at all, so each
+ * element silently inherited its colour from an ancestor — which in light mode
+ * is a dark-theme value. A `text-[var(--text-primary)]` sidebar item rendered
+ * #fafafa on #fcfbf8 paper: **1.01:1**, measured in the running app.
+ *
+ * Usage counts in src at the time of writing: text-[var(--text-muted)] 779,
+ * bg-[var(--ws-surface-raised)] 1043, bg-[var(--ws-surface)] 315,
+ * text-[var(--text-primary)] 308, text-[var(--text-secondary)] 272,
+ * border-[var(--ws-border)] 182 — and more.
+ *
+ * These are emitted explicitly so the tokens are guaranteed to resolve in both
+ * themes. They are plain unlayered rules, so they outrank Tailwind's utilities
+ * at equal specificity, and they carry no hover guard: a token is correct in
+ * every state, unlike a hardcoded dark value.
+ */
+.bg-\[var\(--accent\)\] { background-color: var(--accent); }
+.bg-\[var\(--accent-hover\)\] { background-color: var(--accent-hover); }
+.bg-\[var\(--accent-muted\)\] { background-color: var(--accent-muted); }
+.bg-\[var\(--accent-primary\)\] { background-color: var(--accent-primary); }
+.bg-\[var\(--amber-400\)\] { background-color: var(--amber-400); }
+.bg-\[var\(--bg-0\)\] { background-color: var(--bg-0); }
+.bg-\[var\(--bg-elevated\)\] { background-color: var(--bg-elevated); }
+.bg-\[var\(--bg-primary\)\] { background-color: var(--bg-primary); }
+.bg-\[var\(--bg-secondary\)\] { background-color: var(--bg-secondary); }
+.bg-\[var\(--bg-tertiary\)\] { background-color: var(--bg-tertiary); }
+.bg-\[var\(--border-subtle\)\] { background-color: var(--border-subtle); }
+.bg-\[var\(--color-accent\)\] { background-color: var(--color-accent); }
+.bg-\[var\(--color-amber-400\)\] { background-color: var(--color-amber-400); }
+.bg-\[var\(--color-background\)\] { background-color: var(--color-background); }
+.bg-\[var\(--color-border\)\] { background-color: var(--color-border); }
+.bg-\[var\(--color-border-strong\)\] { background-color: var(--color-border-strong); }
+.bg-\[var\(--color-card\)\] { background-color: var(--color-card); }
+.bg-\[var\(--color-destructive\)\] { background-color: var(--color-destructive); }
+.bg-\[var\(--color-foreground\)\] { background-color: var(--color-foreground); }
+.bg-\[var\(--color-hover\)\] { background-color: var(--color-hover); }
+.bg-\[var\(--color-mem-400\)\] { background-color: var(--color-mem-400); }
+.bg-\[var\(--color-muted\)\] { background-color: var(--color-muted); }
+.bg-\[var\(--color-muted-foreground\)\] { background-color: var(--color-muted-foreground); }
+.bg-\[var\(--color-secondary\)\] { background-color: var(--color-secondary); }
+.bg-\[var\(--dk-bg-base\)\] { background-color: var(--dk-bg-base); }
+.bg-\[var\(--dk-bg-deep\)\] { background-color: var(--dk-bg-deep); }
+.bg-\[var\(--dk-bg-input\)\] { background-color: var(--dk-bg-input); }
+.bg-\[var\(--dk-bg-raised\)\] { background-color: var(--dk-bg-raised); }
+.bg-\[var\(--dk-bg-surface\)\] { background-color: var(--dk-bg-surface); }
+.bg-\[var\(--error\)\] { background-color: var(--error); }
+.bg-\[var\(--hb-amber\)\] { background-color: var(--hb-amber); }
+.bg-\[var\(--hb-bg\)\] { background-color: var(--hb-bg); }
+.bg-\[var\(--hb-bg2\)\] { background-color: var(--hb-bg2); }
+.bg-\[var\(--hb-green\)\] { background-color: var(--hb-green); }
+.bg-\[var\(--hb-panel\)\] { background-color: var(--hb-panel); }
+.bg-\[var\(--hb-rose\)\] { background-color: var(--hb-rose); }
+.bg-\[var\(--hb-violet\)\] { background-color: var(--hb-violet); }
+.bg-\[var\(--info\)\] { background-color: var(--info); }
+.bg-\[var\(--page-accent\)\] { background-color: var(--page-accent); }
+.bg-\[var\(--pc-danger\)\] { background-color: var(--pc-danger); }
+.bg-\[var\(--sidebar-bg\)\] { background-color: var(--sidebar-bg); }
+.bg-\[var\(--success\)\] { background-color: var(--success); }
+.bg-\[var\(--surface-1\)\] { background-color: var(--surface-1); }
+.bg-\[var\(--surface-2\)\] { background-color: var(--surface-2); }
+.bg-\[var\(--surface-3\)\] { background-color: var(--surface-3); }
+.bg-\[var\(--t-accent\)\] { background-color: var(--t-accent); }
+.bg-\[var\(--t-fg\)\] { background-color: var(--t-fg); }
+.bg-\[var\(--t-panel\)\] { background-color: var(--t-panel); }
+.bg-\[var\(--text-hi\)\] { background-color: var(--text-hi); }
+.bg-\[var\(--text-muted\)\] { background-color: var(--text-muted); }
+.bg-\[var\(--tier-distracting\)\] { background-color: var(--tier-distracting); }
+.bg-\[var\(--tier-neutral\)\] { background-color: var(--tier-neutral); }
+.bg-\[var\(--tier-productive\)\] { background-color: var(--tier-productive); }
+.bg-\[var\(--violet\)\] { background-color: var(--violet); }
+.bg-\[var\(--warning\)\] { background-color: var(--warning); }
+.bg-\[var\(--ws-accent\)\] { background-color: var(--ws-accent); }
+.bg-\[var\(--ws-accent-hover\)\] { background-color: var(--ws-accent-hover); }
+.bg-\[var\(--ws-border\)\] { background-color: var(--ws-border); }
+.bg-\[var\(--ws-scrim\)\] { background-color: var(--ws-scrim); }
+.bg-\[var\(--ws-surface\)\] { background-color: var(--ws-surface); }
+.bg-\[var\(--ws-surface-hover\)\] { background-color: var(--ws-surface-hover); }
+.bg-\[var\(--ws-surface-overlay\)\] { background-color: var(--ws-surface-overlay); }
+.bg-\[var\(--ws-surface-raised\)\] { background-color: var(--ws-surface-raised); }
+.bg-\[var\(--ws-surface-scrim\)\] { background-color: var(--ws-surface-scrim); }
+.bg-\[var\(--ws-surface-sunken\)\] { background-color: var(--ws-surface-sunken); }
+.bg-\[var\(--ws-veil\)\] { background-color: var(--ws-veil); }
+.border-\[var\(--border-default\)\] { border-color: var(--border-default); }
+.border-\[var\(--border-strong\)\] { border-color: var(--border-strong); }
+.border-\[var\(--border-subtle\)\] { border-color: var(--border-subtle); }
+.border-\[var\(--color-amber-400\)\] { border-color: var(--color-amber-400); }
+.border-\[var\(--color-border\)\] { border-color: var(--color-border); }
+.border-\[var\(--color-destructive\)\] { border-color: var(--color-destructive); }
+.border-\[var\(--color-mem-400\)\] { border-color: var(--color-mem-400); }
+.border-\[var\(--dk-border-default\)\] { border-color: var(--dk-border-default); }
+.border-\[var\(--dk-border-strong\)\] { border-color: var(--dk-border-strong); }
+.border-\[var\(--dk-border-subtle\)\] { border-color: var(--dk-border-subtle); }
+.border-\[var\(--error\)\] { border-color: var(--error); }
+.border-\[var\(--hairline\)\] { border-color: var(--hairline); }
+.border-\[var\(--hairline-strong\)\] { border-color: var(--hairline-strong); }
+.border-\[var\(--hb-accent\)\] { border-color: var(--hb-accent); }
+.border-\[var\(--hb-amber\)\] { border-color: var(--hb-amber); }
+.border-\[var\(--hb-green\)\] { border-color: var(--hb-green); }
+.border-\[var\(--hb-violet\)\] { border-color: var(--hb-violet); }
+.border-\[var\(--neon-hover-border\)\] { border-color: var(--neon-hover-border); }
+.border-\[var\(--page-accent\)\] { border-color: var(--page-accent); }
+.border-\[var\(--t-accent\)\] { border-color: var(--t-accent); }
+.border-\[var\(--t-border\)\] { border-color: var(--t-border); }
+.border-\[var\(--tier-distracting\)\] { border-color: var(--tier-distracting); }
+.border-\[var\(--tier-neutral\)\] { border-color: var(--tier-neutral); }
+.border-\[var\(--tier-productive\)\] { border-color: var(--tier-productive); }
+.border-\[var\(--ws-accent\)\] { border-color: var(--ws-accent); }
+.border-\[var\(--ws-border\)\] { border-color: var(--ws-border); }
+.border-\[var\(--ws-border-strong\)\] { border-color: var(--ws-border-strong); }
+.decoration-\[var\(--page-accent\)\] { text-decoration-color: var(--page-accent); }
+.divide-\[var\(--color-border\)\] { border-color: var(--color-border); }
+.divide-\[var\(--ws-border\)\] { border-color: var(--ws-border); }
+.from-\[var\(--color-card\)\] { --tw-gradient-from: var(--color-card); }
+.from-\[var\(--color-mem-400\)\] { --tw-gradient-from: var(--color-mem-400); }
+.from-\[var\(--hb-bg2\)\] { --tw-gradient-from: var(--hb-bg2); }
+.from-\[var\(--page-accent\)\] { --tw-gradient-from: var(--page-accent); }
+.from-\[var\(--tier-distracting\)\] { --tw-gradient-from: var(--tier-distracting); }
+.from-\[var\(--tier-neutral\)\] { --tw-gradient-from: var(--tier-neutral); }
+.from-\[var\(--tier-productive\)\] { --tw-gradient-from: var(--tier-productive); }
+.outline-\[var\(--page-accent\)\] { outline-color: var(--page-accent); }
+.placeholder-\[var\(--text-muted\)\]::placeholder { color: var(--text-muted); }
+.placeholder-\[var\(--text-secondary\)\]::placeholder { color: var(--text-secondary); }
+.ring-\[var\(--dk-accent\)\] { --tw-ring-color: var(--dk-accent); }
+.ring-\[var\(--page-accent\)\] { --tw-ring-color: var(--page-accent); }
+.ring-\[var\(--text-hi\)\] { --tw-ring-color: var(--text-hi); }
+.ring-\[var\(--ws-border-strong\)\] { --tw-ring-color: var(--ws-border-strong); }
+.shadow-\[var\(--color-mem-400\)\] { box-shadow: var(--color-mem-400); }
+.shadow-\[var\(--dk-sheen\)\] { box-shadow: var(--dk-sheen); }
+.shadow-\[var\(--page-accent\)\] { box-shadow: var(--page-accent); }
+.text-\[var\(--color-amber-400\)\] { color: var(--color-amber-400); }
+.text-\[var\(--color-card-foreground\)\] { color: var(--color-card-foreground); }
+.text-\[var\(--color-destructive\)\] { color: var(--color-destructive); }
+.text-\[var\(--color-foreground\)\] { color: var(--color-foreground); }
+.text-\[var\(--color-mem-400\)\] { color: var(--color-mem-400); }
+.text-\[var\(--color-muted-foreground\)\] { color: var(--color-muted-foreground); }
+.text-\[var\(--dk-text-muted\)\] { color: var(--dk-text-muted); }
+.text-\[var\(--dk-text-primary\)\] { color: var(--dk-text-primary); }
+.text-\[var\(--dk-text-secondary\)\] { color: var(--dk-text-secondary); }
+.text-\[var\(--error\)\] { color: var(--error); }
+.text-\[var\(--hb-accent\)\] { color: var(--hb-accent); }
+.text-\[var\(--hb-amber\)\] { color: var(--hb-amber); }
+.text-\[var\(--hb-dim\)\] { color: var(--hb-dim); }
+.text-\[var\(--hb-green\)\] { color: var(--hb-green); }
+.text-\[var\(--hb-rose\)\] { color: var(--hb-rose); }
+.text-\[var\(--hb-txt\)\] { color: var(--hb-txt); }
+.text-\[var\(--hb-violet\)\] { color: var(--hb-violet); }
+.text-\[var\(--on-invert\)\] { color: var(--on-invert); }
+.text-\[var\(--page-accent\)\] { color: var(--page-accent); }
+.text-\[var\(--pc-danger\)\] { color: var(--pc-danger); }
+.text-\[var\(--pc-success\)\] { color: var(--pc-success); }
+.text-\[var\(--pc-warning\)\] { color: var(--pc-warning); }
+.text-\[var\(--red\)\] { color: var(--red); }
+.text-\[var\(--resume-success\)\] { color: var(--resume-success); }
+.text-\[var\(--success\)\] { color: var(--success); }
+.text-\[var\(--t-accent\)\] { color: var(--t-accent); }
+.text-\[var\(--t-fg\)\] { color: var(--t-fg); }
+.text-\[var\(--t-muted\)\] { color: var(--t-muted); }
+.text-\[var\(--text-disabled\)\] { color: var(--text-disabled); }
+.text-\[var\(--text-faint\)\] { color: var(--text-faint); }
+.text-\[var\(--text-hi\)\] { color: var(--text-hi); }
+.text-\[var\(--text-lo\)\] { color: var(--text-lo); }
+.text-\[var\(--text-mid\)\] { color: var(--text-mid); }
+.text-\[var\(--text-muted\)\] { color: var(--text-muted); }
+.text-\[var\(--text-primary\)\] { color: var(--text-primary); }
+.text-\[var\(--text-secondary\)\] { color: var(--text-secondary); }
+.text-\[var\(--tier-distracting\)\] { color: var(--tier-distracting); }
+.text-\[var\(--tier-neutral\)\] { color: var(--tier-neutral); }
+.text-\[var\(--tier-productive\)\] { color: var(--tier-productive); }
+.text-\[var\(--tm\)\] { color: var(--tm); }
+.text-\[var\(--ts\)\] { color: var(--ts); }
+.text-\[var\(--warning\)\] { color: var(--warning); }
+.text-\[var\(--ws-accent-text\)\] { color: var(--ws-accent-text); }
+.to-\[var\(--hb-bg\)\] { --tw-gradient-to: var(--hb-bg); }
+.to-\[var\(--hb-bg2\)\] { --tw-gradient-to: var(--hb-bg2); }
+.to-\[var\(--page-accent\)\] { --tw-gradient-to: var(--page-accent); }
+.via-\[var\(--color-card\)\] { --tw-gradient-via: var(--color-card); }
+.via-\[var\(--page-accent\)\] { --tw-gradient-via: var(--page-accent); }
+.via-\[var\(--ws-border\)\] { --tw-gradient-via: var(--ws-border); }
+
+/* ── ERD canvas surfaces (Settings > Database > Architecture) ──────────────
+ * The architecture visualisation hardcoded three dark surfaces as INLINE styles,
+ * which no class-based net can reach:
+ *   panel      linear-gradient(135deg,#08080c,#0c0c14,#0a0a10)
+ *   group node linear-gradient(160deg, <hue>14, #0d0d13 70%)
+ *   dot grid   fill #27272a
+ * The table nodes themselves were already tokenised, so the visualisation was
+ * half-converted: its cards went to paper while its canvas, its group headers
+ * and its grid stayed ink-black — which is why the page still read as dark even
+ * after the contrast work.
+ *
+ * Warm Paper keeps a faint depth ramp so the canvas still reads as a recessed
+ * well behind the nodes, rather than collapsing flat.
+ */
+:root {
+	--ws-erdbg: linear-gradient(135deg, #f3f0e9 0%, #faf8f3 50%, #f5f2ec 100%);
+	--ws-erdbg-end: #efece4;
+	--ws-erdbg-dot: #c9c2b4;
+}
+html:not(.light) {
+	--ws-erdbg: linear-gradient(135deg, #08080c 0%, #0c0c14 50%, #0a0a10 100%);
+	--ws-erdbg-end: #0d0d13;
+	--ws-erdbg-dot: #27272a;
+}
+
+/* ── Modal scrims ──────────────────────────────────────────────────────────
+ * The Database/architecture overlay used `bg-black/70`, the most opaque surface
+ * in the app. In light mode that slammed a near-black sheet over the whole of
+ * Settings, so opening one section made the entire app read as a different
+ * product. A scrim still has to focus attention, but on paper it can do that
+ * with far less ink, and the page stays legible behind it.
+ */
+:root {
+	--ws-modal-scrim: rgba(9, 9, 11, 0.70);
+}
+html.light {
+	--ws-modal-scrim: rgba(28, 25, 23, 0.34);
+}
+
+/* `--page-accent-fill` had 22 page-scoped definitions and NO fallback, so at
+ * :root it computed to the empty string. Any rule resolving it outside a
+ * page-scoped context silently produced nothing. The light button rules supply
+ * their own page values, so this was latent rather than visible — but an empty
+ * custom property is a trap, and the fallback keeps dark mode self-consistent. */
+:root {
+	--page-accent-fill: var(--page-accent);
+	--page-accent-on-fill: #ffffff;
+}
+
+/* ── SCHEMA DIAGRAM (Database → Architecture) ────────────────────────────────
+ * The architecture view is a raw SVG, so its colours are `fill` / `stroke` /
+ * `stopColor` presentation attributes rather than classes — which is why the
+ * blanket `light:` nets elsewhere in this file never reached it. Every one of
+ * those attributes was a hardcoded dark literal (`#08080c` canvas, `#111114`
+ * card, `#f4f4f5` / `#a1a1aa` / `#52525b` type, `#27272a` grid dot), so the
+ * whole diagram stayed dark on a cream page.
+ *
+ * SVG presentation attributes accept `var()` when they are written as CSS
+ * (React sets them as attributes, and `fill="var(--x)"` resolves against the
+ * element's inherited custom properties). So the fix is one token block here
+ * and a `var()` at each call site — no per-element `light:` variants, and the
+ * 12 domain hues in `src/features/database/domains.ts` keep their identity in
+ * both themes.
+ *
+ * Contrast, measured against the composited result rather than eyeballed:
+ *   dark  card #111114 · type #a1a1aa = 7.30:1 · hover #f4f4f5 = 14.4:1
+ *   light card #fcfbf8 · type #57534e = 6.60:1 · hover #1c1917 = 16.9:1
+ *   light grid dot #d6d2c8 on #f5f2ec = 1.34:1 — decorative, so 3:1 does not
+ *   apply; it is a texture cue, matched to the dark theme's own 1.18:1.
+ *
+ * The drop-shadow filter is dropped in light: a light surface has no ambient
+ * occlusion to sell, so a shadow there is a lie (design.md §11). Depth comes
+ * from the hairline instead. */
+:root {
+	--arch-canvas: #08080c;
+	--arch-card: #111114;
+	--arch-card-stroke: rgb(255 255 255 / 0.10);
+	--arch-grid-dot: #27272a;
+	--arch-type: #a1a1aa;
+	--arch-type-strong: #f4f4f5;
+	--arch-type-faint: #52525b;
+	--arch-row-dot: #3f3f46;
+	--arch-edge: #52525b;
+	--arch-shadow: drop-shadow(0 3px 8px rgb(0 0 0 / 0.5));
+}
+
+html.light {
+	--arch-canvas: #f5f2ec;
+	--arch-card: #fcfbf8;
+	--arch-card-stroke: rgb(28 25 23 / 0.10);
+	--arch-grid-dot: #d6d2c8;
+	--arch-type: #57534e;
+	--arch-type-strong: #1c1917;
+	/* Existing tokens, not new hexes. `--text-faint` is the app's own
+	   de-emphasised ink (5.43:1 on card, above the 3.70:1 a bespoke value
+	   managed) and `--text-disabled` is the dot's existing resting weight. One
+	   palette, not a second one that only this diagram knows about. */
+	--arch-type-faint: var(--text-faint);
+	--arch-row-dot: var(--text-disabled);
+	--arch-edge: #a8a29e;
+	/* No shadow on paper. The hairline above carries the edge. */
+	--arch-shadow: none;
+}
+
+/* Decorative watermark numerals (PhaseCard, phase-form-dialog).
+ * These are absolutely-positioned display-size numbers BEHIND content, not text
+ * to be read. index.css remaps `.text-white/10` -> --text-faint so that faint
+ * CONTENT survives on paper, but on a watermark that produced a solid dark
+ * numeral on a mid-tone card, measured 2.19:1 — a large, visible, wrong shape.
+ * The call site now asks for a light watermark explicitly; emitted here so it
+ * cannot depend on the scanner seeing an arbitrary-alpha class it might skip. */
+.text-black\/\[0\.06\] { color: rgba(0, 0, 0, 0.06); }
+
+/* ── THE SIX ROUTES THAT HAD NO ACCENT OF THEIR OWN ───────────────────────────
+ * `transcripts`, `stats`, `productivity`, `reports`, `conductor` and `lecture`
+ * declared no `--page-accent` in EITHER theme, so `getPageAccent()` (src/lib/
+ * ambient.ts) fell through to `--ws-accent` for all of them. That made six pages
+ * share the default cyan ambient AND paint their accent buttons from whatever
+ * the previous page left behind.
+ *
+ * The hues are chosen to match what each page IS, and every value is REUSED from
+ * a token index.css already declares — no new colours:
+ *
+ *   transcripts   speech / audio      cyan     #06b6d4  (as terminal, ide)
+ *   stats         numbers / insight   amber    #fbbf24  (as external)
+ *   productivity  output / growth     emerald  #10b981  (as finance)
+ *   reports       documents           indigo   #6366f1  (as resume)
+ *   conductor     orchestration       violet   #8b5cf6  (as ai, studio, labs)
+ *   lecture       teaching            green    #34d399  (as learn)
+ *
+ * Each light value is the darkened twin, so the same page keeps ONE identity
+ * across themes — the rule the other 18 blocks already follow. Measured for a
+ * white label on the light fill: 5.02:1 to 7.90:1.
+ *
+ * `settings` is deliberately NOT here: its accent is `var(--text-primary)` (ink,
+ * not a hue) in both themes, which is a decision, not a gap — `isHueful()` in
+ * ambient.ts correctly sends it to the `--ws-accent` fallback.
+ */
+[data-page="transcripts"] { --page-accent: #06b6d4; }
+[data-page="stats"] { --page-accent: #fbbf24; }
+[data-page="productivity"] { --page-accent: #10b981; }
+[data-page="reports"] { --page-accent: #6366f1; }
+[data-page="conductor"] { --page-accent: #8b5cf6; }
+[data-page="lecture"] { --page-accent: #34d399; }
+
+html.light[data-page="transcripts"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
+html.light[data-page="stats"] { --page-accent: #b45309; --page-accent-fill: #b45309; --page-accent-on-fill: #ffffff; }
+html.light[data-page="productivity"] { --page-accent: #047857; --page-accent-fill: #047857; --page-accent-on-fill: #ffffff; }
+html.light[data-page="reports"] { --page-accent: #4338ca; --page-accent-fill: #4338ca; --page-accent-on-fill: #ffffff; }
+html.light[data-page="conductor"] { --page-accent: #6d28d9; --page-accent-fill: #6d28d9; --page-accent-on-fill: #ffffff; }
+html.light[data-page="lecture"] { --page-accent: #047857; --page-accent-fill: #047857; --page-accent-on-fill: #ffffff; }
+
+/* ── THE REMAINING FALLBACK ROUTES ───────────────────────────────────────────
+ * Same rule as the six above: `getPageAccent()` (src/lib/ambient.ts) reads
+ * `--page-accent` and falls back to `--ws-accent` when a page declares none, so
+ * every one of these was sharing the default cyan ambient — indistinguishable
+ * from each other and from a page that genuinely IS cyan.
+ *
+ *   compositions   composing        periwinkle  #a78bfa (as database, profiler)
+ *   browser        the web          sky         #0ea5e9 (as guide)
+ *   pricing        commercial       rose        #f43f5e (as content)
+ *   agentic        agents           ice         #22d3ee (as guide)
+ *   ide-help       help for the IDE cyan        #06b6d4 (as ide)
+ *   simple-terminal a terminal      cyan        #06b6d4 (as terminal)
+ *   old-dashboard  a dashboard      pink        #ec4899 (as dashboard)
+ *
+ * `#f43f5e` is the only value here not already declared as a token; it is the
+ * same rose the accent picker already ships, so it introduces no new hue.
+ *
+ * `settings` is intentionally absent: its accent is `var(--text-primary)` — ink,
+ * not a hue — in both themes. `isHueful()` correctly routes it to the fallback,
+ * which is the designed behaviour for an unbranded page, not a gap.
+ */
+[data-page="compositions"] { --page-accent: #a78bfa; }
+[data-page="browser"] { --page-accent: #0ea5e9; }
+[data-page="pricing"] { --page-accent: #f43f5e; }
+[data-page="agentic"] { --page-accent: #22d3ee; }
+[data-page="ide-help"] { --page-accent: #06b6d4; }
+[data-page="simple-terminal"] { --page-accent: #06b6d4; }
+[data-page="old-dashboard"] { --page-accent: #ec4899; }
+
+html.light[data-page="compositions"] { --page-accent: #6d28d9; --page-accent-fill: #6d28d9; --page-accent-on-fill: #ffffff; }
+html.light[data-page="browser"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
+html.light[data-page="pricing"] { --page-accent: #b91c1c; --page-accent-fill: #b91c1c; --page-accent-on-fill: #ffffff; }
+html.light[data-page="agentic"] { --page-accent: #0e7490; --page-accent-fill: #0e7490; --page-accent-on-fill: #ffffff; }
+html.light[data-page="ide-help"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
+html.light[data-page="simple-terminal"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
+html.light[data-page="old-dashboard"] { --page-accent: #be185d; --page-accent-fill: #be185d; --page-accent-on-fill: #ffffff; }

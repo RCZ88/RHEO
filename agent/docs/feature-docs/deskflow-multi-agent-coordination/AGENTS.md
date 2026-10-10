@@ -21,9 +21,12 @@ silently overwrite each other so nothing ships.
 3. **Never build while the app runs; never run the app while building. Never run
    two builds or two app instances.** Use the wrappers — they enforce it:
    ```bash
-   node agent-coordination/run-exclusive.mjs build --forbid app -- npm run build
    node agent-coordination/run-exclusive.mjs app   --forbid build app -- npm start
    ```
+   **There is deliberately no `build` line:** per root `AGENTS.md` §0-0 (Option B,
+   2026-10-02) **agents never build — CZ builds.** An 8192 MB heap on a ~4 GB-available
+   box caused 12 global OOM events in 24 h. Verify with scoped `tsc --noEmit`, scoped
+   `esbuild --bundle --outfile=/dev/null`, and `npm run validate:pages` instead.
 4. **The database has exactly one writer.** better-sqlite3 is single-writer.
    Do DB work only when the app is stopped, and always through the guard
    (it backs up first):

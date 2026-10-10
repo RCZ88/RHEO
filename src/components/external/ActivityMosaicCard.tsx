@@ -72,7 +72,7 @@ export function ActivityMosaicCard({
       whileTap={{ scale: 0.995 }}
       className={cn(
         "group relative overflow-hidden rounded-xl border text-left",
-        "bg-zinc-900/60 backdrop-blur-xl",
+        "bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl",
         "transition-colors",
         selected
           ? "border-white/25"

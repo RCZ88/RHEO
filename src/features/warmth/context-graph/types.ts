@@ -13,6 +13,24 @@ export interface GraphNode {
   vx: number
   vy: number
   vz: number
+  /**
+   * When this node last fired, in epoch ms. RUNTIME-ONLY and never persisted.
+   *
+   * This is the field the whole suprathreshold visual regime hangs off:
+   * `getNodeGlow` reads it, and it is the ONLY bridge between the avalanche
+   * engine (`computeCascade` / `fireNode` in `physics/avalanche.ts`) and
+   * anything being drawn.
+   *
+   * It used to be absent from this type while three separate components read
+   * and wrote it ad hoc, which is precisely why the firing animation was
+   * permanently dead: `computeCascade` never stamped it, the Self page's poll
+   * stamped it onto a throwaway IPC object, and `ActivityFeed.tsx` was reading
+   * it off `GraphNode` with no such field declared — two standing type errors
+   * that documented the bug. Declared here so the contract is honest.
+   */
+  lastFiredAt?: number
+  /** Peak magnitude of the most recent fire. Scales the glow envelope. */
+  lastFiredPeak?: number
 }
 
 export interface GraphLink {

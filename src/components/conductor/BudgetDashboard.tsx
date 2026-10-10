@@ -29,7 +29,7 @@ export function BudgetDashboard({ missionId }: { missionId: string }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-3">
+        <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-3">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-zinc-500 uppercase">Tokens</span>
             <span className={`text-[10px] font-medium ${tokenPct > 90 ? 'text-red-400' : tokenPct > 75 ? 'text-amber-400' : 'text-emerald-400'}`}>{tokenPct.toFixed(1)}%</span>
@@ -41,7 +41,7 @@ export function BudgetDashboard({ missionId }: { missionId: string }) {
           </div>
         </div>
 
-        <div className="rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-3">
+        <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-3">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-zinc-500 uppercase">Cost</span>
             <span className={`text-[10px] font-medium ${costPct > 90 ? 'text-red-400' : costPct > 75 ? 'text-amber-400' : 'text-emerald-400'}`}>{costPct.toFixed(1)}%</span>
@@ -71,7 +71,7 @@ export function BudgetDashboard({ missionId }: { missionId: string }) {
         </div>
       )}
 
-      <div className="rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-3">
+      <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-3">
         <div className="flex items-center gap-2 mb-2">
           <BarChart3 className="w-3.5 h-3.5 text-zinc-500" />
           <span className="text-xs font-medium text-zinc-300">Per-Agent Breakdown</span>
@@ -79,7 +79,7 @@ export function BudgetDashboard({ missionId }: { missionId: string }) {
         <div className="flex flex-col gap-1.5">
           {metrics.length === 0 && <p className="text-[10px] text-zinc-500">No agent metrics yet</p>}
           {metrics.map((m) => (
-            <div key={m.nodeId} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-950/50">
+            <div key={m.nodeId} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.role === 'director' ? '#8b5cf6' : m.role === 'worker' ? '#22d3ee' : '#71717a' }} />
                 <span className="text-[11px] text-zinc-300">{m.role}</span>

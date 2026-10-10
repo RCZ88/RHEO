@@ -102,7 +102,7 @@ export function ColorsSection(props: any) {
         />
         <p className="text-xs text-zinc-500 mb-3">Individual colors</p>
 
-        <div className="flex gap-1 bg-zinc-900/50 light:bg-white/50 p-1 rounded-xl mb-4 w-fit">
+        <div className="flex gap-1 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] light:bg-white/50 p-1 rounded-xl mb-4 w-fit">
           <button onClick={() => setColorTab('apps')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 ${colorTab === 'apps' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 light:bg-zinc-100/50'}`}>Apps</button>
           <button onClick={() => setColorTab('websites')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 ${colorTab === 'websites' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 light:bg-zinc-100/50'}`}>Websites</button>
         </div>

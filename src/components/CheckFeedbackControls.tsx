@@ -118,7 +118,7 @@ export default function CheckFeedbackControls({
             value={feedbackText}
             onChange={(e) => setFeedbackText(e.target.value)}
             placeholder="Optional feedback..."
-            className="flex-1 text-[10px] bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/30"
+            className="flex-1 text-[10px] bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded px-2 py-1 text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/30"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && feedbackText.trim()) {
                 sendFeedback('text', feedbackText.trim());

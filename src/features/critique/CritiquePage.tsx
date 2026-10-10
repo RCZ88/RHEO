@@ -259,7 +259,7 @@ export function CritiquePage() {
         <div className="flex-1 flex gap-4 p-5 min-h-0 overflow-hidden">
           {/* Left: Image + Overlays */}
           <div className="flex-1 flex flex-col gap-3 min-w-0">
-            <div className="relative rounded-xl overflow-hidden border border-zinc-800/60 bg-zinc-900/50">
+            <div className="relative rounded-xl overflow-hidden border border-zinc-800/60 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]">
               {imageUrl && <img src={imageUrl} alt="Uploaded" className="w-full object-contain max-h-[400px]" />}
               {overlayLayers.boxes && result.elements?.map((el) => (
                 <div key={el.id}

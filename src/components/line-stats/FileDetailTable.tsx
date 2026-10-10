@@ -1,15 +1,18 @@
 import { useState, useMemo } from 'react';
-import { ArrowUpDown, Search, FileText } from 'lucide-react';
+import { ArrowUpDown, Search, FileText, ShieldCheck } from 'lucide-react';
 import type { LineCountResult } from '../../types/line-stats';
+import { TOTAL_EXCLUDED, type ExclusionReport } from './lineStatsFilter';
 
 type SortKey = 'filePath' | 'fileType' | 'totalLines' | 'codeLines' | 'commentLines' | 'blankLines' | 'codePercent';
 type SortDir = 'asc' | 'desc';
 
 interface Props {
   files: LineCountResult[];
+  /** Optional: lets the footer state how many rows were already removed upstream. */
+  report?: ExclusionReport | null;
 }
 
-export default function FileDetailTable({ files }: Props) {
+export default function FileDetailTable({ files, report }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('codeLines');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterType, setFilterType] = useState<string>('all');
@@ -51,21 +54,21 @@ export default function FileDetailTable({ files }: Props) {
   );
 
   return (
-    <div className="rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
+    <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
       <div className="p-3 border-b border-zinc-800/70 flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
           <input type="text" placeholder="Search files..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/30" />
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/30" />
         </div>
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-          className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/30">
+          className="bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/30">
           {fileTypes.map(t => <option key={t} value={t}>{t === 'all' ? 'All Types' : t}</option>)}
         </select>
       </div>
       <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-zinc-900/90 backdrop-blur-sm">
+          <thead className="sticky top-0 bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm">
             <tr className="border-b border-zinc-800/70 text-zinc-500 uppercase tracking-wider">
               <th className="text-left px-3 py-2 font-medium cursor-pointer hover:text-zinc-300" onClick={() => handleSort('filePath')}><span className="flex items-center">File <SortIcon col="filePath" /></span></th>
               <th className="text-left px-3 py-2 font-medium cursor-pointer hover:text-zinc-300" onClick={() => handleSort('fileType')}><span className="flex items-center">Type <SortIcon col="fileType" /></span></th>
@@ -82,7 +85,7 @@ export default function FileDetailTable({ files }: Props) {
               const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
               return (
                 <tr key={file.filePath} title={file.filePath}
-                  className={`border-b border-zinc-800/30 hover:bg-zinc-800/40 ${i % 2 === 0 ? 'bg-zinc-900/30' : 'bg-zinc-900/60'}`}>
+                  className={`border-b border-zinc-800/30 hover:bg-zinc-800/40 ${i % 2 === 0 ? 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]' : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]'}`}>
                   <td className="px-3 py-2"><div className="flex items-center gap-1.5"><FileText className="w-3 h-3 text-zinc-600" /><span className="text-zinc-300 truncate max-w-[180px]">{fileName}</span></div></td>
                   <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded bg-zinc-800/60 text-zinc-400">{file.fileType}</span></td>
                   <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">{file.totalLines.toLocaleString()}</td>
@@ -102,7 +105,15 @@ export default function FileDetailTable({ files }: Props) {
         </table>
       </div>
       {sortedFiles.length === 0 && <div className="p-6 text-center text-zinc-600 text-xs">No files match your filters</div>}
-      <div className="px-3 py-1.5 border-t border-zinc-800/70 text-[10px] text-zinc-600">Showing {sortedFiles.length} of {files.length} files</div>
+      <div className="px-3 py-1.5 border-t border-zinc-800/70 text-[10px] text-zinc-600 flex items-center gap-3">
+        <span>Showing {sortedFiles.length} of {files.length} files</span>
+        {report && TOTAL_EXCLUDED(report) > 0 && (
+          <span className="flex items-center gap-1 text-zinc-500" title={`${report.duplicates} duplicate, ${report.backups} backup, ${report.digitCopies} digit copy, ${report.ignoredDirs} in ignored directories`}>
+            <ShieldCheck className="w-3 h-3 text-zinc-600" />
+            {TOTAL_EXCLUDED(report)} rows excluded upstream ({report.inputFiles} scanned)
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader2, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { NumberTicker } from '../ui/number-ticker';
 import { cn } from '../../lib/utils';
@@ -30,7 +30,7 @@ const accentMap: Record<string, {
   dot: string;
 }> = {
   violet: {
-    bg: 'bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent',
+    bg: 'bg-violet-500/[0.08]',
     iconBg: 'bg-violet-500/20',
     iconColor: 'text-violet-400',
     valueColor: 'text-white',
@@ -38,7 +38,7 @@ const accentMap: Record<string, {
     dot: 'bg-violet-400',
   },
   emerald: {
-    bg: 'bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent',
+    bg: 'bg-emerald-500/[0.08]',
     iconBg: 'bg-emerald-500/20',
     iconColor: 'text-emerald-400',
     valueColor: 'text-white',
@@ -46,7 +46,7 @@ const accentMap: Record<string, {
     dot: 'bg-emerald-400',
   },
   pink: {
-    bg: 'bg-gradient-to-br from-pink-500/10 via-pink-500/5 to-transparent',
+    bg: 'bg-pink-500/[0.08]',
     iconBg: 'bg-pink-500/20',
     iconColor: 'text-pink-400',
     valueColor: 'text-white',
@@ -54,7 +54,7 @@ const accentMap: Record<string, {
     dot: 'bg-pink-400',
   },
   cyan: {
-    bg: 'bg-gradient-to-br from-cyan-500/10 via-cyan-500/5 to-transparent',
+    bg: 'bg-cyan-500/[0.08]',
     iconBg: 'bg-cyan-500/20',
     iconColor: 'text-cyan-400',
     valueColor: 'text-white',
@@ -62,7 +62,7 @@ const accentMap: Record<string, {
     dot: 'bg-cyan-400',
   },
   amber: {
-    bg: 'bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent',
+    bg: 'bg-amber-500/[0.08]',
     iconBg: 'bg-amber-500/20',
     iconColor: 'text-amber-400',
     valueColor: 'text-white',
@@ -96,7 +96,7 @@ export function KpiCard({
       whileHover={reduce ? undefined : { y: -1 }}
       className={cn(
         'relative overflow-hidden rounded-xl p-4',
-        'bg-zinc-900/60 backdrop-blur-xl',
+        'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]',
         'border border-zinc-800/40',
         'hover:border-zinc-700/50',
         'transition-all duration-200 group'

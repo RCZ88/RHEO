@@ -121,7 +121,7 @@ export function IntentLibrary({ onGenerateFromIntent }: Props) {
               <BlurFade key={intent.id} delay={0.03 * i}>
                 <motion.div
                   layout
-                  className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden transition-colors hover:border-zinc-700/80"
+                  className="rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden transition-colors hover:border-zinc-700/80"
                 >
                   {/* Card header */}
                   <div className="flex items-start gap-3 p-4">

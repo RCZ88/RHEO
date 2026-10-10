@@ -92,7 +92,7 @@ function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+            className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
           />
         </div>
         <div>
@@ -104,7 +104,7 @@ function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder={mode === 'login' ? 'Enter password' : 'Choose a password'}
-            className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+            className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
           />
         </div>
         {mode === 'register' && (
@@ -115,7 +115,7 @@ function AuthForm({ onSuccess }: { onSuccess?: () => void }) {
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
               placeholder="Repeat password"
-              className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+              className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
             />
           </div>
         )}
@@ -168,7 +168,7 @@ function SyncUrlConfig({ syncUrl, onSave }: { syncUrl: string; onSave: (url: str
           type="url"
           value={url}
           onChange={e => { setUrl(e.target.value); setSaved(false); }}
-          className="flex-1 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+          className="flex-1 px-3 py-2 rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
           placeholder="http://127.0.0.1:8787"
         />
         <button

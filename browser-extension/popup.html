@@ -90,6 +90,62 @@
 
     /* ── Rows ── */
     .info { padding: 2px 16px; }
+    /* ── HERO: current site ───────────────────────────────────────────────────
+       Tabular numerals on the timer stop the layout reflowing as digits tick;
+       without it a 1:59 → 2:00 transition visibly nudges everything beside it. */
+    .site { padding:11px 12px; margin-bottom:10px; border-radius:10px;
+            background:var(--surface); border:1px solid var(--border); }
+    .site-top { display:flex; gap:10px; align-items:center; min-width:0; }
+    .site-fav { width:28px; height:28px; border-radius:6px; flex-shrink:0;
+                opacity:0; transition:opacity .18s ease; }
+    .site-id { min-width:0; flex:1; }
+    .site-domain { font-size:13px; font-weight:600; color:var(--text);
+                   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .site-title { font-size:11px; color:var(--muted); margin-top:1px;
+                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .site-meta { display:flex; align-items:center; gap:8px; margin-top:9px; }
+    .site-timer { font-family:var(--mono); font-variant-numeric:tabular-nums;
+                  font-size:12px; color:var(--text); margin-left:auto; }
+    .site-hint { font-size:10.5px; color:var(--dim); margin:7px 0 0; line-height:1.45; }
+
+    /* One accent. Amber is reserved for "not recording" so colour means one thing. */
+    .pill { font-size:10px; font-weight:600; padding:2px 7px; border-radius:999px;
+            background:rgba(255,255,255,.05); color:var(--muted);
+            border:1px solid var(--border); }
+    .pill--recording { background:rgba(16,185,129,.12); color:var(--emerald);
+                       border-color:rgba(16,185,129,.3); }
+    .pill--paused { background:rgba(245,158,11,.12); color:var(--amber);
+                    border-color:rgba(245,158,11,.3); }
+
+    /* ── Capture list: every state it can be in ─────────────────────────────── */
+    .cap-row { display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+               padding:7px 8px; border-radius:8px; cursor:pointer;
+               border:1px solid transparent; background:transparent; }
+    .cap-row:hover { background:rgba(255,255,255,.04); border-color:var(--border); }
+    .cap-row:focus-visible { outline:2px solid var(--emerald); outline-offset:-2px; }
+    .cap-row .cap-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .cap-main { min-width:0; flex:1; }
+    .cap-title { display:block; font-size:11.5px; color:var(--text);
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cap-sub { display:block; font-size:10px; color:var(--dim); margin-top:1px;
+               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cap-go { font-size:11px; color:var(--dim); flex-shrink:0; }
+    .cap-row:hover .cap-go { color:var(--emerald); }
+
+    .cap-msg { font-size:11px; color:var(--muted); padding:10px 2px; line-height:1.5;
+               display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
+    .cap-msg em { font-style:normal; font-size:10px; color:var(--dim); }
+    .cap-msg--err { color:var(--amber); }
+    .cap-retry { margin-top:5px; font-size:10.5px; padding:4px 9px; border-radius:6px;
+                 background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.32);
+                 color:var(--amber); cursor:pointer; }
+    .cap-retry:hover { background:rgba(245,158,11,.24); }
+
+    .cap-row--skeleton { pointer-events:none; }
+    .sk-line { height:8px; border-radius:4px; background:rgba(255,255,255,.07);
+               margin-bottom:5px; }
+    .sk-line--short { width:52%; height:6px; }
+
     .row {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 0; gap: 8px;
@@ -265,6 +321,16 @@
 
   <!-- ═══ Capture Tab ═══ -->
   <div class="dk-ext-tab-content dk-ext-tab-content--active" id="tab-capture">
+    <!-- Connect gate. Firefox/Zen MV3 grants declared host_permissions only when
+         the user opts in, so without this the extension installs cleanly and
+         silently sends nothing. Hidden the moment everything is working. -->
+    <div id="connectGate" style="display:none;margin:0 0 10px;padding:10px;border-radius:8px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35)">
+      <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px">DeskFlow can&rsquo;t be reached</div>
+      <div id="connectWhy" style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.45"></div>
+      <button id="connectBtn" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid rgba(251,191,36,.4);background:rgba(251,191,36,.15);color:#fcd34d;font-size:12px;font-weight:600;cursor:pointer">
+        Connect to DeskFlow
+      </button>
+    </div>
     <div class="hdr">
       <div class="hdr-logo">D</div>
       <div class="hdr-text">
@@ -278,21 +344,40 @@
       <div class="toggle on" id="trackToggle" role="switch" aria-checked="true" tabindex="0"><span class="knob"></span></div>
     </div>
 
+    <!-- ── HERO: what is being recorded right now ──────────────────────────────
+         The current site is the hero, not a text row. Favicon + domain gives
+         instant recognition; the page title sits under it. The old layout had
+         two "Page" rows, one of which was permanently blank. Timer uses
+         tabular numerals (see --mono) so digits don't reflow as they tick. -->
+    <section class="site" aria-live="polite">
+      <div class="site-top">
+        <img id="siteFavicon" class="site-fav" alt="" width="28" height="28"
+             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E">
+        <div class="site-id">
+          <div class="site-domain" id="domainVal">—</div>
+          <div class="site-title" id="titleVal">No page open</div>
+        </div>
+      </div>
+      <div class="site-meta">
+        <span class="pill" id="siteState">idle</span>
+        <span class="site-timer" id="sessionTime" title="Time on this page">0:00</span>
+      </div>
+      <p class="site-hint" id="siteHint">Open a page to start tracking.</p>
+    </section>
+
     <div class="stats">
       <div class="stat">
         <div class="stat-val emerald" id="captureCount">0</div>
-        <div class="stat-lbl">Captures</div>
+        <div class="stat-lbl">Saved today</div>
       </div>
       <div class="stat">
-        <div class="stat-val amber" id="sessionTime">0:00</div>
-        <div class="stat-lbl">Session</div>
+        <div class="stat-val" id="totalCount">0</div>
+        <div class="stat-lbl">All saved</div>
       </div>
     </div>
 
     <div class="info">
-      <div class="row"><span class="row-lbl">Server</span><span class="row-val" id="serverVal">…</span></div>
-      <div class="row"><span class="row-lbl">Domain</span><span class="row-val emerald" id="domainVal">—</span></div>
-      <div class="row"><span class="row-lbl">Page</span><span class="row-val" id="titleVal">—</span></div>
+      <div class="row"><span class="row-lbl">Connection</span><span class="row-val" id="serverVal">…</span></div>
       <div class="row"><span class="row-lbl">Last sync</span><span class="row-val" id="syncVal">—</span></div>
     </div>
 
@@ -311,7 +396,7 @@
     </div>
 
     <div class="ftr">
-      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-text">DeskFlow Bridge v1.7.0</span>
       <span class="ftr-pill" id="browserPill">chrome</span>
     </div>
   </div>
@@ -343,7 +428,7 @@
     </div>
 
     <div class="ftr">
-      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-text">DeskFlow Bridge v1.7.0</span>
       <span class="ftr-pill" id="browserPill2">chrome</span>
     </div>
   </div>
@@ -372,7 +457,7 @@
     </div>
 
     <div class="ftr">
-      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-text">DeskFlow Bridge v1.7.0</span>
       <span class="ftr-pill" id="browserPill3">chrome</span>
     </div>
   </div>
@@ -408,7 +493,7 @@
     </div>
 
     <div class="ftr">
-      <span class="ftr-text">DeskFlow Bridge v1.3.0</span>
+      <span class="ftr-text">DeskFlow Bridge v1.7.0</span>
       <span class="ftr-pill" id="browserPill4">chrome</span>
     </div>
   </div>

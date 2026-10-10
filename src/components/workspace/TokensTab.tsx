@@ -119,7 +119,7 @@ export function TokensTab({ colorEntries, projectPath }: TokensTabProps) {
             </div>
           </div>
 
-          <pre className="p-3 rounded-xl bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 text-[11px] font-mono text-zinc-300 overflow-x-auto whitespace-pre-wrap">
+          <pre className="p-3 rounded-xl bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 text-[11px] font-mono text-zinc-300 overflow-x-auto whitespace-pre-wrap">
             {cssVariables}
           </pre>
 
@@ -172,7 +172,7 @@ export function TokensTab({ colorEntries, projectPath }: TokensTabProps) {
             </a>
           </div>
 
-          <div className="relative rounded-xl overflow-hidden border border-zinc-800/60 bg-zinc-950" style={{ minHeight: 280 }}>
+          <div className="relative rounded-xl overflow-hidden border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]" style={{ minHeight: 280 }}>
             {!iframeLoaded && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />

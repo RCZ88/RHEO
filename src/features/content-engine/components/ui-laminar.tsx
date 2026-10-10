@@ -20,8 +20,8 @@ export function BentoCard({ children, className, onClick }: BentoCardProps) {
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       onClick={onClick}
       className={cn(
-        'rounded-xl border border-white/[0.08] bg-zinc-900/80 p-4 transition-all duration-200',
-        onClick && 'cursor-pointer hover:border-white/[0.15] hover:bg-zinc-900',
+        'rounded-xl border border-white/[0.08] bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] p-4 transition-all duration-200',
+        onClick && 'cursor-pointer hover:border-white/[0.15] hover:bg-zinc-900 light:bg-[var(--ws-surface-raised)]',
         className
       )}
     >

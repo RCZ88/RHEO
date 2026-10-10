@@ -24,8 +24,8 @@ export function NotesBlock({ block, nodeId, onAddNote, onDeleteNote, onTogglePin
   };
 
   return (
-    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60">
+    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]">
         <StickyNote className="w-4 h-4 text-emerald-400" />
         <span className="text-xs font-medium text-zinc-300">Notes</span>
         <span className="text-[10px] text-zinc-600 ml-auto">{block.notes.length}</span>

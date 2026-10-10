@@ -16,8 +16,8 @@ const DEPTH_ACCENT: Record<string, string> = {
 };
 const DEPTH_HUE: Record<string, string> = {
   core: 'var(--hb-accent)',
-  daily: 'var(--hb-green)',
-  power: 'var(--hb-violet)',
+  daily: 'var(--hb-accent)',
+  power: 'var(--hb-accent)',
   sudo: 'var(--hb-amber)',
   rescue: 'var(--hb-rose)',
 };

@@ -95,7 +95,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, onSave }) 
                   },
                 })
               }
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
             />
             <div className="flex justify-between text-xs text-gray-600 mt-1">
               <span>50</span>
@@ -208,7 +208,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, onSave }) 
                 },
               })
             }
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
           />
           <div className="flex justify-between text-xs text-gray-600 mt-1">
             <span>1K</span>
@@ -242,7 +242,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, onSave }) 
                 },
               })
             }
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
           />
           <div className="flex justify-between text-xs text-gray-600 mt-1">
             <span>2K</span>

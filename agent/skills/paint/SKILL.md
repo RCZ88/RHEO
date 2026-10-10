@@ -1,7 +1,7 @@
 ---
 id: paint
 name: PAINT — Design Orchestrator
-version: 1.0.0
+version: 1.1.0
 category: design
 description: >-
   THE entry point for ALL UI/design work. Conducts 12 design skills + 15 MCP servers in a
@@ -28,6 +28,7 @@ requires:
   - animation-stack
   - beautiful-charts
   - font-selection
+  - prove-it
 ---
 
 # PAINT — the conductor for every design task
@@ -221,6 +222,19 @@ Run every gate in LAYER 2. Fix failures. Do not declare PASS on a partial audit.
 
 ---
 
+### P8 — CLAIM GATE · `prove-it`  *(TERMINAL — no PAINT flow reports done without it)*
+
+Everything above produced a *design*. This stage decides whether it **exists and runs**, which
+is a different question and the one this repo keeps getting wrong. Compile-clean, type-clean
+and gate-green prove nothing about mounting, data, or what is actually running.
+
+- Run `prove-it` Steps 5–9 on any PAINT output that ships UI: **mount chain** (every export
+  must reach a mount root — zero importers is dead code, not a late task), **fixture honesty**
+  (no plausible-looking hardcoded number may read as a live measurement), and **artifact
+  freshness** (a correct fix inside a stale bundle is a false claim).
+- Attach Gate C's grep **scoped to the changed files**, not the repo.
+- A PAINT verdict is not a PAINT report. No flow says done without a PROVE verdict.
+
 # LAYER 2 — THE GATES
 
 ### Gate A — Intent
@@ -287,6 +301,19 @@ none, because every agent trusts it.
    update `references/mcp-routing.md`.
 4. **Conflict log:** every time you resolve a conflict by *your own* judgment rather than by
    a table row, add the row. The next agent needs it.
+   - `prove-it` added as terminal stage P8. PROVE is `category: debugging`, not design — it is
+     loaded BY PAINT by explicit exception, because the failures it catches (dead router,
+     opaque window, stale-bundle "fixed") all arrived as PAINT-flow claims.
+   - **Halo: two external RESULTs merged (2026-10-05).** `RESULT.md` (deep backend audit —
+     §6.2 names the missing channels; `tracking-heartbeat` for AFK/now) governs BACKEND.
+     `result.md` (GLM — exact px, occlusion-not-eviction lane model) governs FRONTEND.
+     Conflict settled by MY judgment: both specs propose a non-canonical compact radius
+     (RESULT.md §7.1 `pill`; GLM §7.1 `radius: 20`). LAMINAR caps at 8/12/pill, so I took
+     **GLM's `radius: 20` and clipped to `9999`/pill** to keep the capsule silhouette the
+     island needs while staying inside the law. GLM §1.2 also shrinks the WINDOW height to
+     232 on a toast; rejected — `types.ts:167` says the canvas is NEVER resized, and
+     `haloIsland.ts` has one `setBounds` for placement, so a per-toast resize would fight
+     the placement guard. Content swaps inside a fixed canvas instead.
 5. **Bump `version:`** on every sync.
 6. **Dead-reference check:** never leave a phase pointing at a skill that was deleted —
    repoint it or delete the phase.

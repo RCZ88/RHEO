@@ -13,11 +13,17 @@ import { DUR, EASE_OUT } from './motion';
 export type CardVariant = 'default' | 'interactive' | 'elevated' | 'inset';
 
 const CARD_BASE = 'rounded-xl transition-all duration-150 relative overflow-hidden';
+/* Light mode: every card drops the glass and the drop shadow and becomes a flat
+   warm surface with a hairline (design.md §11 — on a light field a shadow is a
+   lie and `backdrop-blur` just smears the page behind it). The dark values stay
+   untouched, so this is purely additive.
+   `backdrop-blur` must be cancelled, not just left: blur over paper reads as a
+   grey smear, which is the "dirty" look, not a clean one. */
 const CARD_VARIANTS: Record<CardVariant, string> = {
-  default:    'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.35)] p-5',
-  interactive:'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.35)] p-5 cursor-pointer hover:border-[rgba(63,63,70,0.55)] hover:bg-[rgba(24,24,27,0.70)]',
-  elevated:   'bg-[rgba(24,24,27,0.80)] backdrop-blur-2xl border border-[rgba(63,63,70,0.45)] p-5 shadow-lg shadow-black/20',
-  inset:      'bg-[rgba(9,9,11,0.60)] border border-[rgba(63,63,70,0.25)] p-4',
+  default:    'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.35)] p-5 light:bg-[var(--ws-surface-raised)] light:backdrop-blur-none light:border-[var(--ws-border)]',
+  interactive:'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.35)] p-5 cursor-pointer hover:border-[rgba(63,63,70,0.55)] hover:bg-[rgba(24,24,27,0.70)] light:bg-[var(--ws-surface-raised)] light:backdrop-blur-none light:border-[var(--ws-border)] light:hover:border-[var(--ws-accent)]/40 light:hover:bg-[var(--ws-surface-overlay)]',
+  elevated:   'bg-[rgba(24,24,27,0.80)] backdrop-blur-2xl border border-[rgba(63,63,70,0.45)] p-5 shadow-lg shadow-black/20 light:bg-[var(--ws-surface-overlay)] light:backdrop-blur-none light:border-[var(--ws-border-strong)] light:shadow-[0_1px_2px_rgb(28_25_23/0.06)]',
+  inset:      'bg-[rgba(9,9,11,0.60)] border border-[rgba(63,63,70,0.25)] p-4 light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border)]',
 };
 
 const ACCENT_RAIL: Record<string, string> = {
@@ -36,13 +42,13 @@ export function WorkspaceCard({
   return (
     <div
       onClick={onClick}
-      className={`${CARD_BASE} ${CARD_VARIANTS[variant]} ${onClick && variant !== 'interactive' ? 'cursor-pointer hover:border-[rgba(63,63,70,0.55)]' : ''} ${className}`}
+      className={`${CARD_BASE} ${CARD_VARIANTS[variant]} ${onClick && variant !== 'interactive' ? 'cursor-pointer hover:border-[rgba(63,63,70,0.55)] light:hover:border-[var(--ws-accent)]/40' : ''} ${className}`}
     >
       {railColor && (
         <div className={`absolute top-0 left-0 bottom-0 w-[2px] ${railColor} rounded-full`} />
       )}
       {/* Top-edge highlight */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.04] to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.04] to-transparent light:via-[var(--ws-border)]" />
       {children}
     </div>
   );

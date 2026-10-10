@@ -16,7 +16,7 @@ interface LearnNavBarProps {
 
 export function LearnNavBar({ breadcrumb, onNavigate, onOpenProfile, onOpenHelp, onOpenShortcuts }: LearnNavBarProps) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-[#1c1917]/80 px-4 backdrop-blur-md md:px-6 light:bg-stone-300/90 light:backdrop-blur-sm">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-[#1c1917]/80 px-4 backdrop-blur-md md:px-6 light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_90%,transparent)] light:backdrop-blur-sm">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 rounded-md bg-clay-500/10 p-1.5 text-clay-400 light:bg-clay-500/5 light:text-clay-600">
           <BookOpen className="h-4 w-4" />
@@ -32,13 +32,13 @@ export function LearnNavBar({ breadcrumb, onNavigate, onOpenProfile, onOpenHelp,
               <button
                 onClick={() => !isLast && onNavigate(seg.view)}
                 className={`flex items-center font-mono text-xs uppercase tracking-wider transition-colors ${
-                  isLast ? 'text-clay-300 font-medium light:text-stone-700' : 'text-zinc-400 hover:text-zinc-200 hover:underline light:text-stone-500 light:hover:text-stone-700'
+                  isLast ? 'text-clay-300 font-medium light:text-[var(--text-secondary)]' : 'text-zinc-400 hover:text-zinc-200 hover:underline light:text-[var(--text-muted)] light:hover:text-stone-700'
                 }`}
                 title={seg.label}
               >
                 <span className="max-w-[200px] truncate">{seg.label}</span>
               </button>
-              {!isLast && <ChevronRight className="h-3 w-3 text-zinc-600 light:text-stone-400" />}
+              {!isLast && <ChevronRight className="h-3 w-3 text-zinc-600 light:text-[var(--text-secondary)]" />}
             </React.Fragment>
           );
         })}

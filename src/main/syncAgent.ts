@@ -74,6 +74,7 @@ export class SyncAgent {
       "terminal_messages",
       "workspace_problems",
       "workspace_requests",
+      "schedule_entries",
     ]
   }
 
@@ -135,6 +136,18 @@ export class SyncAgent {
       .all(this.cursor, limit) as Record<string, unknown>[]
     for (const row of requests) {
       changes.push({ table: "workspace_requests", row })
+    }
+
+    // schedule_entries — pushed so the phone sees the desktop's timetable, and so a
+    // phone-authored edit has something to conflict against on the way back.
+    // `updated_at` must be sent: pull filters on it, so omitting it would store
+    // rows the desktop can never read back (the bug that stranded 100 messages).
+    const schedule = this.db
+      .prepare(`SELECT id, title, location, day_of_week, start_time, end_time, category, color, is_recurring, created_at, updated_at, deleted
+                FROM schedule_entries WHERE updated_at > datetime(?, 'unixepoch') LIMIT ?`)
+      .all(this.cursor, limit) as Record<string, unknown>[]
+    for (const row of schedule) {
+      changes.push({ table: "schedule_entries", row })
     }
 
     if (changes.length === 0) return { applied: 0 }
@@ -199,24 +212,59 @@ export class SyncAgent {
         })
       }
 
-      // workspace_problems — upsert LWW
+      // workspace_problems — upsert LWW.
+      // These previously wrote ONLY `updated_at` and threw every other column away,
+      // so a phone marking a problem "Fixed" would sync successfully and the status
+      // would silently vanish on arrival. The full editable column set is now applied.
       const upsertProblem = this.db.prepare(`
-        INSERT INTO workspace_problems (id, updated_at) VALUES (@id, @updated_at)
-        ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at
+        INSERT INTO workspace_problems (id, title, status, priority, category, created_at, updated_at, deleted)
+        VALUES (@id, @title, @status, @priority, @category, @created_at, @updated_at, COALESCE(@deleted, 0))
+        ON CONFLICT(id) DO UPDATE SET
+          title=excluded.title, status=excluded.status, priority=excluded.priority,
+          category=excluded.category, updated_at=excluded.updated_at, deleted=excluded.deleted
         WHERE excluded.updated_at > workspace_problems.updated_at
       `)
       for (const r of changes.workspace_problems ?? []) {
         upsertProblem.run(r)
       }
 
-      // workspace_requests — upsert LWW
+      // workspace_requests — upsert LWW (same fix: description/status were discarded)
       const upsertRequest = this.db.prepare(`
-        INSERT INTO workspace_requests (id, updated_at) VALUES (@id, @updated_at)
-        ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at
+        INSERT INTO workspace_requests (id, title, status, priority, category, description, created_at, updated_at, deleted)
+        VALUES (@id, @title, @status, @priority, @category, @description, @created_at, @updated_at, COALESCE(@deleted, 0))
+        ON CONFLICT(id) DO UPDATE SET
+          title=excluded.title, status=excluded.status, priority=excluded.priority,
+          category=excluded.category, description=excluded.description,
+          updated_at=excluded.updated_at, deleted=excluded.deleted
         WHERE excluded.updated_at > workspace_requests.updated_at
       `)
       for (const r of changes.workspace_requests ?? []) {
         upsertRequest.run(r)
+      }
+
+      // schedule_entries — the phone edits the timetable, so the desktop has to apply
+      // the real columns. Without this branch the table is a fifth write-only dead
+      // store: the phone's edits would be stored and never seen here, exactly like
+      // finance/goals/learning were.
+      const upsertSchedule = this.db.prepare(`
+        INSERT INTO schedule_entries (id, title, location, day_of_week, start_time, end_time, category, color, is_recurring, created_at, updated_at)
+        VALUES (@id, @title, @location, @day_of_week, @start_time, @end_time, @category, @color, COALESCE(@is_recurring, 1), @created_at, @updated_at)
+        ON CONFLICT(id) DO UPDATE SET
+          title=excluded.title, location=excluded.location, day_of_week=excluded.day_of_week,
+          start_time=excluded.start_time, end_time=excluded.end_time,
+          category=excluded.category, color=excluded.color,
+          is_recurring=excluded.is_recurring, updated_at=excluded.updated_at
+        WHERE excluded.updated_at > schedule_entries.updated_at
+      `)
+      const deleteSchedule = this.db.prepare(`DELETE FROM schedule_entries WHERE id = ?`)
+      for (const r of changes.schedule_entries ?? []) {
+        // The desktop schema has no `deleted` column on this table, so honour it as a
+        // real delete rather than resurrecting a removed class.
+        if (Number(r.deleted) === 1) {
+          deleteSchedule.run(r.id)
+        } else {
+          upsertSchedule.run(r)
+        }
       }
     })
 

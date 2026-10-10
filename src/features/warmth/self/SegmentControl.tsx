@@ -16,7 +16,7 @@ interface SegmentControlProps {
 
 export function SegmentControl({ value, onChange, options }: SegmentControlProps) {
   return (
-    <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900/50 ring-1 ring-zinc-800/60">
+    <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60">
       {options.map(opt => {
         const active = opt.value === value
         return (

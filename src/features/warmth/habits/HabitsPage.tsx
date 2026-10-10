@@ -293,7 +293,7 @@ function WeekReview({ weekDates, reflections }: {
           const prod = ref?.productiveSec || 0;
           const isToday = d === todayStr();
           return (
-            <div key={d} className={`flex items-center gap-3 px-2.5 py-1.5 rounded-lg ${isToday ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-zinc-900/30'}`}>
+            <div key={d} className={`flex items-center gap-3 px-2.5 py-1.5 rounded-lg ${isToday ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]'}`}>
               <div className="w-11 shrink-0">
                 <div className={`text-[9px] uppercase tracking-wider ${isToday ? 'text-amber-400' : 'text-zinc-600'}`}>{dow[i]}</div>
                 <div className={`text-[11px] font-semibold tabular-nums ${isToday ? 'text-amber-300' : 'text-zinc-500'}`}>{d.slice(5)}</div>
@@ -655,6 +655,16 @@ export function HabitsPage() {
         </motion.div>
       )}
 
+      {/* ═══ The River of Years — full width ═══
+          It was living in the 1/3 sidebar, which squeezed a wide timeline
+          (its phase cards are a 4-column grid) down to ~400px. It gets the
+          full content width now, above the two-column area. */}
+      <div className="w-full">
+        {/* LifeRiver renders its OWN WarmCard — wrapping it again nested a card
+            inside a card, which is part of why it looked cramped. */}
+        <LifeRiver />
+      </div>
+
       {/* ═══ Two-column layout ═══ */}
       <div className={`flex flex-col lg:flex-row gap-4 ${side === "left" ? "lg:flex-row-reverse" : ""}`}>
         {/* LEFT: 2/3 — Habits + WeekReview + Hierarchy + ConnectionExplorer */}
@@ -820,11 +830,6 @@ export function HabitsPage() {
 
         {/* RIGHT: 1/3 — LifeRiver + HabitStats */}
         <div className="lg:w-1/3 min-w-0 space-y-4">
-          {/* LifeRiver */}
-          <WarmCard ambient>
-            <LifeRiver />
-          </WarmCard>
-
           {/* HabitStats */}
           <WarmCard ambient>
             <div className="text-[12px] font-medium text-zinc-400 mb-3 flex items-center gap-1.5">
@@ -832,19 +837,19 @@ export function HabitsPage() {
               Habit Stats
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/40 px-3 py-2">
+              <div className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Kept Today</div>
                 <div className="text-[18px] font-semibold text-pink-400 tabular-nums">{habitDoneCount}</div>
               </div>
-              <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/40 px-3 py-2">
+              <div className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Total</div>
                 <div className="text-[18px] font-semibold text-zinc-300 tabular-nums">{habitTotalCount}</div>
               </div>
-              <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/40 px-3 py-2">
+              <div className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Tracked</div>
                 <div className="text-[18px] font-semibold text-zinc-300 tabular-nums">{formatTime(habitTracked)}</div>
               </div>
-              <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/40 px-3 py-2">
+              <div className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Streak</div>
                 <div className="text-[18px] font-semibold text-amber-400 tabular-nums">{bestStreak}</div>
               </div>
@@ -865,12 +870,12 @@ export function HabitsPage() {
                   <p className="text-[11px] text-zinc-600 text-center py-2">No schedule or deadlines yet</p>
                 )}
                 {schedule.map(entry => (
-                  <div key={entry.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/30 text-[11px] text-zinc-400">
+                  <div key={entry.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] text-[11px] text-zinc-400">
                     <Clock size={11} /> {entry.title}
                   </div>
                 ))}
                 {deadlines.map(dl => (
-                  <div key={dl.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/30 text-[11px] text-zinc-400">
+                  <div key={dl.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] text-[11px] text-zinc-400">
                     <CalendarDays size={11} /> {dl.title}
                   </div>
                 ))}

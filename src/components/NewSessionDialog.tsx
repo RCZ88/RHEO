@@ -195,7 +195,7 @@ function SystemToggleCard({ system, verifySignal, index }: { system: SystemInfo;
 
   if (loading) {
     return (
-      <div className="nsd-anim rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-3" style={{ animationDelay: `${index * 45}ms` }}>
+      <div className="nsd-anim rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3" style={{ animationDelay: `${index * 45}ms` }}>
         <Skeleton className="mb-2 h-3 w-2/3" />
         <Skeleton className="h-2.5 w-1/2" />
       </div>
@@ -203,10 +203,10 @@ function SystemToggleCard({ system, verifySignal, index }: { system: SystemInfo;
   }
 
   return (
-    <div className={`nsd-anim group relative border rounded-xl p-3 transition-all duration-200 ${isError ? 'border-red-500/40 bg-red-500/5' : system.enabled ? 'bg-zinc-800/40 border-zinc-600/40 shadow-[0_1px_4px_rgba(0,0,0,0.1)]' : 'bg-zinc-900/30 border-zinc-700/30 opacity-60 hover:opacity-80'}`} style={{ animationDelay: `${index * 45}ms` }}>
+    <div className={`nsd-anim group relative border rounded-xl p-3 transition-all duration-200 ${isError ? 'border-red-500/40 bg-red-500/5' : system.enabled ? 'bg-zinc-800/40 border-zinc-600/40 shadow-[0_1px_4px_rgba(0,0,0,0.1)]' : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border-zinc-700/30 opacity-60 hover:opacity-80'}`} style={{ animationDelay: `${index * 45}ms` }}>
       <span className="group/tooltip absolute top-2 left-2 z-10">
         <span className={`block w-2 h-2 rounded-full transition-transform duration-300 ${scaleClass} ${dotClass}`} />
-        <span className="absolute left-0 top-3 hidden group-hover/tooltip:block whitespace-nowrap rounded-md bg-zinc-950/95 border border-zinc-700/60 px-2 py-1 text-[10px] text-zinc-300 shadow-lg z-20">{tip}</span>
+        <span className="absolute left-0 top-3 hidden group-hover/tooltip:block whitespace-nowrap rounded-md bg-zinc-950 light:bg-[var(--ws-surface)]/95 border border-zinc-700/60 px-2 py-1 text-[10px] text-zinc-300 shadow-lg z-20">{tip}</span>
       </span>
       <div className="pl-3">
         <div className="flex items-center justify-between mb-1.5">
@@ -411,7 +411,7 @@ function PromptPreview({ title, content, defaultContent, maxChars = 2000 }: { ti
   const truncated = base.length > maxChars;
   const shown = showFull || !truncated ? base : base.slice(0, maxChars) + '…';
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/60 p-3">
+    <div className="rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] text-zinc-400 uppercase tracking-wider">{title}</span>
         {truncated && (
@@ -498,7 +498,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
   const fetchSystems = useCallback(async () => {
     if (!window.deskflowAPI?.system?.list) return;
     try {
-      const res: any = await window.deskflowAPI.system.list();
+      const res: any = await window.deskflowAPI.system.list(projectPath || undefined);
       if (res && res.ok && Array.isArray(res.systems)) setBackendSystems(Object.fromEntries(res.systems.map((s: any) => [s.id, s])));
     } catch (e) { console.warn('NewSessionDialog: system.list failed', e); }
   }, []);
@@ -515,7 +515,20 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
           setTokenBudget(d.total_token_budget ?? 2000);
           setPrevNode(d.nodes?.[0] ?? null);
           setCtxLoadFailed(false);
+          return;
         }
+        // A resolved-but-failed response is NOT a success. Previously this fell
+        // through with no state change at all: no items, no error, spinner gone,
+        // empty panel — indistinguishable from "this project has no context".
+        // Surface the reason instead of showing a silently blank infrastructure list.
+        const reason =
+          (d && (d.error || d.message)) ||
+          'Context status unavailable — the main process did not return a usable response.';
+        setCtxLoadFailed(true);
+        setCtxState({
+          items: [], graphNodes: [], usedTokens: 0, loading: false,
+          error: reason,
+        });
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -760,7 +773,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                         autoFocus value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder={defaultName || 'e.g. Fix the login bug'}
-                        className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20"
+                        className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20"
                       />
                     </div>
 
@@ -769,7 +782,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                       <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                         {SUPPORTED_AGENTS.map((a) => (
                           <button key={a.id} type="button" onClick={() => setAgentType(a.id)}
-                            className={`rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 ${agentType === a.id ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'}`}>
+                            className={`rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 ${agentType === a.id ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'}`}>
                             {a.name}
                           </button>
                         ))}
@@ -780,17 +793,17 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                       <label className="block text-[11px] font-medium text-zinc-400 mb-1.5">Terminal</label>
                       <div className="grid grid-cols-2 gap-1.5 mb-1.5">
                         <button type="button" onClick={() => setTerminalMode('create')}
-                          className={`rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 ${terminalMode === 'create' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'}`}>
+                          className={`rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 ${terminalMode === 'create' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'}`}>
                           Create new terminal
                         </button>
                         <button type="button" onClick={() => setTerminalMode('select')} disabled={!terminalTabs || Object.keys(terminalTabs).length === 0}
-                          className={`rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 disabled:opacity-40 ${terminalMode === 'select' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'}`}>
+                          className={`rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 disabled:opacity-40 ${terminalMode === 'select' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'}`}>
                           Use open terminal
                         </button>
                       </div>
                       {terminalMode === 'select' && terminalTabs && Object.keys(terminalTabs).length > 0 ? (
                         <select value={selectedTerminal} onChange={(e) => setSelectedTerminal(e.target.value)}
-                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950/60 px-3 py-1.5 text-xs text-zinc-100 outline-none transition-all duration-150 focus:border-cyan-400/50">
+                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 py-1.5 text-xs text-zinc-100 outline-none transition-all duration-150 focus:border-cyan-400/50">
                           {Object.entries(terminalTabs).map(([id, t]) => <option key={id} value={id}>{t.name} ({t.agent})</option>)}
                         </select>
                       ) : terminalMode === 'select' ? (
@@ -821,7 +834,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                           <div className="flex items-center gap-1.5" onMouseEnter={() => setTierHint(true)}>
                             {(['top', 'mid', 'low'] as const).map((t) => (
                               <button key={t} type="button" onClick={() => setModelTier(t)}
-                                className={`flex-1 rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 ${modelTier === t ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600'}`}>
+                                className={`flex-1 rounded-xl border px-2 py-1.5 text-[11px] transition-all duration-150 ${modelTier === t ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-zinc-700/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:border-zinc-600'}`}>
                                 {getModelTier(t).label}
                               </button>
                             ))}
@@ -846,7 +859,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                               Use default
                             </label>
                             {includeDefaultInit && initFiles.length > 0 && (
-                              <select value={initializeFile} onChange={(e) => setInitializeFile(e.target.value)} className="rounded-lg border border-zinc-700/60 bg-zinc-950/60 px-2 py-1 text-[11px] text-zinc-300 outline-none">
+                              <select value={initializeFile} onChange={(e) => setInitializeFile(e.target.value)} className="rounded-lg border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-2 py-1 text-[11px] text-zinc-300 outline-none">
                                 {initFiles.map((f) => <option key={f} value={f}>{f}</option>)}
                               </select>
                             )}
@@ -871,7 +884,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                           ))}
                         </div>
                       </div>
-                      <div className="relative rounded-xl border border-zinc-800/60 bg-zinc-950/60 overflow-hidden">
+                      <div className="relative rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 overflow-hidden">
                         {ctxState.loading ? (
                           <div className="h-44 flex items-center justify-center"><Skeleton className="h-3 w-1/3" /></div>
                         ) : ctxLoadFailed ? (
@@ -908,7 +921,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
 
                 {step === 2 && (
                   <div className="space-y-3.5">
-                    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-3">
+                    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3">
                       <div className="flex items-center gap-3 mb-2">
                         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800/60">
                           <Brain className="w-4 h-4 text-cyan-300" />
@@ -926,7 +939,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                       </div>
                     </div>
 
-                    <button type="button" onClick={() => setShowReviewPrompt(!showReviewPrompt)} className="flex items-center justify-between w-full rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2">
+                    <button type="button" onClick={() => setShowReviewPrompt(!showReviewPrompt)} className="flex items-center justify-between w-full rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] px-3 py-2">
                       <span className="flex items-center gap-2 text-[11px] text-zinc-300 font-medium"><ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showReviewPrompt ? 'rotate-180' : ''}`} />System prompt</span>
                       <LayerBar />
                     </button>
@@ -941,20 +954,20 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                       <VoiceInputWrapper>
                         <textarea value={sessionAdditions} onChange={(e) => setSessionAdditions(e.target.value)}
                           placeholder="Extra instructions for this session only…" rows={2}
-                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 resize-none" />
+                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 resize-none" />
                       </VoiceInputWrapper>
                     </div>
 
                     {agentsCtx.length > 0 && (
                       <div>
-                        <button type="button" onClick={() => setShowAgentsCtx(!showAgentsCtx)} className="flex items-center justify-between w-full rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2">
+                        <button type="button" onClick={() => setShowAgentsCtx(!showAgentsCtx)} className="flex items-center justify-between w-full rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] px-3 py-2">
                           <span className="flex items-center gap-2 text-[11px] text-zinc-300 font-medium"><ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showAgentsCtx ? 'rotate-180' : ''}`} />Agent context ({agentsCtx.length})</span>
                           <span className="text-[10px] text-zinc-500">{agentsLoading ? 'Loading…' : `${agentsCtx.length} files`}</span>
                         </button>
                         {showAgentsCtx && (
                           <div className="nsd-fadein mt-1.5 space-y-1">
                             {agentsCtx.map((f: any) => (
-                              <div key={f.id ?? f.name} className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-zinc-950/40 px-2 py-1">
+                              <div key={f.id ?? f.name} className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-2 py-1">
                                 <span className="text-[10px] text-zinc-400 truncate">{f.name}</span>
                                 <span className="shrink-0 text-[10px] text-zinc-600">{(f.size ?? 0).toLocaleString()} B</span>
                               </div>
@@ -970,11 +983,11 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
               <div className="flex items-center justify-between mt-5 pt-4 border-t border-zinc-800/60">
                 <div className="flex items-center gap-2">
                   {step > 0 && (
-                    <button type="button" onClick={goBack} className="flex items-center gap-1 rounded-lg border border-zinc-700/50 bg-zinc-900/60 px-3 py-1.5 text-[11px] text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition-all duration-150">
+                    <button type="button" onClick={goBack} className="flex items-center gap-1 rounded-lg border border-zinc-700/50 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] px-3 py-1.5 text-[11px] text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition-all duration-150">
                       <ChevronLeft className="w-3 h-3" />Back
                     </button>
                   )}
-                  <button type="button" onClick={onClose} className="rounded-lg border border-zinc-700/50 bg-zinc-900/60 px-3 py-1.5 text-[11px] text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition-all duration-150">Cancel</button>
+                  <button type="button" onClick={onClose} className="rounded-lg border border-zinc-700/50 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] px-3 py-1.5 text-[11px] text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition-all duration-150">Cancel</button>
                 </div>
                 <button type="submit"
                   className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-[11px] font-medium transition-all duration-150 ${step < 2 ? 'bg-cyan-400/10 border border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/20' : 'bg-cyan-400 text-zinc-950 hover:bg-cyan-300'}`}>

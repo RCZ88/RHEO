@@ -212,14 +212,14 @@ export default function ConductorPage() {
       <div className="relative">
         <button
           onClick={() => setShowProjectPicker(!showProjectPicker)}
-          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:border-zinc-500"
+          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:border-zinc-500"
         >
           <FolderOpen size={14} className="text-zinc-400" />
           {selectedProject ? selectedProject.name || selectedProject.path.split('\\').pop() || selectedProject.path : 'Select a project'}
           <ChevronRight size={12} className={`text-zinc-500 transition-transform ${showProjectPicker ? 'rotate-90' : ''}`} />
         </button>
         {showProjectPicker && (
-          <div className="absolute top-full left-0 mt-1 w-80 max-h-48 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50">
+          <div className="absolute top-full left-0 mt-1 w-80 max-h-48 overflow-y-auto bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg shadow-xl z-50">
             {projects.map((p, i) => (
               <button
                 key={p.path || i}
@@ -282,7 +282,7 @@ export default function ConductorPage() {
       <button
         key={m.id}
         onClick={() => setActiveMissionId(isActive ? null : m.id)}
-        className={`w-full text-left rounded-lg border p-3 transition-all ${isActive ? 'border-cyan-500/50 bg-zinc-800/60' : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'}`}
+        className={`w-full text-left rounded-lg border p-3 transition-all ${isActive ? 'border-cyan-500/50 bg-zinc-800/60' : 'border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] hover:border-zinc-600'}`}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-medium text-zinc-200 truncate flex-1">{m.objective}</span>
@@ -332,7 +332,7 @@ export default function ConductorPage() {
     const pendingEscs = (snap.escalations || []).filter((e: any) => e.status === 'pending');
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-900/30">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
           <div className="flex items-center gap-2 text-xs">
             <span className="text-zinc-300 font-medium truncate max-w-[200px]">{snap.objective}</span>
             <span className="text-zinc-600">·</span>
@@ -390,7 +390,7 @@ export default function ConductorPage() {
     if (!showNewMission) return null;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-96 shadow-2xl">
+        <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl w-96 shadow-2xl">
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
             <span className="text-sm font-semibold text-zinc-200">New Mission</span>
             <button onClick={() => setShowNewMission(false)} className="text-zinc-500 hover:text-zinc-300"><X size={14} /></button>
@@ -451,7 +451,7 @@ export default function ConductorPage() {
 
   if (pageState === 'loading-projects') {
     return (
-      <div className="flex flex-col h-full bg-zinc-950/80">
+      <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface)]/80">
         {renderHeader()}
         <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading projects...</div>
       </div>
@@ -460,7 +460,7 @@ export default function ConductorPage() {
 
   if (pageState === 'no-projects') {
     return (
-      <div className="flex flex-col h-full bg-zinc-950/80">
+      <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface)]/80">
         {renderHeader()}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -474,7 +474,7 @@ export default function ConductorPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950/80">
+    <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface)]/80">
       {renderHeader()}
       {activeMissionId ? renderMissionDetail() : renderMissionList()}
       {renderNewMissionDialog()}

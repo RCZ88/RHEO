@@ -31,7 +31,7 @@ export function ActivitySelectionOverlay({
             initial={{ opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
-            className="relative w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900/60 p-5 backdrop-blur-xl"
+            className="relative w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">

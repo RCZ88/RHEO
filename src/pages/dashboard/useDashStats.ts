@@ -82,12 +82,24 @@ export function useDashStats(opts: { enabled: boolean }): DashStats {
   }, [enabled]);
 
   // ── Finance ────────────────────────────────────────────────────────────────
+  // LOCK BOUNDARY: this widget lives on the DASHBOARD, so it is reachable
+  // without ever mounting FinancePage — and FinancePage is what renders the
+  // password screen. Fetching financeGetSummary() unconditionally therefore
+  // leaked the balance to anyone who had not unlocked Finance. Ask the backend
+  // first; it is the single source of truth for the lock, and financeGetSummary
+  // itself does not gate. Skip the fetch entirely when locked.
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     (async () => {
       const api = (window as any).deskflowAPI;
       if (!api?.financeGetSummary) return;
+      if (api.financeIsLocked) {
+        try {
+          const lockState = await api.financeIsLocked();
+          if (lockState?.locked) { if (!cancelled) setFinanceSummary(EMPTY); return; }
+        } catch { /* if we cannot tell, assume locked and show nothing */ if (!cancelled) setFinanceSummary(EMPTY); return; }
+      }
       const res = await safe(() => api.financeGetSummary(), 'finance');
       if (cancelled || !res) return;
       const s: any = (res as any)?.summary || (res as any)?.data || res;
@@ -163,9 +175,20 @@ export function useDashStats(opts: { enabled: boolean }): DashStats {
       const res = await safe(() => api.brainStats(), 'brain');
       if (cancelled || !res) return;
       const s: any = (res as any)?.stats || (res as any)?.data || res;
+      // `brain:stats` returns { episodes, entities, facts, currentFacts } from
+      // contextBrain.getBrainStats(). It does NOT return nodes/density/retrievals,
+      // so the old mapping (`s?.nodes ?? s?.episodeCount`) never matched and the
+      // Context Brain widget rendered a permanent 0 / 0.0 / 0.
+      //
+      // Map the real field names. "nodes" is the graph node count, which is the
+      // entity count — that is what a knowledge graph grows as. Density is not
+      // exposed by the backend at all, so derive a real edges-per-node ratio from
+      // current facts instead of leaving it at 0.
+      const entities = n(s?.entities);
+      const currentFacts = n(s?.currentFacts ?? s?.facts);
       setBrainStats({
-        nodes: n(s?.nodes ?? s?.totalNodes ?? s?.episodeCount),
-        density: n(s?.density ?? s?.avgDensity),
+        nodes: entities,
+        density: entities > 0 ? Number((currentFacts / entities).toFixed(1)) : 0,
         retrievalsToday: n(s?.retrievalsToday ?? s?.retrievals),
         recentQuery: s?.recentQuery ?? null,
       });

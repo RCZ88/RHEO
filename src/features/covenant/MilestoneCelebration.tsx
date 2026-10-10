@@ -45,7 +45,7 @@ export function MilestoneCelebration({ commitmentName, milestone, onClose }: Mil
           animate={cardMotion.animate}
           exit={cardMotion.exit}
           transition={cardMotion.transition}
-          className="relative max-w-sm w-full rounded-xl border border-[#fbbf24]/30 bg-zinc-900/95 backdrop-blur-xl p-6 text-center overflow-hidden"
+          className="relative max-w-sm w-full rounded-xl border border-[#fbbf24]/30 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-6 text-center overflow-hidden"
         >
           <div className="warmth-aurora" style={auroraStyle} />
           <motion.div

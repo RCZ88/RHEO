@@ -7,6 +7,10 @@ import { SectionHeader } from '../components/SectionHeader';
 import { LoadingState } from '../components/LoadingState';
 import { EmptyState } from '../components/EmptyState';
 import { CurrentCanvas } from '../components/CurrentCanvas';
+import ErdCanvas, { type ErdSchema, type ErdDomain } from '@/features/database/ErdCanvas';
+import { DatabaseStatsRail, RowCountBar } from '@/features/database/DatabaseStatsRail';
+import { ARCH_GROUPS } from '@/features/database/domains';
+import { Network as NetworkIcon } from 'lucide-react';
 import { renderPartition } from '../lib/renderers/partition';
 import { startPhaseClock } from '../lib/currentPhase';
 
@@ -46,31 +50,42 @@ const TCM: Record<string, string> = {
   category_overrides:'other',domain_category_overrides:'other',goals:'other',goal_reviews:'other',life_phases:'other',life_timeline_meta:'other',notes:'other',routing_costs:'other',manual_time_assignments:'other',browser_profiles:'other',schema_migrations:'other',
 };
 
-const ARCH_GROUPS = [
-  { id:'core',     label:'Core Tracking',     color:'#10b981', tables:['logs','sessions','daily_stats','browser_sessions','productivity_sessions'] },
-  { id:'stats',    label:'Aggregated Stats',  color:'#06b6d4', tables:['stats_hourly','stats_daily','daily_rollup','app_totals'] },
-  { id:'ide',      label:'IDE / Projects',    color:'#8b5cf6', tables:['projects','ides','extensions','tools','code_activity','commits','ai_attribution','dora_metrics'] },
-  { id:'ai',       label:'AI Usage & Chat',   color:'#d946ef', tables:['ai_usage','ai_chat_messages','ai_chat_threads','ai_context_captures'] },
-  { id:'context',  label:'Context Brain',     color:'#f59e0b', tables:['context_entities','context_facts','context_episodes','user_context_profile','agent_memories'] },
-  { id:'workspace',label:'Terminal',          color:'#6366f1', tables:['terminal_sessions','terminal_messages','workspace_state','workspace_problems','workspace_requests'] },
-  { id:'finance',  label:'Finance',           color:'#84cc16', tables:['finance_accounts','finance_wallets','finance_transactions','finance_categories','finance_subscriptions'] },
-  { id:'learn',    label:'Learn (Lyceum)',    color:'#f97316', tables:['learn_lessons','learn_nodes','learn_progress','learn_cards','learn_streaks'] },
-  { id:'content',  label:'Content Engine',    color:'#f43f5e', tables:['content_ideas','content_episodes','themes','content_lessons','content_videos'] },
-  { id:'focus',    label:'Focus',             color:'#14b8a6', tables:['deep_focus_sessions','focus_groups','focus_group_usage'] },
-  { id:'external', label:'External',          color:'#0ea5e9', tables:['external_activities','external_sessions','schedule_entries','deadlines'] },
-  { id:'conductor',label:'Conductor',         color:'#eab308', tables:['conductor_missions','conductor_nodes','conductor_messages'] },
-];
+
 
 export default function DatabasePage() {
   useEffect(() => { startPhaseClock(); }, []);
-  const [activeTab, setActiveTab] = useState<'browse'|'architecture'|'changes'>('browse');
+  const [activeTab, setActiveTab] = useState<'browse'|'architecture'|'erd'|'changes'>('browse');
   const [tables, setTables] = useState<string[]>([]);
   const [tableCounts, setTableCounts] = useState<Record<string, number>>({});
   const [selectedTable, setSelectedTable] = useState('');
   const [tableSchema, setTableSchema] = useState<any[]>([]);
+  const [erdSchema, setErdSchema] = useState<ErdSchema | null>(null);
+  const [erdLoading, setErdLoading] = useState(false);
+  // Reuse the same domain definitions the architecture view uses, so the ERD
+  // groups identically instead of inventing a second taxonomy.
+  const erdDomains: ErdDomain[] = useMemo(() => ARCH_GROUPS.map((g: any) => ({ id: g.id, label: g.label, color: g.color, tables: g.tables })), []);
+
+  const fetchErd = useCallback(async () => {
+    const api: any = (window as any).deskflowAPI;
+    if (!api?.getErdSchema) { setErdSchema({ error: 'getErdSchema unavailable — rebuild the app', tables: [], relationships: [], tablesWithoutForeignKeys: [], totalColumns: 0, generatedAt: '' }); return; }
+    setErdLoading(true);
+    try { setErdSchema(await api.getErdSchema()); }
+    catch (e: any) { setErdSchema({ error: e?.message || String(e), tables: [], relationships: [], tablesWithoutForeignKeys: [], totalColumns: 0, generatedAt: '' }); }
+    finally { setErdLoading(false); }
+  }, []);
   const [tableData, setTableData] = useState<any[]>([]);
   const [tableSearch, setTableSearch] = useState('');
   const [tableLoading, setTableLoading] = useState(false);
+  // Counts + file facts for the "what's actually in here" rail. Deliberately
+  // separate from `tableLoading`, which drives the detail pane's spinner.
+  const [countsLoading, setCountsLoading] = useState(true);
+  const [dbStats, setDbStats] = useState({ totalRows: 0, indexCount: 0, fkCount: 0, dbBytes: 0 });
+  // Largest table, so every row-count bar is scaled against the same ceiling and
+  // the visual ranking is meaningful rather than per-row arbitrary.
+  const maxTableRows = useMemo(
+    () => Object.values(tableCounts).reduce((m, n) => Math.max(m, Number(n) || 0), 0),
+    [tableCounts],
+  );
   const [tableDataPage, setTableDataPage] = useState(0);
   const [totalRows, setTotalRows] = useState(0);
   const [recentChanges, setRecentChanges] = useState<any[]>([]);
@@ -84,14 +99,31 @@ export default function DatabasePage() {
       const res = await api.getDatabaseTables();
       if (res?.tables) {
         setTables(res.tables);
-        const counts: Record<string, number> = {};
-        for (const t of res.tables) {
-          try { const c = await api.getTableDataCount(t); counts[t] = c?.total ?? 0; }
-          catch { counts[t] = 0; }
+        setCountsLoading(true);
+        // ONE round trip, not one per table. The old sequential
+        // `for (const t of …) await api.getTableDataCount(t)` was ~206 serial IPC
+        // hops on this database, so counts trickled in for many seconds and the
+        // list looked like it had no data at all.
+        if (api.getDatabaseTableStats) {
+          const stats = await api.getDatabaseTableStats();
+          if (stats?.counts) setTableCounts(stats.counts);
+          setDbStats({
+            totalRows: stats?.totalRows ?? 0,
+            indexCount: stats?.indexCount ?? 0,
+            fkCount: stats?.fkCount ?? 0,
+            dbBytes: stats?.dbBytes ?? 0,
+          });
+        } else {
+          const counts: Record<string, number> = {};
+          for (const t of res.tables) {
+            try { const c = await api.getTableDataCount(t); counts[t] = c?.total ?? 0; }
+            catch { counts[t] = 0; }
+          }
+          setTableCounts(counts);
         }
-        setTableCounts(counts);
+        setCountsLoading(false);
       }
-    } catch {}
+    } catch { setCountsLoading(false); }
   }, [api]);
 
   useEffect(() => { fetchTables(); }, [fetchTables]);
@@ -127,6 +159,7 @@ export default function DatabasePage() {
     if (!selectedTable) return;
     if (activeTab === 'browse') { fetchTableSchema(selectedTable); fetchTableData(selectedTable); }
     if (activeTab === 'changes') fetchRecentChanges(selectedTable);
+    if (activeTab === 'erd' && !erdSchema) fetchErd();
   }, [selectedTable, activeTab, fetchTableSchema, fetchTableData, fetchRecentChanges]);
 
   const filteredTables = useMemo(() => {
@@ -159,6 +192,7 @@ export default function DatabasePage() {
   const tabs = [
     { id: 'browse' as const, label: 'Browse', icon: Table2 },
     { id: 'architecture' as const, label: 'Architecture', icon: Network },
+    { id: 'erd' as const, label: 'ERD', icon: NetworkIcon },
     { id: 'changes' as const, label: 'Recent Changes', icon: Clock },
   ];
 
@@ -181,23 +215,40 @@ export default function DatabasePage() {
             <span className="ml-auto text-[10px] text-zinc-600">{tables.length} tables</span>
           </div>
         </div>
-        <div className="flex gap-4 flex-1 min-h-0 p-5 pt-3">
+        {/* `flex-wrap` lets the stats rail take a full row above the list. The
+            scroll container lives HERE, because the browse wrapper below uses
+            `display:contents` and therefore drops out of the height chain —
+            without it the table list grew to full height and stretched the whole
+            page, so reaching a table meant scrolling to the bottom of Settings
+            rather than scrolling a list. */}
+        <div className="flex flex-wrap gap-4 flex-1 min-h-0 overflow-y-auto p-5 pt-3"
+             style={{ alignContent: 'flex-start' }} data-section="database.panels">
           {activeTab === 'browse' && (
+            // display:contents -> this wrapper adds no box of its own
+            <div data-section="database.browse" className="contents">
             <BrowseTab tablesByCategory={tablesByCategory} tableSearch={tableSearch} setTableSearch={setTableSearch}
               selectedTable={selectedTable} setSelectedTable={setSelectedTable} tableCounts={tableCounts}
               tableSchema={tableSchema} tableData={displayRows} tableLoading={tableLoading}
               totalRows={totalRows} tableDataPage={tableDataPage} hasNextPage={hasNextPage}
               fetchTableData={fetchTableData} exportCSV={exportCSV} fetchRecentChanges={fetchRecentChanges}
-              setActiveTab={setActiveTab} PAGE_SIZE={PAGE_SIZE} />
+              setActiveTab={setActiveTab} PAGE_SIZE={PAGE_SIZE}
+              dbStats={dbStats} countsLoading={countsLoading} tableCount={tables.length}
+              maxTableRows={maxTableRows} />
+            </div>
           )}
           {activeTab === 'architecture' && (
-            <GlassCard className="flex-1 p-4 overflow-hidden h-full min-h-0">
+            <GlassCard className="flex-1 p-4 overflow-hidden h-full min-h-0" data-section="database.architecture">
               <ArchitectureView tables={tables} tableCounts={tableCounts}
                 onSelectTable={(t) => { setSelectedTable(t); setActiveTab('browse'); }} />
             </GlassCard>
           )}
+          {activeTab === 'erd' && (
+            <GlassCard className="flex-1 p-4 overflow-hidden h-full min-h-0 flex flex-col" data-section="database.erd">
+              <ErdCanvas schema={erdSchema} domains={erdDomains} loading={erdLoading} onReload={fetchErd} />
+            </GlassCard>
+          )}
           {activeTab === 'changes' && (
-            <GlassCard className="flex-1 p-4 overflow-auto h-full min-h-0">
+            <GlassCard className="flex-1 p-4 overflow-auto h-full min-h-0" data-section="database.changes">
               <ChangesView tablesByCategory={tablesByCategory} tableSearch={tableSearch} setTableSearch={setTableSearch}
                 selectedTable={selectedTable} onSelectTable={setSelectedTable} tableCounts={tableCounts}
                 recentChanges={recentChanges} changesLoading={changesLoading} onFetchChanges={fetchRecentChanges} />
@@ -210,9 +261,15 @@ export default function DatabasePage() {
 }
 
 
-function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTable, setSelectedTable, tableCounts, tableSchema, tableData, tableLoading, totalRows, tableDataPage, hasNextPage, fetchTableData, exportCSV, fetchRecentChanges, setActiveTab, PAGE_SIZE }: any) {
+function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTable, setSelectedTable, tableCounts, tableSchema, tableData, tableLoading, totalRows, tableDataPage, hasNextPage, fetchTableData, exportCSV, fetchRecentChanges, setActiveTab, PAGE_SIZE, dbStats, countsLoading, tableCount, maxTableRows }: any) {
+  const accent = 'var(--page-accent)';
   return (
     <>
+      {/* The rail answers "what's in here" before the list asks you to scroll. */}
+      <div className="col-span-full shrink-0">
+        <DatabaseStatsRail stats={dbStats} tableCount={tableCount} counts={tableCounts} loading={countsLoading} />
+      </div>
+
       <GlassCard className="w-64 flex-shrink-0 p-3 h-full min-h-0 flex flex-col">
         <div className="relative mb-2">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
@@ -225,7 +282,8 @@ function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTabl
         <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
           {Object.entries(tablesByCategory).map(([cat, tbls]: [string, string[]]) => (
             <div key={cat}>
-              <div className="flex items-center gap-1.5 px-2 pt-2 pb-0.5">
+              <div className="flex items-center gap-1.5 px-2 pt-2 pb-0.5 sticky top-0 z-10"
+                   style={{ backgroundColor: 'var(--ws-surface)' }}>
                 <span className={`text-[9px] font-semibold uppercase tracking-wider ${TABLE_CATEGORIES[cat]?.color ?? TABLE_CATEGORIES.other.color}`}>
                   {TABLE_CATEGORIES[cat]?.label ?? cat}
                 </span>
@@ -236,14 +294,12 @@ function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTabl
                   className={`w-full text-left px-2.5 py-1 rounded-lg text-xs transition-colors ${
                     selectedTable === table ? 'bg-purple-500/15 text-purple-300' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
                   }`}>
-                  <span className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 truncate">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 min-w-0">
                       <Table2 className="w-3 h-3 flex-shrink-0 opacity-50" />
                       <span className="truncate">{table}</span>
                     </span>
-                    {tableCounts[table] !== undefined && (
-                      <span className="text-[9px] text-zinc-600 ml-1 flex-shrink-0">{tableCounts[table]}</span>
-                    )}
+                    <RowCountBar count={tableCounts[table] ?? 0} max={maxTableRows} accent={accent} />
                   </span>
                 </button>
               ))}
@@ -257,7 +313,7 @@ function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTabl
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold text-white">{selectedTable}</h2>
-                <p className="text-[10px] text-zinc-500 mt-0.5">
+                <p className="text-[10px] text-zinc-500 light:text-zinc-600 mt-0.5">
                   {tableSchema.length} columns · {totalRows.toLocaleString()} rows
                   {totalRows > PAGE_SIZE && ` · page ${tableDataPage + 1} of ${Math.ceil(totalRows / PAGE_SIZE)}`}
                 </p>
@@ -483,22 +539,22 @@ function ArchitectureView({ tables, tableCounts, onSelectTable }: {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div>
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Network className="w-4 h-4 text-purple-400" /> Database Architecture
+          <h3 className="text-sm font-semibold text-zinc-800 light:text-zinc-900 flex items-center gap-2">
+            <Network className="w-4 h-4 text-purple-500 light:text-purple-700" /> Database Architecture
           </h3>
-          <p className="text-[10px] text-zinc-500 mt-0.5">
+          <p className="text-[10px] text-zinc-500 light:text-zinc-600 mt-0.5">
             {tables.length} tables · {ARCH_GROUPS.length} domains · {fkEdges.length} relationships · scroll to zoom, drag to pan
             {fkLoading && <span className="ml-2 text-amber-500/70 animate-pulse">loading FKs...</span>}
           </p>
         </div>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setZoom(z => Math.min(2, z + 0.15))} className="w-7 h-7 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-xs text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center">+</button>
-          <span className="text-[10px] text-zinc-600 w-10 text-center font-mono">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.max(0.15, z - 0.15))} className="w-7 h-7 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-xs text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center">-</button>
-          <button onClick={() => { setZoom(fitScale); setPan({ ...fitPan }); }} className="px-2.5 h-7 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-[10px] text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors">Fit</button>
+          <button onClick={() => setZoom(z => Math.min(2, z + 0.15))} className="w-7 h-7 rounded-lg bg-zinc-800/60 light:bg-white border border-zinc-700/50 light:border-zinc-300 text-xs text-zinc-400 light:text-zinc-700 hover:text-white light:hover:text-zinc-900 hover:border-zinc-600 light:hover:border-zinc-400 transition-colors flex items-center justify-center">+</button>
+          <span className="text-[10px] text-zinc-600 light:text-zinc-500 w-10 text-center font-mono">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(z => Math.max(0.15, z - 0.15))} className="w-7 h-7 rounded-lg bg-zinc-800/60 light:bg-white border border-zinc-700/50 light:border-zinc-300 text-xs text-zinc-400 light:text-zinc-700 hover:text-white light:hover:text-zinc-900 hover:border-zinc-600 light:hover:border-zinc-400 transition-colors flex items-center justify-center">-</button>
+          <button onClick={() => { setZoom(fitScale); setPan({ ...fitPan }); }} className="px-2.5 h-7 rounded-lg bg-zinc-800/60 light:bg-white border border-zinc-700/50 light:border-zinc-300 text-[10px] text-zinc-500 light:text-zinc-600 hover:text-white light:hover:text-zinc-900 hover:border-zinc-600 light:hover:border-zinc-400 transition-colors">Fit</button>
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-hidden rounded-xl border border-zinc-800/50 relative" style={{ cursor: dragging ? 'grabbing' : 'grab', background: 'linear-gradient(135deg, #08080c 0%, #0c0c14 50%, #0a0a10 100%)', minHeight: '340px' }}>
+      <div ref={containerRef} className="flex-1 overflow-hidden rounded-xl border border-zinc-800/50 relative" style={{ cursor: dragging ? 'grabbing' : 'grab', background: 'var(--arch-canvas)', minHeight: 'min(68vh, 720px)' }}>
         <svg ref={svgRef} width="100%" height="100%" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={() => setDragging(false)} onMouseLeave={() => { setDragging(false); setHoveredTable(null); setHoveredFk(null); }}>
           <defs>
             {ARCH_GROUPS.map(g => (
@@ -518,11 +574,11 @@ function ArchitectureView({ tables, tableCounts, onSelectTable }: {
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
             <filter id="card-shadow" x="-8%" y="-4%" width="116%" height="112%">
-              <feDropShadow dx="0" dy="3" stdDeviation="8" floodColor="#000" floodOpacity="0.5" />
+              <feDropShadow dx="0" dy="3" stdDeviation="8" floodColor="#000" floodOpacity="0.5" style={{ filter: 'var(--arch-shadow)' }} />
             </filter>
           </defs>
           <pattern id="dot-grid" width="28" height="28" patternUnits="userSpaceOnUse">
-            <circle cx="14" cy="14" r="0.6" fill="#27272a" fillOpacity="0.4" />
+            <circle cx="14" cy="14" r="0.6" fill="var(--arch-grid-dot)" fillOpacity="0.4" />
           </pattern>
           <rect width="200%" height="200%" x="-50%" y="-50%" fill="url(#dot-grid)" opacity="0.5" />
           <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
@@ -532,7 +588,7 @@ function ArchitectureView({ tables, tableCounts, onSelectTable }: {
               if (!a || !b) return null;
               const hl = hoveredTable === edge.from || hoveredTable === edge.to || hoveredFk === i;
               const fromGroup = ARCH_GROUPS.find(g => g.tables.includes(edge.from));
-              const color = hl ? (fromGroup?.color ?? '#a78bfa') : '#52525b';
+              const color = hl ? (fromGroup?.color ?? '#a78bfa') : 'var(--arch-edge)';
               return (
                 <g key={i} onMouseEnter={() => setHoveredFk(i)} onMouseLeave={() => setHoveredFk(null)}>
                   {hl && <path d={fkPath(a, b)} fill="none" stroke={color} strokeWidth={5} opacity={0.2} filter="url(#glow-fk)" />}
@@ -545,7 +601,7 @@ function ArchitectureView({ tables, tableCounts, onSelectTable }: {
             {groups.map(g => (
               <g key={g.id} filter="url(#card-shadow)">
                 {/* Card body with gradient fill */}
-                <rect x={g.x} y={g.y} width={GW} height={g.h} rx={14} fill="#111114" stroke={g.color} strokeWidth={0.8} strokeOpacity={0.25} />
+                <rect x={g.x} y={g.y} width={GW} height={g.h} rx={14} fill="var(--arch-card)" stroke={g.color} strokeWidth={0.8} strokeOpacity={0.25} />
                 <rect x={g.x} y={g.y} width={GW} height={g.h} rx={14} fill={`url(#grad-${g.id})`} />
                 {/* Header bar with gradient */}
                 <rect x={g.x} y={g.y} width={GW} height={GH + 2} rx={14} fill={`url(#hdr-${g.id})`} />
@@ -567,12 +623,12 @@ function ArchitectureView({ tables, tableCounts, onSelectTable }: {
                       {/* Hover background pill */}
                       {hl && <rect x={g.x + 8} y={ty} width={GW - 16} height={RW - 3} rx={7} fill={g.color} fillOpacity={0.1} />}
                       {/* Left accent indicator */}
-                      <circle cx={g.x + 18} cy={ty + RW / 2 - 1.5} r={hl ? 3 : 2} fill={hl ? g.color : '#3f3f46'} opacity={hl ? 1 : 0.45} />
+                      <circle cx={g.x + 18} cy={ty + RW / 2 - 1.5} r={hl ? 3 : 2} fill={hl ? g.color : 'var(--arch-row-dot)'} opacity={hl ? 1 : 0.45} />
                       {/* Table name */}
-                      <text x={g.x + 28} y={ty + 15} fill={hl ? '#f4f4f5' : '#a1a1aa'} fontSize={11} fontFamily="'JetBrains Mono', monospace" fontWeight={hl ? 600 : 400}>{t}</text>
+                      <text x={g.x + 28} y={ty + 15} fill={hl ? 'var(--arch-type-strong)' : 'var(--arch-type)'} fontSize={11} fontFamily="'JetBrains Mono', monospace" fontWeight={hl ? 600 : 400}>{t}</text>
                       {/* Row count */}
                       {cnt > 0 && (
-                        <text x={g.x + GW - 16} y={ty + 15} fill="#52525b" fontSize={9} fontFamily="'JetBrains Mono', monospace" textAnchor="end">{cnt >= 10000 ? `${(cnt / 1000).toFixed(0)}k` : cnt >= 1000 ? `${(cnt / 1000).toFixed(1)}k` : cnt.toLocaleString()}</text>
+                        <text x={g.x + GW - 16} y={ty + 15} fill="var(--arch-type-faint)" fontSize={9} fontFamily="'JetBrains Mono', monospace" textAnchor="end">{cnt >= 10000 ? `${(cnt / 1000).toFixed(0)}k` : cnt >= 1000 ? `${(cnt / 1000).toFixed(1)}k` : cnt.toLocaleString()}</text>
                       )}
                     </g>
                   );
@@ -643,7 +699,7 @@ function ChangesView({ tablesByCategory, tableSearch, setTableSearch, selectedTa
                 const isExpanded = expandedIdx === i;
                 const previewCols = Object.keys(row).slice(0, 4);
                 return (
-                  <div key={i} className="rounded-lg border border-zinc-800/40 bg-zinc-900/30 overflow-hidden">
+                  <div key={i} className="rounded-lg border border-zinc-800/40 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] overflow-hidden">
                     <button onClick={() => setExpandedIdx(isExpanded ? null : i)}
                       className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-zinc-800/20 transition-colors">
                       <div className="flex items-center gap-3">

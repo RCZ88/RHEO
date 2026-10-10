@@ -28,6 +28,21 @@
   --wf-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
     'Liberation Mono', monospace;
 
+  /* Semantic state tokens (LAMINAR §2: emerald = success, rose = error,
+     amber = time/waiting, cyan = workspace signal). Declared here so state
+     colours are referenced, never inlined at each use site. */
+  --wf-ok: #34d399;        /* emerald-400 — success / working */
+  --wf-warn: #fbbf24;      /* amber-400   — needs a human */
+  --wf-err: #f87171;       /* red-400     — error */
+  --wf-err-deep: #7f1d1d;  /* red-900     — error fill */
+  --wf-warn-deep: #a16207; /* yellow-700  — warning fill */
+  --wf-idle: #52525b;      /* zinc-600    — launching / offline */
+  --wf-muted: #8b8b94;     /* chrome muted, slightly warm grey */
+  --wf-desk: #232327;
+  --wf-desk-hi: #2c2c31;
+  --wf-desk-lo: #1c1c1f;
+  --wf-desk-line: #2a2a2f;
+
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -80,7 +95,7 @@
   width: 4px; height: 4px; border-radius: 50%;
   background: currentColor;
 }
-.wf-summary[data-active='1'] { color: #34d399; }
+.wf-summary[data-active='1'] { color: var(--wf-ok); }
 .wf-summary[data-idle='1']  { color: var(--wf-text-dim); }
 .wf-overflow-chip {
   font-size: 8px;
@@ -131,7 +146,7 @@
   position: absolute;
   width: 52px; height: 34px;
   transform: translate(-50%, -100%);
-  border: 1px dashed #232327;
+  border: 1px dashed var(--wf-desk);
   border-radius: 4px;
   opacity: 0.9;
   pointer-events: none;
@@ -154,7 +169,7 @@
 /* ---------------------------------------------------------------- unit  */
 
 .wf-unit {
-  --wf-accent: #a1a1aa;
+  --wf-accent: var(--wf-text);
   --wf-blink: 0s;
   --wf-breathe: 0s;
   --wf-look: 0s;
@@ -229,7 +244,7 @@
 /* neck + chair + torso + arms */
 .wf-neck {
   width: 4px; height: 3px;
-  background: #52525b;
+  background: var(--wf-idle);
 }
 /* posture wrapper: leans the head per state (transition, not keyframe,
    so it never fights the bob/tilt loops on .wf-headbox) */
@@ -254,15 +269,15 @@
   top: 4px; left: 50%;
   transform: translateX(-50%);
   width: 24px; height: 9px;
-  background: #232327;
-  border: 1px solid #2c2c31;
+  background: var(--wf-desk);
+  border: 1px solid var(--wf-desk-hi);
   border-bottom: none;
   border-radius: 4px 4px 0 0;
   z-index: 0;
 }
 .wf-torso {
   width: 18px; height: 12px;
-  background: #3f3f46;
+  background: var(--wf-edge);
   border-radius: 3px 3px 0 0;
   position: relative;
   overflow: hidden;
@@ -277,7 +292,7 @@
 }
 .wf-arm {
   width: 3px; height: 10px;
-  background: #52525b;
+  background: var(--wf-idle);
   border-radius: 1px;
   margin-top: 2px;
   z-index: 1;
@@ -291,7 +306,7 @@
   position: relative;
   width: 22px; height: 3px;
   margin: 0 auto -1px;
-  background: #3f3f46;
+  background: var(--wf-edge);
   border-radius: 1px;
   z-index: 2;
 }
@@ -299,7 +314,7 @@
   position: absolute;
   top: -2px;
   width: 3px; height: 2px;
-  background: #8b8b94;
+  background: var(--wf-muted);
   border-radius: 1px;
 }
 .wf-hand-l { left: 4px; }
@@ -314,8 +329,8 @@
   position: relative;
   width: 50px; height: 7px;
   margin: 0 auto;
-  background: #1c1c1f;
-  border: 1px solid #232327;
+  background: var(--wf-desk-lo);
+  border: 1px solid var(--wf-desk);
   border-top: none;
   border-radius: 0 0 2px 2px;
   display: flex;
@@ -348,7 +363,7 @@
 .wf-bars i {
   display: block;
   height: 1px;
-  background: #52525b;
+  background: var(--wf-idle);
   transform-origin: left center;
   transform: scaleX(0.35);
 }
@@ -360,7 +375,7 @@
 }
 .wf-legs i {
   width: 2px; height: 5px;
-  background: #232327;
+  background: var(--wf-desk);
 }
 
 /* label */
@@ -386,7 +401,7 @@
 .wf-dot {
   width: 4px; height: 4px;
   border-radius: 50%;
-  background: var(--wf-dotcolor, #52525b);
+  background: var(--wf-dotcolor, var(--wf-idle));
   flex: none;
 }
 .wf-word {
@@ -396,8 +411,8 @@
   white-space: nowrap;
 }
 /* restrained but obvious: the word itself carries the signal color */
-.wf-state-error .wf-word { color: #f87171; }
-.wf-state-attention .wf-word { color: #fbbf24; }
+.wf-state-error .wf-word { color: var(--wf-err); }
+.wf-state-attention .wf-word { color: var(--wf-warn); }
 
 /* badge (attention ! / error x / completed check) */
 .wf-badge {
@@ -405,14 +420,14 @@
   top: -7px; right: -8px;
   width: 12px; height: 12px;
   background: var(--wf-bg);
-  border: 1px solid var(--wf-badgecolor, #fbbf24);
+  border: 1px solid var(--wf-badgecolor, var(--wf-warn));
   border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 8px;
   line-height: 1;
-  color: var(--wf-badgecolor, #fbbf24);
+  color: var(--wf-badgecolor, var(--wf-warn));
   z-index: 4;
 }
 
@@ -439,7 +454,7 @@
   transform: translateX(-50%);
   min-width: 96px;
   max-width: 168px;
-  background: #18181b;
+  background: var(--wf-bg);
   border: 1px solid var(--wf-edge);
   border-radius: 6px;
   padding: 5px 7px;
@@ -537,24 +552,47 @@
 /* attention: badge bob + slight head tilt; restrained */
 .wf-state-attention .wf-headbox {
   animation: wf-tilt 2.1s ease-in-out infinite;
-  border-color: #a16207; /* amber-700, muted */
+  border-color: var(--wf-warn-deep); /* amber-700, muted */
 }
 .wf-state-attention .wf-bars i { transform: scaleX(0.3); opacity: 0.6; }
 
 /* error: head swaps to x_, red trim, rare subtle flicker — never a red scene */
 .wf-state-error .wf-headbox {
-  border-color: #7f1d1d; /* red-900 */
+  border-color: var(--wf-err-deep); /* red-900 */
   animation: wf-flicker 3.4s linear infinite;
 }
-.wf-state-error .wf-glyph { color: #f87171; }
-.wf-state-error .wf-cursor { color: #f87171; animation-duration: 0.8s; }
-.wf-state-error .wf-bars i { background: #7f1d1d; transform: scaleX(0.4); }
-.wf-state-error .wf-prefix { color: #f87171; }
+.wf-state-error .wf-glyph { color: var(--wf-err); }
+.wf-state-error .wf-cursor { color: var(--wf-err); animation-duration: 0.8s; }
+.wf-state-error .wf-bars i { background: var(--wf-err-deep); transform: scaleX(0.4); }
+.wf-state-error .wf-prefix { color: var(--wf-err); }
 
 /* completed: calm, check badge, slow cursor */
 .wf-state-completed .wf-cursor { animation-duration: 1.8s; }
-.wf-state-completed .wf-bars i { transform: scaleX(0.5); opacity: 0.55; background: #34d399; }
-.wf-state-completed .wf-prefix { color: #34d399; }
+.wf-state-completed .wf-bars i { transform: scaleX(0.5); opacity: 0.55; background: var(--wf-ok); }
+
+/* ── CLOSED vs OPEN ────────────────────────────────────────────────────────
+   A finished/closed worker must read as "past tense" at a glance, not as a
+   quieter version of "working". Recede it: no idle breathing, desaturated,
+   dimmed. The state badge and label still carry the meaning, so this is a
+   visual hierarchy change, not a removal of information.
+   --wf-page-accent falls back to the workspace signal hue so the selected ring
+   stays visible on a dimmed unit. */
+.wf-state-completed .wf-figure { animation: none; }
+.wf-state-completed .wf-headbox,
+.wf-state-completed .wf-arm { animation: none; }
+.wf-state-completed .wf-unit {
+  filter: saturate(0.35) opacity(0.5);
+  transition: filter 200ms ease, opacity 200ms ease;
+}
+.wf-state-completed:hover,
+.wf-state-completed:focus-within { filter: saturate(0.6) opacity(0.75); }
+.wf-state-completed.wf-selected { filter: saturate(0.8) opacity(0.9); }
+.wf-state-inactive { animation: none; }
+.wf-state-inactive .wf-unit { filter: saturate(0) opacity(0.4); }
+.wf-state-inactive .wf-figure,
+.wf-state-inactive .wf-headbox,
+.wf-state-inactive .wf-arm { animation: none; }
+.wf-state-completed .wf-prefix { color: var(--wf-ok); }
 .wf-state-completed .wf-glyph { opacity: 0.85; }
 
 /* launching: screen booting, strip sweeps */
@@ -596,15 +634,15 @@
   gap: 5px;
   margin: 0 8px 4px;
   padding: 2px 6px 3px;
-  background: #1c1c1f;
-  border: 1px solid #2a2a2f;
+  background: var(--wf-desk-lo);
+  border: 1px solid var(--wf-desk-line);
   border-radius: 4px;
   font-size: 8px;
   letter-spacing: 0.04em;
   color: var(--wf-text);
   pointer-events: none;
 }
-.wf-taskchip .wf-task-mark { color: var(--wf-taskcolor, #71717a); }
+.wf-taskchip .wf-task-mark { color: var(--wf-taskcolor, var(--wf-text-dim)); }
 .wf-taskchip .wf-task-text {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -712,3 +750,16 @@
 .wf-scene[data-reduced='true'] .wf-cursor { opacity: 0.9; }
 .wf-scene[data-reduced='true'] .wf-dots i { opacity: 0.9; }
 .wf-scene[data-reduced='true'] .wf-state-busy .wf-bars i { transform: scaleX(0.7); }
+
+/* Reduced motion must still separate closed from open. Colour and opacity are
+   not motion, so they survive `animation: none !important` above — without this
+   a reduced-motion user loses the only remaining way to tell a finished agent
+   from a running one. */
+.wf-scene[data-reduced='true'] .wf-state-completed .wf-unit,
+.wf-scene[data-reduced='true'] .wf-state-inactive .wf-unit {
+  filter: saturate(0.35) opacity(0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wf-state-completed .wf-unit,
+  .wf-state-inactive .wf-unit { filter: saturate(0.35) opacity(0.5); }
+}

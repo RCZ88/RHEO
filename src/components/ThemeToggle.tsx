@@ -45,7 +45,7 @@ export function ThemeToggle({ className = '', size = 'md' }: ThemeToggleProps) {
         pref === 'light'
           ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 light:bg-amber-50 light:text-amber-700 light:hover:bg-amber-100'
           : pref === 'dark'
-          ? 'bg-zinc-800/60 text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200 light:bg-stone-100 light:text-stone-600 light:hover:bg-stone-200'
+          ? 'bg-zinc-800/60 text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200 light:bg-[var(--ws-surface-raised)] light:text-[var(--text-secondary)] light:hover:bg-stone-200'
           : 'bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 light:bg-violet-50 light:text-violet-700 light:hover:bg-violet-100'
       } ${className}`}
       title={`Theme: ${pref.charAt(0).toUpperCase() + pref.slice(1)} (click to cycle)`}

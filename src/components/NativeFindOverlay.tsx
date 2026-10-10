@@ -64,7 +64,7 @@ mark[${MARK_ATTR}] {
 }
 mark[${MARK_ATTR}][${ACTIVE_ATTR}] {
   background: #fbbf24;
-  color: #18181b;
+  color: var(--find-on-highlight);
   box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.9);
 }
 @keyframes df-find-ring {
@@ -397,6 +397,40 @@ export function NativeFindOverlay({
     return () => window.clearInterval(id);
   }, [open]);
 
+  /**
+   * Clicking a tab switches the mode.
+   *
+   * The three scopes are not an abstract menu — they are "here / this route /
+   * everywhere", and clicking a tab is the user telling the app they have moved
+   * to a different "here". So a tab activation moves the bar to Subpage (the only
+   * scope that can describe where they now are) and re-reads the tab name, so a
+   * result list that was built for the previous tab is not left sitting there
+   * answering the wrong question.
+   *
+   * Only fires while the bar is open, so it never fights a deliberate App-scope
+   * choice the user is not currently looking at.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const TAB = '[role="tab"], [data-state][role="tab"], .tab, nav button, nav a';
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest(TAB);
+      if (!el) return;
+      const name = clean(el.textContent || '');
+      if (!name || name.length > 48) return;
+      window.setTimeout(() => {
+        setSubpageName(detectSubpageName() ?? name);
+        setScope((prev) => (prev === 'subpage' ? prev : 'subpage'));
+        setPageFallback(false);
+        setHits([]);
+        setIndexFailed(false);
+        setWhere('');
+      }, 60);
+    };
+    window.addEventListener('click', onClick, true);
+    return () => window.removeEventListener('click', onClick, true);
+  }, [open]);
+
   // ── Indexed search (Page / App) ──
   useEffect(() => {
     if (!open || live) return;
@@ -419,7 +453,13 @@ export function NativeFindOverlay({
       }
     }, 120);
     return () => { cancelled = true; window.clearTimeout(t); };
-  }, [open, live, query, currentPageId]);
+    // currentPageId is deliberately NOT a dependency. Enter navigates as it
+    // walks the results, and with it here every navigation refetched the query
+    // and called setHitIdx(0) — so stepping forward reset the selection to the
+    // first hit each time (1/26 -> 2/26 -> 1/26) and you could never get past
+    // the second result. Page-scope narrowing happens in `visibleHits`, which
+    // reads currentPageId directly, so the list still tracks the route.
+  }, [open, live, query]);
 
   useEffect(() => {
     if (!open || live) return;
@@ -511,7 +551,19 @@ export function NativeFindOverlay({
     return () => { obs.disconnect(); window.clearTimeout(timer); };
   }, [open, query, effectiveLive, build]);
 
-  // ── Navigation ──
+  // ── Navigation ───────────────────────────────────────────────────────────
+  /**
+   * Move to the next/previous result AND go there — in every scope.
+   *
+   * This used to be browse-only in the indexed scopes (it moved the highlighted
+   * row and nothing else), which is why the arrow keys and the chevron buttons
+   * felt dead there while Enter worked. Chrome's find bar has no "select but do
+   * not go" mode: the selection IS the navigation. So arrows, Enter and the
+   * buttons are now interchangeable, and every one of them lands on the target.
+   *
+   * Hovering a row still only previews (setHitIdx, no navigation) — moving the
+   * mouse should not yank the page around.
+   */
   const step = useCallback((delta: number) => {
     if (!effectiveLive) {
       const total = visibleHits.length;
@@ -521,12 +573,7 @@ export function NativeFindOverlay({
       const hit = visibleHits[next];
       if (!hit) return;
       setWhere(hit.title);
-      if (hit.section && (!currentPageId || hit.pageId === currentPageId)) {
-        window.setTimeout(() => {
-          const el = document.querySelector<HTMLElement>(`[data-section="${CSS.escape(hit.section!)}"]`);
-          (el ?? null)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 40);
-      }
+      onSelect?.(hit);
       return;
     }
     setActive((prev) => {
@@ -534,14 +581,9 @@ export function NativeFindOverlay({
       if (total === 0) return 0;
       return (prev + delta + total) % total;
     });
-  }, [effectiveLive, visibleHits, currentPageId]);
+  }, [effectiveLive, visibleHits, onSelect]);
 
-  const commit = useCallback(() => {
-    if (effectiveLive) return;
-    const hit = visibleHits[hitIdx];
-    if (hit) onSelect?.(hit);
-    onClose();
-  }, [effectiveLive, visibleHits, hitIdx, onSelect, onClose]);
+
 
   // ── Dragging ───────────────────────────────────────────────────────────────
   // Pointer events, and the move/up listeners are attached SYNCHRONOUSLY inside
@@ -642,19 +684,19 @@ export function NativeFindOverlay({
         return;
       }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPlaceOpen(false); onClose(); return; }
-      if (e.key === 'Enter' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (e.key === 'Enter' && e.shiftKey) { step(-1); return; }
-        if (e.key === 'Enter') { effectiveLive ? step(1) : commit(); return; }
-        step(1);
-        return;
-      }
+      if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); return; }
+      // Ctrl/⌘ + arrows are the explicit "jump to next/previous result" pair,
+      // matching the muscle memory of every editor. Checked before the bare
+      // arrows so the modifier is not consumed by them.
+      if (mod && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) { e.preventDefault(); step(1); return; }
+      if (mod && (e.key === 'ArrowUp' || e.key === 'ArrowLeft')) { e.preventDefault(); step(-1); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); step(1); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); step(-1); return; }
       if (e.key === 'Tab') e.preventDefault(); // never tab out of the find field
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, onClose, step, commit, effectiveLive]);
+  }, [open, onClose, step]);
 
   const changeScope = useCallback((next: Scope) => {
     setScope(next);
@@ -713,7 +755,7 @@ export function NativeFindOverlay({
           role="search"
           aria-label="Find in page"
           style={{ userSelect: 'none', touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
-          className={`flex items-center gap-1.5 rounded-[12px] border border-white/10 bg-zinc-900/95 pl-1 pr-1.5 py-1.5 transition-shadow ${
+          className={`flex items-center gap-1.5 rounded-[12px] border border-white/10 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] pl-1 pr-1.5 py-1.5 transition-shadow ${
             dragging ? 'shadow-xl shadow-black/60' : 'shadow-lg shadow-black/40'
           }`}
         >
@@ -778,7 +820,7 @@ export function NativeFindOverlay({
         <div
           onPointerDown={startDrag}
           style={{ userSelect: 'none', touchAction: 'none' }}
-          className={`mt-1 flex items-center gap-1 rounded-[8px] border border-white/5 bg-zinc-900/95 p-0.5 ${
+          className={`mt-1 flex items-center gap-1 rounded-[8px] border border-white/5 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] p-0.5 ${
             panelBelow ? '' : 'flex-row-reverse'
           }`}
         >
@@ -810,7 +852,7 @@ export function NativeFindOverlay({
         {placeOpen && (
           <div
             onPointerDown={(e) => e.stopPropagation()}
-            className={`absolute z-20 rounded-[12px] border border-white/10 bg-zinc-900/97 p-2.5 shadow-xl shadow-black/50 ${
+            className={`absolute z-20 rounded-[12px] border border-white/10 bg-zinc-900/97 light:bg-[var(--ws-surface-raised)] p-2.5 shadow-xl shadow-black/50 ${
               panelBelow ? 'left-0 top-full mt-1.5' : 'left-0 bottom-full mb-1.5'
             }`}
           >
@@ -848,7 +890,7 @@ export function NativeFindOverlay({
           <div
             ref={panelRef}
             style={{ overscrollBehavior: 'contain' }}
-            className={`absolute left-0 right-0 overflow-hidden rounded-[12px] border border-white/10 bg-zinc-900/97 shadow-xl shadow-black/50 ${
+            className={`absolute left-0 right-0 overflow-hidden rounded-[12px] border border-white/10 bg-zinc-900/97 light:bg-[var(--ws-surface-raised)] shadow-xl shadow-black/50 ${
               panelBelow ? 'top-full mt-1.5' : 'bottom-full mb-1.5'
             }`}
           >
@@ -860,7 +902,7 @@ export function NativeFindOverlay({
                 ) : total === 0 ? (
                   <span className="text-zinc-500">No matches here.</span>
                 ) : (
-                  <span className="text-zinc-600">Enter next · Shift+Enter previous</span>
+                  <span className="text-zinc-600">Enter next · Shift+Enter previous · Esc close</span>
                 )}
               </div>
             )}
@@ -899,7 +941,7 @@ export function NativeFindOverlay({
                         key={hit.id}
                         type="button"
                         onMouseEnter={() => setHitIdx(i)}
-                        onClick={() => { setHitIdx(i); onSelect?.(hit); onClose(); }}
+                        onClick={() => { setHitIdx(i); onSelect?.(hit); }}
                         className={`w-full rounded-[8px] px-2 py-1.5 text-left transition-colors ${
                           i === hitIdx ? 'bg-zinc-800/80' : 'hover:bg-zinc-800/40'
                         }`}

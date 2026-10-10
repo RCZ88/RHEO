@@ -74,7 +74,7 @@ export function TransactionModalShell({
 				ref={dialogRef}
 				onClick={(e) => e.stopPropagation()}
 				style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
-				className={`w-full max-w-md rounded-xl border border-zinc-700/50 bg-zinc-900/95 backdrop-blur-xl p-5
+				className={`w-full max-w-md rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5
 					transition-all duration-[240ms] ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}
 					[&_input:focus-visible]:!shadow-none [&_textarea:focus-visible]:!shadow-none [&_button:focus-visible]:!shadow-none [&_select:focus-visible]:!shadow-none`}
 			>

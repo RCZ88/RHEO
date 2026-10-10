@@ -3,7 +3,12 @@
  * Registered via registerFinanceHandlers(db, deps).
  */
 
+import type { RecapStage } from '../../shared/recap';
 import { ipcMain, BrowserWindow } from 'electron';
+// AUTOMATIONS (RESULT.md §3.3 write-hook class). Additive: one line inside the
+// existing closure, NOT an extraction. publishAutomationEvent never throws, so a
+// broken automation can never fail the finance write that triggered it.
+import { publishAutomationEvent } from '../../services/automation/AutomationBus';
 import Database from 'better-sqlite3';
 import * as crypto from 'crypto';
 
@@ -58,7 +63,37 @@ export interface FinanceHandlerDeps {
   RecapStage?: Record<string, string>;
 }
 
-const MAX_FINANCE_ATTEMPTS = 5;
+// Must match the value main.ts had before the handler extraction. It drifted to
+// 5 here, so the UI silently granted 5 lockout attempts instead of 3.
+const MAX_FINANCE_ATTEMPTS = 3;
+
+// Auto-generation: runs at startup + every 6h; idempotent; ONLY the immediate previous calendar month.
+// Exported so main.ts can schedule it. It was module-private while the caller
+// stayed in main.ts, so the recurring monthly-recap job threw
+// "checkMonthlyRecaps is not defined" and never ran.
+export function checkMonthlyRecaps(db: any) {
+  try {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const monthKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+
+    const existing = db.prepare('SELECT id FROM finance_monthly_recaps WHERE month = ?').get(monthKey);
+    if (existing) return;
+
+    const { count } = db.prepare(`
+      SELECT COUNT(*) as count FROM finance_transactions
+      WHERE strftime('%Y-%m', date) = ?
+        AND (is_adjustment IS NULL OR is_adjustment = 0)
+    `).get(monthKey) as any;
+    if (count === 0) return;
+
+    generateRecapInternal(db, monthKey).catch((e: any) =>
+      console.log('[RECAP] auto-gen failed:', e?.message?.slice(0, 120))
+    );
+  } catch (e: any) {
+    console.log('[RECAP] check error:', e?.message?.slice(0, 120));
+  }
+}
 
 export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
   const { db, mainWindow, userPreferences, getLocalDateStr, toInt } = deps;
@@ -96,13 +131,25 @@ export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
   let financeDisplayCurrency = deps.financeDisplayCurrency;
   let financeLockTimeout = deps.financeLockTimeout;
   let financeAttemptsLeft = MAX_FINANCE_ATTEMPTS;
+// Has the launch-time lock decision been made yet? It is made by the first
+  // hydrate that actually has the password hash in hand — NOT at registration,
+  // because `db` is created LATER than `registerFinanceHandlers` runs
+  // (main.ts registers the handlers at ~line 4536 and only opens/migrates the
+  // database further down), so a decision taken at registration reads
+  // "no db, therefore no password" and unlocks the page for the whole session.
+  let lockStateInitialized = false;
+  // Did we actually READ the credential? Distinct from `lockStateInitialized`:
+  // a hydrate can be a no-op (no db yet) without anything being decided.
+  // Callers use this to refuse to conclude "no password" from a blank read —
+  // that false negative is what unlocked Finance on every restart.
+  let lockStateDetermined = false;
 
   // These locals were seeded from deps at registration time and then diverged
   // from the database: anything written here (set/change password, remember
   // device, lock timeout, attempts) never round-trips back after a restart.
   // Re-hydrate the security-critical ones from the DB on every use.
   const hydrateFromDb = () => {
-    if (!db) return;
+    if (!db) return;                       // nothing read; determined stays false
     try {
       const h = db.prepare("SELECT value FROM finance_settings WHERE key = 'password_hash'").get() as any;
       const s = db.prepare("SELECT value FROM finance_settings WHERE key = 'password_salt'").get() as any;
@@ -124,19 +171,61 @@ export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
       const cur = db.prepare("SELECT value FROM finance_settings WHERE key = 'display_currency'").get() as any;
       if (cur?.value) financeDisplayCurrency = cur.value;
 
-      financeLocked = !!financePasswordHash;
-      if (financeRememberDevice && financeRememberDeviceExpiry && Date.now() > financeRememberDeviceExpiry) {
-        financeRememberDevice = false;
+      // `financeLocked` is SESSION state: it flips false on unlock, biometric
+      // and remember-device, and true on the idle timer. It must NOT be
+      // re-derived from "a password exists" on every read — that made any
+      // renderer query (get-security-settings, check-password-setup, unlock,
+      // change-password) instantly re-lock a page the user had just unlocked,
+      // and it made "remember this device" a no-op. The old
+      // `else if (rememberDevice && !financeLocked)` was also unreachable: the
+      // line above it had just set financeLocked = true, so `!financeLocked`
+      // was permanently false.
+      //
+      // So the decision is made EXACTLY ONCE, by the first hydrate that
+      // actually has the credential in hand. It cannot be made at registration:
+      // `db` may still be unset there, so `hydrateFromDb()` returns early and a
+      // decision taken then would be "no password => unlocked" — which is how
+      // the lock screen ended up never appearing again. Deferring it to the
+      // first hydrated read is what makes it correct at any registration order.
+// We have now genuinely read the credential — record that BEFORE any
+      // branch, so callers can distinguish "no password" from "could not read".
+      lockStateDetermined = true;
+
+      if (!financePasswordHash) {
+        financeLocked = false;                       // nothing to protect
+        lockStateInitialized = true;
+      } else if (financeRememberDevice && financeRememberDeviceExpiry && Date.now() > financeRememberDeviceExpiry) {
+        financeRememberDevice = false;               // remembered window elapsed
         financeRememberDeviceExpiry = null;
-        financeLocked = true;
-      } else if (financeRememberDevice && !financeLocked) {
-        financeLocked = false;
+        financeLocked = true;                        // ...so lock, and stay locked
+        lockStateInitialized = true;
+      } else if (!lockStateInitialized) {
+        // First look at a real credential: locked, unless the remembered-device
+        // window is still valid. A password alone MUST mean locked.
+        financeLocked = !(financeRememberDevice && financeRememberDeviceExpiry
+          && Date.now() < financeRememberDeviceExpiry);
+        lockStateInitialized = true;
+        // One line, once per launch, in the MAIN console: the only place the
+        // decision and its inputs are visible. Without it, "the lock is not
+        // showing" has no observable cause.
+        console.log('[finance-lock] decided locked=' + financeLocked
+          + ' hasPassword=' + !!financePasswordHash
+          + ' rememberDevice=' + financeRememberDevice
+          + ' rememberExpiry=' + financeRememberDeviceExpiry);
       }
+      // Every later hydrate leaves financeLocked alone — it owns the in-session
+      // unlock and the idle timer owns the re-lock.
     } catch (e) {
       console.error('[finance] hydrateFromDb failed:', (e as any)?.message || e);
     }
   };
 
+  // Warm the cache from the DB at registration so the FIRST renderer read
+  // already has the credential and `hydrateFromDb` can make the lock decision
+  // with real data. This is only a cache warm — `db` is not guaranteed to be
+  // ready here, and if it isn't, `hydrateFromDb` returns early and the decision
+  // correctly defers to the first hydrated read instead of defaulting to
+  // "unlocked". Do NOT decide the lock state here; that is the whole bug.
   hydrateFromDb();
 
   // Password verification MUST read this module's own financePasswordHash /
@@ -158,8 +247,11 @@ export function registerFinanceHandlers(deps: FinanceHandlerDeps) {
   };
 
 ipcMain.handle('finance:check-password-setup', async () => {
-  hydrateFromDb();
-  return { hasPassword: !!financePasswordHash };
+  // `determined` is load-bearing. Without it the renderer cannot tell "there is
+  // genuinely no password" from "the database was not open yet", and it took
+  // the blank read as first-run — which permanently unlocked the page.
+  const locked = ensureLockDecided();
+  return { hasPassword: !!financePasswordHash, determined: lockStateDetermined, locked };
 });
 ipcMain.handle('finance:unlock', async (_event, password: string) => {
   hydrateFromDb();
@@ -248,6 +340,7 @@ ipcMain.handle('finance:set-password', async (_event, password: string) => {
     financePasswordHash = hash;
     financePasswordSalt = salt;
     financeLocked = true;
+    lockStateInitialized = true; // a fresh/changed credential is an explicit lock
     financeAttemptsLeft = MAX_FINANCE_ATTEMPTS;
     db.prepare("INSERT OR REPLACE INTO finance_settings (key, value) VALUES ('attempts_left', ?)").run(String(financeAttemptsLeft));
     return { success: true };
@@ -272,6 +365,7 @@ ipcMain.handle('finance:change-password', async (_event, currentPassword: string
     financePasswordHash = hash;
     financePasswordSalt = salt;
     financeLocked = true;
+    lockStateInitialized = true; // a changed credential is an explicit lock
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -312,11 +406,13 @@ ipcMain.handle('finance:set-lock-timeout', async (_event, timeoutMs: number) => 
 });
 
 ipcMain.handle('finance:biometric-unlock', async () => {
+  ensureLockDecided();
   financeLocked = false;
   return { success: true };
 });
 
 ipcMain.handle('finance:get-webauthn-credential', async () => {
+  ensureLockDecided();
   if (!db) return { credentialId: null };
   try {
     const row = db.prepare("SELECT value FROM finance_settings WHERE key = 'webauthn_credential_id'").get() as { value: string } | undefined;
@@ -613,30 +709,6 @@ async function generateRecapInternal(db: any, month: string, force = false, onSt
   }
 }
 
-// Auto-generation: runs at startup + every 6h; idempotent; ONLY the immediate previous calendar month.
-function checkMonthlyRecaps(db: any) {
-  try {
-    const now = new Date();
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const monthKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-
-    const existing = db.prepare('SELECT id FROM finance_monthly_recaps WHERE month = ?').get(monthKey);
-    if (existing) return;
-
-    const { count } = db.prepare(`
-      SELECT COUNT(*) as count FROM finance_transactions
-      WHERE strftime('%Y-%m', date) = ?
-        AND (is_adjustment IS NULL OR is_adjustment = 0)
-    `).get(monthKey) as any;
-    if (count === 0) return;
-
-    generateRecapInternal(db, monthKey).catch((e: any) =>
-      console.log('[RECAP] auto-gen failed:', e?.message?.slice(0, 120))
-    );
-  } catch (e: any) {
-    console.log('[RECAP] check error:', e?.message?.slice(0, 120));
-  }
-}
 
 ipcMain.handle('finance:recap-list', async () => {
   if (!db) return { ok: false, error: 'DB not ready' };
@@ -737,9 +809,12 @@ ipcMain.handle('finance:set-auto-recalc', async (_event, enabled: boolean) => {
 });
 
 ipcMain.handle('finance:get-security-settings', async () => {
-  hydrateFromDb();
+  ensureLockDecided();
   return {
     hasPassword: !!financePasswordHash,
+    // The renderer decides the lock from this payload. If we could not read the
+    // credential, say so — it must not fall back to "unlocked".
+    determined: lockStateDetermined,
     locked: financeLocked,
     rememberDevice: financeRememberDevice,
     rememberDeviceExpiry: financeRememberDeviceExpiry,
@@ -748,24 +823,76 @@ ipcMain.handle('finance:get-security-settings', async () => {
   };
 });
 
+// ── THE SINGLE LOCK CHOKE POINT ──────────────────────────────────────────
+// Every handler that reports or evaluates lock state must go through here.
+// Before this existed, `finance:is-locked`, `finance:get-lock-state` and
+// `finance:check-page-access` all read the module variables DIRECTLY and none
+// of them hydrated — so whichever of them the renderer happened to call first
+// could observe the lock state BEFORE it had ever been decided from the
+// database, report `locked: false`, and the renderer would unlock the page and
+// stay unlocked for the whole session. That is the "lock unlocks itself on
+// restart" bug: it was a race between readers, not a wrong rule.
+//
+// Hydrating first means the decision is made before any read can observe it,
+// regardless of which IPC lands first. `alreadyDecided` keeps it to one
+// decision per launch while still re-reading credentials on every call.
+const ensureLockDecided = (): boolean => {
+  hydrateFromDb();
+  if (!lockStateDetermined) {
+    // FAIL CLOSED. We could not read the credential — `db` is not open yet, or
+    // the query threw. Concluding "no password => unlocked" here is EXACTLY the
+    // restart bug: registration runs long before the database is opened, so the
+    // renderer's first `check-password-setup` read returned hasPassword:false,
+    // the renderer took that as "first run, no password", called
+    // setIsLocked(false) and set isFirstTime(true) — and from then on the gate
+    // `if (isLocked && !isFirstTime)` could never show the lock screen again.
+    // Return locked and leave the decision OPEN so a later read, once the db is
+    // really available, decides it properly.
+    return true;
+  }
+  if (!lockStateInitialized) {
+    lockStateInitialized = true;
+    financeLocked = !!financePasswordHash;
+    console.log('[finance-lock] decided locked=' + financeLocked
+      + ' (fallback path) hasPassword=' + !!financePasswordHash);
+  }
+  return financeLocked;
+};
+
 ipcMain.handle('finance:get-lock-state', async () => {
-  return { locked: financeLocked };
+  ensureLockDecided();
+  // The renderer seeds its attempt indicator from this payload and does
+  // `setAttemptsLeft(state.attemptsLeft)`. This handler used to return only
+  // `{ locked }`, so attemptsLeft arrived as `undefined`, `i < undefined` was
+  // false for every segment, and the lock screen painted all three attempts
+  // RED on first paint — before a single wrong password. Return the count.
+  return { locked: financeLocked, attemptsLeft: financeAttemptsLeft };
 });
 
 ipcMain.handle('finance:is-locked', async () => {
-  return { locked: financeLocked };
+  ensureLockDecided();
+  return { locked: financeLocked, attemptsLeft: financeAttemptsLeft };
 });
 
 ipcMain.handle('finance:lock', async () => {
   financeLocked = true;
+  lockStateInitialized = true;
   return { locked: true };
 });
 
 ipcMain.handle('finance:check-page-access', async () => {
+  ensureLockDecided();
+  if (!lockStateDetermined) {
+    // We could not read the credential. The conditions below would all evaluate
+    // against a null hash and return canAccess:true — i.e. report the page
+    // OPEN while the lock is genuinely undecided. Fail closed instead; the
+    // renderer's retry re-asks once the database is really available.
+    return { canAccess: false, requiresSetup: false, reason: 'locked', determined: false };
+  }
   // Check if user can access the finance page
   if (!financePasswordHash) {
     // No password set - allow access
-    return { canAccess: true, requiresSetup: true };
+    return { canAccess: true, requiresSetup: true, determined: true };
   }
   
   if (financeRememberDevice && financeRememberDeviceExpiry && Date.now() < financeRememberDeviceExpiry) {
@@ -806,6 +933,18 @@ ipcMain.handle('finance:create-account', async (_event, data: any) => {
     const encBalance = financeDataKey ? encryptField(enc(data.balance || 0), financeDataKey) : String(data.balance || 0);
     const result = stmt.run(data.name, data.type, data.description || null, data.icon || 'Wallet', data.color || '#10b981', data.currency || 'USD', encBalance);
     const newId = Number(result.lastInsertRowid);
+
+    // ── AUTOMATION WRITE-HOOK ── appended after the mutation, inside the
+    // closure (RESULT.md §3.3). `data.amount` is the DECRYPTED-safe value the
+    // caller passed, so the payload carries real numbers, not ciphertext.
+    publishAutomationEvent('finance.transaction.created', {
+      id: String(newId),
+      name: String(data.description || data.merchant || 'Transaction'),
+      amount: Number(safeAmount),
+      type: String(data.type || 'expense'),
+      category: String(resolvedCategoryId ?? ''),
+      account: String(data.account_id ?? ''),
+    }, { kind: 'finance.transaction', id: String(newId) });
     logAuditEvent('account_created', 'account', newId, `Created account "${data.name}"`, {
       name: data.name, type: data.type, balance: data.balance || 0, currency: data.currency || 'USD'
     });

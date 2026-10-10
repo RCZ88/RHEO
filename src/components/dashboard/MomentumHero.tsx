@@ -13,7 +13,7 @@ interface MomentumHeroProps {
 const trendConfig = {
   up: { icon: ArrowUp, color: 'text-zinc-300', bg: 'bg-white/[0.04]', border: 'border-zinc-700/40', label: 'Up from yesterday' },
   down: { icon: ArrowDown, color: 'text-zinc-300', bg: 'bg-white/[0.04]', border: 'border-zinc-700/40', label: 'Down from yesterday' },
-  stable: { icon: Minus, color: 'text-zinc-400 light:text-stone-500', bg: 'bg-zinc-800/50', border: 'border-zinc-700/30', label: 'Same as yesterday', colorLight: 'text-stone-500', bgLight: 'bg-stone-100', borderLight: 'border-stone-300' },
+  stable: { icon: Minus, color: 'text-zinc-400 light:text-[var(--text-muted)]', bg: 'bg-zinc-800/50', border: 'border-zinc-700/30', label: 'Same as yesterday', colorLight: 'text-stone-500', bgLight: 'bg-stone-100', borderLight: 'border-stone-300' },
 };
 
 function getScoreLabel(score: number) {
@@ -29,7 +29,7 @@ function getScoreColor(score: number) {
   if (score >= 60) return 'text-amber-400/90';
   if (score >= 40) return 'text-amber-400/80';
   if (score >= 20) return 'text-amber-500/70';
-  return 'text-zinc-400 light:text-stone-500';
+  return 'text-zinc-400 light:text-[var(--text-muted)]';
 }
 
 export function MomentumHero({ momentum, loading = false }: MomentumHeroProps) {
@@ -67,9 +67,9 @@ export function MomentumHero({ momentum, loading = false }: MomentumHeroProps) {
     return (
       <div className="mh-root h-full flex flex-col p-5 relative">
         <div className="animate-pulse space-y-3">
-          <div className="h-3 bg-zinc-800 light:bg-stone-200 rounded w-1/3" />
-          <div className="h-8 bg-zinc-800 light:bg-stone-200 rounded w-1/2" />
-          <div className="h-3 bg-zinc-800 light:bg-stone-200 rounded w-2/3" />
+          <div className="h-3 bg-zinc-800 light:bg-[var(--ws-surface-sunken)] rounded w-1/3" />
+          <div className="h-8 bg-zinc-800 light:bg-[var(--ws-surface-sunken)] rounded w-1/2" />
+          <div className="h-3 bg-zinc-800 light:bg-[var(--ws-surface-sunken)] rounded w-2/3" />
         </div>
       </div>
     );

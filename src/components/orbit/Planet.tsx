@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { PlanetData } from './PlanetUtils';
+import { PlanetData, SUN_RENDER_SIZE } from './PlanetUtils';
 
 // ── Sun Component ──
 

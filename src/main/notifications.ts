@@ -290,15 +290,54 @@ export function longGapWelcomeBack(db: Db, gapMinutes: number): void {
 // Background checker — called every 5 min from app.whenReady()
 // ===========================================================================
 
-const TIERS = [
-  { key: '1d', ms: 86400000 },
-  { key: '3h', ms: 10800000 },
-  { key: '1h', ms: 3600000 },
-]
+/* Lead times before a deadline fires a notification. These were hardcoded
+   1 day / 3 hours / 1 hour with no way to change them; the user now picks how
+   far ahead to be warned. Defaults preserve the previous behaviour exactly. */
+export const DEFAULT_TIER_MINUTES = { d1: 1440, h3: 180, h1: 60 };
+
+type TierKey = 'd1' | 'h3' | 'h1';
+
+/** Settings row -> tier minutes. Unknown/partial settings fall back per-tier so
+    one bad value cannot silence every notification. */
+export function resolveTierMinutes(db: Db): Record<TierKey, number> {
+  const d = DEFAULT_TIER_MINUTES;
+  let row: any = null;
+  try {
+    row = db.prepare(`SELECT value FROM app_settings WHERE key = 'reminder_lead_minutes'`).get();
+  } catch { row = null; }
+  let parsed: any = {};
+  if (row?.value) { try { parsed = JSON.parse(row.value); } catch { parsed = {}; } }
+  const num = (v: any, fallback: number) => {
+    const n = Number(v);
+    // 0 is meaningful (notify only at the due moment), so test finiteness not truthiness
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+  return {
+    d1: num(parsed?.d1, d.d1),
+    h3: num(parsed?.h3, d.h3),
+    h1: num(parsed?.h1, d.h1),
+  };
+}
+
+function buildTiers(minutes: Record<TierKey, number>) {
+  return (Object.keys(minutes) as TierKey[])
+    // A tier configured to 0 means "don't warn this far ahead" — emitting a
+    // 0ms tier would fire immediately for every deadline, so drop it.
+    .filter(k => minutes[k] > 0)
+    .map(k => ({ key: k, ms: minutes[k] * 60_000 }))
+    .sort((a, b) => b.ms - a.ms);
+}
+
+const TIER_LABEL: Record<TierKey, string> = {
+  d1: 'Due tomorrow',
+  h3: '3 hours left',
+  h1: '1 hour left',
+};
 
 export function checkDeadlinesAndNotify(db: Db): void {
   if (!db) return;
   try {
+  const now = Date.now()
   const rows = db.prepare(`
     SELECT * FROM deadlines
     WHERE status != 'done'
@@ -328,10 +367,31 @@ export function checkDeadlinesAndNotify(db: Db): void {
 
     // Tiered urgency
     const due = new Date(row.due_date).getTime()
+    if (Number.isFinite(due) && !notified['overdue']) {
+      const overdueBy = now - due;
+      const overdueByDays = Math.floor(overdueBy / 86_400_000);
+      const overdueByHours = Math.floor(overdueBy / 3_600_000);
+      const overdueByMins = Math.floor(overdueBy / 60_000);
+      const late =
+        overdueByDays >= 1 ? `${overdueByDays} day${overdueByDays === 1 ? '' : 's'} late`
+        : overdueByHours >= 1 ? `${overdueByHours} hour${overdueByHours === 1 ? '' : 's'} late`
+        : `${Math.max(1, overdueByMins)} min late`;
+      enqueueNotification(db, {
+        id: `dl-overdue-${row.id}`,
+        kind: 'deadline',
+        title: `Overdue — ${late}`,
+        body: `${row.title}${row.course ? ` · ${row.course}` : ''}`,
+        tier: 'urgent',
+        data: { deadlineId: row.id, type: 'overdue' },
+      });
+      notified['overdue'] = true;
+      db.prepare(`UPDATE deadlines SET notified_at = ? WHERE id = ?`).run(JSON.stringify(notified), row.id);
+      continue;
+    }
     const timeLeft = due - now
-    for (const tier of TIERS) {
+    for (const tier of buildTiers(resolveTierMinutes(db))) {
       if (timeLeft <= tier.ms && timeLeft > 0 && !notified[tier.key]) {
-        const label = tier.key === '1d' ? 'Due tomorrow' : tier.key === '3h' ? '3 hours left' : '1 hour left'
+        const label = TIER_LABEL[tier.key] ?? `${Math.round(tier.ms / 3_600_000)} hours left`
         enqueueNotification(db, {
           id: `dl-${tier.key}-${row.id}`,
           kind: 'deadline',
@@ -346,5 +406,9 @@ export function checkDeadlinesAndNotify(db: Db): void {
       }
     }
   }
-  } catch { }
+  } catch (e) {
+    // A bare `catch { }` is what let an undefined `now` sit here silently,
+    // killing every deadline/reminder notification with no trace. Log it.
+    console.error('[DeskFlow] checkDeadlinesAndNotify failed:', e);
+  }
 }

@@ -259,7 +259,7 @@ export function PhaseCard({
           />
 
           {/* Magnitude ghost number */}
-          <span className="absolute right-5 top-16 font-display text-8xl text-white/10 select-none leading-none">
+          <span className="absolute right-5 top-16 font-display text-8xl text-black/[0.06] dark:text-white/10 select-none leading-none">
             {phase.magnitude}
           </span>
 
@@ -559,7 +559,7 @@ export function PhaseCard({
             <p className="mb-2 text-[10.5px] uppercase tracking-wider text-zinc-600">Long-term goals</p>
             <ul className="space-y-1.5">
               {phaseLtgs.map(ltg => (
-                <li key={ltg.id} className="flex items-center gap-2.5 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-2.5 py-2">
+                <li key={ltg.id} className="flex items-center gap-2.5 rounded-lg border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] px-2.5 py-2">
                   <Ring pct={ltg.progress ?? 0} />
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-zinc-300">{ltg.title}</span>
                 </li>

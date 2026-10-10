@@ -56,7 +56,7 @@ export function PinnedActivities({
 
   return (
     <BlurFade delay={0.05} duration={0.4}>
-      <div className="bg-[rgba(24,24,27,0.80)] rounded-xl p-5 mb-4">
+      <div className="bg-[color-mix(in_srgb,var(--ws-surface)_80%,transparent)] rounded-xl p-5 mb-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <button
@@ -64,14 +64,14 @@ export function PinnedActivities({
             className="flex items-center gap-2 text-left"
           >
             {collapsible && <ChevronRight className={`w-4 h-4 text-zinc-500 transition-transform ${pinnedActivitiesExpanded ? 'rotate-90' : ''}`} />}
-            <span className="text-[13px] font-semibold text-zinc-300 light:text-stone-800">Quick Activities</span>
+            <span className="text-[13px] font-semibold text-zinc-300 light:text-[var(--text-primary)]">Quick Activities</span>
           </button>
           <button
             onClick={() => setPinnedActivitiesEditMode(!pinnedActivitiesEditMode)}
             className={`p-1.5 rounded-lg border transition-colors duration-150 ${
               pinnedActivitiesEditMode
                 ? 'bg-emerald-500/20 border-emerald-500/50'
-                : 'bg-zinc-800 light:bg-stone-100 border-zinc-700 light:border-[var(--ws-border)] hover:border-zinc-600 hover:light:border-[var(--ws-border-strong)]'
+                : 'bg-zinc-800 light:bg-[var(--ws-surface-raised)] border-zinc-700 light:border-[var(--ws-border)] hover:border-zinc-600 hover:light:border-[var(--ws-border-strong)]'
             }`}
           >
             {pinnedActivitiesEditMode ? (
@@ -107,7 +107,7 @@ export function PinnedActivities({
                       className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all duration-150 ${
                         isSelected
                           ? 'border-pink-500/40 bg-pink-500/[0.08] text-pink-400'
-                          : 'bg-[#18181b] light:bg-white border-[#27272a] light:border-[var(--ws-border)] text-zinc-400 light:text-stone-600 hover:border-[#3f3f46] hover:light:border-[var(--ws-border-strong)] hover:bg-[#27272a] hover:light:bg-stone-50'
+                          : 'bg-[#18181b] light:bg-white border-[#27272a] light:border-[var(--ws-border)] text-zinc-400 light:text-[var(--text-secondary)] hover:border-[#3f3f46] hover:light:border-[var(--ws-border-strong)] hover:bg-[#27272a] hover:light:bg-[var(--ws-surface-overlay)]'
                       }`}
                     >
                       {isSelected && externalSessionRunning && (
@@ -200,7 +200,7 @@ export function PinnedActivities({
               >
                 <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[#27272a] light:border-[var(--ws-border)]">
                   <div>
-                    <h3 className="text-base font-semibold text-zinc-100 light:text-stone-900">Pin Activities</h3>
+                    <h3 className="text-base font-semibold text-zinc-100 light:text-[var(--text-primary)]">Pin Activities</h3>
                     <p className="text-xs text-zinc-500 mt-0.5">Select activities to add to dashboard</p>
                   </div>
                   <button
@@ -224,7 +224,7 @@ export function PinnedActivities({
                           setSelectedAddActivities(next);
                         }}
                         className={`w-full px-3 py-3 text-left text-sm rounded-xl flex items-center gap-3 transition-colors duration-150 ${
-                          isSelected ? 'bg-pink-500/10' : 'hover:bg-zinc-800 hover:light:bg-stone-100'
+                          isSelected ? 'bg-pink-500/10' : 'hover:bg-zinc-800 hover:light:bg-[var(--ws-surface-raised)]'
                         }`}
                       >
                         <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors duration-150 ${
@@ -237,7 +237,7 @@ export function PinnedActivities({
                           )}
                         </div>
                         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: activity.color }} />
-                        <span className={`font-medium ${isSelected ? 'text-pink-300' : 'text-zinc-300 light:text-stone-700'}`}>
+                        <span className={`font-medium ${isSelected ? 'text-pink-300' : 'text-zinc-300 light:text-[var(--text-secondary)]'}`}>
                           {activity.name}
                         </span>
                       </button>
@@ -248,7 +248,7 @@ export function PinnedActivities({
                 <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#27272a] light:border-[var(--ws-border)]">
                   <button
                     onClick={() => { setShowAddActivityModal(false); setAddPinnedPicker([]); setSelectedAddActivities(new Set()); }}
-                    className="px-4 py-2 text-sm text-zinc-400 light:text-stone-500 hover:text-zinc-200 hover:light:text-stone-900 hover:bg-zinc-800 hover:light:bg-stone-100 rounded-xl transition-colors duration-150"
+                    className="px-4 py-2 text-sm text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-200 hover:light:text-[var(--text-primary)] hover:bg-zinc-800 hover:light:bg-[var(--ws-surface-raised)] rounded-xl transition-colors duration-150"
                   >
                     Cancel
                   </button>

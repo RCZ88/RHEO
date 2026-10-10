@@ -131,7 +131,7 @@ Rules:
       </GhostButton>
 
       {open && (
-        <div className="absolute top-full right-0 mt-1 z-50 w-80 rounded-xl border border-white/[0.08] bg-zinc-900/95 backdrop-blur-xl shadow-2xl">
+        <div className="absolute top-full right-0 mt-1 z-50 w-80 rounded-xl border border-white/[0.08] bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06]">
             <span className="text-[11px] font-medium text-zinc-200">

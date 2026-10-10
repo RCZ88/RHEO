@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import simFragment from '../../shaders/rd-simulation.glsl?raw'
 import displayFragment from '../../shaders/rd-display.glsl?raw'
 import { RD_PRESETS, type Organism } from '../../lib/rd-presets'
+import { webglSupported } from '@/lib/webgl'
 
 console.log('%c[LivingSubstrate] v3.0 loaded — organisms + morphing', 'color: #fbbf24; font-weight: bold')
 
@@ -280,7 +281,7 @@ export function LivingSubstrate({
 
   const bufferSize = resolution ?? (typeof window !== 'undefined' && window.devicePixelRatio > 1.5 ? 384 : 256)
   const simPasses = speed === 2 ? 2 : 1
-  const showWebGL = enabled && motionEnabled
+  const showWebGL = enabled && motionEnabled && webglSupported()
 
   if (!showWebGL) {
     // Static fallback — brighter to ensure visibility
@@ -290,6 +291,11 @@ export function LivingSubstrate({
           opacity: 0.5,
           background: `radial-gradient(ellipse at 50% 40%, ${accent}40, ${accent}20 50%, transparent 80%)`,
         }} />
+        {!webglSupported() && (
+          <p className="absolute bottom-2 right-3 text-[10px] font-mono text-zinc-700">
+            WebGL unavailable — static substrate
+          </p>
+        )}
       </div>
     )
   }

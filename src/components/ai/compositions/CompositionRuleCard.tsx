@@ -15,7 +15,7 @@ interface CompositionRuleCardProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: 'text-zinc-400 bg-zinc-800',
+  idle: 'text-[var(--text-muted)] bg-[var(--dk-bg-input)]',
   success: 'text-emerald-400 bg-emerald-500/10',
   failure: 'text-red-400 bg-red-500/10',
   error: 'text-red-400 bg-red-500/10',
@@ -34,12 +34,12 @@ export function CompositionRuleCard({ rule, status, isRunning, onEdit, onEvaluat
       variants={compositionExecuteVariants}
       initial="idle"
       animate={isRunning ? 'execute' : 'idle'}
-      className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.50)] rounded-xl p-5"
+      className="bg-[var(--dk-bg-surface)] backdrop-blur-xl border border-[var(--dk-border-default)] rounded-xl p-5"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-medium text-white truncate">{rule.name}</h3>
+            <h3 className="text-sm font-medium text-[var(--text-primary)] truncate">{rule.name}</h3>
             {status && (
               <motion.span variants={statusBadgePulse} animate={reduce ? {} : 'pulse'} className={`text-xs px-2 py-0.5 rounded-full ${sc}`}>
                 {status.last_status}
@@ -47,10 +47,10 @@ export function CompositionRuleCard({ rule, status, isRunning, onEdit, onEvaluat
             )}
             {rule.enabled
               ? <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">Enabled</span>
-              : <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded-full">Disabled</span>}
+              : <span className="text-[10px] text-[var(--text-muted)] bg-[var(--dk-bg-input)] px-1.5 py-0.5 rounded-full">Disabled</span>}
           </div>
-          {rule.description && <p className="text-xs text-zinc-500 mt-1 truncate">{rule.description}</p>}
-          <div className="flex items-center gap-3 mt-2 text-[10px] text-zinc-500">
+          {rule.description && <p className="text-xs text-[var(--text-muted)] mt-1 truncate">{rule.description}</p>}
+          <div className="flex items-center gap-3 mt-2 text-[10px] text-[var(--text-muted)]">
             <span>v{rule.version}</span><span>{rule.category}</span><span>{rule.lifecycle}</span>
             {rule.schedule_cron && <span className="font-mono">{rule.schedule_cron}</span>}
             <span>Priority: {rule.priority}</span>
@@ -62,16 +62,16 @@ export function CompositionRuleCard({ rule, status, isRunning, onEdit, onEvaluat
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-4">
-          <button onClick={onEvaluate} disabled={isRunning} className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="Evaluate">
+          <button onClick={onEvaluate} disabled={isRunning} className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--dk-bg-input)] transition-colors" title="Evaluate">
             {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
           </button>
-          <button onClick={onEdit} className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="Edit">
+          <button onClick={onEdit} className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--dk-bg-input)] transition-colors" title="Edit">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={onHistory} className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="History">
+          <button onClick={onHistory} className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--dk-bg-input)] transition-colors" title="History">
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
-          <button onClick={onDelete} className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete">
+          <button onClick={onDelete} className="p-2 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>

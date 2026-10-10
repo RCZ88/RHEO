@@ -18,7 +18,20 @@ export type TrackedInterval = {
   end: Date;
 };
 
-export function createId(prefix = "id"): string {
+/**
+ * Stable-ish id for a detected gap.
+ *
+ * RESTORED. This was deleted as "dead code" because no other module imported it
+ * — but `detectGaps` calls it internally, twice. The audit that justified the
+ * deletion only looked at cross-file imports and never checked intra-module use,
+ * so removing it turned every `detectGaps()` call into
+ * `ReferenceError: createId is not defined` and took down the whole External page.
+ *
+ * LESSON, written down so it does not repeat: a symbol with zero importers can
+ * still be load-bearing INSIDE its own module. Grep the file itself, not just
+ * the importers, before deleting anything.
+ */
+export function createId(prefix = 'id'): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
 }
 
@@ -112,102 +125,7 @@ export function detectGaps(
   return gaps;
 }
 
-export function mergeAdjacentSegments(segments: GapSegment[]): GapSegment[] {
-  const merged: GapSegment[] = [];
 
-  for (const segment of segments) {
-    if (!segment.activityId || segment.minutes <= 0) continue;
-
-    const last = merged[merged.length - 1];
-
-    if (last && last.activityId === segment.activityId) {
-      last.minutes += segment.minutes;
-    } else {
-      merged.push({ ...segment });
-    }
-  }
-
-  return merged;
-}
-
-/**
- * Scales a composition of segments (built against one reference gap) to fit a
- * different gap's duration, preserving relative proportions. Used by the
- * multi-gap fill flow: the user composes once, every selected gap receives the
- * same relative composition scaled to its own length.
- *
- * Unassigned segments (activityId null) are dropped — they carry no time.
- * Each scaled segment is clamped to a minimum of 1 minute; the rounding
- * remainder is added to the last segment. fillGapWithSegments clips anything
- * that would overshoot a very small gap's end.
- */
-export function scaleSegmentsToGap(
-  segments: GapSegment[],
-  targetSeconds: number
-): GapSegment[] {
-  const active = segments.filter((segment) => segment.activityId);
-  if (!active.length) return [];
-
-  const targetMinutes = Math.max(1, Math.round(targetSeconds / 60));
-  const referenceMinutes = active.reduce(
-    (sum, segment) => sum + Math.max(1, segment.minutes),
-    0
-  );
-  if (referenceMinutes <= 0) {
-    return active.map((segment) => ({ ...segment, minutes: 1 }));
-  }
-
-  let assigned = 0;
-
-  return active.map((segment, index) => {
-    if (index === active.length - 1) {
-      return { ...segment, minutes: Math.max(1, targetMinutes - assigned) };
-    }
-
-    const minutes = Math.max(
-      1,
-      Math.floor((Math.max(1, segment.minutes) * targetMinutes) / referenceMinutes)
-    );
-    assigned += minutes;
-
-    return { ...segment, minutes };
-  });
-}
-
-export async function fillGapWithSegments(
-  gap: Gap,
-  segments: GapSegment[],
-  addExternalTime: (
-    activityId: string,
-    minutes: number,
-    startedAt: string,
-    endedAt: string
-  ) => Promise<void>
-): Promise<void> {
-  const merged = mergeAdjacentSegments(segments);
-  if (!merged.length) return;
-
-  let cursor = new Date(gap.start);
-  const gapEnd = new Date(gap.end);
-
-  for (const segment of merged) {
-    if (!segment.activityId) continue;
-
-    const minutes = Math.max(1, Math.round(segment.minutes));
-    const end = new Date(cursor.getTime() + minutes * 60_000);
-
-    if (end > gapEnd) break;
-
-    await addExternalTime(
-      segment.activityId,
-      minutes,
-      cursor.toISOString(),
-      end.toISOString()
-    );
-
-    cursor = end;
-  }
-}
 
 export function suggestGapActivities(
   gap: Gap,
@@ -257,4 +175,35 @@ export function suggestGapActivities(
     .filter((activity) => !suggested.some((s) => s.id === activity.id));
 
   return [...suggested, ...fallback].slice(0, limit);
+}
+
+/**
+ * Rescale a set of segments to fit a different gap length, keeping their
+ * PROPORTIONS.
+ *
+ * Reinstated because the consolidation that removed `GapFillModal` removed this
+ * with it. Without it, filling a day of gaps means answering the same question
+ * once per gap; with it, one answer covers all of them.
+ *
+ * Minutes are floored at 1 and the remainder lands on the last slot so the
+ * segments always add up to exactly the target — a scaled set that came up short
+ * would leave the tail of every gap unfilled and re-appear in gap detection.
+ */
+export function scaleSegmentsToGap(segments: GapSegment[], targetSeconds: number): GapSegment[] {
+  const active = segments.filter((segment) => segment.activityId);
+  if (!active.length) return [];
+
+  const targetMinutes = Math.max(1, Math.round(targetSeconds / 60));
+  const referenceMinutes = active.reduce((sum, segment) => sum + Math.max(1, segment.minutes), 0);
+  if (referenceMinutes <= 0) return active.map((segment) => ({ ...segment, minutes: 1 }));
+
+  let assigned = 0;
+  return active.map((segment, index) => {
+    if (index === active.length - 1) {
+      return { ...segment, minutes: Math.max(1, targetMinutes - assigned) };
+    }
+    const minutes = Math.max(1, Math.floor((Math.max(1, segment.minutes) * targetMinutes) / referenceMinutes));
+    assigned += minutes;
+    return { ...segment, minutes };
+  });
 }

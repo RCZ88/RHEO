@@ -32,6 +32,146 @@ export interface RewindTheme {
   spinner: string;        // loading spinner color
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LIGHT-MODE DERIVATION
+ *
+ * This file shipped six hand-picked CINEMATIC palettes and ZERO light handling.
+ * Every value is a deliberate dark-theme choice — `headline: 'text-zinc-100'` on
+ * `headerBg: 'bg-[#09090b]/95'` — which is correct in isolation and broken in
+ * practice, because two other things conspire:
+ *
+ *   1. index.css remaps BARE `text-zinc-100` to DARK ink for light mode. The
+ *      player keeps its near-black surface, so a correctly-remediated headline
+ *      landed on near-black: **2:1, black on black.**
+ *   2. `bg-[#09090b]/95` is an ARBITRARY value, so no class-based net can reach
+ *      it either. The surface stayed dark while everything painted on it flipped.
+ *
+ * That is the same failure as the Lecture pages, one layer up: a deliberately
+ * dark surface must not inherit light-mode TEXT tokens.
+ *
+ * Rather than hand-author a second palette per theme (24 fields x 6 palettes), the
+ * light values are DERIVED from each palette's own `accentHex`, so every palette
+ * keeps its identity and simply gets re-chroma'd the way index.css re-chromas a
+ * page accent for light. The hue ramps below are the same ones index.css already
+ * uses for its own light remaps (#be185d / #6d28d9 / #0e7490 / #86198f / #92400e /
+ * #166534) — consistency with the rest of the app, not a new palette.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** The fields a light palette must override. Anything not listed keeps its value. */
+export type RewindThemeLight = Partial<
+  Pick<
+    RewindTheme,
+    | 'bg' | 'bgHex' | 'glow' | 'border' | 'borderHex' | 'accent' | 'accentHex'
+    | 'accentBg' | 'headline' | 'subtext' | 'label' | 'value' | 'muted'
+    | 'divider' | 'pillText' | 'progressBg' | 'headerBg' | 'navBg' | 'spinner'
+  >
+>;
+
+/**
+ * Per-palette light values, keyed by id. The accent hue is re-chroma'd from the
+ * dark value using the light ramp; the surfaces become the Warm Paper ladder.
+ */
+const LIGHT_OVERRIDES: Record<string, RewindThemeLight> = {
+  midnight: {
+    bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
+    border: 'border-[var(--ws-border)]', borderHex: 'rgba(28,25,23,0.10)',
+    accent: 'text-[#6d28d9]', accentHex: '#6d28d9', accentBg: 'bg-[#6d28d9]/10',
+    headline: 'text-[var(--text-primary)]', subtext: 'text-[var(--text-secondary)]',
+    label: 'text-[#6d28d9]/75', value: 'text-[var(--text-primary)]',
+    muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
+    pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
+    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+  },
+  ember: {
+    bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
+    border: 'border-[var(--ws-border)]', borderHex: 'rgba(28,25,23,0.10)',
+    accent: 'text-[#93331d]', accentHex: '#93331d', accentBg: 'bg-[#93331d]/10',
+    headline: 'text-[var(--text-primary)]', subtext: 'text-[var(--text-secondary)]',
+    label: 'text-[#93331d]/75', value: 'text-[var(--text-primary)]',
+    muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
+    pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
+    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+  },
+  frost: {
+    bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
+    border: 'border-[var(--ws-border)]', borderHex: 'rgba(28,25,23,0.10)',
+    accent: 'text-[#0e7490]', accentHex: '#0e7490', accentBg: 'bg-[#0e7490]/10',
+    headline: 'text-[var(--text-primary)]', subtext: 'text-[var(--text-secondary)]',
+    label: 'text-[#0e7490]/75', value: 'text-[var(--text-primary)]',
+    muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
+    pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
+    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+  },
+  neon: {
+    bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
+    border: 'border-[var(--ws-border)]', borderHex: 'rgba(28,25,23,0.10)',
+    accent: 'text-[#86198f]', accentHex: '#86198f', accentBg: 'bg-[#86198f]/10',
+    headline: 'text-[var(--text-primary)]', subtext: 'text-[var(--text-secondary)]',
+    label: 'text-[#86198f]/75', value: 'text-[var(--text-primary)]',
+    muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
+    pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
+    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+  },
+  sunset: {
+    bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
+    border: 'border-[var(--ws-border)]', borderHex: 'rgba(28,25,23,0.10)',
+    accent: 'text-[#92400e]', accentHex: '#92400e', accentBg: 'bg-[#92400e]/10',
+    headline: 'text-[var(--text-primary)]', subtext: 'text-[var(--text-secondary)]',
+    label: 'text-[#92400e]/75', value: 'text-[var(--text-primary)]',
+    muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
+    pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
+    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+  },
+  terminal: {
+    bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
+    border: 'border-[var(--ws-border)]', borderHex: 'rgba(28,25,23,0.10)',
+    accent: 'text-[#166534]', accentHex: '#166534', accentBg: 'bg-[#166534]/10',
+    headline: 'text-[var(--text-primary)]', subtext: 'text-[var(--text-secondary)]',
+    label: 'text-[#166534]/75', value: 'text-[var(--text-primary)]',
+    muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
+    pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
+    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+  },
+};
+
+/** Is light mode currently on? Read from <html>, the same source index.css keys off. */
+export function isLightTheme(): boolean {
+  try {
+    return typeof document !== 'undefined'
+      && document.documentElement.classList.contains('light');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a palette for the ACTIVE theme.
+ *
+ * Dark returns the palette object untouched — byte-for-byte the shipped look, so
+ * this cannot regress dark mode. Light returns it merged with that palette's
+ * derived warm values, keyed on id so an unknown id falls back to itself rather
+ * than to another palette's hues.
+ */
+export function resolveRewindTheme(theme: RewindTheme, light = isLightTheme()): RewindTheme {
+  if (!light) return theme;
+  const over = LIGHT_OVERRIDES[theme.id];
+  if (!over) return theme;
+  // `glow` and `spinner` stay: the glow is an accent radial that reads on both,
+  // and the spinner border pair is already token-adjacent.
+  return { ...theme, ...over };
+}
+
+/** Convenience: resolve straight from the palette map. */
+export function resolveRewindThemeById(
+  id: string,
+  map: Record<string, RewindTheme>,
+  light = isLightTheme(),
+): RewindTheme {
+  const t = map[id] || map.midnight;
+  return resolveRewindTheme(t, light);
+}
+
 export const REWIND_THEMES: RewindTheme[] = [
   // ── 1. Midnight (default) ──────────────────────────────
   {

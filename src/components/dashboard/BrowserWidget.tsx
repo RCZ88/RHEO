@@ -68,7 +68,7 @@ export function BrowserWidget({ stats, loading, error }: BrowserWidgetProps) {
 
       <div className="grid grid-cols-3 gap-2">
         {topSites.slice(0, 3).map((site, i) => (
-          <div key={site.domain} className="p-2 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
+          <div key={site.domain} className="p-2 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
             <div className="flex items-center gap-1 mb-1">
               <span className="text-[10px] text-zinc-500">{i + 1}</span>
               <span className="text-[11px] text-zinc-300 truncate">{site.domain}</span>

@@ -40,7 +40,7 @@ export default function Dashboard() {
             <h1 className="mt-3 font-display text-3xl sm:text-4xl font-bold text-white tracking-tight leading-tight">Turn heavy slides into<br /><span className="bg-gradient-to-r from-amber-300 via-orange-400 to-violet-400 bg-clip-text text-transparent">lightweight AI prompts.</span></h1>
             <p className="mt-3 text-sm text-white/60 max-w-xl leading-relaxed">SlideMind digests PPTX decks, image regions, lecture audio and YouTube pages into compact, per-slide question packs — so free AI sites understand exactly what you mean without burning tokens.</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link to="/lecture/decks" className="inline-flex items-center gap-2 rounded-xl bg-white text-black text-sm font-semibold px-4 py-2.5 hover:bg-amber-200 transition-colors">Ingest a deck <ArrowRight className="w-4 h-4" /></Link>
+              <Link to="/lecture/ingest" className="inline-flex items-center gap-2 rounded-xl bg-white text-black text-sm font-semibold px-4 py-2.5 hover:bg-amber-200 transition-colors">Ingest a file <ArrowRight className="w-4 h-4" /></Link>
               <Link to="/lecture/prompts" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 text-white text-sm font-semibold px-4 py-2.5 hover:bg-white/10 transition-colors">Open Prompt Forge</Link>
             </div>
           </div>
@@ -85,9 +85,9 @@ export default function Dashboard() {
       </div>
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-          <div className="flex items-center justify-between mb-3"><h3 className="font-display font-semibold text-white">Recent decks</h3><Link to="/lecture/decks" className="text-xs text-amber-300 hover:underline">View all</Link></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-display font-semibold text-white">Recent documents</h3><Link to="/lecture/ingest" className="text-xs text-amber-300 hover:underline">View all</Link></div>
           <div className="space-y-2">
-            {recent.length === 0 && <div className="text-xs text-white/40">No decks yet — ingest your first PPTX.</div>}
+            {recent.length === 0 && <div className="text-xs text-white/40">No documents yet — ingest a PPTX or PDF.</div>}
             {recent.map(d => (
               <Link key={d.id} to={'/lecture/decks/' + d.id} className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.07] p-3 transition-colors">
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500/40 to-indigo-600/40 grid place-items-center text-xs font-bold text-white">{d.slide_count}</div>

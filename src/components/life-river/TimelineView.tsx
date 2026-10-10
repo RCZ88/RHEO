@@ -108,7 +108,7 @@ export function TimelineView({ phases, onJump }: TimelineViewProps) {
       <div className="relative">
         <div
           data-timeline-track
-          className="relative flex h-24 min-h-[96px] gap-1 overflow-x-auto ws-scroll rounded-lg border border-zinc-800/60 bg-zinc-900/30 p-2.5 snap-x snap-proximity"
+          className="relative flex h-24 min-h-[96px] gap-1 overflow-x-auto ws-scroll rounded-lg border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-2.5 snap-x snap-proximity"
         >
           {zoom === 'year' && (
             <div className="pointer-events-none absolute inset-0">

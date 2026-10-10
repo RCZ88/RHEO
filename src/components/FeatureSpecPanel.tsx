@@ -149,7 +149,7 @@ function FeatureCard({ spec, defaultExpanded }: { spec: FeatureSpec; defaultExpa
   const statusClass = STATUS_COLORS[spec.status] || '';
 
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 overflow-hidden">
+    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors text-left"
@@ -270,7 +270,7 @@ function FeatureCard({ spec, defaultExpanded }: { spec: FeatureSpec; defaultExpa
 function StructureCard({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(true);
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 overflow-hidden">
+    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-4 py-3 hover:bg-zinc-800/30 transition-colors text-left"
@@ -485,7 +485,7 @@ export default function FeatureSpecPanel({ projectPath }: { projectPath?: string
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search features, components..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
           />
         </div>
 

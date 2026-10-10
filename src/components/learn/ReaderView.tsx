@@ -52,10 +52,19 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
   tutorConfig?: { provider: string; model: string } | null;
   onPersistIllustration?: (blockId: string, imagePath: string) => void;
 }) {
-  if (!selectedNode && lesson.nodes.length > 0) {
-    onSelectNode(lesson.nodes[0].id);
-    return null;
-  }
+  // Select the first node when the reader opens without one.
+  //
+  // This MUST NOT be a render-phase `onSelectNode(...)` behind an early
+  // `return null`: that path registers ZERO hooks on the first render and ~20 on
+  // every render after it, which is a conditional-hook-order violation. It also
+  // updated the parent while rendering this component. Every hook below is
+  // therefore unconditional, and the JSX already handles a missing
+  // `currentNode` (it falls back to the lesson title and skips node content).
+  useEffect(() => {
+    if (!selectedNode && lesson.nodes.length > 0) {
+      onSelectNode(lesson.nodes[0].id);
+    }
+  }, [selectedNode, lesson.nodes, onSelectNode]);
 
   // Scroll to top when node changes
   useEffect(() => {
@@ -208,7 +217,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
       <div className="lg:hidden border-b border-zinc-800">
         <button
           onClick={() => setMobileOutlineOpen(!mobileOutlineOpen)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-300 bg-zinc-900/50"
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-300 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]"
         >
           <span className="truncate">{currentNode?.title || lesson.lesson.title}</span>
           <span className="text-zinc-500 text-xs">{mobileOutlineOpen ? '▲' : '▼'}</span>
@@ -221,7 +230,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden border-t border-zinc-800"
             >
-              <div className="p-2 space-y-0.5 bg-zinc-900/30">
+              <div className="p-2 space-y-0.5 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
                 {lesson.nodes.map((node) => {
                   const nodeProgress = node.progress;
                   const level = nodeProgress?.level || 'L0' as MasteryLevel;
@@ -391,7 +400,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
                 </button>
 
                 {/* View toggle: grid | graph */}
-                <div className="flex items-center rounded-lg bg-zinc-900/60 border border-zinc-800 p-0.5">
+                <div className="flex items-center rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 p-0.5">
                   <button
                     onClick={() => onSetGraphView('grid')}
                     className={`p-1 rounded transition ${graphView === 'grid' ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -437,7 +446,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
                         </button>
                       </div>
                     ) : (
-                      <pre className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 text-[11px] font-mono leading-relaxed text-zinc-400 whitespace-pre overflow-x-auto max-h-[70vh] overflow-y-auto">
+                      <pre className="p-4 rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-[11px] font-mono leading-relaxed text-zinc-400 whitespace-pre overflow-x-auto max-h-[70vh] overflow-y-auto">
                         {sourceText}
                       </pre>
                     )}
@@ -527,14 +536,25 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
                       </motion.div>
                     </AnimatePresence>
                   ) : (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3 }}
-                      className="flex items-center justify-center h-full text-zinc-600 text-sm"
+                    // No node selected yet. This is normally TRANSIENT — the
+                    // effect at the top of this component selects the first node
+                    // on the next tick — so it is a loading state, not an empty
+                    // state. An instruction ("Select a node from the outline")
+                    // here told the user to do something the app was already
+                    // doing for them. Skeleton matches the reader's shape.
+                    <div
+                      className="flex flex-col gap-4 h-full p-1"
+                      aria-busy="true"
+                      aria-label="Loading lesson"
                     >
-                      Select a node from the outline
-                    </motion.div>
+                      <div className="h-5 w-2/5 rounded bg-zinc-800/70 animate-pulse" />
+                      <div className="h-3 w-full rounded bg-zinc-800/50 animate-pulse" />
+                      <div className="h-3 w-11/12 rounded bg-zinc-800/50 animate-pulse" />
+                      <div className="h-3 w-4/5 rounded bg-zinc-800/50 animate-pulse" />
+                      <div className="mt-3 h-40 w-full rounded-xl bg-zinc-800/40 animate-pulse" />
+                      <div className="h-3 w-full rounded bg-zinc-800/50 animate-pulse" />
+                      <div className="h-3 w-10/12 rounded bg-zinc-800/50 animate-pulse" />
+                    </div>
                   )}
                 </div>
               ) : graphView !== 'graph' && readerTab === 'recall' ? (
@@ -642,7 +662,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
             animate={{ width: 320, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="shrink-0 border-l border-zinc-800 bg-zinc-900/30 flex flex-col overflow-hidden"
+            className="shrink-0 border-l border-zinc-800 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] flex flex-col overflow-hidden"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
               <span className="text-sm font-medium text-zinc-300 flex items-center gap-2">
@@ -673,7 +693,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
         {/* Explain with Image Modal */}
         {(explainImage.loading || explainImage.result || explainImage.error) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setExplainImage({ loading: false })}>
-            <div className="bg-zinc-900 border border-zinc-700/50 rounded-xl max-w-lg w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl max-w-lg w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
                 <div className="flex items-center gap-2">
@@ -754,7 +774,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
           animate={{ width: 320, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="shrink-0 border-l border-zinc-800 bg-zinc-900/30 flex flex-col overflow-hidden"
+          className="shrink-0 border-l border-zinc-800 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] flex flex-col overflow-hidden"
         >
           <NodeSourcesPanel
             nodeId={currentNode.id}

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Tooltip } from '../ui/tooltip';
 
-type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'ai-gateway' | 'context' | 'handbook';
+type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'context';
 
 interface GroupDef {
   key: GroupKey;
@@ -27,9 +27,7 @@ const GROUPS: GroupDef[] = [
   { key: 'insights',  icon: PieChart,   label: 'Insights',  accent: 'purple',  accentHex: '#a855f7' },
   { key: 'studio',    icon: Sparkles,   label: 'Studio',    accent: 'indigo',  accentHex: '#818cf8' },
   { key: 'conductor', icon: Bot,        label: 'Conductor', accent: 'rose',    accentHex: '#fb7185' },
-  { key: 'ai-gateway', icon: Globe,     label: 'AI Gateway', accent: 'cyan',   accentHex: '#22d3ee' },
   { key: 'context',   icon: Settings2,  label: 'Context',   accent: 'amber',   accentHex: '#fbbf24' },
-  { key: 'handbook',  icon: Terminal,   label: 'Handbook',  accent: 'emerald', accentHex: '#10b981' },
 ];
 
 const ACCENT_ACTIVE: Record<string, string> = {
@@ -75,7 +73,7 @@ export function WorkspaceGroupRail({
   activeGroup, onGroupChange, fileChangedPulse,
 }: WorkspaceGroupRailProps) {
   return (
-    <nav className="flex flex-col items-center w-14 shrink-0 bg-zinc-950 border-r border-zinc-800/40 py-2 gap-1">
+    <nav className="flex flex-col items-center w-14 shrink-0 bg-zinc-950 light:bg-[var(--ws-surface)] border-r border-zinc-800/40 py-2 gap-1">
       {GROUPS.map((g) => {
         const isActive = activeGroup === g.key;
         const Icon = g.icon;

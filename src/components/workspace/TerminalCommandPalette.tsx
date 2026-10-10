@@ -78,7 +78,7 @@ export function TerminalCommandPalette({ isOpen, onClose, onExecute }: TerminalC
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4" onClick={onClose}>
       <div
-        className="max-w-2xl mx-auto rounded-xl bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/60 shadow-2xl overflow-hidden"
+        className="max-w-2xl mx-auto rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/60 shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input Line */}

@@ -219,7 +219,7 @@ export function FeatureStudioPage() {
 
               {/* Video Library sidebar (if videos loaded) */}
               {transcripts.length > 0 && (
-                <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-4 overflow-auto">
+                <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-4 overflow-auto">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-semibold text-zinc-300">Videos ({transcripts.length})</span>
                     <label className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors">
@@ -240,7 +240,7 @@ export function FeatureStudioPage() {
               )}
 
               {/* Main area */}
-              <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-6">
+              <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-6">
                 {transcripts.length === 0 ? (
                   /* Empty state — upload first */
                   <div className="flex flex-col items-center justify-center py-16">
@@ -331,7 +331,7 @@ export function FeatureStudioPage() {
         {/* ═══════════════ TRANSCRIPT VIEW ═══════════════ */}
         {view === 'transcript' && activeTranscript && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 grid gap-4 min-h-0" style={{ gridTemplateColumns: '1fr 320px' }}>
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-5 overflow-auto min-h-0">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 overflow-auto min-h-0">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-zinc-300">Transcript — {activeTranscript.name}</h3>
                 <div className="flex gap-2">
@@ -355,7 +355,7 @@ export function FeatureStudioPage() {
                 })}
               </div>
             </div>
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-4 overflow-auto">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-4 overflow-auto">
               <h3 className="text-xs font-semibold text-zinc-300 mb-3">Actions</h3>
               <div className="space-y-2">
                 <button onClick={() => startBridge('cutplan')} className="w-full text-left rounded-lg border border-zinc-700/30 bg-zinc-800/30 p-3 hover:border-[#ec4899]/30 transition-all min-h-[44px]">
@@ -379,7 +379,7 @@ export function FeatureStudioPage() {
         {view === 'bridge' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 grid gap-4 min-h-0" style={{ gridTemplateColumns: '1fr 1fr' }}>
             {/* Left: Prompt + paste */}
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-5 flex flex-col min-h-0">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 flex flex-col min-h-0">
               <div className="mb-3 shrink-0">
                 <h2 className="text-sm font-medium">AI Bridge — {bridgeMode === 'cutplan' ? 'Cut Planner' : 'Scene DSL'}</h2>
                 <p className="mt-1 text-[10px] text-zinc-500">Copy the prompt → paste into any AI → paste the response back.</p>
@@ -399,7 +399,7 @@ export function FeatureStudioPage() {
               <AnimatePresence mode="wait">
                 {bridgeStep === 'prompt' && (
                   <motion.div key="p" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950/60 p-3 overflow-auto">
+                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 overflow-auto">
                       <pre className="text-[9px] text-zinc-500 leading-relaxed whitespace-pre-wrap font-mono">{activePrompt.slice(0, 2000)}{activePrompt.length > 2000 ? '\n\n...' : ''}</pre>
                     </div>
                     <div className="flex items-center justify-between mt-2 shrink-0">
@@ -417,7 +417,7 @@ export function FeatureStudioPage() {
                 {bridgeStep === 'paste' && (
                   <motion.div key="pa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
                     <textarea value={pastedResponse} onChange={e => setPastedResponse(e.target.value)} placeholder="Paste the AI's JSON response here..."
-                      className="flex-1 min-h-0 w-full resize-none rounded-lg border border-zinc-700/30 bg-zinc-950/60 p-3 font-mono text-[10px] leading-relaxed text-zinc-300 placeholder-zinc-600 outline-none transition-all duration-150 focus:border-[#ec4899]/60 focus:ring-2 focus:ring-[#ec4899]/20" />
+                      className="flex-1 min-h-0 w-full resize-none rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 font-mono text-[10px] leading-relaxed text-zinc-300 placeholder-zinc-600 outline-none transition-all duration-150 focus:border-[#ec4899]/60 focus:ring-2 focus:ring-[#ec4899]/20" />
                     {bridgeError && <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/[0.08] p-2.5 text-[10px] text-red-300" role="alert"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> {bridgeError}</div>}
                     <div className="flex gap-2 mt-2 shrink-0">
                       <motion.button whileTap={{ scale: 0.95 }} onClick={validateResponse} disabled={!pastedResponse.trim()}
@@ -428,7 +428,7 @@ export function FeatureStudioPage() {
                 )}
                 {bridgeStep === 'validate' && (
                   <motion.div key="v" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950/60 p-3 overflow-auto">
+                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 overflow-auto">
                       <ValidationChecklist checks={bridgeChecks} />
                     </div>
                     {allPassed(bridgeChecks) ? (
@@ -444,10 +444,10 @@ export function FeatureStudioPage() {
               </AnimatePresence>
             </div>
             {/* Right: Result preview */}
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-5 flex flex-col min-h-0 overflow-auto">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 flex flex-col min-h-0 overflow-auto">
               <h2 className="text-sm font-medium mb-3">Result Preview</h2>
               {!cutPlan && !sceneDsl ? (
-                <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-950/30 text-center">
+                <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-950 light:bg-[var(--ws-surface)]/30 text-center">
                   <FileJson size={28} className="mb-3 text-zinc-600" />
                   <p className="text-sm text-zinc-400">No result yet</p>
                   <p className="mt-1 text-[10px] text-zinc-500">Complete the bridge steps to see results here.</p>
@@ -486,7 +486,7 @@ export function FeatureStudioPage() {
         {/* ═══════════════ CUT PLAN VIEW ═══════════════ */}
         {view === 'cutplan' && activeTranscript && cutPlan && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 grid gap-4 min-h-0" style={{ gridTemplateColumns: '1fr 320px' }}>
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-5 overflow-auto min-h-0">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 overflow-auto min-h-0">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-zinc-300">Cut Plan</h3>
                 <div className="flex items-center gap-3">
@@ -529,7 +529,7 @@ export function FeatureStudioPage() {
                 })}
               </div>
             </div>
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-4 overflow-auto">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-4 overflow-auto">
               <h3 className="text-xs font-semibold text-zinc-300 mb-3">Cut Plan Details</h3>
               <div className="space-y-2">
                 {cutPlan.kept?.map((k: any, i: number) => (
@@ -552,7 +552,7 @@ export function FeatureStudioPage() {
         {/* ═══════════════ VISUALIZE VIEW ═══════════════ */}
         {view === 'visualize' && sceneDsl && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 grid gap-4 min-h-0" style={{ gridTemplateColumns: '1fr 300px' }}>
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-5 overflow-auto min-h-0">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 overflow-auto min-h-0">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-zinc-300">Generated Scenes ({sceneDsl.scenes?.length || 0})</h3>
                 <button onClick={() => setView('dashboard')} className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">Back</button>
@@ -578,11 +578,11 @@ export function FeatureStudioPage() {
               </div>
             </div>
             {/* 9:16 Preview */}
-            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 backdrop-blur-xl p-4 flex flex-col items-center min-h-0">
+            <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-4 flex flex-col items-center min-h-0">
               <h3 className="text-xs font-semibold text-zinc-300 mb-2">9:16 Preview</h3>
-              <div className="relative rounded-lg overflow-hidden border border-zinc-700/50" style={{ width: 270, height: 480, background: '#0D1117' }}>
+              <div className="relative rounded-lg overflow-hidden border border-zinc-700/50" style={{ width: 270, height: 480, background: 'var(--ws-surface-raised)' }}>
                 <div className="absolute border border-dashed border-red-500/30 bg-red-500/5 rounded pointer-events-none" style={{ left: 190, top: 380, width: 80, height: 100 }} />
-                <div className="absolute bottom-1 right-1 text-[7px] text-red-500/40 pointer-events-none">face cam</div>
+                <div className="absolute bottom-1 right-1 text-[7px] text-[var(--text-muted)] pointer-events-none">face cam</div>
                 {sceneDsl.scenes?.filter((s: any) => currentTime >= s.start_time && currentTime <= s.end_time).map((s: any, i: number) => (
                   <div key={i} className="absolute px-3 py-2 rounded-lg max-w-[85%] pointer-events-none" style={{ top: '20%', left: '8%', right: '8%', background: 'rgba(13,17,23,0.85)', border: '1px solid #22d3ee40' }}>
                     <div className="text-[9px] text-[#22d3ee] font-medium mb-0.5">{s.renderer}</div>

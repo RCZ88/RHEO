@@ -98,7 +98,7 @@ export default function DevTriggerPanel({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="bg-zinc-900/95 border border-zinc-700/50 rounded-xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl"
+            className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -212,7 +212,7 @@ export default function DevTriggerPanel({
                           type="date"
                           value={devSleepInject.date}
                           onChange={e => setDevSleepInject(prev => ({ ...prev, date: e.target.value }))}
-                          className="w-full mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm"
+                          className="w-full mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm"
                         />
                       </div>
                       <div>
@@ -220,11 +220,11 @@ export default function DevTriggerPanel({
                         <div className="flex gap-1 mt-1">
                           <input type="number" min="0" max="23" value={devSleepInject.bedtime.hours}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, bedtime: { ...prev.bedtime, hours: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                           <span className="text-zinc-500 text-xs mt-1.5">:</span>
                           <input type="number" min="0" max="59" value={devSleepInject.bedtime.minutes}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, bedtime: { ...prev.bedtime, minutes: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                         </div>
                       </div>
                       <div>
@@ -232,11 +232,11 @@ export default function DevTriggerPanel({
                         <div className="flex gap-1 mt-1">
                           <input type="number" min="0" max="23" value={devSleepInject.waketime.hours}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, waketime: { ...prev.waketime, hours: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                           <span className="text-zinc-500 text-xs mt-1.5">:</span>
                           <input type="number" min="0" max="59" value={devSleepInject.waketime.minutes}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, waketime: { ...prev.waketime, minutes: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                         </div>
                       </div>
                       <div>
@@ -244,11 +244,11 @@ export default function DevTriggerPanel({
                         <div className="flex gap-1 mt-1">
                           <input type="number" min="0" max="23" value={devSleepInject.fellAsleepAt.hours}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, fellAsleepAt: { ...prev.fellAsleepAt, hours: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                           <span className="text-zinc-500 text-xs mt-1.5">:</span>
                           <input type="number" min="0" max="59" value={devSleepInject.fellAsleepAt.minutes}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, fellAsleepAt: { ...prev.fellAsleepAt, minutes: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                         </div>
                       </div>
                       <div>
@@ -256,11 +256,11 @@ export default function DevTriggerPanel({
                         <div className="flex gap-1 mt-1">
                           <input type="number" min="0" max="23" value={devSleepInject.wakeUpAt.hours}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, wakeUpAt: { ...prev.wakeUpAt, hours: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                           <span className="text-zinc-500 text-xs mt-1.5">:</span>
                           <input type="number" min="0" max="59" value={devSleepInject.wakeUpAt.minutes}
                             onChange={e => setDevSleepInject(prev => ({ ...prev, wakeUpAt: { ...prev.wakeUpAt, minutes: parseInt(e.target.value) || 0 } }))}
-                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm text-center" />
+                            className="w-16 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm text-center" />
                         </div>
                       </div>
                     </div>
@@ -282,7 +282,7 @@ export default function DevTriggerPanel({
                       <div className="mt-3 space-y-2">
                         <div className="text-[10px] text-zinc-500 uppercase font-medium">Adjacent Gaps ({devPreviewGaps.length})</div>
                         {devPreviewGaps.map((g: any, i: number) => (
-                          <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/50 border border-zinc-700/30">
+                          <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-700/30">
                             <span className={`w-2 h-2 rounded-full ${g.relation === 'before' ? 'bg-amber-400' : 'bg-rose-400'}`} />
                             <span className="text-xs text-white">{g.relation === 'before' ? 'Pre-sleep' : 'Post-sleep'}</span>
                             <span className="text-xs text-zinc-400 ml-auto font-mono">{fmt(new Date(g.start).getHours(), new Date(g.start).getMinutes())} – {fmt(new Date(g.end).getHours(), new Date(g.end).getMinutes())}</span>
@@ -310,7 +310,7 @@ export default function DevTriggerPanel({
                         <label className="text-[10px] text-zinc-500 uppercase">Idle Minutes</label>
                         <input type="number" value={devAfkInject.idleMinutes}
                           onChange={e => setDevAfkInject(prev => ({ ...prev, idleMinutes: parseInt(e.target.value) || 5 }))}
-                          className="w-24 mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm" />
+                          className="w-24 mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm" />
                       </div>
                       <div className="flex items-center gap-2 mb-1">
                         <input type="checkbox" checked={devAfkInject.defaultNotAfk}
@@ -344,7 +344,7 @@ export default function DevTriggerPanel({
                       <div>
                         <label className="text-[10px] text-zinc-500 uppercase">Period</label>
                         <select value={devGapsInject.period} onChange={e => setDevGapsInject(prev => ({ ...prev, period: e.target.value }))}
-                          className="mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm">
+                          className="mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm">
                           <option value="today">Today</option>
                           <option value="week">Week</option>
                           <option value="month">Month</option>
@@ -355,7 +355,7 @@ export default function DevTriggerPanel({
                         <label className="text-[10px] text-zinc-500 uppercase">Min Gap</label>
                         <input type="number" value={devGapsInject.minGapMinutes}
                           onChange={e => setDevGapsInject(prev => ({ ...prev, minGapMinutes: parseInt(e.target.value) || 5 }))}
-                          className="w-20 mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm" />
+                          className="w-20 mt-1 px-2 py-1.5 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-white text-sm" />
                       </div>
                       <button onClick={detectGapsInject} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition">
                         Detect Gaps

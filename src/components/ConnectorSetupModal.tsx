@@ -278,7 +278,7 @@ export function ConnectorSetupModal({ open, onClose, onCreated }: ConnectorSetup
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.2 }}
-            className="w-full max-w-md rounded-xl bg-zinc-900 ring-1 ring-zinc-800 shadow-2xl overflow-hidden"
+            className="w-full max-w-md rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800 shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}

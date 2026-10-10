@@ -39,7 +39,7 @@ export function ModelSwitcher({ terminalId, agent }: { terminalId: string; agent
         <ChevronDown className="w-3 h-3 opacity-70" />
       </button>
       {open ? (
-        <div className="absolute right-0 mt-1 z-50 w-56 max-h-72 overflow-auto rounded-xl bg-zinc-900 ring-1 ring-inset ring-zinc-700 shadow-none p-1">
+        <div className="absolute right-0 mt-1 z-50 w-56 max-h-72 overflow-auto rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-700 shadow-none p-1">
           <div className="flex items-center justify-between px-2 py-1 text-[10px] text-zinc-500">
             <span>{loading ? 'Detecting...' : (meta ? (meta.source === 'detected' ? 'Detected' : 'Suggested') : 'Models')}</span>
             {meta && !meta.installed ? <span className="text-amber-400">CLI not found</span> : null}
@@ -89,7 +89,7 @@ export function ConfigGenerator({ agent, baseDir }: { agent: string; baseDir: st
         <span>Configs</span>
       </button>
       {open ? (
-        <div className="absolute bottom-full mb-1 right-0 z-50 w-64 rounded-xl ring-1 ring-inset ring-zinc-700 bg-zinc-900 p-3 shadow-none">
+        <div className="absolute bottom-full mb-1 right-0 z-50 w-64 rounded-xl ring-1 ring-inset ring-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] p-3 shadow-none">
           <div className="text-[11px] font-semibold text-zinc-200 mb-2">Generate CLI configs</div>
           <div className="flex flex-col gap-1 mb-2">
             {(['project', 'global', 'custom'] as const).map((s) => (

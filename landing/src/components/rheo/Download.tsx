@@ -1,10 +1,12 @@
 "use client";
 
 import { motion, useInView } from "framer-motion";
-import { Download as DownloadIcon, Check, ChevronDown } from "lucide-react";
+import { useShouldAnimate } from "./use-motion-preference";
+import { Download as DownloadIcon, ChevronDown } from "lucide-react";
 import { useRef, useState } from "react";
 import DecryptedText from "./DecryptedText";
 import { Button } from "@/components/ui/button";
+import Ledger from "./Ledger";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { useDetectedOS } from "./use-detected-os";
 
@@ -17,9 +19,13 @@ const VERSIONS = [
 ];
 
 const OS_LIST = [
-  { key: "macOS", label: "macOS", arch: "Apple Silicon + Intel", min: "macOS 12+", size: "78 MB", hash: "a1b2c3d4e5f6…", ext: ".dmg" },
-  { key: "Windows", label: "Windows", arch: "x64", min: "Windows 10+", size: "84 MB", hash: "9f3c7e2a1b8d…", ext: ".exe" },
-  { key: "Linux", label: "Linux", arch: "x64 (tar.gz)", min: "glibc 2.31+ / x86_64", size: "71 MB", hash: "d4e5f6a7b8c9…", ext: ".tar.gz" },
+  // `size` and `hash` were placeholder fabrications ("78 MB", "a1b2c3d4e5f6…").
+  // RESULT.md §4.3.5: checksums are real or the column does not ship. They were
+  // never rendered, so the honest fix is to stop asserting them at all. Add
+  // `size`/`sha256` back with real values at release-build time.
+  { key: "macOS", label: "macOS", arch: "Apple Silicon + Intel", min: "macOS 12+", ext: ".dmg" },
+  { key: "Windows", label: "Windows", arch: "x64", min: "Windows 10+", ext: ".exe" },
+  { key: "Linux", label: "Linux", arch: "x64 (tar.gz)", min: "glibc 2.31+ / x86_64", ext: ".tar.gz" },
 ] as const;
 
 const KIND_STYLE = {
@@ -29,6 +35,13 @@ const KIND_STYLE = {
 };
 
 export default function Download() {
+  // OWED 2. This file had NO reduced-motion awareness at all: eight ungated
+  // `initial={{ opacity: 0 }}` objects, so a reduced-motion visitor got 27+
+  // elements stuck below 0.05 opacity carrying the availability line, the platform
+  // list and the version-history link. One missing concept, not 27 bugs — which is
+  // what the sampler's effective-opacity product predicted: a stuck ancestor
+  // counts its whole subtree.
+  const rm = !useShouldAnimate();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { margin: "-20% 0px", once: true });
   const detected = useDetectedOS();
@@ -55,7 +68,7 @@ export default function Download() {
         <motion.p
           className="mono-label"
           style={{ fontSize: 11 }}
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: rm ? 1 : 0, y: rm ? 0 : 8 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
@@ -64,17 +77,23 @@ export default function Download() {
 
         <motion.h2
           className="display-h2 mt-4"
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: rm ? 1 : 0, y: rm ? 0 : 14 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
         >
           OWN YOUR HOURS.
         </motion.h2>
 
-        <motion.p
+                  {/* Trust closes the deal, so the ledger sits directly above the CTA.
+              Three sourced facts, no marketing numbers — RESULT.md §2. */}
+          <div className="mt-14 w-full">
+            <Ledger />
+          </div>
+
+<motion.p
           className="mt-5"
           style={{ fontSize: 16, lineHeight: 1.6, color: "#a1a1aa" }}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: rm ? 1 : 0, y: rm ? 0 : 10 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
         >
@@ -91,7 +110,7 @@ export default function Download() {
 
         {/* Three OS cards — shadcn Card primitives */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: rm ? 1 : 0, y: rm ? 0 : 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className="mx-auto mt-10"
@@ -156,7 +175,7 @@ export default function Download() {
                   </CardHeader>
                   <CardContent className="px-6 pt-3 pb-0">
                     <p className="mono" style={{ fontSize: 11, color: "#8a8a94", letterSpacing: "0.04em" }}>
-                      {os.min} · {os.size} <span style={{ color: "#a1a1aa" }}>{os.ext}</span>
+                      {os.min} <span style={{ color: "#a1a1aa" }}>{os.ext}</span>
                     </p>
                   </CardContent>
                   <CardFooter className="flex flex-col items-stretch gap-3 px-6 pb-5 pt-3">
@@ -188,33 +207,14 @@ export default function Download() {
                         DOWNLOAD <span style={{ fontWeight: 400, opacity: 0.7 }}>{os.label}</span>
                       </span>
                     </Button>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="mono" style={{ fontSize: 9, color: "#8a8a94", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                        SHA-256
-                      </span>
-                      <span className="mono" style={{ fontSize: 9, color: "#a1a1aa", letterSpacing: "0.04em", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {os.hash}
-                      </span>
-                      <button
-                        type="button"
-                        className="mono"
-                        style={{
-                          fontSize: 9,
-                          color: "#8a8a94",
-                          background: "transparent",
-                          border: "1px solid rgba(255,255,255,0.10)",
-                          borderRadius: 4,
-                          padding: "2px 6px",
-                          cursor: "pointer",
-                          transition: "color 0.3s cubic-bezier(0.16,1,0.3,1), border-color 0.3s cubic-bezier(0.16,1,0.3,1)",
-                        }}
-                        onClick={() => navigator.clipboard?.writeText(os.hash)}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#f4f4f5"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.22)"; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#8a8a94"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.10)"; }}
-                      >
-                        copy
-                      </button>
-                    </div>
+                  {/*
+                    REMOVED 2026-10-07 — this row labelled a value "SHA-256"
+                    and offered a copy-to-clipboard button, but the value was a
+                    placeholder ("a1b2c3d4e5f6…"). A verification affordance for
+                    a number that cannot verify is worse than no number at all.
+                    RESULT.md §4.3.5. Restore with a real digest from the release
+                    build.
+                  */}
                   </CardFooter>
                 </Card>
               );
@@ -225,7 +225,7 @@ export default function Download() {
         {/* version history — visible, toggleable */}
         <motion.div
           className="mt-12 flex flex-wrap items-center justify-center gap-x-5 gap-y-2"
-          initial={{ opacity: 0 }}
+          initial={{ opacity: rm ? 1 : 0 }}
           animate={inView ? { opacity: 1 } : {}}
           transition={{ duration: 0.7, delay: 0.3 }}
         >
@@ -262,7 +262,7 @@ export default function Download() {
         {/* version history panel */}
         {historyOpen && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
+            initial={{ opacity: rm ? 1 : 0, height: rm ? "auto" : 0 }}
             animate={{ opacity: 1, height: "auto" }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             style={{
@@ -325,7 +325,7 @@ export default function Download() {
             marginTop: 28,
             letterSpacing: "0.08em",
           }}
-          initial={{ opacity: 0 }}
+          initial={{ opacity: rm ? 1 : 0 }}
           animate={inView ? { opacity: 1 } : {}}
           transition={{ duration: 0.7, delay: 0.4 }}
         >
@@ -340,7 +340,7 @@ export default function Download() {
             background: "rgba(255,255,255,0.08)",
             margin: "32px auto",
           }}
-          initial={{ opacity: 0, scaleX: 0.4 }}
+          initial={{ opacity: rm ? 1 : 0, scaleX: rm ? 1 : 0.4 }}
           animate={inView ? { opacity: 1, scaleX: 1 } : {}}
           transition={{ duration: 0.7, delay: 0.44, ease: [0.16, 1, 0.3, 1] }}
         />

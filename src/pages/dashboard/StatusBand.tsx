@@ -33,6 +33,13 @@ interface StatusBandProps {
   onStartFocus?: () => void;
   isPaused?: boolean;
   websiteTitle?: string;
+  /** Domain of the page currently tracked (e.g. "youtube.com"). Preferred over
+   *  the page title for display: a title is long and truncates in a narrow chip,
+   *  whereas the domain is what the user recognises as "the website". */
+  websiteDomain?: string;
+  websiteUrl?: string;
+  /** Daily focus goal in minutes. */
+  dailyFocusTarget?: number;
   websiteCategory?: string;
   /** Category of the native (non-browser) foreground app — e.g. "Entertainment". */
   appCategory?: string;
@@ -62,16 +69,33 @@ export function StatusBand({
   onStartFocus,
   isPaused,
   websiteTitle,
+  websiteDomain,
+  websiteUrl,
+  dailyFocusTarget: dailyFocusTargetProp,
   websiteCategory,
   appCategory,
   onChangeTier,
 }: StatusBandProps) {
-  const totalMinutes = Math.floor(totalFocusedMs / 1000 / 60);
+  // Defence in depth: this component is mounted from more than one place, and at
+  // least one caller passes no props at all. Every numeric prop below feeds
+  // arithmetic (ms/1000) and string helpers (shade → hex.trim()), so an
+  // undefined or NaN value became a thrown TypeError that the ErrorBoundary
+  // caught as an empty object — which is why the failure had no readable message.
+  // Coerce once, at the boundary.
+  const safeMs = Number.isFinite(displayTimeMs) ? displayTimeMs : 0;
+  const safeTotalMs = Number.isFinite(totalFocusedMs) ? totalFocusedMs : 0;
+  const appName = typeof currentAppName === 'string' ? currentAppName : '';
+
+  const totalMinutes = Math.floor(safeTotalMs / 1000 / 60);
   const stateKey = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
   const isActive = !isPaused && (isCurrentlyProductive || isDistracting);
-  const timeStr = formatTime(displayTimeMs);
+  const timeStr = formatTime(safeMs);
 
-  const dailyFocusTarget = 240;
+  // Was hardcoded to 240, so the goal could never be changed and the ring could
+  // silently disagree with Settings. Guarded: a zero/NaN target would render
+  // Infinity% and wedge the dashoffset maths.
+  const dailyFocusTarget = Number.isFinite(dailyFocusTargetProp) && dailyFocusTargetProp > 0
+    ? dailyFocusTargetProp : 240;
   const focusPercent = Math.min(100, Math.round((totalMinutes / dailyFocusTarget) * 100));
   const currentTier = isDistracting ? 'distracting' : isCurrentlyProductive ? 'productive' : 'neutral';
 
@@ -135,7 +159,21 @@ export function StatusBand({
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [tierMenuOpen]);
 
-  const trackedName = isInBrowser ? (websiteTitle || currentAppName) : currentAppName;
+  // Domain first, then title, then app name. This used to lead with the page
+  // TITLE, which is long, truncates in a narrow chip, and often reads
+  // "How to fix X - YouTube" instead of the site the user is actually on.
+  const trackedName = isInBrowser ? (websiteDomain || websiteTitle || appName) : appName;
+  // Never render an empty chip. When nothing is tracked, say so plainly rather
+  // than leaving a blank pill beside the timer.
+  const displayName = trackedName || (isInBrowser ? 'No site tracked' : 'No app detected');
+  // A favicon only makes sense for a real page served over http(s).
+  const faviconUrl = (() => {
+    try {
+      if (!isInBrowser || !websiteUrl) return null;
+      const u = new URL(websiteUrl);
+      return (u.protocol === 'http:' || u.protocol === 'https:') ? u.origin + '/favicon.ico' : null;
+    } catch { return null; }
+  })();
 
   const pickTier = (next: 'productive' | 'neutral' | 'distracting') => {
     setTierMenuOpen(false);
@@ -143,7 +181,7 @@ export function StatusBand({
     onChangeTier?.(trackedName, next);
   };
 
-  const isTracking = isReal === true || !!currentAppName;
+  const isTracking = isReal === true || !!appName;
 
   // Tier accent — reads the --tier-* CSS variables (see src/lib/tierColors.ts)
   // so Settings → Colors can change productive / neutral / distracting app-wide.
@@ -217,16 +255,19 @@ export function StatusBand({
               the big timer read as unattributed — you could not tell what the
               number belonged to without hunting. Now it sits directly under the
               digits, at reading size, tinted by the app's tier. */}
-          {isTracking && currentAppName ? (
+          {isTracking && appName ? (
             <div
               className={`mt-2.5 max-w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border ${tierBorder} ${tierBg}`}
-              title={`Tracking: ${currentAppName}`}
+              title={`Tracking: ${appName}`}
             >
               {isInBrowser
                 ? <Clock size={13} className={`${tierText} shrink-0`} />
                 : <Activity size={13} className={`${tierText} shrink-0`} />}
               <span className={`text-[13px] font-semibold truncate ${tierText}`}>
-                {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
+                {faviconUrl && (
+                  <img src={faviconUrl} alt="" width={13} height={13} aria-hidden="true"
+                       className="shrink-0 rounded-[3px] opacity-80" />)}
+                {displayName}
               </span>
               {effectiveCategory && effectiveCategory !== 'Other' && (
                 <span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${catStyle.text}`}>
@@ -248,7 +289,7 @@ export function StatusBand({
                   </button>
 
                   {tierMenuOpen && (
-                    <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-xl border border-zinc-700/60 bg-zinc-900/98 light:bg-white shadow-xl overflow-hidden py-1">
+                    <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-xl border border-zinc-700/60 bg-zinc-900/98 light:bg-[var(--ws-surface-raised)] light:bg-white shadow-xl overflow-hidden py-1">
                       <div className="px-3 pt-1.5 pb-1 text-[9px] uppercase tracking-wider text-zinc-500">Rate as</div>
                       {(['productive', 'neutral', 'distracting'] as const).map((opt) => {
                         const active = opt === tier;
@@ -350,7 +391,10 @@ export function StatusBand({
             <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 min-w-0 border ${tierBorder} ${tierBg}`}>
               {isInBrowser ? <Clock size={11} className={`${tierText} shrink-0`} /> : <Activity size={11} className={`${tierText} shrink-0`} />}
               <span className={`text-[12px] font-medium truncate font-sans ${tierText}`}>
-                {isInBrowser ? (websiteTitle || currentAppName) : currentAppName}
+                {faviconUrl && (
+                  <img src={faviconUrl} alt="" width={13} height={13} aria-hidden="true"
+                       className="shrink-0 rounded-[3px] opacity-80" />)}
+                {displayName}
               </span>
               {effectiveCategory && effectiveCategory !== 'Other' && (
                 <span className={`text-[9px] px-1.5 py-0.5 rounded font-sans ${catStyle.text}`}>{effectiveCategory}</span>
@@ -360,12 +404,12 @@ export function StatusBand({
               </span>
             </div>
           ) : isWaylandDegraded ? (
-            <div className="flex items-center gap-2 bg-zinc-900/60 rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50">
+            <div className="flex items-center gap-2 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-lg px-3 py-1.5 min-w-0 border border-zinc-700/50">
               <Clock size={11} className="text-zinc-600" />
               <span className="text-[11px] text-zinc-500 font-sans">Tracking active on Wayland</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 bg-zinc-900/60 rounded-lg px-3 py-1.5 border border-zinc-700/50">
+            <div className="flex items-center gap-2 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-lg px-3 py-1.5 border border-zinc-700/50">
               <Clock size={11} className="text-zinc-600" />
               <span className="text-[11px] text-zinc-500 font-sans">No foreground data</span>
             </div>
@@ -380,7 +424,7 @@ export function StatusBand({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-2 bg-zinc-900/60 rounded-lg p-3 border border-zinc-700/50"
+          className="mt-2 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-lg p-3 border border-zinc-700/50"
         >
           <div className="flex items-center gap-1.5 mb-1.5">
             <Activity size={10} className="text-zinc-500" />

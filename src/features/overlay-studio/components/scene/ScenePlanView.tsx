@@ -45,7 +45,7 @@ export function ScenePlanView() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {overlays.map((overlay: any, i: number) => (
           <BlurFade key={i} delay={i * 0.03}>
-            <div className="group relative rounded-xl border border-white/[0.08] bg-zinc-900/80 p-4 hover:border-white/[0.15] transition-all duration-200">
+            <div className="group relative rounded-xl border border-white/[0.08] bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] p-4 hover:border-white/[0.15] transition-all duration-200">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center">

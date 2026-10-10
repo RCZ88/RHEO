@@ -124,7 +124,7 @@ export function ProgressDashboard({ embedded = false }: ProgressDashboardProps) 
           />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-4">
             <div className="flex items-center gap-2 mb-3">
               <Brain className="w-4 h-4 text-amber-400" />
               <h3 className="text-sm font-medium text-zinc-200">Active Learning</h3>
@@ -144,7 +144,7 @@ export function ProgressDashboard({ embedded = false }: ProgressDashboardProps) 
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-4">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-amber-400" />
               <h3 className="text-sm font-medium text-zinc-200">Most Studied</h3>
@@ -224,7 +224,7 @@ export function ProgressDashboard({ embedded = false }: ProgressDashboardProps) 
       {/* Bottom row: Active conversations + Top nodes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <BlurFade delay={0.28}>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-5">
             <div className="flex items-center gap-2 mb-3">
               <Brain className="w-4 h-4 text-amber-400" />
               <h3 className="text-sm font-medium text-zinc-200">Active Learning</h3>
@@ -247,7 +247,7 @@ export function ProgressDashboard({ embedded = false }: ProgressDashboardProps) 
         </BlurFade>
 
         <BlurFade delay={0.32}>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-5">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-amber-400" />
               <h3 className="text-sm font-medium text-zinc-200">Most Studied</h3>

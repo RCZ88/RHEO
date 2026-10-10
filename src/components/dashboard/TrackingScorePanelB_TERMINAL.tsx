@@ -1,7 +1,7 @@
 // ============================================================
 // RHEO Dashboard — Tracking Score PROTOTYPE B: "TERMINAL CHIC"
 // Segmented horizontal bar (3 segments: streak/completion/focus).
-// Flat bg-zinc-900 panel. All mono. Linear, aligned, terminal style.
+// Flat bg-zinc-900 light:bg-[var(--ws-surface-raised)] panel. All mono. Linear, aligned, terminal style.
 // ============================================================
 
 import { motion } from 'motion/react';

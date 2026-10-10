@@ -374,6 +374,12 @@ export function registerProjectBackupIPC(database?: any): void {
   });
 
   ipcMain.handle('projectBackup:getSchedules', async () => {
-    return { success: true, data: Array.from(schedulerMap.keys()) };
+    /* Return an explicitly sanitised array. The map's VALUES are Node Timeout
+       objects, which structuredClone refuses ("An object could not be
+       cloned") — keys alone should be safe, but never hand the renderer
+       anything derived from that map without coercing it to a primitive. */
+    const data: string[] = [];
+    for (const key of schedulerMap.keys()) data.push(String(key));
+    return { success: true, data };
   });
 }

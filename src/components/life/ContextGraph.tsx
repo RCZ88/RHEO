@@ -215,7 +215,7 @@ export function ContextGraph({ data, onNodeClick }: ContextGraphProps) {
   }, [onNodeClick])
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#09090b', borderRadius: 12, overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: '100%', background: 'var(--ws-surface-sunken)', borderRadius: 12, overflow: 'hidden' }}>
       <Canvas
         camera={{ position: [8, 6, 8], fov: 50 }}
         gl={{ antialias: true, alpha: true }}

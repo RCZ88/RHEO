@@ -58,10 +58,10 @@ export function ConnectionExplorer({ node, connections, onClose, onNodeClick }: 
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: MOTION.normal, ease: MOTION.ease }}
-            className="fixed right-0 top-0 bottom-0 w-[380px] max-w-[90vw] z-50 bg-zinc-950/95 backdrop-blur-xl border-l border-zinc-800/60 overflow-y-auto"
+            className="fixed right-0 top-0 bottom-0 w-[380px] max-w-[90vw] z-50 bg-zinc-950 light:bg-[var(--ws-surface)]/95 backdrop-blur-xl border-l border-zinc-800/60 overflow-y-auto"
           >
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-800/60 p-4">
+            <div className="sticky top-0 z-10 bg-zinc-950 light:bg-[var(--ws-surface)]/90 backdrop-blur-xl border-b border-zinc-800/60 p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
                   <span className={`h-8 w-8 flex items-center justify-center rounded-lg ${a.pill}`}>
@@ -115,7 +115,7 @@ export function ConnectionExplorer({ node, connections, onClose, onNodeClick }: 
                         <button
                           key={conn.id}
                           onClick={() => onNodeClick(conn)}
-                          className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-zinc-900/40 ring-1 ring-zinc-800/50 text-left transition-all hover:ring-zinc-700 hover:bg-zinc-900/60"
+                          className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/50 text-left transition-all hover:ring-zinc-700 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]"
                         >
                           <span className={`h-6 w-6 flex items-center justify-center rounded-md text-[10px] ${ga.pill}`}>
                             {TYPE_ICON[conn.type]}

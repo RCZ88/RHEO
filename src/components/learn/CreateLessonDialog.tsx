@@ -380,7 +380,7 @@ function PromptSectionPreview({ prompt }: { prompt: string }) {
   if (current.content.trim()) sections.push(current);
 
   return (
-    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950/50 overflow-hidden">
+    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/50 overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-zinc-800/30 transition-colors"
@@ -448,6 +448,7 @@ export function CreateLessonDialog({
   const [validPrompt, setValidPrompt] = useState(false);
   const [genPhase, setGenPhase] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [knowledgeUsed, setKnowledgeUsed] = useState<any>(null);
   const [chapterChoice, setChapterChoice] = useState('');
   const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
@@ -532,6 +533,7 @@ export function CreateLessonDialog({
   useEffect(() => {
     if (open) {
       setSaved(false);
+      setSaveError(null);
       setCreatedLesson(null);
       setChapterChoice('');
       setChapterPickerOpen(false);
@@ -826,7 +828,7 @@ export function CreateLessonDialog({
     if (!title) return;
     try {
       const context = resources.map(r => r.content).join('\n\n---\n\n');
-      await api.learnSaveIntent({
+      const res = await api.learnSaveIntent({
         title,
         description: inputMode === 'simple' ? userInput.trim() : description.trim(),
         context: context || undefined,
@@ -844,9 +846,21 @@ export function CreateLessonDialog({
           chapterChoice,
         },
       });
+      // The handler reports failure by RETURNING {ok:false} — it never throws,
+      // so the catch below cannot fire and an unconditional setSaved(true) would
+      // render "Saved" for an intent that was never written. Branch on the payload.
+      if (!res?.ok) {
+        console.error('[CreateLessonDialog] Save failed:', res?.error);
+        setSaved(false);
+        setSaveError(res?.error || 'Could not save this intent. Try again.');
+        return;
+      }
+      setSaveError(null);
       setSaved(true);
     } catch (e: any) {
       console.error('[CreateLessonDialog] Save failed:', e);
+      setSaved(false);
+      setSaveError(e?.message || 'Could not save this intent. Try again.');
     }
   };
 
@@ -938,7 +952,7 @@ export function CreateLessonDialog({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.96, opacity: 0, y: 8 }}
             transition={{ type: 'spring', duration: 0.3, bounce: 0.06 }}
-            className="relative w-full max-w-2xl max-h-[88vh] flex flex-col rounded-xl border border-zinc-800/50 bg-zinc-900/80 backdrop-blur-xl shadow-2xl shadow-black/40"
+            className="relative w-full max-w-2xl max-h-[88vh] flex flex-col rounded-xl border border-zinc-800/50 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl shadow-2xl shadow-black/40"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -1230,7 +1244,7 @@ export function CreateLessonDialog({
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
                             transition={{ duration: 0.15 }}
-                            className="absolute z-10 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-zinc-700/50 bg-zinc-900/95 backdrop-blur-xl shadow-xl"
+                            className="absolute z-10 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl shadow-xl"
                             role="listbox"
                           >
                             <button
@@ -1386,7 +1400,7 @@ export function CreateLessonDialog({
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
                             transition={{ duration: 0.15 }}
-                            className="absolute z-10 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-zinc-700/50 bg-zinc-900/95 backdrop-blur-xl shadow-xl"
+                            className="absolute z-10 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl shadow-xl"
                             role="listbox"
                           >
                             <button
@@ -1505,7 +1519,7 @@ export function CreateLessonDialog({
                   <PromptSectionPreview prompt={prompt} />
 
                     {/* Prompt block */}
-                    <div className="relative rounded-xl border border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl overflow-hidden">
+                    <div className="relative rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/80 backdrop-blur-xl overflow-hidden">
                       <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-2.5">
                         <span className="text-xs font-medium text-zinc-400">Generated prompt</span>
                         <div className="flex gap-1.5">
@@ -1760,7 +1774,7 @@ export function CreateLessonDialog({
                           value={externalPaste}
                           onChange={(e) => setExternalPaste(e.target.value)}
                           placeholder={'Paste your .lmd lesson (starts with ---) or .ldoc JSON here — code fences and preamble are stripped automatically...'}
-                          className="w-full px-3 py-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/50 text-zinc-300 text-[11px] font-mono leading-relaxed resize-y min-h-[100px] max-h-[200px] focus:outline-none focus:border-blue-500/40 placeholder:text-zinc-600 transition-all"
+                          className="w-full px-3 py-2.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-zinc-300 text-[11px] font-mono leading-relaxed resize-y min-h-[100px] max-h-[200px] focus:outline-none focus:border-blue-500/40 placeholder:text-zinc-600 transition-all"
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -1835,6 +1849,11 @@ export function CreateLessonDialog({
                         <><FileText className="w-3.5 h-3.5" />Save for later</>
                       )}
                     </button>
+                  )}
+                  {saveError && (
+                    <p role="alert" className="text-xs text-red-400/90 leading-snug">
+                      Could not save this idea: {saveError}. Nothing was lost — try Save for later again.
+                    </p>
                   )}
                   <button
                     onClick={handleBuildPrompt}

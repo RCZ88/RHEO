@@ -118,15 +118,15 @@ export function WidgetCard({
       <Card className={`h-full ${className}`} data-widget-id={widgetId} data-state="loading">
         <CardHeader>
           <CardTitle>
-            <Skeleton className="h-4 w-4 rounded light:bg-stone-200/70" />
-            <Skeleton className="h-4 w-24 light:bg-stone-200/70" />
+            <Skeleton className="h-4 w-4 rounded light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_70%,transparent)]" />
+            <Skeleton className="h-4 w-24 light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_70%,transparent)]" />
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <Skeleton className="h-10 w-full light:bg-stone-200/70" />
-            <Skeleton className="h-10 w-full light:bg-stone-200/70" />
-            <Skeleton className="h-10 w-3/4 light:bg-stone-200/70" />
+            <Skeleton className="h-10 w-full light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_70%,transparent)]" />
+            <Skeleton className="h-10 w-full light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_70%,transparent)]" />
+            <Skeleton className="h-10 w-3/4 light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_70%,transparent)]" />
           </div>
         </CardContent>
       </Card>

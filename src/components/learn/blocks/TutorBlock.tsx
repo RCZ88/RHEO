@@ -19,8 +19,8 @@ export function TutorBlock({ block, nodeId, onAsk }: Props) {
   }, [question, isStreaming, block.id, onAsk]);
 
   return (
-    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60">
+    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]">
         <Brain className="w-4 h-4 text-amber-400" />
         <span className="text-xs font-medium text-zinc-300">Ask about this concept</span>
       </div>

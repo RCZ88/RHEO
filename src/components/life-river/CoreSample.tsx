@@ -65,7 +65,7 @@ export function CoreSample({
   }, [covenant.completions])
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/75 backdrop-blur-xl" data-lifephase="core-sample">
+    <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl" data-lifephase="core-sample">
       {/* ambient glow */}
       <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: 'radial-gradient(circle at 50% 40%, rgba(251,191,36,0.08), transparent 60%)' }} />
 

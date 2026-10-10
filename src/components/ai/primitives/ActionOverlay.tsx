@@ -31,7 +31,7 @@ export function ActionOverlay({ status, actionType, label, className, children }
             initial="hidden" animate="show" exit="exit"
             className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 backdrop-blur-sm z-10"
           >
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900/90 border border-zinc-700/50">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50">
               <Loader2 size={14} className="animate-spin" style={{ color: accentHex }} />
               {label && <span className="text-xs font-medium" style={{ color: accentHex }}>{label}</span>}
             </div>

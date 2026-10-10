@@ -41,7 +41,7 @@ export function VoiceInputButton({ voice, disabled }: VoiceInputButtonProps) {
             ? 'bg-pink-500/15 text-pink-400 ring-1 ring-pink-500/30'
             : isError
               ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/40'
-              : 'text-zinc-400 bg-zinc-900/60 ring-1 ring-zinc-800/60 hover:text-pink-300 hover:ring-pink-500/30'
+              : 'text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-pink-300 hover:ring-pink-500/30'
           }`}
         title={`${label} (${shortcutHint})`}
       >
@@ -96,7 +96,7 @@ export function VoiceInputButton({ voice, disabled }: VoiceInputButtonProps) {
             role="status"
             aria-live="polite"
           >
-            <div className="rounded-lg bg-zinc-900/95 ring-1 ring-zinc-700 px-2.5 py-1.5 text-xs text-zinc-200 max-w-[240px]">
+            <div className="rounded-lg bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-700 px-2.5 py-1.5 text-xs text-zinc-200 max-w-[240px]">
               {voice.interim}
             </div>
           </motion.div>

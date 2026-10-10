@@ -63,7 +63,7 @@ export function StatusButton({
   const ring = tone === 'error' ? 'focus-visible:ring-rose-500/50' : tone === 'warning' ? 'focus-visible:ring-amber-500/50' : 'focus-visible:ring-zinc-500/50';
   const cls = primary
     ? 'bg-zinc-100 text-zinc-900 hover:bg-white active:scale-[0.98] ' + ring
-    : 'border border-white/10 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:scale-[0.98] ' + ring;
+    : 'border border-white/10 bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:scale-[0.98] ' + ring;
   return (
     <button type="button" onClick={onClick} disabled={disabled} className={`${btnBase} h-11 ${cls}`}>
       {icon}
@@ -128,7 +128,7 @@ export function StatusScreen({
 
         {/* ── Detail: collapsed by default. Internals must not shout. ─────── */}
         {detail && (
-          <div className={`mt-5 rounded-xl border border-white/10 bg-zinc-900/60`}>
+          <div className={`mt-5 rounded-xl border border-white/10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]`}>
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">{detailLabel}</span>
               {onCopy && (
@@ -170,7 +170,7 @@ export function StatusScreen({
                   key={d.path}
                   type="button"
                   onClick={() => onNavigate(d.path)}
-                  className={`${btnBase} h-9 border border-white/10 bg-transparent px-3 text-[12px] text-zinc-400 hover:border-white/20 hover:bg-zinc-900 hover:text-zinc-200 focus-visible:ring-zinc-500/50`}
+                  className={`${btnBase} h-9 border border-white/10 bg-transparent px-3 text-[12px] text-zinc-400 hover:border-white/20 hover:bg-zinc-900 light:bg-[var(--ws-surface-raised)] hover:text-zinc-200 focus-visible:ring-zinc-500/50`}
                 >
                   {d.icon}
                   {d.label}

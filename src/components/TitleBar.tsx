@@ -107,9 +107,16 @@ export default function TitleBar({
 
   useEffect(() => {
     refreshState();
-    const poll = setInterval(refreshState, 500);
+    // This bar is mounted on EVERY route, so a 500ms poll meant 2 IPC
+    // round-trips every half second for the whole life of the app. Maximizing or
+    // restoring the window always produces a resize, so a resize listener covers
+    // the only transition that matters, and the poll stays as a slow backstop
+    // (e.g. for a state change pushed from elsewhere) rather than the hot path.
+    const poll = setInterval(refreshState, 2000);
+    const onResize = () => { refreshState(); };
+    window.addEventListener('resize', onResize);
 
-    const unsubFocus = (() => { const fn = api()?.onWindowFocusChange; return fn ? fn((focused: boolean) => { setIsFocused(focused); refreshState(); }) : undefined; })();
+    const unsubFocus = (() => { const fn = api()?.onWindowFocusChange; return fn ? fn((focused: boolean) => { setIsFocused(focused); }) : undefined; })();
 
     let cancelled = false;
     const refreshUnread = async () => {
@@ -134,6 +141,7 @@ export default function TitleBar({
       cancelled = true;
       clearInterval(poll);
       clearInterval(unreadInterval);
+      window.removeEventListener('resize', onResize);
       unsubFocus?.();
       window?.removeEventListener?.('notification:new', onNotifPush);
       bar?.removeEventListener('dblclick', onDblClick);
@@ -150,10 +158,15 @@ export default function TitleBar({
   // ── Original refresh logic ──
   const buildTitleBar = () => (
     <div
-      className="relative z-20 shrink-0 h-7 flex items-center justify-between select-none light:bg-stone-200/90"
+      className="relative z-20 shrink-0 h-7 flex items-center justify-between select-none light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_90%,transparent)]"
       style={{
-        background: isFocused ? '#1a1a1a' : '#111111',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        // Was hardcoded '#1a1a1a' / '#111111' via an INLINE style. An inline style
+        // beats every CSS class, so the `light:` variant on the className above was
+        // being silently overridden — the title bar stayed dark in light mode no
+        // matter what the theme did. Tokens now, and the focus/unfocus split is
+        // preserved as two tokens so the 'unfocused' dimming still exists.
+        background: isFocused ? 'var(--titlebar-bg)' : 'var(--titlebar-bg-unfocused)',
+        borderBottom: '1px solid var(--titlebar-border)',
         WebkitAppRegion: 'drag',
       }}
       data-titlebar-drag
@@ -165,7 +178,7 @@ export default function TitleBar({
       >
         <button
           onClick={handleNotifyClick}
-          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 relative light:hover:bg-stone-300/50"
+          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 relative light:hover:bg-[var(--ws-veil)]"
           title="Notifications"
         >
           <Bell
@@ -180,7 +193,7 @@ export default function TitleBar({
           />
           {unreadCount > 0 && (
             <span
-              className="absolute -top-1 -right-1 flex items-center justify-center text-[10px] font-bold text-white light:text-stone-900"
+              className="absolute -top-1 -right-1 flex items-center justify-center text-[10px] font-bold text-white light:text-[var(--text-primary)]"
               style={{
                 width: 14,
                 height: 14,
@@ -196,31 +209,31 @@ export default function TitleBar({
         </button>
         <button
           onClick={handleMinimize}
-          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
+          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-[var(--ws-veil)]"
           title="Minimize"
         >
-          <Minus className="w-3 h-3 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
+          <Minus className="w-3 h-3 transition-colors text-zinc-400 light:text-[var(--text-muted)]" strokeWidth={1.5} />
         </button>
         <button
           onClick={handleMaximize}
-          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-stone-300/50"
+          className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-white/5 light:hover:bg-[var(--ws-veil)]"
           title={isMaximized ? 'Restore' : 'Maximize'}
         >
           {isMaximized ? (
             <span className="relative" style={{ width: 14, height: 14 }}>
               <Square
-                className="absolute transition-colors text-zinc-400 light:text-stone-500"
+                className="absolute transition-colors text-zinc-400 light:text-[var(--text-muted)]"
                 style={{ top: 1, left: 1, width: 11, height: 11 }}
                 strokeWidth={1.5}
               />
               <Square
-                className="absolute transition-colors text-zinc-400 light:text-stone-500"
+                className="absolute transition-colors text-zinc-400 light:text-[var(--text-muted)]"
                 style={{ top: 4, left: 4, width: 11, height: 11, fill: 'currentColor', fillOpacity: isFocused ? 0.15 : 0.1 }}
                 strokeWidth={1.5}
               />
             </span>
           ) : (
-            <Square className="w-3 h-3 transition-colors text-zinc-400 light:text-stone-500" strokeWidth={1.5} fill="none" />
+            <Square className="w-3 h-3 transition-colors text-zinc-400 light:text-[var(--text-muted)]" strokeWidth={1.5} fill="none" />
           )}
         </button>
         <button
@@ -228,7 +241,7 @@ export default function TitleBar({
           className="group h-full w-9 flex items-center justify-center transition-colors hover:bg-red-500/10 light:hover:bg-red-200/40"
           title="Close"
         >
-          <X className="w-3 h-3 transition-colors group-hover:text-red-400 text-zinc-400 light:text-stone-500" strokeWidth={1.5} />
+          <X className="w-3 h-3 transition-colors group-hover:text-red-400 text-zinc-400 light:text-[var(--text-muted)]" strokeWidth={1.5} />
         </button>
       </div>
     </div>

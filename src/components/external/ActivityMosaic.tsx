@@ -169,7 +169,7 @@ export function ActivityMosaic({
       {layout.hasMainGrid && (
         <>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="flex items-center gap-1 rounded-full border border-white/10 bg-zinc-900/60 p-1 backdrop-blur-xl">
+            <div className="flex items-center gap-1 rounded-full border border-white/10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] p-1 backdrop-blur-xl">
               {SCALE_MODES.map((option) => (
                 <button
                   key={option}
@@ -188,7 +188,7 @@ export function ActivityMosaic({
             </div>
             <div
               title="Size emphasis (no effect when Scale is True — it is already literal)"
-              className={`flex items-center gap-1 rounded-full border border-white/10 bg-zinc-900/60 p-1 backdrop-blur-xl transition-opacity ${
+              className={`flex items-center gap-1 rounded-full border border-white/10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] p-1 backdrop-blur-xl transition-opacity ${
                 scale === "true" ? "opacity-40" : ""
               }`}
             >
@@ -239,7 +239,7 @@ export function ActivityMosaic({
               key={activity.id}
               type="button"
               onClick={() => onSelectActivity?.(activity)}
-              className="flex min-h-[88px] w-full items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/60 p-3 text-left backdrop-blur-xl transition-colors hover:border-white/20 hover:bg-zinc-800/60"
+              className="flex min-h-[88px] w-full items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] p-3 text-left backdrop-blur-xl transition-colors hover:border-white/20 hover:bg-zinc-800/60"
             >
               <div
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"

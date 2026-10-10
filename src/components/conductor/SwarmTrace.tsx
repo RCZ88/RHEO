@@ -57,7 +57,7 @@ export default function SwarmTrace({
           const dotStyle: React.CSSProperties = { background: color };
           const typeStyle: React.CSSProperties = { color };
           return (
-            <div key={m.id} className="flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-zinc-900/70 text-[11px]">
+            <div key={m.id} className="flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] text-[11px]">
               <span className="mt-1 inline-block w-1.5 h-1.5 rounded-full flex-shrink-0" style={dotStyle} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">

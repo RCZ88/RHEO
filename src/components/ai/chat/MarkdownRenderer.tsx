@@ -1,8 +1,27 @@
 import { useMemo, type ReactNode } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
 
+/**
+ * Two renderers, one component.
+ *
+ *   `parsed`   — react-markdown + GFM + KaTeX. Real tables, real math.
+ *                Used when the text is SETTLED (a completed message).
+ *   `fallback` — the original hand-rolled parser. Used while a response is
+ *                still streaming, because a partial string fed to a markdown
+ *                parser flickers: an unclosed ``` or | cell re-parses into a
+ *                different tree every tick. The hand-rolled parser degrades
+ *                gracefully on a fragment; react-markdown does not.
+ *
+ * The switch is driven by the CALLER passing `settled`, not by guessing.
+ */
 interface MarkdownRendererProps {
   content: string
   className?: string
+  /** true when the text will not change again → use the full parser */
+  settled?: boolean
 }
 
 function renderInline(text: string): ReactNode {
@@ -46,7 +65,54 @@ function renderInline(text: string): ReactNode {
   return parts.length === 0 ? text : parts
 }
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+/** The full parser: GFM tables + KaTeX math. Settled text only. */
+function ParsedMarkdown({ content, className }: { content: string; className?: string }) {
+  return (
+    <div className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          // Match the surrounding dark surface rather than react-markdown's
+          // default light-mode table styling.
+          table: ({ children, ...props }) => (
+            <div className="my-2 w-full overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]" {...props}>{children}</table>
+            </div>
+          ),
+          thead: ({ children, ...props }) => (
+            <thead className="border-b border-zinc-700/70" {...props}>{children}</thead>
+          ),
+          th: ({ children, ...props }) => (
+            <th className="px-2 py-1 text-left font-semibold text-zinc-200" {...props}>{children}</th>
+          ),
+          td: ({ children, ...props }) => (
+            <td className="border-t border-zinc-800/70 px-2 py-1 align-top text-zinc-300" {...props}>{children}</td>
+          ),
+          p: ({ children, ...props }) => (
+            <p className="my-1 text-[13px] leading-relaxed text-zinc-300" {...props}>{children}</p>
+          ),
+          a: ({ children, ...props }) => (
+            <a className="text-pink-400 underline underline-offset-2 hover:text-pink-300" target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+          ),
+          code: ({ children, className: cls, ...props }) =>
+            /language-/.test(cls || "") ? (
+              <code className={cls} {...props}>{children}</code>
+            ) : (
+              <code className="rounded bg-zinc-800/80 px-1.5 py-0.5 font-mono text-pink-300 text-[13px]" {...props}>{children}</code>
+            ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
+export function MarkdownRenderer({ content, settled = false, className }: MarkdownRendererProps) {
+  // SETTLED → full parser (tables + math). STREAMING → hand-rolled fallback.
+  if (settled) return <ParsedMarkdown content={content} className={className} />
+
   const nodes = useMemo(() => {
     if (!content) return null
     const lines = content.split("\n")

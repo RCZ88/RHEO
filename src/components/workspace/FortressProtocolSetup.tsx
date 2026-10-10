@@ -115,7 +115,7 @@ function TerminalOutput({ lines, status }: { lines: string[]; status: LayerStatu
       animate={{ opacity: 1, height: 'auto' }}
       exit={{ opacity: 0, height: 0 }}
       transition={{ duration: DUR.normal, ease: EASE_OUT as any }}
-      className="mt-3 rounded-lg bg-zinc-950/80 border border-zinc-800/50 overflow-hidden"
+      className="mt-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/80 border border-zinc-800/50 overflow-hidden"
     >
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800/40">
         <Terminal className="w-3 h-3 text-zinc-500" />
@@ -428,7 +428,7 @@ export default function FortressProtocolSetup() {
               'Tell AI agent: "You may NOT run git reset without approval"',
             ].map((item, i) => (
               <label key={i} className="flex items-start gap-2 text-[12px] text-zinc-400 cursor-pointer group">
-                <input type="checkbox" className="mt-0.5 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500/30" />
+                <input type="checkbox" className="mt-0.5 rounded border-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-emerald-500 focus:ring-emerald-500/30" />
                 <span className="group-hover:text-zinc-200 transition-colors">{item}</span>
               </label>
             ))}
@@ -441,7 +441,7 @@ export default function FortressProtocolSetup() {
               'If WIP: leave committed locally',
             ].map((item, i) => (
               <label key={i} className="flex items-start gap-2 text-[12px] text-zinc-400 cursor-pointer group">
-                <input type="checkbox" className="mt-0.5 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500/30" />
+                <input type="checkbox" className="mt-0.5 rounded border-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] text-emerald-500 focus:ring-emerald-500/30" />
                 <span className="group-hover:text-zinc-200 transition-colors">{item}</span>
               </label>
             ))}

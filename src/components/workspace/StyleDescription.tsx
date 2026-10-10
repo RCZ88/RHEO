@@ -51,7 +51,7 @@ export function StyleDescription({ value, onChange }: StyleDescriptionProps) {
   const [showGuidance, setShowGuidance] = useState(false);
 
   return (
-    <div className="p-4 bg-zinc-900/50 border border-zinc-800/50 rounded-lg space-y-3">
+    <div className="p-4 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 rounded-lg space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Style Description</h3>
         <button
@@ -68,12 +68,12 @@ export function StyleDescription({ value, onChange }: StyleDescriptionProps) {
         onChange={e => onChange(e.target.value)}
         placeholder="Describe your design style — colors, mood, inspiration..."
         rows={3}
-        className="w-full px-3 py-2 text-[11px] bg-zinc-950 border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
+        className="w-full px-3 py-2 text-[11px] bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-700/50 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 resize-none"
       />
 
       {/* Guidance / Presets */}
       {showGuidance && (
-        <div className="space-y-3 p-3 bg-zinc-950/50 border border-zinc-800/40 rounded-lg max-h-60 overflow-y-auto">
+        <div className="space-y-3 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg max-h-60 overflow-y-auto">
           <p className="text-[9px] text-zinc-500 leading-relaxed">
             Describe the visual style you want. Include: color palette, mood (professional, playful, minimal), typography feel, and specific UI patterns you like.
           </p>

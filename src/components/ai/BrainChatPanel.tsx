@@ -82,7 +82,7 @@ export function BrainChatPanel({ open, onClose }: { open: boolean; onClose?: () 
         <button
           onClick={onClose}
           title="Close"
-          className="p-1.5 rounded-lg text-zinc-500 light:text-stone-500 hover:text-white hover:bg-zinc-800 light:bg-stone-200 transition-colors"
+          className="p-1.5 rounded-lg text-zinc-500 light:text-[var(--text-muted)] hover:text-white hover:bg-zinc-800 light:bg-[var(--ws-surface-sunken)] transition-colors"
         >
           <X size={16} />
         </button>
@@ -118,7 +118,7 @@ export function BrainChatPanel({ open, onClose }: { open: boolean; onClose?: () 
                 ? 'bg-violet-500/20 border border-violet-500/30 text-violet-50'
                 : m.error
                   ? 'bg-red-500/10 border border-red-500/30 text-red-200'
-                  : 'bg-zinc-900 border border-zinc-800 text-zinc-200'
+                  : 'bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 text-zinc-200'
               }`}
               style={{ fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
             >
@@ -151,11 +151,11 @@ export function BrainChatPanel({ open, onClose }: { open: boolean; onClose?: () 
                     {m.toolCalls.length} tool call{m.toolCalls.length > 1 ? 's' : ''} — {m.toolCalls.map(t => t.tool).join(', ')}
                   </button>
                   {expandedTools === i && m.toolCalls.map((t, ti) => (
-                    <div key={ti} className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 light:bg-white px-2 py-1.5 space-y-0.5">
+                    <div key={ti} className="rounded-lg border border-zinc-800/70 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white px-2 py-1.5 space-y-0.5">
                       <div style={{ fontSize: 10, color: '#a78bfa', fontFamily: 'var(--mono)' }}>
                         {t.tool} {Object.keys(t.args || {}).length > 0 ? JSON.stringify(t.args) : ''}
                       </div>
-                      <div className="text-zinc-400 light:text-stone-500 max-h-28 overflow-y-auto" style={{ fontSize: 10, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
+                      <div className="text-zinc-400 light:text-[var(--text-muted)] max-h-28 overflow-y-auto" style={{ fontSize: 10, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
                         {t.result}
                       </div>
                     </div>

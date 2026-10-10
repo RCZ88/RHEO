@@ -1,10 +1,12 @@
 import { useState, useMemo, lazy, Suspense, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Monitor, Globe, Target, Activity, Focus as FocusIcon, Clock, ArrowLeftRight, Sparkles } from 'lucide-react';
+import { Monitor, Globe, Target, Focus as FocusIcon, Clock, ArrowLeftRight, Sparkles } from 'lucide-react';
 import { LoadingState } from '../components/LoadingState';
 import { ManualAssignModal } from '../components/external/ManualAssignModal';
 import ManualFillModal from '../components/external/ManualFillModal';
+import TrackingCoverage from '../components/external/TrackingCoverage';
 import type { Period } from '../lib/dateRange';
+import { MONO_STEPS, formatClock, monoStep, platformLabel } from '../lib/usageScale';
 
 const StatsPage = lazy(() => import('./StatsPage'));
 const BrowserActivityPage = lazy(() => import('./BrowserActivityPage'));
@@ -32,12 +34,16 @@ interface ActivityPageProps {
   onPlatformFilterChange?: (platform: string) => void;
 }
 
+// No per-tab accent. Five hues in one tab strip was a LAMINAR §2 breach
+// (one signal hue per surface) and it made every tab look like a different
+// app. Identity now comes from the icon + label; the single signal hue is
+// the surface accent, carried by the active pill.
 const TABS = [
-  { key: 'apps', label: 'Applications', icon: Monitor, accent: '#6366f1' },
-  { key: 'websites', label: 'Websites', icon: Globe, accent: '#3b82f6' },
-  { key: 'productivity', label: 'Productivity', icon: Target, accent: '#10b981' },
-  { key: 'focus', label: 'Focus', icon: FocusIcon, accent: '#ec4899' },
-  { key: 'external', label: 'External', icon: Clock, accent: '#a855f7' },
+  { key: 'apps', label: 'Applications', icon: Monitor },
+  { key: 'websites', label: 'Websites', icon: Globe },
+  { key: 'productivity', label: 'Productivity', icon: Target },
+  { key: 'focus', label: 'Focus', icon: FocusIcon },
+  { key: 'external', label: 'External', icon: Clock },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
@@ -46,7 +52,9 @@ const crossfadeInitial = { opacity: 0, y: 8 };
 const crossfadeAnimate = { opacity: 1, y: 0 };
 const crossfadeExit = { opacity: 0, y: -8 };
 const crossfadeTransition = { duration: 0.2, ease: [0.16, 1, 0.3, 1] as const };
-const pillTransition = { type: 'spring' as const, stiffness: 400, damping: 32 };
+// LAMINAR §6 bans spring overshoot on app surfaces, so the shared pill
+// slide is an eased transition rather than a spring.
+const pillTransition = { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const };
 
 export default function ActivityPage(props: ActivityPageProps) {
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
@@ -86,70 +94,88 @@ export default function ActivityPage(props: ActivityPageProps) {
   const [manualVersion, setManualVersion] = useState(0);
 
   const activeConfig = TABS.find(t => t.key === activeTab) || TABS[0];
-  const activeIconWrapStyle = { background: `${activeConfig.accent}22` };
-  const activeIconStyle = { color: activeConfig.accent };
 
-  // Compute OS split stats for the summary card
+  // OS split. Three things were wrong with the previous version:
+  //   • colour was assigned by Object.entries index BEFORE the sort, so a
+  //     platform's hue depended on the order rows happened to arrive in
+  //     (the newest log decided it) — the same machine could come back a
+  //     different colour on a different day;
+  //   • six hardcoded hues were spent on what is realistically 1–3 rows,
+  //     which is how a two-row card ended up looking like a paint chart;
+  //   • zero-duration platforms produced a visible 0% row.
+  // Now: rank-ordered, capped at MONO_STEPS.length with the tail folded
+  // into "Other", one luminance ramp, no hue per row.
   const osStats = useMemo(() => {
     const logs = (props.allLogs as any[]) || [];
-    if (logs.length === 0) return [];
     const byPlatform: Record<string, number> = {};
-    let total = 0;
     for (const log of logs) {
-      const p = log.platform || 'unknown';
-      byPlatform[p] = (byPlatform[p] || 0) + (log.duration || 0);
-      total += log.duration || 0;
+      const key = platformLabel(log.platform || 'unknown');
+      const seconds = Number(log.duration) || 0;
+      if (seconds <= 0) continue;
+      byPlatform[key] = (byPlatform[key] || 0) + seconds;
     }
-    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6'];
-    return Object.entries(byPlatform)
-      .map(([platform, seconds], i) => ({
-        platform,
-        seconds,
-        pct: total > 0 ? (seconds / total) * 100 : 0,
-        color: colors[i % colors.length],
-      }))
+    const ranked = Object.entries(byPlatform)
+      .map(([platform, seconds]) => ({ platform, seconds }))
       .sort((a, b) => b.seconds - a.seconds);
+
+    // Fold the tail so the ramp never exceeds the number of steps a reader
+    // can actually tell apart.
+    const kept = ranked.slice(0, MONO_STEPS.length);
+    const tail = ranked.slice(MONO_STEPS.length);
+    if (tail.length > 0) {
+      kept.push({ platform: 'Other', seconds: tail.reduce((s, o) => s + o.seconds, 0) });
+    }
+
+    const total = kept.reduce((sum, o) => sum + o.seconds, 0);
+    return kept.map(o => ({ ...o, pct: total > 0 ? (o.seconds / total) * 100 : 0 }));
   }, [props.allLogs]);
 
-  const platformLabel = (p: string) => {
-    if (p === 'win32') return 'Windows';
-    if (p === 'darwin') return 'macOS';
-    if (p === 'linux') return 'Linux';
-    return p;
-  };
-
-  const formatHours = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  };
+  const osTotalSeconds = useMemo(
+    () => osStats.reduce((sum, o) => sum + o.seconds, 0),
+    [osStats]
+  );
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tab Navigation Bar */}
-      <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900 light:bg-white/20 backdrop-blur-md border-b border-zinc-800 light:border-zinc-200/50">
+      {/* Sticky chrome. Flat surface + hairline: LAMINAR §7 bans
+          backdrop-blur glassmorphism on chrome, and the blur also made the
+          tab strip unreadable wherever a saturated card scrolled under it. */}
+      {/* Coverage summary. It used to exist only inside the transient
+          "While you were away" prompt, so the one screen that answers "how much
+          of my day is actually accounted for" was gone the moment that prompt
+          closed — and unreachable entirely if the prompt never appeared.
+          Period follows the page, so it honours the date the user is viewing. */}
+      <div className="px-5 pt-2.5">
+          <TrackingCoverage
+            period={props.selectedPeriod === 'today' ? 'today' : props.selectedPeriod === 'week' ? 'week' : 'month'}
+            dateOffset={props.dateOffset ?? 0}
+            onFillNow={() => setShowManualFill(true)}
+          />
+      </div>
+
+      <div className="sticky top-0 z-30 -mx-5 px-5 bg-[var(--color-background)] border-b border-[var(--color-border)]">
         <div className="flex items-center gap-1 py-2">
-          <div className="h-9 w-9 rounded-xl grid place-items-center mr-2" style={activeIconWrapStyle}>
-            <Activity className="w-5 h-5" style={activeIconStyle} />
+          <div className="h-9 w-9 rounded-lg grid place-items-center mr-2 bg-[var(--page-accent)]/12 border border-[var(--page-accent)]/25">
+            <activeConfig.icon className="w-4.5 h-4.5 text-[var(--page-accent)]" />
           </div>
           
-          <div className="flex gap-1 bg-zinc-800 light:bg-zinc-100/50 p-0.5 rounded-lg" data-tutorial="activity.tabs">
+          <div className="flex gap-1 bg-[var(--color-muted)] light:bg-[var(--color-secondary)] p-0.5 rounded-lg" data-tutorial="activity.tabs">
             {TABS.map(tab => {
-              const pillStyle = { background: `${tab.accent}22`, border: `1px solid ${tab.accent}40` };
               return (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`relative px-3 py-1.5 text-xs rounded-md transition-colors min-h-[36px] flex items-center gap-1.5 ${
-                    activeTab === tab.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  aria-current={activeTab === tab.key ? 'page' : undefined}
+                  className={`relative px-3 py-1.5 text-xs rounded-md transition-colors duration-150 min-h-[36px] flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-background)] ${
+                    activeTab === tab.key
+                      ? 'text-[var(--text-primary)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {activeTab === tab.key && (
                     <motion.div
                       layoutId="activity-tab-pill"
-                      className="absolute inset-0 rounded-md"
-                      style={pillStyle}
+                      className="absolute inset-0 rounded-md bg-[var(--page-accent)]/14 border border-[var(--page-accent)]/35"
                       transition={pillTransition}
                     />
                   )}
@@ -164,46 +190,46 @@ export default function ActivityPage(props: ActivityPageProps) {
 
           {/* OS Filter Bar */}
           {((props.availablePlatforms || []).length > 0) && (
-            <div className="flex items-center gap-1.5 mr-2">
-              <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
+          <div className="flex items-center gap-1.5 mr-2">
+            <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
+            <button
+              onClick={() => props.onPlatformFilterChange?.('all')}
+              disabled={!props.onPlatformFilterChange}
+              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${props.onPlatformFilterChange
+                ? props.platformFilter === 'all'
+                  ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)]'
+                : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
+              }`}
+            >
+              All
+            </button>
+            {(props.availablePlatforms || []).map(p => (
               <button
-                onClick={() => props.onPlatformFilterChange?.('all')}
+                key={p}
+                onClick={() => props.onPlatformFilterChange?.(p)}
                 disabled={!props.onPlatformFilterChange}
-                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${props.onPlatformFilterChange
-                  ? props.platformFilter === 'all'
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${props.onPlatformFilterChange
+                  ? props.platformFilter === p
                     ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                    : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)]'
                   : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
                 }`}
               >
-                All
+                {platformLabel(p)}
               </button>
-              {(props.availablePlatforms || []).map(p => (
-                <button
-                  key={p}
-                  onClick={() => props.onPlatformFilterChange?. (p)}
-                  disabled={!props.onPlatformFilterChange}
-                  className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${props.onPlatformFilterChange
-                    ? props.platformFilter === p
-                      ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                      : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
-                  }`}
-                >
-                  {platformLabel(p)}
-                </button>
-              ))}
-            </div>
+            ))}
+          </div>
           )}
 
           {/* Compare Mode Toggle */}
           {((props.availablePlatforms || []).length > 1) && (
             <button
               onClick={() => setCompareMode(!compareMode)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${
                 compareMode
                   ? 'border border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)]'
               }`}
             >
               <ArrowLeftRight className="h-3.5 w-3.5" />
@@ -218,7 +244,7 @@ export default function ActivityPage(props: ActivityPageProps) {
               setShowManualAssign(true);
             }}
             title="Assign manual time into empty spans (random or custom)"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-violet-400 hover:text-violet-300 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
           >
             <Clock className="h-3.5 w-3.5" />
             Manual time
@@ -227,7 +253,7 @@ export default function ActivityPage(props: ActivityPageProps) {
           <button
             onClick={() => setShowManualFill(true)}
             title="Describe a period and the app generates the usage from your specification"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-400 hover:text-emerald-300 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
           >
             <Sparkles className="h-3.5 w-3.5" />
             Fill a range
@@ -235,36 +261,68 @@ export default function ActivityPage(props: ActivityPageProps) {
         </div>
       </div>
 
-      {/* OS Split Summary Card */}
+      {/* OS Usage Split — ONE bar for the whole machine, not N unrelated
+          cards. The old version spent a six-colour array on three rows and
+          read as three unrelated stats; the split only becomes legible as
+          one continuous proportion. Segments step down in luminance by
+          rank, so the dominant machine leads without any hue doing work. */}
       {osStats.length > 1 && props.platformFilter === 'all' && (
-        <div className="p-5 pb-0">
-          <div className="rounded-xl border border-zinc-800/50 bg-[var(--color-card)] p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-9 w-9 rounded-lg bg-[var(--page-accent)]/15 grid place-items-center">
-                <Activity className="w-4.5 h-4.5 text-[var(--page-accent)]" />
+        <div className="px-5 pt-5">
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 border border-[var(--page-accent)]/20 grid place-items-center">
+                <Monitor className="w-4.5 h-4.5 text-[var(--page-accent)]" />
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--text-primary)]">OS Usage Split</h3>
-                <p className="text-[11px] text-[var(--text-secondary)]">Time distribution across operating systems</p>
+              <div className="min-w-0">
+                <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">OS Usage Split</h3>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Share of tracked time by operating system
+                </p>
               </div>
+              <span className="ml-auto shrink-0 font-mono text-xs tabular-nums text-[var(--text-secondary)]">
+                {formatClock(osTotalSeconds)}
+              </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {osStats.map(os => (
-                <div key={os.platform} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/30">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: os.color }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-[var(--text-primary)]">{platformLabel(os.platform)}</span>
-                      <span className="text-[11px] text-[var(--text-secondary)]">{os.pct.toFixed(1)}%</span>
-                    </div>
-                    <div className="text-[11px] text-[var(--text-muted)]">{formatHours(os.seconds)}</div>
-                    <div className="mt-1.5 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${os.pct}%`, backgroundColor: os.color }} />
-                    </div>
-                  </div>
-                </div>
+
+            <div
+              className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-muted)]"
+              role="img"
+              aria-label={osStats
+                .map(o => `${o.platform} ${o.pct.toFixed(1)}%`)
+                .join(', ')}
+            >
+              {osStats.map((os, i) => (
+                <div
+                  key={os.platform}
+                  className="h-full motion-safe:transition-[width] duration-500 first:rounded-l-full last:rounded-r-full"
+                  style={{ width: `${os.pct}%`, background: monoStep(i) }}
+                  title={`${os.platform} — ${formatClock(os.seconds)} (${os.pct.toFixed(1)}%)`}
+                />
               ))}
             </div>
+
+            {/* Legend. Every segment carries a text label AND a number, so
+                the split is never read by colour alone (Gate D). */}
+            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-2">
+              {osStats.map((os, i) => (
+                <li key={os.platform} className="flex items-baseline gap-2 text-xs">
+                  <span
+                    aria-hidden="true"
+                    className="w-2 h-2 rounded-full flex-shrink-0 translate-y-px"
+                    style={{ background: monoStep(i) }}
+                  />
+                  <span className="text-[var(--text-primary)] font-medium truncate">
+                    {os.platform}
+                  </span>
+                  <span className="ml-auto shrink-0 font-mono tabular-nums text-[var(--text-muted)]">
+                    {formatClock(os.seconds)}
+                  </span>
+                  <span className="w-12 shrink-0 text-right font-mono tabular-nums text-[var(--text-secondary)]">
+                    {os.pct.toFixed(1)}%
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}

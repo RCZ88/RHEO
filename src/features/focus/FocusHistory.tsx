@@ -93,7 +93,7 @@ export function FocusHistory({ history, onStartFirstSession }: FocusHistoryProps
 
   if (history.length === 0) {
     return (
-      <GlassCard className="bg-zinc-900/95 border-zinc-800/60">
+      <GlassCard className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border-zinc-800/60">
         <h3 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
           <Clock className="w-4 h-4 text-[var(--page-accent)]" />
           Session history
@@ -117,7 +117,7 @@ export function FocusHistory({ history, onStartFirstSession }: FocusHistoryProps
   }, {} as Record<string, FocusHistoryRow[]>);
 
   return (
-    <GlassCard className="bg-zinc-900/95 border-zinc-800/60">
+    <GlassCard className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border-zinc-800/60">
       <h3 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
         <Clock className="w-4 h-4 text-[var(--page-accent)]" />
         Session history

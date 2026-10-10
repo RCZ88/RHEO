@@ -21,7 +21,7 @@ export function TotalPracticeStat({ stats }: TotalPracticeStatProps) {
         <div className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">Longest</div>
       </div>
       <div className="text-center py-2 rounded-lg bg-zinc-800/40">
-        <div className="text-lg font-bold tabular-nums text-[#6fb38f]">{stats.totalCompletions}</div>
+        <div className="text-lg font-bold tabular-nums text-[var(--color-mem-400)]">{stats.totalCompletions}</div>
         <div className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">Total practice</div>
       </div>
     </div>

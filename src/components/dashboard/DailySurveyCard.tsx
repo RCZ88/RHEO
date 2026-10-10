@@ -136,7 +136,7 @@ export function DailySurveyCard({ goals = [], onComplete, className = '' }: Dail
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="p-3 rounded-lg bg-zinc-900/30 border border-zinc-800/30"
+                    className="p-3 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30"
                   >
                     <p className="text-[13px] text-zinc-300 mb-2">{question.question}</p>
                     <div className="flex items-center gap-2">
@@ -174,7 +174,7 @@ export function DailySurveyCard({ goals = [], onComplete, className = '' }: Dail
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Any notes about today?"
-                    className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-emerald-500/50"
+                    className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 focus-visible:ring-emerald-500/50"
                   />
                 </div>
 

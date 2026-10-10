@@ -22,7 +22,7 @@ export function SpendingSplitCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-xl border border-zinc-800/60 bg-zinc-900/80 backdrop-blur-xl p-5 h-full flex flex-col"
+      className="rounded-xl border border-zinc-800/60 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 h-full flex flex-col"
     >
       {/* Header */}
       <div className="flex items-center gap-2.5 mb-4">

@@ -32,7 +32,7 @@ export function MonthlyTimeline({
             <button
               key={day.date.toISOString()}
               onClick={() => onDayClick?.(day)}
-              className={`relative min-h-[108px] rounded-xl border p-3 text-left transition-colors bg-zinc-900/60 backdrop-blur-xl ${
+              className={`relative min-h-[108px] rounded-xl border p-3 text-left transition-colors bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl ${
                 day.inMonth
                   ? "border-white/10 hover:border-white/20"
                   : "border-white/5 opacity-40"

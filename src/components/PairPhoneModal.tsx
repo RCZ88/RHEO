@@ -197,7 +197,7 @@ export function PairPhoneModal({ terminalId, terminalLabel, onClose }: PairPhone
             ) : (
               qrDataUrl && (
                 <div className="flex justify-center mb-4">
-                  <div className={`p-2 rounded-lg bg-zinc-950 border border-zinc-800/60 ${isExpired ? 'opacity-30' : ''}`}>
+                  <div className={`p-2 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 ${isExpired ? 'opacity-30' : ''}`}>
                     <img src={qrDataUrl} alt="Pairing QR Code" width={180} height={180} className="block" />
                   </div>
                 </div>
@@ -217,8 +217,8 @@ export function PairPhoneModal({ terminalId, terminalLabel, onClose }: PairPhone
               disabled={isExpired}
               className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border transition-all duration-150 ${
                 isExpired
-                  ? 'bg-zinc-900/50 border-zinc-800/30 opacity-50 cursor-not-allowed'
-                  : 'bg-zinc-900 border-zinc-800/60 hover:border-zinc-700 hover:bg-zinc-800/60 active:scale-[0.98] cursor-pointer'
+                  ? 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-zinc-800/30 opacity-50 cursor-not-allowed'
+                  : 'bg-zinc-900 light:bg-[var(--ws-surface-raised)] border-zinc-800/60 hover:border-zinc-700 hover:bg-zinc-800/60 active:scale-[0.98] cursor-pointer'
               }`}
             >
               <span className="text-2xl font-mono font-bold tracking-[0.25em] text-zinc-100 select-all">
@@ -246,7 +246,7 @@ export function PairPhoneModal({ terminalId, terminalLabel, onClose }: PairPhone
             </div>
 
             {/* Instructions */}
-            <div className="bg-zinc-950/50 rounded-lg p-3 mb-4 border border-zinc-800/30">
+            <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/50 rounded-lg p-3 mb-4 border border-zinc-800/30">
               <p className="text-[11px] text-zinc-500 leading-relaxed">
                 Open DeskFlow on your phone, go to <span className="text-zinc-400 font-medium">Settings → Pair Device</span>,
                 and scan the QR code or enter the 8-character code. Both devices must be on the same network (e.g., Tailscale).

@@ -551,7 +551,32 @@ function registerAll() {
     };
   })
 
-  r('createDeadlineFromEmail', 'Create a deadline from an email. Use when an email mentions a due date, submission deadline, exam, or time-sensitive task.', {
+    // Generic deadline creation — the non-email case. `createDeadlineFromEmail`
+    // is scoped by its description to deadlines found IN AN EMAIL, so a plain
+    // "create a deadline for X" had no tool whose description matched, and the
+    // failure mode was silent (_executed:false, nothing written).
+    // Direct-writer shape like saveGoal: no _action indirection, one hop to the
+    // DB via preload -> IPC 'add-deadline'. Still 'confirm' lane, so it asks
+    // before writing.
+    r('createDeadline', 'Create a deadline with a due date. Use whenever the user states they need to finish, submit, hand in, or deliver something by a date — even if no email is involved.', {
+      title: p('string', 'What is due (e.g. "Essay Submission", "Lab Report", "Tax Return")', { required: true }),
+      due_date: p('string', 'Due date in ISO format YYYY-MM-DD. Resolve relative dates ("Friday", "next week") to a concrete calendar date before calling.', { required: true }),
+      course: p('string', 'Course, project or category this belongs to, if the user mentioned one'),
+      priority: p('string', 'How urgent: low, medium, high, urgent', { enum: ['low', 'medium', 'high', 'urgent'] }),
+      description: p('string', 'Any extra detail the user gave about it'),
+    }, 'confirm', 'deadlines', async p => {
+      const gate = await checkAccess('deadlines');
+      if (!gate.allowed) return { _privacy: true, message: gate.message };
+      return api.addDeadline({
+        title: p.title,
+        course: p.course || null,
+        due_date: p.due_date,
+        priority: p.priority || 'medium',
+        description: p.description || null,
+      });
+    })
+
+    r('createDeadlineFromEmail', 'Create a deadline from an email. Use when an email mentions a due date, submission deadline, exam, or time-sensitive task.', {
     title: p('string', 'Deadline title (e.g. "Essay Submission", "Project Report")', { required: true }),
     due_date: p('string', 'Due date in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)', { required: true }),
     course: p('string', 'Course or category if mentioned'),

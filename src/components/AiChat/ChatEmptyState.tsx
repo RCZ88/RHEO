@@ -47,7 +47,7 @@ export const ChatEmptyState: FC<ChatEmptyStateProps> = ({ onPick, connectors }) 
           <button
             key={s.id}
             onClick={() => onPick(s.prompt)}
-            className="rounded-lg px-3 py-1.5 text-xs bg-zinc-900/60 ring-1 ring-zinc-800/60 text-zinc-300 hover:ring-pink-500/40 hover:text-zinc-100 hover:-translate-y-0.5 transition-all duration-150"
+            className="rounded-lg px-3 py-1.5 text-xs bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 text-zinc-300 hover:ring-pink-500/40 hover:text-zinc-100 hover:-translate-y-0.5 transition-all duration-150"
             style={{ transitionDelay: `${i * 50}ms` }}
           >
             {s.label}

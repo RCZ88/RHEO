@@ -66,7 +66,7 @@ export function TierBreakdownStrip({
             >
               <div className="flex items-center gap-1.5 mb-2">
                 <span style={{ color: stat.color }}>{stat.icon}</span>
-                <span className="text-[11px] text-zinc-500 light:text-stone-500 uppercase tracking-wider font-medium">
+                <span className="text-[11px] text-zinc-500 light:text-[var(--text-muted)] uppercase tracking-wider font-medium">
                   {stat.label}
                 </span>
               </div>
@@ -80,7 +80,7 @@ export function TierBreakdownStrip({
                     duration={1200}
                   />
                 </span>
-                <span className="text-[12px] text-zinc-500 light:text-stone-400">h</span>
+                <span className="text-[12px] text-zinc-500 light:text-[var(--text-secondary)]">h</span>
               </div>
             </motion.div>
           ))}

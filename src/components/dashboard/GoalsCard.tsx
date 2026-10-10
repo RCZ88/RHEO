@@ -219,10 +219,10 @@ export function GoalsCard({
       <Card className="rounded-lg h-full">
         <CardContent className="p-5 h-full flex flex-col items-center justify-center text-center">
           <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
-            <AlertCircle size={24} className="light:text-stone-400" />
+            <AlertCircle size={24} className="light:text-[var(--text-secondary)]" />
           </div>
-          <p className="text-[14px] font-medium light:text-stone-400">Could not load goals</p>
-          <p className="text-[12px] light:text-stone-400 mt-1 max-w-[220px]">{error}</p>
+          <p className="text-[14px] font-medium light:text-[var(--text-secondary)]">Could not load goals</p>
+          <p className="text-[12px] light:text-[var(--text-secondary)] mt-1 max-w-[220px]">{error}</p>
         </CardContent>
     </Card>
     );
@@ -243,8 +243,8 @@ export function GoalsCard({
             </button>
             <div>
               <button onClick={() => navigate('/life')} className="hover:opacity-80 transition-opacity text-left">
-                <h2 className="text-[15px] font-semibold light:text-stone-900">Routines</h2>
-                <p className="text-[11px] light:text-stone-400">
+                <h2 className="text-[15px] font-semibold light:text-[var(--text-primary)]">Routines</h2>
+                <p className="text-[11px] light:text-[var(--text-secondary)]">
                   {activeGoals.length} active · {completedGoals.length} done
                 </p>
               </button>
@@ -277,7 +277,7 @@ export function GoalsCard({
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsAdding(!isAdding)}
-              className="w-8 h-8 rounded-md light:bg-[var(--ws-surface-sunken)] hover:light:border-[var(--ws-border-strong)] flex items-center justify-center light:text-stone-400 hover:light:text-stone-900 transition-colors"
+              className="w-8 h-8 rounded-md light:bg-[var(--ws-surface-sunken)] hover:light:border-[var(--ws-border-strong)] flex items-center justify-center light:text-[var(--text-secondary)] hover:light:text-[var(--text-primary)] transition-colors"
               aria-label={isAdding ? 'Cancel adding goal' : 'Add new goal'}
             >
               {isAdding ? <X size={14} /> : <Plus size={14} />}
@@ -330,15 +330,15 @@ export function GoalsCard({
                       exit={{ height: 0, opacity: 0 }}
                       className="flex items-center gap-2 overflow-hidden"
                     >
-                      <span className="text-[11px] light:text-stone-400">Target:</span>
+                      <span className="text-[11px] light:text-[var(--text-secondary)]">Target:</span>
                       <Input type="number" min={0} max={23} value={newGoal.targetHours}
                         onChange={e => setNewGoal(p => ({ ...p, targetHours: parseInt(e.target.value) || 0 }))}
                         className="w-16 light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] text-[13px] h-8" />
-                      <span className="text-[11px] light:text-stone-400">h</span>
+                      <span className="text-[11px] light:text-[var(--text-secondary)]">h</span>
                       <Input type="number" min={0} max={59} value={newGoal.targetMinutes}
                         onChange={e => setNewGoal(p => ({ ...p, targetMinutes: parseInt(e.target.value) || 0 }))}
                         className="w-16 light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] text-[13px] h-8" />
-                      <span className="text-[11px] light:text-stone-400">m</span>
+                      <span className="text-[11px] light:text-[var(--text-secondary)]">m</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -357,7 +357,7 @@ export function GoalsCard({
                       <Plus size={12} className="mr-1" /> Add Goal
                     </Button>
                   </motion.div>
-                  <Button size="sm" variant="ghost" onClick={() => { resetAddForm(); setIsAdding(false); }} className="light:text-stone-400 hover:light:text-stone-900 text-[12px] h-8">
+                  <Button size="sm" variant="ghost" onClick={() => { resetAddForm(); setIsAdding(false); }} className="light:text-[var(--text-secondary)] hover:light:text-[var(--text-primary)] text-[12px] h-8">
                     Cancel
                   </Button>
                 </div>
@@ -376,7 +376,7 @@ export function GoalsCard({
                     <Sparkles size={12} className="text-violet-400" />
                     <span className="text-[11px] text-violet-400 font-medium">AI Suggested Goals</span>
                   </div>
-                  <button onClick={() => setShowSuggestions(false)} className="light:text-stone-400 hover:light:text-stone-900/80 p-1 rounded">
+                  <button onClick={() => setShowSuggestions(false)} className="light:text-[var(--text-secondary)] hover:light:text-[color-mix(in_srgb,var(--text-primary)_80%,transparent)] p-1 rounded">
                     <X size={12} />
                   </button>
                 </div>
@@ -392,9 +392,9 @@ export function GoalsCard({
                       <div className="flex items-center gap-2 min-w-0">
                         <Sparkles size={12} className="text-violet-400 shrink-0" />
                         <div className="min-w-0">
-                          <span className="text-[13px] light:text-stone-900/80 truncate block">{suggestion.title}</span>
+                          <span className="text-[13px] light:text-[color-mix(in_srgb,var(--text-primary)_80%,transparent)] truncate block">{suggestion.title}</span>
                           {suggestion.parentId && longTermGoals.find(l => l.id === suggestion.parentId) && (
-                            <span className="text-[10px] light:text-stone-400 truncate block">
+                            <span className="text-[10px] light:text-[var(--text-secondary)] truncate block">
                               Serves: {longTermGoals.find(l => l.id === suggestion.parentId)?.title}
                             </span>
                           )}
@@ -414,7 +414,7 @@ export function GoalsCard({
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
                           onClick={() => onDismissSuggestion(suggestion.id)}
-                          className="w-7 h-7 rounded-md light:bg-[var(--ws-surface-sunken)] light:text-stone-400 hover:light:border-[var(--ws-border-strong)] flex items-center justify-center transition-colors"
+                          className="w-7 h-7 rounded-md light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)] hover:light:border-[var(--ws-border-strong)] flex items-center justify-center transition-colors"
                           title="Dismiss"
                         >
                           <X size={12} />
@@ -462,7 +462,7 @@ export function GoalsCard({
                           Save
                         </Button>
                       </motion.div>
-                      <Button size="sm" variant="ghost" onClick={() => { setEditingId(null); setEditForm({}); }} className="light:text-stone-400 hover:light:text-stone-900 text-[12px] h-8">
+                      <Button size="sm" variant="ghost" onClick={() => { setEditingId(null); setEditForm({}); }} className="light:text-[var(--text-secondary)] hover:light:text-[var(--text-primary)] text-[12px] h-8">
                         Cancel
                       </Button>
                     </div>
@@ -484,13 +484,13 @@ export function GoalsCard({
 
                     <div className="flex-1 min-w-0">
                       <div className={`text-[13px] truncate transition-colors ${
-                        goal.status === 'done' ? 'light:text-stone-400 line-through' : 'light:text-stone-900/90'
+                        goal.status === 'done' ? 'light:text-[var(--text-secondary)] line-through' : 'light:text-[color-mix(in_srgb,var(--text-primary)_90%,transparent)]'
                       }`}>
                         {goal.title}
                       </div>
 
                       {goal.description && (
-                        <p className="text-[11px] light:text-stone-400 mt-0.5 line-clamp-1">{goal.description}</p>
+                        <p className="text-[11px] light:text-[var(--text-secondary)] mt-0.5 line-clamp-1">{goal.description}</p>
                       )}
 
                       {(() => {
@@ -498,8 +498,8 @@ export function GoalsCard({
                         const parents = parentIds.map(pid => longTermGoals.find(ltg => ltg.id === pid)).filter(Boolean) as LongTermGoal[];
                         return parents.length > 0 ? (
                           <div className="flex items-center gap-1 mt-1">
-                            <ArrowRight size={8} className="light:text-stone-400 shrink-0" />
-                            <span className="text-[10px] light:text-stone-400 truncate">Serves: {parents.map(p => p.title).join(', ')}</span>
+                            <ArrowRight size={8} className="light:text-[var(--text-secondary)] shrink-0" />
+                            <span className="text-[10px] light:text-[var(--text-secondary)] truncate">Serves: {parents.map(p => p.title).join(', ')}</span>
                           </div>
                         ) : null;
                       })()}
@@ -508,11 +508,11 @@ export function GoalsCard({
                         <Badge className={`text-[10px] px-1.5 py-0.5 ${getCategoryMeta(goal.category).color}`}>
                           {getCategoryMeta(goal.category).label}
                         </Badge>
-                        <span className="text-[10px] light:bg-[var(--ws-surface-sunken)] light:text-stone-400 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <span className="text-[10px] light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)] px-1.5 py-0.5 rounded flex items-center gap-1">
                           <RefreshCw size={8} />{goal.period}
                         </span>
                         {goal.target.type === 'time' && goal.target.targetSeconds && (
-                          <span className="text-[10px] light:text-stone-400">
+                          <span className="text-[10px] light:text-[var(--text-secondary)]">
                             {formatTime(goal.progressSeconds || 0)} / {formatTime(goal.target.targetSeconds)}
                           </span>
                         )}
@@ -551,7 +551,7 @@ export function GoalsCard({
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={(e) => { e.stopPropagation(); startEdit(goal); }}
-                        className="w-7 h-7 rounded-md light:bg-[var(--ws-surface-sunken)] light:text-stone-400 hover:light:border-[var(--ws-border-strong)] hover:light:text-stone-900 flex items-center justify-center transition-colors"
+                        className="w-7 h-7 rounded-md light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)] hover:light:border-[var(--ws-border-strong)] hover:light:text-[var(--text-primary)] flex items-center justify-center transition-colors"
                         title="Edit goal"
                       >
                         <Edit3 size={12} />
@@ -563,7 +563,7 @@ export function GoalsCard({
                         className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                           deleteConfirmId === goal.id
                             ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                            : 'light:bg-[var(--ws-surface-sunken)] light:text-stone-400 hover:bg-red-500/20 hover:text-red-400'
+                            : 'light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400'
                         }`}
                         title={deleteConfirmId === goal.id ? 'Click again to confirm delete' : 'Delete goal'}
                       >
@@ -584,10 +584,10 @@ export function GoalsCard({
               className="flex-1 flex flex-col items-center justify-center text-center py-10"
             >
               <div className="w-14 h-14 rounded-full bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] flex items-center justify-center mb-3">
-                <Target size={24} className="text-zinc-600 light:text-stone-400" />
+                <Target size={24} className="text-zinc-600 light:text-[var(--text-secondary)]" />
               </div>
-              <p className="text-[14px] font-medium light:text-stone-400">No routines yet</p>
-              <p className="text-[12px] light:text-stone-400 mt-1 max-w-[200px]">
+              <p className="text-[14px] font-medium light:text-[var(--text-secondary)]">No routines yet</p>
+              <p className="text-[12px] light:text-[var(--text-secondary)] mt-1 max-w-[200px]">
                 Add a daily or weekly routine, or let AI suggest one from your long-term plans
               </p>
               <div className="flex items-center gap-2 mt-3">
@@ -604,7 +604,7 @@ export function GoalsCard({
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={onGenerateSuggestions}
-                  className="px-3 py-1.5 rounded-lg light:bg-[var(--ws-surface-sunken)] light:text-stone-400 border light:border-[var(--ws-border)] hover:light:border-[var(--ws-border-strong)] hover:light:text-stone-900 transition-colors text-[12px] font-medium"
+                  className="px-3 py-1.5 rounded-lg light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-secondary)] border light:border-[var(--ws-border)] hover:light:border-[var(--ws-border-strong)] hover:light:text-[var(--text-primary)] transition-colors text-[12px] font-medium"
                 >
                   <Sparkles size={12} className="inline mr-1" />
                   AI Suggest
@@ -619,7 +619,7 @@ export function GoalsCard({
           <div className="mt-3 pt-3 border-t light:border-[var(--ws-border)] shrink-0">
             <button
               onClick={() => setShowCompleted(!showCompleted)}
-              className="flex items-center gap-1.5 text-[11px] light:text-stone-400 hover:light:text-stone-900/80 transition-colors w-full py-1"
+              className="flex items-center gap-1.5 text-[11px] light:text-[var(--text-secondary)] hover:light:text-[color-mix(in_srgb,var(--text-primary)_80%,transparent)] transition-colors w-full py-1"
             >
               {showCompleted ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               <span>{completedGoals.length} completed</span>
@@ -645,12 +645,12 @@ export function GoalsCard({
                         className="flex items-center gap-2 p-2 rounded-md light:bg-white light:border-[var(--ws-border-strong)] opacity-50 hover:opacity-80 transition-opacity"
                       >
                         <Check size={12} className="text-emerald-500" />
-                        <span className="text-[12px] light:text-stone-400 line-through flex-1">{goal.title}</span>
+                        <span className="text-[12px] light:text-[var(--text-secondary)] line-through flex-1">{goal.title}</span>
                         <motion.button
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
                           onClick={() => onToggle(goal.id)}
-                          className="light:text-stone-400 hover:light:text-stone-400 p-1 rounded"
+                          className="light:text-[var(--text-secondary)] hover:light:text-[var(--text-secondary)] p-1 rounded"
                           title="Undo completion"
                         >
                           <RefreshCw size={10} />

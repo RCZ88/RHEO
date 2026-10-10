@@ -38,22 +38,103 @@ document.querySelectorAll('.dk-ext-tab').forEach(btn => {
   });
 });
 
-// ── Capture list ──
+// ── Capture list ─────────────────────────────────────────────────────────────
+// Was a stub: it hit /ai-context/stats (a route that did not exist -> 404) and
+// then wrote "No captures yet" unconditionally, so the list was empty no matter
+// what had actually been saved. It now reads the real endpoints and renders
+// proper empty / loading / error / populated states.
+const PROVIDER_TINT = {
+  chatgpt: '#10a37f', claude: '#d97757', gemini: '#4285f4', perplexity: '#20808d',
+  deepseek: '#4d6bfe', qwen: '#615ced', kimi: '#1d1d1f', chatglm: '#3859ff',
+  you: '#c8a2c8', huggingface: '#ffd21e', poe: '#5d5cde', character: '#000000',
+};
+function tintFor(p) { return PROVIDER_TINT[String(p || '').toLowerCase()] || 'var(--muted)'; }
+
+function relTime(ms) {
+  if (!ms) return '';
+  const d = Math.floor((Date.now() - ms) / 1000);
+  if (d < 60) return 'just now';
+  if (d < 3600) return Math.floor(d / 60) + 'm ago';
+  if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+  if (d < 604800) return Math.floor(d / 86400) + 'd ago';
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 async function refreshCaptureList() {
+  const listEl = $('capList');
+  if (!listEl) return;
+
+  // ── loading: skeleton rows matching the real row shape, not a bare spinner ──
+  if (!listEl.dataset.loaded) {
+    listEl.innerHTML = [0, 1].map(() =>
+      '<div class="cap-row cap-row--skeleton"><div class="sk-line"></div><div class="sk-line sk-line--short"></div></div>'
+    ).join('');
+  }
+
+  let stats = null;
   try {
-    const r = await fetch(`${DESKFLOW_SERVER}/ai-context/stats`, { signal: AbortSignal.timeout(2000) });
-    if (r.ok) {
-      const data = await r.json();
-      $('captureCount').textContent = data.total || 0;
-    }
-  } catch {}
-  // Load recent captures
+    const r = await fetch(`${DESKFLOW_SERVER}/ai-context/stats`, { signal: AbortSignal.timeout(2500) });
+    if (r.ok) stats = await r.json();
+  } catch { /* handled below */ }
+
+  if (stats) {
+    const c = $('captureCount'); if (c) c.textContent = stats.today || 0;
+    const t = $('totalCount'); if (t) t.textContent = stats.total || 0;
+  }
+
+  let data = null;
   try {
-    const r = await fetch(`${DESKFLOW_SERVER}/ai-context`, { signal: AbortSignal.timeout(2000) });
-    // The endpoint returns list via IPC; use stats for now
-    const listEl = $('capList');
-    listEl.innerHTML = '<div style="font-size:11px;color:var(--dim)">No captures yet</div>';
-  } catch {}
+    const r = await fetch(`${DESKFLOW_SERVER}/ai-context/list?limit=12`, { signal: AbortSignal.timeout(2500) });
+    if (r.ok) data = await r.json();
+  } catch { /* handled below */ }
+
+  // ── error: plain cause + recovery. Never a raw status code. ──
+  if (!data) {
+    listEl.dataset.loaded = '1';
+    listEl.innerHTML = '<div class="cap-msg cap-msg--err">'
+      + '<span>Could not reach DeskFlow.</span>'
+      + '<button class="cap-retry" id="capRetry">Retry</button></div>';
+    const btn = $('capRetry');
+    if (btn) btn.addEventListener('click', () => { delete listEl.dataset.loaded; refreshCaptureList(); });
+    return;
+  }
+
+  const rows = Array.isArray(data.captures) ? data.captures : [];
+  listEl.dataset.loaded = '1';
+
+  // ── empty: explain what would be here, not "No data" ──
+  if (!rows.length) {
+    listEl.innerHTML = '<div class="cap-msg">'
+      + '<span>Saved conversations appear here.</span>'
+      + '<em>Open ChatGPT, Claude or Gemini and the bridge captures as you chat.</em></div>';
+    return;
+  }
+
+  // ── populated ──
+  listEl.innerHTML = rows.map(c => {
+    const tint = tintFor(c.provider);
+    const host = (() => { try { return new URL(c.url).hostname.replace(/^www\./, ''); } catch { return c.provider || 'chat'; } })();
+    return '<button class="cap-row" data-id="' + c.id + '" data-url="' + (c.url || '').replace(/"/g, '&quot;') + '" title="Open this conversation">'
+      + '<span class="cap-dot" style="background:' + tint + '"></span>'
+      + '<span class="cap-main">'
+        + '<span class="cap-title">' + escapeHtml(c.title || host) + '</span>'
+        + '<span class="cap-sub">' + escapeHtml(host) + ' · ' + relTime(c.capturedAt) + '</span>'
+      + '</span>'
+      + '<span class="cap-go">→</span>'
+      + '</button>';
+  }).join('');
+
+  listEl.querySelectorAll('.cap-row[data-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const url = row.getAttribute('data-url');
+      if (url) { try { chrome.tabs.create({ url }); } catch (e) { window.open(url, '_blank'); } }
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // ── Topics & Categories ──
@@ -241,6 +322,63 @@ setInterval(refresh, 1000);
 refresh();
 fetchCaptureCount();
 
+// ── Connect gate (Firefox / Zen MV3) ────────────────────────────────────────
+// Firefox grants declared host_permissions only if the user opts in. Until they
+// do, every fetch() to localhost:54321 from here AND from the background worker
+// fails — so the popup used to show a permanent, unexplained "offline".
+// This asks the background worker what is actually wrong and shows the fix.
+async function checkConnectivity() {
+  let res = null;
+  try {
+    res = await chrome.runtime.sendMessage({ type: 'DESKFLOW_DIAGNOSE' });
+  } catch (e) {
+    res = null;
+  }
+  const gate = $('connectGate');
+  const why = $('connectWhy');
+  const btn = $('connectBtn');
+  if (!gate) return;
+
+  // Healthy: hide the gate entirely so it never occupies the popup.
+  if (res && res.permissions && res.reachable) {
+    gate.style.display = 'none';
+    return;
+  }
+  gate.style.display = 'block';
+  if (res && !res.permissions) {
+    why.textContent = 'This browser has not granted the extension access to the '
+      + 'DeskFlow app on this computer. Without it the extension cannot send anything.';
+  } else if (res && !res.reachable) {
+    why.textContent = 'Permission is granted, but the DeskFlow app is not answering '
+      + 'on port 54321. Start DeskFlow and try again.';
+  } else {
+    why.textContent = 'Could not check the connection. Open the extension\u2019s developer '
+      + 'console for details.';
+  }
+  if (btn) btn.disabled = false;
+}
+
+const connectBtn = $('connectBtn');
+if (connectBtn) {
+  connectBtn.addEventListener('click', async () => {
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Connecting…';
+    try { await chrome.runtime.sendMessage({ type: 'DESKFLOW_REQUEST_PERMISSIONS' }); }
+    catch (e) { /* surfaced by checkConnectivity below */ }
+    await checkConnectivity();
+    await refresh();
+    const gate = $('connectGate');
+    const stillFailing = gate && gate.style.display !== 'none';
+    if (stillFailing) {
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect to DeskFlow';
+    }
+  });
+}
+
+checkConnectivity();
+setInterval(checkConnectivity, 5000);
+
 async function refresh() {
   let serverHealthy = false;
   try { const r = await fetch(`${DESKFLOW_SERVER}/health`, { signal: AbortSignal.timeout(2000) }); serverHealthy = r.ok; } catch { serverHealthy = false; }
@@ -248,13 +386,44 @@ async function refresh() {
     'deskflow_sessionStart','deskflow_lastPeriodicSync','deskflow_isTrackingEnabled','deskflow_isBrowserFocused'], (data) => {
     const err = chrome.runtime.lastError;
     if (err) { $('serverVal').textContent = 'storage error'; return; }
-    const activeDomain = data.deskflow_activeTabDomain || '—';
+    const activeDomain = data.deskflow_activeTabDomain || '';
+    const activeUrl = data.deskflow_activeTabUrl || '';
+    const activeTitle = data.deskflow_activeTabTitle || '';
     const isTracking = data.deskflow_isTrackingEnabled !== false;
+
     setStatus(serverHealthy && isTracking ? 'ok' : isTracking ? 'warn' : 'off',
-      serverHealthy ? (isTracking ? 'tracking' : 'paused') : 'offline');
-    $('serverVal').textContent = serverHealthy ? 'connected' : 'offline';
-    $('domainVal').textContent = activeDomain;
-    $('titleVal').textContent = '';
+      !serverHealthy ? 'offline' : isTracking ? 'recording' : 'paused');
+    $('serverVal').textContent = !serverHealthy ? 'DeskFlow not running'
+      : isTracking ? 'connected' : 'connected · paused';
+
+    // ── hero: identity first, then the page, then state ──
+    $('domainVal').textContent = activeDomain || 'No page open';
+    $('titleVal').textContent = activeTitle || (activeDomain ? '—' : 'Open a page to start tracking');
+    const fav = $('siteFavicon');
+    if (fav) {
+      let iconUrl = '';
+      try { if (activeUrl) iconUrl = new URL(activeUrl).origin + '/favicon.ico'; } catch {}
+      if (iconUrl) {
+        fav.src = iconUrl;
+        fav.onload = () => { fav.style.opacity = '1'; };
+        fav.onerror = () => { fav.style.opacity = '0'; };
+      } else { fav.style.opacity = '0'; }
+    }
+    const st = $('siteState');
+    if (st) {
+      const label = !activeDomain ? 'idle' : !serverHealthy ? 'offline' : isTracking ? 'recording' : 'paused';
+      st.textContent = label;
+      st.className = 'pill pill--' + label;
+    }
+    const hint = $('siteHint');
+    if (hint) {
+      hint.textContent = !activeDomain ? 'Open a page to start tracking.'
+        : !serverHealthy ? 'DeskFlow is not running, so nothing is being saved.'
+        : !isTracking ? 'Tracking is paused — turn it back on above.'
+        : activeDomain.includes('localhost') || activeDomain.startsWith('127.')
+          ? 'Local pages are never tracked.'
+          : 'Recording time on this page.';
+    }
     const sessionStart = data.deskflow_sessionStart || Date.now();
     $('sessionTime').textContent = fmtDuration(Date.now() - sessionStart);
     $('syncVal').textContent = fmtSync(data.deskflow_lastPeriodicSync);

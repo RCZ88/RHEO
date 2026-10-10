@@ -1,6 +1,12 @@
 ﻿// Lyceum Learn module — IPC handler registration
 // Call registerLearnHandlers(db, callAi) from main.ts during startup
 
+// `require('../../shared/learn/types')` resolved correctly for this SOURCE
+// file but not for the OUTPUT: the bundler leaves a bare require() in
+// dist-electron/main.cjs, where '../../' points above the repo root. It sat
+// inside a `catch {}`, so the failure was silent — the learner profile
+// silently fell back to the `return null` below.
+import { DEFAULT_PROFILE } from '../../shared/learn/types';
 import { ipcMain, dialog, app, BrowserWindow } from 'electron';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
@@ -45,7 +51,6 @@ function loadLearnerProfile(db: Database): import('../../shared/learn/types').Le
     const raw = getProfileValue(db, KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    const { DEFAULT_PROFILE } = require('../../shared/learn/types');
     return { ...DEFAULT_PROFILE, ...parsed, priorKnowledge: { ...(parsed.priorKnowledge ?? {}) } };
   } catch {
     return null;

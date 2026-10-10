@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { CreditCard } from 'lucide-react'
 import { TransactionModalShell } from './TransactionModalShell'
+import { SubmitGate } from './SubmitGate'
 import { useTransactionForm } from './useTransactionForm'
 import { ContextBand, TypeToggle, AmountInput, AdvancedToggle, ProgressBar, OnBehalfOfSection, HistoricalToggle } from './modalParts'
 import { CategoryChipGrid } from './CategoryChipGrid'
@@ -36,7 +37,7 @@ export const CreditTransactionModal: React.FC<TxModalProps> = (props) => {
 			}}
 		>
 			{({ setCanSubmit }) => {
-				useEffect(() => setCanSubmit(valid), [valid, setCanSubmit])
+				<SubmitGate valid={valid} setCanSubmit={setCanSubmit} />
 				return (
 					<>
 						<ContextBand accent={ACCENT}>

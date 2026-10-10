@@ -118,7 +118,14 @@ export function DeskFlowCardMotion({
       onClick={onClick}
       style={{ zIndex, position: 'relative' }}
       className={cn(
-        "rounded-xl bg-zinc-900/80 overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.07)] flex-1 min-h-0 cursor-pointer",
+        // `bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]` is an ALPHA utility, so Tailwind inlines it as the literal
+        // `oklab(0.21 … / 0.8)`. Alpha utilities therefore ignore the token
+        // contract entirely — this is why the single most prominent card on the
+        // dashboard stayed black in light mode no matter what the theme did.
+        // 128 `bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]` sites exist; the light variant has to be written
+        // per component. Shadow also cancelled on light — it reads as dirt on
+        // paper, not depth.
+        "rounded-xl bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] overflow-hidden transition-colors duration-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.07)] light:bg-[var(--ws-surface-raised)] light:hover:shadow-[0_1px_2px_rgb(28_25_23/0.06)] flex-1 min-h-0 cursor-pointer light:border light:border-[var(--ws-border)]",
         pinned ? "ring-1 ring-amber-500/30" : "",
         className,
       )}

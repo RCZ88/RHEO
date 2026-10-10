@@ -218,7 +218,7 @@ export function WidgetHost({ block }: Props) {
 
   return (
     <div className="my-4">
-      <div className={`rounded-xl border border-zinc-700/40 overflow-hidden transition-all ${expanded ? 'fixed inset-4 z-40 bg-zinc-900' : 'bg-zinc-800/20'}`}>
+      <div className={`rounded-xl border border-zinc-700/40 overflow-hidden transition-all ${expanded ? 'fixed inset-4 z-40 bg-zinc-900 light:bg-[var(--ws-surface-raised)]' : 'bg-zinc-800/20'}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-800/30">
           <span className="text-xs font-medium text-zinc-400">
@@ -264,7 +264,7 @@ export function WidgetHost({ block }: Props) {
               ref={iframeRef}
               sandbox="allow-scripts"
               title={`Widget: ${widgetDef?.label || block.template || 'custom'}`}
-              className={`w-full ${expanded ? 'h-full' : 'h-64'} border-0 bg-zinc-950/50 ${loaded ? '' : 'hidden'}`}
+              className={`w-full ${expanded ? 'h-full' : 'h-64'} border-0 bg-zinc-950 light:bg-[var(--ws-surface)]/50 ${loaded ? '' : 'hidden'}`}
               onError={() => setError('Failed to load widget')}
             />
             {error && (

@@ -5,11 +5,11 @@ import { consumeSectionHint, scrollToSection } from '../lib/deepNav';
 import { subDays, format } from 'date-fns';
 import type { Period } from '../lib/dateRange';
 import { getDateRange } from '../lib/dateRange';
-import { BarChart3, Clock, Target, Moon, TrendingUp, TrendingDown, Activity, Zap, Sun, Globe, Monitor, PieChart, AlertTriangle, Info, RefreshCw } from 'lucide-react';
+import { BarChart3, Clock, Target, Moon, TrendingUp, TrendingDown, Activity, Zap, Sun, Globe, Monitor, PieChart, AlertTriangle, RefreshCw, Calendar } from 'lucide-react';
 import { maxOf, maxBy } from '../utils/safeMath';
 import { motion } from 'framer-motion';
 import FocusGroupVenn from '../components/FocusGroupVenn';
-import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -28,8 +28,11 @@ import { GlassCard } from '../components/GlassCard';
 import { SectionHeader } from '../components/SectionHeader';
 import { InsightCard } from '../components/insights/InsightCard';
 import { RewindPlayer } from '../components/insights/RewindPlayer';
+import { defaultRewindMonthKey, monthLabel } from '../lib/rewindPeriod';
 import type { InsightAtom } from '../shared/insights';
 import { tierColor } from '../lib/tierColors';
+import { useIsLight } from '../lib/theme';
+import { paletteFor, dataVizFor, chartOptions, categoryHex, categoryHexList, ramp, withAlpha, meterTrack } from '../lib/chartTheme';
 
 const RankingsPage = lazy(() => import('./RankingsPage'));
 
@@ -127,28 +130,20 @@ function formatDuration(seconds: number): string {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'IDE': '#6366f1',
-  'AI Tools': '#8b5cf6',
-  'Browser': '#3b82f6',
-  'Entertainment': '#ec4899',
-  'Communication': '#14b8a6',
-  'Design': '#a855f7',
-  'Productivity': '#10b981',
-  'Tools': '#f59e0b',
-  'Developer Tools': '#10b981',
-  'Social Media': '#f97316',
-  'News': '#eab308',
-  'Shopping': '#ec4899',
-  'Education': '#06b6d4',
-  'Uncategorized': '#78716c',
-  'Other': '#64748b',
-};
-
-function resolveActivityColor(name: string): string {
-  const saved = localStorage.getItem(`deskflow-category-color-${name}`);
-  if (saved) return saved;
-  return CATEGORY_COLORS[name] || '#6b7280';
+/**
+ * Activity colours come from the canonical category map (LAMINAR §5). This page
+ * used to carry its own 14-entry HEX table plus a second 8-entry rgba "rainbow"
+ * for doughnuts — two private palettes that could drift from the rest of the app
+ * and from each other. `categoryHex` (lib/chartTheme) mirrors the canonical
+ * category names as canvas/CSS colour VALUES, which is what every caller here
+ * needs: these strings are used as `backgroundColor` and interpolated into a
+ * `linear-gradient`, neither of which can read a Tailwind class.
+ */
+function resolveActivityColor(name: string, isLight: boolean): string {
+  const saved = (() => {
+    try { return localStorage.getItem(`deskflow-category-color-${name}`); } catch { return null; }
+  })();
+  return saved || categoryHex(name, isLight);
 }
 
 const hourLabels = Array.from({ length: 24 }, (_, i) => {
@@ -167,6 +162,12 @@ export default function InsightsPage({
   onDateOffsetChange,
   tierAssignments = { productive: ['IDE', 'AI Tools', 'Developer Tools', 'Education', 'Productivity', 'Tools'], neutral: ['Communication', 'Design', 'Search Engine', 'News', 'Uncategorized', 'Other', 'Browser'], distracting: ['Entertainment', 'Social Media', 'Shopping'] },
 }: InsightsPageProps) {
+  // One palette for every chart on the page, re-read when the theme flips. The
+  // six charts previously each carried their own hand-typed hex set, so they
+  // disagreed with each other AND could not follow light mode.
+  const isLight = useIsLight();
+  const pal = paletteFor(isLight);
+  const viz = dataVizFor(isLight);
   const [stats, setStats] = useState<ExternalStats>({ byActivity: {}, total_seconds: 0, sleep_deficit_seconds: 0, average_sleep_hours: 0 });
   const [consistency, setConsistency] = useState<ConsistencyData & { this_week: number; last_week: number; trend: string; streak: number }>({ score: 0, weekly_comparison: [], this_week: 0, last_week: 0, trend: 'stable', streak: 0 });
   const [sleepTrends, setSleepTrends] = useState<SleepTrend>({ daily: [], average_bedtime: '', average_wake_time: '' });
@@ -224,6 +225,8 @@ export default function InsightsPage({
   const insightFetchedRef = useRef<string>('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // A rejected IPC read must NOT be indistinguishable from a genuine zero.
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const refreshAll = useCallback(() => {
     setIsRefreshing(true);
@@ -247,11 +250,77 @@ export default function InsightsPage({
 
   useEffect(() => {
     const statsPeriod = parentPeriod === 'today' ? 'week' : parentPeriod === '7day' ? 'week' : parentPeriod === '30day' ? 'month' : parentPeriod === 'all' ? 'month' : parentPeriod;
-    window.deskflowAPI?.getExternalStats(parentPeriod).then(setStats);
-    window.deskflowAPI?.getConsistencyScore(statsPeriod as 'week' | 'month').then(setConsistency);
-    window.deskflowAPI?.getSleepTrends(parentPeriod, dateOffset).then(setSleepTrends);
-    window.deskflowAPI?.getBestDays().then(setBestDays);
-    window.deskflowAPI?.getDailyStats?.(statsPeriod as 'week' | 'month' | 'all').then((data: any) => setDailyStats(Array.isArray(data) ? data : []));
+
+    /* Field-guard discipline: an IPC that rejects, or resolves null/undefined,
+       must never reach a setter. Previously `.then(setStats)` stored whatever
+       came back, so a failed read either crashed the page at `stats.byActivity`
+       (Object.keys(null)) or silently rendered the initial all-zero object —
+       which is indistinguishable from "you did nothing". Every setter below
+       normalises, and failures are surfaced as an error rather than a zero. */
+    let cancelled = false;
+    const fail = (what: string) => { if (!cancelled) setDataError(`Could not load ${what}.`); };
+
+    window.deskflowAPI?.getExternalStats(parentPeriod)
+      .then((data: any) => {
+        if (cancelled) return;
+        if (data && typeof data === 'object') {
+          setStats({
+            byActivity: data.byActivity && typeof data.byActivity === 'object' ? data.byActivity : {},
+            total_seconds: Number(data.total_seconds) || 0,
+            sleep_deficit_seconds: Number(data.sleep_deficit_seconds) || 0,
+            average_sleep_hours: Number(data.average_sleep_hours) || 0,
+          });
+        } else fail('activity');
+      })
+      .catch(() => fail('activity'));
+
+    window.deskflowAPI?.getConsistencyScore(statsPeriod as 'week' | 'month')
+      .then((data: any) => {
+        if (cancelled) return;
+        if (data && typeof data === 'object') {
+          setConsistency({
+            ...data,
+            weekly_comparison: Array.isArray(data.weekly_comparison) ? data.weekly_comparison : [],
+            this_week: Number(data.this_week) || 0,
+            last_week: Number(data.last_week) || 0,
+            trend: typeof data.trend === 'string' ? data.trend : 'stable',
+            streak: Number(data.streak) || 0,
+          });
+        } else fail('consistency');
+      })
+      .catch(() => fail('consistency'));
+
+    window.deskflowAPI?.getSleepTrends(parentPeriod, dateOffset)
+      .then((data: any) => {
+        if (cancelled) return;
+        if (data && typeof data === 'object') {
+          setSleepTrends({
+            daily: Array.isArray(data.daily) ? data.daily : [],
+            average_bedtime: String(data.average_bedtime ?? ''),
+            average_wake_time: String(data.average_wake_time ?? ''),
+          });
+        } else fail('sleep trends');
+      })
+      .catch(() => fail('sleep trends'));
+
+    window.deskflowAPI?.getBestDays()
+      .then((data: any) => {
+        if (cancelled) return;
+        if (data && typeof data === 'object') {
+          setBestDays({
+            bestDay: String(data.bestDay ?? ''),
+            worstDay: String(data.worstDay ?? ''),
+            averages: data.averages && typeof data.averages === 'object' ? data.averages : {},
+          });
+        } else fail('best days');
+      })
+      .catch(() => fail('best days'));
+
+    window.deskflowAPI?.getDailyStats?.(statsPeriod as 'week' | 'month' | 'all')
+      .then((data: any) => { if (!cancelled) setDailyStats(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) { setDailyStats([]); fail('daily activity'); } });
+
+    return () => { cancelled = true; };
   }, [parentPeriod, dateOffset, refreshKey]);
 
   useEffect(() => {
@@ -307,7 +376,7 @@ export default function InsightsPage({
       while (curr < range.end) {
         labels.push(format(curr, 'MMM d'));
         const dayStr = format(curr, 'yyyy-MM-dd');
-        const dayData = sleepTrends.daily.find(d => d.date === dayStr);
+        const dayData = (sleepTrends?.daily ?? []).find(d => d.date === dayStr);
         sleepData.push((dayData?.sleep_seconds || 0) / 3600);
         deficitData.push((dayData?.deficit_seconds || 0) / 3600);
         curr.setDate(curr.getDate() + 1);
@@ -328,23 +397,29 @@ export default function InsightsPage({
   }, [sleepTrends, parentPeriod, dateOffset]);
 
   const weeklyData = useMemo(() => {
-    const labels = consistency.weekly_comparison.map(w => w.week.slice(5));
-    const data = consistency.weekly_comparison.map(w => w.total_seconds / 3600);
+    const weeks = consistency?.weekly_comparison ?? [];
+    const labels = weeks.map(w => String(w?.week ?? '').slice(5));
+    const data = weeks.map(w => (Number(w?.total_seconds) || 0) / 3600);
     return { labels, data };
   }, [consistency]);
 
   const dayOfWeekData = useMemo(() => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const data = days.map(d => bestDays.averages[d] || 0);
+    const avgs = bestDays?.averages ?? {};
+    const data = days.map(d => Number(avgs[d]) || 0);
     const max = maxOf(data, 1);
     return { labels: days, data, max };
   }, [bestDays]);
 
+  // LAMINAR §2: ONE signal hue per surface. This was a 10-hue rainbow cycling
+  // per index, which made an arbitrary slice order change the colours. A single
+  // hue at descending opacity encodes RANK, so the reading order is the signal.
   const breakdownColors = useMemo(() => {
-    const labels = Object.keys(stats.byActivity);
+    const labels = Object.keys(stats?.byActivity ?? {});
+    const n = Math.max(labels.length - 1, 1);
     return labels.map((_, i) => {
-      const colors = ['#22c55e', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e', '#84cc16', '#a855f7'];
-      return colors[i % colors.length];
+      const a = 1 - (i / n) * 0.75;
+      return `color-mix(in oklab, var(--page-accent) ${Math.round(a * 100)}%, var(--color-card))`;
     });
   }, [stats]);
 
@@ -362,16 +437,16 @@ export default function InsightsPage({
         ...cell,
         activities: cell.activities.map(a => ({
           ...a,
-          color: a.color || resolveActivityColor(a.activity)
+          color: a.color || resolveActivityColor(a.activity, isLight)
         }))
       }))
     );
     const legend = typicalDayData.legend.map(item => ({
       ...item,
-      color: item.color || resolveActivityColor(item.activity)
+      color: item.color || resolveActivityColor(item.activity, isLight)
     }));
     return { ...typicalDayData, grid, legend };
-  }, [typicalDayData]);
+  }, [typicalDayData, isLight]);
 
   // --- Original mode: compute actual hourly data from raw logs ---
   interface HourlySlot {
@@ -421,12 +496,10 @@ export default function InsightsPage({
 
     const slots: HourlySlot[] = Array.from({ length: 24 }, (_, h) => {
       const entries = Object.entries(hourly[h]).sort((a, b) => b[1] - a[1]);
-      const rawSeconds = entries.reduce((s, [, sec]) => s + sec, 0);
-      const avgSeconds = Math.round(rawSeconds / dayCount);
       const activities = entries.map(([name, seconds]) => ({
         name,
         seconds: Math.round(seconds / dayCount),
-        color: resolveActivityColor(name),
+        color: resolveActivityColor(name, isLight),
       })).filter(a => a.seconds > 0);
       const totalSeconds = activities.reduce((s, a) => s + a.seconds, 0);
       const primaryActivity = activities[0]?.name || 'none';
@@ -446,7 +519,7 @@ export default function InsightsPage({
       .slice(0, 8)
       .map(([activity, totalSeconds]) => ({
         activity,
-        color: resolveActivityColor(activity),
+        color: resolveActivityColor(activity, isLight),
         totalSeconds,
       }));
 
@@ -454,7 +527,7 @@ export default function InsightsPage({
     const mostActiveHour = slots.reduce((best, slot) => slot.totalSeconds > best.totalSeconds ? slot : best, slots[0]);
 
     return { slots, maxSeconds, legend, stats: { totalHours, mostActiveHour: { hour: mostActiveHour.hour, day: 0 }, mostActiveDay: 0, activityBreakdown: topActivities }, dayCount };
-  }, [logs, browserLogs]);
+  }, [logs, browserLogs, isLight]);
 
   const selectedHourData = hoveredHour !== null ? originalDayData.slots.find(s => s.hour === hoveredHour) : null;
 
@@ -547,12 +620,15 @@ export default function InsightsPage({
       external[name] = (external[name] || 0) + (data.total_seconds || 0);
     }
     const sum = (o: Record<string, number>) => Object.values(o).reduce((s, v) => s + v, 0);
+    // Three sources, so this is a genuine categorical split — but the hues come
+    // from the shared palette, and "Apps" (what this page is mostly about) takes
+    // the surface's own signal hue rather than an arbitrary violet.
     return [
-      { id: 1, name: 'Apps', color: '#6366f1', seconds: sum(apps), appSeconds: apps },
-      { id: 2, name: 'Browser', color: '#3b82f6', seconds: sum(browser), appSeconds: browser },
-      { id: 3, name: 'External', color: '#10b981', seconds: sum(external), appSeconds: external },
+      { id: 1, name: 'Apps', color: viz.accent, seconds: sum(apps), appSeconds: apps },
+      { id: 2, name: 'Browser', color: viz.neutral, seconds: sum(browser), appSeconds: browser },
+      { id: 3, name: 'External', color: viz.distracting, seconds: sum(external), appSeconds: external },
     ];
-  }, [logs, browserLogs, stats.byActivity]);
+  }, [logs, browserLogs, stats.byActivity, viz]);
 
   const timeSplit = useMemo(() => {
     const deviceSec = logs.reduce((s, l) => s + (l.duration || 0), 0) +
@@ -611,20 +687,109 @@ export default function InsightsPage({
     return { labels: entries.map(e => e[0]), values: entries.map(e => Math.round(e[1] / 3600000 * 100) / 100) };
   }, [appStats]);
 
-  const barOptions = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(24, 24, 27, 0.95)', titleColor: '#e4e4e7', bodyColor: '#a1a1aa', borderColor: 'rgba(63, 63, 70, 0.5)', borderWidth: 1, cornerRadius: 8, padding: 10 } },
-    scales: {
-      x: { ticks: { color: '#71717a', font: { size: 10 } }, grid: { color: 'rgba(113,113,122,0.08)' }, border: { color: 'rgba(113,113,122,0.15)' } },
-      y: { ticks: { color: '#71717a', font: { size: 10 } }, grid: { color: 'rgba(113,113,122,0.08)' }, border: { color: 'rgba(113,113,122,0.15)' }, title: { display: true, text: 'Hours', color: '#71717a', font: { size: 10 } } },
-    },
-  };
+  // ── Chart options ──────────────────────────────────────────────────
+  // All built from the shared factories so every chart on the page has the
+  // same grid weight, tick size, tooltip shape and unit suffix.
 
-  const chartColors = ['rgba(168, 85, 247, 0.8)', 'rgba(34, 211, 238, 0.8)', 'rgba(52, 211, 153, 0.8)', 'rgba(251, 113, 133, 0.8)', 'rgba(245, 158, 11, 0.8)', 'rgba(96, 165, 250, 0.8)', 'rgba(129, 140, 248, 0.8)', 'rgba(251, 146, 60, 0.8)'];
+  const hoursBarOptions = useMemo(
+    () => chartOptions(pal, { suffix: 'h' }),
+    [pal],
+  );
+
+  const weeklyLineOptions = useMemo(
+    () => chartOptions(pal, {
+      legend: true,
+      suffix: 'h',
+      y: { suggestedMax: 40 },
+    }),
+    [pal],
+  );
+
+  const dayOfWeekOptions = useMemo(
+    () => chartOptions(pal, { suffix: 'h' }),
+    [pal],
+  );
+
+  const sleepOptions = useMemo(
+    () => chartOptions(pal, {
+      legend: true,
+      suffix: 'h',
+      interaction: { mode: 'index', intersect: false },
+      y: { suggestedMax: 10 },
+    }),
+    [pal],
+  );
+
+  // The Recap tab carries its own legend in the card header, so Chart.js's
+  // legend would be a duplicate.
+  const recapSleepOptions = useMemo(
+    () => chartOptions(pal, { suffix: 'h', y: { suggestedMax: 10 } }),
+    [pal],
+  );
+
+  // One hue for the score gauge, chosen by band — the same three the tier list
+  // uses, so the ring and the list can never tell different stories.
+  const scoreHue = tierDistribution.score >= 70
+    ? viz.productive
+    : tierDistribution.score >= 40 ? viz.neutral : viz.distracting;
+
+  // One hue at four opacities — the heatmap's whole intensity encoding, and the
+  // same array the "Less → More" legend swatches read from, so the legend can
+  // never describe a scale the grid does not use.
+  const heat = useMemo(() => ramp(viz.accent, 4, 0.15, 0.9), [viz]);
+
+  const doughnutOptions = useMemo(
+    () => chartOptions(pal, {
+      // No x/y scales on a doughnut — passing empty ones makes Chart.js reserve
+      // padding for axes that do not exist.
+      scales: { x: { display: false }, y: { display: false } },
+      interaction: { mode: 'nearest', intersect: true },
+      suffix: 'h',
+      plugins: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: {
+            color: pal.tick,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            pointStyleRadius: 4,
+            boxHeight: 8,
+            boxWidth: 8,
+            padding: 12,
+            font: { family: 'Inter, system-ui, sans-serif', size: 11 },
+          },
+        },
+      },
+    }),
+    [pal],
+  );
 
   return (
     <PageShell page="insights" variant="sticky-header">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/60 bg-zinc-900/40 backdrop-blur-sm">
+      {/* Data-integrity banner. Without this a failed IPC read was
+          indistinguishable from a genuine all-zero period. */}
+      {dataError && (
+        <div
+          role="alert"
+          className="mx-6 mt-4 flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3"
+        >
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-amber-200">{dataError}</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              The figures below are incomplete — they are not a real zero for this period.
+            </p>
+          </div>
+          <button
+            onClick={refreshAll}
+            className="text-[11px] font-medium text-amber-200/80 hover:text-amber-100 border border-amber-500/30 rounded-lg px-2.5 py-1 shrink-0 transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
             <BarChart3 className="w-5 h-5 text-emerald-400" />
@@ -760,10 +925,10 @@ export default function InsightsPage({
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-zinc-200 group-hover:text-zinc-100 transition-colors">
-                    Your {format(new Date(), 'MMMM')} Rewind
+                    Your {monthLabel(defaultRewindMonthKey())} Rewind
                   </h3>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    See your monthly story — top apps, focus streaks, and patterns
+                    Last month's story — top apps, focus streaks, and patterns
                   </p>
                 </div>
               </div>
@@ -836,13 +1001,17 @@ export default function InsightsPage({
               };
 
               const cellBg = (cell: HourCell) => {
-                if (cell.activities.length === 0) return 'rgba(39, 39, 42, 0.5)';
+                if (cell.activities.length === 0) return meterTrack(isLight);
                 if (cell.activities.length === 1) {
+                  // Magnitude is encoded by OPACITY of one hue, never by hue
+                  // choice. This used to be a hardcoded emerald ladder
+                  // (rgba(16,185,129,…)) that ignored the surface's signal hue
+                  // and was invisible on cream.
                   const secs = cell.totalSeconds;
-                  if (secs >= 2700) return 'rgba(16, 185, 129, 0.9)';
-                  if (secs >= 1200) return 'rgba(16, 185, 129, 0.6)';
-                  if (secs >= 300) return 'rgba(16, 185, 129, 0.35)';
-                  return 'rgba(16, 185, 129, 0.15)';
+                  if (secs >= 2700) return heat[3];
+                  if (secs >= 1200) return heat[2];
+                  if (secs >= 300) return heat[1];
+                  return heat[0];
                 }
                 const segments = cell.activities.map((a, i) => {
                   const start = cell.activities.slice(0, i).reduce((s, x) => s + x.percentage, 0);
@@ -878,7 +1047,7 @@ export default function InsightsPage({
               };
               const rowVariants = {
                 hidden: { opacity: 0, x: -8 },
-                visible: { opacity: 1, x: 0, transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }
+                visible: { opacity: 1, x: 0, transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const } }
               };
 
               return (
@@ -970,19 +1139,26 @@ export default function InsightsPage({
                                       setTooltip(cellData);
                                     }
                                   }}
-                                  className="flex-1 min-h-[32px] cursor-pointer transition-all duration-150 hover:brightness-125 hover:z-10 hover:ring-1 hover:ring-pink-400/40 hover:scale-[1.02] relative flex items-center justify-center"
+                                  className="flex-1 min-h-[32px] cursor-pointer transition-opacity duration-150 hover:brightness-125 hover:z-10 hover:ring-1 focus-visible:ring-2 focus-visible:outline-none relative flex items-center justify-center"
                                   style={{
                                     background: cellBg(cell),
-                                    borderRight: '1px solid rgba(39,39,42,0.3)',
-                                    borderBottom: '1px solid rgba(39,39,42,0.3)',
-                                    outline: (tooltip?.day === dayIdx && tooltip?.hour === hourIdx) || (pinnedTooltip?.day === dayIdx && pinnedTooltip?.hour === hourIdx) ? '1.5px solid rgba(236,72,153,0.5)' : 'none',
+                                    borderRight: `1px solid ${meterTrack(isLight)}`,
+                                    borderBottom: `1px solid ${meterTrack(isLight)}`,
+                                    // Focus/selection ring uses the surface's own
+                                    // accent token, so the highlight follows the
+                                    // theme instead of a hardcoded pink.
+                                    outline: (tooltip?.day === dayIdx && tooltip?.hour === hourIdx) || (pinnedTooltip?.day === dayIdx && pinnedTooltip?.hour === hourIdx) ? `1.5px solid ${withAlpha(viz.accent, 0.65)}` : 'none',
                                     outlineOffset: '-1px',
                                   }}
                                 >
                                   {dominantActivity && (
                                     <span
                                       className="text-[8px] font-medium truncate px-0.5 leading-none"
-                                      style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.5)', maxWidth: '100%' }}
+                                      // The label sits ON the heat cell, so it needs
+                                      // to contrast with the CELL, not with the page.
+                                      // The weakest ramp step is 15% — too light for
+                                      // white text on light mode.
+                                      style={{ color: 'var(--text-primary)', maxWidth: '100%' }}
                                       title={dominantActivity}
                                     >
                                       {dominantActivity.length > 8 ? dominantActivity.slice(0, 8) + '…' : dominantActivity}
@@ -1012,7 +1188,7 @@ export default function InsightsPage({
                         initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                        className="fixed z-[9999] bg-zinc-900/95 border border-zinc-700 rounded-lg p-3 min-w-[200px] backdrop-blur-sm shadow-xl shadow-black/30"
+                        className="fixed z-[9999] bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg p-3 min-w-[200px] backdrop-blur-sm shadow-xl shadow-black/30"
                         style={{ left: tooltip.x, top: tooltip.y }}
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -1068,7 +1244,7 @@ export default function InsightsPage({
                   {/* Intensity legend */}
                   <div className="mt-3 flex items-center gap-2">
                     <span className="text-[10px] text-zinc-600">Less</span>
-                    {['rgba(16,185,129,0.15)', 'rgba(16,185,129,0.35)', 'rgba(16,185,129,0.6)', 'rgba(16,185,129,0.9)'].map((c, i) => (
+                    {heat.map((c, i) => (
                       <div key={i} className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: c }} />
                     ))}
                     <span className="text-[10px] text-zinc-600">More</span>
@@ -1303,7 +1479,7 @@ export default function InsightsPage({
                   {/* Intensity legend */}
                   <div className="mt-3 flex items-center gap-2">
                     <span className="text-[10px] text-zinc-600">Less</span>
-                    {['rgba(16,185,129,0.15)', 'rgba(16,185,129,0.35)', 'rgba(16,185,129,0.6)', 'rgba(16,185,129,0.9)'].map((c, i) => (
+                    {heat.map((c, i) => (
                       <div key={i} className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: c }} />
                     ))}
                     <span className="text-[10px] text-zinc-600">More</span>
@@ -1335,103 +1511,73 @@ export default function InsightsPage({
                         datasets: [{
                           label: 'Hours',
                           data: weeklyData.data,
-                          borderColor: '#22c55e',
+                          borderColor: viz.accent,
                           backgroundColor: (ctx) => {
-                            const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200);
-                            g.addColorStop(0, '#22c55e40');
-                            g.addColorStop(1, '#22c55e00');
+                            const { chart } = ctx;
+                            if (!chart.chartArea) return viz.accentFill;
+                            const { top, bottom } = chart.chartArea;
+                            const g = chart.ctx.createLinearGradient(0, top, 0, bottom);
+                            g.addColorStop(0, viz.accentSoft);
+                            g.addColorStop(1, withAlpha(viz.accent, 0));
                             return g;
                           },
                           fill: true,
-                          tension: 0.4,
-                          pointRadius: 3,
-                          pointHoverRadius: 5,
-                          pointBackgroundColor: '#22c55e',
-                          pointHoverBackgroundColor: '#34d399',
+                          tension: 0.35,
+                          borderWidth: 2,
+                          // No permanent dots: seven dots is seven more things
+                          // to read. They appear on hover, where they mean
+                          // something.
+                          pointRadius: 0,
+                          pointHoverRadius: 4,
+                          pointBackgroundColor: viz.accent,
+                          pointHoverBorderColor: pal.tooltipBg,
+                          pointHoverBorderWidth: 2,
                         }, {
                           label: 'Target (30h)',
                           data: weeklyData.data.map(() => 30),
-                          borderColor: '#6366f1',
-                          borderDash: [6, 4],
+                          borderColor: viz.accentFaint,
+                          borderDash: [5, 5],
                           pointRadius: 0,
+                          pointHoverRadius: 0,
                           fill: false,
-                          borderWidth: 1.5,
+                          borderWidth: 1,
                         }]
                       }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { intersect: false, mode: 'index' },
-                        plugins: {
-                          legend: { display: true, labels: { color: '#a1a1aa', usePointStyle: true, pointStyle: 'circle', padding: 12, font: { size: 11 } } },
-                          tooltip: {
-                            backgroundColor: '#18181b',
-                            borderColor: '#3f3f46',
-                            borderWidth: 1,
-                            titleColor: '#e4e4e7',
-                            bodyColor: '#a1a1aa',
-                            padding: 10,
-                            cornerRadius: 8,
-                          }
-                        },
-                        scales: {
-                          x: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } } },
-                          y: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } }, suggestedMax: 40 },
-                        }
-                      }}
+                      options={weeklyLineOptions}
                     />
                   ) : (
-                    <div className="h-full flex items-center justify-center text-zinc-600 text-sm">No data yet</div>
+                    <div className="h-full flex flex-col items-center justify-center text-center px-6">
+                      <p className="text-zinc-600 text-sm">No weeks tracked yet</p>
+                      <p className="text-zinc-700 text-xs mt-1">Weekly totals appear once a full week of activity is logged.</p>
+                    </div>
                   )}
                 </div>
               </GlassCard>
 
               <GlassCard>
                 <h3 className="text-sm font-semibold text-zinc-200 mb-1">Day of Week Performance</h3>
-                <p className="text-xs text-zinc-500 mb-4">Average active hours per day of the week. Higher bars show your most productive days.</p>
+                <p className="text-xs text-zinc-500 mb-4">Average active hours per day of the week. Your strongest day is picked out.</p>
                 <div className="h-56">
                   <Bar
                     data={{
                       labels: dayOfWeekData.labels,
                       datasets: [{
-                        label: 'Hours',
+                        label: 'Avg hours',
                         data: dayOfWeekData.data,
-                        backgroundColor: dayOfWeekData.labels.map((_, i) => {
-                          const colors = ['#22c55e60', '#0ea5e960', '#8b5cf660', '#f59e0b60', '#ec489960', '#6366f160', '#14b8a660'];
-                          return colors[i % colors.length];
-                        }),
-                        borderColor: dayOfWeekData.labels.map((_, i) => {
-                          const colors = ['#22c55e', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ec4899', '#6366f1', '#14b8a6'];
-                          return colors[i % colors.length];
-                        }),
-                        borderWidth: 1.5,
+                        // Colour here means RANK, not identity: the axis already
+                        // says which day each bar is. Seven different hues
+                        // encoded nothing and made the eye do work for free.
+                        backgroundColor: dayOfWeekData.data.map(v =>
+                          v > 0 && v === Math.max(...dayOfWeekData.data) ? viz.accent : viz.accentFill,
+                        ),
+                        hoverBackgroundColor: viz.accentSoft,
                         borderRadius: 4,
                         borderSkipped: false,
+                        barPercentage: 0.72,
+                        categoryPercentage: 0.82,
                       }]
                     }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          backgroundColor: '#18181b',
-                          borderColor: '#3f3f46',
-                          borderWidth: 1,
-                          titleColor: '#e4e4e7',
-                          bodyColor: '#a1a1aa',
-                          padding: 10,
-                          cornerRadius: 8,
-                          callbacks: {
-                            label: (ctx) => `${parseFloat(ctx.raw as string).toFixed(1)}h`,
-                          }
-                        }
-                      },
-                      scales: {
-                        x: { grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } },
-                        y: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } } },
-                      }
-                    }}
+                    options={dayOfWeekOptions}
                   />
                 </div>
               </GlassCard>
@@ -1447,7 +1593,7 @@ export default function InsightsPage({
                     {topApps.map((app, i) => {
                       const maxSec = topApps[0]?.seconds || 1;
                       const pct = (app.seconds / maxSec) * 100;
-                      const catColor = CATEGORY_COLORS[app.name] || '#6366f1';
+                      const catColor = categoryHex(app.name, isLight);
                       return (
                         <div key={i} className="flex items-center gap-2">
                           <span className="text-[11px] text-zinc-500 w-5 text-right">{i + 1}</span>
@@ -1479,7 +1625,7 @@ export default function InsightsPage({
                     {browserCategoryData.data.slice(0, 6).map((cat, i) => {
                       const maxMs = browserCategoryData.data[0]?.total_ms || 1;
                       const widthPct = (cat.total_ms / maxMs) * 100;
-                      const catColor = CATEGORY_COLORS[cat.category] || '#64748b';
+                      const catColor = categoryHex(cat.category, isLight);
                       const hours = cat.total_ms / 3600000;
                       return (
                         <div key={i} className="flex items-center gap-2">
@@ -1521,47 +1667,29 @@ export default function InsightsPage({
                         labels: sleepTrendData.labels,
                         datasets: [
                           {
-                            label: 'Sleep (h)',
+                            label: 'Sleep',
                             data: sleepTrendData.sleepData,
-                            backgroundColor: '#6366f160',
-                            borderColor: '#6366f1',
-                            borderWidth: 1,
+                            backgroundColor: viz.accent,
+                            hoverBackgroundColor: viz.accentFaint,
                             borderRadius: 3,
                             borderSkipped: false,
-                            order: 2,
+                            barPercentage: 0.9,
                           },
                           {
-                            label: 'Deficit (h)',
+                            // A deficit is genuinely the absence of something,
+                            // so it gets the one semantic hue on the page
+                            // rather than a decorative second colour.
+                            label: 'Deficit',
                             data: sleepTrendData.deficitData,
-                            backgroundColor: '#f43f5e40',
-                            borderColor: '#f43f5e',
-                            borderWidth: 1,
+                            backgroundColor: viz.deficient,
+                            hoverBackgroundColor: viz.deficient,
                             borderRadius: 3,
                             borderSkipped: false,
-                            order: 1,
+                            barPercentage: 0.9,
                           }
                         ]
                       }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: true, labels: { color: '#a1a1aa', usePointStyle: true, pointStyle: 'rectRounded', padding: 12, font: { size: 11 } } },
-                          tooltip: {
-                            backgroundColor: '#18181b',
-                            borderColor: '#3f3f46',
-                            borderWidth: 1,
-                            titleColor: '#e4e4e7',
-                            bodyColor: '#a1a1aa',
-                            padding: 10,
-                            cornerRadius: 8,
-                          }
-                        },
-                        scales: {
-                          x: { grid: { display: false }, ticks: { color: '#71717a', font: { size: 10 } } },
-                          y: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } }, beginAtZero: true },
-                        }
-                      }}
+                      options={sleepOptions}
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center text-zinc-600 text-sm">No sleep data yet</div>
@@ -1595,20 +1723,26 @@ export default function InsightsPage({
 
                 {timeSplit.total > 0 ? (
                   <>
-                    {/* Animated split bar with glass texture */}
+                    {/* Split bar. This was teal→violet gradients under a
+                        repeating 45° "glass texture", with backdrop-blur and
+                        coloured glow shadows on the legend dots. Three hues,
+                        two signal hues and an ornament, none of which carried
+                        information — and glassmorphism on chrome is a LAMINAR
+                        §7.3 failure. Device is the surface's own signal hue,
+                        external is deliberately quiet: the split's point is the
+                        proportion, not the decoration. */}
                     <div className="relative mb-6">
-                      <div className="flex h-11 rounded-xl overflow-hidden bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/40 shadow-inner">
+                      <div className="flex h-11 rounded-lg overflow-hidden" style={{ backgroundColor: meterTrack(isLight) }}>
                         <motion.div
           key={`device-${timeSplit.deviceSec}`}
           initial={{ width: 0 }}
           animate={{ width: `${timeSplit.total > 0 ? (timeSplit.deviceSec / timeSplit.total) * 100 : 0}%` }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-          className="flex items-center justify-center relative overflow-hidden"
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="flex items-center justify-center"
+          style={{ backgroundColor: viz.accent }}
         >
-                          <div className="absolute inset-0 bg-gradient-to-r from-teal-600/90 to-teal-500/80" />
-                          <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_8px,rgba(255,255,255,0.03)_8px,rgba(255,255,255,0.03)_16px)]" />
                           {timeSplit.deviceSec / timeSplit.total > 0.12 && (
-                            <span className="relative text-xs font-bold text-white drop-shadow-sm">
+                            <span className="text-xs font-semibold text-white tabular-nums">
                               {Math.round((timeSplit.deviceSec / timeSplit.total) * 100)}%
                             </span>
                           )}
@@ -1617,13 +1751,12 @@ export default function InsightsPage({
           key={`external-${timeSplit.externalSec}`}
           initial={{ width: 0 }}
           animate={{ width: `${timeSplit.total > 0 ? (timeSplit.externalSec / timeSplit.total) * 100 : 0}%` }}
-          transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
-          className="flex items-center justify-center relative overflow-hidden"
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="flex items-center justify-center"
+          style={{ backgroundColor: viz.neutral }}
         >
-                          <div className="absolute inset-0 bg-gradient-to-r from-violet-600/90 to-violet-500/80" />
-                          <div className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,transparent,transparent_8px,rgba(255,255,255,0.03)_8px,rgba(255,255,255,0.03)_16px)]" />
                           {timeSplit.externalSec / timeSplit.total > 0.12 && (
-                            <span className="relative text-xs font-bold text-white drop-shadow-sm">
+                            <span className="text-xs font-semibold tabular-nums" style={{ color: isLight ? 'var(--ws-surface-overlay)' : 'var(--color-background)' }}>
                               {Math.round((timeSplit.externalSec / timeSplit.total) * 100)}%
                             </span>
                           )}
@@ -1631,122 +1764,117 @@ export default function InsightsPage({
                       </div>
                       <div className="flex items-center justify-center gap-5 mt-2.5">
                         <div className="flex items-center gap-1.5">
-                          <div className="w-2.5 h-2.5 rounded-sm bg-teal-400 shadow-[0_0_6px_rgba(45,212,191,0.3)]" />
+                          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: viz.accent }} />
                           <span className="text-[11px] text-zinc-500">Device</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <div className="w-2.5 h-2.5 rounded-sm bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.3)]" />
+                          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: viz.neutral }} />
                           <span className="text-[11px] text-zinc-500">External</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Glass stat cards */}
+                    {/* The two split figures. Flat surface, hairline, one hue
+                        each — no glass, no gradient ornament, no glow. They sit
+                        directly under the split bar, so repeating its colours
+                        makes the two read as one measurement rather than two
+                        unrelated cards. */}
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="relative group"
+          transition={{ duration: 0.25, delay: 0.1 }}
+          className="rounded-lg p-4 border border-zinc-800/60 bg-zinc-900/30"
         >
-                          <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                          <div className="relative bg-zinc-900/40 backdrop-blur-xl rounded-xl p-4 border border-zinc-800/40 hover:border-teal-500/20 transition-colors duration-300">
                             <div className="flex items-center gap-2.5 mb-3">
-                              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500/15 to-teal-500/5 border border-teal-500/20 flex items-center justify-center shadow-lg shadow-teal-500/5">
-                                <Monitor className="w-4 h-4 text-teal-300" />
-                              </div>
+                              <Monitor className="w-4 h-4" style={{ color: viz.accent }} />
                               <span className="text-[11px] text-zinc-400 font-medium tracking-wide uppercase">Device Time</span>
                             </div>
-                            <div className="text-2xl font-bold text-teal-200 tabular-nums tracking-tight">
+                            <div className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-100">
                               {formatHours(timeSplit.deviceSec)}
                             </div>
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                              <div className="h-1 flex-1 bg-zinc-800/60 rounded-full overflow-hidden">
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <div className="h-1 flex-1 rounded-full overflow-hidden" style={{ backgroundColor: meterTrack(isLight) }}>
                                 <div
-          className="h-full rounded-full bg-gradient-to-r from-teal-500 to-teal-400"
-          style={{ width: `${timeSplit.total > 0 ? (timeSplit.deviceSec / timeSplit.total) * 100 : 0}%` }}
+          className="h-full rounded-full"
+          style={{ width: `${timeSplit.total > 0 ? (timeSplit.deviceSec / timeSplit.total) * 100 : 0}%`, backgroundColor: viz.accent }}
         />
                               </div>
                               <span className="text-[10px] text-zinc-600 tabular-nums">
                                 {timeSplit.total > 0 ? Math.round((timeSplit.deviceSec / timeSplit.total) * 100) : 0}%
                               </span>
                             </div>
-                          </div>
                         </motion.div>
 
                       <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="relative group"
+          transition={{ duration: 0.25, delay: 0.15 }}
+          className="rounded-lg p-4 border border-zinc-800/60 bg-zinc-900/30"
         >
-                          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                          <div className="relative bg-zinc-900/40 backdrop-blur-xl rounded-xl p-4 border border-zinc-800/40 hover:border-violet-500/20 transition-colors duration-300">
                             <div className="flex items-center gap-2.5 mb-3">
-                              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500/15 to-violet-500/5 border border-violet-500/20 flex items-center justify-center shadow-lg shadow-violet-500/5">
-                                <Globe className="w-4 h-4 text-violet-300" />
-                              </div>
+                              <Globe className="w-4 h-4" style={{ color: viz.neutral }} />
                               <span className="text-[11px] text-zinc-400 font-medium tracking-wide uppercase">External Time</span>
                             </div>
-                            <div className="text-2xl font-bold text-violet-200 tabular-nums tracking-tight">
+                            <div className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-100">
                               {formatHours(timeSplit.externalSec)}
                             </div>
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                              <div className="h-1 flex-1 bg-zinc-800/60 rounded-full overflow-hidden">
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <div className="h-1 flex-1 rounded-full overflow-hidden" style={{ backgroundColor: meterTrack(isLight) }}>
                                 <div
-          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-violet-400"
-          style={{ width: `${timeSplit.total > 0 ? (timeSplit.externalSec / timeSplit.total) * 100 : 0}%` }}
+          className="h-full rounded-full"
+          style={{ width: `${timeSplit.total > 0 ? (timeSplit.externalSec / timeSplit.total) * 100 : 0}%`, backgroundColor: viz.neutral }}
         />
                               </div>
                               <span className="text-[10px] text-zinc-600 tabular-nums">
                                 {timeSplit.total > 0 ? Math.round((timeSplit.externalSec / timeSplit.total) * 100) : 0}%
                               </span>
                             </div>
-                          </div>
                         </motion.div>
                     </div>
 
                     {/* Productivity breakdown with circular gauge */}
                     <div className="border-t border-zinc-700/30 pt-5">
                       <div className="flex items-center justify-center gap-8 mb-4">
-                        {/* Circular gauge */}
-                        <div className="relative" style={{ width: 110, height: 110 }}>
+                        {/* Circular gauge. The stroke was a rose→amber→emerald
+                            GRADIENT, so a low score painted only rose, a high
+                            score painted all three — i.e. the colour encoded how
+                            far round the arc was, not how good the month was.
+                            It is now ONE hue chosen by the score band, identical
+                            to the dot beside it in the list. */}
+                        <div className="relative shrink-0" style={{ width: 110, height: 110 }}>
                           <svg width={110} height={110} className="transform -rotate-90">
-                            <defs>
-                              <linearGradient id="scoreGaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#f43f5e" />
-                                <stop offset="50%" stopColor="#f59e0b" />
-                                <stop offset="100%" stopColor="#10b981" />
-                              </linearGradient>
-                            </defs>
-                            <circle cx={55} cy={55} r={47} stroke="rgba(39,39,42,0.6)" strokeWidth={8} fill="none" />
+                            <circle cx={55} cy={55} r={47} stroke={meterTrack(isLight)} strokeWidth={8} fill="none" />
                             <motion.circle
           key={`gauge-${Math.round(tierDistribution.score)}`}
           cx={55} cy={55} r={47}
-          stroke="url(#scoreGaugeGrad)"
+          stroke={scoreHue}
           strokeWidth={8}
           fill="none"
           strokeLinecap="round"
           strokeDasharray={295.31}
           initial={{ strokeDashoffset: 295.31 }}
           animate={{ strokeDashoffset: 295.31 - (tierDistribution.score / 100) * 295.31 }}
-          transition={{ duration: 1.2, ease: 'easeOut' }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         />
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className={`text-xl font-bold ${tierDistribution.score >= 70 ? 'text-emerald-300' : tierDistribution.score >= 40 ? 'text-amber-300' : 'text-rose-300'}`}>
+                            <span className="text-xl font-semibold tabular-nums text-zinc-100">
                               {Math.round(tierDistribution.score)}%
                             </span>
                             <span className="text-[9px] text-zinc-600 mt-0.5">score</span>
                           </div>
                         </div>
 
-                        {/* Tier list */}
+                        {/* Tier list. The dots previously carried a coloured
+                            `shadow-[0_0_6px_rgba(...)]` halo — decorative neon
+                            glow (LAMINAR §7.6). A flat dot in the same colour
+                            as the number is enough to bind them together. */}
                         <div className="space-y-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.3)]" />
+                            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: viz.productive }} />
                             <span className="text-xs text-zinc-400 w-20">Productive</span>
-                            <span className="text-xs font-medium text-emerald-300 tabular-nums w-14 text-right">
+                            <span className="text-xs font-medium tabular-nums w-14 text-right" style={{ color: viz.productive }}>
                               {formatDuration(tierDistribution.productive / 1000)}
                             </span>
                             <span className="text-[10px] text-zinc-600 w-8 text-right">
@@ -1754,9 +1882,9 @@ export default function InsightsPage({
                             </span>
                           </div>
                           <div className="flex items-center gap-2.5">
-                            <div className="w-2.5 h-2.5 rounded-full bg-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.3)]" />
+                            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: viz.neutral }} />
                             <span className="text-xs text-zinc-400 w-20">Neutral</span>
-                            <span className="text-xs font-medium text-blue-300 tabular-nums w-14 text-right">
+                            <span className="text-xs font-medium tabular-nums w-14 text-right" style={{ color: viz.neutral }}>
                               {formatDuration(tierDistribution.neutral / 1000)}
                             </span>
                             <span className="text-[10px] text-zinc-600 w-8 text-right">
@@ -1764,9 +1892,9 @@ export default function InsightsPage({
                             </span>
                           </div>
                           <div className="flex items-center gap-2.5">
-                            <div className="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.3)]" />
+                            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: viz.distracting }} />
                             <span className="text-xs text-zinc-400 w-20">Distracting</span>
-                            <span className="text-xs font-medium text-rose-300 tabular-nums w-14 text-right">
+                            <span className="text-xs font-medium tabular-nums w-14 text-right" style={{ color: viz.distracting }}>
                               {formatDuration(tierDistribution.distracting / 1000)}
                             </span>
                             <span className="text-[10px] text-zinc-600 w-8 text-right">
@@ -1809,12 +1937,22 @@ export default function InsightsPage({
                   {dailyTrend.values.length > 0 ? (
                     <Bar data={{
                       labels: dailyTrend.labels,
-                      datasets: [{ data: dailyTrend.values, backgroundColor: 'rgba(168, 85, 247, 0.6)', borderColor: 'rgba(168, 85, 247, 1)', borderWidth: 1, borderRadius: 6, barPercentage: 0.7 }]
-                    }} options={barOptions} />
+                      datasets: [{
+                        label: 'Hours',
+                        data: dailyTrend.values,
+                        backgroundColor: viz.accentFill,
+                        hoverBackgroundColor: viz.accent,
+                        borderRadius: 4,
+                        borderSkipped: false,
+                        barPercentage: 0.82,
+                        categoryPercentage: 0.9,
+                      }]
+                    }} options={hoursBarOptions} />
                   ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-600">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                       <BarChart3 className="w-8 h-8 mb-2 opacity-30" />
                       <span className="text-xs">No daily activity data available</span>
+                      <span className="text-[10px] text-zinc-700 mt-1">Each bar is one day of tracked time in this period.</span>
                     </div>
                   )}
                 </div>
@@ -1824,20 +1962,40 @@ export default function InsightsPage({
                 <p className="text-[11px] text-zinc-600 mb-3">Tracked time by activity type</p>
                 <div className="relative" style={{ height: 240 }}>
                   {activityCategoryDist.values.length > 0 ? (
-                    <Doughnut data={{
-                      labels: activityCategoryDist.labels,
-                      datasets: [{ data: activityCategoryDist.values, backgroundColor: activityCategoryDist.labels.map((_, i) => chartColors[i % chartColors.length]), borderColor: activityCategoryDist.labels.map((_, i) => chartColors[i % chartColors.length].replace('0.8)', '1)')), borderWidth: 1.5 }]
-                    }} options={{
-                      responsive: true, maintainAspectRatio: false,
-                      plugins: {
-                        legend: { position: 'right' as const, labels: { color: '#a1a1aa', font: { size: 11 }, padding: 12, usePointStyle: true, pointStyleWidth: 8 } },
-                        tooltip: { backgroundColor: 'rgba(24, 24, 27, 0.95)', titleColor: '#e4e4e7', bodyColor: '#a1a1aa', borderColor: 'rgba(63, 63, 70, 0.5)', borderWidth: 1, cornerRadius: 8, padding: 10 },
-                      },
-                    }} />
+                    <>
+                      <Doughnut
+                        data={{
+                          labels: activityCategoryDist.labels,
+                          datasets: [{
+                            label: 'Hours',
+                            data: activityCategoryDist.values,
+                            // Categories are genuine identities — a legend cannot
+                            // work without distinct hues — so this is the one
+                            // place a categorical palette is correct. The hues
+                            // come from the canonical category map (§5), not
+                            // from a private rainbow defined on this page.
+                            backgroundColor: categoryHexList(activityCategoryDist.labels, isLight),
+                            borderColor: pal.tooltipBg,
+                            borderWidth: 2,
+                            hoverOffset: 6,
+                          }]
+                        }}
+                        options={doughnutOptions}
+                      />
+                      {/* Centre readout — the whole reason to pick a doughnut
+                          over a pie. Previously the hole was wasted space. */}
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-xl font-semibold tabular-nums text-zinc-200">
+                          {Math.round(maxOf(activityCategoryDist.values) || 0)}h
+                        </span>
+                        <span className="text-[10px] text-zinc-500 mt-0.5">largest category</span>
+                      </div>
+                    </>
                   ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-600">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                       <PieChart className="w-8 h-8 mb-2 opacity-30" />
                       <span className="text-xs">No activity data available</span>
+                      <span className="text-[10px] text-zinc-700 mt-1">Categories appear once apps are attributed to them.</span>
                     </div>
                   )}
                 </div>
@@ -1907,7 +2065,7 @@ export default function InsightsPage({
                               animate={{ width: `${widthPct}%` }}
                               transition={{ duration: 0.5, delay: i * 0.02 }}
                               className="h-full rounded-full"
-                              style={{ backgroundColor: '#6366f188' }}
+                              style={{ backgroundColor: withAlpha(viz.accent, i === 0 ? 0.85 : 0.4) }}
                             />
                           </div>
                           <span className="text-[11px] text-zinc-300 w-28 truncate text-right">{item.name}</span>
@@ -1938,7 +2096,7 @@ export default function InsightsPage({
                               animate={{ width: `${widthPct}%` }}
                               transition={{ duration: 0.5, delay: i * 0.02 }}
                               className="h-full rounded-full"
-                              style={{ backgroundColor: '#f43f5e66' }}
+                              style={{ backgroundColor: withAlpha(viz.deficient, 0.4) }}
                             />
                           </div>
                           <span className="text-[11px] text-zinc-300 w-28 truncate text-left">{item.name}</span>
@@ -2002,7 +2160,7 @@ export default function InsightsPage({
                     {topApps.length > 0 ? topApps.map((app, i) => {
                       const maxSec = topApps[0]?.seconds || 1;
                       const pct = (app.seconds / maxSec) * 100;
-                      const catColor = CATEGORY_COLORS[app.name] || '#6366f1';
+                      const catColor = categoryHex(app.name, isLight);
                       return (
                         <div key={i} className="flex items-center gap-2 py-1 group">
                           <span className="text-[10px] text-zinc-600 w-4 text-right font-mono">{i+1}</span>
@@ -2028,7 +2186,7 @@ export default function InsightsPage({
                       const maxSec = maxBy(Object.values(stats.byActivity), v => v.total_seconds, 1);
                       const pct = (data.total_seconds / stats.total_seconds) * 100;
                       const widthPct = (data.total_seconds / maxSec) * 100;
-                      const catColor = CATEGORY_COLORS[name] || '#64748b';
+                      const catColor = categoryHex(name, isLight);
                       return (
                         <div key={name} className="flex items-center gap-2 py-1 group">
                           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
@@ -2098,7 +2256,7 @@ export default function InsightsPage({
                         return (
                           <div key={date} className="flex items-center gap-2 py-1 group">
                             <span className="text-[10px] text-zinc-600 w-16 font-mono">{format(new Date(date), 'MMM d')}</span>
-                            <div className="flex-1 h-2 bg-zinc-800/60 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: Math.min(100, (sleepH/8)*100) + '%', backgroundColor: hasDeficit ? '#f43f5e66' : '#34d39966' }} /></div>
+                            <div className="flex-1 h-2 bg-zinc-800/60 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: Math.min(100, (sleepH/8)*100) + '%', backgroundColor: hasDeficit ? withAlpha(viz.deficient, 0.4) : withAlpha(viz.productive, 0.4) }} /></div>
                             <span className={"text-[10px] font-mono w-16 text-right " + (hasDeficit ? 'text-rose-300' : 'text-emerald-300')}>{sleepH.toFixed(1)}h</span>
                             {hasDeficit && <span className="text-[10px] text-rose-400 w-12 text-right">-{deficitH.toFixed(1)}h</span>}
                           </div>
@@ -2120,7 +2278,7 @@ export default function InsightsPage({
                     {browserCategoryData.data.length > 0 ? browserCategoryData.data.map((cat, i) => {
                       const maxMs = browserCategoryData.data[0]?.total_ms || 1;
                       const widthPct = (cat.total_ms / maxMs) * 100;
-                      const catColor = CATEGORY_COLORS[cat.category] || '#64748b';
+                      const catColor = categoryHex(cat.category, isLight);
                       const hours = cat.total_ms / 3600000;
                       return (
                         <div key={i} className="flex items-center gap-2 py-1 group">
@@ -2227,18 +2385,18 @@ export default function InsightsPage({
                     <div><h3 className="text-sm font-semibold text-zinc-200">Consistency Score</h3><p className="text-[10px] text-zinc-500">Overall productivity rating</p></div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="relative" style={{ width: 72, height: 72 }}>
+                    <div className="relative shrink-0" style={{ width: 72, height: 72 }}>
                       <svg width={72} height={72} className="transform -rotate-90">
-                        <circle cx={36} cy={36} r={30} stroke="rgba(39,39,42,0.6)" strokeWidth={6} fill="none" />
-                        <motion.circle cx={36} cy={36} r={30} stroke={consistency.score >= 70 ? '#34d399' : consistency.score >= 40 ? '#f59e0b' : '#f43f5e'} strokeWidth={6} fill="none" strokeLinecap="round" strokeDasharray={188.5} initial={{ strokeDashoffset: 188.5 }} animate={{ strokeDashoffset: 188.5 - (consistency.score/100)*188.5 }} transition={{ duration: 1.2, ease: 'easeOut' }} />
+                        <circle cx={36} cy={36} r={30} stroke={meterTrack(isLight)} strokeWidth={6} fill="none" />
+                        <motion.circle cx={36} cy={36} r={30} stroke={scoreHue} strokeWidth={6} fill="none" strokeLinecap="round" strokeDasharray={188.5} initial={{ strokeDashoffset: 188.5 }} animate={{ strokeDashoffset: 188.5 - (consistency.score/100)*188.5 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }} />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className={"text-xl font-bold tabular-nums " + (consistency.score >= 70 ? 'text-emerald-300' : consistency.score >= 40 ? 'text-amber-300' : 'text-rose-300')}>{consistency.score.toFixed(0)}%</span>
+                        <span className="text-xl font-semibold tabular-nums text-zinc-100">{consistency.score.toFixed(0)}%</span>
                       </div>
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <div className="text-xs text-zinc-500">Score</div>
-                      <div className="text-lg font-bold tabular-nums" style={{ color: consistency.score >= 70 ? '#34d399' : consistency.score >= 40 ? '#f59e0b' : '#f43f5e' }}>{consistency.score.toFixed(0)}%</div>
+                      <div className="text-lg font-semibold tabular-nums" style={{ color: scoreHue }}>{consistency.score.toFixed(0)}%</div>
                       <div className="text-[10px] text-zinc-600 mt-1">{consistency.weekly_comparison.length > 0 ? 'vs ' + formatHours(consistency.weekly_comparison[0]?.total_seconds || 0) + ' best week' : 'No comparison data'}</div>
                     </div>
                   </div>
@@ -2268,28 +2426,57 @@ export default function InsightsPage({
                     <div><h3 className="text-sm font-semibold text-zinc-200">Best Day</h3><p className="text-[10px] text-zinc-500">Most productive day of week</p></div>
                   </div>
                   <div className="flex items-center gap-4 mt-2">
-                    <div className="p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30"><span className="text-2xl font-bold text-sky-200">{DAY_LABELS[bestDays.bestDay]}</span><span className="text-xs text-zinc-500 block mt-0.5">Best day</span></div>
+                    {/* `get-best-days` (src/main.ts:25140) returns bestDay/worstDay as
+                        DAY NAMES and keys `averages` by name. Indexing DAY_LABELS with
+                        that name yielded undefined, so this tile always rendered empty. */}
+                    <div className="p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30"><span className="text-2xl font-bold text-[var(--text-secondary)]">{bestDays.bestDay || '--'}</span><span className="text-xs text-zinc-500 block mt-0.5">Best day</span></div>
                     <div className="flex flex-col gap-1">
                       <div className="text-xs text-zinc-500">Avg hours</div>
-                      <div className="text-sm font-semibold text-zinc-300">{bestDays.averages[DAY_LABELS[bestDays.bestDay]] ? bestDays.averages[DAY_LABELS[bestDays.bestDay]].toFixed(1) + 'h' : '--'}</div>
-                      <div className="text-[10px] text-zinc-600 mt-1">Worst: {DAY_LABELS[bestDays.worstDay]}</div>
+                      <div className="text-sm font-semibold text-zinc-300">{Number(bestDays.averages?.[bestDays.bestDay]) > 0 ? Number(bestDays.averages[bestDays.bestDay]).toFixed(1) + 'h' : '--'}</div>
+                      <div className="text-[10px] text-zinc-600 mt-1">Worst: {bestDays.worstDay || '--'}</div>
                     </div>
                   </div>
                 </GlassCard>
               </div>
 
-              {/* Sleep Trend Chart */}
+              {/* Sleep Trend Chart. Same two-series treatment as the Weekly tab's sleep
+                    card, so the same measurement does not look like two
+                    different features. */}
               {sleepTrendData.labels.length > 0 && (
                 <GlassCard data-section="insights.recap.sleep-trend">
                   <div className="flex items-center justify-between mb-3">
                     <div><h3 className="text-sm font-semibold text-zinc-200">Sleep Trend</h3><p className="text-[10px] text-zinc-500 mt-0.5">Daily sleep hours over the selected period</p></div>
                     <div className="flex items-center gap-3 text-[10px] text-zinc-500">
-                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm bg-indigo-400" />Sleep</span>
-                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm bg-rose-400" />Deficit</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm" style={{ backgroundColor: viz.accent }} />Sleep</span>
+                      <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm" style={{ backgroundColor: viz.deficient }} />Deficit</span>
                     </div>
                   </div>
                   <div className="h-40">
-                    <Bar data={{ labels: sleepTrendData.labels, datasets: [{ label: 'Sleep (h)', data: sleepTrendData.sleepData, backgroundColor: '#6366f180', borderColor: '#6366f1', borderWidth: 1, borderRadius: 3, borderSkipped: false }, { label: 'Deficit (h)', data: sleepTrendData.deficitData, backgroundColor: '#f43f5e60', borderColor: '#f43f5e', borderWidth: 1, borderRadius: 3, borderSkipped: false }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', borderColor: '#3f3f46', borderWidth: 1, titleColor: '#e4e4e7', bodyColor: '#a1a1aa', padding: 8, cornerRadius: 6 } }, scales: { x: { grid: { display: false }, ticks: { color: '#71717a', font: { size: 9 } } }, y: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 9 } }, beginAtZero: true, suggestedMax: 10 } } }} />
+                    <Bar
+                      data={{
+                        labels: sleepTrendData.labels,
+                        datasets: [
+                          {
+                            label: 'Sleep',
+                            data: sleepTrendData.sleepData,
+                            backgroundColor: viz.accent,
+                            hoverBackgroundColor: viz.accentFaint,
+                            borderRadius: 3,
+                            borderSkipped: false,
+                            barPercentage: 0.9,
+                          },
+                          {
+                            label: 'Deficit',
+                            data: sleepTrendData.deficitData,
+                            backgroundColor: viz.deficient,
+                            borderRadius: 3,
+                            borderSkipped: false,
+                            barPercentage: 0.9,
+                          },
+                        ],
+                      }}
+                      options={recapSleepOptions}
+                    />
                   </div>
                 </GlassCard>
               )}

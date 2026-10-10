@@ -202,7 +202,7 @@ export function PlanBoard(props: PlanBoardProps) {
               rows={12}
               spellCheck={false}
               placeholder="# This week\n- …"
-              className="w-full resize-none rounded-lg bg-zinc-950/60 p-3 text-[13px] leading-6 text-zinc-100 placeholder:text-zinc-600 ring-1 ring-zinc-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/60"
+              className="w-full resize-none rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 text-[13px] leading-6 text-zinc-100 placeholder:text-zinc-600 ring-1 ring-zinc-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/60"
               style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}
             />
           </VoiceInputWrapper>
@@ -314,7 +314,7 @@ function LongTermRow({
   const accentKey = (CATEGORY_ACCENT[goal.category] ?? "violet") as keyof typeof ACCENT
 
   return (
-    <div className="relative rounded-lg bg-zinc-950/40 p-3 ring-1 ring-zinc-800/50 transition-[box-shadow] duration-150 hover:ring-zinc-700 group">
+    <div className="relative rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3 ring-1 ring-zinc-800/50 transition-[box-shadow] duration-150 hover:ring-zinc-700 group">
       <div className="flex items-center gap-2.5">
         <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", ACCENT[accentKey].dot)} />
         <button
@@ -347,7 +347,7 @@ function LongTermRow({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -4 }}
                 transition={{ duration: 0.1 }}
-                className="absolute right-0 top-full mt-1 z-50 min-w-[150px] overflow-hidden rounded-lg border border-zinc-800/60 bg-zinc-900/95 backdrop-blur-xl py-1 shadow-xl"
+                className="absolute right-0 top-full mt-1 z-50 min-w-[150px] overflow-hidden rounded-lg border border-zinc-800/60 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl py-1 shadow-xl"
               >
                 <button
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-zinc-300 hover:bg-zinc-800/60 transition-colors"
@@ -407,7 +407,7 @@ function GoalDetailModal({ goal, onClose }: { goal: LongTermGoal; onClose: () =>
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md rounded-xl border border-zinc-800/60 bg-zinc-950 p-6 shadow-2xl"
+        className="relative w-full max-w-md rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)] p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
@@ -437,18 +437,18 @@ function GoalDetailModal({ goal, onClose }: { goal: LongTermGoal; onClose: () =>
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-zinc-950/40 p-3 ring-1 ring-zinc-800/50">
+            <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3 ring-1 ring-zinc-800/50">
               <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Category</div>
               <div className="flex items-center gap-2">
                 <span className={cn("h-2 w-2 rounded-full", ACCENT[accentKey].dot)} />
                 <span className="text-[12px] text-zinc-300 capitalize">{goal.category}</span>
               </div>
             </div>
-            <div className="rounded-lg bg-zinc-950/40 p-3 ring-1 ring-zinc-800/50">
+            <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3 ring-1 ring-zinc-800/50">
               <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Priority</div>
               <span className="text-[12px] text-zinc-300">P{goal.priority}</span>
             </div>
-            <div className="rounded-lg bg-zinc-950/40 p-3 ring-1 ring-zinc-800/50">
+            <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3 ring-1 ring-zinc-800/50">
               <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Status</div>
               <span className={cn("text-[12px] capitalize font-medium",
                 goal.status === "done" ? "text-emerald-400" :
@@ -457,14 +457,14 @@ function GoalDetailModal({ goal, onClose }: { goal: LongTermGoal; onClose: () =>
                 {goal.status}
               </span>
             </div>
-            <div className="rounded-lg bg-zinc-950/40 p-3 ring-1 ring-zinc-800/50">
+            <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3 ring-1 ring-zinc-800/50">
               <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Created</div>
               <span className="text-[12px] text-zinc-300">{createdAt}</span>
             </div>
           </div>
 
           {goal.target_seconds ? (
-            <div className="rounded-lg bg-zinc-950/40 p-3 ring-1 ring-zinc-800/50">
+            <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3 ring-1 ring-zinc-800/50">
               <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Target</div>
               <span className="text-[12px] text-zinc-300">{Math.round(goal.target_seconds / 3600)} hours</span>
             </div>
@@ -517,7 +517,7 @@ function GoalEditModal({
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md rounded-xl border border-zinc-800/60 bg-zinc-950 p-6 shadow-2xl"
+        className="relative w-full max-w-md rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)] p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-[15px] font-semibold text-zinc-100">Edit Goal</h3>
@@ -538,7 +538,7 @@ function GoalEditModal({
                 type="text"
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                className="w-full rounded-lg bg-zinc-950/40 border border-zinc-800/60 px-3 py-2 text-[13px] text-zinc-200 outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600/50 transition-all"
+                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 border border-zinc-800/60 px-3 py-2 text-[13px] text-zinc-200 outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600/50 transition-all"
                 required
               />
             </VoiceInputWrapper>
@@ -551,7 +551,7 @@ function GoalEditModal({
                 value={form.description || ""}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 rows={3}
-                className="w-full rounded-lg bg-zinc-950/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-400 outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600/50 resize-none transition-all"
+                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-400 outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600/50 resize-none transition-all"
               />
             </VoiceInputWrapper>
           </div>
@@ -562,7 +562,7 @@ function GoalEditModal({
               <select
                 value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value as GoalCategory }))}
-                className="w-full rounded-lg bg-zinc-950/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-300 outline-none focus:border-zinc-600 transition-all"
+                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-300 outline-none focus:border-zinc-600 transition-all"
               >
                 {(["work", "personal", "health", "learning", "finance", "relationships"] as GoalCategory[]).map(c => (
                   <option key={c} value={c}>{c}</option>
@@ -574,7 +574,7 @@ function GoalEditModal({
               <select
                 value={form.priority}
                 onChange={e => setForm(f => ({ ...f, priority: Number(e.target.value) }))}
-                className="w-full rounded-lg bg-zinc-950/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-300 outline-none focus:border-zinc-600 transition-all"
+                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-300 outline-none focus:border-zinc-600 transition-all"
               >
                 {[1, 2, 3, 4, 5].map(p => (
                   <option key={p} value={p}>P{p}</option>
@@ -597,7 +597,7 @@ function GoalEditModal({
                       ? s === "done" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                       : s === "missed" ? "border-red-500/30 bg-red-500/10 text-red-300"
                       : "border-zinc-600 bg-zinc-800/60 text-zinc-200"
-                      : "border-zinc-800/60 bg-zinc-950/40 text-zinc-500 hover:border-zinc-700"
+                      : "border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 text-zinc-500 hover:border-zinc-700"
                   )}
                 >
                   {s}
@@ -610,7 +610,7 @@ function GoalEditModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-zinc-800/60 bg-zinc-950/40 px-4 py-2 text-[12px] text-zinc-400 hover:bg-zinc-800/40 transition-colors"
+              className="flex-1 rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-4 py-2 text-[12px] text-zinc-400 hover:bg-zinc-800/40 transition-colors"
             >
               Cancel
             </button>
@@ -656,7 +656,7 @@ function DeleteConfirmDialog({
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-sm rounded-xl border border-zinc-800/60 bg-zinc-950 p-6 shadow-2xl"
+        className="relative w-full max-w-sm rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)] p-6 shadow-2xl"
       >
         <div className="flex items-center gap-3 mb-4">
           <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
@@ -671,7 +671,7 @@ function DeleteConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-lg border border-zinc-800/60 bg-zinc-950/40 px-4 py-2 text-[12px] text-zinc-400 hover:bg-zinc-800/40 transition-colors"
+            className="flex-1 rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-4 py-2 text-[12px] text-zinc-400 hover:bg-zinc-800/40 transition-colors"
           >
             Cancel
           </button>
@@ -723,7 +723,7 @@ function AddGoalDialog({
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg rounded-xl border border-zinc-800/60 bg-zinc-950 p-6 shadow-2xl"
+        className="relative w-full max-w-lg rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)] p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -745,14 +745,14 @@ function AddGoalDialog({
             onChange={e => onDumpChange(e.target.value)}
             rows={5}
             placeholder="I want to learn Rust, run a marathon, save $10k..."
-            className="w-full rounded-lg bg-zinc-950/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-300 outline-none focus:border-zinc-600 resize-none mb-3"
+            className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 border border-zinc-800/60 px-3 py-2 text-[12px] text-zinc-300 outline-none focus:border-zinc-600 resize-none mb-3"
           />
         </VoiceInputWrapper>
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 px-4 py-2 text-[12px] text-zinc-400 hover:bg-zinc-800/40 transition-colors"
+            className="rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-4 py-2 text-[12px] text-zinc-400 hover:bg-zinc-800/40 transition-colors"
           >
             Cancel
           </button>
@@ -770,7 +770,7 @@ function AddGoalDialog({
           <div className="mt-4 space-y-2">
             <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Extracted Goals</div>
             {parsedGoals.map((g, i) => (
-              <div key={i} className="rounded-lg bg-zinc-950/40 p-3 ring-1 ring-zinc-800/50">
+              <div key={i} className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3 ring-1 ring-zinc-800/50">
                 <div className="text-[13px] text-zinc-200 font-medium">{g.title}</div>
                 {g.description && <p className="text-[11px] text-zinc-400 mt-1">{g.description}</p>}
               </div>

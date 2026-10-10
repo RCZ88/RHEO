@@ -300,7 +300,7 @@ export default function InitializeProgressModal({
                     className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                       projectType === 'new'
                         ? 'bg-green-600/20 border border-green-500/40 text-green-300'
-                        : 'bg-zinc-900/50 border border-zinc-700/50 text-zinc-500 hover:bg-zinc-800/50'
+                        : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-500 hover:bg-zinc-800/50'
                     }`}
                   >
                     <div className="font-semibold mb-0.5">New Project</div>
@@ -311,7 +311,7 @@ export default function InitializeProgressModal({
                     className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                       projectType === 'existing'
                         ? 'bg-amber-600/20 border border-amber-500/40 text-amber-300'
-                        : 'bg-zinc-900/50 border border-zinc-700/50 text-zinc-500 hover:bg-zinc-800/50'
+                        : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-zinc-500 hover:bg-zinc-800/50'
                     }`}
                   >
                     <div className="font-semibold mb-0.5">Existing Project</div>
@@ -327,7 +327,7 @@ export default function InitializeProgressModal({
                     <select
                       value={seedAgent}
                       onChange={e => setSeedAgent(e.target.value)}
-                      className="w-full bg-zinc-900/60 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-600/60 focus:border-zinc-600 transition-colors"
+                      className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-600/60 focus:border-zinc-600 transition-colors"
                     >
                       {SUPPORTED_AGENTS.map(a => (
                         <option key={a.id} value={a.id}>{a.name}</option>
@@ -339,7 +339,7 @@ export default function InitializeProgressModal({
                     <textarea
                       value={seedPrompt}
                       onChange={e => setSeedPrompt(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded px-2.5 py-2 text-xs text-zinc-200 min-h-[120px] resize-y font-mono"
+                      className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded px-2.5 py-2 text-xs text-zinc-200 min-h-[120px] resize-y font-mono"
                     />
                   </div>
                 </>
@@ -412,7 +412,7 @@ export default function InitializeProgressModal({
             )}
           </div>
 
-          <div className="h-2 bg-zinc-900 rounded-full overflow-hidden mb-4">
+          <div className="h-2 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-full overflow-hidden mb-4">
             <motion.div
               className={`h-full rounded-full transition-colors duration-300 ${
                 hasError
@@ -556,7 +556,7 @@ export default function InitializeProgressModal({
                                   <X className="w-3 h-3" />
                                 </button>
                               </div>
-                              <pre className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-700/50 text-[11px] text-zinc-400 font-mono max-h-[200px] overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                              <pre className="p-3 rounded-lg bg-zinc-900/90 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-[11px] text-zinc-400 font-mono max-h-[200px] overflow-y-auto whitespace-pre-wrap leading-relaxed">
                                 {step.content}
                               </pre>
                             </div>

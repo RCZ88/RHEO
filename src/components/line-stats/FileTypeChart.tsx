@@ -12,7 +12,7 @@ function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const data = payload[0].payload;
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 shadow-xl">
+    <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg p-3 shadow-xl">
       <div className="text-xs font-semibold text-zinc-100 mb-1.5">{label} ({data.count} files)</div>
       {payload.map((entry: any) => (
         <div key={entry.name} className="flex items-center gap-2 text-[10px]">
@@ -44,7 +44,7 @@ export default function FileTypeChart({ summary }: Props) {
   if (data.length === 0) return null;
 
   return (
-    <div className="rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-4">
+    <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-4">
       <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Lines by File Type</h3>
       <ResponsiveContainer width="100%" height={Math.max(200, data.length * 32 + 40)}>
         <BarChart data={data} layout="vertical" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>

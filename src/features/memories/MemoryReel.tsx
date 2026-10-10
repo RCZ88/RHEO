@@ -35,14 +35,14 @@ export function MemoryReel({ items, onOpen, onPlayRecap }: MemoryReelProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="relative rounded-xl overflow-hidden border border-[#6fb38f]/20">
+    <div className="relative rounded-xl overflow-hidden border border-[var(--color-mem-400)]/20">
       <div className="flex items-center justify-between px-4 pt-3">
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6fb38f]">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[var(--color-mem-400)]">
           <Film className="w-3.5 h-3.5" /> Your life on film
         </div>
         <button
           onClick={onPlayRecap}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#6fb38f]/15 text-[#6fb38f] text-[11px] font-semibold hover:bg-[#6fb38f]/25 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-mem-400)]/15 text-[var(--color-mem-400)] text-[11px] font-semibold hover:bg-[var(--color-mem-400)]/25 transition-colors"
         >
           <Play className="w-3 h-3" /> Play recap
         </button>

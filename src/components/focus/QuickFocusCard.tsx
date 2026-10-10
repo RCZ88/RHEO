@@ -85,10 +85,10 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
               value={active && mode === 'stopwatch' ? stopwatchElapsed : remainingSec}
               duration={active ? 600 : 200}
               formatter={fmtClock}
-              className="text-2xl font-bold tabular-nums font-mono text-white light:text-stone-900"
+              className="text-2xl font-bold tabular-nums font-mono text-white light:text-[var(--text-primary)]"
             />
           </AnimatedCircularProgressBar>
-          <span className="text-[10px] text-white/50 light:text-stone-500">
+          <span className="text-[10px] text-white/50 light:text-[var(--text-muted)]">
             {active ? (mode === 'stopwatch' ? 'elapsed' : 'remaining') : mode === 'stopwatch' ? 'count up' : 'count down'}
           </span>
 
@@ -99,7 +99,7 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
                 className="w-full text-center"
                 style={{ animation: 'fadeIn 200ms ease-out' }}
               >
-                <p className="text-xs text-white/50 light:text-stone-500 mb-4">
+                <p className="text-xs text-white/50 light:text-[var(--text-muted)] mb-4">
                   Distracting {state.strictness === 'non_allowed' ? '& neutral ' : ''}apps/sites will prompt you.
                 </p>
                 <Button
@@ -118,14 +118,14 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
                 className="w-full"
                 style={{ animation: 'fadeIn 200ms ease-out' }}
               >
-                <div className="flex gap-1 mb-3 p-1 bg-zinc-800/40 light:bg-stone-100 rounded-lg">
+                <div className="flex gap-1 mb-3 p-1 bg-zinc-800/40 light:bg-[var(--ws-surface-raised)] rounded-lg">
                   <Button
                     onClick={() => setMode('timer')}
                     whileTap={tapScale}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                       mode === 'timer'
                         ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]'
-                        : 'text-white/50 hover:text-white/60 light:text-stone-500 hover:light:text-stone-800'
+                        : 'text-white/50 hover:text-white/60 light:text-[var(--text-muted)] hover:light:text-[var(--text-primary)]'
                     }`}
                     variant="ghost"
                     size="sm"
@@ -139,7 +139,7 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                       mode === 'stopwatch'
                         ? 'bg-amber-500/20 text-amber-300'
-                        : 'text-white/50 hover:text-white/60 light:text-stone-500 hover:light:text-stone-800'
+                        : 'text-white/50 hover:text-white/60 light:text-[var(--text-muted)] hover:light:text-[var(--text-primary)]'
                     }`}
                     variant="ghost"
                     size="sm"
@@ -159,7 +159,7 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
                         className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
                           mins === p.sec / 60
                             ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]'
-                            : 'bg-zinc-800/60 light:bg-stone-100 text-white/60 light:text-stone-600 hover:bg-zinc-800 hover:light:bg-stone-200/60'
+                            : 'bg-zinc-800/60 light:bg-[var(--ws-surface-raised)] text-white/60 light:text-[var(--text-secondary)] hover:bg-zinc-800 hover:light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_60%,transparent)]'
                         }`}
                         variant="ghost"
                         size="sm"
@@ -184,7 +184,7 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
         </div>
       </CardContent>
       <CardFooter className="px-5 pb-4 pt-1">
-        <p className="text-[10px] text-white/40 light:text-stone-500 leading-relaxed text-center w-full">
+        <p className="text-[10px] text-white/40 light:text-[var(--text-muted)] leading-relaxed text-center w-full">
           Soft-block overlay — not enforcement. Your choice is always logged.
         </p>
       </CardFooter>

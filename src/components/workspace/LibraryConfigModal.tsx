@@ -199,13 +199,13 @@ export default function LibraryConfigModal({ open, onClose, config: externalConf
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950 light:bg-[var(--ws-surface)]/80 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.97 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/60 overflow-hidden"
+            className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-zinc-800/60 shrink-0">
@@ -267,7 +267,7 @@ export default function LibraryConfigModal({ open, onClose, config: externalConf
                           value={cfg.mcpCommand || ''}
                           onChange={e => updateSource(source.id, { mcpCommand: e.target.value })}
                           placeholder="npx -y @package/mcp"
-                          className="w-full px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-700/60 rounded-lg
+                          className="w-full px-2.5 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/60 rounded-lg
                             text-xs font-mono text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600
                             transition-colors duration-150"
                         />
@@ -280,7 +280,7 @@ export default function LibraryConfigModal({ open, onClose, config: externalConf
                             value={cfg.apiKey || ''}
                             onChange={e => updateSource(source.id, { apiKey: e.target.value })}
                             placeholder="sk-..."
-                            className="w-full px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-700/60 rounded-lg
+                            className="w-full px-2.5 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/60 rounded-lg
                               text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600
                               transition-colors duration-150"
                           />
@@ -293,7 +293,7 @@ export default function LibraryConfigModal({ open, onClose, config: externalConf
                             type="text"
                             value={cfg.registryUrl || ''}
                             onChange={e => updateSource(source.id, { registryUrl: e.target.value })}
-                            className="w-full px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-700/60 rounded-lg
+                            className="w-full px-2.5 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/60 rounded-lg
                               text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600
                               transition-colors duration-150"
                           />

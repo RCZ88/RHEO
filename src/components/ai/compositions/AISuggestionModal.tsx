@@ -77,13 +77,13 @@ export function AISuggestionModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#18181b] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+      <div className="w-full max-w-lg rounded-xl border border-[var(--dk-border-subtle)] bg-[var(--dk-bg-surface)] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[var(--dk-border-subtle)] px-5 py-3">
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-violet-400" />
             <h3 className={cn('text-[14px] font-semibold', TEXT.primary)}>Generate automation with AI</h3>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white" aria-label="Close">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--dk-bg-raised)] hover:text-[var(--text-primary)]" aria-label="Close">
             <X size={16} />
           </button>
         </div>
@@ -96,12 +96,12 @@ export function AISuggestionModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setRequest(e.target.value)}
               rows={3}
               placeholder="e.g. When I log a transaction over $500, notify me"
-              className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-violet-500/60"
+              className="w-full resize-none rounded-xl border border-[var(--dk-border-subtle)] bg-black/30 px-3 py-2 text-[13px] text-[var(--text-primary)] outline-none focus:border-violet-500/60"
             />
             <button
               onClick={generate}
               disabled={loading || !request.trim()}
-              className="mt-2 flex items-center gap-2 rounded-xl bg-violet-600/80 px-4 py-2 text-[12px] font-medium text-white transition-colors hover:bg-violet-500/80 disabled:opacity-40"
+              className="mt-2 flex items-center gap-2 rounded-xl bg-violet-600/80 px-4 py-2 text-[12px] font-medium text-[var(--text-primary)] transition-colors hover:bg-violet-500/80 disabled:opacity-40"
             >
               <Sparkles size={14} /> {loading ? 'Generating…' : 'Generate'}
             </button>
@@ -126,7 +126,7 @@ export function AISuggestionModal({ onClose }: { onClose: () => void }) {
                   value={dsl}
                   onChange={(e) => setDsl(e.target.value)}
                   rows={4}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-[12px] text-emerald-300 outline-none focus:border-violet-500/60"
+                  className="w-full resize-none rounded-xl border border-[var(--dk-border-subtle)] bg-black/30 px-3 py-2 font-mono text-[12px] text-emerald-300 outline-none focus:border-violet-500/60"
                 />
               </div>
 
@@ -158,7 +158,7 @@ export function AISuggestionModal({ onClose }: { onClose: () => void }) {
               <button
                 onClick={create}
                 disabled={creating || !dsl.trim()}
-                className="flex items-center gap-2 rounded-xl bg-emerald-600/80 px-4 py-2 text-[12px] font-medium text-white transition-colors hover:bg-emerald-500/80 disabled:opacity-40"
+                className="flex items-center gap-2 rounded-xl bg-emerald-600/80 px-4 py-2 text-[12px] font-medium text-[var(--text-primary)] transition-colors hover:bg-emerald-500/80 disabled:opacity-40"
               >
                 <Plus size={14} /> {creating ? 'Creating…' : 'Create automation'}
               </button>

@@ -56,7 +56,7 @@ export function VideoAssetBlock({ block, nodeId }: Props) {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+        className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] overflow-hidden"
       >
         <video
           controls
@@ -98,8 +98,8 @@ export function VideoAssetBlock({ block, nodeId }: Props) {
           </div>
         </div>
         {meta.python_source && (
-          <div className="rounded-lg bg-zinc-950 border border-zinc-800 overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800/60 bg-zinc-900/50">
+          <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800/60 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]">
               <Code className="w-3 h-3 text-zinc-500" />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Manim Source</span>
             </div>
@@ -122,7 +122,7 @@ export function VideoAssetBlock({ block, nodeId }: Props) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-5"
+      className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-5"
     >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-clay-500/10 border border-clay-500/20 flex items-center justify-center shrink-0">
@@ -147,7 +147,7 @@ export function VideoAssetBlock({ block, nodeId }: Props) {
       {meta.python_source && (
         <details className="mt-3">
           <summary className="text-xs text-zinc-600 cursor-pointer hover:text-zinc-400">Show source code</summary>
-          <pre className="mt-2 p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-400 overflow-x-auto max-h-48 font-mono">
+          <pre className="mt-2 p-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800 text-xs text-zinc-400 overflow-x-auto max-h-48 font-mono">
             {meta.python_source}
           </pre>
         </details>

@@ -126,7 +126,9 @@ export function ProductivityFocusZone({
                 <div
                   key={stat.label}
                   className="relative p-3.5 rounded-xl border border-zinc-700 light:border-zinc-300/40 light:border-zinc-200/40 text-center overflow-hidden group"
-                  style={{ background: `linear-gradient(135deg, ${stat.color}10, rgba(9,9,11,0.8))` }}
+                  /* rgba(9,9,11,0.8) is the dark surface; on paper it terminated the gradient
+                     in near-black. */
+                  style={{ background: `linear-gradient(135deg, ${stat.color}10, color-mix(in srgb, var(--ws-surface) 80%, transparent))` }}
                 >
                   {/* Top edge glow */}
                   <div

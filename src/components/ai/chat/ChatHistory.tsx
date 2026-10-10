@@ -27,6 +27,10 @@ export function ChatHistory(props: ChatHistoryProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const editInputRef = useRef<HTMLInputElement>(null)
+  const confirmTimer = useRef<number | null>(null)
+  const [query, setQuery] = useState("")
+
+  useEffect(() => () => { if (confirmTimer.current) clearTimeout(confirmTimer.current) }, [])
 
   useEffect(() => {
     if (editingId && editInputRef.current) {
@@ -41,19 +45,25 @@ export function ChatHistory(props: ChatHistoryProps) {
       setConfirmDelete(null)
     } else {
       setConfirmDelete(date)
-      setTimeout(() => setConfirmDelete(null), 3000)
+      if (confirmTimer.current) clearTimeout(confirmTimer.current)
+      confirmTimer.current = window.setTimeout(() => setConfirmDelete(null), 3000)
     }
   }, [confirmDelete, props])
 
   const startRename = useCallback((thread: ChatThread) => {
+    committedRef.current = null
     setEditingId(thread.threadDate)
     setEditValue(thread.title || formatDateFull(thread.threadDate))
   }, [])
 
+  /* Enter and blur BOTH reach this. Without a guard the rename IPC fired twice
+     per rename (Enter commits, then the input unmounts and blur commits again). */
+  const committedRef = useRef<string | null>(null)
   const commitRename = useCallback(() => {
-    if (editingId && editValue.trim()) {
-      props.onRenameThread(editingId, editValue.trim())
-    }
+    if (!editingId) return
+    if (committedRef.current === editingId) { setEditingId(null); return }
+    committedRef.current = editingId
+    if (editValue.trim()) props.onRenameThread(editingId, editValue.trim())
     setEditingId(null)
   }, [editingId, editValue, props])
 

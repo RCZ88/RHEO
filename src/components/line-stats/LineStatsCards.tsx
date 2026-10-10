@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { FileCode, Code, MessageSquare, Minus } from 'lucide-react';
+import { TOTAL_EXCLUDED, type ExclusionReport } from './lineStatsFilter';
 
 interface Props {
   totalFiles: number;
@@ -7,6 +8,8 @@ interface Props {
   codeLines: number;
   commentLines: number;
   blankLines: number;
+  /** When present, the "Total Files" card states how many rows were removed and why. */
+  report?: ExclusionReport | null;
 }
 
 function AnimatedNumber({ value, duration = 1200 }: { value: number; duration?: number }) {
@@ -39,13 +42,21 @@ const cards = [
   { key: 'blank', label: 'Blank Lines', sub: 'whitespace', icon: Minus, color: 'text-zinc-400', bg: 'bg-zinc-400/10' },
 ];
 
-export default function LineStatsCards({ totalFiles, totalLines, codeLines, commentLines, blankLines }: Props) {
+export default function LineStatsCards({ totalFiles, codeLines, commentLines, blankLines, report }: Props) {
   const values: Record<string, number> = { files: totalFiles, code: codeLines, comments: commentLines, blank: blankLines };
+  const subs: Record<string, string> = {
+    files: report && TOTAL_EXCLUDED(report) > 0
+      ? `of ${report.inputFiles} scanned — ${TOTAL_EXCLUDED(report)} excluded`
+      : 'scanned files',
+    code: 'actual code',
+    comments: 'documentation',
+    blank: 'whitespace',
+  };
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {cards.map((card) => (
-        <div key={card.key} className="rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-4">
+        <div key={card.key} className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className={`p-1.5 rounded-lg ${card.bg}`}>
               <card.icon className={`w-3.5 h-3.5 ${card.color}`} />
@@ -55,7 +66,7 @@ export default function LineStatsCards({ totalFiles, totalLines, codeLines, comm
           <div className={`text-xl font-bold ${card.color} tabular-nums`}>
             <AnimatedNumber value={values[card.key]} />
           </div>
-          <div className="text-[10px] text-zinc-600 mt-0.5">{card.sub}</div>
+          <div className="text-[10px] text-zinc-600 mt-0.5">{subs[card.key] || card.sub}</div>
         </div>
       ))}
     </div>

@@ -89,7 +89,7 @@ export default function AICityscape({
 
   return (
     <div
-      className={`relative rounded-xl overflow-hidden bg-zinc-950 h-[500px] min-h-[440px] ${className ?? ""}`}
+      className={`relative rounded-xl overflow-hidden bg-zinc-950 light:bg-[var(--ws-surface)] h-[500px] min-h-[440px] ${className ?? ""}`}
     >
       {loading || activeCount === 0 ? (
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">

@@ -10,6 +10,7 @@ import {
   Search,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useMotionPreferenceSetter } from "./use-motion-preference";
 
 type Item = {
   id: string;
@@ -20,19 +21,22 @@ type Item = {
   run: () => void;
 };
 
+/**
+ * Must match the five sections in app/page.tsx exactly.
+ *
+ * WAS nine entries pointing at ids that no longer exist (#manifesto,
+ * #capabilities, #learn, #atlas, #flow), so ⌘K scrolled to nothing.
+ */
 const SECTIONS = [
   { id: "hero", label: "Hero — Time, made legible" },
-  { id: "manifesto", label: "Manifesto — Observe" },
-  { id: "act-record", label: "Act II — Record" },
-  { id: "capabilities", label: "Capabilities" },
-  { id: "understand", label: "Act III — Understand" },
-  { id: "learn", label: "Act IV — Learn" },
-  { id: "atlas", label: "The Atlas" },
-  { id: "flow", label: "Act V — Flow" },
-  { id: "download", label: "Download" },
+  { id: "act-record", label: "The record" },
+  { id: "gallery", label: "The whole app" },
+  { id: "understand", label: "What it becomes" },
+  { id: "download", label: "Get it" },
 ];
 
 export default function CommandPalette() {
+  const { mode, setMode } = useMotionPreferenceSetter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -117,19 +121,24 @@ export default function CommandPalette() {
         },
       },
       {
-        id: "act-reduce",
+        id: "act-motion",
         group: "ACTIONS",
-        label: "Reduce motion (open OS setting)",
-        hint: "↵",
+        // R6: this row used to read "Reduce motion (open OS setting)" and its `run`
+        // only closed the palette — the label promised a navigation that never
+        // happened, on a page whose product IS motion tracking. The store is right
+        // here: it is exported, persisted, drives the MotionChip, and (since the
+        // hero keyframes landed) stamps html[data-motion]. Now wired to it.
+        label: `Motion — ${mode === "off" ? "reduced" : "full"}`,
+        hint: "toggle",
         icon: <Moon size={14} strokeWidth={1.5} />,
         run: () => {
-          // informational only — can't toggle OS pref from JS
+          setMode(mode === "off" ? "auto" : "off");
           setOpen(false);
         },
       },
     ];
     return [...jump, ...actions];
-  }, []);
+  }, [mode, setMode]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;

@@ -141,7 +141,7 @@ export default function CryptoUnifiedPortfolio({ walletId, displayCurrency = 'ID
 
   if (loading) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
         <div className="h-6 w-48 bg-zinc-800 rounded mb-4"></div>
         <div className="h-32 bg-zinc-800/50 rounded-lg"></div>
       </div>
@@ -150,7 +150,7 @@ export default function CryptoUnifiedPortfolio({ walletId, displayCurrency = 'ID
 
   if (error) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-red-900/30">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-red-900/30">
         <div className="flex items-center gap-2 text-red-400">
           <AlertCircle size={18} />
           <span className="text-sm font-medium">{error}</span>
@@ -164,7 +164,7 @@ export default function CryptoUnifiedPortfolio({ walletId, displayCurrency = 'ID
   const isProfit = data.unrealizedPnL >= 0;
 
   return (
-    <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
+    <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">

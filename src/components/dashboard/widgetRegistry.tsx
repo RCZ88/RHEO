@@ -6,6 +6,7 @@ export type WidgetId =
   | 'schedule' | 'insights' | 'productivity-chart' | 'recent-sessions'
   | 'ai-usage' | 'console-widget' | 'finance-widget' | 'learn-widget'
   | 'browser-widget' | 'brain-widget' | 'covenant-widget' | 'health-widget'
+  | 'notes'
   | 'daily-survey' | 'unified-goals' | 'drilldown' | 'spotlight'
   | 'streak' | 'schedule-sync' | 'momentum-orb' | 'momentum-score';
 
@@ -29,6 +30,7 @@ export const WIDGET_META: Record<WidgetId, WidgetMeta> = {
   'tier-breakdown':     { id: 'tier-breakdown',     name: 'Tier Breakdown',       description: 'Time split across app categories',         accent: '#fbbf24' },
   'pinned-activities':  { id: 'pinned-activities',  name: 'Pinned Activities',    description: 'Your pinned focus sessions',               accent: '#a855f7' },
   goals:                { id: 'goals',              name: 'Goals',                description: "Today's goal completion",                  accent: '#8b5cf6' },
+  notes:                { id: 'notes',              name: 'Notes',                description: 'Recent notes with quick capture',        accent: '#a78bfa' },
   'quick-focus':        { id: 'quick-focus',        name: 'Quick Focus',          description: 'One-tap focus launcher',                   accent: '#f43f5e' },
   deadlines:            { id: 'deadlines',          name: 'Deadlines',            description: 'Upcoming due dates',                       accent: '#fbbf24' },
   'longest-focus':      { id: 'longest-focus',      name: 'Longest Focus',        description: 'Personal best session',                    accent: '#22d3ee' },
@@ -136,6 +138,7 @@ export const WIDGET_ID_ALIAS: Record<string, WidgetId> = {
   'insight-strip':   'insights',
   'activity-feed':   'recent-sessions',
   'sleep-bar':       'health-widget',
+  'notes-card':       'notes',
 };
 
 /** Library id -> dashboard id, or null when there is nothing to render. */

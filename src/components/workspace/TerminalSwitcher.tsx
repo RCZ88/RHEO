@@ -183,7 +183,7 @@ export function TerminalSwitcher({
   return (
     <div className="fixed inset-0 z-[110] flex items-start justify-center pt-[14vh] px-4" onClick={onClose}>
       {/* LAMINAR: flat scrim, no backdrop-blur on chrome. */}
-      <div className="absolute inset-0 bg-zinc-900/80 animate-in fade-in-0 duration-150" aria-hidden="true" />
+      <div className="absolute inset-0 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] animate-in fade-in-0 duration-150" aria-hidden="true" />
 
       <div
         role="dialog"
@@ -191,7 +191,7 @@ export function TerminalSwitcher({
         aria-label="Jump to a terminal or session"
         onKeyDown={onKeyDown}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg rounded-xl bg-zinc-900 border border-[var(--ws-border)] shadow-lg animate-in fade-in-0 zoom-in-95 duration-150 overflow-hidden"
+        className="relative w-full max-w-lg rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-[var(--ws-border)] shadow-lg animate-in fade-in-0 zoom-in-95 duration-150 overflow-hidden"
       >
         {/* Search field */}
         <div className="flex items-center gap-2 px-3 h-11 border-b border-[var(--ws-border)]">

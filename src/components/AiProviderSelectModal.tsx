@@ -142,7 +142,7 @@ export function AiProviderSelectModal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 10 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="w-full max-w-md mx-4 bg-zinc-950 border border-zinc-800/60 rounded-xl shadow-2xl shadow-black/50 overflow-hidden"
+            className="w-full max-w-md mx-4 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded-xl shadow-2xl shadow-black/50 overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
@@ -164,7 +164,7 @@ export function AiProviderSelectModal({
             </div>
 
             <div className="flex items-center gap-2 px-4 pt-3">
-              <div className="flex bg-zinc-900/60 rounded-lg p-0.5 flex-1">
+              <div className="flex bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-lg p-0.5 flex-1">
                 {(['provider', 'model'] as const).map((mode) => (
                   <button
                     key={mode}
@@ -206,7 +206,7 @@ export function AiProviderSelectModal({
                     className={`w-full text-left p-3 rounded-xl border transition-all duration-150 ${
                       isSelected
                         ? 'bg-violet-500/8 border-violet-500/30'
-                        : 'bg-zinc-900/50 border-zinc-800/40 hover:border-zinc-700/50 hover:bg-zinc-900/80'
+                        : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-zinc-800/40 hover:border-zinc-700/50 hover:bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -268,7 +268,7 @@ export function AiProviderSelectModal({
               {viewMode === 'model' && modelEntries.map(([modelName, providers]) => {
                 const isSelected = selectedId != null && selectedModel === modelName;
                 return (
-                  <div key={modelName} className="p-3 rounded-xl border bg-zinc-900/50 border-zinc-800/40">
+                  <div key={modelName} className="p-3 rounded-xl border bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-zinc-800/40">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-medium text-zinc-300">{modelName}</span>
                       <span className="text-[10px] text-zinc-500 ml-auto">{providers.length} provider{providers.length > 1 ? 's' : ''}</span>
@@ -365,7 +365,7 @@ export function AiProviderSelectModal({
               )}
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-3 border-t border-zinc-800/40 bg-zinc-900/20">
+            <div className="flex items-center gap-2 px-4 py-3 border-t border-zinc-800/40 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)]">
               <button
                 onClick={onClose}
                 className="flex-1 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-800/60 text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200 transition-colors"
@@ -380,7 +380,7 @@ export function AiProviderSelectModal({
                 {saving ? 'Saving...' : 'Save'}
               </button>
             </div>
-            <div className="px-4 py-2 border-t border-zinc-800/30 bg-zinc-900/10">
+            <div className="px-4 py-2 border-t border-zinc-800/30 bg-zinc-900/10 light:bg-[var(--ws-surface-raised)]">
               <button
                 type="button"
                 onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new CustomEvent('navigate', { detail: '/settings' })), 100); }}

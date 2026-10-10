@@ -83,7 +83,7 @@ Every surviving hex/rgba must exist in `src/index.css` tokens OR be pure black/w
 `App.tsx` already sets `document.documentElement[data-page]` on route change. The theme
 map in `src/index.css` is re-keyed to LIVE routes:
 `dashboard, activity, ai, learn, resume, ide, finance, insights, life, settings,
-guide, studio, agentic, terminal, external, database`.
+guide, studio, terminal, external, database`.
 Components read `var(--page-accent)` for the surface signal hue.
 
 ## §9. Superseded / Archived
@@ -91,12 +91,57 @@ Components read `var(--page-accent)` for the surface signal hue.
 - `agent/DESIGN.md` → **deleted** (dead refs to `globals.css`).
 - `agent/docs/DESIGN_SYSTEM.md` → archive to `design/archive/` (pink-primary spec, pre-LAMINAR).
 - `src/tokens.css` → retained but scoped to landing only.
-- `.light` theme block → **deleted** (design.md §5.2: dark-only for v1; the 280-line block frozen and removed).
+- ~~`.light` theme block → **deleted** (dark-only for v1)~~ → **REVERTED 2026-10-01.**
+  Light mode is a **first-class, supported theme** again. See §11.
 - `index.html <title>` → `DeskFlow AI - Elite Productivity Tracker` → **`RHEO`**.
+
+## §11. Light Mode — "Warm Paper" (first-class, not derived)
+
+> **The rule that was broken:** light mode used to be defined TWICE in
+> `src/index.css` — a `.light` block of ~85 **cool-zinc** tokens with a **green**
+> `#22c55e` accent, and an `html.light` block of ~34 **warm** tokens with a
+> **teal** `#0e7490` accent. Both were live simultaneously. `html.light` won on
+> specificity for its 34 tokens; the other ~76 kept cool zinc + green. The app
+> rendered warm cream cards on cool zinc borders beside teal headers and green
+> toggles. **Lesson: a theme is ONE block. Two blocks is not "50% implemented" —
+> it is two palettes fighting, and it will never resolve on its own.**
+
+- **Identity: warm paper, not snow.** Base is bone/oat, never `#fff` and never
+  cool grey. Surfaces step *S0 paper `#f5f2ec` → S1 card `#fcfbf8` →
+  S2 overlay `#ffffff` → S3 sunken `#edeae2` → S4 veil*.
+- **Depth comes from hairlines, never shadow.** A light surface has no ambient
+  occlusion to sell, so a drop shadow is a lie. `--ws-border` is
+  `rgb(28 25 23 / 0.10)` — light needs *more* alpha than dark, because a dark
+  hairline vanishes into a bright field where a light one does not.
+- **One signal hue: deep teal** `--ws-accent #0e7490`. It is a **FILL** token
+  (borders, tracks, slider thumbs) and clears the 3:1 rule on all four
+  surfaces. Accent-coloured **text** must use `--ws-accent-text #0b5c73`
+  (6.26:1) — `#0e7490` is only 4.46:1 on the sunken surface and fails 4.5:1
+  there.
+- **Green is SEMANTIC ONLY** (success / filled). It is *never* the accent. This
+  is what killed the green-vs-teal clash: every legacy alias
+  (`--color-primary`, `--color-ring`, `--toggle-active`, `--slider-thumb`,
+  `--chart-line`, `--sidebar-active-fg`, …) now resolves to teal.
+- **Contrast is measured, not eyeballed** (`impeccable`: 4.5:1 body, 3:1
+  large/UI). Every light *text* token clears 4.5:1 on all four surfaces.
+  `--text-disabled #a8a29e` is deliberately 2.26:1 — WCAG exempts disabled
+  controls; do not "fix" it. Use `--text-faint #6f665e` (4.67:1 on sunken) for
+  de-emphasised text that still gets read.
+- **Chrome sits one step off the field.** `--sidebar-bg` is the *raised*
+  `#fcfbf8`, not the paper `#f5f2ec` — matching it exactly makes the app edge
+  disappear and the chrome read as page content.
+- **Per-page accents get their own light ramp.** The `html.light[data-page=…]`
+  remaps exist because the dark accents (cyan `#06b6d4`, amber `#fbbf24`) cannot
+  pass 4.5:1 on paper. These are *re-chroma'd*, not reused.
 
 ## §10. Pre-Task Checklist (run before restyling any page)
 
 - [ ] Tokens present in `src/index.css` (no new hex in component).
+- [ ] Single signal hue chosen for the surface.
+- [ ] `data-page` key exists in the index.css map.
+- [ ] **If the surface renders in light mode too:** its colour resolves to a
+      token that has a `html.light` value, and accent-coloured *text* uses
+      `--ws-accent-text` (§11), not `--ws-accent`.
 - [ ] Single signal hue chosen for the surface.
 - [ ] `data-page` key exists in the index.css map.
 - [ ] Categorical color sourced from `src/lib/CategoryColors.ts`.

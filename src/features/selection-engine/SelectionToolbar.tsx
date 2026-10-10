@@ -38,7 +38,7 @@ export function SelectionToolbar() {
         className="fixed top-4 left-1/2 -translate-x-1/2 z-[210]"
         data-selection-overlay="true"
       >
-        <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-xl rounded-xl border border-zinc-700/80 shadow-2xl px-2 py-1.5">
+        <div className="flex items-center gap-1 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl border border-zinc-700/80 shadow-2xl px-2 py-1.5">
           <div className="flex items-center gap-0.5 pr-2 border-r border-zinc-700/60">
             {tools.map(tool => (
               <button

@@ -259,7 +259,7 @@ export function BridgeForm({
       </div>
 
       {/* Live prompt + AI controls */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm p-2.5 space-y-2.5">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm p-2.5 space-y-2.5">
         <div className="flex items-center justify-between">
           <button
             onClick={() => setShowPrompt((s) => !s)}
@@ -388,7 +388,7 @@ export function BridgeForm({
           <textarea
             value={paste}
             onChange={(e) => setPaste(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-950/60 p-1.5 text-[11px] text-zinc-200 resize-none font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-1.5 text-[11px] text-zinc-200 resize-none font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
             rows={3}
             placeholder="Or paste the AI's JSON response here to fill the whole form at once…"
           />

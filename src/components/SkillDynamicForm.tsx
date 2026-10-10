@@ -107,7 +107,7 @@ export default function SkillDynamicForm({
     const hasError = valState && !valState.valid;
 
     const labelClass = 'text-[10px] font-medium text-zinc-400 mb-1 block';
-    const inputClass = `w-full bg-zinc-950 border rounded-lg px-3 py-1.5 text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 ${
+    const inputClass = `w-full bg-zinc-950 light:bg-[var(--ws-surface)] border rounded-lg px-3 py-1.5 text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 ${
       hasError ? 'border-red-500/50' : 'border-zinc-700/50'
     }`;
     const selectClass = `w-full bg-zinc-800/80 border rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 focus:outline-none focus:border-zinc-600 ${
@@ -199,7 +199,7 @@ export default function SkillDynamicForm({
                     step={input.step || 1}
                     value={value ?? input.min ?? 0}
                     onChange={e => updateValue(input.name, Number(e.target.value))}
-                    className="flex-1 accent-pink-500"
+                    className="flex-1"
                   />
                   <span className="text-[10px] text-zinc-400 font-mono w-10 text-right">
                     {value ?? input.min ?? 0}
@@ -314,7 +314,7 @@ export default function SkillDynamicForm({
                             const next = tags.filter((_, idx) => idx !== i);
                             updateValue(input.name, next);
                           }}
-                          className="text-pink-400/60 hover:text-pink-300"
+                          className="text-[var(--text-muted)] hover:text-pink-300"
                         >
                           <X className="w-2 h-2" />
                         </button>
@@ -421,7 +421,7 @@ export default function SkillDynamicForm({
   }
 
   return (
-    <div className="bg-zinc-900/40 backdrop-blur-sm rounded-xl p-3">
+    <div className="bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm rounded-xl p-3">
       {Array.from(groups.entries()).map(([name, groupInputs]) =>
         renderGroup(name, groupInputs)
       )}

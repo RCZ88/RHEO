@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlignHorizontalDistributeCenter, ArrowDown, ArrowRight, Award, BarChart3, Check, ChevronDown, Clock, Copy, Cpu, Download,
   Equal, Flame, FlipHorizontal2, FolderGit2, History, Keyboard, Layers, ListOrdered, Monitor, Pencil, Pin, PinOff, Play, Plus, Plug, Search,
-  Settings2, Star, Terminal, Trash2, Type, X, Zap, ZoomIn, BookOpen,
-} from "lucide-react";
+  Settings2, Star, Terminal, Trash2, Type, X, Zap, ZoomIn, BookOpen, Gauge, FileText } from "lucide-react";
 import type { MCPServer, PaneNode, RightPanelTab, SavedCommand, Shortcut, TerminalTab, ThemeDef } from "../lib/types";
 import { DEFAULT_SHORTCUTS, FONT_OPTIONS, TAB_COLORS, THEMES } from "../lib/data";
 import { DISTROS, LINUX_TIPS, MAIN_SNIPPET, PRELOAD_SNIPPET, SHELLS, isElectron } from "../lib/electron";
@@ -11,10 +10,12 @@ import { cx, download, fillDynamic, fmtClock, fmtDate, fmtTime, formatDuration, 
 import type { Store } from "../hooks/useConsoleStore";
 import { collectSplits, countLeaves, listPaneIds } from "../hooks/useConsoleStore";
 import { ICON_CHOICES, TabIcon } from "./TabIcon";
+import { MetricsPanel } from "./MetricsPanel";
+import { commandNotes, notesVersion, subscribeNotes } from "./CommandNotesStore";
 import { CommandNotesPanel } from "./CommandNotesPanel";
-import { commandNotes } from "./CommandNotesStore";
+import { HandbookWorkspace } from "@/components/learn/HandbookWorkspace";
+import { HandbookReference } from "@/components/learn/HandbookReference";
 import { AddPromptModal } from "./AddPromptModal";
-import type { CommandNote } from "./CommandNotesPanel";
 
 function Section({ title, icon, right, children }: { title: string; icon?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -108,7 +109,7 @@ export function InspectPanel({ store, notify }: { store: Store; notify: (m: stri
         <div className="space-y-1.5">
           {Object.values(t.panes).map((p, i) => (
             <div key={p.id} onClick={() => store.focusPane(t.id, p.id)} className="flex items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition" style={{ borderColor: t.activePaneId === p.id ? t.color : "var(--t-border)", background: t.activePaneId === p.id ? `${t.color}0c` : "transparent" }}>
-              <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] mono font-bold shrink-0" style={{ background: t.activePaneId === p.id ? t.color : "var(--t-border)", color: t.activePaneId === p.id ? "#0b0e17" : "var(--t-muted)" }}>{i + 1}</span>
+              <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] mono font-bold shrink-0" style={{ background: t.activePaneId === p.id ? t.color : "var(--t-border)", color: t.activePaneId === p.id ? "var(--t-bg)" : "var(--t-muted)" }}>{i + 1}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-[11.5px] mono truncate" style={{ color: "var(--t-fg)" }}>{p.cwd.replace("/home/user", "~")}</div>
                 <div className="text-[10px] mono" style={{ color: "var(--t-muted)" }}>{p.cmdHistory.length} cmds · {p.lines.length} lines{p.lastExit ? ` · ✗${p.lastExit}` : ""}</div>
@@ -226,7 +227,7 @@ export function LayoutPanel({ store, notify }: { store: Store; notify: (m: strin
           <button onClick={() => store.balanceAction(t.id)} className="flex-1 h-8 rounded-lg text-[11.5px] font-semibold" style={{ background: "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: "var(--t-accent)" }}>Balance all</button>
           <button onClick={() => store.cyclePane(t.id, 1)} className="flex-1 h-8 rounded-lg border text-[11.5px] font-semibold" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>Focus next</button>
         </div>
-        <button onClick={() => { store.setBroadcastTabId(broadcasting ? null : t.id); notify(broadcasting ? "Broadcast off" : "Broadcast on — typing runs everywhere"); }} className="mt-1.5 w-full h-8 rounded-lg text-[11.5px] font-bold border" style={{ borderColor: broadcasting ? "#fb7185" : "var(--t-border)", color: broadcasting ? "#fb7185" : "var(--t-fg)", background: broadcasting ? "rgba(251,113,133,.08)" : undefined }}>
+        <button onClick={() => { store.setBroadcastTabId(broadcasting ? null : t.id); notify(broadcasting ? "Broadcast off" : "Broadcast on — typing runs everywhere"); }} className="mt-1.5 w-full h-8 rounded-lg text-[11.5px] font-bold border" style={{ borderColor: broadcasting ? "var(--pc-danger)" : "var(--t-border)", color: broadcasting ? "var(--pc-danger)" : "var(--t-fg)", background: broadcasting ? "rgba(251,113,133,.08)" : undefined }}>
           {broadcasting ? "● Broadcasting to all panes — stop" : "○ Broadcast input to all panes"}
         </button>
       </Section>
@@ -271,7 +272,7 @@ export function CommandsPanel({ store, notify }: { store: Store; notify: (m: str
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search saved commands…" aria-label="search commands" className={cx(inputCls, "!pl-8 mono")} style={inputStyle} />
         </div>
-        <button onClick={() => setFavs(!favs)} title="Favorites only" aria-pressed={favs} className="w-9 h-9 rounded-xl border grid place-items-center shrink-0 transition" style={{ borderColor: favs ? "#fbbf24" : "var(--t-border)", color: favs ? "#fbbf24" : "var(--t-muted)", background: favs ? "#fbbf2415" : undefined }}><Star size={15} className={favs ? "fill-current" : ""} /></button>
+        <button onClick={() => setFavs(!favs)} title="Favorites only" aria-pressed={favs} className="w-9 h-9 rounded-xl border grid place-items-center shrink-0 transition" style={{ borderColor: favs ? "var(--pc-warn)" : "var(--t-border)", color: favs ? "var(--pc-warn)" : "var(--t-muted)", background: favs ? "var(--pc-warn)" : undefined }}><Star size={15} className={favs ? "fill-current" : ""} /></button>
       </div>
       <div className="flex gap-1.5 flex-wrap">
         {cats.map((c) => (
@@ -298,8 +299,8 @@ export function CommandsPanel({ store, notify }: { store: Store; notify: (m: str
               )}
             </div>
           ))}
-          <div className="text-[11px] mono p-2 rounded-lg mb-2 break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "#34d399" }}>$ {fillDynamic(execFor.command, vals)}</div>
-          <button onClick={() => run(execFor, vals)} className="w-full h-9 rounded-xl text-white text-[12.5px] font-bold flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Play size={14} />Execute in active pane</button>
+          <div className="text-[11px] mono p-2 rounded-lg mb-2 break-all border" style={{ borderColor: "var(--t-border)", background: "var(--t-bg)", color: "var(--pc-success)" }}>$ {fillDynamic(execFor.command, vals)}</div>
+          <button onClick={() => run(execFor, vals)} className="w-full h-9 rounded-lg text-[12.5px] font-semibold flex items-center justify-center gap-2 transition-opacity hover:opacity-90" style={{ background: "var(--t-accent)", color: "var(--color-background)" }}><Play size={14} />Execute in active pane</button>
         </div>
       )}
       <div className="space-y-2">
@@ -316,7 +317,7 @@ export function CommandsPanel({ store, notify }: { store: Store; notify: (m: str
                   </div>
                   <div className="text-[10.5px] truncate" style={{ color: "var(--t-muted)" }}>{c.description} · {c.category}</div>
                 </div>
-                <button aria-label="favorite" onClick={() => store.setCommands((cs) => cs.map((x) => x.id === c.id ? { ...x, favorite: !x.favorite } : x))} style={{ color: c.favorite ? "#fbbf24" : "var(--t-muted)" }}><Star size={14} className={c.favorite ? "fill-current" : ""} /></button>
+                <button aria-label="favorite" onClick={() => store.setCommands((cs) => cs.map((x) => x.id === c.id ? { ...x, favorite: !x.favorite } : x))} style={{ color: c.favorite ? "var(--pc-warn)" : "var(--t-muted)" }}><Star size={14} className={c.favorite ? "fill-current" : ""} /></button>
               </div>
               <div className="text-[11px] mono mt-1.5 p-2 rounded-lg break-all" style={{ background: "var(--t-bg)", color: "var(--t-muted)" }}>$ {c.command}</div>
               <div className="flex items-center gap-1.5 mt-1.5">
@@ -384,7 +385,7 @@ export function HistoryPanel({ store, notify }: { store: Store; notify: (m: stri
             {items.map((h) => (
               <div key={h.id} className="rounded-xl border px-2.5 py-2 transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
                 <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: h.exitCode === 0 ? "#34d399" : "#fb7185" }} />
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: h.exitCode === 0 ? "var(--pc-success)" : "var(--pc-danger)" }} />
                   <span className="text-[12px] mono font-medium truncate flex-1" style={{ color: "var(--t-fg)" }}>$ {h.command}</span>
                   <button onClick={() => rerun(h.id)} title="Re-run in active pane" className="w-6 h-6 rounded-md grid place-items-center shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}><Play size={11} /></button>
                 </div>
@@ -420,9 +421,9 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
       <div className="grid grid-cols-2 gap-2">
         {[
           { v: s.total, l: "Total commands", c: "var(--t-accent)", i: <Terminal size={14} /> },
-          { v: s.today, l: "Run today", c: "#34d399", i: <Flame size={14} /> },
-          { v: `${s.okRate}%`, l: "Success rate", c: "#22d3ee", i: <Check size={14} /> },
-          { v: formatDuration(s.avgMs), l: "Avg runtime", c: "#fbbf24", i: <Clock size={14} /> },
+          { v: s.today, l: "Run today", c: "var(--pc-success)", i: <Flame size={14} /> },
+          { v: `${s.okRate}%`, l: "Success rate", c: "var(--t-accent)", i: <Check size={14} /> },
+          { v: formatDuration(s.avgMs), l: "Avg runtime", c: "var(--pc-warn)", i: <Clock size={14} /> },
         ].map((k) => (
           <div key={k.l} className="rounded-xl border p-3" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
             <div className="flex items-center gap-1.5" style={{ color: k.c }}>{k.i}<span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{k.l}</span></div>
@@ -433,7 +434,7 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
       <div className="grid grid-cols-2 gap-2">
         {["7-day", "errors"].map((k) => (
           <div key={k} className="rounded-xl border px-3 py-2 flex items-center gap-2" style={{ borderColor: "var(--t-border)", background: "var(--t-panel)" }}>
-            <span className="display font-bold text-[18px]" style={{ color: k === "errors" ? "#fb7185" : "var(--t-fg)" }}>{k === "errors" ? s.errors : s.week}</span>
+            <span className="display font-bold text-[18px]" style={{ color: k === "errors" ? "var(--pc-danger)" : "var(--t-fg)" }}>{k === "errors" ? s.errors : s.week}</span>
             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{k === "errors" ? "failed runs" : "last 7 days"}</span>
           </div>
         ))}
@@ -443,7 +444,7 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
           {s.days.map((d) => (
             <div key={d.date} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${d.date}: ${d.count}`}>
               <span className="text-[8.5px] mono" style={{ color: "var(--t-muted)" }}>{d.count || ""}</span>
-              <div className="w-full rounded-md transition-all" style={{ height: `${Math.max(4, (d.count / maxDay) * 62)}px`, background: d.count ? "linear-gradient(180deg, var(--t-accent), var(--t-accent2))" : "var(--t-border)", opacity: d.count ? 1 : 0.4 }} />
+              <div className="w-full rounded-md transition-[height]" style={{ height: `${Math.max(4, (d.count / maxDay) * 62)}px`, background: d.count ? "linear-gradient(180deg, var(--t-accent), var(--t-accent2))" : "var(--t-border)", opacity: d.count ? 1 : 0.4 }} />
               <span className="text-[7.5px] mono truncate w-full text-center" style={{ color: "var(--t-muted)" }}>{d.label}</span>
             </div>
           ))}
@@ -457,7 +458,7 @@ export function StatsPanel({ store, notify }: { store: Store; notify: (m: string
         </div>
         <div className="flex justify-between text-[8.5px] mono mt-1" style={{ color: "var(--t-muted)" }}><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
       </Section>
-      <Section title="Top commands" icon={<Award size={14} style={{ color: "#fbbf24" }} />} right={<span className="text-[10px] mono" style={{ color: "var(--t-muted)" }}>click ▶ to run</span>}>
+      <Section title="Top commands" icon={<Award size={14} style={{ color: "var(--pc-warn)" }} />} right={<span className="text-[10px] mono" style={{ color: "var(--t-muted)" }}>click ▶ to run</span>}>
         <div className="space-y-1.5">
           {s.top.map(([cmd, c], i) => (
             <div key={cmd} className="flex items-center gap-2">
@@ -559,7 +560,7 @@ export function KeysPanel({ store, notify }: { store: Store; notify: (m: string)
                     <kbd key={k} className="text-[10px] mono font-bold px-1.5 py-1 rounded-md border" style={{ background: "var(--t-bg)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}>{k}</kbd>
                   ))}
                 </div>
-                <button onClick={() => setRec(rec === s.id ? null : s.id)} className="h-7 px-2 rounded-lg text-[10.5px] font-bold shrink-0" style={{ background: rec === s.id ? "#fb7185" : "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: rec === s.id ? "#fff" : "var(--t-accent)" }}>{rec === s.id ? "press…" : "Record"}</button>
+                <button onClick={() => setRec(rec === s.id ? null : s.id)} className="h-7 px-2 rounded-lg text-[10.5px] font-bold shrink-0" style={{ background: rec === s.id ? "var(--pc-danger)" : "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: rec === s.id ? "#fff" : "var(--t-accent)" }}>{rec === s.id ? "press…" : "Record"}</button>
               </div>
             ))}
           </div>
@@ -587,38 +588,38 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
   };
   return (
     <div className="space-y-3 anim-fadeUp">
-      <div className="rounded-xl border p-3.5" style={{ borderColor: "color-mix(in srgb, #34d399 40%, transparent)", background: "linear-gradient(135deg, rgba(52,211,153,.1), transparent)" }}>
+      <div className="rounded-xl border p-3.5" style={{ borderColor: "color-mix(in srgb, var(--pc-success) 40%, transparent)", background: "linear-gradient(135deg, rgba(52,211,153,.1), transparent)" }}>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0" style={{ background: "rgba(52,211,153,.16)", color: "#34d399" }}><Plug size={16} /></div>
+          <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0" style={{ background: "rgba(52,211,153,.16)", color: "var(--pc-success)" }}><Plug size={16} /></div>
           <div className="flex-1 min-w-0">
             <div className="display font-bold text-[13px]" style={{ color: "var(--t-fg)" }}>MCP Context Bus</div>
-            <div className="text-[10.5px] mono" style={{ color: "#34d399" }}>{on}/{store.mcp.length} servers · {store.mcp.reduce((a, m) => a + m.tools.length, 0)} tools · stdio</div>
+            <div className="text-[10.5px] mono" style={{ color: "var(--pc-success)" }}>{on}/{store.mcp.length} servers · {store.mcp.reduce((a, m) => a + m.tools.length, 0)} tools · stdio</div>
           </div>
           <span className="relative flex h-2.5 w-2.5 shrink-0"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" /></span>
         </div>
         <p className="text-[11px] mt-2 leading-relaxed" style={{ color: "var(--t-muted)" }}>Model Context Protocol servers inject filesystem, shell, git, container and system context into every pane. Tools execute in the active pane and are logged below.</p>
       </div>
       {store.mcp.map((m: MCPServer) => (
-        <div key={m.id} className="rounded-xl border p-3" style={{ borderColor: m.enabled ? "color-mix(in srgb, #34d399 35%, var(--t-border))" : "var(--t-border)", background: "var(--t-panel)" }}>
+        <div key={m.id} className="rounded-xl border p-3" style={{ borderColor: m.enabled ? "color-mix(in srgb, var(--pc-success) 35%, var(--t-border))" : "var(--t-border)", background: "var(--t-panel)" }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: m.enabled ? "rgba(52,211,153,.14)" : "var(--t-bg)", color: m.enabled ? "#34d399" : "var(--t-muted)" }}><TabIcon name={m.icon} size={16} /></div>
+            <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: m.enabled ? "rgba(52,211,153,.14)" : "var(--t-bg)", color: m.enabled ? "var(--pc-success)" : "var(--t-muted)" }}><TabIcon name={m.icon} size={16} /></div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[12.5px] font-bold mono" style={{ color: "var(--t-fg)" }}>{m.name}</span>
-                <span className="text-[9px] mono font-bold px-1.5 py-px rounded-md" style={{ background: m.status === "connected" ? "rgba(52,211,153,.14)" : "rgba(251,113,133,.14)", color: m.status === "connected" ? "#34d399" : "#fb7185" }}>{m.status.toUpperCase()}</span>
+                <span className="text-[9px] mono font-bold px-1.5 py-px rounded-md" style={{ background: m.status === "connected" ? "rgba(52,211,153,.14)" : "rgba(251,113,133,.14)", color: m.status === "connected" ? "var(--pc-success)" : "var(--pc-danger)" }}>{m.status.toUpperCase()}</span>
                 {m.enabled && <span className="text-[9px] mono" style={{ color: "var(--t-muted)" }}>{m.latencyMs}ms</span>}
               </div>
               <div className="text-[10.5px] truncate" style={{ color: "var(--t-muted)" }}>{m.description}</div>
             </div>
-            <button role="switch" aria-checked={m.enabled} aria-label={`toggle ${m.name}`} onClick={() => { store.setMcp((ms) => ms.map((x) => x.id === m.id ? { ...x, enabled: !x.enabled, status: !x.enabled ? "connected" : "disconnected" } : x)); notify(`${m.name} ${m.enabled ? "disconnected" : "connected"}`); }} className="w-10 h-[22px] rounded-full relative transition-all shrink-0" style={{ background: m.enabled ? "#34d399" : "var(--t-border)" }}>
-              <span className="absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-all" style={{ left: m.enabled ? 22 : 3 }} />
+            <button role="switch" aria-checked={m.enabled} aria-label={`toggle ${m.name}`} onClick={() => { store.setMcp((ms) => ms.map((x) => x.id === m.id ? { ...x, enabled: !x.enabled, status: !x.enabled ? "connected" : "disconnected" } : x)); notify(`${m.name} ${m.enabled ? "disconnected" : "connected"}`); }} className="w-10 h-[22px] rounded-full relative shrink-0" style={{ background: m.enabled ? "var(--pc-success)" : "var(--t-border)" }}>
+              <span className="absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ left: m.enabled ? 22 : 3 }} />
             </button>
           </div>
           <div className="mt-2 space-y-1">
             <div className="text-[9.5px] font-bold uppercase tracking-wider px-1" style={{ color: "var(--t-muted)" }}>Tools</div>
             {m.tools.map((tool) => (
               <div key={tool.name} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px]" style={{ background: "var(--t-bg)" }}>
-                <Zap size={11} className="shrink-0" style={{ color: m.enabled ? "#34d399" : "var(--t-muted)" }} />
+                <Zap size={11} className="shrink-0" style={{ color: m.enabled ? "var(--pc-success)" : "var(--t-muted)" }} />
                 <span className="mono font-bold shrink-0" style={{ color: "var(--t-fg)" }}>{tool.name}</span>
                 <span className="truncate" style={{ color: "var(--t-muted)" }}>{tool.description}</span>
                 <button title={`Run ${tool.command} in active pane`} onClick={() => runTool(m, tool.name, tool.command)} className="ml-auto text-[10px] mono font-bold shrink-0 hover:underline" style={{ color: "var(--t-accent)" }}>{tool.command}</button>
@@ -636,11 +637,11 @@ export function McpPanel({ store, notify }: { store: Store; notify: (m: string) 
           </div>
         </div>
       ))}
-      <Section title="Tool call log" icon={<History size={13} style={{ color: "#34d399" }} />} right={<button onClick={() => store.logMcp("bus", "clear", "log cleared", true)} className="text-[10px] font-bold" style={{ color: "var(--t-muted)" }}>clear</button>}>
+      <Section title="Tool call log" icon={<History size={13} style={{ color: "var(--pc-success)" }} />} right={<button onClick={() => store.logMcp("bus", "clear", "log cleared", true)} className="text-[10px] font-bold" style={{ color: "var(--t-muted)" }}>clear</button>}>
         <div className="space-y-1 max-h-44 overflow-y-auto">
           {store.mcpLog.map((e) => (
             <div key={e.id} className="flex items-center gap-2 text-[10.5px] mono px-2 py-1.5 rounded-lg" style={{ background: "var(--t-bg)" }}>
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: e.ok ? "#34d399" : "#fb7185" }} />
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: e.ok ? "var(--pc-success)" : "var(--pc-danger)" }} />
               <span className="font-bold shrink-0" style={{ color: "var(--t-fg)" }}>{e.server}/{e.tool}</span>
               <span className="truncate" style={{ color: "var(--t-muted)" }}>{e.detail}</span>
               <span className="ml-auto shrink-0" style={{ color: "var(--t-muted)" }}>{timeAgo(e.ts)}</span>
@@ -715,7 +716,7 @@ export function ThemePanel({ store, notify }: { store: Store; notify: (m: string
         {[["Cursor blink", a.cursorBlink, (v: boolean) => set({ cursorBlink: v })], ["Pane status bar", a.showStatusBar, (v: boolean) => set({ showStatusBar: v })], ["Transparency blur", a.transparency, (v: boolean) => set({ transparency: v })], ["Accent glow", a.glow, (v: boolean) => set({ glow: v })]].map(([label2, v, fn]) => (
           <button key={label2 as string} role="switch" aria-checked={!!v} onClick={() => (fn as (v: boolean) => void)(!(v as boolean))} className="w-full flex items-center justify-between py-1.5">
             <span className="text-[12px] font-medium" style={{ color: "var(--t-fg)" }}>{label2 as string}</span>
-            <span className="w-9 h-5 rounded-full relative transition-all" style={{ background: v ? "var(--t-accent)" : "var(--t-border)" }}><span className="absolute top-[2.5px] w-[15px] h-[15px] rounded-full bg-white shadow transition-all" style={{ left: v ? 19 : 3 }} /></span>
+            <span className="w-9 h-5 rounded-full relative transition-colors" style={{ background: v ? "var(--t-accent)" : "var(--t-border)" }}><span className="absolute top-[2.5px] w-[15px] h-[15px] rounded-full bg-white shadow" style={{ left: v ? 19 : 3 }} /></span>
           </button>
         ))}
       </Section>
@@ -779,34 +780,120 @@ export function SysPanel({ store, notify }: { store: Store; notify: (m: string) 
   );
 }
 
+export function useCommandNotes() {
+  const [v, setV] = useState(() => notesVersion());
+  useEffect(() => subscribeNotes(() => setV(notesVersion())), []);
+  return useMemo(() => commandNotes.list(), [v]);
+}
+
 export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: (m: string) => void; groupCtl: { renameG: string | null; setRenameG: (v: string | null) => void; gDraft: string; setGDraft: (v: string) => void } }) {
   const [modalNote, setModalNote] = useState<{ command: string; section: string; sectionTitle: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [savingLabel, setSavingLabel] = useState("");
   const [activeNoteId, setActiveNoteId] = useState<string | undefined>(undefined);
-  const tabs = [
-    { id: "inspect", label: "Inspect", icon: <Settings2 size={13} /> },
-    { id: "layout", label: "Layout", icon: <Layers size={13} /> },
-    { id: "commands", label: "Cmds", icon: <Zap size={13} /> },
-    { id: "history", label: "Hist", icon: <History size={13} /> },
-    { id: "stats", label: "Stats", icon: <BarChart3 size={13} /> },
-    { id: "keys", label: "Keys", icon: <Keyboard size={13} /> },
-    { id: "mcp", label: "Mcp", icon: <Plug size={13} /> },
-    { id: "theme", label: "Theme", icon: <Type size={13} /> },
-    { id: "sys", label: "System", icon: <Monitor size={13} /> },
-    { id: "handbook", label: "Handbook", icon: <BookOpen size={13} /> },
-  ] as const;
+  const notes = useCommandNotes();
+  // GROUPED, not a flat grid. Eleven equal chips in a 3-wide grid is a wall --
+  // every destination shouts at the same volume and none of them reads as more
+  // important than another. Four labelled sections restore the hierarchy the
+  // grid was destroying: shape the workspace, read its output, configure it,
+  // look things up. Order follows that, not the order things were written in.
+  const sections: { title: string; tabs: { id: RightPanelTab; label: string; icon: React.ReactNode; badge?: number }[] }[] = [
+    {
+      title: "Workspace",
+      tabs: [
+        { id: "inspect", label: "Inspect", icon: <Settings2 size={13} /> },
+        { id: "layout", label: "Layout", icon: <Layers size={13} /> },
+      ],
+    },
+    {
+      title: "Output",
+      tabs: [
+        { id: "commands", label: "Cmds", icon: <Zap size={13} /> },
+        { id: "history", label: "Hist", icon: <History size={13} />, badge: store.history.length },
+        { id: "stats", label: "Stats", icon: <BarChart3 size={13} /> },
+        { id: "metrics", label: "Resources", icon: <Gauge size={13} /> },
+      ],
+    },
+    {
+      title: "Configure",
+      tabs: [
+        { id: "keys", label: "Keys", icon: <Keyboard size={13} /> },
+        { id: "mcp", label: "Mcp", icon: <Plug size={13} /> },
+        { id: "theme", label: "Theme", icon: <Type size={13} /> },
+        { id: "sys", label: "System", icon: <Monitor size={13} /> },
+      ],
+    },
+    {
+      /* `handbook` is CommandNotesPanel -- the per-session AI command notes.
+         It was already here and is CORRECT where it is: this move ADDS the big
+         Learn handbook next to it, it does not replace it. See
+         agent/docs/HANDBOOK-MOVE-TO-PENGUIN.md §1b. */
+      title: "Reference",
+      tabs: [
+        { id: "handbook", label: "Handbook", icon: <BookOpen size={13} /> },
+        { id: "handbook-part", label: "Sections", icon: <BookOpen size={13} /> },
+        { id: "handbook-ref", label: "Cheatsheet", icon: <FileText size={13} /> },
+      ],
+    },
+  ];
   return (
     <div className="h-full flex flex-col min-h-0" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
-      <div className="grid grid-cols-3 gap-1 p-2.5 pb-1.5" role="tablist" aria-label="inspector tabs">
-        {tabs.map((tb) => (
-          <button key={tb.id} role="tab" aria-selected={store.rightTab === tb.id}           onClick={() => store.setRightTab(tb.id as RightPanelTab)} className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-[9.5px] font-bold uppercase tracking-wider transition" style={{
-            background: store.rightTab === tb.id ? "color-mix(in srgb, var(--t-accent) 16%, transparent)" : "transparent",
-            color: store.rightTab === tb.id ? "var(--t-accent)" : "var(--t-muted)",
-          }}>
-            {tb.icon}{tb.label}
-            {tb.id === "history" && <span className="text-[8.5px] mono px-1 rounded" style={{ background: "var(--t-accent)", color: "#fff" }}>{store.history.length}</span>}
-          </button>
+      {/* Sectioned switcher. Each section is a labelled group so the panel has a
+          spine; the active tab gets an accent LEFT BAR rather than a filled chip,
+          which keeps "where am I" readable without adding another bright block. */}
+      <div className="px-2.5 pt-2.5 pb-2 flex flex-col gap-2.5" role="tablist" aria-label="inspector sections">
+        {sections.map((sec) => (
+          <div key={sec.title}>
+            <div className="flex items-center gap-1.5 mb-1 px-0.5">
+              <span className="text-[9px] mono uppercase tracking-[0.09em]" style={{ color: "var(--t-muted)" }}>
+                {sec.title}
+              </span>
+              <span className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
+            </div>
+            <div className={cx("grid gap-1", sec.tabs.length > 2 ? "grid-cols-2" : "grid-cols-2")}>
+              {sec.tabs.map((tb) => {
+                const active = store.rightTab === tb.id;
+                return (
+                  <button
+                    key={tb.id}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => store.setRightTab(tb.id)}
+                    title={tb.label}
+                    className="relative flex items-center gap-1.5 px-2 h-7 rounded-lg text-[11.5px] text-left transition-colors"
+                    style={{
+                      background: active
+                        ? "color-mix(in srgb, var(--t-accent) 13%, transparent)"
+                        : "transparent",
+                      color: active ? "var(--t-fg)" : "var(--t-muted)",
+                      fontWeight: active ? 600 : 400,
+                    }}
+                  >
+                    {active && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full"
+                        style={{ background: "var(--t-accent)" }}
+                      />
+                    )}
+                    <span style={{ color: active ? "var(--t-accent)" : "inherit" }}>{tb.icon}</span>
+                    <span className="truncate">{tb.label}</span>
+                    {!!tb.badge && (
+                      <span
+                        className="ml-auto text-[9px] mono px-1 rounded"
+                        style={{
+                          color: "var(--t-accent)",
+                          background: "color-mix(in srgb, var(--t-accent) 15%, transparent)",
+                        }}
+                      >
+                        {tb.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </div>
       <div className="flex-1 overflow-y-auto px-2.5 pb-3 min-h-0">
@@ -815,12 +902,23 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
         {store.rightTab === "commands" && <CommandsPanel store={store} notify={notify} />}
         {store.rightTab === "history" && <HistoryPanel store={store} notify={notify} />}
         {store.rightTab === "stats" && <StatsPanel store={store} notify={notify} />}
+        {store.rightTab === "metrics" && <div key="metrics" className="df-swap contents"><MetricsPanel store={store} /></div>}
         {store.rightTab === "keys" && <KeysPanel store={store} notify={notify} />}
         {store.rightTab === "mcp" && <McpPanel store={store} notify={notify} />}
         {store.rightTab === "theme" && <ThemePanel store={store} notify={notify} />}
         {store.rightTab === "sys" && <SysPanel store={store} notify={notify} />}
-        {store.rightTab === "handbook" && <CommandNotesPanel store={store} onOpenModal={(cmd) => setModalNote(cmd ?? { command: "", section: "", sectionTitle: "" })} activeNoteId={activeNoteId} onSelectNote={setActiveNoteId} notes={commandNotes.list()} saving={saving} savingLabel={savingLabel} />}
-        {store.rightTab === "notes" && <CommandNotesPanel store={store} onOpenModal={(cmd) => setModalNote(cmd ?? { command: "", section: "", sectionTitle: "" })} activeNoteId={activeNoteId} onSelectNote={setActiveNoteId} notes={commandNotes.list()} saving={saving} savingLabel={savingLabel} />}
+        {store.rightTab === "handbook-part" && (
+          <div key="handbook-part" className="df-swap">
+            <HandbookWorkspace />
+          </div>
+        )}
+        {store.rightTab === "handbook-ref" && (
+          <div key="handbook-ref" className="df-swap">
+            <HandbookReference />
+          </div>
+        )}
+        {store.rightTab === "handbook" && <CommandNotesPanel store={store} onOpenModal={(cmd) => setModalNote(cmd ?? { command: "", section: "", sectionTitle: "" })} activeNoteId={activeNoteId} onSelectNote={setActiveNoteId} notes={notes} saving={saving} savingLabel={savingLabel} />}
+        {store.rightTab === "notes" && <CommandNotesPanel store={store} onOpenModal={(cmd) => setModalNote(cmd ?? { command: "", section: "", sectionTitle: "" })} activeNoteId={activeNoteId} onSelectNote={setActiveNoteId} notes={notes} saving={saving} savingLabel={savingLabel} />}
       </div>
       {modalNote && (
         <AddPromptModal
@@ -831,13 +929,18 @@ export function RightPanel({ store, notify, groupCtl }: { store: Store; notify: 
           onSave={(note) => {
             setSaving(true);
             setSavingLabel("Saving...");
+            // The store now returns a real success flag; never render a save
+            // confirmation for a write that actually failed (quota/private mode).
+            // `add` mints its own id/savedAt/savedBy -- it accepts Omit<..., those>.
             commandNotes.add({
-              id: note.id, command: note.command, section: note.section, sectionTitle: note.sectionTitle,
+              command: note.command, section: note.section, sectionTitle: note.sectionTitle,
               title: note.title, summary: note.summary, what: note.what, when: note.when,
               gotcha: note.gotcha, params: note.params, safety: note.safety, related: note.related,
-              savedAt: Date.now(), savedBy: 'ai',
             });
-            setTimeout(() => { setSaving(false); setSavingLabel(""); setModalNote(null); notify("Note saved"); }, 400);
+            // read AFTER the write -- reading it before would report the previous
+            // attempt's result.
+            const ok = commandNotes.lastWriteOk();
+            setTimeout(() => { setSaving(false); setSavingLabel(""); if (ok) { setModalNote(null); notify("Note saved"); } else notify("Could not save — storage is full or blocked"); }, 400);
           }}
           saving={saving}
           savingLabel={savingLabel}

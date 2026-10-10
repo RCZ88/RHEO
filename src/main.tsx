@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import { NumberMaskProvider } from './context/NumberMaskContext';
-import { ErrorBoundary, triggerGlobalError, isDynamicImportFailure, autoHealDynamicImport } from './components/ErrorBoundary'
+import { ErrorBoundary, triggerGlobalError, isDynamicImportFailure, isBenignBrowserError, autoHealDynamicImport } from './components/ErrorBoundary'
 import App from './App.tsx'
 import { BootOverlay } from './components/boot/BootOverlay';
 import { getSplashApi, type BootAnimationConfig } from './components/boot/bootTimings';
@@ -15,12 +15,20 @@ import './styles/lyceum-learn-features.css'
 import './styles/terminal-handbook.css'
 import './styles/signaling.css'
 import { applyTierColors, getTierColorOverrides } from './lib/tierColors'
+import { initAccent } from './lib/applyAccent'
 import { SmoothScrollProvider } from './components/ui/smooth-scroll'
 
 // Re-apply the user's saved tier colours BEFORE the first paint, so a
 // customised productive/neutral/distracting palette survives a reload
 // instead of flashing the default green/blue/red for a frame.
 applyTierColors(getTierColorOverrides());
+
+// Same for the accent colour. This was previously only called when the Settings
+// page mounted (SettingsPage.tsx:630), so the override was silently LOST on
+// every reload until the user happened to open Settings. initAccent also
+// re-resolves the accent on each theme change, because the stored swatch is a
+// NAME and the correct hex is theme-dependent.
+initAccent();
 
 console.log('BUILD MARKER v5');
 
@@ -85,6 +93,19 @@ const routeToBoundary = (err: unknown) => {
     autoHealDynamicImport();
     return;
   }
+  // Benign browser-emitted conditions (`ResizeObserver loop completed with
+  // undelivered notifications`, cross-origin `Script error.`, resource load
+  // failures) arrive here as window `error` events. They are warnings, not
+  // render errors — escalating them unmounts the entire screen for a layout
+  // hiccup. Log once and move on.
+  if (isBenignBrowserError(err)) {
+    const m = (err instanceof Error ? err.message : String(err ?? '')) || '(no message)';
+    if (m !== lastError) {
+      lastError = m;
+      console.warn('[Main] Ignored benign browser error:', m);
+    }
+    return;
+  }
   const key = err instanceof Error ? err.message : String(err);
   if (key === lastError) return; // deduplicate
   lastError = key;
@@ -101,7 +122,15 @@ const routeToBoundary = (err: unknown) => {
 };
 window.onerror = (_msg, _src, _line, _col, err) => { routeToBoundary(err || _msg); return true; };
 window.onunhandledrejection = (e: PromiseRejectionEvent) => { routeToBoundary(e.reason); return true; };
-window.addEventListener('error', (e) => routeToBoundary(e.error || e.message));
+// `e.target !== window` means a resource failed to load (<img>/<script>/<link>).
+// That is a missing asset, not a render error, and must not blank the screen.
+window.addEventListener('error', (e) => {
+  if (e.target !== window) {
+    console.warn('[Main] Resource load failed:', (e.target as Element)?.tagName ?? e.target);
+    return;
+  }
+  routeToBoundary(e.error || e.message);
+});
 window.addEventListener('unhandledrejection', (e) => routeToBoundary(e.reason));
 
 createRoot(document.getElementById('root')!).render(

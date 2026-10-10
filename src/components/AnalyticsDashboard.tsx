@@ -1,671 +1,793 @@
 import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
-  Database, BarChart3, DollarSign, Zap, AlertTriangle,
-  Clock, Activity, Cpu, TrendingUp, Code2,
-  PieChart as PieChartIcon, FileText, Timer, Wrench, Loader2, GitCommitHorizontal,
-  Users, MessageSquare, Sparkles
+  BarChart3, DollarSign, Zap, AlertTriangle, Activity, Cpu, TrendingUp,
+  Code2, FileText, Timer, Wrench, Loader2, GitCommitHorizontal, MessageSquare,
+  Sparkles, Inbox, AlertCircle, Clock,
 } from 'lucide-react';
 import { WorkspaceCard } from './workspace/_ds/containers';
-import { WorkspaceSection } from './workspace/_ds/containers';
-import { Chip } from './workspace/_ds/controls';
-import { Skeleton } from './ui/skeleton';
 import { format } from 'date-fns';
 import {
   Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement,
-  ArcElement, Tooltip, Legend, Filler,
-  LogarithmicScale
+  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
+  Tooltip, Legend, Filler,
 } from 'chart.js';
-import { Bar, Pie, Doughnut, Line } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, Filler, LogarithmicScale);
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
+  Tooltip, Legend, Filler,
+);
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const PURPLE = '#a855f7';
-const TEAL   = '#22d3ee';
-const EMERALD= '#34d399';
-const AMBER  = '#f59e0b';
-const ROSE   = '#fb7185';
-const BLUE   = '#60a5fa';
-const SLATE  = '#64748b';
-
-const CHART_PALETTE = [
-  'rgba(168, 85, 247, 0.75)', 'rgba(34, 211, 238, 0.75)', 'rgba(52, 211, 153, 0.75)',
-  'rgba(251, 113, 133, 0.75)', 'rgba(245, 158, 11, 0.75)', 'rgba(96, 165, 250, 0.75)',
-  'rgba(129, 140, 248, 0.75)', 'rgba(251, 146, 60, 0.75)', 'rgba(167, 139, 250, 0.75)',
-  'rgba(74, 222, 128, 0.75)', 'rgba(244, 114, 182, 0.75)', 'rgba(163, 230, 53, 0.75)',
-];
-const CHART_BORDERS = CHART_PALETTE.map(c => c.replace('0.75)', '1)'));
+/* ────────────────────────────────────────────────────────────────────────────
+ * LAMINAR §1/§2: the only colour source is a token. Chrome is monochrome zinc;
+ * data wears exactly ONE signal hue (--page-accent, §8). Emerald/rose are
+ * reserved for SEMANTIC states (success / error) and never used as decoration.
+ *
+ * Chart.js paints into a <canvas>, which cannot resolve `var(--x)` — so the
+ * token is read off the document once and cached. getAccent() is the bridge.
+ * ──────────────────────────────────────────────────────────────────────────── */
+let ACCENT_CACHE: string | null = null;
+const ACCENT_FALLBACK = '#ec4899';
+function getAccent(): string {
+  if (ACCENT_CACHE) return ACCENT_CACHE;
+  if (typeof document === 'undefined') return ACCENT_FALLBACK;
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--page-accent').trim();
+  ACCENT_CACHE = v || ACCENT_FALLBACK;
+  return ACCENT_CACHE;
+}
+/** Canvas needs a concrete colour; alpha variants are derived from the hue. */
+function alpha(hex: string, a: number) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return `rgba(236,72,153,${a})`;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${a})`;
+}
 
 const WORKSPACE_CATEGORIES = ['IDE', 'AI Tools', 'Developer Tools', 'Education', 'Productivity', 'Tools'];
 
-const STATUS_COLORS: Record<string, string> = {
-  'Fixed': 'rgba(52, 211, 153, 0.75)', 'Irrelevant': 'rgba(113, 113, 122, 0.75)',
-  'In Progress': 'rgba(96, 165, 250, 0.75)', 'NEW': 'rgba(251, 113, 133, 0.75)',
-  'Not Started': 'rgba(245, 158, 11, 0.75)', 'AI Attempted Fix': 'rgba(168, 85, 247, 0.75)',
-  'User Testing': 'rgba(34, 211, 238, 0.75)', 'Completed': 'rgba(52, 211, 153, 0.75)',
-  'Cancelled': 'rgba(113, 113, 122, 0.75)', 'Pending': 'rgba(245, 158, 11, 0.75)',
-  'active': 'rgba(52, 211, 153, 0.75)', 'running': 'rgba(34, 211, 238, 0.75)',
-  'completed': 'rgba(129, 140, 248, 0.75)', 'stopped': 'rgba(113, 113, 122, 0.75)',
-  'error': 'rgba(251, 113, 133, 0.75)',
+/** Semantic tone per status. §2 — emerald = success/filled, rose = error. */
+type Tone = 'good' | 'bad' | 'warn' | 'idle';
+const STATUS_TONE: Record<string, Tone> = {
+  Fixed: 'good', Completed: 'good', active: 'good', running: 'good', resolved: 'good',
+  Cancelled: 'idle', Irrelevant: 'idle', stopped: 'idle', Unknown: 'idle',
+  NEW: 'bad', error: 'bad', Declined: 'bad', Rejected: 'bad',
+  'Not Started': 'warn', Pending: 'warn', 'In Progress': 'warn',
+  'AI Attempted Fix': 'warn', 'User Testing': 'warn',
+};
+const toneOf = (status: string): Tone => STATUS_TONE[status] ?? 'idle';
+const TONE_CLASS: Record<Tone, string> = {
+  good: 'bg-emerald-400',
+  bad: 'bg-rose-400',
+  warn: 'bg-amber-400',
+  idle: 'bg-zinc-600',
 };
 
-const getStatusColor = (status: string, fallbackIdx: number) =>
-  STATUS_COLORS[status] || CHART_PALETTE[fallbackIdx % CHART_PALETTE.length];
-const getStatusBorder = (status: string, fallbackIdx: number) =>
-  getStatusColor(status, fallbackIdx).replace('0.75)', '1)');
-
 const fmtNum = (n: number) => {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  if (!Number.isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (abs >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n.toLocaleString();
 };
 const fmtCost = (n: number) => {
+  if (!Number.isFinite(n)) return '—';
   if (n >= 1) return '$' + n.toFixed(2);
   if (n >= 0.01) return '$' + n.toFixed(3);
   if (n > 0) return '$' + n.toFixed(4);
   return '$0.00';
 };
 const fmtSec = (s: number) => {
+  if (!Number.isFinite(s)) return '—';
   if (s >= 3600) return (s / 3600).toFixed(1) + 'h';
   if (s >= 60) return (s / 60).toFixed(1) + 'm';
   return s.toFixed(1) + 's';
 };
-
-// ─── Chart options ────────────────────────────────────────────────────────────
-const doughnutOptions = {
-  responsive: true, maintainAspectRatio: false,
-  cutout: '68%',
-  plugins: {
-    legend: { position: 'right' as const, labels: { color: '#71717a', font: { size: 10 }, padding: 10, usePointStyle: true, pointStyleWidth: 6 } },
-    tooltip: { backgroundColor: 'rgba(9,9,11,0.95)', titleColor: '#e4e4e7', bodyColor: '#a1a1aa', borderColor: 'rgba(63,63,70,0.5)', borderWidth: 1, cornerRadius: 8, padding: 8, displayColors: true, boxPadding: 4 },
-  },
+const safeDayLabel = (d: unknown) => {
+  if (typeof d !== 'string' || !d) return '—';
+  try { return format(new Date(d + 'T00:00:00'), 'MMM d'); } catch { return d; }
 };
 
-const barOptions = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(9,9,11,0.95)', titleColor: '#e4e4e7', bodyColor: '#a1a1aa', borderColor: 'rgba(63,63,70,0.5)', borderWidth: 1, cornerRadius: 8, padding: 8 } },
-  scales: {
-    x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(113,113,122,0.06)' }, border: { color: 'rgba(113,113,122,0.12)' } },
-    y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(113,113,122,0.06)' }, border: { color: 'rgba(113,113,122,0.12)' } },
-  },
-};
-
-const crosshairPlugin = {
-  id: 'dashedCrosshair',
-  afterDraw(chart: any) {
-    const active = chart.tooltip?.getActiveElements?.();
-    if (!active || !active.length) return;
-    const { ctx, chartArea } = chart;
-    const x = active[0].element.x;
-    ctx.save();
-    ctx.beginPath();
-    ctx.setLineDash([4, 4]);
-    ctx.moveTo(x, chartArea.top);
-    ctx.lineTo(x, chartArea.bottom);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.stroke();
-    ctx.restore();
-  },
-};
-
-// ─── Stat Card (compact KPI tile) ─────────────────────────────────────────────
-function KpiTile({ icon: Icon, value, label, sub, accent, delay = 0 }: {
-  icon: React.ComponentType<{ className?: string }>;
-  value: string; label: string; sub?: string; accent?: string; delay?: number;
-}) {
-  const accentColors: Record<string, string> = {
-    purple: 'bg-purple-500/15 text-purple-400', teal: 'bg-teal-500/15 text-teal-400',
-    emerald: 'bg-emerald-500/15 text-emerald-400', amber: 'bg-amber-500/15 text-amber-400',
-    rose: 'bg-rose-500/15 text-rose-400', blue: 'bg-blue-500/15 text-blue-400',
-  };
-  const iconCls = accent ? accentColors[accent] || accentColors.purple : 'bg-zinc-800 text-zinc-400';
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.3 }}
-      className="bg-zinc-900/60 backdrop-blur-xl rounded-xl p-4 border border-zinc-800/40 hover:border-zinc-700/50 transition-colors"
-    >
-      <div className="flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconCls}`}>
-          <Icon className="w-4.5 h-4.5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-lg font-bold text-white font-mono tracking-tight">{value}</div>
-          <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
-          {sub && <div className="text-[10px] text-zinc-600 mt-0.5">{sub}</div>}
-        </div>
-      </div>
-    </motion.div>
-  );
+/* ─── Animation ─────────────────────────────────────────────────────────────── */
+const EASE = [0.16, 1, 0.3, 1] as const;
+function useEnter(delay: number) {
+  const reduce = useReducedMotion();
+  return reduce
+    ? {}
+    : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 },
+        transition: { delay, duration: 0.25, ease: EASE } };
 }
 
-// ─── Chart Card shell ─────────────────────────────────────────────────────────
-function ChartTile({ title, subtitle, icon: Icon, children, empty, emptyText, full = false }: {
+/* ─── Panel: the four states ────────────────────────────────────────────────── */
+type PanelState = 'loading' | 'error' | 'empty' | 'ready';
+
+function Panel({
+  title, subtitle, icon: Icon, state, error, onRetry, children, footer,
+}: {
   title: string; subtitle?: string; icon?: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode; empty: boolean; emptyText: string; full?: boolean;
+  state: PanelState; error?: string | null; onRetry?: () => void;
+  children: React.ReactNode; footer?: React.ReactNode;
 }) {
+  const enter = useEnter(0);
+
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
-      className={full ? 'col-span-1 lg:col-span-2' : ''}
-    >
-      <WorkspaceCard className={`min-h-[240px] ${full ? 'lg:col-span-2' : ''}`}>
-        <div className="flex items-center gap-2.5 mb-3">
+    <motion.div {...enter}>
+      <WorkspaceCard className="h-full flex flex-col">
+        <div className="flex items-start gap-2.5 mb-4 shrink-0">
           {Icon && (
-            <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center ring-1 ring-zinc-700/50">
+            <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
               <Icon className="w-3.5 h-3.5 text-zinc-400" />
             </div>
           )}
-          <div>
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">{title}</h3>
-            {subtitle && <p className="text-[11px] text-zinc-600 mt-0.5">{subtitle}</p>}
+            {subtitle && <p className="text-[11px] text-zinc-500 mt-0.5">{subtitle}</p>}
           </div>
         </div>
-        <div className="relative" style={{ height: empty ? 180 : 220 }}>
-          {empty ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-600">
-              <BarChart3 className="w-7 h-7 mb-1 opacity-30" />
-              <span className="text-xs">{emptyText}</span>
+
+        <div className="flex-1 min-h-[132px] flex flex-col justify-center">
+          {state === 'loading' && (
+            <div className="flex flex-col items-center justify-center gap-2 py-6" role="status" aria-live="polite">
+              <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
+              <span className="text-xs text-zinc-600">Loading…</span>
             </div>
-          ) : children}
+          )}
+
+          {state === 'error' && (
+            <div className="flex flex-col items-center justify-center gap-2 py-6 text-center" role="alert">
+              <AlertCircle className="w-5 h-5 text-rose-400" />
+              <p className="text-xs text-zinc-400 max-w-[26ch] leading-relaxed">
+                {error || 'This data could not be loaded.'}
+              </p>
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  className="mt-1 text-[11px] font-medium text-zinc-300 border border-zinc-700 rounded-lg px-2.5 py-1 hover:border-zinc-600 hover:text-white transition-colors"
+                >
+                  Try again
+                </button>
+              )}
+              <p className="text-[10px] text-zinc-600">Not zero — unavailable.</p>
+            </div>
+          )}
+
+          {state === 'empty' && (
+            <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+              <Inbox className="w-5 h-5 text-zinc-700" />
+              <p className="text-xs text-zinc-500">Nothing recorded yet</p>
+              <p className="text-[10px] text-zinc-600 max-w-[28ch] leading-relaxed">
+                This is a genuine zero for this period — not a failed read.
+              </p>
+            </div>
+          )}
+
+          {state === 'ready' && children}
         </div>
+
+        {state === 'ready' && footer && <div className="mt-3 pt-3 shrink-0">{footer}</div>}
       </WorkspaceCard>
     </motion.div>
   );
 }
 
-// ─── Progress bar card ────────────────────────────────────────────────────────
-function ProgressCard({ title, icon: Icon, accent, items }: {
-  title: string; icon: React.ComponentType<{ className?: string }>; accent?: string;
-  items: { label: string; done: number; total: number; color: string; pendingColor: string }[];
+/* ─── RankBars — the core replacement ──────────────────────────────────────────
+ * One measure split across N categories. Length is the only channel a human
+ * reads accurately, so it is a ranked bar list, never an angle-based donut.
+ * ONE signal hue for categorical data; a semantic dot for status lists.
+ * ──────────────────────────────────────────────────────────────────────────── */
+interface Datum { label: string; value: number; tone?: Tone }
+
+function RankBars({
+  data, formatValue = fmtNum, max: maxOverride, semantic = false, limit = 8,
+}: {
+  data: Datum[]; formatValue?: (n: number) => string;
+  max?: number; semantic?: boolean; limit?: number;
+}) {
+  const reduce = useReducedMotion();
+  const rows = data.slice(0, limit);
+  const total = data.reduce((a, d) => a + (Number.isFinite(d.value) ? d.value : 0), 0);
+  const max = maxOverride ?? Math.max(...rows.map(d => d.value), 0);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <ul className="w-full flex flex-col gap-2.5">
+      {rows.map((d, i) => {
+        const widthPct = max > 0 ? Math.max((d.value / max) * 100, 0) : 0;
+        const sharePct = total > 0 ? (d.value / total) * 100 : 0;
+        const fill = semantic ? undefined : 'var(--page-accent)';
+        const fillClass = semantic ? TONE_CLASS[d.tone ?? 'idle'] : '';
+        return (
+          <li key={d.label} className="grid grid-cols-[1.25rem_1fr_auto] items-center gap-x-2.5 gap-y-1">
+            <span className="text-[10px] text-zinc-600 tabular-nums text-right">
+              {i + 1}
+            </span>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 mb-1">
+                {semantic && (
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${fillClass}`} aria-hidden />
+                )}
+                <span className="text-xs text-zinc-300 truncate" title={d.label}>{d.label}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                <motion.div
+                  className={`h-full rounded-full ${fillClass}`}
+                  style={fill ? { backgroundColor: fill } : undefined}
+                  initial={reduce ? false : { width: 0 }}
+                  animate={{ width: `${widthPct}%` }}
+                  transition={reduce ? { duration: 0 } : { duration: 0.4, delay: i * 0.04, ease: EASE }}
+                />
+              </div>
+            </div>
+
+            <div className="text-right shrink-0">
+              <div className="text-xs text-zinc-300 font-mono tabular-nums leading-none">
+                {formatValue(d.value)}
+              </div>
+              {total > 0 && (
+                <div className="text-[10px] text-zinc-600 font-mono tabular-nums mt-0.5">
+                  {sharePct >= 0.1 ? sharePct.toFixed(0) + '%' : '<1%'}
+                </div>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* ─── Stat tile ─────────────────────────────────────────────────────────────── */
+function KpiTile({ icon: Icon, value, label, sub, delay = 0 }: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: string; label: string; sub?: string; delay?: number;
+}) {
+  const enter = useEnter(delay);
+  return (
+    <motion.div {...enter} className="rounded-xl p-4 border border-zinc-800/40 bg-zinc-900/40">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-800">
+          <Icon className="w-4 h-4 text-zinc-400" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-lg font-bold text-zinc-100 font-mono tracking-tight leading-none">{value}</div>
+          <div className="text-xs text-zinc-500 mt-1">{label}</div>
+          {sub && <div className="text-[10px] text-zinc-600 mt-0.5 font-mono">{sub}</div>}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Progress card ─────────────────────────────────────────────────────────── */
+function ProgressCard({ title, icon: Icon, items, state }: {
+  title: string; icon: React.ComponentType<{ className?: string }>;
+  items: { label: string; done: number; total: number }[];
+  state: 'ready' | 'empty';
 }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-      className="bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/40 p-4"
-    >
-      <div className="flex items-center gap-2.5 mb-4">
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${accent ? `bg-${accent}-500/15` : 'bg-zinc-800'}`}>
-          <Icon className={`w-3.5 h-3.5 ${accent ? `text-${accent}-400` : 'text-zinc-400'}`} />
+    <WorkspaceCard className="h-full flex flex-col">
+      <div className="flex items-center gap-2.5 mb-4 shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+          <Icon className="w-3.5 h-3.5 text-zinc-400" />
         </div>
         <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">{title}</h3>
       </div>
-      <div className="space-y-3">
-        {items.map((item) => {
-          const pct = item.total > 0 ? Math.round((item.done / item.total) * 100) : 0;
-          return (
-            <div key={item.label}>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-zinc-400 font-medium">{item.label}</span>
-                <span className="text-zinc-500 tabular-nums">{item.done} / {item.total}</span>
+
+      {state === 'empty' ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-6 text-center">
+          <Inbox className="w-5 h-5 text-zinc-700" />
+          <p className="text-xs text-zinc-500">Nothing tracked yet</p>
+        </div>
+      ) : (
+        <div className="space-y-4 flex-1 flex flex-col justify-center">
+          {items.map((item) => {
+            // Division-by-zero guard: a 0-total row must never produce NaN%.
+            const total = Number.isFinite(item.total) ? item.total : 0;
+            const done = Number.isFinite(item.done) ? item.done : 0;
+            const pct = total > 0 ? Math.min((done / total) * 100, 100) : 0;
+            return (
+              <div key={item.label}>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="text-zinc-400">{item.label}</span>
+                  <span className="text-zinc-500 tabular-nums font-mono">{done} / {total}</span>
+                </div>
+                <div
+                  className="h-1.5 rounded-full bg-zinc-800 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={Math.round(pct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={item.label}
+                >
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: 'var(--page-accent)' }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.4, ease: EASE }}
+                  />
+                </div>
               </div>
-              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: item.color }} />
-                <div className="h-full rounded-full transition-all" style={{ width: `${(item.total - item.done) / item.total * 100}%`, backgroundColor: item.pendingColor }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </WorkspaceCard>
   );
 }
 
-// ─── Code activity stat card ──────────────────────────────────────────────────
-function CodeStatCard({ icon: Icon, value, label, sub, accent, delay = 0 }: {
-  icon: React.ComponentType<{ className?: string }>; value: string; label: string;
-  sub?: string; accent?: string; delay?: number;
-}) {
-  const accentMap: Record<string, { bg: string; color: string }> = {
-    emerald: { bg: 'bg-emerald-500/12', color: 'text-emerald-400' },
-    cyan:    { bg: 'bg-cyan-500/10',  color: 'text-cyan-400' },
-    rose:    { bg: 'bg-rose-500/10',  color: 'text-rose-400' },
-    purple:  { bg: 'bg-purple-500/10', color: 'text-purple-400' },
+/* ─── Time-series chart options ─────────────────────────────────────────────── */
+function timeSeriesOptions(yTitle: string) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index' as const, intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#18181b',
+        titleColor: '#e4e4e7',
+        bodyColor: '#a1a1aa',
+        borderColor: 'rgba(255,255,255,0.08)',
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 8,
+        displayColors: false,
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { color: 'rgba(255,255,255,0.08)' },
+        ticks: { color: '#71717a', font: { size: 10 }, maxRotation: 0, autoSkipPadding: 12 },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: 'rgba(255,255,255,0.06)' },
+        border: { display: false },
+        ticks: { color: '#71717a', font: { size: 10 }, padding: 8 },
+        title: { display: true, text: yTitle, color: '#71717a', font: { size: 10 } },
+      },
+    },
   };
-  const a = accentMap[accent] || accentMap.emerald;
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.3 }}
-      className="bg-zinc-900/60 backdrop-blur-xl rounded-xl p-4 border border-zinc-800/40"
-    >
-      <div className="flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${a.bg}`}>
-          <Icon className={`w-4.5 h-4.5 ${a.color}`} />
-        </div>
-        <div className="min-w-0">
-          <div className="text-lg font-bold text-white font-mono tracking-tight">{value}</div>
-          <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
-          {sub && <div className="text-[10px] text-zinc-600 mt-0.5">{sub}</div>}
-        </div>
-      </div>
-    </motion.div>
-  );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+/* ─── Main component ────────────────────────────────────────────────────────── */
 export default function AnalyticsDashboard({
   aiUsage, sessions, problems, requests, dailyStats, appStats,
   promptHistory, loading, period, variant = 'full',
   projectLanguages, codeStats, codeActivity,
+  error = null, onRetry,
 }: {
-  aiUsage?: any; sessions: any[]; problems?: any[]; requests?: any[];
+  aiUsage?: any; sessions?: any[]; problems?: any[]; requests?: any[];
   dailyStats?: any[]; appStats?: any[]; promptHistory?: any[]; loading: boolean;
   period: string; variant?: 'project' | 'workspace' | 'full';
   projectLanguages?: { language: string; count: number }[]; codeStats?: any; codeActivity?: any;
+  error?: string | null; onRetry?: () => void;
 }) {
-  const tokenByTool = useMemo(() => {
-    if (!aiUsage?.byTool) return { labels: [], values: [] };
-    const entries = Object.entries(aiUsage.byTool)
-      .map(([tool, data]: [string, any]) => ({ tool, tokens: data?.tokens || 0 }))
-      .sort((a, b) => b.tokens - a.tokens);
-    return { labels: entries.map(e => e.tool), values: entries.map(e => e.tokens) };
+  // `sessions` was typed required but callers can hand us undefined on a failed
+  // read. Every consumer below is now total.
+  const sessionList = useMemo(() => (Array.isArray(sessions) ? sessions : []), [sessions]);
+  const problemList = useMemo(() => (Array.isArray(problems) ? problems : []), [problems]);
+  const requestList = useMemo(() => (Array.isArray(requests) ? requests : []), [requests]);
+  const promptList = useMemo(() => (Array.isArray(promptHistory) ? promptHistory : []), [promptHistory]);
+  const dailyList = useMemo(() => (Array.isArray(dailyStats) ? dailyStats : []), [dailyStats]);
+  const appList = useMemo(() => (Array.isArray(appStats) ? appStats : []), [appStats]);
+  const langList = useMemo(() => (Array.isArray(projectLanguages) ? projectLanguages : []), [projectLanguages]);
+
+  /** Group any array by a key, descending by count. Total on any input shape. */
+  const tally = (list: any[], key: string, fallback = 'Unknown'): Datum[] => {
+    const counts = new Map<string, number>();
+    for (const row of list) {
+      const raw = row?.[key];
+      const k = typeof raw === 'string' && raw.trim() ? raw : fallback;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value, tone: toneOf(label) }))
+      .sort((a, b) => b.value - a.value);
+  };
+
+  const byToolTokens = useMemo<Datum[]>(() => {
+    const byTool = aiUsage?.byTool;
+    if (!byTool || typeof byTool !== 'object') return [];
+    return Object.entries(byTool)
+      .map(([tool, data]: [string, any]) => ({ label: tool, value: Number(data?.tokens) || 0 }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value);
   }, [aiUsage]);
 
-  const costByTool = useMemo(() => {
-    if (!aiUsage?.byTool) return { labels: [], values: [] };
-    const entries = Object.entries(aiUsage.byTool)
-      .map(([tool, data]: [string, any]) => ({ tool, cost: data?.cost || 0 }))
-      .sort((a, b) => b.cost - a.cost);
-    return { labels: entries.map(e => e.tool), values: entries.map(e => e.cost) };
+  const byToolCost = useMemo<Datum[]>(() => {
+    const byTool = aiUsage?.byTool;
+    if (!byTool || typeof byTool !== 'object') return [];
+    return Object.entries(byTool)
+      .map(([tool, data]: [string, any]) => ({ label: tool, value: Number(data?.cost) || 0 }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value);
   }, [aiUsage]);
 
-  const sessionsByAgent = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const s of sessions) counts[s.agent || 'Unknown'] = (counts[s.agent || 'Unknown'] || 0) + 1;
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return { labels: entries.map(e => e[0]), values: entries.map(e => e[1]) };
-  }, [sessions]);
+  const sessionsByAgent = useMemo(() => tally(sessionList, 'agent'), [sessionList]);
+  const sessionsByStatus = useMemo(() => tally(sessionList, 'status'), [sessionList]);
+  const problemsByStatus = useMemo(() => tally(problemList, 'status'), [problemList]);
+  const requestsByStatus = useMemo(() => tally(requestList, 'status'), [requestList]);
 
-  const sessionsByStatus = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const s of sessions) counts[s.status || 'Unknown'] = (counts[s.status || 'Unknown'] || 0) + 1;
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return { labels: entries.map(e => e[0]), values: entries.map(e => e[1]) };
-  }, [sessions]);
+  const categoryDist = useMemo<Datum[]>(() => {
+    if (appList.length === 0) return [];
+    const totals = new Map<string, number>();
+    for (const stat of appList) {
+      const cat = typeof stat?.category === 'string' && stat.category ? stat.category : 'Other';
+      const ms = Number(stat?.total_ms);
+      totals.set(cat, (totals.get(cat) ?? 0) + (Number.isFinite(ms) ? ms : 0));
+    }
+    return [...totals.entries()]
+      .map(([label, ms]) => ({ label, value: +(ms / 3600).toFixed(2), tone: toneOf(label) }))
+      .sort((a, b) => b.value - a.value);
+  }, [appList]);
 
-  const categoryDist = useMemo(() => {
-    if (!appStats?.length) return { labels: [], values: [] };
-    const totals: Record<string, number> = {};
-    for (const stat of appStats) { const cat = stat.category || 'Other'; totals[cat] = (totals[cat] || 0) + (stat.total_ms || 0); }
-    const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-    return { labels: entries.map(e => e[0]), values: entries.map(e => e[1]) };
-  }, [appStats]);
-
-  const languageDist = useMemo(() => {
-    if (!projectLanguages?.length) return { labels: [], values: [] };
-    const sorted = [...projectLanguages].sort((a, b) => b.count - a.count);
-    return { labels: sorted.map(e => e.language), values: sorted.map(e => e.count) };
-  }, [projectLanguages]);
-
-  const problemsByStatus = useMemo(() => {
-    if (!problems?.length) return { labels: [], values: [] };
-    const counts: Record<string, number> = {};
-    for (const p of problems) counts[p.status || 'Unknown'] = (counts[p.status || 'Unknown'] || 0) + 1;
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return { labels: entries.map(e => e[0]), values: entries.map(e => e[1]) };
-  }, [problems]);
-
-  const requestsByStatus = useMemo(() => {
-    if (!requests?.length) return { labels: [], values: [] };
-    const counts: Record<string, number> = {};
-    for (const r of requests) counts[r.status || 'Unknown'] = (counts[r.status || 'Unknown'] || 0) + 1;
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return { labels: entries.map(e => e[0]), values: entries.map(e => e[1]) };
-  }, [requests]);
+  const languageDist = useMemo<Datum[]>(() => {
+    if (langList.length === 0) return [];
+    return langList
+      .map(l => ({ label: String(l?.language ?? 'Unknown'), value: Number(l?.count) || 0 }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [langList]);
 
   const dailyTrend = useMemo(() => {
-    if (!dailyStats?.length) return { labels: [], values: [] };
-    const dayTotals: Record<string, number> = {};
-    for (const stat of dailyStats) {
-      if (!WORKSPACE_CATEGORIES.includes(stat.category)) continue;
-      const day = stat.day || stat.date; if (!day) continue;
-      dayTotals[day] = (dayTotals[day] || 0) + (stat.total_sec || 0);
+    if (dailyList.length === 0) return { labels: [] as string[], values: [] as number[] };
+    const dayTotals = new Map<string, number>();
+    for (const stat of dailyList) {
+      if (!WORKSPACE_CATEGORIES.includes(stat?.category)) continue;
+      const day = stat?.day || stat?.date;
+      if (typeof day !== 'string' || !day) continue;
+      const sec = Number(stat?.total_sec);
+      dayTotals.set(day, (dayTotals.get(day) ?? 0) + (Number.isFinite(sec) ? sec : 0));
     }
-    const sorted = Object.keys(dayTotals).sort();
+    const sorted = [...dayTotals.keys()].sort();
     return {
-      labels: sorted.map(d => { try { return format(new Date(d + 'T00:00:00'), 'MMM d'); } catch { return d; } }),
-      values: sorted.map(d => +(dayTotals[d] / 3600).toFixed(2)),
+      labels: sorted.map(safeDayLabel),
+      values: sorted.map(d => +(dayTotals.get(d)! / 3600).toFixed(2)),
     };
-  }, [dailyStats]);
+  }, [dailyList]);
 
   const responseTiming = useMemo(() => {
-    if (!promptHistory?.length) return { avgResponse: null, avgThink: null, count: 0 };
-    const bySession: Record<string, any[]> = {};
-    for (const msg of promptHistory) { const sid = msg.session_id; if (!sid) continue; if (!bySession[sid]) bySession[sid] = []; bySession[sid].push(msg); }
-    let totalResponseGap = 0, responseGapCount = 0;
-    let totalThinkGap = 0, thinkGapCount = 0;
-    for (const msgs of Object.values(bySession)) {
-      const sorted = [...msgs].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    if (promptList.length === 0) return { avgResponse: null as number | null, avgThink: null as number | null, count: 0 };
+    const bySession = new Map<string, any[]>();
+    for (const msg of promptList) {
+      const sid = msg?.session_id;
+      if (!sid) continue;
+      if (!bySession.has(sid)) bySession.set(sid, []);
+      bySession.get(sid)!.push(msg);
+    }
+    let totalResponse = 0, nResponse = 0, totalThink = 0, nThink = 0;
+    for (const msgs of bySession.values()) {
+      const sorted = [...msgs].sort(
+        (a, b) => new Date(a?.created_at ?? 0).getTime() - new Date(b?.created_at ?? 0).getTime(),
+      );
       for (let i = 0; i < sorted.length - 1; i++) {
-        const t0 = new Date(sorted[i].created_at).getTime();
-        const t1 = new Date(sorted[i + 1].created_at).getTime();
+        const t0 = new Date(sorted[i]?.created_at ?? 0).getTime();
+        const t1 = new Date(sorted[i + 1]?.created_at ?? 0).getTime();
+        if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue;
         const gap = (t1 - t0) / 1000;
-        if (sorted[i].role === 'user' && sorted[i + 1].role === 'assistant' && gap >= 0 && gap < 600) { totalResponseGap += gap; responseGapCount++; }
-        else if (sorted[i].role === 'assistant' && sorted[i + 1].role === 'user' && gap >= 0 && gap < 7200) { totalThinkGap += gap; thinkGapCount++; }
+        if (sorted[i]?.role === 'user' && sorted[i + 1]?.role === 'assistant' && gap >= 0 && gap < 600) {
+          totalResponse += gap; nResponse++;
+        } else if (sorted[i]?.role === 'assistant' && sorted[i + 1]?.role === 'user' && gap >= 0 && gap < 7200) {
+          totalThink += gap; nThink++;
+        }
       }
     }
     return {
-      avgResponse: responseGapCount > 0 ? totalResponseGap / responseGapCount : null,
-      avgThink: thinkGapCount > 0 ? totalThinkGap / thinkGapCount : null,
-      count: responseGapCount,
+      avgResponse: nResponse > 0 ? totalResponse / nResponse : null,
+      avgThink: nThink > 0 ? totalThink / nThink : null,
+      count: nResponse,
     };
-  }, [promptHistory]);
+  }, [promptList]);
 
-  const summaryStats = useMemo(() => {
-    const totalTokens = aiUsage?.totalTokens || 0;
-    const totalCost = aiUsage?.totalCost || 0;
-    const sessionCount = sessions.length;
-    const activeSessions = sessions.filter(s => s.status === 'active' || s.status === 'running').length;
-    const problemCount = problems?.length || 0;
-    const openProblems = problems ? problems.filter(p => !['Fixed', 'Irrelevant'].includes(p.status)).length : 0;
-    const requestCount = requests?.length || 0;
-    const openRequests = requests ? requests.filter(r => !['Completed', 'Cancelled'].includes(r.status)).length : 0;
-    const toolsUsed = aiUsage?.byTool ? Object.keys(aiUsage.byTool).length : 0;
-    return { totalTokens, totalCost, sessionCount, activeSessions, problemCount, openProblems, requestCount, openRequests, toolsUsed };
-  }, [aiUsage, sessions, problems, requests]);
+  const summary = useMemo(() => {
+    const totalTokens = Number(aiUsage?.totalTokens) || 0;
+    const totalCost = Number(aiUsage?.totalCost) || 0;
+    const activeSessions = sessionList.filter(s => s?.status === 'active' || s?.status === 'running').length;
+    const openProblems = problemList.filter(p => !['Fixed', 'Irrelevant'].includes(p?.status)).length;
+    const openRequests = requestList.filter(r => !['Completed', 'Cancelled'].includes(r?.status)).length;
+    const toolsUsed = aiUsage?.byTool && typeof aiUsage.byTool === 'object' ? Object.keys(aiUsage.byTool).length : 0;
+    return {
+      totalTokens, totalCost, sessionCount: sessionList.length, activeSessions,
+      problemCount: problemList.length, openProblems,
+      requestCount: requestList.length, openRequests, toolsUsed,
+    };
+  }, [aiUsage, sessionList, problemList, requestList]);
 
-  // ─── Loading ────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-        <span className="ml-3 text-sm text-zinc-500">Loading analytics...</span>
-      </div>
-    );
-  }
+  const codeDaily = useMemo(() => {
+    const daily = codeActivity?.daily;
+    if (!Array.isArray(daily) || daily.length === 0) return { labels: [] as string[], added: [] as number[], removed: [] as number[], hours: [] as number[] };
+    return {
+      labels: daily.map((r: any) => safeDayLabel(r?.date)),
+      added: daily.map((r: any) => Number(r?.linesAdded) || 0),
+      removed: daily.map((r: any) => Number(r?.linesRemoved) || 0),
+      hours: daily.map((r: any) => {
+        const ms = Number(r?.durationMs);
+        return Number.isFinite(ms) ? +(ms / 3600000).toFixed(2) : 0;
+      }),
+    };
+  }, [codeActivity]);
 
-  // ─── Project variant ────────────────────────────────────────────────────────
+  const topFiles = useMemo(() => {
+    const files = codeActivity?.topFiles;
+    if (!Array.isArray(files)) return [];
+    return files
+      .map((f: any) => ({
+        path: typeof f?.file_path === 'string' ? f.file_path : '(unknown)',
+        added: Number(f?.linesAdded) || 0,
+        removed: Number(f?.linesRemoved) || 0,
+        seconds: (Number(f?.durationMs) || 0) / 1000,
+      }))
+      .slice(0, 6);
+  }, [codeActivity]);
+
+  /**
+   * error → 'error'; else if we have data → 'ready'; else if still fetching →
+   * 'loading'; else → 'empty'. Ordering matters: showing 'empty' while a fetch
+   * is in flight is how a failed read masquerades as a genuine zero.
+   */
+  const panelState = (has: boolean): PanelState =>
+    error ? 'error' : has ? 'ready' : loading ? 'loading' : 'empty';
+
+  /* ─── Project variant ─────────────────────────────────────────────────────── */
   if (variant === 'project') {
     return (
       <div className="space-y-4">
-        <KpiTile icon={Activity} value={String(summaryStats.sessionCount)} label="Sessions"
-          sub={summaryStats.activeSessions > 0 ? `${summaryStats.activeSessions} active` : undefined} accent="teal" />
+        <KpiTile icon={Activity} value={String(summary.sessionCount)} label="Sessions"
+          sub={summary.activeSessions > 0 ? `${summary.activeSessions} active` : undefined} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartTile title="Sessions by Agent" icon={Cpu} subtitle="AI agent usage distribution"
-            empty={sessionsByAgent.values.length === 0} emptyText="No session data available">
-            <Pie data={{ labels: sessionsByAgent.labels, datasets: [{ data: sessionsByAgent.values, backgroundColor: sessionsByAgent.labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), borderColor: sessionsByAgent.labels.map((_, i) => CHART_BORDERS[i % CHART_BORDERS.length]), borderWidth: 1.5 }] }} options={doughnutOptions} />
-          </ChartTile>
-          <ChartTile title="Session Status" icon={Activity} subtitle="Active vs completed sessions"
-            empty={sessionsByStatus.values.length === 0} emptyText="No status data available">
-            <Doughnut data={{ labels: sessionsByStatus.labels, datasets: [{ data: sessionsByStatus.values, backgroundColor: sessionsByStatus.labels.map((l, i) => getStatusColor(l, i)), borderColor: sessionsByStatus.labels.map((l, i) => getStatusBorder(l, i)), borderWidth: 1.5 }] }} options={doughnutOptions} />
-          </ChartTile>
+          <Panel title="Sessions by Agent" subtitle="Which agents ran" icon={Cpu}
+            state={panelState(sessionsByAgent.length > 0)} error={error} onRetry={onRetry}>
+            <RankBars data={sessionsByAgent} formatValue={fmtNum} />
+          </Panel>
+          <Panel title="Session Status" subtitle="Active vs completed" icon={Activity}
+            state={panelState(sessionsByStatus.length > 0)} error={error} onRetry={onRetry}>
+            <RankBars data={sessionsByStatus} semantic />
+          </Panel>
         </div>
       </div>
     );
   }
 
-  // ─── Workspace / Full variant ───────────────────────────────────────────────
-  const hasAiData = aiUsage?.totalTokens > 0 || (aiUsage?.byTool ? Object.keys(aiUsage.byTool).length > 0 : false);
-  const hasActivity = codeActivity && (codeActivity.totalEvents || 0) > 0;
+  /* ─── Full / workspace variant ────────────────────────────────────────────── */
+  const accent = getAccent();
+  const hasCodeSection = Boolean(codeStats || codeActivity);
 
   return (
     <div className="space-y-5">
-      {/* ── KPI Row ── */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3"
-      >
-        <KpiTile icon={Zap} value={fmtNum(summaryStats.totalTokens)} label="Total Tokens"
-          sub={`${summaryStats.toolsUsed} tools`} accent="purple" delay={0} />
-        <KpiTile icon={DollarSign} value={fmtCost(summaryStats.totalCost)} label="Total Cost" delay={0.05} />
-        <KpiTile icon={Activity} value={String(summaryStats.sessionCount)} label="Sessions"
-          sub={summaryStats.activeSessions > 0 ? `${summaryStats.activeSessions} active` : undefined} accent="teal" delay={0.1} />
-        <KpiTile icon={AlertTriangle} value={String(summaryStats.problemCount)} label="Problems"
-          sub={summaryStats.openProblems > 0 ? `${summaryStats.openProblems} open` : undefined} accent="rose" delay={0.15} />
-        <KpiTile icon={FileText} value={String(summaryStats.requestCount)} label="Requests"
-          sub={summaryStats.openRequests > 0 ? `${summaryStats.openRequests} open` : undefined} accent="emerald" delay={0.2} />
-      </motion.div>
-
-      {/* ── Distribution Charts (2×2 grid) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartTile title="Token Distribution" icon={Zap} subtitle="Token usage by tool"
-          empty={tokenByTool.values.length === 0} emptyText="No token data">
-          <Pie data={{ labels: tokenByTool.labels, datasets: [{ data: tokenByTool.values, backgroundColor: tokenByTool.labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), borderColor: tokenByTool.labels.map((_, i) => CHART_BORDERS[i % CHART_BORDERS.length]), borderWidth: 1.5 }] }} options={doughnutOptions} />
-        </ChartTile>
-        <ChartTile title="Cost Distribution" icon={DollarSign} subtitle="Spending by tool"
-          empty={costByTool.values.length === 0} emptyText="No cost data">
-          <Doughnut data={{ labels: costByTool.labels, datasets: [{ data: costByTool.values, backgroundColor: costByTool.labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), borderColor: costByTool.labels.map((_, i) => CHART_BORDERS[i % CHART_BORDERS.length]), borderWidth: 1.5 }] }} options={doughnutOptions} />
-        </ChartTile>
-        <ChartTile title="Sessions by Agent" icon={Cpu} subtitle="Agent usage distribution"
-          empty={sessionsByAgent.values.length === 0} emptyText="No session data">
-          <Pie data={{ labels: sessionsByAgent.labels, datasets: [{ data: sessionsByAgent.values, backgroundColor: sessionsByAgent.labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), borderColor: sessionsByAgent.labels.map((_, i) => CHART_BORDERS[i % CHART_BORDERS.length]), borderWidth: 1.5 }] }} options={doughnutOptions} />
-        </ChartTile>
-        <ChartTile title="Session Status" icon={Activity} subtitle="Active vs completed"
-          empty={sessionsByStatus.values.length === 0} emptyText="No status data">
-          <Doughnut data={{ labels: sessionsByStatus.labels, datasets: [{ data: sessionsByStatus.values, backgroundColor: sessionsByStatus.labels.map((l, i) => getStatusColor(l, i)), borderColor: sessionsByStatus.labels.map((l, i) => getStatusBorder(l, i)), borderWidth: 1.5 }] }} options={doughnutOptions} />
-        </ChartTile>
+      {/* KPI row — values are facts, so they stay legible even when a panel errors */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <KpiTile icon={Zap} value={fmtNum(summary.totalTokens)} label="Total Tokens"
+          sub={summary.toolsUsed > 0 ? `${summary.toolsUsed} tools` : undefined} delay={0} />
+        <KpiTile icon={DollarSign} value={fmtCost(summary.totalCost)} label="Total Cost" delay={0.04} />
+        <KpiTile icon={Activity} value={String(summary.sessionCount)} label="Sessions"
+          sub={summary.activeSessions > 0 ? `${summary.activeSessions} active` : undefined} delay={0.08} />
+        <KpiTile icon={AlertTriangle} value={String(summary.problemCount)} label="Problems"
+          sub={summary.openProblems > 0 ? `${summary.openProblems} open` : undefined} delay={0.12} />
+        <KpiTile icon={FileText} value={String(summary.requestCount)} label="Requests"
+          sub={summary.openRequests > 0 ? `${summary.openRequests} open` : undefined} delay={0.16} />
       </div>
 
-      {/* ── Activity & Problems row ── */}
+      {/* Spend & effort */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartTile title="Activity by Category" icon={PieChartIcon} subtitle="Tracked time by type"
-          empty={categoryDist.values.length === 0} emptyText="No activity data">
-          <Doughnut data={{ labels: categoryDist.labels, datasets: [{ data: categoryDist.values, backgroundColor: categoryDist.labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), borderColor: categoryDist.labels.map((_, i) => CHART_BORDERS[i % CHART_BORDERS.length]), borderWidth: 1.5 }] }} options={doughnutOptions} />
-        </ChartTile>
-        <ChartTile title="Problems by Status" icon={AlertTriangle} subtitle="Issue pipeline"
-          empty={problemsByStatus.values.length === 0} emptyText="No problems">
-          <Pie data={{ labels: problemsByStatus.labels, datasets: [{ data: problemsByStatus.values, backgroundColor: problemsByStatus.labels.map((l, i) => getStatusColor(l, i)), borderColor: problemsByStatus.labels.map((l, i) => getStatusBorder(l, i)), borderWidth: 1.5 }] }} options={doughnutOptions} />
-        </ChartTile>
+        <Panel title="Tokens by Tool" subtitle="Ranked by share of usage" icon={Zap}
+          state={panelState(byToolTokens.length > 0)} error={error} onRetry={onRetry}>
+          <RankBars data={byToolTokens} formatValue={fmtNum} />
+        </Panel>
+        <Panel title="Cost by Tool" subtitle="Ranked by spend" icon={DollarSign}
+          state={panelState(byToolCost.length > 0)} error={error} onRetry={onRetry}
+          footer={<p className="text-[10px] text-zinc-600">Total {fmtCost(summary.totalCost)} across {summary.toolsUsed} tools</p>}>
+          <RankBars data={byToolCost} formatValue={fmtCost} />
+        </Panel>
       </div>
 
-      {/* ── Daily Activity Trend (full-width) ── */}
-      <div className="lg:grid-cols-2 gap-4">
-        <ChartTile title="Daily Activity Trend" icon={TrendingUp} subtitle="Hours tracked per day" full>
-          {dailyTrend.values.length === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center text-zinc-600">
-              <span className="text-xs">No daily activity data</span>
-            </div>
-          ) : (
-            <Bar data={{ labels: dailyTrend.labels, datasets: [{ data: dailyTrend.values, backgroundColor: `rgba(168, 85, 247, 0.6)`, borderColor: `rgba(168, 85, 247, 1)`, borderWidth: 1, borderRadius: 6, barPercentage: 0.7 }] }}
-              options={{ ...barOptions, scales: { ...barOptions.scales, y: { ...barOptions.scales.y, title: { display: true, text: 'Hours', color: '#64748b', font: { size: 9 } } } }, plugins: { ...barOptions.plugins, tooltip: { ...barOptions.plugins.tooltip, callbacks: { label: (ctx: any) => ` ${ctx.parsed.y} hours` } } } }} />
-          )}
-        </ChartTile>
+      {/* Activity & pipeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel title="Activity by Category" subtitle="Hours tracked, by type" icon={BarChart3}
+          state={panelState(categoryDist.length > 0)} error={error} onRetry={onRetry}>
+          <RankBars data={categoryDist} formatValue={(n) => n.toFixed(1) + 'h'} />
+        </Panel>
+        <Panel title="Sessions by Agent" subtitle="Which agents ran" icon={Cpu}
+          state={panelState(sessionsByAgent.length > 0)} error={error} onRetry={onRetry}>
+          <RankBars data={sessionsByAgent} formatValue={fmtNum} />
+        </Panel>
       </div>
 
-      {/* ── Requests Progress ── */}
+      {/* The one genuine time series */}
+      <Panel title="Daily Activity" subtitle={`Hours tracked per day · ${period}`} icon={TrendingUp}
+        state={panelState(dailyTrend.values.length > 0)} error={error} onRetry={onRetry}>
+        <div className="h-[200px] w-full">
+          <Bar
+            data={{
+              labels: dailyTrend.labels,
+              datasets: [{
+                label: 'Hours',
+                data: dailyTrend.values,
+                backgroundColor: alpha(accent, 0.55),
+                borderColor: accent,
+                borderWidth: 1,
+                borderRadius: 4,
+                borderSkipped: false,
+                barPercentage: 0.7,
+                categoryPercentage: 0.85,
+              }],
+            }}
+            options={timeSeriesOptions('Hours')}
+          />
+        </div>
+      </Panel>
+
+      {/* Status — semantic, not categorical */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartTile title="Requests by Status" icon={FileText} subtitle="Feature request pipeline"
-          empty={requestsByStatus.values.length === 0} emptyText="No requests">
-          <Doughnut data={{ labels: requestsByStatus.labels, datasets: [{ data: requestsByStatus.values, backgroundColor: requestsByStatus.labels.map((l, i) => getStatusColor(l, i)), borderColor: requestsByStatus.labels.map((l, i) => getStatusBorder(l, i)), borderWidth: 1.5 }] }} options={doughnutOptions} />
-        </ChartTile>
-        <ChartTile title="Response Timing" icon={Timer} subtitle="Avg AI response & think times"
-          empty={responseTiming.avgResponse === null && responseTiming.avgThink === null} emptyText="No timing data">
-          <div className="flex flex-col items-center justify-center h-full gap-5 py-4">
+        <Panel title="Session Status" subtitle="Active vs completed" icon={Activity}
+          state={panelState(sessionsByStatus.length > 0)} error={error} onRetry={onRetry}>
+          <RankBars data={sessionsByStatus} semantic />
+        </Panel>
+        <Panel title="Problems by Status" subtitle="Issue pipeline" icon={AlertTriangle}
+          state={panelState(problemsByStatus.length > 0)} error={error} onRetry={onRetry}>
+          <RankBars data={problemsByStatus} semantic />
+        </Panel>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel title="Requests by Status" subtitle="Feature request pipeline" icon={FileText}
+          state={panelState(requestsByStatus.length > 0)} error={error} onRetry={onRetry}>
+          <RankBars data={requestsByStatus} semantic />
+        </Panel>
+        <Panel title="Response Timing" subtitle="Where the round trip goes" icon={Timer}
+          state={panelState(responseTiming.avgResponse !== null || responseTiming.avgThink !== null)}
+          error={error} onRetry={onRetry}>
+          <div className="flex flex-col items-center justify-center gap-4 py-2">
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-400 font-mono">{responseTiming.avgResponse !== null ? fmtSec(responseTiming.avgResponse) : '—'}</div>
-              <div className="text-xs text-zinc-500 mt-1">Avg Response Time</div>
+              <div className="text-3xl font-bold text-zinc-100 font-mono">
+                {responseTiming.avgResponse !== null ? fmtSec(responseTiming.avgResponse) : '—'}
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">Avg response</div>
               <div className="text-[10px] text-zinc-600">prompt → reply</div>
             </div>
-            <div className="w-12 h-px bg-zinc-800" />
+            <div className="w-10 h-px bg-zinc-800" />
             <div className="text-center">
-              <div className="text-3xl font-bold text-cyan-400 font-mono">{responseTiming.avgThink !== null ? fmtSec(responseTiming.avgThink) : '—'}</div>
-              <div className="text-xs text-zinc-500 mt-1">Avg Think Time</div>
+              <div className="text-3xl font-bold text-zinc-100 font-mono">
+                {responseTiming.avgThink !== null ? fmtSec(responseTiming.avgThink) : '—'}
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">Avg think</div>
               <div className="text-[10px] text-zinc-600">reply → next prompt</div>
             </div>
-            {responseTiming.count > 0 && <div className="text-[10px] text-zinc-600">Based on {responseTiming.count} response pairs</div>}
+            {responseTiming.count > 0 && (
+              <p className="text-[10px] text-zinc-600 font-mono">n = {responseTiming.count} pairs</p>
+            )}
           </div>
-        </ChartTile>
+        </Panel>
       </div>
 
-      {/* ── Language Distribution ── */}
-      {languageDist.labels.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartTile title="Language Distribution" icon={Code2} subtitle="Languages across projects"
-            empty={false} emptyText="">
-            <Doughnut data={{ labels: languageDist.labels, datasets: [{ data: languageDist.values, backgroundColor: languageDist.labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), borderColor: languageDist.labels.map((_, i) => CHART_BORDERS[i % CHART_BORDERS.length]), borderWidth: 1.5 }] }} options={doughnutOptions} />
-          </ChartTile>
-          {/* Top languages as a ranked list */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-            className="bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/40 p-4"
-          >
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center ring-1 ring-zinc-700/50">
-                <Code2 className="w-3.5 h-3.5 text-zinc-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">Top Languages</h3>
-            </div>
-            <div className="space-y-2">
-              {languageDist.labels.slice(0, 8).map((lang, i) => {
-                const pct = languageDist.values.reduce((a, b) => a + b, 0) > 0
-                  ? Math.round((languageDist.values[i] / languageDist.values.reduce((a, b) => a + b, 0)) * 100)
-                  : 0;
-                return (
-                  <div key={lang} className="flex items-center gap-3">
-                    <span className="text-[10px] text-zinc-500 w-4 text-right tabular-nums">{i + 1}</span>
-                    <div className="flex-1 h-6 rounded-lg bg-zinc-800/50 overflow-hidden relative">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.5, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
-                        className="h-full rounded-lg relative"
-                        style={{ background: `repeating-linear-gradient(45deg, ${CHART_PALETTE[i % CHART_PALETTE.length]}40 0px, ${CHART_PALETTE[i % CHART_PALETTE.length]}40 2px, transparent 2px, transparent 6px)`, borderTop: `2px solid ${CHART_PALETTE[i % CHART_PALETTE.length]}` }}
-                      />
-                    </div>
-                    <span className="text-xs text-zinc-400 w-16 text-right tabular-nums">{lang}</span>
-                    <span className="text-xs text-zinc-500 w-12 text-right tabular-nums font-mono">{languageDist.values[i]}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* ── Code Activity Section ── */}
-      {(codeStats || codeActivity) && (
-        <div className="space-y-4">
-          {/* Code KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
-            <CodeStatCard icon={Clock} value={fmtSec(Math.round((codeActivity?.totalDurationMs || 0) / 1000))} label="Active Coded Time"
-              sub={hasActivity ? `${codeActivity?.activeDays || 0} active days` : undefined} accent="emerald" delay={0} />
-            <CodeStatCard icon={Code2} value={`+${fmtNum(codeActivity?.totalLinesAdded || 0)}`} label="Lines Added"
-              sub={hasActivity ? `${fmtNum(codeActivity?.filesTouched || 0)} files` : undefined} accent="cyan" delay={0.05} />
-            <CodeStatCard icon={GitCommitHorizontal} value={`-${fmtNum(codeActivity?.totalLinesRemoved || 0)}`} label="Lines Removed"
-              sub={hasActivity ? `${fmtNum(codeActivity?.totalEdits || 0)} edits` : undefined} accent="rose" delay={0.1} />
-          </div>
-
-          {/* Coding Activity Chart */}
-          {hasActivity && codeActivity?.daily && codeActivity.daily.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.35 }}
-              className="bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/40 p-4"
-            >
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
-                  <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">Coding Activity</h3>
-                  <p className="text-[11px] text-zinc-600 mt-0.5">Live from the DeskFlow VS Code extension</p>
-                </div>
-              </div>
-              <div className="relative" style={{ height: 220 }}>
-                <Bar data={{
-                  labels: codeActivity.daily.map((r: any) => { try { return format(new Date((r.date || '') + 'T00:00:00'), 'MMM d'); } catch { return r.date; } }),
-                  datasets: [
-                    { label: 'Active Time (h)', data: codeActivity.daily.map((r: any) => +(r.durationMs / 3600000).toFixed(2)), backgroundColor: `rgba(52, 211, 153, 0.55)`, borderColor: `rgba(52, 211, 153, 1)`, borderWidth: 1, borderRadius: 4 },
-                    { label: 'Lines Added', data: codeActivity.daily.map((r: any) => r.linesAdded || 0), backgroundColor: `rgba(34, 211, 238, 0.55)`, borderColor: `rgba(34, 211, 238, 1)`, borderWidth: 1, borderRadius: 4 },
-                    { label: 'Lines Removed', data: codeActivity.daily.map((r: any) => r.linesRemoved || 0), backgroundColor: `rgba(251, 113, 133, 0.55)`, borderColor: `rgba(251, 113, 133, 1)`, borderWidth: 1, borderRadius: 4 },
-                  ],
-                }} options={{
-                  responsive: true, maintainAspectRatio: false,
-                  interaction: { mode: 'index' as const, intersect: false },
-                  scales: {
-                    x: { stacked: true, grid: { display: false }, ticks: { color: '#64748b', font: { size: 9 } } },
-                    y: { stacked: true, grid: { color: 'rgba(113,113,122,0.06)' }, border: { color: 'rgba(113,113,122,0.12)' }, ticks: { color: '#64748b', font: { size: 9 }, padding: 6 } },
-                  },
-                  plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(9,9,11,0.95)', titleColor: '#e4e4e7', bodyColor: '#a1a1aa', borderColor: 'rgba(63,63,70,0.5)', borderWidth: 1, cornerRadius: 8, padding: 8 } },
-                }} />
-              </div>
-            </motion.div>
-          )}
-
-          {/* Top Files */}
-          {codeActivity?.topFiles && codeActivity.topFiles.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.35 }}
-              className="bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/40 p-4"
-            >
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center ring-1 ring-zinc-700/50">
-                  <FileText className="w-3.5 h-3.5 text-zinc-400" />
-                </div>
-                <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">Most Active Files</h3>
-              </div>
-              <div className="space-y-1.5 overflow-y-auto max-h-[200px] pr-2 custom-scrollbar">
-                {codeActivity.topFiles.slice(0, 6).map((file: any) => (
-                  <div key={file.file_path} className="flex items-center justify-between text-xs bg-zinc-800/30 rounded-lg px-3 py-2">
-                    <span className="text-zinc-300 truncate font-mono max-w-[200px]" title={file.file_path}>
-                      {file.file_path.split(/[\\/]/).pop()}
-                    </span>
-                    <div className="flex items-center gap-3 text-zinc-500 flex-shrink-0">
-                      <span className="text-emerald-400">+{file.linesAdded || 0}</span>
-                      <span className="text-rose-400">-{file.linesRemoved || 0}</span>
-                      <span className="text-cyan-400">{fmtSec((file.durationMs || 0) / 1000)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </div>
-      )}
-
-      {/* ── Problems & Requests Progress ── */}
+      {/* Progress */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ProgressCard title="Problems Progress" icon={AlertTriangle} accent="rose"
-          items={problems?.length ? [{
-            label: 'Fixed', done: problems.filter(p => p.status === 'Fixed').length, total: problems.length,
-            color: 'rgba(52, 211, 153, 0.8)', pendingColor: 'rgba(59, 130, 246, 0.5)',
-          }, {
-            label: 'In Progress', done: problems.filter(p => ['In Progress', 'AI Attempted Fix'].includes(p.status)).length, total: problems.length,
-            color: 'rgba(96, 165, 250, 0.6)', pendingColor: 'rgba(59, 130, 246, 0.3)',
-          }] : []} />
-        <ProgressCard title="Requests Progress" icon={FileText} accent="emerald"
-          items={requests?.length ? [{
-            label: 'Completed', done: requests.filter(r => r.status === 'Completed').length, total: requests.length,
-            color: 'rgba(52, 211, 153, 0.8)', pendingColor: 'rgba(59, 130, 246, 0.5)',
-          }, {
-            label: 'In Progress', done: requests.filter(r => r.status === 'In Progress').length, total: requests.length,
-            color: 'rgba(96, 165, 250, 0.6)', pendingColor: 'rgba(59, 130, 246, 0.3)',
-          }] : []} />
+        <ProgressCard title="Problems Progress" icon={AlertTriangle} state={problemList.length > 0 ? 'ready' : 'empty'}
+          items={problemList.length > 0 ? [
+            { label: 'Fixed', done: problemList.filter(p => p?.status === 'Fixed').length, total: problemList.length },
+            { label: 'In progress', done: problemList.filter(p => ['In Progress', 'AI Attempted Fix', 'User Testing'].includes(p?.status ?? '')).length, total: problemList.length },
+          ] : []} />
+        <ProgressCard title="Requests Progress" icon={FileText} state={requestList.length > 0 ? 'ready' : 'empty'}
+          items={requestList.length > 0 ? [
+            { label: 'Completed', done: requestList.filter(r => r?.status === 'Completed').length, total: requestList.length },
+            { label: 'In progress', done: requestList.filter(r => r?.status === 'In Progress').length, total: requestList.length },
+          ] : []} />
       </div>
 
-      {/* ── AI Usage Summary Table ── */}
-      {hasAiData && aiUsage?.byTool && Object.keys(aiUsage.byTool).length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.35 }}
-          className="bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/40 p-4"
-        >
+      {/* Languages */}
+      {languageDist.length > 0 && (
+        <Panel title="Language Distribution" subtitle="Files by language, across projects" icon={Code2}
+          state={panelState(languageDist.length > 0)} error={error} onRetry={onRetry}>
+          <RankBars data={languageDist} formatValue={fmtNum} limit={8} />
+        </Panel>
+      )}
+
+      {/* Code activity */}
+      {hasCodeSection && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <KpiTile icon={Clock} value={fmtSec(Math.round((Number(codeActivity?.totalDurationMs) || 0) / 1000))} label="Active coded time" delay={0} />
+            <KpiTile icon={GitCommitHorizontal} value={`+${fmtNum(Number(codeActivity?.totalLinesAdded) || 0)}`} label="Lines added" delay={0.04} />
+            <KpiTile icon={GitCommitHorizontal} value={`-${fmtNum(Number(codeActivity?.totalLinesRemoved) || 0)}`} label="Lines removed" delay={0.08} />
+          </div>
+
+          {codeDaily.labels.length > 0 && (
+            <Panel title="Coding Activity" subtitle="Lines changed and active time per day" icon={Wrench}
+              state={panelState(codeDaily.labels.length > 0)} error={error} onRetry={onRetry}>
+              <div className="h-[220px] w-full">
+                <Line
+                  data={{
+                    labels: codeDaily.labels,
+                    datasets: [
+                      {
+                        label: 'Lines added',
+                        data: codeDaily.added,
+                        borderColor: accent,
+                        backgroundColor: alpha(accent, 0.12),
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.3,
+                        fill: true,
+                      },
+                      {
+                        label: 'Lines removed',
+                        data: codeDaily.removed.map(v => -v),
+                        borderColor: '#71717a',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1.5,
+                        borderDash: [4, 4],
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.3,
+                        fill: false,
+                      },
+                    ],
+                  }}
+                  options={{
+                    ...timeSeriesOptions('Lines'),
+                    plugins: {
+                      ...timeSeriesOptions('Lines').plugins,
+                      legend: {
+                        display: true,
+                        position: 'bottom' as const,
+                        labels: { color: '#a1a1aa', font: { size: 10 }, usePointStyle: true, boxWidth: 6, padding: 12 },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </Panel>
+          )}
+
+          {topFiles.length > 0 && (
+            <WorkspaceCard>
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-3.5 h-3.5 text-zinc-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">Most edited files</h3>
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {topFiles.map((f, i) => (
+                  <li key={`${f.path}-${i}`} className="flex items-center justify-between gap-3 text-xs bg-zinc-800/30 rounded-lg px-3 py-2">
+                    <span className="text-zinc-300 truncate font-mono" title={f.path}>
+                      {f.path.split(/[\\/]/).pop()}
+                    </span>
+                    <span className="text-zinc-500 font-mono tabular-nums shrink-0 flex gap-2">
+                      <span className="text-emerald-400">+{f.added}</span>
+                      <span className="text-rose-400">-{f.removed}</span>
+                      <span>{fmtSec(f.seconds)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </WorkspaceCard>
+          )}
+        </div>
+      )}
+
+      {/* Per-tool table */}
+      {byToolTokens.length > 0 && aiUsage?.byTool && (
+        <WorkspaceCard>
           <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center ring-1 ring-purple-500/20">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: alpha(accent, 0.12) }}>
+              <Sparkles className="w-3.5 h-3.5" style={{ color: accent }} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">AI Usage Summary</h3>
-              <p className="text-[11px] text-zinc-600 mt-0.5">Per-tool breakdown</p>
+              <h3 className="text-sm font-semibold text-zinc-200 tracking-tight">AI usage by tool</h3>
+              <p className="text-[11px] text-zinc-500 mt-0.5">Per-tool breakdown</p>
             </div>
           </div>
-          <div className="grid grid-cols-5 gap-3 mb-4">
-            <div className="bg-zinc-800/40 rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-purple-400 font-mono">{fmtNum(summaryStats.totalTokens)}</div>
-              <div className="text-[10px] text-zinc-500 mt-0.5">Total Tokens</div>
-            </div>
-            <div className="bg-zinc-800/40 rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-amber-400 font-mono">{fmtCost(summaryStats.totalCost)}</div>
-              <div className="text-[10px] text-zinc-500 mt-0.5">Total Cost</div>
-            </div>
-            <div className="bg-zinc-800/40 rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-emerald-400 font-mono">{summaryStats.toolsUsed}</div>
-              <div className="text-[10px] text-zinc-500 mt-0.5">Tools Used</div>
-            </div>
-            <div className="bg-zinc-800/40 rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-cyan-400 font-mono">{summaryStats.sessionCount}</div>
-              <div className="text-[10px] text-zinc-500 mt-0.5">Sessions</div>
-            </div>
-            <div className="bg-zinc-800/40 rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-rose-400 font-mono">{responseTiming.avgResponse !== null ? fmtSec(responseTiming.avgResponse) : '—'}</div>
-              <div className="text-[10px] text-zinc-500 mt-0.5">Avg Response</div>
-            </div>
-          </div>
-          <div className="overflow-x-auto border-t border-zinc-800/40 pt-3">
+          <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-zinc-800/40">
+                <tr className="border-b border-zinc-800">
                   <th className="text-left text-zinc-500 font-medium py-2 pr-4">Tool</th>
                   <th className="text-right text-zinc-500 font-medium py-2 pr-4">Tokens</th>
                   <th className="text-right text-zinc-500 font-medium py-2 pr-4">Cost</th>
@@ -674,23 +796,23 @@ export default function AnalyticsDashboard({
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(aiUsage.byTool).sort(([, a]: any[], [, b]: any[]) => (b.tokens || 0) - (a.tokens || 0))
-                  .map(([tool, data]: [string, any], i: number) => (
-                    <tr key={tool} className="border-b border-zinc-800/20 hover:bg-zinc-800/20 transition-colors">
-                      <td className="py-2 pr-4 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                {Object.entries(aiUsage.byTool)
+                  .sort(([, a]: any[], [, b]: any[]) => (Number(b?.tokens) || 0) - (Number(a?.tokens) || 0))
+                  .map(([tool, data]: [string, any]) => (
+                    <tr key={tool} className="border-b border-zinc-800/40 hover:bg-zinc-800/20 transition-colors">
+                      <td className="py-2 pr-4">
                         <span className="text-zinc-300">{tool}</span>
                       </td>
-                      <td className="text-right text-zinc-400 py-2 pr-4 font-mono">{fmtNum(data.tokens || 0)}</td>
-                      <td className="text-right text-zinc-400 py-2 pr-4 font-mono">{fmtCost(data.cost || 0)}</td>
-                      <td className="text-right text-zinc-400 py-2 font-mono">{data.sessions || 0}</td>
-                      <td className="text-right text-zinc-400 py-2 font-mono">{data.messageCount || 0}</td>
+                      <td className="text-right text-zinc-400 py-2 pr-4 font-mono tabular-nums">{fmtNum(Number(data?.tokens) || 0)}</td>
+                      <td className="text-right text-zinc-400 py-2 pr-4 font-mono tabular-nums">{fmtCost(Number(data?.cost) || 0)}</td>
+                      <td className="text-right text-zinc-400 py-2 pr-4 font-mono tabular-nums">{Number(data?.sessions) || 0}</td>
+                      <td className="text-right text-zinc-400 py-2 font-mono tabular-nums">{Number(data?.messageCount) || 0}</td>
                     </tr>
                   ))}
               </tbody>
             </table>
           </div>
-        </motion.div>
+        </WorkspaceCard>
       )}
     </div>
   );

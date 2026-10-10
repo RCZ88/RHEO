@@ -28,7 +28,7 @@ export function StepAction({ selected, onSelect }: StepActionProps) {
             onClick={() => onSelect({ name: action.id, params: action.params })}
             className={cn(
               "flex items-start gap-3 rounded-xl p-4 text-left transition-all",
-              "bg-zinc-900/40 ring-1 ring-zinc-800/60 hover:ring-zinc-700",
+              "bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:ring-zinc-700",
               selected?.name === action.id && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
             )}
           >
@@ -36,7 +36,7 @@ export function StepAction({ selected, onSelect }: StepActionProps) {
             <div>
               <span className={cn("text-[12px] font-medium block", TEXT.primary)}>{action.label}</span>
               <span className={cn("text-[10px] leading-tight", TEXT.muted)}>{action.description}</span>
-              <span className="mt-1 inline-block rounded-full bg-zinc-800 px-2 py-0.5 text-[9px] text-zinc-500 light:text-stone-500">
+              <span className="mt-1 inline-block rounded-full bg-zinc-800 px-2 py-0.5 text-[9px] text-zinc-500 light:text-[var(--text-muted)]">
                 {action.params.length} param{action.params.length !== 1 ? 's' : ''}
               </span>
             </div>

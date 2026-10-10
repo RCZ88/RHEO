@@ -66,7 +66,7 @@ export function PrototypePreview() {
   const showC = activeTab === 'all' || activeTab === 'C';
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 font-sans" style={{ fontFamily: "var(--dk-sans, 'Geist', sans-serif)" }}>
+    <div className="min-h-screen bg-zinc-950 light:bg-[var(--ws-surface)] text-zinc-100 p-6 font-sans" style={{ fontFamily: "var(--dk-sans, 'Geist', sans-serif)" }}>
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-zinc-100" style={{ fontFamily: "var(--dk-sans, 'Geist', sans-serif)" }}>
@@ -137,11 +137,11 @@ export function PrototypePreview() {
             <div className="w-[240px]">
 <WidgetCardA category="productivity">
                   <div className="text-zinc-400 text-sm flex flex-col gap-1">
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30">
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
                       <div className="w-4 h-4 rounded border-2 border-violet-400/50" />
                       <span className="text-zinc-300 text-xs">Complete 3 goals today</span>
                     </div>
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30">
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
                       <div className="w-4 h-4 rounded border-2 border-violet-400/50" />
                       <span className="text-zinc-300 text-xs">Write 500 words</span>
                     </div>
@@ -159,11 +159,11 @@ export function PrototypePreview() {
             <div className="w-[240px]">
 <WidgetCardA category="productivity">
                   <div className="text-zinc-400 text-sm">
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 mb-1">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] mb-1">
                       <span className="text-xs text-zinc-300">Project submission</span>
                       <span className="text-xs font-mono text-rose-400">2d left</span>
                     </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
                       <span className="text-xs text-zinc-300">Review draft</span>
                       <span className="text-xs font-mono text-amber-400">5d left</span>
                     </div>
@@ -297,11 +297,11 @@ export function PrototypePreview() {
             <div className="w-[240px]">
               <WidgetCardC widgetId="test-goals-c" title="Goals" icon={Target} neonColor="#8b5cf6" kicker="TODAY">
                 <div className="text-zinc-400 text-sm flex flex-col gap-1">
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
                     <div className="w-4 h-4 rounded border-2 border-violet-400/50" />
                     <span className="text-zinc-300 text-xs">Complete 3 goals today</span>
                   </div>
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
                     <div className="w-4 h-4 rounded border-2 border-violet-400/50" />
                     <span className="text-zinc-300 text-xs">Write 500 words</span>
                   </div>
@@ -319,11 +319,11 @@ export function PrototypePreview() {
             <div className="w-[240px]">
               <WidgetCardC widgetId="test-deadlines-c" title="Deadlines" icon={Target} neonColor="#f43f5e" kicker="UPCOMING">
                 <div className="text-zinc-400 text-sm">
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30 mb-1">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30 mb-1">
                     <span className="text-xs text-zinc-300">Project submission</span>
                     <span className="text-xs font-mono text-rose-400">2d left</span>
                   </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/30">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/30">
                     <span className="text-xs text-zinc-300">Review draft</span>
                     <span className="text-xs font-mono text-amber-400">5d left</span>
                   </div>

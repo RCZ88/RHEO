@@ -10,7 +10,7 @@ interface TabBarProps {
 
 export function TabBar({ tabs, activeKey, onTabChange, className = '' }: TabBarProps) {
   return (
-    <div className={`bg-zinc-900/50 p-1 rounded-xl inline-flex gap-0.5 ${className}`}>
+    <div className={`bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-1 rounded-xl inline-flex gap-0.5 ${className}`}>
       {tabs.map(tab => (
         <button
           key={tab.key}

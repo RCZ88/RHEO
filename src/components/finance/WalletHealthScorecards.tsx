@@ -126,7 +126,7 @@ export default function WalletHealthScorecards() {
 
   if (loading) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
         <div className="flex items-center gap-2 mb-3">
           <div className="h-5 w-5 bg-zinc-800 rounded" />
           <div className="h-4 w-32 bg-zinc-800 rounded" />
@@ -142,7 +142,7 @@ export default function WalletHealthScorecards() {
 
   if (error) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle className="w-5 h-5 text-amber-400" />
           <span className="text-sm font-medium text-zinc-300">Wallet Health</span>

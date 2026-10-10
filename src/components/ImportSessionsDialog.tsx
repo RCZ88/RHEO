@@ -22,7 +22,7 @@ const AGENTS: AgentDef[] = [
 
 const CLR = {
   overlay: 'fixed inset-0 bg-black/70 backdrop-blur-sm z-[100]',
-  panel: 'fixed top-[8%] left-1/2 -translate-x-1/2 w-[680px] max-h-[80vh] bg-zinc-900/95 border border-zinc-700/50 rounded-xl flex flex-col z-[101]',
+  panel: 'fixed top-[8%] left-1/2 -translate-x-1/2 w-[680px] max-h-[80vh] bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl flex flex-col z-[101]',
   header: 'flex items-center justify-between px-5 py-4 border-b border-zinc-800/70',
   title: 'text-sm font-semibold text-zinc-200 flex items-center gap-2',
   close: 'p-1 rounded-lg hover:bg-zinc-800/80 text-zinc-500 hover:text-zinc-300 transition-colors',
@@ -32,7 +32,7 @@ const CLR = {
   rowUnselected: 'hover:bg-zinc-800/40',
   checkbox: 'w-4 h-4 rounded border-2 border-zinc-600 flex items-center justify-center shrink-0 transition-colors',
   checkboxChecked: 'bg-cyan-500 border-cyan-500',
-  footer: 'flex items-center justify-between px-5 py-3 border-t border-zinc-800/70 bg-zinc-900/50',
+  footer: 'flex items-center justify-between px-5 py-3 border-t border-zinc-800/70 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]',
   scanBtn: 'px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors',
   importBtn: 'px-4 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed',
   cancelBtn: 'px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-medium rounded-lg transition-colors',
@@ -223,7 +223,7 @@ export default function ImportSessionsDialog({ onClose, onImport, projectId }: {
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all ${
                     activeAgent === a.id
                       ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-inset ring-cyan-500/30'
-                      : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200'
+                      : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   <Icon className="w-3 h-3" />

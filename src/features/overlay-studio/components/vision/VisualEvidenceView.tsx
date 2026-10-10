@@ -101,7 +101,7 @@ export function VisualEvidenceView() {
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/40">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
         <button onClick={captureFrame} disabled={capturing || !activeSession.sourceVideoPath}
           className="studio-btn-primary inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[11px]">
           <Camera size={12} /> {capturing ? 'Capturing…' : 'Capture Frame'}
@@ -116,7 +116,7 @@ export function VisualEvidenceView() {
         </div>
         {markMode && (
           <input value={markLabel} onChange={e => setMarkLabel(e.target.value)} placeholder="Label..."
-            className="h-6 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-[10px] text-zinc-200 outline-none focus:border-[#ec4899]/40" />
+            className="h-6 rounded-md border border-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] px-2 text-[10px] text-zinc-200 outline-none focus:border-[#ec4899]/40" />
         )}
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[10px] text-zinc-500">{frames.length} frames</span>
@@ -162,7 +162,7 @@ export function VisualEvidenceView() {
 
         {/* Filmstrip */}
         {showFilmstrip && (
-          <div className="w-48 border-l border-zinc-800/50 bg-zinc-900/40 overflow-auto p-2 space-y-1">
+          <div className="w-48 border-l border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-auto p-2 space-y-1">
             <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider px-1 mb-2">Filmstrip</div>
             {frames.map(frame => (
               <button key={frame.id} onClick={() => setSelectedFrame(frame)}

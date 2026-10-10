@@ -9,8 +9,9 @@ import {
   type MotionValue,
 } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { usePrefersReducedMotion } from "./use-reduced-motion";
+import { useShouldAnimate } from "./use-motion-preference";
 import DecryptedText from "./DecryptedText";
+import { RealClip } from "./RealFootage";
 
 type Phase = {
   key: string;
@@ -72,12 +73,25 @@ function fmtHM(totalMin: number): string {
 
 export default function ActRecord() {
   const ref = useRef<HTMLDivElement>(null);
-  const reduced = usePrefersReducedMotion();
+  const shouldAnimate = useShouldAnimate();
+  const reduced = !shouldAnimate;
+
   const { scrollYProgress: raw } = useScroll({
     target: ref,
     offset: ["start start", "end end"],
   });
-  const p = useSpring(raw, { stiffness: 120, damping: 25 });
+  // OWED 1. This was `useSpring(raw, { stiffness: 120, damping: 25 })`.
+  // A framer-motion spring drives transforms from its own physics — it consults
+  // neither the store nor the media query, which is exactly the signature the
+  // sampler found: max|ty|=15 IDENTICAL under (auto,reduce) and (off,no-preference).
+  // That is motion that governs itself, so no amount of store-gating reaches it.
+  //
+  // Constraint #5 bans springs regardless of attribution, so the replacement is owed
+  // on either branch of the hypothesis. The hook still runs (hooks cannot be
+  // conditional) but its value is bypassed under reduced motion, which is a real
+  // alternate path rather than a 0-duration animation.
+  const springP = useSpring(raw, { stiffness: 120, damping: 25 });
+  const p = shouldAnimate ? springP : raw;
 
   // playhead top on vertical timeline (0%..100%)
   const playheadTop = useTransform(p, [0, 1], ["0%", "100%"]);
@@ -144,7 +158,14 @@ export default function ActRecord() {
       >
         <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-20 pb-20">
           {/* top-left header */}
-          <div className="absolute top-16 left-5 sm:left-10 lg:left-16 max-w-[420px]">
+          {/* The static (reduced-motion) branch renders this label + heading IN FLOW.
+              Rendering them here as well put two 69px .display-h2 elements on top of
+              each other: measured at y=-4 and y=12, with 6 further elements overlapping. */}
+          {/* max-w 420 -> 340: at 1280 the absolutely-centred 438px clip starts at
+              x=421 while this column ran to x=484, so the phase heading sat 63x31px on
+              top of the media. 340px puts its right edge at 404, clear of 421. */}
+          {showAnimated && (
+          <div className="absolute top-16 left-5 sm:left-10 lg:left-16 max-w-[340px]">
             <p className="mono-label" style={{ fontSize: 11 }}>
               <DecryptedText text="SECTION 02 / RECORD" speed={28} maxIterations={6} />
             </p>
@@ -158,11 +179,19 @@ export default function ActRecord() {
             </p>
           </div>
 
+          )}
           {/* LEFT: per-phase text block (crossfade) */}
           {showAnimated ? (
             <div
               className="absolute left-5 sm:left-10 lg:left-16"
-              style={{ top: "44%", transform: "translateY(-50%)", maxWidth: 300 }}
+              // Was top:"44%" + translateY(-50%): a VIEWPORT percentage sitting under a
+              // CONTENT-height header. Measured header 64..305 (241px) vs the phase block
+              // centred on 44% of the viewport ->
+              //   vh=720  phase 147..486  overlap 158px
+              //   vh=900  phase 227..566  overlap  78px
+              //   vh=1080 phase 306..645  clear only by 1px
+              // A deterministic offset below the header cannot collide at any height.
+              style={{ top: 320, maxWidth: 300 }}
             >
               <div className="relative" style={{ minHeight: 180 }}>
                 <AnimatePresence mode="wait">
@@ -362,32 +391,47 @@ export default function ActRecord() {
             </div>
           )}
 
-          {/* CENTER: mock RHEO dashboard card */}
+          {/* CENTER: the real RHEO dashboard, captured from a running instance */}
+          {/* POSITION SWITCH, not a second element. The static (reduced-motion) layout is a
+              stacked column of height:auto, so this box — absolutely centred for the 300vh
+              sticky scrub — resolved top:50% against a short section and landed on the phase
+              list. Measured: a 438x273 video covering "DEEP WORK", "09-12 - phase 2/4",
+              "Unbroken focus...", and "MEETINGS". In flow it belongs after the list. */}
           <div
-            className="absolute"
-            style={{
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "min(440px, 80vw)",
-            }}
+            className={showAnimated ? "absolute" : "relative mx-auto w-full"}
+            style={
+              showAnimated
+                ? {
+                    left: "50%",
+                    top: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: "min(440px, 80vw)",
+                  }
+                : { width: "min(640px, 100%)", marginTop: 24 }
+            }
           >
-            <DashboardCard
-              pathLength={pathLength}
-              miniFill={miniFill}
-              active={active}
+            <RealClip
+              src="/media/app-timeline-24h.mp4"
+              poster="/media/app-dashboard.png"
+              alt="The RHEO dashboard with the 24 hour timeline filling in as the day is recorded"
+              pauseControl
+              ratio={16 / 10}
             />
           </div>
 
           {/* RIGHT: vertical 24h timeline */}
           <div
-            className="absolute right-4 lg:right-10"
-            style={{
-              top: "50%",
-              transform: "translateY(-50%)",
-              height: "min(62vh, 540px)",
-              width: 96,
-            }}
+            // Same position switch as the clip. The reduced-motion layout is a
+            // stacked column whose content spans the full 1280px, so this rail
+            // pinned at right-4 sat ON TOP of the phase list — measured: the blurb
+            // "Unbroken focus. The record marks it sharply." against the rail's own
+            // "REST" label, 18x5px. In flow it follows the list instead.
+            className={showAnimated ? "absolute right-4 lg:right-10" : "mx-auto"}
+            style={
+              showAnimated
+                ? { top: "50%", transform: "translateY(-50%)", height: "min(62vh, 540px)", width: 96 }
+                : { height: "min(62vh, 540px)", width: 96 }
+            }
           >
             <TimelineTrack
               playheadTop={playheadTop}
@@ -826,7 +870,15 @@ function TimelineTrack({
         <motion.div
           style={{
             position: "absolute",
-            left: 14,
+            // Deterministic boundary. This label was `left: 14` off an 8x8 dot
+            // marker, so a 194px nowrap phrase started at x=1256 and ran to x=1450 —
+            // 10px PAST the 1440 viewport, and straight across the rail's own phase
+            // labels ("MEETINGS" 1261..1308). Overlap measured at 47x5px.
+            // Anchored with right:100% + a gap it grows leftward into the empty
+            // gutter between the clip and the rail, so its right edge is the dot's
+            // left edge minus a fixed 10px at every viewport.
+            right: "100%",
+            marginRight: 10,
             top: "calc(100% + 8px)",
             whiteSpace: "nowrap",
             opacity: inviteOpacity,

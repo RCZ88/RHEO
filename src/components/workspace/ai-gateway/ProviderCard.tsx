@@ -40,25 +40,25 @@ export function ProviderCard({
       accent={selected ? 'cyan' : undefined}
       className={`!p-0 overflow-hidden transition-all duration-150 ${selected ? 'ring-1 ring-cyan-500/40' : ''}`}
     >
-      <button onClick={onSelect} className="w-full text-left p-3" disabled={!onSelect}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2.5">
+      <button onClick={onSelect} className="w-full text-left p-3 min-w-0" disabled={!onSelect}>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2.5 min-w-0">
             <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
-            <span className="text-[12px] font-medium text-zinc-200">{adapter.name}</span>
+            <span className="text-[12px] font-medium text-zinc-200 truncate">{adapter.name}</span>
           </div>
-          <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${meta.cls}`}>
+          <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${meta.cls}`}>
             <Icon className={`w-3 h-3 ${report?.status === 'authenticating' ? 'animate-spin' : ''}`} />
             {meta.label}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-          <span className="font-mono">{adapter.id}</span>
+        <div className="flex items-center gap-2 text-[10px] text-zinc-500 min-w-0 flex-wrap">
+          <span className="font-mono truncate">{adapter.id}</span>
           {report?.browserRunning && <span className="text-cyan-400">· window open</span>}
           {report?.requestsRemaining != null && <span>· {report.requestsRemaining} left today</span>}
           {report?.queueDepth ? <span className="text-amber-300">· {report.queueDepth} queued</span> : null}
         </div>
         {report?.lastError && (
-          <p className="text-[10px] text-red-300/90 mt-1.5 line-clamp-2">{report.lastError}</p>
+          <p className="text-[10px] text-red-300/90 mt-1.5 line-clamp-2 break-words">{report.lastError}</p>
         )}
       </button>
     </WorkspaceCard>

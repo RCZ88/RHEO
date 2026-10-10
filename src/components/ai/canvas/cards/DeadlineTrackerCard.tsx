@@ -82,7 +82,7 @@ export function DeadlineTrackerCard({ days = 14 }: { days?: number }) {
           <span className="dk-card-badge">{sorted.length} upcoming</span>
           <button
             onClick={() => setShowAdd(!showAdd)}
-            style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 10px', borderRadius: 6, fontSize: 11, color: showAdd ? '#f87171' : '#52525b', background: showAdd ? 'rgba(248,113,113,0.1)' : 'transparent', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', transition: 'all 0.15s', marginLeft: 8 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 10px', borderRadius: 6, fontSize: 11, color: showAdd ? '#f87171' : '#52525b', background: showAdd ? 'rgba(248,113,113,0.1)' : 'transparent', border: '1px solid var(--dk-chip-edge)', cursor: 'pointer', transition: 'all 0.15s', marginLeft: 8 }}
           >
             {showAdd ? <X size={11} /> : <Plus size={11} />}
             {showAdd ? 'Cancel' : 'Add'}
@@ -91,26 +91,26 @@ export function DeadlineTrackerCard({ days = 14 }: { days?: number }) {
       </div>
       <div className="dk-card-body">
         {showAdd && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 0', marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 0', marginBottom: 12, borderBottom: '1px solid var(--dk-chip)' }}>
             <input
               value={newDeadline.title}
               onChange={e => setNewDeadline(p => ({ ...p, title: e.target.value }))}
               placeholder="Deadline title..."
               autoFocus
               onKeyDown={e => { if (e.key === 'Enter') handleAddDeadline(); if (e.key === 'Escape') setShowAdd(false) }}
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#e4e4e7', outline: 'none', width: '100%' }}
+              style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#e4e4e7', outline: 'none', width: '100%' }}
             />
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input
                 type="date"
                 value={newDeadline.due_date}
                 onChange={e => setNewDeadline(p => ({ ...p, due_date: e.target.value }))}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none' }}
+                style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none' }}
               />
               <select
                 value={newDeadline.priority}
                 onChange={e => setNewDeadline(p => ({ ...p, priority: e.target.value }))}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none' }}
+                style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none' }}
               >
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -122,12 +122,12 @@ export function DeadlineTrackerCard({ days = 14 }: { days?: number }) {
                 value={newDeadline.course}
                 onChange={e => setNewDeadline(p => ({ ...p, course: e.target.value }))}
                 placeholder="Course / category (optional)"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none', flex: 1 }}
+                style={{ background: 'var(--dk-chip)', border: '1px solid var(--dk-chip-edge)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#a1a1aa', outline: 'none', flex: 1 }}
               />
               <button
                 onClick={handleAddDeadline}
                 disabled={!newDeadline.title.trim() || !newDeadline.due_date}
-                style={{ padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: (newDeadline.title.trim() && newDeadline.due_date) ? 'rgba(248,113,113,0.15)' : 'rgba(255,255,255,0.04)', color: (newDeadline.title.trim() && newDeadline.due_date) ? '#f87171' : '#52525b', border: 'none', cursor: (newDeadline.title.trim() && newDeadline.due_date) ? 'pointer' : 'default', transition: 'all 0.15s' }}
+                style={{ padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: (newDeadline.title.trim() && newDeadline.due_date) ? 'rgba(248,113,113,0.15)' : 'var(--dk-chip-edge)', color: (newDeadline.title.trim() && newDeadline.due_date) ? '#f87171' : '#52525b', border: 'none', cursor: (newDeadline.title.trim() && newDeadline.due_date) ? 'pointer' : 'default', transition: 'all 0.15s' }}
               >
                 Add Deadline
               </button>

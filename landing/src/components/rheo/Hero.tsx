@@ -1,42 +1,13 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
 import FlowFieldCanvas from "./FlowFieldCanvas";
 import { useDetectedOS } from "./use-detected-os";
-import Def from "./Def";
 import DecryptedText from "./DecryptedText";
 import OSLogo from "./OSLogo";
-import { useShouldAnimate } from "./use-motion-preference";
+import SessionClock from "./SessionClock";
 
 export default function Hero() {
   const os = useDetectedOS();
-  const shouldAnimate = useShouldAnimate();
-  const seconds = useRef(1204032);
-  const [secondsState, setSecondsState] = useState(1204032);
-  const [h1Revealed, setH1Revealed] = useState(false);
-
-  // seconds counter ticks +1 per second
-  useEffect(() => {
-    const id = setInterval(() => {
-      seconds.current += 1;
-      setSecondsState(seconds.current);
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // one-time H1 reveal after preloader completes
-  useEffect(() => {
-    const onDone = () => {
-      // Small delay so the preloader exit animation finishes first
-      setTimeout(() => setH1Revealed(true), 100);
-    };
-    window.addEventListener("rheo-preloader-done", onDone);
-    return () => window.removeEventListener("rheo-preloader-done", onDone);
-  }, []);
-
-  const fmt = (n: number) =>
-    n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
   return (
     <section
@@ -69,32 +40,21 @@ export default function Hero() {
 
       {/* foreground content */}
       <div className="relative z-10 h-full flex flex-col justify-center px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto">
-        <motion.p
-          className="mono-label mb-6"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        <p
+          className="mono-label mb-6 hero-enter hero-enter--kicker"
           style={{ fontSize: 11, color: "#8a8a94" }}
         >
           <DecryptedText text="RHEO — ῥέω · GREEK: TO FLOW" speed={28} maxIterations={6} />
-        </motion.p>
+        </p>
 
-        <motion.h1
-          className="display-h1"
-          initial={{ opacity: 0, y: shouldAnimate ? 12 : 0 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        >
+        <h1 className="display-h1 hero-enter">
           TIME,
           <br />
           MADE LEGIBLE.
-        </motion.h1>
+        </h1>
 
-        <motion.p
-          className="mt-8 max-w-[640px]"
-          initial={{ opacity: 0, y: shouldAnimate ? 12 : 0 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.9, delay: 0.9, ease: [0.16, 1, 0.3, 1] }}
+        <p
+          className="mt-8 max-w-[640px] hero-enter hero-enter--manifesto"
           style={{
             fontSize: 16,
             lineHeight: 1.6,
@@ -102,20 +62,29 @@ export default function Hero() {
             maxWidth: 560,
           }}
         >
-          RHEO records how you spend your hours, then turns the record into
-          understanding — <Def term="phase">phases</Def>, dashboards, <Def term="lesson">lessons</Def>,
-          and an AI that knows your time because it watched it flow.
-        </motion.p>
+            {/* The manifesto line is the product's own words and the
+                emotional spine of the reflection half (§0.2). It was dropped
+                while the atlas's 180 words went into captions — backwards:
+                captions were the compressible material, this was not.
+                Restored VERBATIM; the 60-word trim came off the stopwatch
+                counter below, which the ledger now carries. */}
+            Your hours are the only currency you can never earn back. RHEO
+            records how they flow — so every phase of your life can be seen,
+            questioned, and improved.
+        </p>
 
-        <motion.div
-          className="mt-10 flex flex-wrap items-center gap-3"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.9, delay: 1.05, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {/* solid white button */}
+        <div className="mt-10 flex flex-wrap items-center gap-3 hero-enter hero-enter--ctas">
+          {/* R2 — ORDER MATTERS, not styling. The carousel is the main thing, and
+              this is the one element every visitor sees. Download is ghosted because
+              there are no real binaries and no real checksums yet, so it cannot be
+              the hero's promise until it fully delivers. "See the method" is GONE:
+              its destination is the next scroll position, and a CTA that duplicates
+              the scroll wheel is noise. Reversal condition: when real installers with
+              real SHA-256 ship, download-primary becomes defensible again. */}
+
+          {/* PRIMARY — the evidence */}
           <a
-            href="#download"
+            href="#gallery"
             className="btn-sheen inline-flex items-center justify-center"
             style={{
               background: "#ffffff",
@@ -127,20 +96,16 @@ export default function Hero() {
               letterSpacing: "0.02em",
             }}
           >
-            <span className="inline-flex items-center gap-2">
-              <span className="mono" style={{ fontWeight: 500, fontSize: 13 }}>
-                Download for {os}
-              </span>
-              <OSLogo os={os} />
+            <span className="mono" style={{ fontWeight: 500, fontSize: 13 }}>
+              See all 17 screens, untouched ↓
             </span>
-            {/* sheen sweep on hover */}
             <span aria-hidden className="btn-sheen-sweep" />
           </a>
 
-          {/* ghost button */}
+          {/* GHOST — the ask, with the platform it will detect at runtime */}
           <a
-            href="#act-record"
-            className="mono"
+            href="#download"
+            className="mono inline-flex items-center gap-2"
             style={{
               border: "1px solid rgba(255,255,255,0.16)",
               borderRadius: 6,
@@ -160,18 +125,17 @@ export default function Hero() {
               e.currentTarget.style.borderColor = "rgba(255,255,255,0.16)";
             }}
           >
-            See the method ↓
+            <span>Download for {os}</span>
+            <OSLogo os={os} />
           </a>
-        </motion.div>
+        </div>
+
       </div>
 
       {/* bottom edge live line */}
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 z-10 px-5 sm:px-10 lg:px-16"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8, delay: 1.2 }}
-        style={{ paddingBottom: 18 }}
+      <div
+        className="absolute bottom-0 left-0 right-0 z-10 px-5 sm:px-10 lg:px-16 hero-enter"
+        style={{ paddingBottom: 18, animationDelay: "1.2s" }}
       >
         <div
           className="flex items-center gap-3 max-w-[1280px] mx-auto"
@@ -181,22 +145,20 @@ export default function Hero() {
             <span className="blink-cursor" style={{ color: "#ffffff" }}>▍</span>{" "}
             <span style={{ color: "#a1a1aa" }}>tracking</span>
             <span style={{ color: "#8a8a94" }}> · </span>
-            <span className="tabular-nums" style={{ color: "#f4f4f5" }}>
-              {fmt(secondsState)} s observed
-            </span>
+            {/* R3: real elapsed time on THIS page. Was a hard-coded 1,204,032 that
+                ticked up forever — a fabricated measurement on a page whose brand is
+                that its labels are true. */}
+            <SessionClock />
+            <span style={{ color: "#a1a1aa" }}> on this page</span>
             <span style={{ color: "#8a8a94" }}> · </span>
-            <span style={{ color: "#8a8a94" }}>field: </span>
-            <span
-              style={{
-                color: "#f4f4f5",
-                transition: "color 0.4s cubic-bezier(0.16,1,0.3,1)",
-              }}
-            >
-              laminar
-            </span>
+            {/* R1: the privacy claim lands here because this is the only hero element
+                whose register is an INSTRUMENT READOUT — and it is now checkable, so
+                it can be a fact rather than a promise. `field: laminar` was removed:
+                the flow field is already visible, so labelling it encoded nothing. */}
+            <span style={{ color: "#f4f4f5" }}>0 bytes sent</span>
           </span>
         </div>
-      </motion.div>
+      </div>
     </section>
   );
 }

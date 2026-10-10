@@ -21,7 +21,7 @@ export function EmptyRiver({ onAdd }: EmptyRiverProps) {
   return (
     <div
       data-lifephase="empty-river"
-      className="flex flex-col items-center gap-4 rounded-xl border border-zinc-800/70 bg-zinc-900/60 px-6 py-8 text-center backdrop-blur-sm"
+      className="flex flex-col items-center gap-4 rounded-xl border border-zinc-800/70 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] px-6 py-8 text-center backdrop-blur-sm"
     >
       <div className="flex size-10 items-center justify-center rounded-full border border-amber-400/25 bg-amber-400/10">
         <Droplets size={18} className="text-amber-300" />
@@ -44,7 +44,7 @@ export function EmptyRiver({ onAdd }: EmptyRiverProps) {
             : `${MONTHS[e.startMonth - 1]} ${e.startYear} → present`
           return (
             <div key={e.title} className="flex-1">
-              <div className="relative flex h-14 items-center justify-center overflow-hidden rounded-lg border border-zinc-700/60 bg-zinc-900/80">
+              <div className="relative flex h-14 items-center justify-center overflow-hidden rounded-lg border border-zinc-700/60 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]">
                 <div
                   className="absolute inset-x-0 bottom-0 rounded-b-lg"
                   style={{ height: '58%', background: cat.color, opacity: 0.6 }}

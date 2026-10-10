@@ -19,16 +19,33 @@ type Base = {
   alt: string;
   /** Caption rendered under the frame. Use one that states what is on screen. */
   caption?: string;
+  /**
+   * The plate label (§3): "03 / 17 — DASHBOARD". Rendered as the FIRST line of
+   * the caption block, above `caption`. It is what makes a slide announce its
+   * own position to a screen reader and to the eye without a separate overlay —
+   * an overlay on the image would contradict the section's UNRETOUCHED claim.
+   */
+  plate?: string;
   className?: string;
   /**
    * Box the media to this aspect ratio. Every capture is 16:10, so this is the
    * default. Set to null to let the media size itself (use in a wide band).
    */
   ratio?: number | null;
+  /**
+   * Native capture dimensions, emitted as width/height attributes. RESULT.md
+   * §3.5: without these the frame has no reserved space and every slide shifts
+   * the page as it loads. Every capture in public/media is 2880x1800.
+   */
+  width?: number;
+  height?: number;
+  /** load eagerly. RESULT.md §3.5: the first three slides only — the other 14
+   *  are lazy so the strip does not pull 18 MB on first paint. */
+  priority?: boolean;
 };
 
 /** A real screenshot. */
-export function RealShot({ src, alt, caption, className = "", ratio = 16 / 10 }: Base) {
+export function RealShot({ src, alt, caption, plate, className = "", ratio = 16 / 10, width = 2880, height = 1800, priority = false }: Base) {
   const frame: React.CSSProperties = ratio
     ? { background: "#050506", aspectRatio: String(ratio) }
     : { background: "#050506" };
@@ -38,8 +55,10 @@ export function RealShot({ src, alt, caption, className = "", ratio = 16 / 10 }:
         <img
           src={src}
           alt={alt}
-          loading="lazy"
-          decoding="async"
+          width={width}
+          height={height}
+          loading={priority ? "eager" : "lazy"}
+          decoding={priority ? "sync" : "async"}
           style={{
             display: "block",
             width: "100%",
@@ -48,7 +67,7 @@ export function RealShot({ src, alt, caption, className = "", ratio = 16 / 10 }:
           }}
         />
       </div>
-      {caption ? (
+      {caption || plate ? (
         <figcaption
           className="mono"
           style={{
@@ -59,7 +78,8 @@ export function RealShot({ src, alt, caption, className = "", ratio = 16 / 10 }:
             marginTop: 18,
           }}
         >
-          {caption}
+          {plate ? <span style={{ display: "block", color: "#f4f4f5" }}>{plate}</span> : null}
+          {caption ? <span style={{ display: "block" }}>{caption}</span> : null}
         </figcaption>
       ) : null}
     </figure>
@@ -78,9 +98,12 @@ export function RealClip({
   src,
   alt,
   caption,
+  plate,
   poster,
   className = "",
   ratio,
+  width = 2880,
+  height = 1800,
   /**
    * Show a play/pause control. WCAG 2.2.2: any media that moves for more than
    * 5 seconds must offer a way to stop it. Default OFF because the loops that
@@ -107,6 +130,15 @@ export function RealClip({
   useEffect(() => {
     const el = ref.current;
     const video = videoRef.current;
+    // `reduced` starts false and flips true in a post-mount effect, so a clip
+    // can already be playing by the time it is set. Returning early here only
+    // prevents the NEXT autoplay; it never stops the current one. Measured
+    // under `prefers-reduced-motion: reduce`: currentTime 0.27 -> 1.78 -> 3.28.
+    if (reduced && video && !video.paused) {
+      video.pause();
+      setPaused(true);
+      return;
+    }
     if (!el || !video || reduced || paused) return;
     const io = new IntersectionObserver(
       (entries) => {
@@ -145,7 +177,7 @@ export function RealClip({
           }}
         />
       </div>
-      {caption || pauseControl ? (
+      {caption || plate || pauseControl ? (
         <figcaption
           className="mono"
           style={{
@@ -159,7 +191,13 @@ export function RealClip({
             gap: 12,
           }}
         >
-          {caption ? <span>{caption}</span> : null}
+            {/* plate label sits ABOVE the claim (§3 two-line plate) */}
+            {plate ? (
+              <span style={{ display: "block", color: "#f4f4f5", marginRight: "auto" }}>
+                {plate}
+              </span>
+            ) : null}
+            {caption ? <span>{caption}</span> : null}
           {pauseControl ? (
             <button
               type="button"

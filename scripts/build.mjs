@@ -2,6 +2,51 @@ import { build as viteBuild } from 'vite';
 import { execSync } from 'child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, unlinkSync } from 'fs';
 import { resolve, dirname, relative } from 'path';
+import { connect } from 'net';
+import { builtinModules } from 'node:module';
+
+
+// Externalised non-builtin deps for the Step 4 library build.
+const NON_BUILTIN_EXTERNALS = new Set([
+  'electron', 'better-sqlite3', 'active-win', 'node-pty', 'dotenv', 'ws',
+]);
+
+// Every Node builtin, keyed on the `node:`-prefix-normalised name so the Step 4
+// `external` predicate matches both `util` and `node:util`.
+const NODE_BUILTINS = new Set(builtinModules.map((m) => m.replace(/^node:/, '')));
+
+// ── LIVE-APP GUARD: never wipe dist/ while the app is running ─────────────
+// WHY THIS EXISTS (CZ, 2026-10-05, after the Nth "The application files could
+// not be found. Please rebuild: node scripts/build.mjs" crash):
+//   The Electron main process serves the renderer STRAIGHT OFF DISK over
+//   http://localhost:38123 (see createWindow() in src/main.ts). `vite build`
+//   with `emptyOutDir: true` DELETES all of dist/ *before* it writes a single
+//   file back. So any build overlapping a running app means the live window
+//   requests /index.html, gets ENOENT, and is served the fatal "application
+//   files could not be found" page. Worse: if the build then FAILS, dist/ is
+//   left permanently empty and the app is bricked for EVERY later launch --
+//   and the error page tells you to rebuild, which fails for the same reason.
+//   That is the loop. 2 of 11 logged builds failed (agent/logs/build.log).
+// THIS GUARD REFUSES TO RUN AT ALL while the app is live. AI agents have no
+// right to delete the files out from under a running app (AGENTS.md §0-0).
+// CZ-only escape hatch, by name: RHEO_CZ_OVERRIDE=1 (close the app instead).
+const RHEO_PROD_PORT = 38123;
+function isAppRunning() {
+  return new Promise((resolveRunning) => {
+    const socket = connect({ host: '127.0.0.1', port: RHEO_PROD_PORT });
+    let settled = false;
+    const done = (running) => {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch {}
+      resolveRunning(running);
+    };
+    socket.setTimeout(1500);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
+}
 
 // ── Build Mutex (prevent parallel builds) ──────────────────────
 const LOCK_FILE = resolve(import.meta.dirname, '..', '.build-lock');
@@ -69,8 +114,46 @@ function findAllTs(dir) {
 }
 
 async function main() {
-  // Step 1: Renderer
-  run('Step 1/4: Building renderer', 'npx vite build');
+  // ── GATE: refuse to touch dist/ while the app is running ──────────────
+  if (!process.env.RHEO_CZ_OVERRIDE && await isAppRunning()) {
+    console.error(
+      '\n❌ REFUSING TO BUILD: the app is running (something is listening on 127.0.0.1:' + RHEO_PROD_PORT + ').\n' +
+      '   A build DELETES dist/ before writing it back, which would blank the window you\n' +
+      '   are using right now, and a failed build would leave the app bricked entirely.\n' +
+      '   Close RHEO first, then build. (CZ-only override: RHEO_CZ_OVERRIDE=1)\n'
+    );
+    process.exit(2);
+  }
+
+  // ── Step 1: Renderer — build to a STAGING dir, then swap it in ───────
+  // NEVER `vite build` straight into dist/. emptyOutDir deletes dist/ first,
+  // so an in-place build means (a) a live app sees an empty dist mid-build and
+  // (b) a FAILED build leaves no dist/index.html at all -> every later launch
+  // shows "The application files could not be found". Staging + rename makes
+  // the swap effectively atomic and leaves the previous good dist/ untouched
+  // if the build fails for any reason.
+  const DIST = resolve(ROOT, 'dist');
+  const STAGING = resolve(ROOT, 'dist-tmp');   // .gitignore'd
+  const PREV = resolve(ROOT, 'dist-prev');     // .gitignore'd, removed after swap
+  console.log('\n=== Step 1/4: Building renderer (staged -> dist-tmp) ===');
+  try {
+    execSync(`npx vite build --outDir "${STAGING}"`, { cwd: ROOT, stdio: 'inherit', shell: true });
+  } catch (err) {
+    rmSync(STAGING, { recursive: true, force: true });
+    console.error('\n❌ Renderer build FAILED — the existing dist/ was left UNTOUCHED (app still runs).');
+    throw err;
+  }
+  const stagedIndex = resolve(STAGING, 'index.html');
+  if (!existsSync(stagedIndex) || statSync(stagedIndex).size < 1024) {
+    rmSync(STAGING, { recursive: true, force: true });
+    console.error('\n❌ Renderer build produced no usable index.html — the existing dist/ was left UNTOUCHED.');
+    process.exit(1);
+  }
+  rmSync(PREV, { recursive: true, force: true });
+  if (existsSync(DIST)) renameSync(DIST, PREV);
+  renameSync(STAGING, DIST);
+  rmSync(PREV, { recursive: true, force: true });
+  console.log(`  dist/ swapped atomically (index.html ${(statSync(resolve(DIST, 'index.html')).size / 1024).toFixed(0)} KB)`);
 
   // Step 2: Preload (esbuild for real CJS output — Vite SSR emits ESM which Electron rejects)
   const preloadOut = resolve(OUT, 'preload.cjs');
@@ -191,31 +274,23 @@ async function main() {
         fileName: () => 'main.cjs',
       },
       rollupOptions: {
-        external: [
-          'electron',
-          'better-sqlite3',
-          'active-win',
-          'node-pty',
-          'dotenv',
-          'ws',
-          'crypto',
-          'os',
-          'path',
-          'fs',
-          'child_process',
-          'util',
-          'url',
-          'stream',
-          'events',
-          'net',
-          'http',
-          'https',
-          'tls',
-          'zlib',
-          'assert',
-          'querystring',
-          'buffer',
-        ],
+        // Predicate, not a literal list — `external` strings are matched EXACTLY,
+        // and this list was built with bare names ('util', 'os', 'path'). Source
+        // files import the `node:`-prefixed spellings, so `node:util` never
+        // matched the entry `'util'` and got bundled instead: it resolved to
+        // `__vite-browser-external`, which exports no `promisify`, and Step 4
+        // died with `"promisify" is not exported by "__vite-browser-external"`.
+        // No main bundle was produced at all.
+        //
+        // Enumerating the names is inherently lossy — any builtin added to Node
+        // later would need editing here. Matching on the `node:`-prefix-normalised
+        // name covers every builtin, present and future, in either spelling, and
+        // keeps the runtime `require()` that Electron main expects.
+        external: (id) => {
+          if (NON_BUILTIN_EXTERNALS.has(id)) return true;
+          const bare = id.startsWith('node:') ? id.slice(5) : id;
+          return NODE_BUILTINS.has(bare);
+        },
       },
       ssr: undefined,
       minify: false,

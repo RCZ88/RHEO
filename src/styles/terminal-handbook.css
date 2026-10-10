@@ -8,32 +8,41 @@
    ============================================ */
 
 .hb-scope {
-  --hb-bg: #09090b;
-  --hb-bg2: #0a0a0a;
-  --hb-panel: #18181b;
-  --hb-panel2: #1f1f23;
-  --hb-line: #27272a;
-  --hb-line2: #3f3f46;
-  --hb-txt: #e4e4e7;
-  --hb-dim: #a1a1aa;
-  --hb-faint: #71717a;
+  /* The handbook now derives its palette from the CONSOLE's active theme
+     (--t-*), not from terminal-handbook.html's pink. The HTML contributed the
+     information design (cards, badges, what/when/gotcha rows, spec-sheet fields);
+     its pink accent did not survive LAMINAR §2 "one signal hue per surface".
+     Rebinding these 8 tokens re-themes the whole panel with the theme switch. */
+  --hb-bg: var(--t-bg, #09090b);
+  --hb-bg2: var(--t-panel, #18181b);
+  --hb-panel: var(--t-panel, #18181b);
+  --hb-panel2: var(--t-panel2, #1f1f23);
+  --hb-line: var(--t-border, #27272a);
+  --hb-line2: var(--t-border, #27272a);
+  --hb-txt: var(--t-fg, #e4e4e7);
+  --hb-dim: var(--t-muted, #a1a1aa);
+  --hb-faint: var(--t-muted, #a1a1aa);
 
-  --hb-accent: #ec4899;
-  --hb-accent2: #8b5cf6;
-  --hb-pink: #ec4899;
+  /* ONE signal hue per surface (LAMINAR §2) = the console's accent. */
+  --hb-accent: var(--t-accent, #22d3ee);
+  --hb-accent2: var(--t-accent2, #2dd4bf);
+
+  /* Semantic only — LAMINAR §2: rose = destructive/error, amber = warning.
+     green/violet are NOT used as surface hues, so core/daily/power all read as
+     the surface accent instead of five competing colours. */
   --hb-amber: #fbbf24;
-  --hb-rose: #fb7185;
-  --hb-violet: #a78bfa;
-  --hb-green: #28c840;
+  --hb-rose: #ef4444;
+  --hb-green: #34d399;
+  --hb-violet: var(--t-accent2, #2dd4bf);
 
-  --hb-accent-dim: rgba(236, 72, 153, 0.12);
-  --hb-amber-dim: rgba(251, 191, 36, 0.12);
-  --hb-rose-dim: rgba(251, 113, 133, 0.1);
-  --hb-violet-dim: rgba(167, 139, 250, 0.12);
-  --hb-green-dim: rgba(40, 200, 64, 0.12);
+  --hb-accent-dim: color-mix(in srgb, var(--hb-accent) 12%, transparent);
+  --hb-amber-dim: color-mix(in srgb, var(--hb-amber) 12%, transparent);
+  --hb-rose-dim: color-mix(in srgb, var(--hb-rose) 10%, transparent);
+  --hb-violet-dim: color-mix(in srgb, var(--hb-violet) 12%, transparent);
+  --hb-green-dim: color-mix(in srgb, var(--hb-green) 12%, transparent);
 
-  --hb-mono: "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
-  --hb-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  --hb-mono: var(--font-mono, "JetBrains Mono"), ui-monospace, monospace;
+  --hb-sans: var(--font-sans, Inter), system-ui, sans-serif;
 
   color: var(--hb-txt);
   font-family: var(--hb-sans);
@@ -50,9 +59,8 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 800px 500px at 75% -10%, rgba(236, 72, 153, 0.06), transparent),
-    radial-gradient(ellipse 600px 400px at 10% 30%, rgba(139, 92, 246, 0.05), transparent),
-    radial-gradient(ellipse 700px 300px at 50% 80%, rgba(236, 72, 153, 0.04), transparent);
+    radial-gradient(ellipse 800px 500px at 75% -10%, color-mix(in srgb, var(--hb-accent) 5%, transparent), transparent),
+    radial-gradient(ellipse 600px 400px at 10% 30%, rgba(255, 255, 255, 0.02), transparent);
   animation: hb-substrate-drift 20s ease-in-out infinite alternate;
 }
 @keyframes hb-substrate-drift {
@@ -63,7 +71,7 @@
 
 /* ---- scroll progress (HTML: linear-gradient(90deg,var(--accent),var(--pink))) ---- */
 .hb-progress {
-  background: linear-gradient(90deg, var(--hb-accent), var(--hb-pink));
+  background: var(--hb-accent);
 }
 
 /* ---- section heading with the 2px accent rule (HTML h3::before) ---- */
@@ -89,7 +97,7 @@
 /* ---- command card (HTML .cmd) ---- */
 .hb-cmd {
   background: rgba(24, 24, 27, 0.6);
-  border: 1px solid rgba(236, 72, 153, 0.15);
+  border: 1px solid color-mix(in srgb, var(--hb-accent) 16%, transparent);
   border-radius: 12px;
   overflow: hidden;
   backdrop-filter: blur(12px);
@@ -97,14 +105,14 @@
   transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
 }
 .hb-cmd:hover {
-  border-color: var(--hb-pink);
+  border-color: var(--hb-accent);
   transform: translateX(3px);
-  box-shadow: -3px 0 0 0 var(--hb-pink), 0 4px 20px rgba(244, 114, 182, 0.08);
+  box-shadow: -3px 0 0 0 var(--hb-accent), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
-.hb-cmd.acc-grn:hover { box-shadow: -3px 0 0 0 rgba(40, 200, 64, 0.5); }
+.hb-cmd.acc-grn:hover { box-shadow: -3px 0 0 0 color-mix(in srgb, var(--hb-accent) 50%, transparent); }
 .hb-cmd.acc-blu:hover { box-shadow: -3px 0 0 0 rgba(121, 192, 255, 0.5); }
-.hb-cmd.acc-pur:hover { box-shadow: -3px 0 0 0 rgba(167, 139, 250, 0.5); }
-.hb-cmd.acc-red { box-shadow: -3px 0 0 0 rgba(251, 113, 133, 0.35); }
+.hb-cmd.acc-pur:hover { box-shadow: -3px 0 0 0 color-mix(in srgb, var(--hb-accent) 50%, transparent); }
+.hb-cmd.acc-red { box-shadow: -3px 0 0 0 color-mix(in srgb, var(--hb-rose) 35%, transparent); }
 .hb-cmd.acc-red:hover { box-shadow: -3px 0 0 0 var(--hb-rose); }
 .hb-cmd.acc-amb { box-shadow: -3px 0 0 0 rgba(251, 191, 36, 0.35); }
 .hb-cmd.acc-amb:hover { box-shadow: -3px 0 0 0 var(--hb-amber); }
@@ -164,7 +172,7 @@
 }
 .hb-copy:hover {
   color: var(--hb-accent);
-  border-color: rgba(40, 200, 64, 0.4);
+  border-color: color-mix(in srgb, var(--hb-accent) 40%, transparent);
 }
 
 /* ---- expanded detail (HTML .cmd-detail) ---- */
@@ -200,11 +208,11 @@
 .hb-dv { color: var(--hb-dim); font-size: 13px; line-height: 1.5; }
 .hb-dv ul { list-style: none; padding: 0; margin: 4px 0 0; }
 .hb-dv li { padding: 2px 0; font-size: 13px; color: var(--hb-dim); }
-.hb-dv li::before { content: "\2192 "; color: var(--hb-pink); }
+.hb-dv li::before { content: "\2192 "; color: var(--hb-accent); }
 .hb-dv code {
   color: var(--hb-accent);
   font-size: 12px;
-  background: rgba(236, 72, 153, 0.08);
+  background: color-mix(in srgb, var(--hb-accent) 10%, transparent);
   padding: 1px 5px;
   border-radius: 3px;
   font-family: var(--hb-mono);
@@ -280,7 +288,7 @@
 }
 .hb-path { font-family: var(--hb-mono); color: var(--hb-violet); }
 
-.hb-scope ::selection { background: rgba(236, 72, 153, 0.3); }
+.hb-scope ::selection { background: color-mix(in srgb, var(--hb-accent) 30%, transparent); }
 
 /* ============================================
    Panel adaptations (CommandNotesPanel)
@@ -297,8 +305,8 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 420px 280px at 85% -10%, rgba(236, 72, 153, 0.07), transparent),
-    radial-gradient(ellipse 320px 320px at 0% 40%, rgba(139, 92, 246, 0.06), transparent);
+    radial-gradient(ellipse 420px 280px at 85% -10%, color-mix(in srgb, var(--hb-accent) 5%, transparent), transparent),
+    radial-gradient(ellipse 320px 320px at 0% 40%, rgba(255, 255, 255, 0.015), transparent);
 }
 
 /* Section heading — the HTML's sec-head h3 with its 2px accent rule */
@@ -315,30 +323,32 @@
   color: var(--hb-faint);
 }
 
-/* Depth badges — the HTML legend's five tiers, verbatim mapping */
+/* Depth tiers — LAMINAR §2: one signal hue per surface. core/daily/power are
+   informational tiers and all read as the surface accent; only sudo (admin) and
+   rescue (destructive) are semantic. Five hues here was the "vibrant" look. */
 .hb-badge-core {
-  color: var(--hb-pink);
-  border-color: rgba(244, 114, 182, 0.35);
-  background: rgba(244, 114, 182, 0.08);
+  color: var(--hb-accent);
+  border-color: color-mix(in srgb, var(--hb-accent) 32%, transparent);
+  background: var(--hb-accent-dim);
 }
 .hb-badge-daily {
-  color: var(--hb-green);
-  border-color: rgba(40, 200, 64, 0.35);
-  background: var(--hb-green-dim);
+  color: var(--hb-accent);
+  border-color: color-mix(in srgb, var(--hb-accent) 24%, transparent);
+  background: color-mix(in srgb, var(--hb-accent) 7%, transparent);
 }
 .hb-badge-power {
-  color: var(--hb-violet);
-  border-color: rgba(167, 139, 250, 0.35);
-  background: var(--hb-violet-dim);
+  color: var(--hb-accent);
+  border-color: color-mix(in srgb, var(--hb-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--hb-accent) 9%, transparent);
 }
 .hb-badge-sudo {
   color: var(--hb-amber);
-  border-color: rgba(251, 191, 36, 0.35);
+  border-color: color-mix(in srgb, var(--hb-amber) 32%, transparent);
   background: var(--hb-amber-dim);
 }
 .hb-badge-rescue {
   color: var(--hb-rose);
-  border-color: rgba(251, 113, 133, 0.35);
+  border-color: color-mix(in srgb, var(--hb-rose) 32%, transparent);
   background: var(--hb-rose-dim);
 }
 
@@ -348,7 +358,7 @@
   width: 100%;
   text-align: left;
   background: rgba(24, 24, 27, 0.55);
-  border: 1px solid rgba(236, 72, 153, 0.14);
+  border: 1px solid color-mix(in srgb, var(--hb-accent) 15%, transparent);
   border-radius: 12px;
   padding: 9px 11px;
   cursor: pointer;
@@ -357,14 +367,14 @@
   transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
 }
 .hb-cmd-row:hover {
-  border-color: var(--hb-pink);
+  border-color: var(--hb-accent);
   transform: translateX(3px);
-  box-shadow: -3px 0 0 0 var(--hb-pink), 0 4px 20px rgba(244, 114, 182, 0.08);
+  box-shadow: -3px 0 0 0 var(--hb-accent), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
-.hb-cmd-row.acc-grn:hover { box-shadow: -3px 0 0 0 rgba(40, 200, 64, 0.5); }
-.hb-cmd-row.acc-pur:hover { box-shadow: -3px 0 0 0 rgba(167, 139, 250, 0.5); }
-.hb-cmd-row.acc-amb:hover { box-shadow: -3px 0 0 0 rgba(251, 191, 36, 0.5); }
-.hb-cmd-row.acc-red { box-shadow: -3px 0 0 0 rgba(251, 113, 133, 0.35); }
+.hb-cmd-row.acc-grn:hover { box-shadow: -3px 0 0 0 color-mix(in srgb, var(--hb-accent) 50%, transparent); }
+.hb-cmd-row.acc-pur:hover { box-shadow: -3px 0 0 0 color-mix(in srgb, var(--hb-accent) 50%, transparent); }
+.hb-cmd-row.acc-amb:hover { box-shadow: -3px 0 0 0 color-mix(in srgb, var(--hb-accent) 50%, transparent); }
+.hb-cmd-row.acc-red { box-shadow: -3px 0 0 0 color-mix(in srgb, var(--hb-rose) 35%, transparent); }
 .hb-cmd-row.acc-red:hover { box-shadow: -3px 0 0 0 var(--hb-rose); }
 
 .hb-cmd-row .hb-cmdline {
@@ -408,7 +418,7 @@
 .hb-detail code {
   color: var(--hb-accent);
   font-size: 11.5px;
-  background: rgba(236, 72, 153, 0.08);
+  background: color-mix(in srgb, var(--hb-accent) 10%, transparent);
   padding: 1px 5px;
   border-radius: 3px;
   font-family: var(--hb-mono);
@@ -425,8 +435,8 @@
   font-family: var(--hb-mono);
   font-size: 10.5px;
   color: var(--hb-accent);
-  background: rgba(236, 72, 153, 0.1);
-  border: 1px solid rgba(236, 72, 153, 0.2);
+  background: color-mix(in srgb, var(--hb-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hb-accent) 22%, transparent);
   border-radius: 4px;
   padding: 0 5px;
   height: fit-content;

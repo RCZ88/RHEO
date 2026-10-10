@@ -236,13 +236,27 @@ export async function buildContextBundleDetailed(): Promise<ContextBundleResult>
   }
 
   // ADDED — finance context
+  // LOCK BOUNDARY: this bundle is sent to external AI, so pulling finance here
+  // leaked the summary, the wallet list and subscription intelligence to a
+  // third party even while Finance was locked. Ask the backend first and send
+  // nothing if it says locked — fail closed, since a lock we cannot read is
+  // still a lock.
   let financeSummary: any = null
   let financeWallets: any[] = []
   let financeSubscriptions: any = null
   try {
-    financeSummary = await safe<unknown>(b && (() => (b.financeGetSummary as () => Promise<unknown>)()), null)
-    financeWallets = (await safe<any[]>(b && (() => (b.financeGetWallets as () => Promise<any>)()), [])) || []
-    financeSubscriptions = await safe<unknown>(b && (() => (b.financeGetSubscriptionIntelligence as () => Promise<unknown>)()), null)
+    let financeLocked = true; // fail closed
+    try {
+      const lockRes = await (b as any)?.financeIsLocked?.();
+      financeLocked = lockRes?.locked !== false;
+    } catch { financeLocked = true; }
+    if (!financeLocked) {
+      financeSummary = await safe<unknown>(b && (() => (b.financeGetSummary as () => Promise<unknown>)()), null)
+      financeWallets = (await safe<any[]>(b && (() => (b.financeGetWallets as () => Promise<any>)()), [])) || []
+      financeSubscriptions = await safe<unknown>(b && (() => (b.financeGetSubscriptionIntelligence as () => Promise<unknown>)()), null)
+    } else {
+      warnings.push('Finance context omitted — finance is locked')
+    }
   } catch {
     warnings.push('Finance context failed')
   }

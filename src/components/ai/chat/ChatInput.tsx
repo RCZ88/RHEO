@@ -30,6 +30,27 @@ const SLASH_COMMANDS = [
   { id: "focus", name: "/focus", desc: "Start focus session", icon: <Target size={14} />, category: "ai" },
 ]
 
+/** Composer growth ceilings. `140` is the historical hardcoded value, kept as the
+ *  default so existing users see no change on upgrade. */
+export const GROW_CAPS = {
+  compact: 140,
+  comfortable: 320,
+  full: 640,
+} as const
+export type GrowMode = keyof typeof GROW_CAPS
+export const GROW_MIN = 88
+export const GROW_MAX = 720
+
+const GROW_KEY = 'ai.composer.growMode'
+const GROW_OVERRIDE_KEY = 'ai.composer.growPx'
+
+function readStored(key: string): string | null {
+  try { return localStorage.getItem(key) } catch { return null }
+}
+function writeStored(key: string, val: string | null): void {
+  try { if (val === null) localStorage.removeItem(key); else localStorage.setItem(key, val) } catch { /* private mode */ }
+}
+
 export function ChatInput(props: ChatInputProps) {
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -40,12 +61,65 @@ export function ChatInput(props: ChatInputProps) {
   const historyIndexRef = useRef(-1)
   const draftRef = useRef("")
 
+  const [growMode, setGrowMode] = useState<GrowMode>(() => {
+    const v = readStored(GROW_KEY)
+    return v && v in GROW_CAPS ? (v as GrowMode) : 'compact'
+  })
+  const [growOverride, setGrowOverride] = useState<number | null>(() => {
+    const v = readStored(GROW_OVERRIDE_KEY)
+    const n = v ? parseInt(v, 10) : NaN
+    return Number.isFinite(n) ? Math.min(Math.max(n, GROW_MIN), GROW_MAX) : null
+  })
+  const [dragResizing, setDragResizing] = useState(false)
+
+  /** Effective ceiling: a drag override wins over the named mode. */
+  const cap = growOverride ?? GROW_CAPS[growMode]
+
+  const setMode = useCallback((m: GrowMode) => {
+    setGrowMode(m)
+    setGrowOverride(null)
+    writeStored(GROW_KEY, m)
+    writeStored(GROW_OVERRIDE_KEY, null)
+  }, [])
+
+  // `cap` is a DEPENDENCY, not just props.value: without it a drag resize is
+  // immediately overwritten the next time the value changes, and the two fight.
   useEffect(() => {
     const el = taRef.current
     if (!el) return
     el.style.height = "auto"
-    el.style.height = Math.min(el.scrollHeight, 140) + "px"
-  }, [props.value])
+    el.style.height = Math.min(el.scrollHeight, cap) + "px"
+    el.style.overflowY = el.scrollHeight > cap ? "auto" : "hidden"
+  }, [props.value, cap])
+
+  /** Drag the bottom edge to set a free-form ceiling. Pointer capture so the drag
+   *  survives the pointer leaving the handle. */
+  const startDragResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startCap = cap
+    const el = e.currentTarget
+    try { el.setPointerCapture(e.pointerId) } catch { /* not supported */ }
+    setDragResizing(true)
+
+    // Held outside React state so pointerup persists the FINAL value, not the
+    // value at drag start — state updates here are async and batched.
+    let latest = cap
+
+    const onMove = (ev: PointerEvent) => {
+      // dragging UP (smaller clientY) should make the box TALLER
+      latest = Math.min(Math.max(startCap + (startY - ev.clientY), GROW_MIN), GROW_MAX)
+      setGrowOverride(latest)
+    }
+    const onUp = () => {
+      setDragResizing(false)
+      writeStored(GROW_OVERRIDE_KEY, String(latest))
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }, [cap])
 
   const canSend = (props.value.trim().length > 0 || pendingImages.length > 0) && !props.streaming
 
@@ -214,6 +288,31 @@ export function ChatInput(props: ChatInputProps) {
             disabled={props.streaming}
           />
         </VoiceInputWrapper>
+        <div
+          onPointerDown={startDragResize}
+          title="Drag to change the composer height"
+          style={{
+            height: 7,
+            marginTop: -1,
+            cursor: dragResizing ? 'ns-resize' : 'ns-resize',
+            touchAction: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: dragResizing ? 0.9 : 0.35,
+            transition: 'opacity 120ms ease-out',
+          }}
+        >
+          <div
+            style={{
+              width: 34,
+              height: 2,
+              borderRadius: 2,
+              background: 'var(--dk-chip-edge, currentColor)',
+              opacity: 0.5,
+            }}
+          />
+        </div>
         <div className="dk-input-tools">
           <input
             ref={fileRef}

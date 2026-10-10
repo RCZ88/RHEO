@@ -84,7 +84,10 @@ export default function SleepDetectionModal({
   onFillGap?: (gap: { start: string; end: string; duration_seconds: number }) => void;
   filledGapStarts?: string[];
 }) {
-  console.log('%c[SleepDetectionModal] v1.4 date picker + GapFillModal integration', 'color: #fbbf24; font-weight: bold');
+  console.log(
+    '%c[SleepDetectionModal] v1.5 unified gap prompt — amber time-surface, no decorative gradient',
+    'color: #fbbf24; font-weight: bold',
+  );
 
   const [dateManuallySet, setDateManuallySet] = useState(false);
 
@@ -97,14 +100,14 @@ export default function SleepDetectionModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
       >
         <motion.div
           initial={{ scale: 0.92, opacity: 0, y: 10 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.92, opacity: 0, y: 10 }}
-          transition={{ type: 'spring', duration: 0.4, bounce: 0.25 }}
-          className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl"
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-white/[0.10] rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl shadow-black/50"
         >
           <div className="p-5 sm:p-6">
             {/* Header */}
@@ -124,7 +127,7 @@ export default function SleepDetectionModal({
                   </p>
                 </div>
               </div>
-              <button onClick={handleDone} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-200 transition-colors">
+              <button onClick={handleDone} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
               </button>
             </div>
@@ -202,7 +205,7 @@ export default function SleepDetectionModal({
                         {/* the sleep block sits between the two flanks */}
                         {i === 0 && adjacentGaps.length > 1 && adjacentGaps[1].relation === 'after' && (
                           <div className="relative flex items-center gap-3 pb-3">
-                            <div className="absolute -left-10 top-0.5 w-[27px] h-[27px] rounded-full bg-violet-500/15 text-violet-300 flex items-center justify-center ring-4 ring-zinc-900/95">
+                            <div className="absolute -left-10 top-0.5 w-[27px] h-[27px] rounded-full bg-amber-500/15 text-amber-300 flex items-center justify-center ring-4 ring-zinc-900/95">
                               <Moon className="w-3.5 h-3.5" />
                             </div>
                             <div className="flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-white/[0.05] bg-black/20">
@@ -224,7 +227,7 @@ export default function SleepDetectionModal({
                         .map(g => ({ start: g.start, end: g.end, duration_seconds: g.durationSeconds }));
                       onFillGapRequest?.(unfilled);
                     }}
-                    className="w-full mt-1 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-900 bg-zinc-100 hover:bg-white active:scale-[0.99] transition-all"
+                    className="w-full mt-1 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-900 bg-zinc-100 hover:bg-white active:scale-[0.99] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
                   >
                     Fill {adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length === 1 ? 'this gap' : 'next gap'}
                   </button>
@@ -233,7 +236,7 @@ export default function SleepDetectionModal({
             )}
             <button
               onClick={handleDone}
-              className="w-full mt-2 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] border border-white/[0.07] transition-colors"
+              className="w-full mt-2 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] border border-white/[0.07] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
             >
               {allFilled ? 'Done' : 'Skip — fill later from External page'}
             </button>
@@ -303,33 +306,33 @@ export default function SleepDetectionModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
     >
       <motion.div
         initial={{ scale: 0.92, opacity: 0, y: 10 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.92, opacity: 0, y: 10 }}
-        transition={{ type: 'spring', duration: 0.4, bounce: 0.25 }}
-        className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl"
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-white/[0.10] rounded-xl w-full max-w-lg max-h-[min(680px,90vh)] overflow-y-auto shadow-2xl shadow-black/50"
       >
         {/* Decorative bar */}
-        <div className="h-1 bg-gradient-to-r from-indigo-500/40 via-violet-500/40 to-indigo-500/40" />
+        <div className="h-px bg-white/[0.06]" />
 
         <div className="p-5">
           {/* ── Header ── */}
           <div className="flex items-start justify-between mb-5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0 ring-1 ring-indigo-500/20">
-                <Moon className="w-5 h-5 text-indigo-400" />
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 ring-1 ring-amber-500/20">
+                <Moon className="w-5 h-5 text-amber-400" />
               </div>
               <div>
                 <h3 className="text-base font-semibold text-zinc-100">Were you sleeping?</h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Inactive for <span className="text-indigo-300 font-medium">{fmtDur(data.gapMinutes)}</span>
+                  Inactive for <span className="text-amber-300 font-medium">{fmtDur(data.gapMinutes)}</span>
                 </p>
               </div>
             </div>
-            <button onClick={onDismiss} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors">
+            <button onClick={onDismiss} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
           </div>
@@ -338,7 +341,7 @@ export default function SleepDetectionModal({
           <div className="mb-5">
             <div className="flex h-8 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700/30">
               <div className="flex-1 flex items-center justify-center text-[10px] text-zinc-500 bg-zinc-800/50">Pre-sleep</div>
-              <div className="flex-[3] flex items-center justify-center text-xs text-indigo-300 bg-indigo-900/40 font-medium">Sleep</div>
+              <div className="flex-[3] flex items-center justify-center text-xs text-amber-300 bg-amber-900/40 light:bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] font-medium">Sleep</div>
               <div className="flex-[0.8] flex items-center justify-center text-[10px] text-zinc-500 bg-zinc-800/50">Wake</div>
             </div>
             {(() => {
@@ -368,7 +371,7 @@ export default function SleepDetectionModal({
                   onSleepDateChange(localDateStr(d));
                   setDateManuallySet(true);
                 }}
-                className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-zinc-200"
+                className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
@@ -379,7 +382,7 @@ export default function SleepDetectionModal({
                   onSleepDateChange(e.target.value);
                   setDateManuallySet(true);
                 }}
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-zinc-200 text-center"
+                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-zinc-200 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
               />
               <button
                 onClick={() => {
@@ -389,7 +392,7 @@ export default function SleepDetectionModal({
                   setDateManuallySet(true);
                 }}
                 disabled={sleepDate === localDateStr(new Date())}
-                className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
               </button>
@@ -405,16 +408,16 @@ export default function SleepDetectionModal({
               </div>
               <span className="text-sm font-semibold text-zinc-100">{fmtDur(totalInactive)}</span>
             </div>
-            <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
-              <div className="flex items-center gap-1.5 text-indigo-400/70 text-[10px] mb-1">
+            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+              <div className="flex items-center gap-1.5 text-amber-400/70 text-[10px] mb-1">
                 <Bed className="w-3 h-3" />
                 <span>Actual sleep</span>
               </div>
-              <span className="text-sm font-semibold text-indigo-300">{fmtDur(actualSleep)}</span>
+              <span className="text-sm font-semibold text-amber-300">{fmtDur(actualSleep)}</span>
             </div>
             <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
               <div className="flex items-center gap-1.5 text-amber-500/60 text-[10px] mb-1">
-                <span className="text-[11px]">🌙</span>
+                <Moon className="w-3 h-3 shrink-0" />
                 <span>Pre-sleep</span>
               </div>
               <span className="text-sm font-semibold text-amber-300">+{fmtDur(asleepFromOff)}</span>
@@ -521,7 +524,7 @@ export default function SleepDetectionModal({
                       .map(g => ({ start: g.start, end: g.end, duration_seconds: g.durationSeconds }));
                     onFillGapRequest?.(unfilled);
                   }}
-                  className="w-full px-3 py-1.5 rounded-lg text-[11px] font-medium text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-all mt-2"
+                  className="w-full px-3 py-1.5 rounded-lg text-[11px] font-medium text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-colors mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
                 >
                   Fill all {adjacentGaps.filter(g => !filledGapStarts?.includes(g.start)).length} gaps
                 </button>
@@ -536,13 +539,13 @@ export default function SleepDetectionModal({
           <div className="flex gap-3">
             <button
               onClick={onDismiss}
-              className="flex-1 px-4 py-2.5 rounded-xl text-sm text-zinc-500 hover:text-zinc-300 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/30 transition-colors"
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm text-zinc-500 hover:text-zinc-300 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
             >
               Skip
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg shadow-indigo-600/20"
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-zinc-950 bg-amber-500 hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 light:focus-visible:ring-offset-[var(--ws-surface-raised)]"
             >
               Confirm Sleep
             </button>

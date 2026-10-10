@@ -69,14 +69,14 @@ export function ChartBlock({ block, onAsk }: Props) {
   return (
     <div className="my-6 py-4 px-4 rounded-xl bg-zinc-800/30 border border-zinc-700/40 group relative min-h-[220px]" data-block-id={block.id}>
       {loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-zinc-900/50">
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]">
           <div className="w-8 h-8 border-2 border-zinc-600 border-t-clay-400 rounded-full animate-spin" />
         </div>
       )}
       {error && (
         <div className="relative z-10 text-red-400 text-sm">
           <div>{error}</div>
-          <pre className="mt-2 text-xs bg-zinc-900/50 p-2 rounded overflow-x-auto">{block.spec}</pre>
+          <pre className="mt-2 text-xs bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-2 rounded overflow-x-auto">{block.spec}</pre>
           <button
             onClick={() => setRetry((r) => r + 1)}
             className="mt-2 text-xs font-medium text-clay-400 hover:text-clay-300 transition"

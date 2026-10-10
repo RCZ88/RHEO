@@ -86,7 +86,7 @@ export function DesignStudioTab() {
   }, [])
 
   return (
-    <div className="h-full w-full grid grid-cols-12 gap-0 bg-zinc-950 text-white overflow-hidden">
+    <div className="h-full w-full grid grid-cols-12 gap-0 bg-zinc-950 light:bg-[var(--ws-surface)] text-white overflow-hidden">
 
       {/* ── Column 1: Style Gallery (3/12) ── */}
       <div className="col-span-3 border-r border-zinc-800 overflow-y-auto p-4 space-y-3 scrollbar-thin">
@@ -104,7 +104,7 @@ export function DesignStudioTab() {
                 className={`w-full text-left p-3 rounded-xl transition-all relative border ${
                   isActive
                     ? 'border-purple-500/60 bg-purple-500/10'
-                    : 'border-zinc-800/60 hover:border-zinc-700/60 bg-zinc-900/30'
+                    : 'border-zinc-800/60 hover:border-zinc-700/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]'
                 }`}
               >
                 {isActive && (
@@ -133,7 +133,7 @@ export function DesignStudioTab() {
       </div>
 
       {/* ── Column 2: Rich Preview Canvas (5/12) ── */}
-      <div className="col-span-5 flex flex-col bg-zinc-950 overflow-hidden">
+      <div className="col-span-5 flex flex-col bg-zinc-950 light:bg-[var(--ws-surface)] overflow-hidden">
         <div className="px-4 pt-4 pb-2 shrink-0">
           <h2 className="text-[13px] font-bold text-zinc-200">Live Preview</h2>
           <p className="text-[10px] text-zinc-500 mt-0.5">{activeStyle.name} — interactive miniature workspace</p>
@@ -165,7 +165,7 @@ export function DesignStudioTab() {
 
         {/* Design Directive Preview */}
         <div className="px-4 pb-4 shrink-0">
-          <div className="p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/40 max-h-28 overflow-y-auto scrollbar-thin">
+          <div className="p-3 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-xl border border-zinc-800/40 max-h-28 overflow-y-auto scrollbar-thin">
             <p className="text-[9px] font-semibold text-purple-400 uppercase tracking-wider mb-1">AI Design Directive</p>
             <pre className="text-[9px] text-zinc-500 font-mono whitespace-pre-wrap leading-relaxed">{designDirective}</pre>
           </div>

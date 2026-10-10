@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { webglSupported } from '@/lib/webgl';
 import { Search, Filter, ChevronRight, ChevronDown, Layers, GitBranch, FileCode, Box, Cpu, Database } from 'lucide-react';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Line, Html, Stars } from '@react-three/drei';
@@ -1535,7 +1536,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ node, onClose }) => {
     const featureCount = allNodes.filter(n => n.type === 'feature').length;
 
     return (
-        <div className="absolute top-4 right-4 w-80 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl z-50">
+        <div className="absolute top-4 right-4 w-80 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg shadow-2xl z-50">
             <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1878,7 +1879,7 @@ const NodeLabel: React.FC<{ node: LayoutNode; position: THREE.Vector3 }> = ({ no
 const NodeTooltip: React.FC<{ node: LayoutNode; position: THREE.Vector3 }> = ({ node, position }) => (
     <Html position={[position.x, position.y + node.size + 2.6, position.z]} center
         zIndexRange={[40, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="bg-zinc-900/95 border border-zinc-700 rounded-lg px-3 py-2 max-w-56 shadow-2xl">
+        <div className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg px-3 py-2 max-w-56 shadow-2xl">
             <div className="text-xs font-semibold" style={{ color: node.accent }}>{node.label}</div>
             <div className="text-[10px] text-zinc-400 capitalize mt-0.5">{node.type}</div>
             {node.description && (
@@ -1990,6 +1991,19 @@ const ArchGraph3D: React.FC<ArchGraph3DProps> = ({ nodes, edges, adjacency, sele
 
     const visibleNodes = useMemo(() => nodes.filter(n => n.type !== 'file'), [nodes]);
     const labelNodes = useMemo(() => nodes.filter(n => n.type === 'app' || n.type === 'page'), [nodes]);
+
+    // No WebGL (VM / remote desktop / blocklisted GPU): `new WebGLRenderer()`
+    // throws inside a layout effect and takes the subtree with it. Render a
+    // legible placeholder rather than crashing.
+    if (!webglSupported()) {
+        return (
+            <div className="h-full w-full flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60">
+                <p className="text-[11px] text-zinc-600 text-center px-6">
+                    Architecture map needs WebGL, which this machine cannot provide.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <Canvas
@@ -2132,9 +2146,9 @@ const CodeArchitectureMap: React.FC = () => {
     }, []);
 
     return (
-        <div className="flex h-full bg-zinc-950">
+        <div className="flex h-full bg-zinc-950 light:bg-[var(--ws-surface)]">
             {/* Left Panel: Tree View */}
-            <div className="w-80 border-r border-zinc-800 flex flex-col bg-zinc-900">
+            <div className="w-80 border-r border-zinc-800 flex flex-col bg-zinc-900 light:bg-[var(--ws-surface-raised)]">
                 {/* Header */}
                 <div className="p-4 border-b border-zinc-800">
                     <h2 className="text-lg font-semibold text-zinc-100 mb-3">Architecture Map</h2>
@@ -2193,7 +2207,7 @@ const CodeArchitectureMap: React.FC = () => {
                 </div>
 
                 {/* Stats */}
-                <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900/50">
+                <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)]">
                     <div className="grid grid-cols-4 gap-2">
                         <div className="text-center">
                             <div className="text-lg font-bold text-purple-400">{totalStats.pages}</div>
@@ -2229,7 +2243,7 @@ const CodeArchitectureMap: React.FC = () => {
             </div>
 
             {/* Right Panel: 3D Neural Graph View */}
-            <div className="flex-1 relative bg-zinc-950">
+            <div className="flex-1 relative bg-zinc-950 light:bg-[var(--ws-surface)]">
                 <ArchGraph3D
                     nodes={graphData.nodes}
                     edges={graphData.edges}
@@ -2241,7 +2255,7 @@ const CodeArchitectureMap: React.FC = () => {
                 />
 
                 {/* Hint */}
-                <div className="absolute top-4 left-4 bg-zinc-900/80 border border-zinc-800 rounded-lg px-3 py-2 text-[11px] text-zinc-400 pointer-events-none backdrop-blur-sm">
+                <div className="absolute top-4 left-4 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-2 text-[11px] text-zinc-400 pointer-events-none backdrop-blur-sm">
                     Drag to orbit · Scroll to zoom · Click a node for details
                 </div>
 
@@ -2251,13 +2265,13 @@ const CodeArchitectureMap: React.FC = () => {
                 {/* Reset View */}
                 <button
                     onClick={() => { setFocusId(null); setResetSignal(s => s + 1); }}
-                    className="absolute bottom-4 right-4 px-3 py-1.5 rounded-lg text-xs text-zinc-300 bg-zinc-900/80 border border-zinc-700 hover:border-cyan-400/50 hover:text-cyan-300 transition-colors"
+                    className="absolute bottom-4 right-4 px-3 py-1.5 rounded-lg text-xs text-zinc-300 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700 hover:border-cyan-400/50 hover:text-cyan-300 transition-colors"
                 >
                     Reset View
                 </button>
 
                 {/* Legend */}
-                <div className="absolute bottom-4 left-4 bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+                <div className="absolute bottom-4 left-4 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg p-3">
                     <div className="text-xs text-zinc-500 mb-2">Legend</div>
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -2277,7 +2291,7 @@ const CodeArchitectureMap: React.FC = () => {
                             <span className="text-xs text-zinc-400">Component</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#6b7280', opacity: 0.6 }} />
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--text-muted)', opacity: 0.6 }} />
                             <span className="text-xs text-zinc-400">File (particles)</span>
                         </div>
                     </div>

@@ -27,18 +27,22 @@ import {
 } from '@/components/ui/slider'
 
 import {
+  DEFAULT_PHASE_SCALE,
   MAGNITUDE_LABELS,
   MONTHS,
   PHASE_CATEGORIES,
   PHASE_MOOD_TAGS,
+  PHASE_SCALES,
   getContrastColor,
   lighten,
+  scaleOf,
   sortPhases,
   uid,
   type LifePhase,
   type LifePhaseMilestone,
   type LifePhasePerson,
   type PhaseMoodTag,
+  type PhaseScaleId,
 } from '@/lib/riverMath'
 import { cn } from '@/lib/utils'
 import { LoaderCircle, Mic, Sparkles, X } from 'lucide-react'
@@ -94,6 +98,7 @@ function freshDraft(initial: LifePhase | null, now: Date): Draft {
     colorSource: initial?.colorSource ?? 'category',
     reflectionSource: initial?.reflectionSource ?? null,
     reflectionGeneratedAt: initial?.reflectionGeneratedAt ?? null,
+    scale: initial?.scale ?? DEFAULT_PHASE_SCALE,
   }
 }
 
@@ -159,6 +164,8 @@ function draftReducer(state: Draft, action: Action): Draft {
 
 /* ── Steps ────────────────────────────────────────────────── */
 
+const SCALE_STEP = 'scale' as const
+
 const STEPS = [
   { id: 'basics', label: 'The Chapter' },
   { id: 'story', label: 'The Story' },
@@ -173,29 +180,68 @@ const STEPS = [
 
 type StepId = (typeof STEPS)[number]['id']
 
+/** Everything except the final Review is optional; Review is always last. */
+const OPTIONAL_STEPS = STEPS.filter(s => s.id !== 'review').map(s => s.id)
+
+/**
+ * The visible step list = scale picker, then the steps this scale REQUIRES,
+ * then anything the user has explicitly opted into via "deepen".
+ *
+ * `deeper` is monotonic on purpose: once a user chooses to widen the form we
+ * keep the extra steps, because silently re-narrowing a half-filled wizard is
+ * the one thing that makes someone lose work they can see on screen.
+ */
+function visibleSteps(scaleId: PhaseScaleId, deeper: boolean): VisibleStep[] {
+  const scale = scaleOf(scaleId)
+  const required = scale.required as readonly StepId[]
+  const rest = deeper ? OPTIONAL_STEPS.filter(id => !required.includes(id)) : []
+  return [SCALE_STEP, ...required, ...rest, 'review'] as VisibleStep[]
+}
+
+type VisibleStep = StepId | typeof SCALE_STEP
+
 interface PhaseFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initial?: LifePhase | null
   allPhases?: LifePhase[]
   onSave: (phase: LifePhase) => void
+  /** Only offered for an EXISTING phase — there is nothing to delete when creating. */
+  onDelete?: (phaseId: string) => void
 }
 
-export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], onSave }: PhaseFormDialogProps) {
-  const [step, setStep] = useState<StepId>('basics')
+export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], onSave, onDelete }: PhaseFormDialogProps) {
+  const [step, setStep] = useState<VisibleStep>(SCALE_STEP)
   const [draft, dispatch] = useReducer(draftReducer, null, () => freshDraft(initial ?? null, new Date()))
   const [assistQuestions, setAssistQuestions] = useState<string[] | null>(null)
   const [assistLoading, setAssistLoading] = useState(false)
   const [reflectionLoading, setReflectionLoading] = useState(false)
+  /* Has the user opted into the extra optional steps? Monotonic — never
+     auto-reverts, so a half-filled wider form can't collapse under them. */
+  const [deeper, setDeeper] = useState(false)
+  /* Destructive actions arm-then-confirm, matching PhaseDrawer's tap-again.
+     A single click on "Delete" must never destroy a chapter. */
+  const [armDelete, setArmDelete] = useState(false)
 
   const otherPhases = useMemo(() => sortPhases(allPhases.filter(p => p.id !== initial?.id)), [allPhases, initial?.id])
-  const stepIndex = STEPS.findIndex(s => s.id === step)
-  const isLast = stepIndex === STEPS.length - 1
+
+  const scaleId = draft.scale ?? DEFAULT_PHASE_SCALE
+  const steps = useMemo(() => visibleSteps(scaleId, deeper), [scaleId, deeper])
+  const stepIndex = steps.indexOf(step)
+  /* Guard: narrowing the scale can orphan the current step (e.g. user drops
+     from deep to light while on "people"). Snap back to the scale picker so
+     we never render a step that is no longer in the list. */
+  useEffect(() => {
+    if (stepIndex === -1) setStep(SCALE_STEP)
+  }, [stepIndex])
+  const isLast = stepIndex === steps.length - 1
 
   useEffect(() => {
     if (!open) return
     dispatch({ type: 'reset', draft: freshDraft(initial ?? null, new Date()) })
-    setStep('basics')
+    setStep(initial?.scale ? 'basics' : SCALE_STEP)
+    setDeeper(false)
+    setArmDelete(false)
     setAssistQuestions(null)
   }, [open, initial])
 
@@ -224,7 +270,48 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
     }
   }, [step, draft])
 
-  const canGoNext = stepValid
+  /* A REQUIRED step must actually be filled, not just visited — otherwise
+     "required" is a lie and the tier buys the user nothing. Only the fields
+     that carry the meaning of that step are enforced, so a Deep phase is not
+     punished for having no connections yet. */
+  const requiredFilled = useMemo(() => {
+    switch (step) {
+      case 'story':
+        return draft.description.trim().length > 0
+      case 'moments':
+        return draft.milestones.some(m => m.label.trim().length > 0)
+      case 'people':
+        return (draft.people ?? []).some(p => p.name.trim().length > 0)
+      case 'feelings':
+        return draft.moodStart != null || draft.moodEnd != null || (draft.moodTags ?? []).length > 0 || (draft.feelingsNote ?? '').trim().length > 0
+      case 'lessons':
+        return (draft.lessonsLearned ?? '').trim().length > 0 || draft.impactNotes.trim().length > 0
+      default:
+        return true
+    }
+  }, [step, draft])
+
+  const isRequiredStep = useMemo(() => {
+    if (step === SCALE_STEP || step === 'review') return false
+    return (scaleOf(scaleId).required as readonly StepId[]).includes(step as StepId)
+  }, [step, scaleId])
+
+  /* WHY: a disabled Continue with no stated reason is the single most common
+     way a form teaches a user to give up. Name the one thing that's missing. */
+  const missingReason = useMemo((): string | null => {
+    if (step === 'basics' && !draft.title.trim()) return 'Give the chapter a name to continue.'
+    if (!isRequiredStep || requiredFilled) return null
+    switch (step) {
+      case 'story': return 'One line about what this was like is enough to continue.'
+      case 'moments': return 'Add at least one key moment — name it, even without a date.'
+      case 'people': return 'Add one person who was part of this.'
+      case 'feelings': return 'Move the mood slider, or pick a tag, to continue.'
+      case 'lessons': return 'Write what it taught you, or how it changed you.'
+      default: return null
+    }
+  }, [step, isRequiredStep, requiredFilled, draft.title])
+
+  const canGoNext = stepValid && (!isRequiredStep || requiredFilled)
   const canGoBack = stepIndex > 0
 
   const next = () => {
@@ -233,10 +320,30 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
       saveNow('complete')
       return
     }
-    setStep(STEPS[stepIndex + 1].id)
+    setStep(steps[stepIndex + 1])
   }
   const back = () => {
-    if (stepIndex > 0) setStep(STEPS[stepIndex - 1].id)
+    if (stepIndex > 0) setStep(steps[stepIndex - 1])
+  }
+
+  /* Escape hatch: from ANY step, save what exists right now as a draft and
+     leave. Forgiveness pillar — one click beats abandoning a half-filled form. */
+  const saveAndClose = () => {
+    saveNow('draft')
+    onOpenChange(false)
+  }
+
+  /* Arm-then-confirm. First click arms and auto-disarms after 3s so a stray
+     double-tap on a slow day can't nuke a chapter. */
+  const handleDelete = () => {
+    if (!initial || !onDelete) return
+    if (!armDelete) {
+      setArmDelete(true)
+      setTimeout(() => setArmDelete(false), 3000)
+      return
+    }
+    onDelete(initial.id)
+    onOpenChange(false)
   }
 
   const runAssist = async () => {
@@ -317,6 +424,7 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
       colorSource: draft.colorSource,
       reflectionSource: draft.reflectionSource,
       reflectionGeneratedAt: draft.reflectionGeneratedAt,
+      scale: scaleId,
       status,
       updatedAt: new Date().toISOString(),
     }
@@ -324,6 +432,60 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
   }
 
   /* ── Per-step renderers ─────────────────────────────────── */
+
+  /* WHY THE SCALE PICKER SHOWS A COUNT: a form that says "we'll ask 1 thing"
+     and a form that says "we'll ask 6" are different promises, and the user
+     must be able to price the choice BEFORE committing to it. */
+  const renderScale = () => (
+    <div className="space-y-3">
+      <div>
+        <p className="text-[13px] text-zinc-200">How much do you want to write about this?</p>
+        <p className="mt-0.5 text-[11.5px] text-zinc-500">
+          This sets how many questions we ask right now — not how important it was.
+          Everything else stays available; you can widen it on any later step.
+        </p>
+      </div>
+
+      <div className="space-y-1.5" role="radiogroup" aria-label="How much detail to write" data-lifephase="phase-scale-picker">
+        {PHASE_SCALES.map(s => {
+          const on = scaleId === s.id
+          const count = (s.required as readonly StepId[]).length
+          const askList = (s.required as readonly StepId[])
+            .map(id => STEPS.find(x => x.id === id)?.label)
+            .filter(Boolean)
+            .join(' · ')
+          return (
+            <button
+              key={s.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => dispatch({ type: 'set', patch: { scale: s.id } })}
+              className={cn(
+                'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
+                on
+                  ? 'border-[var(--page-accent)]/50 bg-[var(--page-accent)]/10'
+                  : 'border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={cn('text-[13px] font-medium', on ? 'text-zinc-50' : 'text-zinc-300')}>
+                  {s.label}
+                </span>
+                <span className={cn('shrink-0 text-[10.5px] tabular-nums', on ? 'text-[var(--page-accent)]' : 'text-zinc-600')}>
+                  {count === 1 ? '1 question' : `${count} questions`}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11.5px] text-zinc-500">{s.blurb}</p>
+              <p className="mt-1 text-[10.5px] text-zinc-600">
+                <span className="font-mono">e.g. {s.example}</span> — {askList}
+              </p>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 
   const renderBasics = () => (
     <div className="space-y-4">
@@ -454,7 +616,10 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
       </div>
 
       <div className="space-y-1.5">
-        <Label>Magnitude — how much did this chapter reshape you?</Label>
+        {/* WORDED TO NOT COLLIDE WITH THE DETAIL PICKER: this rates the CHAPTER'S
+            IMPACT, the picker at step 1 chose how much WORK to write. "How much"
+            in both places made them indistinguishable. */}
+        <Label>Impact — how much did this chapter reshape you?</Label>
         <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 pt-3 pb-2">
           <Slider
             value={draft.magnitude}
@@ -463,7 +628,7 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
             max={100}
             step={1}
             className="grow"
-            aria-label="Magnitude"
+            aria-label="Impact"
           >
             <SliderControl>
               <SliderTrack>
@@ -516,7 +681,7 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
         </p>
       )}
       {draft.milestones.map((m, i) => (
-        <div key={m.id} className="flex items-start gap-2 rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-2.5">
+        <div key={m.id} className="flex items-start gap-2 rounded-lg border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-2.5">
           <div className="flex-1 space-y-1.5">
             <Input
               value={m.label}
@@ -746,7 +911,7 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
               const conn = draft.connections.find(c => c.targetPhaseId === op.id)
               const opColor = op.color || PHASE_CATEGORIES.find(c => c.id === op.category)?.color || '#a1a1aa'
               return (
-                <div key={op.id} className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-2">
+                <div key={op.id} className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-2">
                   <button
                     onClick={() => dispatch({ type: 'toggleConnection', targetPhaseId: op.id })}
                     className="flex w-full items-center gap-2.5 text-left"
@@ -817,6 +982,7 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
 
   const renderStep = () => {
     switch (step) {
+      case SCALE_STEP: return renderScale()
       case 'basics': return renderBasics()
       case 'story': return renderStory()
       case 'moments': return renderMoments()
@@ -828,6 +994,13 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
       case 'review': return renderReview()
     }
   }
+
+  const stepLabel = step === SCALE_STEP
+    ? 'How much detail?'
+    : STEPS.find(s => s.id === step)?.label ?? ''
+
+  /* The remaining optional steps, offered by name so widening is concrete. */
+  const pendingOptional = OPTIONAL_STEPS.filter(id => !steps.includes(id))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -846,24 +1019,33 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
             </span>
           </div>
           <DialogDescription>
-            {STEPS[stepIndex].label} · step {stepIndex + 1} of {STEPS.length}
+            {stepLabel} · step {stepIndex + 1} of {steps.length}
+            {scaleId !== 'light' && !deeper && (
+              <span className="ml-1.5 text-[10.5px] text-zinc-600">
+                ({scaleOf(scaleId).label} detail)
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         {/* Step dots */}
         <div className="flex gap-1">
-          {STEPS.map((s, i) => (
-            <button
-              key={s.id}
-              onClick={() => i <= stepIndex && setStep(s.id)}
-              title={s.label}
-              className={cn(
-                'h-1 flex-1 rounded-full transition-all',
-                i <= stepIndex ? 'bg-amber-400/80' : 'bg-white/10 hover:bg-white/20'
-              )}
-              disabled={i > stepIndex}
-            />
-          ))}
+          {steps.map((s, i) => {
+            const label = s === SCALE_STEP ? 'Scale' : STEPS.find(x => x.id === s)?.label ?? String(s)
+            return (
+              <button
+                key={s}
+                onClick={() => i <= stepIndex && setStep(s)}
+                title={label}
+                aria-label={`Go to ${label}`}
+                className={cn(
+                  'h-1 flex-1 rounded-full transition-colors',
+                  i <= stepIndex ? 'bg-amber-400/80' : 'bg-white/10 hover:bg-white/20'
+                )}
+                disabled={i > stepIndex}
+              />
+            )
+          })}
         </div>
 
         <div className="min-h-[320px]">
@@ -878,11 +1060,42 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
               {renderStep()}
             </motion.div>
           </AnimatePresence>
+
+          {/* Widen on demand. This is the "customisable later" promise made
+              concrete: it is always one click, and it never clears input. */}
+          {!deeper && pendingOptional.length > 0 && step !== SCALE_STEP && step !== 'review' && (
+            <div className="mt-3 rounded-lg border border-dashed border-zinc-800 px-3 py-2.5" data-lifephase="deepen-phase">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11.5px] text-zinc-500">
+                  {pendingOptional.length} more{' '}
+                  {pendingOptional.length === 1 ? 'step is' : 'steps are'} available if this chapter
+                  deserves them.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => setDeeper(true)}>
+                  Deepen this phase
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="mt-2">
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
+              {initial && onDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  data-lifephase="delete-phase"
+                  aria-label={armDelete ? 'Confirm delete phase' : 'Delete this phase'}
+                  className={cn(
+                    armDelete && 'bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/50'
+                  )}
+                >
+                  {armDelete ? 'Tap again to delete' : 'Delete'}
+                </Button>
+              )}
               {canGoBack && (
                 <Button variant="ghost" size="sm" onClick={back}>
                   Back
@@ -891,9 +1104,11 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
               <DialogClose render={<Button variant="ghost" size="sm">Cancel</Button>} />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => saveNow('draft')} data-lifephase="save-draft">
-                Save as draft
-              </Button>
+              {step !== SCALE_STEP && (
+                <Button variant="ghost" size="sm" onClick={saveAndClose} data-lifephase="save-draft">
+                  Skip the rest
+                </Button>
+              )}
               <Button
                 variant="default"
                 size="sm"
@@ -901,10 +1116,15 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
                 onClick={next}
                 data-lifephase="step-next"
               >
-                {isLast ? 'Save this chapter' : 'Continue'}
+                {step === SCALE_STEP ? 'Continue' : isLast ? 'Save this chapter' : 'Continue'}
               </Button>
             </div>
           </div>
+          {missingReason && (
+            <p className="mt-1.5 w-full text-right text-[11px] text-zinc-500" role="status" data-lifephase="step-requirement">
+              {missingReason}
+            </p>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1010,13 +1230,13 @@ function PhaseCardPreview({ draft, color, full = false }: { draft: Draft; color:
   const bar = moodBar(draft.moodStart, draft.moodEnd)
 
   return (
-    <div className={cn('pointer-events-none w-[480px] overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60', !full && 'scale-100')}>
+    <div className={cn('pointer-events-none w-[480px] overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]', !full && 'scale-100')}>
       <div className="relative h-32 overflow-hidden" style={{ backgroundColor: color }}>
         <div
           className="absolute inset-0"
           style={{ background: `radial-gradient(circle at 30% 30%, ${lighten(color, 20)}, transparent 60%)` }}
         />
-        <span className="absolute right-4 top-2 font-display text-6xl text-white/10 select-none leading-none">{draft.magnitude}</span>
+        <span className="absolute right-4 top-2 font-display text-6xl text-black/[0.06] dark:text-white/10 select-none leading-none">{draft.magnitude}</span>
         <div className="absolute bottom-3 left-4">
           <h3 className="warmth-serif text-2xl" style={{ color: contrast }}>{draft.title || 'Untitled chapter'}</h3>
           <p className="font-mono text-[11px] opacity-80" style={{ color: contrast }}>{span}</p>

@@ -59,7 +59,7 @@ export function AnnotatedCodeBlock({ block, onAsk, activeRefId, onRefHover, onRe
                 className={`p-2.5 rounded-lg border text-xs transition-all duration-100 ${
                   isActive
                     ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
-                    : 'border-zinc-700/30 bg-zinc-900/40 text-zinc-300 hover:border-zinc-600/50'
+                    : 'border-zinc-700/30 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-600/50'
                 }`}
                 onMouseEnter={() => handleCardMouseEnter(a.id)}
                 onMouseLeave={handleCardMouseLeave}

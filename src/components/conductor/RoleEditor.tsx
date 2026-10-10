@@ -48,7 +48,7 @@ export function RoleEditor({ roles, onChange }: { roles: any[]; onChange: (roles
         const isOpen = expanded === `${role.role}-${i}`;
         const meta = DEFAULT_ROLES.find(r => r.role === role.role) || { label: role.customName || 'Custom', color: '#a855f7', desc: 'Custom role' };
         return (
-          <div key={`${role.role}-${i}`} className="rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
+          <div key={`${role.role}-${i}`} className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 overflow-hidden">
             <button onClick={() => setExpanded(isOpen ? null : `${role.role}-${i}`)} className="w-full flex items-center justify-between px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: meta.color }} />
@@ -69,7 +69,7 @@ export function RoleEditor({ roles, onChange }: { roles: any[]; onChange: (roles
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase mb-1 block">Agent Provider</label>
-                    <select value={role.agentTypeId} onChange={e => updateRole(i, { agentTypeId: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40">
+                    <select value={role.agentTypeId} onChange={e => updateRole(i, { agentTypeId: e.target.value })} className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40">
                       <option value="default">Default</option>
                       <option value="claude">Claude</option>
                       <option value="gemini">Gemini</option>
@@ -79,7 +79,7 @@ export function RoleEditor({ roles, onChange }: { roles: any[]; onChange: (roles
                   </div>
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase mb-1 block">File Access</label>
-                    <select value={role.fileAccess} onChange={e => updateRole(i, { fileAccess: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40">
+                    <select value={role.fileAccess} onChange={e => updateRole(i, { fileAccess: e.target.value })} className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40">
                       <option value="none">None</option>
                       <option value="read">Read Only</option>
                       <option value="write">Read + Write</option>
@@ -103,11 +103,11 @@ export function RoleEditor({ roles, onChange }: { roles: any[]; onChange: (roles
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase mb-1 block">Max Depth</label>
-                    <input type="number" value={role.maxDepth} onChange={e => updateRole(i, { maxDepth: Number(e.target.value) })} className="w-full bg-zinc-950 border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40" />
+                    <input type="number" value={role.maxDepth} onChange={e => updateRole(i, { maxDepth: Number(e.target.value) })} className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40" />
                   </div>
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase mb-1 block">Max Children</label>
-                    <input type="number" value={role.maxChildren} onChange={e => updateRole(i, { maxChildren: Number(e.target.value) })} className="w-full bg-zinc-950 border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40" />
+                    <input type="number" value={role.maxChildren} onChange={e => updateRole(i, { maxChildren: Number(e.target.value) })} className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/70 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-rose-500/40" />
                   </div>
                 </div>
               </div>

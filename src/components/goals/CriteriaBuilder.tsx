@@ -110,7 +110,7 @@ export function LTGPicker({
               className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-left transition-colors ${
                 selected
                   ? 'bg-violet-500/15 border-violet-500/40 text-violet-200'
-                  : 'bg-zinc-900/60 border-zinc-700/50 text-zinc-300 hover:border-zinc-600'
+                  : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-zinc-300 hover:border-zinc-600'
               }`}
             >
               <span className={`w-3.5 h-3.5 rounded flex items-center justify-center shrink-0 border transition-colors ${
@@ -151,7 +151,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
           onKeyDown={e => e.key === 'Enter' && value.title.trim() && onSave()}
           placeholder="What do you want to achieve?"
           autoFocus
-          className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
+          className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
         />
       </VoiceInputWrapper>
 
@@ -160,7 +160,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
           value={value.description}
           onChange={e => update({ description: e.target.value })}
           placeholder="Add details (optional)"
-          className="bg-zinc-900/80 border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
+          className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 focus-visible:ring-violet-500/50 text-[13px] h-9"
         />
       </VoiceInputWrapper>
 
@@ -197,14 +197,14 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
               type="number" min={0} max={23}
               value={value.targetHours}
               onChange={e => update({ targetHours: parseInt(e.target.value) || 0 })}
-              className="w-14 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-8 text-center"
+              className="w-14 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-8 text-center"
             />
             <span className="text-[11px] text-zinc-500">h</span>
             <Input
               type="number" min={0} max={59}
               value={value.targetMinutes}
               onChange={e => update({ targetMinutes: parseInt(e.target.value) || 0 })}
-              className="w-14 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-8 text-center"
+              className="w-14 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-8 text-center"
             />
             <span className="text-[11px] text-zinc-500">m</span>
             {targetSeconds && (
@@ -229,7 +229,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
       )}
 
       {value.targetType === 'app' && (
-        <div className="space-y-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/40">
+        <div className="space-y-2 p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40">
           <div className="flex items-center gap-1.5 text-[11px] text-amber-300">
             <Monitor size={13} /> Track time spent in specific apps
           </div>
@@ -244,7 +244,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
         <motion.div
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
-          className="space-y-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/40"
+          className="space-y-2 p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40"
         >
           <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
             <ArrowDownToLine size={13} className="text-amber-400" />
@@ -256,14 +256,14 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
               type="number" min={0} max={23}
               value={value.externalHours}
               onChange={e => update({ externalHours: parseInt(e.target.value) || 0 })}
-              className="w-14 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-8 text-center"
+              className="w-14 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-8 text-center"
             />
             <span className="text-[11px] text-zinc-500">h</span>
             <Input
               type="number" min={0} max={59}
               value={value.externalMinutes}
               onChange={e => update({ externalMinutes: parseInt(e.target.value) || 0 })}
-              className="w-14 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-8 text-center"
+              className="w-14 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-8 text-center"
             />
             <span className="text-[11px] text-zinc-500">m</span>
             <span className="text-[10px] text-zinc-600 ml-1">
@@ -316,7 +316,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                       : mode === 'hybrid'
                         ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30'
                         : 'bg-violet-500/15 text-violet-400 border-violet-500/30'
-                    : 'bg-zinc-900/60 text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
+                    : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
                 } ${disabled ? 'opacity-35 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center gap-1">
@@ -335,7 +335,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
       </div>
 
       {/* Completion Logic */}
-      <div className="space-y-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/40">
+      <div className="space-y-2 p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40">
         <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
           <AlertTriangle size={13} className="text-amber-400" />
           What happens if this goal is missed?
@@ -356,7 +356,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
               type="number" min={0} max={1440}
               value={value.completionLogic.gracePeriodMinutes}
               onChange={e => update({ completionLogic: { ...value.completionLogic, gracePeriodMinutes: parseInt(e.target.value) || 0 } })}
-              className="w-20 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-7 text-center"
+              className="w-20 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-7 text-center"
             />
             minutes after deadline
           </div>
@@ -383,7 +383,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
               step={5}
               value={value.completionLogic.partialCreditThreshold ?? 80}
               onChange={e => update({ completionLogic: { ...value.completionLogic, partialCreditThreshold: parseInt(e.target.value) || 80 } })}
-              className="w-full accent-amber-500"
+              className="w-full"
             />
             <p className="text-[10px] text-zinc-600 leading-relaxed">
               {targetSeconds
@@ -407,7 +407,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                       : rule === 'continue'
                         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                         : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                    : 'bg-zinc-900/60 text-zinc-500 border-zinc-700/50'
+                    : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50'
                 }`}
               >
                 {rule === 'reset' && '🔥 Reset'}
@@ -421,7 +421,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
 
       {/* Cadence Config */}
       {(value.period === 'weekly' || value.period === 'monthly') && (
-        <div className="space-y-2 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/40">
+        <div className="space-y-2 p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40">
           <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
             <CalendarDays size={13} className="text-cyan-400" />
             Schedule pattern
@@ -436,7 +436,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                 className={`flex-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium border transition-colors ${
                   value.cadenceConfig.type === type
                     ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30'
-                    : 'bg-zinc-900/60 text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
+                    : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
                 }`}
               >
                 {type === 'fixed' && '📌 Specific days'}
@@ -465,7 +465,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                     className={`w-9 h-7 rounded-md text-[10px] font-medium border transition-colors ${
                       value.cadenceConfig.fixedDays.includes(i)
                         ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                        : 'bg-zinc-900/60 text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
+                        : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
                     }`}
                   >
                     {day}
@@ -481,7 +481,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                 type="number" min={1} max={31}
                 value={value.cadenceConfig.rollingTarget}
                 onChange={e => update({ cadenceConfig: { ...value.cadenceConfig, rollingTarget: parseInt(e.target.value) || 1 } })}
-                className="w-14 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-7 text-center"
+                className="w-14 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-7 text-center"
               />
               times per {value.period}
             </div>
@@ -493,7 +493,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                 type="number" min={1} max={31}
                 value={value.cadenceConfig.flexibleWindowDays}
                 onChange={e => update({ cadenceConfig: { ...value.cadenceConfig, flexibleWindowDays: parseInt(e.target.value) || 1 } })}
-                className="w-14 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-7 text-center"
+                className="w-14 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-7 text-center"
               />
               of {value.period === 'weekly' ? '7 days' : '30 days'}
             </div>
@@ -520,7 +520,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden space-y-3 p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/40"
+            className="overflow-hidden space-y-3 p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40"
           >
             <div className="flex items-center gap-2">
               <Monitor size={13} className="text-zinc-500" />
@@ -547,7 +547,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                           ? m === 'positive'
                             ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                             : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                          : 'bg-zinc-900/60 text-zinc-500 border-zinc-700/50'
+                          : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50'
                       }`}
                     >
                       {m === 'positive' ? 'Positive (accumulate)' : 'Avoidance (flag)'}
@@ -564,7 +564,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                     value={value.detectionKeywords}
                     onChange={e => update({ detectionKeywords: e.target.value })}
                     placeholder="e.g. VS Code, Duolingo, Figma"
-                    className="bg-zinc-900/80 border-zinc-700/50 text-[13px] h-8"
+                    className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-8"
                   />
                 </div>
 
@@ -575,7 +575,7 @@ export function CriteriaBuilder({ value, onChange, onSave, onCancel, longTermGoa
                       type="number" min={1}
                       value={value.detectionMinMinutes}
                       onChange={e => update({ detectionMinMinutes: parseInt(e.target.value) || 1 })}
-                      className="w-14 bg-zinc-900/80 border-zinc-700/50 text-[13px] h-7 text-center"
+                      className="w-14 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-700/50 text-[13px] h-7 text-center"
                     />
                     minutes detected
                   </div>

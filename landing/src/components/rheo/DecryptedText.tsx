@@ -2,7 +2,7 @@
 
 import { useInView } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { usePrefersReducedMotion } from "./use-reduced-motion";
+import { useShouldAnimate } from "./use-motion-preference";
 
 /**
  * DecryptedText — per-character scramble reveal, LAMINAR pass.
@@ -12,12 +12,15 @@ import { usePrefersReducedMotion } from "./use-reduced-motion";
  *
  * Props:
  *  - text: the final string to resolve to.
- *  - speed: ms per iteration step (default 30).
+ *  - speed: minimum ms per iteration step (default 30).
  *  - maxIterations: scramble frames before resolving each char (default 8).
  *  - as: element tag (default span).
  *  - className / style: passthrough.
  *  - scrambleChars: the character pool used while scrambling.
  */
+/** Total wall-clock budget for a reveal, whatever the string length. */
+const TARGET_MS = 900;
+
 const DEFAULT_SCRAMBLE =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789·∙:;=+×#@ᵢₜΣ∫";
 
@@ -40,7 +43,7 @@ export default function DecryptedText({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { margin: "-10% 0px", once });
-  const reduced = usePrefersReducedMotion();
+  const reduced = !useShouldAnimate();
   const [display, setDisplay] = useState(text);
 
   useEffect(() => {
@@ -53,6 +56,15 @@ export default function DecryptedText({
     let frame = 0;
     const total = text.length * maxIterations;
     let raf = 0;
+
+    // BOUND THE TOTAL DURATION. `speed` was a flat per-step delay, so the reveal
+    // took `text.length * maxIterations * speed` ms — 22 chars x 6 x 28 = 3.7 SECONDS
+    // for a section kicker. Measured: "SECTIGZ TQ X QQJJZGNML1" sat garbled in the
+    // rendered page, and it scales with string length, so a longer label is worse.
+    // A reveal is punctuation: it should read as a beat, not a wait. Step size is
+    // therefore derived from a target duration, with `speed` as a FLOOR so no
+    // call site can make it slower than it asked for.
+    const stepMs = Math.max(4, Math.min(speed, Math.floor(TARGET_MS / Math.max(1, total))));
 
     const tick = () => {
       // build the current frame: resolved chars stay, the rest scramble
@@ -73,7 +85,7 @@ export default function DecryptedText({
       setDisplay(out.join(""));
       frame++;
       if (frame <= total) {
-        raf = window.setTimeout(tick, speed) as unknown as number;
+        raf = window.setTimeout(tick, stepMs) as unknown as number;
       } else {
         setDisplay(text);
       }

@@ -38,7 +38,7 @@ export function AnimationBlock({ block, concept }: Props) {
 
   if (status === 'loading') {
     return (
-      <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 flex items-center justify-center gap-3">
+      <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] p-6 flex items-center justify-center gap-3">
         <Loader2 className="w-5 h-5 text-clay-400 animate-spin" />
         <span className="text-sm text-zinc-400">Validating animation…</span>
       </div>
@@ -77,7 +77,7 @@ export function AnimationBlock({ block, concept }: Props) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+      className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] overflow-hidden"
     >
       {block.meta.title && (
         <div className="px-4 py-2 border-b border-zinc-800/60">

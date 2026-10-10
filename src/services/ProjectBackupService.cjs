@@ -17,6 +17,25 @@ function loadDeps() {
   }
 }
 
+/**
+ * Resolve the glob entry point across the v7/v9+ API split.
+ *
+ * `glob` is NOT a declared dependency of this app — it only resolves
+ * transitively, and the resolved major version decides the API:
+ *   v7  → glob.sync(pattern, opts)
+ *   v9+ → glob.globSync(pattern, opts)
+ * The previous code hardcoded globSync, so on the v7 that actually resolves
+ * here it threw "g.globSync is not a function". That throw was swallowed by
+ * createProjectBackup's catch, which returned {success:false} — so the Backups
+ * tab silently found ZERO files and never reported why.
+ */
+function globSyncCompat(pattern, opts) {
+  if (!globModule) throw new Error('glob module is not available');
+  if (typeof globModule.globSync === 'function') return globModule.globSync(pattern, opts);
+  if (typeof globModule.sync === 'function') return globModule.sync(pattern, opts);
+  throw new Error('glob exposes neither globSync nor sync');
+}
+
 const BACKUPS_DIR = path.join(app.getPath('userData'), 'project-backups');
 const BACKUP_DB_FILE = path.join(BACKUPS_DIR, 'backups.json');
 
@@ -50,21 +69,20 @@ function getBackupPath(id) {
 }
 
 function getProjectFiles(projectPath) {
-  if (!globModule) return [];
+  if (!projectPath || !fs.existsSync(projectPath)) return [];
   const ignorePatterns = [
     '**/node_modules/**', '**/.git/**', '**/dist/**', '**/.next/**',
     '**/build/**', '**/target/**', '**/__pycache__/**', '**/.cache/**',
     '**/*.zip', '**/*.tar.gz', '**/.env', '**/.env.local',
     '**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml',
   ];
-  const allFiles = globModule.globSync('**/*', {
+  return globSyncCompat('**/*', {
     cwd: projectPath,
     nodir: true,
     dot: true,
     ignore: ignorePatterns,
     absolute: true,
-  });
-  return allFiles;
+  }) || [];
 }
 
 function registerProjectBackupIPC(db) {
@@ -291,10 +309,30 @@ function setProjectSchedule(projectId, minutes, projectPath) {
 }
 
 function createProjectBackup(projectId, projectPath, label, extra) {
+  return new Promise((resolve) => {
   try {
     loadDeps();
-    if (!archiver) return Promise.resolve({ success: false, error: 'archiver package not installed' });
-    if (!projectPath || !fs.existsSync(projectPath)) return Promise.resolve({ success: false, error: `project path not found: ${projectPath}` });
+    if (!archiver) {
+      return resolve({ success: false, error: 'archiver package not installed — cannot create a backup zip' });
+    }
+    if (!projectPath || !fs.existsSync(projectPath)) {
+      return resolve({ success: false, error: `project path not found: ${projectPath}` });
+    }
+
+    // Enumerate BEFORE opening the archive so a discovery failure is reported
+    // with its reason instead of silently producing an empty backup.
+    let files;
+    try {
+      files = getProjectFiles(projectPath);
+    } catch (e) {
+      return resolve({ success: false, error: `could not read project files: ${e && e.message ? e.message : e}` });
+    }
+    if (files.length === 0) {
+      return resolve({
+        success: false,
+        error: `no files found under ${projectPath} — nothing to back up`,
+      });
+    }
 
     const id = generateId();
     const timestamp = new Date().toISOString();
@@ -303,10 +341,9 @@ function createProjectBackup(projectId, projectPath, label, extra) {
     const output = fs.createWriteStream(zipPath);
     const archive = archiver('zip', { zlib: { level: 9 } });
 
-    return new Promise((resolve) => {
-      output.on('close', () => {
+    output.on('close', () => {
+      try {
         const stats = fs.statSync(zipPath);
-        const files = getProjectFiles(projectPath);
         const entry = {
           id,
           projectId,
@@ -314,27 +351,30 @@ function createProjectBackup(projectId, projectPath, label, extra) {
           timestamp,
           fileCount: files.length,
           totalSize: stats.size,
-          compressionRatio: stats.size > 0 && files.length > 0 ? stats.size / (files.length * 4096) : 0,
+          compressionRatio: stats.length > 0 && files.length > 0 ? stats.size / (files.length * 4096) : 0,
           autoBackup: !!(extra && extra.autoBackup),
           trigger: (extra && extra.trigger) || 'manual',
         };
         manifest.push(entry);
         saveManifest(manifest);
         resolve({ success: true, data: entry });
-      });
-      archive.on('error', (err) => {
-        resolve({ success: false, error: err.message });
-      });
-      archive.pipe(output);
-      const files = getProjectFiles(projectPath);
-      for (const f of files) {
-        archive.file(f, { name: path.relative(projectPath, f) });
+      } catch (e) {
+        resolve({ success: false, error: `finalising backup manifest failed: ${e && e.message ? e.message : e}` });
       }
-      archive.finalize();
     });
+    archive.on('error', (err) => {
+      resolve({ success: false, error: err.message });
+    });
+    archive.pipe(output);
+    // `files` was already enumerated above — do not re-glob here.
+    for (const f of files) {
+      archive.file(f, { name: path.relative(projectPath, f) });
+    }
+    archive.finalize();
   } catch (err) {
-    return Promise.resolve({ success: false, error: String(err) });
+    resolve({ success: false, error: String(err) });
   }
+  });
 }
 
 module.exports = { registerProjectBackupIPC, createProjectBackup, getSchedules, setProjectSchedule };

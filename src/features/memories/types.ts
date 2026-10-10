@@ -7,6 +7,8 @@ export interface MemoryItem {
   capturedAt: string;
   caption?: string;
   phaseId?: string;
+  /** Notes this memory belongs to. Lets a photo anchor a written thought. */
+  noteIds?: string[];
   people: string[];
   createdAt: number;
   width?: number;

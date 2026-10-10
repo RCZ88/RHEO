@@ -76,19 +76,19 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
             >
               <Zap size={14} style={{ color }} />
             </div>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.15em] light:text-stone-900">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.15em] light:text-[var(--text-primary)]">
               Focus Sessions
             </span>
           </div>
-          <div className="flex light:bg-stone-100 light:border-[var(--ws-border)] rounded-lg p-0.5 border border-white/10">
+          <div className="flex light:bg-[var(--ws-surface-raised)] light:border-[var(--ws-border)] rounded-lg p-0.5 border border-white/10">
             {(['today', 'week', 'allTime'] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors ${
                   view === v
-                    ? 'light:bg-[rgb(28 25 23 / 0.04)] light:text-stone-900'
-                    : 'light:text-stone-400 hover:light:text-stone-500'
+                    ? 'light:bg-[rgb(28 25 23 / 0.04)] light:text-[var(--text-primary)]'
+                    : 'light:text-[var(--text-secondary)] hover:light:text-[var(--text-muted)]'
                 }`}
               >
                 {v === 'allTime' ? 'Best' : v === 'today' ? 'Today' : 'Week'}
@@ -104,8 +104,8 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
           </div>
         ) : sessions.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
-            <Monitor size={20} className="light:text-stone-500" />
-            <div className="text-[11px] light:text-stone-400">
+            <Monitor size={20} className="light:text-[var(--text-muted)]" />
+            <div className="text-[11px] light:text-[var(--text-secondary)]">
               No productive session yet{view === 'today' ? ' today' : view === 'week' ? ' this week' : ''}
             </div>
           </div>
@@ -120,12 +120,12 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
                 exit={{ opacity: 0, y: -4 }}
                 className="flex items-baseline gap-1"
               >
-                <span className="text-3xl sm:text-4xl font-mono font-bold tabular-nums light:text-stone-900">
+                <span className="text-3xl sm:text-4xl font-mono font-bold tabular-nums light:text-[var(--text-primary)]">
                   <NumberTicker value={Math.floor(topSession!.durationSeconds / 60)} />
                 </span>
-                <span className="text-sm font-medium light:text-stone-700">min</span>
+                <span className="text-sm font-medium light:text-[var(--text-secondary)]">min</span>
                 {topSession!.durationSeconds >= 3600 && (
-                  <span className="text-xs light:text-stone-400 ml-1">
+                  <span className="text-xs light:text-[var(--text-secondary)] ml-1">
                     ({formatDuration(topSession!.durationSeconds)})
                   </span>
                 )}
@@ -145,12 +145,12 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
               <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
               {topSession!.apps.length <= 2 ? (
                 topSession!.apps.map((a, i) => (
-                  <span key={i} className="text-[11px] font-medium light:text-stone-900">{a}{i < topSession!.apps.length - 1 ? ' · ' : ''}</span>
+                  <span key={i} className="text-[11px] font-medium light:text-[var(--text-primary)]">{a}{i < topSession!.apps.length - 1 ? ' · ' : ''}</span>
                 ))
               ) : (
-                <span className="text-[11px] font-medium light:text-stone-900">{topSession!.apps.length} apps — {topSession!.apps.slice(0, 2).join(', ')}</span>
+                <span className="text-[11px] font-medium light:text-[var(--text-primary)]">{topSession!.apps.length} apps — {topSession!.apps.slice(0, 2).join(', ')}</span>
               )}
-              <span className="text-[10px] light:text-stone-500 px-1.5 py-0.5 rounded light:bg-[rgb(28 25 23 / 0.04)]">{topSession!.category}</span>
+              <span className="text-[10px] light:text-[var(--text-muted)] px-1.5 py-0.5 rounded light:bg-[rgb(28 25 23 / 0.04)]">{topSession!.category}</span>
             </div>
 
             {/* Remaining sessions */}
@@ -170,10 +170,10 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
                       {rank.label}
                     </span>
                     <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: sColor }} />
-                    <span className="text-[11px] light:text-stone-800 truncate flex-1 min-w-0">
+                    <span className="text-[11px] light:text-[var(--text-primary)] truncate flex-1 min-w-0">
                       {s.apps.length <= 2 ? s.apps.join(' · ') : `${s.apps.length} apps`}
                     </span>
-                    <span className="text-[11px] font-mono font-medium light:text-stone-700 tabular-nums shrink-0">
+                    <span className="text-[11px] font-mono font-medium light:text-[var(--text-secondary)] tabular-nums shrink-0">
                       {formatDuration(s.durationSeconds)}
                     </span>
                   </div>
@@ -185,20 +185,20 @@ export function LongestFocusCard({ data, loading }: LongestFocusCardProps) {
             <div className="flex gap-2 pt-2 border-t border-white/10 shrink-0">
               {data?.today && view !== 'today' && data.today[0] && (
                 <div className="text-[10px]">
-                  <span className="light:text-stone-400">Today </span>
-                  <span className="light:text-stone-800 font-medium">{formatDuration(data.today[0].durationSeconds)}</span>
+                  <span className="light:text-[var(--text-secondary)]">Today </span>
+                  <span className="light:text-[var(--text-primary)] font-medium">{formatDuration(data.today[0].durationSeconds)}</span>
                 </div>
               )}
               {data?.week && view !== 'week' && data.week[0] && (
                 <div className="text-[10px]">
-                  <span className="light:text-stone-400">Week </span>
-                  <span className="light:text-stone-800 font-medium">{formatDuration(data.week[0].durationSeconds)}</span>
+                  <span className="light:text-[var(--text-secondary)]">Week </span>
+                  <span className="light:text-[var(--text-primary)] font-medium">{formatDuration(data.week[0].durationSeconds)}</span>
                 </div>
               )}
               {data?.allTime && view !== 'allTime' && data.allTime[0] && (
                 <div className="text-[10px]">
-                  <span className="light:text-stone-400">Best </span>
-                  <span className="light:text-stone-800 font-medium">{formatDuration(data.allTime[0].durationSeconds)}</span>
+                  <span className="light:text-[var(--text-secondary)]">Best </span>
+                  <span className="light:text-[var(--text-primary)] font-medium">{formatDuration(data.allTime[0].durationSeconds)}</span>
                 </div>
               )}
             </div>

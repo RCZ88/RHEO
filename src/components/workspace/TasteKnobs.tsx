@@ -47,11 +47,7 @@ function SliderRow({ name, value, onChange }: { name: keyof TasteKnobValues; val
         <input
           type="range" min="1" max="10" value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="flex-1 accent-pink-500 h-1.5 rounded-full appearance-none bg-zinc-700 cursor-pointer
-            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
-            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-pink-400
-            [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-pink-500/30
-            [&::-webkit-slider-thumb]:cursor-pointer"
+          className="flex-1 h-1.5 rounded-full appearance-none bg-zinc-700 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-pink-400 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-pink-500/30 [&::-webkit-slider-thumb]:cursor-pointer"
         />
         <span className="text-[8px] text-zinc-600 w-12">{info.high}</span>
       </div>
@@ -67,14 +63,14 @@ export function TasteKnobs({ values, onChange }: TasteKnobsProps) {
   const aesthetic = getAesthetic(values);
 
   return (
-    <div className="p-4 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
+    <div className="p-4 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 rounded-lg">
       <h3 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">Taste Knobs</h3>
       <div className="space-y-3">
         <SliderRow name="designVariance" value={values.designVariance} onChange={handleChange('designVariance')} />
         <SliderRow name="motionIntensity" value={values.motionIntensity} onChange={handleChange('motionIntensity')} />
         <SliderRow name="visualDensity" value={values.visualDensity} onChange={handleChange('visualDensity')} />
       </div>
-      <div className="mt-3 px-3 py-2 bg-zinc-900/50 rounded border border-zinc-800/30">
+      <div className="mt-3 px-3 py-2 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-800/30">
         <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Aesthetic: </span>
         <span className="text-[10px] text-pink-400 font-medium">{aesthetic}</span>
       </div>

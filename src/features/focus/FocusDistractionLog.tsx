@@ -54,7 +54,7 @@ export function FocusDistractionLog({ distractions, isActive }: FocusDistraction
 
   if (!isActive && distractions.length === 0) {
     return (
-      <GlassCard className="h-full bg-zinc-900/95 border-zinc-800/60">
+      <GlassCard className="h-full bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border-zinc-800/60">
         <h3 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-zinc-500" />
           Distractions
@@ -73,7 +73,7 @@ export function FocusDistractionLog({ distractions, isActive }: FocusDistraction
   }
 
   return (
-    <GlassCard className="h-full bg-zinc-900/95 border-zinc-800/60">
+    <GlassCard className="h-full bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border-zinc-800/60">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400" />

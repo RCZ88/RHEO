@@ -34,9 +34,12 @@ interface GoalCardProps {
   linkedSchedules?: { id: string; title: string }[];
   linkedDeadlines?: { id: string; title: string }[];
   onOpenConnections?: (goal: GoalType) => void;
+  /** Total linked entities across every feature, from goal:connections-bulk.
+   *  Used for the always-visible "N linked" chip. */
+  linkedTotal?: number;
 }
 
-export function GoalCard({ goal, onToggle, onDelete, onEdit, longTermGoals = [], todoCount = 0, linkedSchedules = [], linkedDeadlines = [], onOpenConnections }: GoalCardProps) {
+export function GoalCard({ goal, onToggle, onDelete, onEdit, longTermGoals = [], todoCount = 0, linkedSchedules = [], linkedDeadlines = [], onOpenConnections, linkedTotal }: GoalCardProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const handleToggle = () => {
@@ -131,7 +134,17 @@ export function GoalCard({ goal, onToggle, onDelete, onEdit, longTermGoals = [],
               </span>
             )}
 
-            <EntityChip kind="todo" label={`${todoCount} todo${todoCount === 1 ? '' : 's'}`} onClick={onOpenConnections ? () => onOpenConnections(goal) : undefined} />
+            {/* Linked-entity chips. The "N linked" chip is ALWAYS rendered when a
+                handler is supplied — previously the only entry point was a zero-count
+                "0 todos" chip, so a goal with nothing linked yet had no way to open
+                the hub and therefore no way to attach anything to it. */}
+            {onOpenConnections && (
+              <EntityChip
+                kind="todo"
+                label={`${linkedTotal ?? (todoCount + linkedSchedules.length + linkedDeadlines.length)} linked`}
+                onClick={() => onOpenConnections(goal)}
+              />
+            )}
             {linkedSchedules.slice(0, 1).map(schedule => <EntityChip key={schedule.id} kind="schedule" label={schedule.title} onClick={onOpenConnections ? () => onOpenConnections(goal) : undefined} />)}
             {linkedDeadlines.slice(0, 1).map(deadline => <EntityChip key={deadline.id} kind="deadline" label={deadline.title} onClick={onOpenConnections ? () => onOpenConnections(goal) : undefined} />)}
 

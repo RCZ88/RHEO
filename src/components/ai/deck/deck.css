@@ -45,10 +45,37 @@
   height: 100%;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
+  /* ROW, not column: the page content and the nav rail are siblings, so the
+     rail takes its width OUT of the layout. It used to be `column` with a
+     `position: fixed` rail floated over the top — which is precisely how a
+     nav ends up covering a third of the screen. Docked needs a row. */
+  flex-direction: row;
+  /* ── THE RAIL WIDTH IS STATE, AND IT HAS A CEILING ────────────────────
+     ONE variable decides it. `.dk-wrap`'s right padding reads the SAME
+     expression, so the rail and the gutter reserved for it physically cannot
+     disagree — which is the bug class that produced the earlier overlap
+     (48px of padding reserved while the rail painted 320px).
+     `data-navrail` is written by React from the user's own toggle choice. */
+  --dk-navrail-w: 188px;
+  /* THE CEILING. 188px is 18% of a 1067px window and it read as "a third of
+     the app is a navigation bar". min() caps it at 22vw at ANY window size,
+     so it can never grow into the canvas no matter how wide the labels get. */
+  --dk-navrail-actual: min(var(--dk-navrail-w), 22vw);
   padding: 0;
 }
+/* collapsed is a user CHOICE, not a breakpoint — hence an attribute, not a
+   media query, and it must win over the width declared just above. */
+.dk-root[data-navrail="collapsed"] { --dk-navrail-w: 56px; }
 .dk-root * { box-sizing: border-box; }
+
+/* LIGHT MODE — the aurora glows are decorative dark-mode chrome (design.md §6
+   bans decorative glows, and on the paper field the pink/violet/cyan radial
+   washes read as faint coloured "dots" that blend into the background). Remove
+   them entirely on light and let the token-driven --canvas show through, so the
+   AI assistant reads as the same clean paper as the rest of the app. */
+html.light .dk-root {
+  background: var(--canvas);
+}
 
 /* --- Root: full available width ---
    WAS `max-width: 1400px; margin: 0 auto;` — a PROSE reading measure that
@@ -65,10 +92,17 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  /* as a ROW child this is what stops the content refusing to shrink and
+     pushing the rail off-screen instead of yielding to it */
+  min-width: 0;
   overflow-y: auto;
   padding: 20px 32px 32px;
   gap: 0;
   position: relative;
+  /* The rail is absolute, so THIS box reserves its width. Same variable, same
+     expression — and it must stay declared AFTER the `padding` shorthand above,
+     because a shorthand resets all four sides and silently wins otherwise. */
+  padding-right: var(--dk-navrail-actual, min(188px, 22vw));
 }
 
 /* --- Top Bar --- */
@@ -134,6 +168,21 @@
   transform: scale(0.97);
 }
 
+/* Count badge on a topbar button. Token-driven (LAMINAR: no raw hex in a
+   component, and this is the only place the "something needs you" tint lives). */
+.dk-topbar-count {
+  margin-left: 5px;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+  background: color-mix(in srgb, var(--color-amber-400) 16%, transparent);
+  color: var(--color-amber-400);
+}
+
 .dk-topbar-sep {
   width: 1px;
   height: 20px;
@@ -150,12 +199,31 @@
 }
 
 .dk-topbar-btn--violet {
-  border-color: rgba(167,139,250,0.3);
+  border-color: rgba(167,139,250,0.4);
   color: #a78bfa;
+}
+/* Was referenced by the Export button but never defined, so that button was
+   silently rendering with no accent at all. */
+.dk-topbar-btn--green {
+  border-color: rgba(52,211,153,0.4);
+  color: #34d399;
 }
 .dk-topbar-btn--amber {
   border-color: rgba(251,191,36,0.4);
   color: #fbbf24;
+}
+/* Active/pressed state for topbar buttons that SWITCH the surface.
+   Without it a toggle like Brain looks identical whether or not you are inside
+   it, so a user who clicked in could not tell they had left the canvas.
+   The filled track + ring is the "you are here" signal; the label also flips
+   to its exit wording, so the control states its own escape. */
+.dk-topbar-btn--active {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 35%, transparent);
+}
+.dk-topbar-btn--active:hover {
+  background: color-mix(in srgb, currentColor 26%, transparent);
 }
 .dk-topbar-btn--cyan {
   border-color: rgba(34,211,238,0.4);
@@ -1091,6 +1159,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Without this the row refuses to shrink and spills past the window edge. */
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dk-barR::-webkit-scrollbar { display: none; }
+
+/* Status chips yield first: they are the most compressible and least urgent,
+   and hiding them keeps the actionable controls reachable on a narrow window. */
+@media (max-width: 900px) {
+  .dk-barR .dk-chip { display: none; }
+  .dk-barR .dk-topbar-sep:first-of-type { display: none; }
 }
 
 /* --- Topbar chip variants (smaller than suggestion .dk-chip) --- */
@@ -1526,3 +1607,509 @@
   .deck-card-grid { gap: 8px; }
 }
 
+
+/* ============================================================
+   TOOLS LAUNCHER — vertical replacement-nav drawer.
+   Painted, not invented: every value below is a live token or a
+   LAMINAR-legal radius (8 / 12 / pill). One signal hue per surface
+   (--page-accent, violet on the ai page) — no second hue, no hex.
+   ============================================================ */
+.dk-tools-panel {
+	/* width comes from the widest label + hint pair, not a magic number */
+	min-width: 268px;
+	padding: 0;
+	border: 1px solid var(--border-default);
+	border-radius: 12px;            /* LAMINAR allows 12 */
+	background: var(--surface-1, var(--popover));
+	box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.45);
+	overflow: hidden;
+	/* entrance: rise + fade only. transform/opacity, never height/top. */
+	animation: dk-tools-in 120ms cubic-bezier(0.2, 0, 0, 1);
+	transform-origin: var(--transform-origin, top right);
+}
+
+@keyframes dk-tools-in {
+	from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+	to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* --- head: names the panel and says what it is for (Gate D: no mystery) --- */
+.dk-tools-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 10px 12px 9px;
+	border-bottom: 1px solid var(--border-subtle);
+	background: var(--surface-2, transparent);
+}
+.dk-tools-head > span:first-child {
+	font-family: var(--sans);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	color: var(--text-primary);
+}
+.dk-tools-sub {
+	font-size: 10px;
+	line-height: 1.35;
+	color: var(--text-muted);
+}
+
+/* --- section label: a rule, not shouty uppercase text --- */
+.dk-tools-label {
+	padding: 9px 12px 4px !important;
+	font-family: var(--mono) !important;
+	font-size: 9px !important;
+	font-weight: 500 !important;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-faint) !important;
+}
+
+/* --- row: icon | name | right-aligned status. 44px tall (Gate D) --- */
+.dk-tools-item {
+	display: flex !important;
+	align-items: center;
+	gap: 9px;
+	min-height: 34px;
+	margin: 0 6px;
+	padding: 6px 8px !important;
+	border-radius: 8px;             /* LAMINAR: 8 */
+	font-family: var(--sans);
+	font-size: 12px;
+	color: var(--text-secondary);
+	cursor: pointer;
+	transition: background-color 90ms linear, color 90ms linear;
+}
+.dk-tools-item > svg {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	transition: color 90ms linear;
+}
+.dk-tools-item[data-highlighted],
+.dk-tools-item:hover {
+	background: var(--surface-3, var(--muted));
+	color: var(--text-primary);
+}
+.dk-tools-item[data-highlighted] > svg,
+.dk-tools-item:hover > svg {
+	color: var(--page-accent);     /* the only hue on this surface */
+}
+.dk-tools-item:focus-visible {
+	outline: 2px solid var(--page-accent);
+	outline-offset: -2px;
+}
+
+/* name takes the slack; hint is the quiet third column */
+.dk-tools-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+}
+.dk-tools-hint {
+	flex: 0 0 auto;
+	font-family: var(--mono);
+	font-size: 9px;
+	letter-spacing: 0.02em;
+	color: var(--text-disabled);
+	white-space: nowrap;
+}
+.dk-tools-count {
+	flex: 0 0 auto;
+	min-width: 16px;
+	padding: 1px 5px;
+	border-radius: pill;            /* LAMINAR: pill allowed */
+	font-family: var(--mono);
+	font-size: 9px;
+	font-weight: 600;
+	line-height: 1.5;
+	text-align: center;
+	color: var(--accent-foreground);
+	background: var(--page-accent);
+}
+
+/* active surface: an accent rail, so "where am I" reads pre-attentively.
+   Meaning is carried by the rail + the word "Exit", never colour alone. */
+.dk-tools-item--on {
+	color: var(--text-primary);
+	background: var(--surface-3, var(--muted));
+}
+.dk-tools-item--on > svg { color: var(--page-accent); }
+.dk-tools-exit {
+	flex: 0 0 auto;
+	padding: 1px 6px;
+	border: 1px solid var(--border-default);
+	border-radius: pill;
+	font-family: var(--mono);
+	font-size: 9px;
+	color: var(--page-accent);
+	white-space: nowrap;
+}
+
+/* --- responsive: never let it hang off a narrow window --- */
+@media (max-width: 900px) {
+	.dk-tools-panel { min-width: 232px; }
+	.dk-tools-hint { display: none; }   /* hint is the first thing to go */
+}
+
+/* --- reduced motion: no transform, no fade loop (Gate E) --- */
+@media (prefers-reduced-motion: reduce) {
+	.dk-tools-panel { animation: none; }
+	.dk-tools-item,
+	.dk-tools-item > svg { transition: none; }
+}
+
+/* ============================================================
+   BACK — the permanent exit from a surface.
+   Meaning: you are never trapped. The switcher slot becomes this,
+   so "where am I" and "how do I leave" are the same widget.
+   ============================================================ */
+.dk-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	padding: 0 9px;
+	border: 1px solid var(--border-default);
+	border-radius: 8px;             /* LAMINAR: 8 */
+	background: var(--surface-2, transparent);
+	font-family: var(--mono);
+	font-size: 10px;
+	color: var(--text-secondary);
+	cursor: pointer;
+	transition: background-color 90ms linear, border-color 90ms linear, color 90ms linear;
+}
+.dk-back:hover {
+	background: var(--surface-3, var(--muted));
+	border-color: var(--border-strong);
+	color: var(--text-primary);
+}
+.dk-back:focus-visible {
+	outline: 2px solid var(--page-accent);
+	outline-offset: 1px;
+}
+.dk-back > svg { color: var(--page-accent); }   /* direction, not decoration */
+
+/* the destination you are leaving FROM is the quiet part */
+.dk-back-label {
+	font-weight: 600;
+	color: var(--text-primary);
+	white-space: nowrap;
+}
+.dk-back-sep {
+	color: var(--text-disabled);
+	user-select: none;
+}
+.dk-back-where {
+	color: var(--text-muted);
+	white-space: nowrap;
+	max-width: 92px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+	.dk-back-where, .dk-back-sep { display: none; }   /* keep "← Canvas" only */
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.dk-back { transition: none; }
+}
+
+/* ============================================================
+   RIGHT NAV RAIL — a docked shelf, not an overlay.
+
+   ── WHY THIS FILE USED TO BE A DISASTER ───────────────────────────
+   The class `.dk-rail` was owned by TWO different components:
+
+     canvas.css:1484  TranscriptRail   position:absolute; width:320px;
+                                      backdrop-filter; box-shadow; z-index:25
+     deck.css         (this nav)       position:fixed;    width:48px
+
+   canvas.css is imported AFTER deck.css (AiPage.tsx:51 then :54), so the
+   transcript panel's rule WON. The nav therefore rendered 320px wide and
+   absolutely positioned over the whole page — which is exactly the
+   "covers a third of the screen and the top bar" report. A class name is
+   a global namespace; two components sharing one is a silent collision.
+
+   THE FIX IS STRUCTURAL, NOT COSMETIC:
+     1. renamed to `.dk-navrail*` so the two can never collide again
+     2. DOCKED as a real flex column inside `.dk-root` instead of
+        `position: fixed`, so overlap is impossible by construction
+     3. no `padding-right` compensation on `.dk-root` — that reserved 48px
+        for an element that drew 320px, which guaranteed the overlap
+     4. every destination carries a PERMANENT label — a hover tooltip is
+        not a name, and it is the thing that used to float over the work
+
+   Pattern source: @react-bits/LineSidebar (semantic <ul>, aria-current on
+   the active row, a marker that shows WHERE you are). Its values are NOT
+   copied — its hardcoded hex, 1.1rem type and non-token colours break
+   LAMINAR. Tokens come from ../design-tokens.css, read live.
+   ============================================================ */
+.dk-navrail {
+  /* ABSOLUTE against .dk-root (which is position:relative) — NOT fixed, and
+     deliberately NOT a flex child. Three attempts each failed, and each failure
+     is why this is what it is:
+       1. `position: fixed` anchors to the VIEWPORT, so it painted over the window
+          title bar and escaped the AI page into the rest of the app.
+       2. `flex-direction: row` on .dk-root was IGNORED — a screenshot of the real
+          build shows the rail at the TOP-LEFT with the canvas stacked BELOW it,
+          i.e. the parent's flex direction did not govern placement.
+       3. Being an in-flow flex child means it inherits whatever the parent does,
+          so it breaks again the next time .dk-root's layout changes.
+     Absolute + a position:relative ancestor is the only arrangement that pins the
+     rail to the RIGHT edge of THIS page no matter what the parent flexbox does,
+     and whose top:0 is the top of this page — i.e. below the title bar. */
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  width: var(--dk-navrail-actual, min(188px, 22vw));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 8px 12px;
+  gap: 2px;
+  border-left: 1px solid var(--dk-border-subtle);
+  background: var(--dk-bg-base);
+  font-family: var(--dk-sans);
+}
+
+/* ── the collapse toggle ───────────────────────────────────────────────
+   Sits INSIDE the rail, at the top, so the control and the thing it controls
+   are one object. A collapse button parked outside the thing it collapses is
+   a control the user has to hunt for. */
+.dk-navrail-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;                 /* LAMINAR: 8 */
+  background: transparent;
+  color: var(--dk-text-muted);
+  font: 500 11px/1.2 var(--dk-mono);
+  cursor: pointer;
+  transition: background-color 100ms linear, color 100ms linear;
+}
+.dk-navrail-toggle:hover {
+  background: var(--dk-bg-raised);
+  color: var(--dk-text-primary);
+}
+.dk-navrail-toggle:focus-visible {
+  outline: 2px solid var(--page-accent);
+  outline-offset: -2px;
+}
+.dk-navrail-toggle > svg { flex: 0 0 auto; }
+.dk-navrail-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the column heading — says what this surface is, not just what it holds */
+.dk-navrail-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--dk-border-subtle);
+  color: var(--dk-text-secondary);
+  font: 600 11px/1.2 var(--dk-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* a run of related destinations */
+.dk-navrail-group { display: flex; flex-direction: column; gap: 2px; }
+
+/* what the run IS. Without these 9 buttons are a column of guesses. */
+.dk-navrail-group-label {
+  padding: 12px 8px 5px;
+  color: var(--dk-text-muted);
+  font: 500 10px/1.2 var(--dk-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.dk-navrail-group:first-of-type .dk-navrail-group-label { padding-top: 2px; }
+
+.dk-navrail-sep {
+  height: 1px;
+  margin: 10px 8px;
+  background: var(--dk-border-subtle);
+}
+.dk-navrail-spacer { flex: 1 1 auto; min-height: 8px; }
+
+/* ── the row ────────────────────────────────────────────────────────
+   32px tall, full column width, icon LEFT then the name. The name is
+   always rendered — never swapped for a tooltip on hover. */
+.dk-navrail-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 8px;                 /* LAMINAR: 8 */
+  background: transparent;
+  color: var(--dk-text-secondary);
+  font: 500 12px/1.25 var(--dk-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms linear, color 100ms linear;
+}
+.dk-navrail-btn > svg { flex: 0 0 auto; }
+
+.dk-navrail-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-navrail-btn:hover {
+  background: var(--dk-bg-raised);
+  color: var(--dk-text-primary);
+}
+.dk-navrail-btn:active { background: var(--dk-bg-input); }
+.dk-navrail-btn:focus-visible {
+  outline: 2px solid var(--page-accent);
+  outline-offset: -2px;                /* inside the row: a ring must not eat the gap */
+  color: var(--dk-text-primary);
+}
+.dk-navrail-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* CURRENT: the accent bar marks the left edge AND the raised fill marks the
+   row, so position is never carried by colour alone. */
+.dk-navrail-btn[aria-current="page"] {
+  background: var(--dk-bg-raised);
+  color: var(--dk-text-primary);
+  font-weight: 600;
+}
+.dk-navrail-btn[aria-current="page"] > svg { color: var(--page-accent); }
+.dk-navrail-btn[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 16px;
+  border-radius: pill;
+  background: var(--page-accent);
+}
+
+/* pending count — a dot alone is unreadable, so the count rides the label */
+.dk-navrail-count {
+  flex: 0 0 auto;
+  min-width: 16px;
+  padding: 1px 5px;
+  border-radius: pill;
+  background: var(--page-accent);
+  color: var(--dk-bg-deep);
+  font: 600 10px/1.4 var(--dk-mono);
+  text-align: center;
+}
+
+/* ── narrow: icons only, but the NAME IS NEVER LOST ────────────────
+   the label is moved into an accessible tooltip (and stays in the DOM as
+   the button's accessible name), so it is still one hover — not zero. */
+.dk-navrail-tip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%) scale(0.96);
+  padding: 4px 8px;
+  border: 1px solid var(--dk-border-default);
+  border-radius: 8px;
+  background: var(--dk-bg-input);
+  color: var(--dk-text-primary);
+  font: 500 11px/1.3 var(--dk-sans);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 100ms linear, transform 100ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ── COLLAPSED: icons only, and every name MOVES to a tooltip ──────────
+   The labels do not vanish — they stay in the DOM as the button's accessible
+   name and become a visible tooltip on hover/focus, so a collapsed rail is
+   still fully usable and still screen-reader complete. */
+.dk-root[data-navrail="collapsed"] .dk-navrail-head,
+.dk-root[data-navrail="collapsed"] .dk-navrail-group-label,
+.dk-root[data-navrail="collapsed"] .dk-navrail-name,
+.dk-root[data-navrail="collapsed"] .dk-navrail-toggle-label { display: none; }
+
+.dk-root[data-navrail="collapsed"] .dk-navrail { padding: 10px 6px 12px; }
+.dk-root[data-navrail="collapsed"] .dk-navrail-btn,
+.dk-root[data-navrail="collapsed"] .dk-navrail-toggle {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+  gap: 0;
+}
+.dk-root[data-navrail="collapsed"] .dk-navrail-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) scale(1);
+}
+.dk-root[data-navrail="collapsed"] .dk-navrail-count {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 0;
+  padding: 0 3px;
+  font-size: 9px;
+}
+.dk-root[data-navrail="collapsed"] .dk-navrail-spacer { display: none; }
+
+@media (max-width: 1180px) {
+  /* anything reading the rail width (the toast stack) follows it here */
+  .dk-root:not([data-navrail="expanded"]) { --dk-navrail-w: 56px; }
+  .dk-navrail { width: var(--dk-navrail-actual); padding: 10px 6px 12px; }
+  .dk-navrail-head,
+  .dk-navrail-group-label,
+  .dk-navrail-name,
+  .dk-navrail-toggle-label { display: none; }
+  .dk-navrail-btn,
+  .dk-navrail-toggle { justify-content: center; padding: 7px 0; gap: 0; }
+  .dk-navrail-count {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 0;
+    padding: 0 3px;
+    font-size: 9px;
+  }
+  .dk-navrail-btn:hover .dk-navrail-tip,
+  .dk-navrail-btn:focus-visible .dk-navrail-tip,
+  .dk-navrail-toggle:hover .dk-navrail-tip,
+  .dk-navrail-toggle:focus-visible .dk-navrail-tip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-navrail-btn,
+  .dk-navrail-toggle,
+  .dk-navrail-tip { transition: none; }
+}

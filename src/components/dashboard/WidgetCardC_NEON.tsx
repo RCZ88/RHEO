@@ -21,7 +21,7 @@ const Card = ({ className = '', children, neonColor, ...props }: React.HTMLAttri
       // R3: hover was `hover:border-[${neon}]/40` — a runtime-built class Tailwind never
       // compiles, so it silently did nothing. The className below is a STATIC literal and
       // the color comes from the --neon-hover-border custom property set in style.
-      className={`rounded-xl bg-zinc-900/40 backdrop-blur-sm text-zinc-100 border border-zinc-800/50 hover:border-[var(--neon-hover-border)] hover:shadow-[0_0_24px_-8px_var(--neon-hover-glow)] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${className}`}
+      className={`rounded-xl bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm text-zinc-100 border border-zinc-800/50 hover:border-[var(--neon-hover-border)] hover:shadow-[0_0_24px_-8px_var(--neon-hover-glow)] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${className}`}
       style={{
         ['--neon-hover-border' as string]: withAlpha(neonColor, 0.4),
         ['--neon-hover-glow' as string]: withAlpha(neonColor, 0.07),

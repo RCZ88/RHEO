@@ -42,7 +42,7 @@ export function MetricCard({
 	return (
 		<div
 			className={cn(
-				"group relative flex flex-col gap-3 rounded-xl bg-zinc-900/40 p-5 ring-1 ring-zinc-800/60",
+				"group relative flex flex-col gap-3 rounded-xl bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-5 ring-1 ring-zinc-800/60",
 				"transition-[box-shadow] duration-150 hover:ring-zinc-700",
 				className,
 			)}
@@ -51,7 +51,7 @@ export function MetricCard({
 				<span
 					aria-hidden
 					className={cn(
-						"flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900/60 ring-1 ring-zinc-800/60",
+						"flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60",
 						a.text,
 					)}
 				>

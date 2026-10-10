@@ -207,6 +207,37 @@ export async function initDatabase() {
       PRIMARY KEY (user_id, id)
     );
 
+    -- Real-column mirror of the desktop's schedule_entries, NOT a value_json KV
+    -- blob. The phone edits a schedule (add/edit/delete a class or appointment) and
+    -- the desktop has to apply those edits to its own real columns, so a KV blob
+    -- would be unreadable on the other side. "deleted" is honoured for hard-delete
+    -- parity with the other synced tables, and "updated_at" is what pull filters
+    -- on, so it MUST be written by every writer (the push handler mirrors
+    -- created_at into it when a client omits it).
+    CREATE TABLE IF NOT EXISTS schedule_entries (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      device_id TEXT,
+      -- Deliberately NOT NULL-free. This is a sync TRANSPORT, not a validator, and
+      -- clients legitimately send PARTIAL rows (only the fields that changed) — the
+      -- DO UPDATE clause is built from the supplied columns alone. SQLite checks a
+      -- NOT NULL column against the candidate insert row BEFORE it resolves the
+      -- conflict, so "title TEXT NOT NULL" made every partial update die with
+      -- "NOT NULL constraint failed: schedule_entries.title" even though the row
+      -- already existed and was about to be updated. Verified by hand on a real DB.
+      title TEXT,
+      location TEXT,
+      day_of_week INTEGER,
+      start_time TEXT,
+      end_time TEXT,
+      category TEXT,
+      color TEXT,
+      is_recurring INTEGER DEFAULT 1,
+      created_at TEXT,
+      updated_at TEXT,
+      deleted INTEGER NOT NULL DEFAULT 0
+    );
+
     -- Indexes
     CREATE INDEX IF NOT EXISTS idx_terminal_sessions_user ON terminal_sessions(user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_terminal_messages_user ON terminal_messages(user_id, created_at);
@@ -222,6 +253,7 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_learning_user ON learning(user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_phone_tracking_user ON phone_tracking(user_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_schedule_entries_user ON schedule_entries(user_id, updated_at);
   `)
 
   // Migration: add device_id to existing tables (safe to run repeatedly)

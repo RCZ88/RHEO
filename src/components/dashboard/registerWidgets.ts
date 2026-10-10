@@ -9,6 +9,7 @@ import {
   ScheduleSummary,
   InsightsSummary,
   GoalsSummary,
+  NotesWidget,
   DeadlinesSummary,
   FocusSummary,
   TierBreakdownSummary,
@@ -30,6 +31,7 @@ import { BrainWidget } from './BrainWidget';
 import { CovenantWidget } from './CovenantWidget';
 import { HealthWidget } from './HealthWidget';
 import { LongestFocusCard } from './LongestFocusCard';
+import { AppEcosystemWidget } from './AppEcosystemWidget';
 
 // ── Dashboard Widgets ──
 WidgetRegistry.register({
@@ -85,6 +87,22 @@ WidgetRegistry.register({
   maxSize: { cols: 2, rows: 1 },
   component: GoalsSummary,
   defaultVisible: true,
+  sourcePage: 'dashboard',
+});
+
+WidgetRegistry.register({
+  id: 'notes-card',
+  name: 'Notes',
+  description: 'Recent notes with one-tap capture',
+  icon: 'BookOpen',
+  category: 'productivity',
+  defaultSize: { cols: 1, rows: 1 },
+  minSize: { cols: 1, rows: 1 },
+  maxSize: { cols: 2, rows: 2 },
+  component: NotesWidget,
+  /* opt-in, not uninvited: a new widget should never appear on someone's
+     dashboard without them choosing it. */
+  defaultVisible: false,
   sourcePage: 'dashboard',
 });
 
@@ -195,8 +213,8 @@ WidgetRegistry.register({
   defaultSize: { cols: 2, rows: 1 },
   minSize: { cols: 1, rows: 1 },
   maxSize: { cols: 2, rows: 1 },
-  component: () => null, // OrbitSystem is preserved untouched
-  defaultVisible: false,
+  component: AppEcosystemWidget,
+  defaultVisible: true,
   sourcePage: 'dashboard',
 });
 

@@ -1,6 +1,7 @@
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { cn } from "@/lib/utils"
 import { CheckIcon } from "lucide-react"
+import type { HTMLAttributes } from "react"
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -39,6 +40,33 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       className={cn(
         "flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm text-popover-foreground outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+/**
+ * A non-interactive heading that groups the items below it. Needed as soon as a
+ * menu carries more than a handful of entries, otherwise "Chat history" and
+ * "Vision model" read as one undifferentiated list.
+ *
+ * This is deliberately a PLAIN element, not base-ui's `Menu.GroupLabel`.
+ * GroupLabel calls `useMenuGroupRootContext`, which throws
+ * "Base UI error #31" unless it is rendered inside a <Menu.Group> ancestor —
+ * and this wrapper does not expose a Group. A heading needs no menu behaviour
+ * (no focus, no keyboard handling, no selection), so plain markup is both
+ * correct and immune to that context requirement. Wrap the label in a
+ * `Menu.Group` via a future `DropdownMenuGroup` if grouped keyboard nav is
+ * ever actually needed.
+ */
+function DropdownMenuLabel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      data-slot="dropdown-menu-label"
+      className={cn(
+        "px-2 py-1.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground",
         className
       )}
       {...props}
@@ -87,6 +115,7 @@ export {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
 }

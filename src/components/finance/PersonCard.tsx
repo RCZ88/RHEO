@@ -21,7 +21,7 @@ export function PersonCard({ person, wallets, displayCurrency, onClick }: Person
   return (
     <button
       onClick={onClick}
-      className="group relative flex items-center gap-3 rounded-xl bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/60 p-4 text-left transition-all duration-200 hover:bg-zinc-800/60 hover:border-zinc-700/60 hover:scale-[1.01] active:scale-[0.99]"
+      className="group relative flex items-center gap-3 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border border-zinc-800/60 p-4 text-left transition-all duration-200 hover:bg-zinc-800/60 hover:border-zinc-700/60 hover:scale-[1.01] active:scale-[0.99]"
     >
       <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${isSettled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
         {initials}

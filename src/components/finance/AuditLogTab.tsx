@@ -79,7 +79,7 @@ export function AuditLogTab({ displayCurrency }: { displayCurrency: string }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-zinc-400" />
-          <span className="text-xs text-zinc-500 font-medium">Security Event Log</span>
+          <span className="fin-label font-medium">Security Event Log</span>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -124,7 +124,7 @@ export function AuditLogTab({ displayCurrency }: { displayCurrency: string }) {
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Clock className="w-2.5 h-2.5 text-zinc-600" />
-                  <span className="text-[10px] text-zinc-600">{formatTime(log.created_at)}</span>
+                  <span className="fin-label">{formatTime(log.created_at)}</span>
                   {log.entity_type && (
                     <span className="text-[10px] text-zinc-700">{log.entity_type}#{log.entity_id}</span>
                   )}
@@ -141,7 +141,7 @@ export function AuditLogTab({ displayCurrency }: { displayCurrency: string }) {
           className="text-[10px] px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition-colors disabled:opacity-30">
           Previous
         </button>
-        <span className="text-[10px] text-zinc-600">Page {page + 1} of {Math.max(1, totalPages)}</span>
+        <span className="fin-label">Page {page + 1} of {Math.max(1, totalPages)}</span>
         <button disabled={page + 1 >= totalPages} onClick={() => setPage(p => p + 1)}
           className="text-[10px] px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition-colors disabled:opacity-30">
           Next
@@ -151,7 +151,7 @@ export function AuditLogTab({ displayCurrency }: { displayCurrency: string }) {
       {selectedLog && (
         <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setSelectedLog(null)}>
-          <div className="bg-zinc-900 border border-white/10 rounded-xl p-5 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
+          <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-xl p-5 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm text-zinc-200 font-medium">{selectedLog.event_type}</span>
@@ -162,11 +162,11 @@ export function AuditLogTab({ displayCurrency }: { displayCurrency: string }) {
             <p className="text-xs text-zinc-400 mb-4">{selectedLog.description}</p>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
-                <span className="text-[10px] text-zinc-600">Entity</span>
+                <span className="fin-label">Entity</span>
                 <p className="text-xs text-zinc-300">{selectedLog.entity_type} #{selectedLog.entity_id}</p>
               </div>
               <div>
-                <span className="text-[10px] text-zinc-600">Timestamp</span>
+                <span className="fin-label">Timestamp</span>
                 <p className="text-xs text-zinc-300">{formatTime(selectedLog.created_at)}</p>
               </div>
             </div>
@@ -176,18 +176,18 @@ export function AuditLogTab({ displayCurrency }: { displayCurrency: string }) {
               </div>
             ) : detailData ? (
               <div className="space-y-1.5">
-                <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Encrypted Payload</span>
+                <span className="fin-label font-medium uppercase tracking-wider">Encrypted Payload</span>
                 <div className="bg-black/30 rounded-xl p-3 max-h-60 overflow-y-auto">
                   {Object.entries(detailData).map(([key, val]) => (
                     <div key={key} className="flex items-start gap-2 py-0.5">
-                      <span className="text-[10px] text-zinc-500 shrink-0 min-w-[24px]">{key}</span>
+                      <span className="fin-label shrink-0 min-w-[24px]">{key}</span>
                       <span className="text-[10px] text-zinc-300 break-all font-mono">{String(val)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <p className="text-[10px] text-zinc-600 italic">No encrypted payload for this event</p>
+              <p className="fin-label italic">No encrypted payload for this event</p>
             )}
           </div>
         </div>

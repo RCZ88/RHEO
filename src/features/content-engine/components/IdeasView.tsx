@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Lightbulb, Star, ChevronRight, Trash2, Sparkles, CheckCircle2, SlidersHorizontal, ShieldCheck, ShieldX, Clapperboard, ExternalLink, ClipboardPaste, Check, Zap, BrainCircuit, ArrowRight } from 'lucide-react'
+import { Lightbulb, Star, ChevronRight, Trash2, Sparkles, CheckCircle2, SlidersHorizontal, ShieldCheck, ShieldX, Shield, Clapperboard, ExternalLink, ClipboardPaste, Check, Zap, BrainCircuit, ArrowRight } from 'lucide-react'
 import { AmberButton, CopyPromptButton, GhostButton, Card, Chip, ConfirmIconButton, EmptyState, ErrorState, LoadingBlock, SectionHeader, TextInput, TextArea, toast } from './ui'
 import { cn } from '@/lib/utils'
 import { useContentEngine } from '../ContentEngineContext'

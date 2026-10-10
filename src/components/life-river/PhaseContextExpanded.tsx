@@ -112,7 +112,7 @@ function DensityHeatmap({ phase, context }: { phase: LifePhase; context: PhasePe
   }
 
   return (
-    <div className="flex h-10 items-end gap-px overflow-hidden rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-1.5" title="Activity density across this chapter">
+    <div className="flex h-10 items-end gap-px overflow-hidden rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-1.5" title="Activity density across this chapter">
       {buckets.map((b, i) => (
         <div
           key={i}
@@ -131,8 +131,8 @@ function ContextToolbar({ mode, onModeChange, onEdit, onAddAttachment, phaseId }
   onEdit: () => void; onAddAttachment: () => void; phaseId: string
 }) {
   return (
-    <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-zinc-800/60 bg-zinc-900/80 backdrop-blur-xl px-4 py-2.5">
-      <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950/50 p-0.5">
+    <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-zinc-800/60 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl px-4 py-2.5">
+      <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-0.5">
         {(['system', 'manual'] as const).map(m => (
           <button
             key={m}
@@ -170,7 +170,7 @@ function AppUsagePanel({ data }: { data: NonNullable<PhasePeriodContext['appUsag
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? data.topApps : data.topApps.slice(0, 3)
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">App Usage</h4><BarChart3 className="h-4 w-4 text-sky-400/70" /></header>
       <div className="font-mono text-2xl text-zinc-100">{formatMs(data.totalMs)}</div>
       <div className="text-[12px] text-zinc-500">tracked across this chapter</div>
@@ -183,7 +183,7 @@ function AppUsagePanel({ data }: { data: NonNullable<PhasePeriodContext['appUsag
 
 function FocusPanel({ data }: { data: NonNullable<PhasePeriodContext['focus']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">Deep Focus</h4><Brain className="h-4 w-4 text-sky-400/70" /></header>
       <div className="font-mono text-2xl text-zinc-100">{formatMs(data.totalMs)}</div>
       <div className="text-[12px] text-zinc-500">total focus time</div>
@@ -205,7 +205,7 @@ function FocusPanel({ data }: { data: NonNullable<PhasePeriodContext['focus']> }
 
 function FinancePanel({ data }: { data: NonNullable<PhasePeriodContext['finance']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">Finance</h4><CreditCard className="h-3.5 w-3.5 text-zinc-600" /></header>
       <div className="grid grid-cols-3 gap-3 text-center">
         <div><div className="text-[10px] uppercase text-emerald-500">Income</div><div className="font-mono text-lg font-semibold text-emerald-400">{formatMoney(data.incomeTotal)}</div></div>
@@ -219,7 +219,7 @@ function FinancePanel({ data }: { data: NonNullable<PhasePeriodContext['finance'
 
 function SubscriptionsPanel({ data }: { data: NonNullable<PhasePeriodContext['subscriptions']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">Subscriptions</h4><CreditCard className="h-3.5 w-3.5 text-zinc-600" /></header>
       <div className="font-mono text-2xl text-zinc-100">{formatMoney(data.estimatedMonthlyBurn)}<span className="text-[12px] text-zinc-500 font-sans">/mo</span></div>
       {data.activeDuringPhase.length > 0 && <div className="mt-3 space-y-1">{data.activeDuringPhase.slice(0, 5).map(s => <div key={s.id} className="flex items-center justify-between text-[12px]"><span className="text-zinc-300">{s.name}</span><span className="text-zinc-500">{formatMoney(s.amount)}/{s.billingCycle}</span></div>)}</div>}
@@ -229,7 +229,7 @@ function SubscriptionsPanel({ data }: { data: NonNullable<PhasePeriodContext['su
 
 function SleepPanel({ data }: { data: NonNullable<PhasePeriodContext['sleep']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">Sleep</h4><Moon className="h-3.5 w-3.5 text-zinc-600" /></header>
       <div className="font-mono text-2xl text-zinc-100">{data.averageMinutes}m</div>
       <div className="text-[12px] text-zinc-500 mt-1">avg per night · {data.sessionCount} nights</div>
@@ -239,7 +239,7 @@ function SleepPanel({ data }: { data: NonNullable<PhasePeriodContext['sleep']> }
 
 function AiPanel({ data }: { data: NonNullable<PhasePeriodContext['ai']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">AI Usage</h4><Brain className="h-3.5 w-3.5 text-zinc-600" /></header>
       <div className="font-mono text-2xl text-zinc-100">{data.totalRequests}<span className="text-[12px] text-zinc-500 font-sans"> calls</span></div>
       <div className="text-[12px] text-zinc-500 mt-1">${formatMoney(data.totalCost)} · {formatMs(data.totalTokensIn * 4)} tokens</div>
@@ -250,7 +250,7 @@ function AiPanel({ data }: { data: NonNullable<PhasePeriodContext['ai']> }) {
 
 function CodePanel({ data }: { data: NonNullable<PhasePeriodContext['code']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">Code Activity</h4><Code className="h-3.5 w-3.5 text-zinc-600" /></header>
       <div className="font-mono text-2xl text-zinc-100">{data.totalEvents}<span className="text-[12px] text-zinc-500 font-sans"> edits</span></div>
       <div className="text-[12px] text-zinc-500 mt-1">+{data.linesAdded} / -{data.linesRemoved} lines</div>
@@ -261,7 +261,7 @@ function CodePanel({ data }: { data: NonNullable<PhasePeriodContext['code']> }) 
 
 function ProjectsPanel({ data }: { data: NonNullable<PhasePeriodContext['projects']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">IDE Projects</h4><Folder className="h-3.5 w-3.5 text-zinc-600" /></header>
       {data.activeProjects.length > 0 && <div className="space-y-1.5">{data.activeProjects.slice(0, 5).map(p => <div key={p.id} className="flex items-center justify-between text-[12px]"><span className="text-zinc-300">{p.name}</span><span className="text-zinc-500">active</span></div>)}</div>}
     </section>
@@ -270,7 +270,7 @@ function ProjectsPanel({ data }: { data: NonNullable<PhasePeriodContext['project
 
 function BrowserPanel({ data }: { data: NonNullable<PhasePeriodContext['browser']> }) {
   return (
-    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+    <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">Browser</h4><Globe className="h-3.5 w-3.5 text-zinc-600" /></header>
       <div className="font-mono text-2xl text-zinc-100">{formatMs(data.totalMs)}</div>
       {data.topDomains.length > 0 && <div className="mt-3 space-y-1">{data.topDomains.slice(0, 5).map(d => <div key={d.domain} className="flex items-center justify-between text-[12px]"><span className="text-zinc-300 truncate">{d.domain}</span><span className="text-zinc-500">{formatMs(d.totalMs)}</span></div>)}</div>}
@@ -302,7 +302,7 @@ function ManualView({ phase, memories, longTermGoals, covenant, onAddMemory, onA
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+      <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
         <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-emerald-500">Memories</h4><button onClick={onAddMemory} className="text-[10px] text-amber-400 hover:text-amber-300">+ Attach</button></header>
         {attachedMemories.length > 0 && (
           <div className="mb-3">
@@ -322,11 +322,11 @@ function ManualView({ phase, memories, longTermGoals, covenant, onAddMemory, onA
           </div>
         ) : attachedMemories.length === 0 ? <p className="text-[12px] text-zinc-500">No memories attached yet.</p> : null}
       </section>
-      <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+      <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
         <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-amber-500">Goals</h4><button onClick={onAddGoal} className="text-[10px] text-amber-400 hover:text-amber-300">+ Link</button></header>
         {phaseGoals.length > 0 ? <div className="space-y-1.5">{phaseGoals.map(g => <div key={g.id} className="flex items-center justify-between text-[12px] group"><span className="text-zinc-300">{g.title}</span><div className="flex items-center gap-2"><span className="text-zinc-500">{g.status || 'active'}</span>{onDetachGoal && <button onClick={() => onDetachGoal(g.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X className="h-3 w-3 text-zinc-500 hover:text-rose-400" /></button>}</div></div>)}</div> : <p className="text-[12px] text-zinc-500">No goals linked yet.</p>}
       </section>
-      <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5 backdrop-blur-xl">
+      <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5 backdrop-blur-xl">
         <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-rose-500">Covenants</h4><button onClick={onAddCovenant} className="text-[10px] text-amber-400 hover:text-amber-300">+ Create</button></header>
         <p className="text-[12px] text-zinc-500">{(covenant?.completions?.length || 0)} commitment completions during this chapter.</p>
       </section>
@@ -342,7 +342,7 @@ function MemoryPicker({ memories, phaseId, onSelect, onClose }: {
   const toggle = useCallback((id: string) => setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next }), [])
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">Attach memories</h3>
         <div className="grid grid-cols-4 gap-2 max-h-80 overflow-y-auto">
           {memories.slice(0, 20).map(m => (
@@ -370,7 +370,7 @@ function GoalPicker({ goals, phaseId, onSelect, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">Link goals to this chapter</h3>
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {goals.length === 0 ? (
@@ -410,7 +410,7 @@ function CovenantQuickCreate({ phaseId, onClose, onSave }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-sm bg-zinc-900/95 border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-sm bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-zinc-100 mb-4">New commitment</h3>
         <div className="space-y-4">
           <div>
@@ -419,7 +419,7 @@ function CovenantQuickCreate({ phaseId, onClose, onSave }: {
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="I will..."
-              className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-rose-500/40"
+              className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-rose-500/40"
             />
           </div>
           <div>
@@ -516,7 +516,7 @@ export function PhaseContextExpanded({
         {expandedMode === 'system' ? (
           loading ? (
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="animate-pulse rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-5"><div className="h-3 w-20 rounded bg-zinc-800" /><div className="mt-4 h-7 w-28 rounded bg-zinc-800" /><div className="mt-3 space-y-2"><div className="h-2.5 w-full rounded bg-zinc-800/60" /><div className="h-2.5 w-4/5 rounded bg-zinc-800/60" /></div></div>)}
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="animate-pulse rounded-xl border border-zinc-800/60 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5"><div className="h-3 w-20 rounded bg-zinc-800" /><div className="mt-4 h-7 w-28 rounded bg-zinc-800" /><div className="mt-3 space-y-2"><div className="h-2.5 w-full rounded bg-zinc-800/60" /><div className="h-2.5 w-4/5 rounded bg-zinc-800/60" /></div></div>)}
             </div>
           ) : context ? (
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">

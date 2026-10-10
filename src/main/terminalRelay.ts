@@ -7,9 +7,16 @@
 //      looks up the JWT and upgrades the connection.
 //
 // Security:
-//   * Binds to 127.0.0.1 ONLY (use Tailscale/WireGuard/CF Tunnel — never expose).
+//   * Binds 0.0.0.0 by DEFAULT, because the phone reaches it over the LAN (or a
+//     Tailscale/WireGuard interface) and 127.0.0.1 would make pairing impossible.
+//     The header used to claim "Binds to 127.0.0.1 ONLY" while the code bound
+//     0.0.0.0 and the startup log printed 0.0.0.0 — the documentation was wrong,
+//     not the code. Override with RELAY_HOST=127.0.0.1 to restrict it.
+//   * Transport is plaintext ws://. Do NOT port-forward this; use a private tunnel.
 //   * Short codes expire in 5 minutes; JWT tickets expire in 60 seconds after code use.
-//   * Only attaches to existing, owned sessions — no remote spawn.
+//   * Attaches only to terminals that already exist — no remote spawn.
+//     NOTE: ownership is NOT verified (terminalId comes from the query string), so
+//     any holder of a valid code can attach to any live terminal id it can name.
 //   * Idle + absolute session timeouts.
 
 import { WebSocketServer, type WebSocket } from "ws"
@@ -153,6 +160,7 @@ export function startTerminalRelay(
   terminalManager: TerminalManagerAdapter,
   port = 8788,
   onConnected?: (terminalId: string) => void,
+  host = process.env.RELAY_HOST || "0.0.0.0",
 ): { wss: WebSocketServer | null; pairingStore: PairingCodeStore } {
   let secret = process.env.RELAY_TICKET_SECRET
   if (!secret) {
@@ -165,7 +173,20 @@ export function startTerminalRelay(
   const pairingStore = new PairingCodeStore(secretKey)
   pairingStore.startCleanup()
 
-  const wss = new WebSocketServer({ host: "0.0.0.0", port })
+  const wss = new WebSocketServer({ host, port })
+
+  // Without this listener an EADDRINUSE (or any bind failure) emits 'error' on the
+  // server, which Node treats as an unhandled 'error' event and crashes the whole
+  // main process. startTerminalRelay's caller wraps only the SYNCHRONOUS part in
+  // try/catch, and 'error' fires later, asynchronously — so a port collision took
+  // down RHEO itself rather than reporting a relay failure.
+  wss.on("error", (err: Error & { code?: string }) => {
+    if (err?.code === "EADDRINUSE") {
+      console.error(`[relay] port ${port} already in use — terminal relay NOT started`)
+    } else {
+      console.error("[relay] server error:", err?.message)
+    }
+  })
 
   wss.on("connection", async (ws: WebSocket, req) => {
     const url = new URL(req.url || "", "http://localhost")
@@ -219,8 +240,16 @@ export function startTerminalRelay(
     }, 15_000)
 
     // 4) Stream PTY output → phone.
+    //    lastActivity must be refreshed by DATA FLOW IN EITHER DIRECTION. It used to
+    //    be updated only inside ws.on("message") (phone → desktop), so a phone that
+    //    merely WATCHED a long build or agent run — with data streaming to it the
+    //    whole time — was killed by the idle timeout after 5 minutes. A stream that
+    //    is visibly flowing must never be considered idle.
+    const touch = () => { lastActivity = Date.now() }
+
     const unsub = terminalManager.onData(terminalId, (d: string) => {
       if (ws.readyState === ws.OPEN) {
+        touch()
         ws.send(JSON.stringify({ t: "out", d }))
       }
     })
@@ -237,7 +266,11 @@ export function startTerminalRelay(
       if (msg.t === "in" && typeof msg.d === "string" && msg.d.length < MAX_INPUT_LEN) {
         terminalManager.write(terminalId, msg.d)
       } else if (msg.t === "resize" && Number.isInteger(msg.cols) && Number.isInteger(msg.rows)) {
-        terminalManager.resize(terminalId, Math.min(msg.cols!, MAX_COLS), Math.min(msg.rows!, MAX_ROWS))
+        // Must be POSITIVE: `Number.isInteger(-1)` is true, so -1 used to sail
+        // through Math.min() into terminalManager.resize and corrupt the PTY.
+        if ((msg.cols as number) > 0 && (msg.rows as number) > 0) {
+          terminalManager.resize(terminalId, Math.min(msg.cols!, MAX_COLS), Math.min(msg.rows!, MAX_ROWS))
+        }
       }
     })
 
@@ -253,7 +286,7 @@ export function startTerminalRelay(
     })
   })
 
-  console.log(`[relay] terminal relay on 0.0.0.0:${port}`)
+  console.log(`[relay] terminal relay on ${host}:${port}`)
   return { wss, pairingStore }
 }
 

@@ -80,7 +80,7 @@ export default function DesignLibrarySources({ libraries, onBrowse, onToggle, on
           return (
             <div
               key={library.id}
-              className="group relative overflow-hidden rounded-xl p-4 bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/60 flex flex-col gap-2 transition-all hover:-translate-y-0.5 hover:border-zinc-700"
+              className="group relative overflow-hidden rounded-xl p-4 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 flex flex-col gap-2 transition-all hover:-translate-y-0.5 hover:border-zinc-700"
             >
               {/* accent strip */}
               <span className="pointer-events-none absolute inset-x-0 top-0 h-0.5" style={{ background: `linear-gradient(to right, ${library.accentColor}, ${library.accentColor}00)` }} />

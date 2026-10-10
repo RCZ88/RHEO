@@ -74,7 +74,7 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-3">
-          <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
+          <div className="p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
             <div className="flex items-center gap-1.5 mb-1">
               <Droplets size={12} className="text-sky-400" />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Last Night</span>
@@ -83,7 +83,7 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
               {lastNightHours.toFixed(1)} <span className="text-[11px] text-zinc-500">hrs</span>
             </div>
           </div>
-          <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
+          <div className="p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
             <div className="flex items-center gap-1.5 mb-1">
               <Heart size={12} className="text-rose-400" />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Resting HR</span>
@@ -92,7 +92,7 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
               {restingHeartRate} <span className="text-[11px] text-zinc-500">bpm</span>
             </div>
           </div>
-          <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
+          <div className="p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
             <div className="flex items-center gap-1.5 mb-1">
               <Activity size={12} className="text-emerald-400" />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Gaps</span>
@@ -102,14 +102,14 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
         </div>
 
         <div className="flex flex-col gap-3">
-          <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
+          <div className="p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
             <div className="flex items-center gap-1.5 mb-1">
               <Wind size={12} className="text-teal-400" />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Consistency</span>
             </div>
             <div className="text-[20px] font-display font-bold text-zinc-100 tabular-nums">{consistencyPercent}%</div>
           </div>
-          <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
+          <div className="p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
             <div className="flex items-center gap-1.5 mb-1">
               <Activity size={12} className="text-amber-400" />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Steps</span>
@@ -118,7 +118,7 @@ export function HealthWidget({ stats, loading, error }: HealthWidgetProps) {
               {stepsToday.toLocaleString()} <span className="text-[11px] text-zinc-500">/{stepGoal.toLocaleString()}</span>
             </div>
           </div>
-          <div className="p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/50">
+          <div className="p-3 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
             <div className="flex items-center gap-1.5 mb-1">
               <Moon size={12} className="text-indigo-400" />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">6d Avg</span>

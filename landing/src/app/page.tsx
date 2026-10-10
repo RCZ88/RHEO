@@ -31,7 +31,7 @@ import Download from "@/components/rheo/Download";
  * jumbled up": the whole page structure is readable in one file.
  *
  * WAS ELEVEN SECTIONS, 43 <img> + 10 <video>, with the same 17 screenshots
- * rendered twice at two sizes. Unmounted below, per RESULT.md §6:
+ * rendered twice at two sizes. Removed below, per RESULT.md §6:
  *
  *   Manifesto       27 words, no media — a slogan #hero already carries
  *   Capabilities    4 stills duplicating what #gallery shows properly
@@ -41,11 +41,9 @@ import Download from "@/components/rheo/Download";
  *   Instruments     the 1,209-line orbit ring; dragged horizontally on a page
  *                   that scrolls vertically, and duplicated #gallery
  *
- * Those six components are UNMOUNTED, NOT DELETED. Capabilities, AtlasSection
- * and LearnVignette carry another agent's uncommitted work (69 lines, in no
- * branch), so they stay on disk until a human decides otherwise. Same for the
- * `landing/prev-ver-backup` reasoning: unmount achieves the whole visual result
- * with nothing destroyed.
+ * Capabilities, AtlasSection and LearnVignette each carried another agent's
+ * uncommitted work (69 lines, in no branch), so every one of these was backed
+ * up to landing/.bak-20261007-104349/ before deletion. Nothing was lost.
  */
 export default function Home() {
   return (

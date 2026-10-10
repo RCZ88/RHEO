@@ -2,7 +2,23 @@ import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } fro
 import { getToastDurationMs, isSticky } from '../lib/toastDuration';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Settings, BookOpen, Newspaper, Bell, History, Library, Brain, Sparkles, ListTodo, Bug, MessageSquare, Eye, Download } from 'lucide-react';
+import { Settings, BookOpen, Newspaper, Bell, History, Library, Brain, Sparkles, ListTodo, Bug, MessageSquare, Eye, Download, ExternalLink, X, Plug, FlaskConical, Plus, Menu, ChevronLeft, ChevronRight, } from 'lucide-react';
+import { AirRouterPanel } from '../components/ai/AirRouterPanel';
+import { AiEvalPanel } from '../components/ai/AiEvalPanel';
+
+// Every surface that REPLACES the canvas with a sub-page. Declared once so the
+// menu, the render branch and the active-state lookup can never disagree — the
+// bug class that produced the earlier "button only renders when already open"
+// dead gate.
+const AI_SURFACES = [
+  { id: 'brain',   label: 'Context Brain', short: 'Brain',   icon: Brain,        hint: 'what the assistant knows' },
+  { id: 'context', label: 'Context',       short: 'Context', icon: MessageSquare, hint: 'pinned material' },
+  { id: 'vault',   label: 'Debug Vault',   short: 'Vault',   icon: Bug,          hint: 'every AI call, with cost' },
+  { id: 'evals',   label: 'AI Eval',       short: 'Eval',    icon: FlaskConical, hint: 'regression checks' },
+  { id: 'router',  label: 'AI Router',     short: 'Router',  icon: Plug,         hint: 'providers and fallbacks' },
+] as const;
+
+type AiSurfaceId = typeof AI_SURFACES[number]['id'];
 import { useCanvasState } from '../hooks/useCanvasState';
 import { loadDefaultSetup, BUILTIN_DEFAULT_SETUP } from '../services/canvasPersistence';
 import type { CardType } from '../types/canvas';
@@ -56,6 +72,7 @@ const ChatHistory = lazy(() => import('../components/ai/chat/ChatHistory').then(
 const ChatLibrary = lazy(() => import('../components/ai/chat/ChatLibrary').then(m => ({ default: m.ChatLibrary })));
 const BrainSurface = lazy(() => import('../components/ai/chat/BrainSurface').then(m => ({ default: m.BrainSurface })));
 const ChatExportBridge = lazy(() => import('../components/ai/chat/ChatExportBridge').then(m => ({ default: m.ChatExportBridge })));
+const ExternalAiLauncher = lazy(() => import('../components/ai-bridge/ExternalAiLauncher').then(m => ({ default: m.ExternalAiLauncher })));
 const ActionOverlay = lazy(() => import('../components/ai/primitives/ActionOverlay').then(m => ({ default: m.ActionOverlay })));
 const AiBuildingIndicator = lazy(() => import('../components/ai/primitives/AiBuildingIndicator').then(m => ({ default: m.AiBuildingIndicator })));
 const CanvasGrid = lazy(() => import('../components/ai/canvas/CanvasGrid').then(m => ({ default: m.CanvasGrid })));
@@ -63,6 +80,7 @@ const CanvasInput = lazy(() => import('../components/ai/canvas/CanvasInput').the
 const CommandPalette = lazy(() => import('../components/ai/canvas/CommandPalette').then(m => ({ default: m.CommandPalette })));
 const DailyPlannerCard = lazy(() => import('../components/ai/canvas/cards/DailyPlannerCard').then(m => ({ default: m.DailyPlannerCard })));
 const WeeklyScheduleCard = lazy(() => import('../components/ai/canvas/cards/WeeklyScheduleCard').then(m => ({ default: m.WeeklyScheduleCard })));
+import { TimePanel } from '../components/TimePanel';
 const DeadlineTrackerCard = lazy(() => import('../components/ai/canvas/cards/DeadlineTrackerCard').then(m => ({ default: m.DeadlineTrackerCard })));
 const SlashCommandManager = lazy(() => import('../components/ai/chat/SlashCommandManager').then(m => ({ default: m.SlashCommandManager })));
 
@@ -125,10 +143,49 @@ export function AiPage() {
   const [digestReason, setDigestReason] = useState<string | null>(null);
   const digestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // `null` until getAiProviders() resolves. Without this the badge shows
+  // "Not configured" on every cold start and then swaps to the real model —
+  // a flash of a false statement. `providersPending` lets us say nothing yet.
+  const [providersPending, setProvidersPending] = useState(true);
   const [aiProviders, setAiProviders] = useState<Array<{ id: string; label: string; models: string[]; enabled: boolean }>>([]);
   const [aiRouting, setAiRouting] = useState<Record<string, { providerId: string; model: string; smallProviderId?: string; smallModel?: string } | null>>({});
   const [configuringFeature, setConfiguringFeature] = useState<'default' | 'researchDigest' | 'goalAssistant' | 'vision' | null>(null);
-  const [aiSubPage, setAiSubPage] = useState<'assistant' | 'vault' | 'context' | 'brain'>('assistant');
+  const [aiSubPage, setAiSubPage] = useState<'assistant' | AiSurfaceId>('assistant');
+  const activeSurface = AI_SURFACES.find(s => s.id === aiSubPage);
+
+  // Escape leaves a surface. Without this the ONLY exit was re-opening the
+  // tools menu and clicking the item you just clicked.
+  useEffect(() => {
+    if (!activeSurface) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const tag = (e.target as HTMLElement)?.tagName;
+        // never steal Escape from a dialog that is closing itself
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        setAiSubPage('assistant');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeSurface?.id]);
+
+  /* Escape always gets you back to the canvas.
+     Brain / Vision / Vault / Context each REPLACE the canvas, so a user who
+     clicked in has no scroll or click target that returns them — they had to
+     hunt the topbar for the exact button that opened the surface. Esc is the
+     universal expectation and costs nothing. Ordered so the most transient
+     layer closes first: an open provider modal wins over a sub-page, because
+     the modal is what you opened last. Inputs are ignored so typing a space
+     or clearing a field does not eject you. */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (configuringFeature) { setConfiguringFeature(null); return; }
+      if (aiSubPage !== 'assistant') { setAiSubPage('assistant'); return; }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [aiSubPage, configuringFeature]);
   const [showConnectorSetup, setShowConnectorSetup] = useState(false);
   const [connectorsState, setConnectorsState] = useState<'loading' | 'error' | 'empty' | 'ready'>('loading');
   const [connectors, setConnectors] = useState<Array<{ id: string; name: string; status: string; detail?: string; itemCount?: number; type?: string }>>([]);
@@ -166,6 +223,13 @@ export function AiPage() {
   const [remindersLoading, setRemindersLoading] = useState(false);
   const [remindersError, setRemindersError] = useState<string | null>(null);
 
+  // Badge count for the Tools menu: an overdue goal, plus any surface currently
+  // replacing the canvas. Without it, collapsing 12 controls into one menu hides
+  // state the user needs to notice — the exact trap that buried Brain behind a
+  // dead conditional. Declared HERE because it reads `reminders`, which is only
+  // in scope from this point down.
+  const openGoals = reminders.filter(r => !r.done).length;
+
   // Focus board per-action errors
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [toggleErrors, setToggleErrors] = useState<Record<number, string>>({});
@@ -185,6 +249,7 @@ export function AiPage() {
   const [chatHistoryOpen, setChatHistoryOpen] = useState(false);
   const [chatLibraryOpen, setChatLibraryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [externalAiOpen, setExternalAiOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [expandedCardIds, setExpandedCardIds] = useState<Set<string>>(new Set());
   const [canvasMode, setCanvasMode] = useState<'deck' | 'canvas' | 'compositions'>('canvas');
@@ -202,6 +267,20 @@ export function AiPage() {
   const [autoApprove, setAutoApprove] = useState(false);
   const [autoFocus, setAutoFocus] = useState(true);
   const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
+
+  /* ── NAV RAIL: expanded (names visible) vs collapsed (icons only) ─────
+     A preference, not a breakpoint, so it lives in state and persists.
+     Read once on mount inside try/catch because localStorage throws when
+     the renderer is blocked, and a nav that fails to mount because of a
+     storage read is worse than a nav that forgets the preference. */
+  const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('dk.navrail.collapsed') === '1'; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('dk.navrail.collapsed', railCollapsed ? '1' : '0'); }
+    catch { /* preference is cosmetic — never let it break the page */ }
+  }, [railCollapsed]);
   const aiActions = useAiActions();
   const dynamicUI = useDynamicUI();
 
@@ -1046,6 +1125,7 @@ export function AiPage() {
           setAiRouting(state.routing || {});
         }
       } catch (e) { console.error('[AiPage] getAiProviders:', e); }
+      finally { setProvidersPending(false); }
     })();
   }, []);
 
@@ -1485,7 +1565,7 @@ export function AiPage() {
   return (
     <>
       {bootState === 'loading' ? (
-        <div className="dk-root">
+        <div className="dk-root" data-navrail={railCollapsed ? 'collapsed' : 'expanded'}>
           <div className="dk-wrap flex items-center justify-center min-h-[70vh]">
             <div className="flex flex-col items-center gap-4">
               <div className="w-8 h-8 border-2 border-emerald-500/40 border-t-emerald-400 rounded-full animate-spin" />
@@ -1494,7 +1574,7 @@ export function AiPage() {
           </div>
         </div>
       ) : bootState === 'error' ? (
-        <div className="dk-root">
+        <div className="dk-root" data-navrail={railCollapsed ? 'collapsed' : 'expanded'}>
           <div className="dk-wrap flex items-center justify-center min-h-[70vh]">
             <div className="flex flex-col items-center gap-4 max-w-sm text-center">
               <div className="rounded-full bg-red-500/10 p-3">
@@ -1511,156 +1591,260 @@ export function AiPage() {
           </div>
         </div>
       ) : (
-      <div className="dk-root">
+      <div className="dk-root" data-navrail={railCollapsed ? 'collapsed' : 'expanded'}>
         <div className="dk-wrap">
           <CurrentCanvas accent="#8b5cf6" render={renderCellular} />
           <div className="relative z-10 dk-topbar">
             <div className="dk-brand">
               <div className="dk-logo">D</div>
-              
             </div>
+
+            {/* ONE bar, three groups, one divider.
+                Everything that was inline is now filed by what it DOES, because
+                the previous bar had 13 buttons (Goals/+New/Features literally
+                duplicated back-to-back) and simply did not fit.
+
+                  STATUS  — read-only, not clickable except the provider chip
+                  MODE    — the canvas/deck/comps switch (a segmented control,
+                            not a menu: these are peer views you flip between)
+                  CREATE  — the actions you take (new thread, features)
+                  OPEN    — everything that opens something (one menu)
+
+                Grouping rule: if a control can be seen at the same time as
+                another, they stay inline. If it replaces what is on screen, it
+                goes in a menu. Mixing the two rules is what made this a mess. */}
             <div className="dk-barR">
+
+              {/* ---- STATUS (informational) ---- */}
               <span className="dk-chip dk-mode"><span className="dk-dot" />{modeLabelMap[mode]}</span>
-              <button className="dk-chip dk-prov hover:bg-zinc-800 light:bg-zinc-100/40 light:bg-zinc-100/40 transition-colors" onClick={() => setConfiguringFeature('default')}><span className="dk-dot" />{defaultBadge?.label ?? "Claude Sonnet"}</button>
+              <button
+                className="dk-chip dk-prov transition-colors hover:bg-zinc-800 light:hover:bg-zinc-100/40"
+                onClick={() => setConfiguringFeature('default')}
+                title="Change the model used for the assistant"
+              >
+                {/* Show the REAL provider · model from routing. The previous
+                      `?? "Claude Sonnet"` fallback named a specific model that
+                      was not necessarily in use — a badge that lies about which
+                      model is active. An honest "Not configured" is correct here
+                      because null genuinely means routing is absent/loading. */}
+                  <span className="dk-dot" />
+                  {defaultBadge?.label ?? (providersPending ? "Loading…" : "Not configured")}
+              </button>
               <span className="dk-chip dk-live"><span className="dk-dot" />{chat.hasProvider ? "Connected" : "Offline"}</span>
-              <button
-                onClick={() => setChatHistoryOpen(true)}
-                title="Chat History"
-                className="dk-topbar-btn dk-topbar-btn--sm"
+
+              <span className="dk-topbar-sep" />
+
+              {/* ---- BACK / MODE ----------------------------------------
+                  A surface REPLACES the canvas, so the peer-view switcher would
+                  otherwise be three dead buttons with no way home. When a
+                  surface is open the switcher slot becomes an explicit, labelled
+                  "back" affordance instead of vanishing. Leaving is always one
+                  click, always in the same place, never a menu round-trip. */}
+              {activeSurface && (
+                <button
+                  onClick={() => setAiSubPage('assistant')}
+                  title="Back to your canvas (Esc)"
+                  aria-label="Back to your canvas"
+                  className="dk-back"
+                >
+                  <ChevronLeft size={13} aria-hidden />
+                  <span className="dk-back-label">Canvas</span>
+                  <span className="dk-back-sep" aria-hidden>/</span>
+                  <span className="dk-back-where">{activeSurface.short}</span>
+                </button>
+              )}
+
+              {/* ---- MODE (peer views — segmented, stays inline) ---- */}
+              <div
+                className="flex items-center bg-zinc-900 light:bg-white/60 rounded-lg p-0.5 border border-zinc-800 light:border-zinc-200/50"
+                style={activeSurface ? { display: 'none' } : undefined}
               >
-                <History size={12} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>History</span>
-              </button>
-              <button
-                onClick={() => setChatLibraryOpen(true)}
-                title="Search and group every conversation"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
-              >
-                <Library size={12} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Library</span>
-              </button>
-              <div className="flex items-center bg-zinc-900 light:bg-white/60 light:bg-white/40 rounded-lg p-0.5 border border-zinc-800 light:border-zinc-200/50 light:border-zinc-200/50">
-                {(['canvas', 'deck', 'compositions'] as const).map(mode => (
+                {(['canvas', 'deck', 'compositions'] as const).map(m => (
                   <button
-                    key={mode}
-                    onClick={() => setCanvasMode(mode)}
-                    className={`relative px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${canvasMode === mode ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    key={m}
+                    onClick={() => setCanvasMode(m)}
+                    className={`relative px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${canvasMode === m ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                     style={{ fontFamily: "var(--mono)" }}
                   >
-                    {canvasMode === mode && (
-                      <motion.div layoutId="mode-pill" className="absolute inset-0 bg-zinc-700 light:bg-zinc-200/60 rounded-md" transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }} />
+                    {canvasMode === m && (
+                      <motion.div
+                        layoutId="mode-pill"
+                        className="absolute inset-0 bg-zinc-700 light:bg-zinc-200/60 rounded-md"
+                        transition={{ type: 'tween', duration: 0.15 }}
+                      />
                     )}
-                    <span className="relative z-10">{mode === 'canvas' ? 'CANVAS' : mode === 'deck' ? 'DECK' : 'COMPS'}</span>
+                    <span className="relative z-10">{m === 'canvas' ? 'CANVAS' : m === 'deck' ? 'DECK' : 'COMPS'}</span>
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => setHistoryOpen(v => !v)}
-                title="Goals & Reminders"
-                className="dk-topbar-btn dk-topbar-btn--sm"
-              >
-                <Bell size={12} className="text-amber-400" />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Goals</span>
-                {reminders.filter(r => !r.done).length > 0 && (
-                  <span style={{ marginLeft: 4, borderRadius: 999, background: "rgba(251,191,36,.15)", padding: "0 5px", fontSize: 9, color: "#fbbf24" }}>
-                    {reminders.filter(r => !r.done).length}
-                  </span>
-                )}
-              </button>
+
+              <span className="dk-topbar-sep" />
+
+              {/* ---- PRIMARY ACTION (inline: used every session) ---- */}
               <button
                 onClick={chat.startNewThread}
-                title="New Thread"
+                title="Start a new conversation"
                 className="dk-topbar-btn dk-topbar-btn--sm"
               >
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>+ New</span>
+                <Plus size={12} aria-hidden />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>New</span>
               </button>
               <button
                 onClick={() => setShowFeatures(true)}
                 title="AI Features"
                 className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--violet"
               >
-                <Sparkles size={11} />
+                <Sparkles size={11} aria-hidden />
                 <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Features</span>
-              </button>
-              {/* Group: Navigation */}
-              <button
-                onClick={() => setHistoryOpen(v => !v)}
-                title="Goals & Reminders"
-                className="dk-topbar-btn dk-topbar-btn--sm"
-              >
-                <Bell size={12} className="text-amber-400" />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Goals</span>
-                {reminders.filter(r => !r.done).length > 0 && (
-                  <span style={{ marginLeft: 4, borderRadius: 999, background: "rgba(251,191,36,.15)", padding: "0 5px", fontSize: 9, color: "#fbbf24" }}>
-                    {reminders.filter(r => !r.done).length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={chat.startNewThread}
-                title="New Thread"
-                className="dk-topbar-btn dk-topbar-btn--sm"
-              >
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>+ New</span>
-              </button>
-              <span className="dk-topbar-sep" />
-              {/* Group: AI Tools */}
-              <button
-                onClick={() => setShowFeatures(true)}
-                title="AI Features"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--violet"
-              >
-                <Sparkles size={11} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Features</span>
-              </button>
-              {aiSubPage === 'vault' ? (
-                <button
-                  onClick={() => setAiSubPage(p => (p === 'vault' ? 'assistant' : 'vault'))}
-                  title="AI Debug Vault"
-                  className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
-                >
-                  <Bug size={11} />
-                  <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vault</span>
-                </button>
-              ) : null}
-              {aiSubPage === 'context' ? (
-                <button
-                  onClick={() => setAiSubPage(p => (p === 'context' ? 'assistant' : 'context'))}
-                  title="AI Context Captures"
-                  className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--cyan"
-                >
-                  <MessageSquare size={11} />
-                  <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Context</span>
-                </button>
-              ) : null}
-              <button
-                onClick={() => setAiSubPage(p => (p === 'brain' ? 'assistant' : 'brain'))}
-                title="Context Brain — knowledge graph, search, external AI trail"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--amber"
-              >
-                <Brain size={11} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Brain</span>
-              </button>
-              <button
-                onClick={() => setConfiguringFeature('vision')}
-                title="Configure Vision Model"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--pink"
-              >
-                <Eye size={11} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Vision</span>
-              </button>
-              <span className="dk-topbar-sep" />
-              {/* Group: Utilities */}
-              <button
-                onClick={() => setExportOpen(true)}
-                title="Export, import, or save this conversation to the brain"
-                className="dk-topbar-btn dk-topbar-btn--sm dk-topbar-btn--green"
-              >
-                <Download size={11} />
-                <span style={{ fontSize: 11, fontFamily: "var(--mono)" }}>Export</span>
               </button>
             </div>
           </div>
+
+      {/* ---- RIGHT NAV RAIL -------------------------------------------
+          A permanent dock, not a menu. Every surface used to be reachable only
+          by opening a dropdown from the top bar, which meant the fastest path
+          to the canvas was "open Tools, click the item you just clicked". The
+          rail is always on screen, so every destination is one click and the
+          current one is legible at a glance. */}
+      {/* ---- RIGHT NAV RAIL --------------------------------------------
+          A DOCKED column, not a floating menu. Three things this fixes that
+          the previous version got wrong:
+            1. it was `.dk-rail`, which canvas.css ALSO defines (as the 320px
+               transcript panel) and loads later — so the nav silently
+               inherited `position:absolute; width:320px` and laid itself over
+               the top bar. It is `.dk-navrail` now, and the collision cannot
+               recur.
+            2. it was `position: fixed` over a `column` root. `.dk-root` is a
+               flex ROW now, so this is a sibling of the content and takes its
+               width out of the layout. Overlap is impossible, not merely
+               absent today.
+            3. every row carries its NAME in text. An icon alone is not a label
+               (Gate D), and a hover tooltip is not a name — it is the thing
+               that was covering the work. Tooltips survive only at the narrow
+               breakpoint, where the label becomes an accessible tooltip and
+               the button's accessible name is unchanged. */}
+      <nav className="dk-navrail" aria-label="AI assistant sections">
+        {/* The rail's own collapse control. Inside the rail, at the top, so the
+            control and the thing it controls are the same object. `aria-expanded`
+            states the CURRENT state, and the chevron points the way it will go. */}
+        <button
+          onClick={() => setRailCollapsed(v => !v)}
+          className="dk-navrail-toggle"
+          aria-expanded={!railCollapsed}
+          aria-controls="dk-navrail-sections"
+          title={railCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+        >
+          {railCollapsed ? <ChevronLeft size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+          <span className="dk-navrail-toggle-label">Collapse</span>
+          <span className="dk-navrail-tip" role="tooltip" aria-hidden>
+            {railCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          </span>
+        </button>
+
+        <div className="dk-navrail-head" id="dk-navrail-sections">
+          <Sparkles size={12} aria-hidden style={{ color: 'var(--page-accent)' }} />
+          Assistant
+        </div>
+
+        <div className="dk-navrail-group">
+          <div className="dk-navrail-group-label" id="dk-navrail-surfaces">Surfaces</div>
+          {AI_SURFACES.map(sf => {
+            const on = activeSurface?.id === sf.id;
+            return (
+              <button
+                key={sf.id}
+                onClick={() => setAiSubPage(p => (p === sf.id ? 'assistant' : sf.id))}
+                className="dk-navrail-btn"
+                aria-current={on ? 'page' : undefined}
+                aria-describedby="dk-navrail-surfaces"
+                title={`${sf.label} — ${sf.hint}`}
+              >
+                <sf.icon size={15} aria-hidden />
+                <span className="dk-navrail-name">{sf.label}</span>
+                <span className="dk-navrail-tip" role="tooltip" aria-hidden>{sf.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="dk-navrail-sep" role="presentation" />
+
+        <div className="dk-navrail-group">
+          <div className="dk-navrail-group-label">Workspace</div>
+          <button
+            onClick={() => setChatHistoryOpen(true)}
+            className="dk-navrail-btn"
+            title="Chat history — every past conversation"
+          >
+            <History size={15} aria-hidden />
+            <span className="dk-navrail-name">Chat history</span>
+            <span className="dk-navrail-tip" role="tooltip" aria-hidden>Chat history</span>
+          </button>
+          <button
+            onClick={() => setChatLibraryOpen(true)}
+            className="dk-navrail-btn"
+            title="Library — saved prompts and documents"
+          >
+            <Library size={15} aria-hidden />
+            <span className="dk-navrail-name">Library</span>
+            <span className="dk-navrail-tip" role="tooltip" aria-hidden>Library</span>
+          </button>
+          <button
+            onClick={() => setExternalAiOpen(true)}
+            className="dk-navrail-btn"
+            title="External AI — open ChatGPT, Claude and more in your browser"
+          >
+            <ExternalLink size={15} aria-hidden />
+            <span className="dk-navrail-name">External AI</span>
+            <span className="dk-navrail-tip" role="tooltip" aria-hidden>External AI</span>
+          </button>
+          <button
+            onClick={() => setHistoryOpen(v => !v)}
+            className="dk-navrail-btn"
+            title="Goals &amp; reminders"
+          >
+            <Bell size={15} aria-hidden />
+            <span className="dk-navrail-name">Goals &amp; reminders</span>
+            {openGoals > 0 && (
+              <span className="dk-navrail-count" aria-label={`${openGoals} due`}>{openGoals}</span>
+            )}
+            <span className="dk-navrail-tip" role="tooltip" aria-hidden>Goals &amp; reminders</span>
+          </button>
+        </div>
+
+        <div className="dk-navrail-spacer" />
+
+        <div className="dk-navrail-group">
+          <div className="dk-navrail-group-label">Setup</div>
+          <button
+            onClick={() => setConfiguringFeature('default')}
+            className="dk-navrail-btn"
+            title="Assistant model"
+          >
+            <Settings size={15} aria-hidden />
+            <span className="dk-navrail-name">Assistant model</span>
+            <span className="dk-navrail-tip" role="tooltip" aria-hidden>Assistant model</span>
+          </button>
+          <button
+            onClick={() => setConfiguringFeature('vision')}
+            className="dk-navrail-btn"
+            title="Vision model"
+          >
+            <Eye size={15} aria-hidden />
+            <span className="dk-navrail-name">Vision model</span>
+            <span className="dk-navrail-tip" role="tooltip" aria-hidden>Vision model</span>
+          </button>
+          <button
+            onClick={() => setExportOpen(true)}
+            className="dk-navrail-btn"
+            title="Export conversation"
+          >
+            <Download size={15} aria-hidden />
+            <span className="dk-navrail-name">Export conversation</span>
+            <span className="dk-navrail-tip" role="tooltip" aria-hidden>Export conversation</span>
+          </button>
+        </div>
+      </nav>
 
           <Suspense fallback={<LazyFallback />}>
           {aiSubPage === 'vault' ? (
@@ -1671,9 +1855,92 @@ export function AiPage() {
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
               <AiContextPanel open={true} />
             </div>
-          ) : aiSubPage === 'brain' ? (
+          ) : aiSubPage === 'evals' ? (
+            /* Same escape-bar pattern as Brain, Router and Vault: any surface
+               that replaces the canvas must carry its own way out. */
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <BrainSurface onOpenLibrary={() => setChatLibraryOpen(true)} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+                <FlaskConical size={13} style={{ color: 'var(--page-accent)' }} />
+                <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+                  AI Eval
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  golden cases · regression runs
+                </span>
+                <div style={{ flex: 1 }} />
+                <button
+                  onClick={() => setAiSubPage('assistant')}
+                  title="Close the eval harness and return to the canvas (Esc)"
+                  aria-label="Close AI Eval and return to the canvas"
+                  className="dk-topbar-btn dk-topbar-btn--sm"
+                  style={{ gap: 4 }}
+                >
+                  <X size={11} />
+                  <span style={{ fontSize: 11, fontFamily: 'var(--mono)' }}>Back to canvas</span>
+                </button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                <AiEvalPanel open={true} />
+              </div>
+            </div>
+          ) : aiSubPage === 'router' ? (
+            /* Same escape-bar pattern as Brain: any surface that REPLACES the
+               canvas must carry its own way out, or people get stuck. */
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+                <Plug size={13} style={{ color: 'var(--page-accent)' }} />
+                <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+                  AI Router
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  live providers · failover chains · cooldowns
+                </span>
+                <div style={{ flex: 1 }} />
+                <button
+                  onClick={() => setAiSubPage('assistant')}
+                  title="Close the router console and return to the canvas (Esc)"
+                  aria-label="Close AI Router console and return to the canvas"
+                  className="dk-topbar-btn dk-topbar-btn--sm"
+                  style={{ gap: 4 }}
+                >
+                  <X size={11} />
+                  <span style={{ fontSize: 11, fontFamily: 'var(--mono)' }}>Back to canvas</span>
+                </button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>
+                <AirRouterPanel />
+              </div>
+            </div>
+          ) : aiSubPage === 'brain' ? (
+            /* Brain replaces the entire sub-page, so it carries its own way
+               out. Relying on the topbar toggle alone is what trapped people —
+               once the surface is open, the button that opened it is just
+               another control in a row. An explicit, labelled escape at the top
+               of the surface itself is the reliable affordance. */
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+                <Brain size={13} style={{ color: 'var(--ws-accent, var(--page-accent))' }} />
+                <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+                  Context Brain
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  knowledge graph · search · external AI trail
+                </span>
+                <div style={{ flex: 1 }} />
+                <button
+                  onClick={() => setAiSubPage('assistant')}
+                  title="Close the brain and return to the canvas (Esc)"
+                  aria-label="Close Context Brain and return to the canvas"
+                  className="dk-topbar-btn dk-topbar-btn--sm"
+                  style={{ gap: 4 }}
+                >
+                  <X size={11} />
+                  <span style={{ fontSize: 11, fontFamily: 'var(--mono)' }}>Back to canvas</span>
+                </button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                <BrainSurface onOpenLibrary={() => setChatLibraryOpen(true)} />
+              </div>
             </div>
           ) : canvasMode === 'compositions' ? (
             <div style={{ flex: 1, minHeight: 0, padding: 20 }} data-section="ai.compositions">
@@ -1864,6 +2131,11 @@ actionResults={actionResults}
                   <WeeklyScheduleCard />
                 </div>
               }
+              timeSlot={
+                <div style={{ padding: 16 }}>
+                  <TimePanel />
+                </div>
+              }
               deadlineSlot={
                 <div style={{ padding: 16 }}>
                   <DeadlineTrackerCard />
@@ -1936,7 +2208,12 @@ actionResults={actionResults}
               onArrangeCards={canvas.arrangeCards}
               onPinCard={canvas.pinCard}
               onResizeCard={canvas.resizeCard}
-              onCardClick={(id) => setSelectedCardId(id)}
+              // Clicking a card must ALSO move the viewport. `focusedCardId` is
+              // the only value the auto-follow pan watches, and this handler used
+              // to set `selectedCardId` alone — so a click selected the card
+              // (highlight) but never scrolled it into view. That is the whole
+              // "focus does nothing" report, independent of the pan maths.
+              onCardClick={(id) => { setSelectedCardId(id); setFocusedCardId(id); }}
               onUpdateCard={canvas.updateCard}
               groups={canvas.groups}
               onUpdateGroup={canvas.updateGroup}
@@ -2027,6 +2304,11 @@ actionResults={actionResults}
       />
 
       {/* Export / Import / Save-to-brain */}
+      <ExternalAiLauncher
+        open={externalAiOpen}
+        onClose={() => setExternalAiOpen(false)}
+      />
+
       <ChatExportBridge
         open={exportOpen}
         onClose={() => setExportOpen(false)}
@@ -2064,7 +2346,12 @@ actionResults={actionResults}
       />
 
       {/* Toast container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2" role="status" aria-live="polite">
+      {/* offset by the rail's own width variable, so a toast never lands on it */}
+      <div
+        className="fixed bottom-6 z-50 flex flex-col gap-2"
+        style={{ right: 'calc(var(--dk-navrail-w, 0px) + 24px)' }}
+        role="status" aria-live="polite"
+      >
         {toasts.map(t => (
           <div
             key={t.id}

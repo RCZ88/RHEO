@@ -156,7 +156,7 @@ export function QuickAddModal({ open, onClose, accounts, categories, wallets, di
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 20 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-md bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl overflow-hidden"
+            className="w-full max-w-md bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className={`px-5 pt-5 pb-3 border-b ${cfg.border} transition-colors duration-300`}>

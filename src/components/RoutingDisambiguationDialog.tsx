@@ -50,7 +50,7 @@ export function RoutingDisambiguationDialog({
             <button
               key={c.sessionId}
               onClick={() => onSelectSession(c.sessionId)}
-              className="w-full text-left p-3 bg-zinc-900/60 rounded-lg border border-zinc-700/50 hover:border-cyan-500/30 hover:bg-zinc-800/80 transition-all group"
+              className="w-full text-left p-3 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-lg border border-zinc-700/50 hover:border-cyan-500/30 hover:bg-zinc-800/80 transition-all group"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-zinc-200 group-hover:text-white">

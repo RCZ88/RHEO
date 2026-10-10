@@ -66,6 +66,19 @@ export interface DashboardData {
   // Heatmap
   weeklyHeatmap: { date: string; productiveHours: number }[];
 
+  /**
+   * Per-app and per-domain totals, exactly as the 3D Orbit (solar system) modal
+   * consumes them — same object, same period, same clock.
+   *
+   * These were NOT in the context, so the `app-ecosystem` grid slot was wired to
+   * `component: () => null` and rendered nothing, and any widget that wanted
+   * this data had no choice but to fetch it AGAIN with its own period — which is
+   * precisely how two surfaces on the same dashboard end up disagreeing. One
+   * source, supplied once.
+   */
+  appStats: { app: string; category: string; seconds: number }[];
+  websiteStats: { domain: string; seconds: number }[];
+
   // AI Insights
   aiInsights: any[];
 

@@ -6,7 +6,9 @@
 import { GasSyncPayload, GasResponse, Triple, SyncStatus, PendingSyncEntry } from './types'
 import { post, get as gasGet } from './client'
 import { addToPendingQueue, getPendingQueue } from './ipc'
-import { contextBrain } from '../ai/contextBrain'
+// contextBrain.ts has no `contextBrain` namespace export — see the note in
+// ./ipc.ts. These are the real named exports.
+import { addFact, getAllCurrentFacts, logEpisode } from '../ai/contextBrain'
 
 const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024 // 5MB chunking threshold
 
@@ -18,7 +20,7 @@ export async function pushTriples(
   cursor?: string
 ): Promise<GasResponse> {
   // Get all current facts from Context Brain
-  const allFacts = contextBrain.getAllCurrentFacts()
+  const allFacts = getAllCurrentFacts()
 
   if (allFacts.length === 0) {
     return { ok: true, data: { pushed: 0, message: 'No facts to sync' } }
@@ -104,11 +106,11 @@ export async function pullTriples(
   }
 
   // Write pulled triples through the existing episode-writer pipeline
-  // NOT direct SQLite writes — go through contextBrain.addFact so
+  // NOT direct SQLite writes — go through addFact so
   // Context Brain's integrity (bitemporal facts, entity tracking) is preserved
   for (const triple of data.triples) {
     const entityId = `ent_gas_${triple.subject.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40)}`
-    contextBrain.addFact(
+    addFact(
       entityId,
       triple.predicate,
       triple.object,
@@ -119,7 +121,7 @@ export async function pullTriples(
   }
 
   // Log a sync episode
-  contextBrain.logEpisode(
+  logEpisode(
     'gas-sync',
     `Pulled ${data.triples.length} triples from GAS`,
     'gas-cloud-mirror',
@@ -158,7 +160,7 @@ export async function getSyncStatus(): Promise<SyncStatus> {
 // ── Stats ──
 
 export function getMirrorStats(): { totalFacts: number; pendingSyncs: number } {
-  const allFacts = contextBrain.getAllCurrentFacts()
+  const allFacts = getAllCurrentFacts()
   const pendingQueue = getPendingQueue()
   return {
     totalFacts: allFacts.length,

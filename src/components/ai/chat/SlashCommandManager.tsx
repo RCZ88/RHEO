@@ -66,7 +66,7 @@ export function SlashCommandManager(props: SlashCommandManagerProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={props.onClose}>
       <div
-        className="w-full max-w-lg rounded-xl bg-zinc-900 ring-1 ring-zinc-800 shadow-2xl overflow-hidden"
+        className="w-full max-w-lg rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800 shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -138,7 +138,7 @@ export function SlashCommandManager(props: SlashCommandManagerProps) {
                     value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="standup"
-                    className="w-full rounded-lg bg-zinc-900/60 pl-6 pr-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-700/50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 placeholder:text-zinc-600"
+                    className="w-full rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] pl-6 pr-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-700/50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 placeholder:text-zinc-600"
                   />
                 </div>
               </div>
@@ -148,7 +148,7 @@ export function SlashCommandManager(props: SlashCommandManagerProps) {
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Generate standup summary"
-                  className="w-full rounded-lg bg-zinc-900/60 px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-700/50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 placeholder:text-zinc-600"
+                  className="w-full rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-700/50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 placeholder:text-zinc-600"
                 />
               </div>
               <div>
@@ -158,7 +158,7 @@ export function SlashCommandManager(props: SlashCommandManagerProps) {
                   onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
                   rows={3}
                   placeholder="Write a standup based on my recent activity: {args}"
-                  className="w-full rounded-lg bg-zinc-900/60 px-3 py-2 text-sm text-zinc-100 font-mono ring-1 ring-zinc-700/50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 placeholder:text-zinc-600 resize-none"
+                  className="w-full rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] px-3 py-2 text-sm text-zinc-100 font-mono ring-1 ring-zinc-700/50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 placeholder:text-zinc-600 resize-none"
                 />
                 <p className="text-[10px] text-zinc-600 mt-1">Use {'{args}'} where user input should go</p>
               </div>

@@ -41,7 +41,7 @@ export function TranscriptMessage({ message }: TranscriptMessageProps) {
         {isUser ? (
           <span className="dk-rail-text">{content}</span>
         ) : (
-          <MarkdownRenderer content={content} />
+          <MarkdownRenderer content={content} settled />
         )}
       </div>
       <div className="dk-rail-msg-meta">

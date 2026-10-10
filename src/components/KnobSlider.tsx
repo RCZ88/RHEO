@@ -23,7 +23,7 @@ export function KnobSlider({ label, value, min, max, step = 1, onChange, display
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[var(--page-accent)]"
+        className="w-full"
       />
     </div>
   );

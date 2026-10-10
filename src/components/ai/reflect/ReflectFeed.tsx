@@ -131,7 +131,7 @@ function DayNode({ day }: { day: GoalDay }) {
 		day: "numeric",
 	})
 	return (
-		<div className="rounded-xl bg-zinc-950/40 p-4 ring-1 ring-zinc-800/50 transition-[box-shadow] duration-150 hover:ring-zinc-700">
+		<div className="rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-4 ring-1 ring-zinc-800/50 transition-[box-shadow] duration-150 hover:ring-zinc-700">
 			<span
 				aria-hidden
 				className="absolute left-0 top-5 h-3.5 w-3.5 rounded-full border-2 border-zinc-950 bg-amber-400/80"

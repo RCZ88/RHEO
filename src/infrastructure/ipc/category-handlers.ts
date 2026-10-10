@@ -49,6 +49,12 @@ export interface CategoryHandlerDeps {
   categoryConfig: CategoryConfig;
   mainWindow: BrowserWindow | null;
   currentApp: string | null;
+  /** Live accessor for the tracked app. `currentApp` is destructured once, so it
+   *  is a stale snapshot and any "is this the app I'm tracking?" check against
+   *  it silently never matched. */
+  getCurrentApp?: () => string | null;
+  /** Live accessor for the main window (the destructured one is a snapshot). */
+  getMainWindow?: () => BrowserWindow | null;
   saveCategoryConfig: () => void;
   categorizeApp: (appName: string) => string;
 }
@@ -61,6 +67,31 @@ const DEFAULT_CATEGORIES = [
 
 export function registerCategoryHandlers(deps: CategoryHandlerDeps) {
   const { db, categoryConfig, mainWindow, currentApp, saveCategoryConfig, categorizeApp } = deps;
+  const getCurrentApp = deps.getCurrentApp ?? (() => currentApp);
+
+  /**
+   * The dashboard stopwatch is fed by the `foreground-changed` event, which the
+   * tracker only sends when the app CHANGES (`if (appName !== currentApp)`).
+   * So a category override never reached the live UI: the stopwatch kept showing
+   * the old category until you switched away and back, or hit the 5-minute
+   * safety-net refresh. Re-emit it here so the change is visible immediately.
+   */
+  const pushCategoryToRenderer = (appName: string) => {
+    const win = deps.getMainWindow?.() ?? mainWindow;
+    if (!win || win.isDestroyed()) return;
+    const next = categorizeApp(appName);
+    try {
+      win.webContents.send('foreground-changed', {
+        app: appName,
+        title: '',
+        category: next,
+        timestamp: new Date().toISOString(),
+        isReal: true,
+        categoryOnly: true,
+      });
+    } catch { /* window tearing down */ }
+    return next;
+  };
 
   ipcMain.handle('get-category-config', () => {
     return categoryConfig;
@@ -89,15 +120,55 @@ export function registerCategoryHandlers(deps: CategoryHandlerDeps) {
   ipcMain.handle('get-keyword-enabled-domains', () => categoryConfig.keywordEnabledDomains || {});
 
   ipcMain.handle('set-app-category', (_event, appName: string, category: string) => {
+    // Drop any existing key that differs only by case, otherwise a stale
+    // "Konsole" and a fresh "konsole" can both exist and disagree.
+    for (const k of Object.keys(categoryConfig.appCategoryMap)) {
+      if (k.toLowerCase() === appName.toLowerCase() && k !== appName) {
+        delete categoryConfig.appCategoryMap[k];
+      }
+    }
     categoryConfig.appCategoryMap[appName] = category;
     saveCategoryConfig();
     try {
+      db.prepare('DELETE FROM category_overrides WHERE lower(app) = lower(?)').run(appName);
       db.prepare('INSERT OR REPLACE INTO category_overrides (app, category) VALUES (?, ?)').run(appName, category);
     } catch (err) {
       console.error('[DeskFlow] Failed to save app category override to DB:', err);
     }
     if (mainWindow && !mainWindow.isDestroyed() && currentApp && currentApp.toLowerCase() === appName.toLowerCase()) {
       categorizeApp(currentApp);
+    }
+
+    // Backfill history so a category change is visible immediately instead of
+    // only applying to future sessions. Column names vary per table and some may
+    // not exist on older databases, so each is probed before use.
+    const probe = (sql: string) => {
+      try { db.prepare(sql); return true; } catch { return false; }
+    };
+    const targets: Array<[string, string]> = [
+      ['sessions', 'UPDATE sessions SET category = ? WHERE LOWER(app) = ? AND category IS NOT ?'],
+      ['logs', "UPDATE logs SET category = ? WHERE LOWER(app) = ? AND is_browser_tracking = 0 AND category IS NOT ?"],
+      ['app_totals', 'UPDATE app_totals SET category = ? WHERE LOWER(app_name) = ? AND app_type = ? AND category IS NOT ?'],
+    ];
+    let touched = 0;
+    for (const [table, sql] of targets) {
+      if (!probe(`SELECT 1 FROM ${table} LIMIT 1`)) continue;
+      try {
+        const r = table === 'app_totals'
+          ? db.prepare(sql).run(category, appName.toLowerCase(), 'app', category)
+          : db.prepare(sql).run(category, appName.toLowerCase(), category);
+        touched += r.changes;
+      } catch (e: any) {
+        console.warn(`[category] backfill ${table} skipped:`, e?.message || e);
+      }
+    }
+    if (touched) console.log(`[category] backfilled ${touched} historical row(s) for "${appName}" → ${category}`);
+
+    // Push to the live UI if this is the app currently being tracked.
+    const live = getCurrentApp();
+    if (live && live.toLowerCase() === appName.toLowerCase()) {
+      const pushed = pushCategoryToRenderer(live);
+      console.log(`[category] live "${live}" category is now ${pushed}`);
     }
   });
 

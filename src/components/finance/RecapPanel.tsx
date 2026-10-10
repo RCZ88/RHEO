@@ -517,7 +517,7 @@ export function RecapPanel({ dataSection, displayCurrency, onNotify }: RecapPane
           value={selectedMonth}
           max={new Date().toISOString().slice(0, 7)}
           onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
-          className="rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-200 text-xs px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+          className="rounded-lg border border-zinc-800 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] text-zinc-200 text-xs px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
         />
         <div className="flex flex-wrap gap-1.5">
           {monthsWithData.map((m) => (
@@ -536,9 +536,9 @@ export function RecapPanel({ dataSection, displayCurrency, onNotify }: RecapPane
 
       {listLoading ? (
         <div className="space-y-4">
-          <div className="h-24 rounded-xl bg-zinc-900/60 animate-pulse" />
+          <div className="h-24 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] animate-pulse" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-24 rounded-xl bg-zinc-900/60 animate-pulse" />)}
+            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-24 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] animate-pulse" />)}
           </div>
         </div>
       ) : error ? (
@@ -556,9 +556,9 @@ export function RecapPanel({ dataSection, displayCurrency, onNotify }: RecapPane
         renderEmpty()
       ) : fetchLoading ? (
         <div className="space-y-4">
-          <div className="h-24 rounded-xl bg-zinc-900/60 animate-pulse" />
+          <div className="h-24 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] animate-pulse" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-24 rounded-xl bg-zinc-900/60 animate-pulse" />)}
+            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-24 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] animate-pulse" />)}
           </div>
         </div>
       ) : (
@@ -670,7 +670,7 @@ export function RecapPanel({ dataSection, displayCurrency, onNotify }: RecapPane
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-sm mx-4 rounded-xl border border-zinc-800 bg-zinc-900/95 backdrop-blur-xl p-5 shadow-2xl"
+              className="w-full max-w-sm mx-4 rounded-xl border border-zinc-800 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-2 mb-3">

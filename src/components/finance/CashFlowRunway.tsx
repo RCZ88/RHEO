@@ -197,7 +197,7 @@ export default function CashFlowRunway() {
 
   if (loading) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800 animate-pulse">
         <div className="h-6 w-40 bg-zinc-800 rounded mb-4"></div>
         <div className="h-40 bg-zinc-800/50 rounded-lg"></div>
       </div>
@@ -206,7 +206,7 @@ export default function CashFlowRunway() {
 
   if (error) {
     return (
-      <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
+      <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
         <div className="text-center py-8">
           <Gauge size={32} className="text-zinc-600 mx-auto mb-2" />
           <p className="text-sm text-zinc-500">Need more data for runway calculation</p>
@@ -217,7 +217,7 @@ export default function CashFlowRunway() {
   }
 
   if (!data) return (
-    <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
+    <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
       <div className="flex items-center gap-2 mb-3">
         <Fuel size={18} className="text-orange-400" />
         <h3 className="text-sm font-semibold text-zinc-100">Cash Flow Runway</h3>
@@ -230,7 +230,7 @@ export default function CashFlowRunway() {
   const gaugeColor = getGaugeColor(data.runwayMonths);
 
   return (
-    <div className="bg-zinc-900/80 backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
+    <div className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl rounded-xl p-5 border border-zinc-800">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">

@@ -12,8 +12,8 @@ export function ProposalBlock({ block, onApprove, onReject }: Props) {
   const isPending = block.status === 'pending';
 
   return (
-    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60">
+    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]">
         {block.status === 'approved' ? (
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
         ) : block.status === 'rejected' ? (

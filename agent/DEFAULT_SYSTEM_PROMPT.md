@@ -44,9 +44,12 @@ commit), you MUST read and execute the protocol below.**
 3. **Never build while the app runs; never run the app while building. Never run
    two builds or two app instances.** Use the wrappers — they enforce it:
    ```bash
-   node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/run-exclusive.mjs build --forbid app -- npm run build
    node agent/docs/feature-docs/deskflow-multi-agent-coordination/agent-coordination/run-exclusive.mjs app   --forbid build app -- npm start
    ```
+   **There is deliberately no `build` line: per `AGENTS.md` §0-0 (Option B, 2026-10-02) an
+   agent does not build — CZ builds.** Running `npm run build` requested an 8192 MB V8 heap
+   on a box with ~4 GB available and produced 12 global OOM events in 24 h. Verify with scoped
+   `tsc --noEmit`, scoped `esbuild --bundle --outfile=/dev/null`, and `npm run validate:pages`.
 4. **The database has exactly one writer.** better-sqlite3 is single-writer.
    Do DB work only when the app is stopped, and always through the guard
    (it backs up first):
@@ -209,6 +212,31 @@ You may receive layered instructions. Resolve conflicts by specificity, most spe
 Project > Agent-type > General > Default (this baseline).
 Runtime "Session scope" blocks override all of the above for the bound item only.
 Never act outside the most specific scope you were given.
+
+## 5e. SCOPE DISCIPLINE — your errors are your files, only
+
+> Stated by CZ: "NO NEED TO WORRY ABOUT ERRORS THAT ARE NOT IN UR FIELD. THATS NONE OF UR BUSINESS." Permanent policy.
+
+**Scope every check to the paths you touched.** On this tree `tsc --noEmit` reports 8,000+ pre-existing errors, so a bare run and a repo-wide error count tell you nothing actionable — and both move when OTHER agents edit. A `vite build` failure is a whole-repo compile: one in-flight typo in one unrelated file kills every agent's build. **That is not your failure and you cannot fix it from your chair.**
+
+1. **Never investigate** a failure in a file you did not create or edit.
+2. **Never fix** another agent's broken file. Not even a one-character fix, not even when the fix is obvious and you have already diagnosed it. Offer once, in one line, then drop it.
+3. **Never let it gate your verdict.** If your files compile and your validators pass you are DONE. Report `PARTIAL — build blocked by an unrelated file` in one clause and move on. Do not poll waiting for someone else's build to clear.
+4. **Never offer to fix it repeatedly.** If CZ wants it he will say so.
+5. **Never panic** because another agent is live-editing a SHARED file you also touched. Grep for YOUR markers, confirm they survived, then leave. Their breakage is theirs.
+
+The exception: if a failure is in a file **you** edited, it is yours — no "probably not mine". `git diff --stat <file>` showing your own edits is proof of shared responsibility.
+
+Verify without a full build, since your surface is usually renderer-only:
+
+```bash
+npx esbuild <your files> --bundle --outfile=/dev/null \
+  --alias:@=./src --external:react --external:lucide-react   # 1. parse + resolve with real imports
+npx tsc --noEmit --project tsconfig.app.json 2>&1 | grep -E "<your paths>"   # 2. type-clean, scoped
+node <your probe>                                                    # 3. logic — a test, not a claim
+```
+
+Those three are a legitimate PASS. Name what you could not check in one clause.
 
 ## 6. Testing layers (verify honestly)
 - An IPC probe proving the backend responds is NOT proof the UI works. Test the real UI: navigate the route, click the control, observe the rendered result.

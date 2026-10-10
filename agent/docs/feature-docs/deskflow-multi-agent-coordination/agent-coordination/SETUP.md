@@ -14,7 +14,6 @@ the raw ones under `:raw` so the wrappers can call them:
     "build:raw": "vite build",          // <- your real build command
     "start:raw": "electron .",          // <- your real start command
 
-    "build": "node agent-coordination/run-exclusive.mjs build --forbid app -- npm run build:raw",
     "start": "node agent-coordination/run-exclusive.mjs app --forbid build app -- npm run start:raw",
     "deps":  "node agent-coordination/run-exclusive.mjs deps -- npm ci",
 
@@ -27,7 +26,14 @@ the raw ones under `:raw` so the wrappers can call them:
 }
 ```
 
-After this, `npm run build` and `npm start` are automatically collision-safe:
+> **NOTE — `build` is intentionally NOT wired to a wrapper.** Per `AGENTS.md` §0-0
+> (Option B, CZ 2026-10-02) **only CZ builds**. An 8192 MB heap on a box with ~4 GB
+> available produced 12 global OOM events in 24 h. Do not add a `build` wrapper line
+> back into `package.json` — it would re-create the contradiction this repo just spent
+> a cycle removing. CZ runs `npm run build`, which self-logs via
+> `scripts/build-with-log.mjs`.
+
+After this, `npm start` is automatically collision-safe:
 you physically cannot start a second app instance or build over a running app.
 
 ## 2. Pointing db-guard at the real database

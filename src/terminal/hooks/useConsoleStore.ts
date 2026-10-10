@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Appearance, HistoryEntry, MCPLogEntry, MCPServer, PaneNode, PaneState, Preset,
-  SavedCommand, Shortcut, TerminalLine, TerminalTab, TermGroup, Workspace, ZoomState,
-} from "../lib/types";
+  SavedCommand, Shortcut, TerminalLine, TerminalTab, TermGroup, Workspace, ZoomState, RightPanelTab } from "../lib/types";
 import { DEFAULT_APPEARANCE, DEFAULT_COMMANDS, DEFAULT_GROUPS, DEFAULT_MCP, DEFAULT_SHORTCUTS, MOTD, TAB_COLORS, THEMES, uid } from "../lib/data";
-import { execShell, execShellReal } from "../lib/shell";
+import { execShell, execShellReal, isFactCommand } from "../lib/shell";
 
 const LS_KEY = "penguin-console-v3";
 const LS_OLD = "penguin-console-v2";
+
+/** "quick" = create instantly with an auto-name; "prompt" = open the setup dialog. */
+export type NewTabMode = "quick" | "prompt";
 
 /** Hard cap on retained scrollback per pane. */
 const MAX_LINES = 600;
@@ -143,6 +145,7 @@ interface Persist {
   commands: SavedCommand[]; history: HistoryEntry[]; shortcuts: Shortcut[]; appearance: Appearance;
   distro: string; shell: string; demoMode: boolean; sidebarWidth: number; rightPanelWidth: number;
   autosaveEnabled: boolean;
+  newTabMode: NewTabMode;
 }
 
 function load(): Persist | null {
@@ -178,7 +181,7 @@ export function useConsoleStore() {
     { id: uid("m"), ts: Date.now() - 1000 * 60 * 18, server: "git-ops", tool: "commit_ctx", detail: "git status → clean", ok: true },
     { id: uid("m"), ts: Date.now() - 1000 * 60 * 6, server: "shell-exec", tool: "history_ctx", detail: "injected 12 cmds as context", ok: true },
   ]);
-  const [rightTab, setRightTab] = useState<"inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys" | "notes" | "handbook">("inspect");
+  const [rightTab, setRightTab] = useState<RightPanelTab>("inspect");
   const [historyQuery, setHistoryQuery] = useState("");
   const [notesQuery, setNotesQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
@@ -191,6 +194,7 @@ export function useConsoleStore() {
   const [sidebarWidth, setSidebarWidth] = useState(s?.sidebarWidth ?? 264);
   const [rightPanelWidth, setRightPanelWidth] = useState(330);
   const [autosaveEnabled, setAutosaveEnabled] = useState(s?.autosaveEnabled ?? false);
+  const [newTabMode, setNewTabMode] = useState<NewTabMode>(s?.newTabMode === "prompt" ? "prompt" : "quick");
 
   // ---- persistence ---------------------------------------------------------
   // Trims scrollback before serialising: the full store (every tab x 800 lines +
@@ -205,7 +209,7 @@ export function useConsoleStore() {
     })),
     activeTabId, groups, workspaces, commands,
     history: history.slice(0, 400),
-    shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled,
+    shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled, newTabMode,
   };
   const writeNow = useCallback(() => {
     try { localStorage.setItem(LS_KEY, JSON.stringify(snapshot.current)); } catch { /* quota */ }
@@ -214,7 +218,7 @@ export function useConsoleStore() {
   useEffect(() => {
     const t = window.setTimeout(writeNow, 400);
     return () => window.clearTimeout(t);
-  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled, writeNow]);
+  }, [tabs, activeTabId, groups, workspaces, commands, history, shortcuts, appearance, distro, shell, demoMode, sidebarWidth, rightPanelWidth, autosaveEnabled, newTabMode, writeNow]);
 
   useEffect(() => {
     if (!autosaveEnabled) return;
@@ -295,7 +299,12 @@ export function useConsoleStore() {
         },
       },
     }));
-    const res = await (demoMode ? execShell(cmd, pane.cwd, env) : execShellReal(cmd, pane.cwd, env));
+    // FACT commands (ps, free, top, pgrep, ...) always go to the real system,
+    // even in demo mode. Fabricating process or memory numbers is the one
+    // failure mode that can make an agent draw a confidently wrong conclusion,
+    // and demoMode defaults to true.
+    const useReal = !demoMode || isFactCommand(cmd);
+    const res = await (useReal ? execShellReal(cmd, pane.cwd, env) : execShell(cmd, pane.cwd, env));
     if (res.envDelta) {
       setPaneEnv((prev) => {
         const key = `${tabId}:${paneId}`;
@@ -669,7 +678,7 @@ export function useConsoleStore() {
       if (keep) merged[firstId] = { ...keep, id: firstId };
       return { ...t, layout, panes: merged, activePaneId: active, focusedPaneId: active };
     }),
-    demoMode, setDemoMode, sidebarWidth, setSidebarWidth, rightPanelWidth, setRightPanelWidth, autosaveEnabled, setAutosaveEnabled,
+    demoMode, setDemoMode, sidebarWidth, setSidebarWidth, rightPanelWidth, setRightPanelWidth, autosaveEnabled, setAutosaveEnabled, newTabMode, setNewTabMode,
     copyAllContent,
     importFromText,
   };

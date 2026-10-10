@@ -1,3 +1,4 @@
+import { ImportModal } from './components/Modals';
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useConsoleStore } from "./hooks/useConsoleStore";
@@ -17,7 +18,8 @@ import { BottomBar, LeftSidebar, TabStrip } from "./components/Chrome";
 import { SplitView, TermPane } from "./components/Terminal";
 import { RightPanel } from "./components/Panels";
 import { NewTabModal, Palette, PresetsModal, RunCmdModal, SaveCmdModal, SaveWsModal, Toasts, WorkspacesModal } from "./components/Modals";
-import { Check, Download, Maximize2, Pencil, Radio, Search, X, Upload, Import } from "lucide-react";
+import { ArrowUpDown, BookmarkPlus, Check, Download, Maximize2, MoreHorizontal, Pencil, Radio, Scale, Search, X, Upload, Import } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type Modal = "palette" | "presets" | "workspaces" | "savews" | "newtab" | "savecmd" | "rename" | "find" | "import" | null;
 
@@ -26,29 +28,60 @@ const PASSIVE_KEYS = ["t", "w", "r", "h", "v", "]", "[", "k", "l", "s", "f", "y"
 const SIDEBAR_MIN = 208;
 const SIDEBAR_MAX = 520;
 const SIDEBAR_DEFAULT = 264;
+const RIGHT_MIN = 264;
+const RIGHT_MAX = 720;
+const RIGHT_DEFAULT = 330;
 
-/** Drag handle for the left sidebar. Clamped so the sidebar can never be shrunk
- *  far enough to obstruct the terminal, nor dragged wide enough to crowd it out.
- *  Drag + arrow keys (keyboard resizing) + double-click to reset. */
-function SidebarResizer({ store }: { store: Store }) {
-  const clamp = (n: number) => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(n)));
+/** Generic drag handle for the left sidebar and the right inspector. Clamped so a
+ *  panel can never be shrunk far enough to obstruct the terminal, nor dragged
+ *  wide enough to crowd it out. Drag + arrow keys (keyboard resizing) +
+ *  double-click to reset. `side` decides which edge the drag follows. */
+function PanelResizer({ store, side }: { store: Store; side: "left" | "right" }) {
+  const isLeft = side === "left";
+  const min = isLeft ? SIDEBAR_MIN : RIGHT_MIN;
+  const max = isLeft ? SIDEBAR_MAX : RIGHT_MAX;
+  const width = isLeft ? store.sidebarWidth : store.rightPanelWidth;
+  const setWidth = isLeft ? store.setSidebarWidth : store.setRightPanelWidth;
+  const label = isLeft ? "sidebar" : "inspector";
+  const clamp = (n: number) => Math.min(max, Math.max(min, Math.round(n)));
   const onDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const startW = store.sidebarWidth;
+    const startW = width;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     // Coalesce to one state write per frame. Without this, every mousemove pushes a
     // full re-render of the whole console and the drag becomes janky/laggy.
     let pending = startW;
     let frame = 0;
+    // ── WHY THIS IS NOT A setState CALL ──────────────────────────────────────
+    // The old handler did `setWidth()` inside requestAnimationFrame. sidebarWidth
+    // is App-level state, so every single drag frame re-rendered the WHOLE console:
+    // both panels, all panes, every visible scrollback row and the inspector. That
+    // is what made the drag feel sticky -- the cost was React, not the mouse.
+    //
+    // Instead the drag writes inline widths straight to the two affected DOM nodes
+    // (zero React work per frame) and commits to the store ONCE on pointerup. The
+    // inline styles are cleared on commit so the animated width prop takes over
+    // again and React and the DOM cannot disagree.
+    const root = (e.currentTarget as HTMLElement).closest("[data-console-root]") as HTMLElement | null;
+    const panel = root?.querySelector(`[data-panel="${isLeft ? "left" : "right"}"]`) as HTMLElement | null;
+    const inner = panel?.firstElementChild as HTMLElement | null;
+    let last = startW;
+
+    const apply = (w: number) => {
+      if (panel) panel.style.width = `${w + 8}px`;
+      if (inner) inner.style.width = `${w}px`;
+    };
+
     const move = (ev: MouseEvent) => {
-      pending = clamp(startW + (ev.clientX - startX));
+      pending = clamp(startW + (isLeft ? 1 : -1) * (ev.clientX - startX));
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        store.setSidebarWidth(pending);
+        last = pending;
+        apply(pending);
       });
     };
     const up = () => {
@@ -57,6 +90,10 @@ function SidebarResizer({ store }: { store: Store }) {
       if (frame) cancelAnimationFrame(frame);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      // hand control back to React, then commit exactly once
+      if (panel) panel.style.width = "";
+      if (inner) inner.style.width = "";
+      if (last !== startW) setWidth(last);
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -65,24 +102,30 @@ function SidebarResizer({ store }: { store: Store }) {
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label={`resize sidebar, ${store.sidebarWidth} pixels`}
-      aria-valuenow={store.sidebarWidth}
-      aria-valuemin={SIDEBAR_MIN}
-      aria-valuemax={SIDEBAR_MAX}
+      aria-label={`resize ${label}, ${width} pixels`}
+      aria-valuenow={width}
+      aria-valuemin={min}
+      aria-valuemax={max}
       tabIndex={0}
-      data-testid="sidebar-resizer"
+      data-testid={isLeft ? "sidebar-resizer" : "right-panel-resizer"}
       onMouseDown={onDown}
-      onDoubleClick={() => store.setSidebarWidth(SIDEBAR_DEFAULT)}
+      onDoubleClick={() => setWidth(isLeft ? SIDEBAR_DEFAULT : RIGHT_DEFAULT)}
       onKeyDown={(e) => {
-        if (e.key === "ArrowLeft") { e.preventDefault(); store.setSidebarWidth(clamp(store.sidebarWidth - 16)); }
-        if (e.key === "ArrowRight") { e.preventDefault(); store.setSidebarWidth(clamp(store.sidebarWidth + 16)); }
-        if (e.key === "Home") { e.preventDefault(); store.setSidebarWidth(SIDEBAR_MIN); }
-        if (e.key === "End") { e.preventDefault(); store.setSidebarWidth(SIDEBAR_MAX); }
+        const nudge = (d: number) => { e.preventDefault(); setWidth(clamp(width + (isLeft ? d : -d))); };
+        if (e.key === "ArrowLeft") nudge(16);
+        if (e.key === "ArrowRight") nudge(16);
+        if (e.key === "Home") { e.preventDefault(); setWidth(min); }
+        if (e.key === "End") { e.preventDefault(); setWidth(max); }
       }}
       title="Drag to resize · arrows nudge · double-click resets"
-      className="sidebar-resizer w-2 shrink-0 cursor-col-resize grid place-items-center group/resizer outline-none"
+      className="panel-resizer df-interactive-edge w-3 shrink-0 cursor-col-resize grid place-items-center group/resizer outline-none hover:bg-[var(--t-fg)]/[0.05]"
     >
-      <span className="w-0.5 h-8 rounded-full transition group-hover/resizer:bg-[var(--t-accent)] group-focus-visible/resizer:bg-[var(--t-accent)]" style={{ background: "var(--t-border)" }} />
+      {/* The grip is ALWAYS visible. It was a 2x32px pill painted in --t-border,
+          which is #27272a on #09090b -- effectively invisible -- and it only
+          brightened on hover, so there was nothing to aim at. Now a 3x40px muted
+          grip that turns accent on hover/focus/drag, inside a 12px hit column
+          that tints on hover so the target announces itself. */}
+      <span className="w-[3px] h-10 rounded-full transition-colors group-hover/resizer:bg-[var(--t-accent)] group-focus-visible/resizer:bg-[var(--t-accent)] group-active/resizer:bg-[var(--t-accent)]" style={{ background: "var(--t-muted)", opacity: 0.45 }} />
     </div>
   );
 }
@@ -109,19 +152,47 @@ export default function App() {
 
   const demoMode = store.demoMode;
   const setDemoMode = store.setDemoMode;
-  const theme = store.theme;  const cssVars = useMemo(() => ({
-    ["--t-bg" as string]: theme.bg,
-    ["--t-panel" as string]: theme.panel,
-    ["--t-panel2" as string]: theme.panel2,
-    ["--t-fg" as string]: theme.fg,
-    ["--t-muted" as string]: theme.muted,
-    ["--t-accent" as string]: theme.accent,
-    ["--t-accent2" as string]: theme.accent2,
-    ["--t-border" as string]: theme.border,
+  const theme = store.theme;
+  // LAMINAR P4 — CHROME IS THE APP'S JOB, NOT THE SYNTAX THEME'S.
+  // This block is the reason the console never followed the design spec. All
+  // eight terminal palettes used to inject their own --t-bg/--t-panel/--t-accent
+  // as raw hex, so the surface ignored the app's zinc ramp + single signal hue
+  // entirely -- and "RHEO Dark" shipped accent #f472b6 (pink) as its identity.
+  // CHROME now derives from the app's LAMINAR tokens and the page accent, so the
+  // console is on-spec no matter which palette is selected. Only SYNTAX colours
+  // (prompt / path / selection) stay per-theme: a terminal's content palette is
+  // content, not chrome.
+  const cssVars = useMemo(() => ({
+    ["--t-bg" as string]: "var(--color-background)",
+    ["--t-panel" as string]: "var(--color-card)",
+    ["--t-panel2" as string]: "color-mix(in srgb, var(--color-card) 88%, var(--color-border))",
+    ["--t-fg" as string]: "var(--color-foreground)",
+    ["--t-muted" as string]: "var(--color-muted-foreground)",
+    ["--t-accent" as string]: "var(--page-accent, #06b6d4)",
+    ["--t-accent2" as string]: "var(--color-muted-foreground)",
+    ["--t-border" as string]: "var(--color-border)",
     ["--t-promptUser" as string]: theme.promptUser,
     ["--t-promptPath" as string]: theme.promptPath,
     ["--t-selection" as string]: theme.selection,
+    // LAMINAR §2 semantics for the console surface. Emerald is success-only,
+    // rose is destructive-only, amber is warning-only -- never decoration.
+    ["--pc-success" as string]: "var(--pc-emerald)",
+    ["--pc-danger" as string]: "var(--pc-rose)",
+    ["--pc-warning" as string]: "var(--color-amber-400)",
+    ["--pc-warn" as string]: "#fbbf24",
   }), [theme]);
+
+  /** The single gate for "make a new tab". In `quick` mode it creates one
+   *  immediately with an auto-name (no dialog); in `prompt` mode it opens the
+   *  setup dialog. Every entry point -- +, Ctrl+Shift+T, palette, tab strip,
+   *  sidebar, mobile -- routes through here, so the preference is respected
+   *  everywhere instead of only at one button. */
+  const requestNewTab = useCallback((preset?: Parameters<typeof store.newTab>[0]) => {
+    if (store.newTabMode === "prompt" && !preset) { setModal("newtab"); return; }
+    const id = store.newTab(preset);
+    notify(`New tab · ${store.tabs.length + 1}`);
+    return id;
+  }, [store, notify]);
 
   const openRunCmd = useCallback((idOrCmd: string) => {
     const byId = store.commands.find((c) => c.id === idOrCmd);
@@ -134,7 +205,7 @@ export default function App() {
   const doAction = useCallback((action: string) => {
     const t = store.activeTab;
     switch (action) {
-      case "new-tab": setModal("newtab"); break;
+      case "new-tab": requestNewTab(); break;
       case "close-tab": if (t) { store.closeTab(t.id); notify(`Closed “${t.label}”`); } break;
       case "rename": if (t) { setRenameDraft(t.label); setModal("rename"); } break;
       case "pin-tab": if (t) { store.togglePin(t.id); notify(t.pinned ? "Unpinned" : "Pinned to front"); } break;
@@ -206,7 +277,7 @@ export default function App() {
   const paletteCmd = (c: string) => {
     if (c === "__save_ws__") setModal("savews");
     else if (c === "__cycle_theme__") doAction("cycle-theme");
-    else if (c === "__new_tab__") setModal("newtab");
+    else if (c === "__new_tab__") requestNewTab();
     else if (c === "__broadcast__") doAction("broadcast");
     else if (c.startsWith("__runcmd__")) openRunCmd(c.replace("__runcmd__", ""));
     else if (c === "__import__") { setModal("import"); notify("Import terminal history"); }
@@ -234,14 +305,14 @@ export default function App() {
   const matchCount = findQ && t ? Object.values(t.panes).reduce((a, p) => a + p.lines.filter((l) => l.text.toLowerCase().includes(findQ.toLowerCase())).length, 0) : 0;
 
   return (
-    <div data-page="terminal" className={store.appearance.glow ? "term-glow h-full flex flex-col" : "h-full flex flex-col"} style={{ background: theme.bg, ...cssVars } as React.CSSProperties}>
+    <div data-console-root data-page="terminal" className={store.appearance.glow ? "term-glow h-full flex flex-col" : "h-full flex flex-col"} style={{ background: "var(--color-background)", ...cssVars } as React.CSSProperties}>
       {/* Terminal's own wash, tinted by the TERMINAL THEME (not --page-accent),
           so it still tracks the user's chosen terminal theme. Shares the global
           ambient prefs so one on/off switch governs the whole app: when the user
           turns the ambient background off it must not survive here. */}
       {ambientPrefs.enabled && ambientPrefs.intensity > 0 && (
         <div className="pointer-events-none fixed inset-0 z-0" style={{
-          background: `radial-gradient(${900 + (ambientPrefs.spread / 100) * 1400}px ${400 + (ambientPrefs.spread / 100) * 260}px at 15% -5%, ${theme.accent}${hexAlpha(ambientPrefs.intensity * 0.08)}, transparent 60%), radial-gradient(${800 + (ambientPrefs.spread / 100) * 1300}px ${380 + (ambientPrefs.spread / 100) * 250}px at 95% 0%, ${theme.accent2}${hexAlpha(ambientPrefs.intensity * 0.07)}, transparent 60%)`,
+          background: `radial-gradient(${900 + (ambientPrefs.spread / 100) * 1400}px ${400 + (ambientPrefs.spread / 100) * 260}px at 15% -5%, var(--page-accent, #06b6d4)${hexAlpha(ambientPrefs.intensity * 0.08)}, transparent 60%), radial-gradient(${800 + (ambientPrefs.spread / 100) * 1300}px ${380 + (ambientPrefs.spread / 100) * 250}px at 95% 0%, var(--page-accent, #06b6d4)${hexAlpha(ambientPrefs.intensity * 0.05)}, transparent 60%)`,
         }} />
       )}
       <a href="#terminal-main" className="sr-only focus:not-sr-only focus:absolute focus:z-[70] focus:px-3 focus:py-2 focus:rounded-lg" style={{ background: "var(--t-accent)", color: "#fff" }}>Skip to terminal</a>
@@ -252,45 +323,97 @@ export default function App() {
           onSaveWs={() => setModal("savews")}
           onWorkspaces={() => setModal("workspaces")}
           onPresets={() => setModal("presets")}
-          onNewTab={() => setModal("newtab")}
+          onNewTab={() => requestNewTab()}
           leftOpen={leftOpen} setLeftOpen={setLeftOpen} rightOpen={rightOpen} setRightOpen={setRightOpen}
           demoMode={demoMode} setDemoMode={setDemoMode}
           onRename={() => { setRenameDraft(t.label); setModal("rename"); }}
         />
-        <TabStrip store={store} onNewTab={() => setModal("newtab")} />
-        <div className="flex-1 flex min-h-0 gap-2 px-3 pb-1">
+        <TabStrip store={store} onNewTab={() => requestNewTab()} />
+        <div className="flex-1 flex min-h-0 px-3 pb-3 pt-1">
+          {/* The ONE frame of the surface. `console-frame` lifts it onto the
+              elevation ramp (plane 2) with the only shadow in the console, and
+              `df-rail-edge` gives it a lit top hairline so the chrome reads as a
+              physical plane catching light rather than a flat rectangle. */}
+          <div className="console-frame df-rail-edge flex-1 flex min-h-0 overflow-hidden rounded-xl border" style={{ borderColor: "var(--t-border)" }}>
           <AnimatePresence initial={false}>
             {leftOpen && (
-              <motion.div key="left" initial={{ width: 0, opacity: 0 }} animate={{ width: store.sidebarWidth + 8, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden lg:flex shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
+              <motion.div key="left" data-panel="left" initial={{ width: 0, opacity: 0 }} animate={{ width: store.sidebarWidth + 8, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden lg:flex shrink-0 min-h-0 border-r" style={{ borderColor: "var(--t-border)" }}>
                 <div className="h-full" style={{ width: store.sidebarWidth }}>
-                  <LeftSidebar store={store} onPresets={() => setModal("presets")} onWorkspaces={() => setModal("workspaces")} onNewTab={() => setModal("newtab")} />
+                  <LeftSidebar store={store} onPresets={() => setModal("presets")} onWorkspaces={() => setModal("workspaces")} onNewTab={() => requestNewTab()} />
                 </div>
-                <SidebarResizer store={store} />
+                <PanelResizer store={store} side="left" />
               </motion.div>
             )}
           </AnimatePresence>
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 rounded-xl border p-2" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-panel) 55%, transparent)" }}>
-            <div className="flex items-center gap-1.5 px-1 pb-2 shrink-0 flex-wrap">
-              <span className="flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: `${t?.color ?? theme.accent}15`, color: t?.color ?? theme.fg }}>
+          <div className="flex-1 flex flex-col min-h-0 min-w-0">
+            <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-2 shrink-0 flex-wrap border-b" style={{ borderColor: "var(--t-border)" }}>
+              <span className="flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: `${t?.color ?? "var(--t-accent)"}15`, color: t?.color ?? "var(--t-fg)" }}>
                 <span className="w-1.5 h-1.5 rounded-full anim-pulse-dot" style={{ background: t?.color }} />{t?.label}
-                {t?.pinned && <span className="text-[9px] mono px-1 rounded" style={{ background: t.color, color: "#0b0e17" }}>PINNED</span>}
+                {t?.pinned && <span className="text-[9px] mono px-1 rounded" style={{ background: t.color, color: "var(--t-bg)" }}>PINNED</span>}
               </span>
               <span className="text-[10.5px] mono hidden sm:inline" style={{ color: "var(--t-muted)" }}>{t ? Object.keys(t.panes).length : 0} panes · {t?.shell ?? store.shell} · {store.distro.split(" ")[0]}</span>
-              {store.broadcastTabId === t?.id && <span className="flex items-center gap-1 text-[10px] mono font-bold px-1.5 py-1 rounded-lg" style={{ background: "rgba(251,113,133,.12)", color: "#fb7185" }}><Radio size={11} />BROADCAST</span>}
+              {store.broadcastTabId === t?.id && <span className="flex items-center gap-1 text-[10px] mono font-bold px-1.5 py-1 rounded-lg" style={{ background: "rgba(251,113,133,.12)", color: "var(--pc-danger)" }}><Radio size={11} />BROADCAST</span>}
               <div className="flex-1" />
-              <button onClick={() => { setModal("find"); if (t) { setFindOpen(true); notify("Find mode active"); } }} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Search size={12} />Find</button>
-              <button onClick={() => { setModal("import"); notify("Import terminal history"); }} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)] hidden sm:flex items-center gap-1" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Import size={12} />Import</button>
-              <button onClick={() => t && store.splitPane(t.id, t.activePaneId, "row")} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>⇄ Split</button>
-              <button onClick={() => t && store.splitPane(t.id, t.activePaneId, "col")} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)]" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>⇅ Stack</button>
-              <button onClick={() => t && store.balanceAction(t.id)} className="h-7 px-2.5 rounded-lg text-[11px] font-bold transition hover:brightness-110" style={{ background: "color-mix(in srgb, var(--t-accent) 16%, transparent)", color: "var(--t-accent)" }}>Balance</button>
-              <button onClick={() => { setSaveCmdInitial(""); setModal("savecmd"); }} className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)] hidden sm:block" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}>＋ Save cmd</button>
-              <button onClick={exportTranscript} title="Export transcript (.md)" className="h-7 px-2.5 rounded-lg border text-[11px] font-semibold transition hover:border-[var(--t-accent)] hidden sm:flex items-center gap-1" style={{ borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Download size={12} /></button>
+              <button
+                onClick={() => { setModal("find"); if (t) { setFindOpen(true); notify("Find mode active"); } }}
+                className="h-7 px-2 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1.5 hover:bg-[var(--t-fg)]/[0.06]"
+                style={{ color: "var(--t-muted)" }}
+              >
+                <Search size={12} />Find
+              </button>
+              {/* ONE primary action for this bar. Splitting a pane is the console's
+                  core verb, so it is the only thing allowed a filled accent —
+                  the rail has zero, and LAMINAR §4 allows one signal per surface,
+                  not one per toolbar. Everything else moved into the overflow so
+                  this stops being a wall of eight equal chips. */}
+              <button
+                onClick={() => t && store.splitPane(t.id, t.activePaneId, "row")}
+                title="Split pane left/right (Ctrl+Shift+H)"
+                className="h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-90 flex items-center gap-1.5"
+                style={{ background: "var(--t-accent)", color: "var(--color-background)" }}
+              >
+                Split <span className="text-[10px] mono opacity-70">⇧⌃H</span>
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label="More pane actions"
+                  className="h-7 w-7 rounded-lg grid place-items-center transition-colors hover:bg-[var(--t-fg)]/[0.06]"
+                  style={{ color: "var(--t-muted)" }}
+                >
+                  <MoreHorizontal size={13} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => t && store.splitPane(t.id, t.activePaneId, "col")}>
+                    <ArrowUpDown size={13} />
+                    Stack panes
+                    <span className="ml-auto text-[10px] mono" style={{ color: "var(--t-muted)" }}>⇧⌃V</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => t && store.balanceAction(t.id)}>
+                    <Scale size={13} />
+                    Balance panes
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => { setModal("import"); notify("Import terminal history"); }}>
+                    <Import size={13} />
+                    Import history
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportTranscript}>
+                    <Download size={13} />
+                    Export transcript
+                    <span className="ml-auto text-[10px] mono" style={{ color: "var(--t-muted)" }}>.md</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setSaveCmdInitial(""); setModal("savecmd"); }}>
+                    <BookmarkPlus size={13} />
+                    Save command
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {findOpen && (
-              <div className="flex items-center gap-2 px-1 pb-2 shrink-0 anim-fadeUp">
+              <div className="flex items-center gap-2 px-3 py-2 shrink-0 anim-fadeUp border-b" style={{ borderColor: "var(--t-border)" }}>
                 <div className="relative flex-1 max-w-xs">
                   <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
-                  <input autoFocus value={findQ} onChange={(e) => setFindQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { setFindOpen(false); setFindQ(""); } }} placeholder="Find in all panes…" aria-label="find in panes" className="w-full h-8 pl-8 pr-3 rounded-lg border text-[12px] outline-none mono" style={{ background: "var(--t-bg)", borderColor: "var(--t-accent)", color: "var(--t-fg)" }} />
+                  <input autoFocus value={findQ} onChange={(e) => setFindQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { setFindOpen(false); setFindQ(""); } }} placeholder="Find in all panes…" aria-label="find in panes" className="w-full h-8 pl-8 pr-3 rounded-lg text-[12px] outline-none mono border" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)", color: "var(--t-fg)" }} />
                 </div>
                 <span className="text-[11px] mono" style={{ color: "var(--t-muted)" }}>{findQ ? `${matchCount} match${matchCount === 1 ? "" : "es"}` : "type to highlight"}</span>
                 <button onClick={() => { setFindOpen(false); setFindQ(""); }} className="w-7 h-7 rounded-lg grid place-items-center hover:bg-white/10" style={{ color: "var(--t-muted)" }} aria-label="close find"><X size={13} /></button>
@@ -302,13 +425,15 @@ export default function App() {
           </div>
           <AnimatePresence initial={false}>
             {rightOpen && (
-              <motion.div key="right" initial={{ width: 0, opacity: 0 }} animate={{ width: 330, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="hidden md:block shrink-0 rounded-xl border overflow-hidden min-h-0" style={{ borderColor: "var(--t-border)" }}>
-                <div className="w-[330px] h-full">
+              <motion.div key="right" data-panel="right" initial={{ width: 0, opacity: 0 }} animate={{ width: store.rightPanelWidth + 8, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }} className="hidden md:flex shrink-0 min-h-0 border-l" style={{ borderColor: "var(--t-border)" }}>
+                <PanelResizer store={store} side="right" />
+                <div className="h-full" style={{ width: store.rightPanelWidth }}>
                   <RightPanel store={store} notify={notify} groupCtl={{ renameG, setRenameG, gDraft, setGDraft }} />
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
+          </div>
         </div>
         <BottomBar store={store} />
       </div>
@@ -319,14 +444,14 @@ export default function App() {
             <div className="fixed inset-0 z-30 bg-black/50" onClick={() => setLeftOpen(false)} />
             <motion.div initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }} className="fixed inset-y-0 left-0 w-[300px] z-40 border-r overflow-hidden" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)" }}>
               <div className="flex justify-end p-2"><button onClick={() => setLeftOpen(false)} className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10" style={{ color: "var(--t-muted)" }} aria-label="close sidebar"><X size={15} /></button></div>
-              <div className="h-[calc(100%-48px)]"><LeftSidebar store={store} onPresets={() => { setModal("presets"); setLeftOpen(false); }} onWorkspaces={() => { setModal("workspaces"); setLeftOpen(false); }} onNewTab={() => setModal("newtab")} /></div>
+              <div className="h-[calc(100%-48px)]"><LeftSidebar store={store} onPresets={() => { setModal("presets"); setLeftOpen(false); }} onWorkspaces={() => { setModal("workspaces"); setLeftOpen(false); }} onNewTab={() => requestNewTab()} /></div>
             </motion.div>
           </>
         )}
       </div>
       <div className="md:hidden">
         {!rightOpen && t && (
-          <button onClick={() => setRightOpen(true)} className="fixed bottom-12 right-3 z-40 h-10 px-3.5 rounded-xl text-white text-[12px] font-bold shadow-2xl flex items-center gap-1.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}><Maximize2 size={13} />Inspector</button>
+          <button onClick={() => setRightOpen(true)} aria-label="Open inspector" className="fixed bottom-12 right-3 z-40 h-8 px-2.5 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-colors hover:bg-[var(--t-fg)]/[0.06]" style={{ background: "var(--t-panel)", borderColor: "var(--t-border)", color: "var(--t-fg)" }}><Maximize2 size={12} />Inspector</button>
         )}
         {rightOpen && (
           <>

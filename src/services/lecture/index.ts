@@ -306,6 +306,45 @@ async function transcribeLocally(bytes: Buffer, opts: { mime: string; filename: 
   return { error: STT_HELP };
 }
 
+/**
+ * Split `pdftotext -layout` output into analysed pages.
+ *
+ * Exported (and pure) so it can be unit-tested against real poppler output
+ * rather than a reimplementation of itself. Poppler separates pages with a
+ * form feed; a trailing one is not a page.
+ *
+ * NUL / non-breaking space are normalised to a space and NOTHING else is
+ * collapsed — `-layout` has already preserved column alignment, and squashing
+ * runs of spaces here would flatten every table and code listing in the PDF.
+ */
+export function analysePdfText(raw: string): { pages: PdfPageAnalysis[]; totalChars: number } {
+  const pages: PdfPageAnalysis[] = [];
+  const chunks = String(raw || '').split('\f');
+  // Drop ALL trailing empty chunks, not just one: a single pop left N-1 phantom
+  // pages behind whenever poppler emitted consecutive form feeds. Interior empty
+  // chunks are KEPT, because they are real blank pages and dropping them would
+  // renumber every page after the gap.
+  while (chunks.length && chunks[chunks.length - 1].trim() === '') chunks.pop();
+
+  for (let i = 0; i < chunks.length; i++) {
+    const text = chunks[i].replace(/[\u0000\u00a0]/g, ' ').trim();
+    const chars = text.length;
+    // A page with almost no characters is a scanned image, not a text page.
+    const scanned = chars < 24;
+    const firstLine = (text.split('\n').find(l => l.trim()) || '').trim().slice(0, 90);
+    pages.push({ number: i + 1, text, chars, scanned, title: firstLine || `Page ${i + 1}` });
+  }
+  return { pages, totalChars: pages.reduce((a, p) => a + p.chars, 0) };
+}
+
+export interface PdfPageAnalysis {
+  number: number;
+  text: string;
+  chars: number;
+  scanned: boolean;
+  title: string;
+}
+
 export function registerLectureHandlers(db: Database) {
   // ── Generic REST dispatcher over the sm_* tables ──────────────────────────
   ipcMain.handle('lecture:api', async (_event, req: ApiRequest) => {
@@ -577,6 +616,124 @@ export function registerLectureHandlers(db: Database) {
     }) as { error?: string; text: string; model?: string; engine?: string };
     if (result.error || !result.text) return { error: result.error || 'The backend returned an empty transcript.' };
     return { ...result, elapsedMs: Date.now() - started, bytes: bytes.length };
+  });
+
+  // ── PDF ingestion (poppler) ──────────────────────────────────────────────
+  // Deliberately NOT pdfjs-dist: adding an npm dependency would mutate
+  // package.json / node_modules, which other agents are actively editing, and a
+  // from-scratch PDF text extractor mangles CID-encoded fonts silently. Poppler
+  // (pdftotext/pdftoppm/pdfinfo) is a correct, dependency-free extractor and
+  // `pdftoppm` additionally rasterises pages, which is how a SCANNED pdf (no text
+  // layer) still reaches the local vision model instead of importing as blank.
+  ipcMain.handle('lecture:pdf:parse', async (_event, opts: {
+    pdfBase64?: string; filename?: string; rasteriseScanned?: boolean; maxPageImages?: number;
+  }) => {
+    const b64 = String(opts?.pdfBase64 || '').trim();
+    if (!b64) return { error: 'No PDF supplied.' };
+
+    const which = (bin: string) => new Promise<string | null>((resolve) => {
+      const cmd = process.platform === 'win32' ? 'where' : 'which';
+      execFile(cmd, [bin], { timeout: 5000, windowsHide: true },
+        (_e, stdout) => resolve(String(stdout || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)[0] || null));
+    });
+
+    const [pdftotext, pdfinfo, pdftoppm] = await Promise.all([which('pdftotext'), which('pdfinfo'), which('pdftoppm')]);
+    if (!pdftotext || !pdfinfo) {
+      return {
+        error: 'PDF extraction needs Poppler (pdftotext + pdfinfo), which was not found on PATH. ' +
+          'Install it with: sudo dnf install poppler-utils   (Debian/Ubuntu: sudo apt install poppler-utils)',
+      };
+    }
+
+    let bytes: Buffer;
+    try { bytes = Buffer.from(b64, 'base64'); } catch { return { error: 'PDF payload was not valid base64.' }; }
+    if (bytes.length < 32) return { error: 'That file is empty or too small to be a PDF.' };
+    // A PDF always starts with %PDF- ; anything else means a renamed file.
+    if (bytes.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      return { error: 'That file is not a PDF (missing the %PDF- header). It may be renamed.' };
+    }
+    if (bytes.length > 250 * 1024 * 1024) return { error: 'PDF is over 250 MB. Split it first.' };
+
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'slidemind-pdf-'));
+    const safeName = String(opts?.filename || 'lecture.pdf').replace(/[^\w.\-]+/g, '_').slice(-80);
+    const file = path.join(dir, safeName.endsWith('.pdf') ? safeName : safeName + '.pdf');
+
+    const run = (bin: string, args: string[], maxBuf = 64 * 1024 * 1024) =>
+      new Promise<{ stdout: Buffer; stderr: string }>((resolve, reject) => {
+        execFile(bin, args, { timeout: 5 * 60_000, maxBuffer: maxBuf, windowsHide: true, encoding: 'buffer' as any },
+          (err, stdout, stderr) => {
+            if (err) return reject(new Error(String(stderr || err.message).toString().slice(0, 300)));
+            resolve({ stdout: stdout as unknown as Buffer, stderr: String(stderr || '') });
+          });
+      });
+
+    try {
+      await fs.writeFile(file, bytes);
+
+      // ── metadata ────────────────────────────────────────────────────────────
+      let info: Record<string, string> = {};
+      try {
+        const { stdout } = await run(pdfinfo, [file]);
+        for (const line of stdout.toString('utf8').split('\n')) {
+          const m = line.match(/^([A-Za-z][A-Za-z ()/-]*):\s*(.*)$/);
+          if (m) info[m[1].trim()] = m[2].trim();
+        }
+      } catch (e: any) {
+        const msg = String(e?.message || '');
+        if (/password/i.test(msg)) return { error: 'This PDF is password-protected. Remove the password and re-import.' };
+      }
+
+// ── text, layout-preserved ──────────────────────────────────────────────
+      let text = '';
+      try {
+        const { stdout } = await run(pdftotext, ['-layout', '-enc', 'UTF-8', file, '-']);
+        text = stdout.toString('utf8');
+      } catch (e: any) {
+        const msg = String(e?.message || '');
+        if (/password/i.test(msg)) return { error: 'This PDF is password-protected. Remove the password and re-import.' };
+        return { error: 'pdftotext failed: ' + msg };
+      }
+
+      const { pages: analysed, totalChars } = analysePdfText(text);
+      const declared = Number(info.Pages) || 0;
+      const wantRaster = !!opts?.rasteriseScanned && !!pdftoppm;
+
+      const pages: any[] = [];
+      for (const a of analysed) {
+        let imageBase64: string | null = null;
+        if (a.scanned && wantRaster) {
+          try {
+            const prefix = path.join(dir, `page-${a.number}`);
+            await run(pdftoppm, ['-r', '140', '-f', String(a.number), '-l', String(a.number), '-png', '-singlefile', file, prefix], 8 * 1024 * 1024);
+            const png = await fs.readFile(prefix + '.png');
+            if (png.length < 4 * 1024 * 1024) imageBase64 = png.toString('base64');
+          } catch { /* raster is best-effort */ }
+        }
+        pages.push({ ...a, hasImage: !!imageBase64, imageBase64 });
+      }
+
+      const scannedCount = pages.filter(p => p.scanned).length;
+
+      return {
+        pages,
+        meta: {
+          fileName: String(opts?.filename || safeName),
+          title: info.Title && info.Title.length > 1 ? info.Title : String(opts?.filename || 'Lecture PDF').replace(/\.pdf$/i, ''),
+          author: info.Author || '',
+          pageCount: declared || pages.length,
+          scannedPages: scannedCount,
+          // Surfaced so the UI can say WHY a document came out empty instead of
+          // silently importing 40 blank pages.
+          hasTextLayer: totalChars > 0,
+          tools: { pdftotext: !!pdftotext, pdftoppm: !!pdftoppm, rasterised: wantRaster },
+          bytes: bytes.length,
+        },
+      };
+    } catch (err: any) {
+      return { error: 'PDF import failed: ' + (err?.message || String(err)) };
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
   });
 }
 

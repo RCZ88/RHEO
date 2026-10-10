@@ -17,7 +17,50 @@ A Chrome Manifest V3 extension that tracks your active browsing activity and sen
 - Screenshots or page content
 - Incognito/private browsing (by default)
 
-## Installation in Comet Browser
+## Install in Zen / Firefox (the extension is named "DeskFlow Browser Bridge")
+
+Zen is **Firefox-based** — there is no "Developer mode" and no "Load unpacked".
+Those are Chromium-only, and looking for them wastes your time.
+
+1. Build the package (it needs `manifest.json` at the archive root):
+   ```bash
+   node scripts/build-extension-package.mjs
+   ```
+   Output: `release/deskflow-bridge/deskflow-bridge-firefox.xpi`
+2. Open `about:addons` → **Extensions** tab
+3. Gear icon (⚙️ top-right) → **Install Add-on From File…**
+4. Pick the **`.xpi`** (not the folder, not the `browser-extension/` dir)
+5. On the permission prompt, **Allow** access to `localhost`
+
+### The extension is not on your toolbar (Zen 1.17b+)
+
+Zen removed the toolbar extension button. Extensions moved into the **unified
+panel** in the address bar. The panel is also **hidden on new-tab and `about:`
+pages**, so on a blank page it genuinely looks like nothing is installed.
+
+Open a **real web page** → click the settings icon in the address bar → find
+DeskFlow Browser Bridge → right-click → **Pin to Toolbar**.
+
+### Nothing is being sent to DeskFlow?
+
+Firefox-family MV3 makes `host_permissions` **opt-in** (Chrome grants them
+silently). Without the grant every request to `localhost:54321` is blocked and
+the extension looks fine while sending nothing.
+
+Check: `about:addons` → **DeskFlow Browser Bridge** → confirm **localhost** access
+is ON. You can also click **Connect to DeskFlow** in the add-on's own popup —
+the extension retries automatically, so this is only needed once.
+
+### Debug it properly
+
+**`about:debugging#/runtime/this-firefox`** → *This Firefox* sidebar → the add-on
+→ **Inspect** → **Console**.
+
+This is where a broken add-on's actual error appears. Prefer it to guessing.
+
+---
+
+## Installation in Chrome / Comet / Brave / Edge (Chromium)
 
 1. **Open Comet Browser**
 
@@ -35,7 +78,7 @@ A Chrome Manifest V3 extension that tracks your active browsing activity and sen
    - Example: `C:\Users\cleme\Downloads\App Tracker\browser-extension`
 
 5. **Verify Installation**
-   - You should see **"DeskFlow Browser Tracker"** in your extensions list
+   - You should see **"DeskFlow Browser Bridge"** in your extensions list
    - Under the extension, you should see: `Service Worker` (clickable link)
    - Click "Service Worker" to open DevTools and see console logs
 

@@ -106,7 +106,7 @@ export function CategoriesTab({ categories, loading, error, onRetry, displayCurr
           </div>
           <div className="flex gap-1">
             <button onClick={handleSaveEdit} className="flex-1 px-2 py-1 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Save</button>
-            <button onClick={() => setEditing(null)} className="flex-1 px-2 py-1 rounded text-[10px] text-zinc-500 hover:text-zinc-300">Cancel</button>
+            <button onClick={() => setEditing(null)} className="flex-1 px-2 py-1 rounded fin-label hover:text-zinc-300">Cancel</button>
           </div>
         </div>
       ) : (
@@ -134,7 +134,7 @@ export function CategoriesTab({ categories, loading, error, onRetry, displayCurr
             </div>
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-[10px] text-zinc-500">Spent this period</span>
+            <span className="fin-label">Spent this period</span>
             <span className="text-xs font-medium tabular-nums" style={{ color: cat.color }}>
               {fc(Number((cat as any).amount) || 0)}
             </span>
@@ -258,7 +258,7 @@ export function CategoriesTab({ categories, loading, error, onRetry, displayCurr
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.92 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-xs bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5"
+              className="w-full max-w-xs bg-popover border border-border rounded-xl p-5"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -325,7 +325,7 @@ function CreateCategoryModal({ onClose, onSave }: {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.92 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-sm bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5"
+        className="w-full max-w-sm bg-popover border border-border rounded-xl p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
@@ -363,7 +363,7 @@ function CreateCategoryModal({ onClose, onSave }: {
           </div>
 
           <div>
-            <p className="text-[11px] text-zinc-500 mb-1.5">Icon</p>
+            <p className="fin-label mb-1.5">Icon</p>
             <div className="relative mb-1.5">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
               <input
@@ -395,7 +395,7 @@ function CreateCategoryModal({ onClose, onSave }: {
           </div>
 
           <div>
-            <p className="text-[11px] text-zinc-500 mb-1.5">Color</p>
+            <p className="fin-label mb-1.5">Color</p>
             <div className="grid grid-cols-4 gap-2">
               {defaultColors.map(c => (
                 <button
@@ -416,7 +416,7 @@ function CreateCategoryModal({ onClose, onSave }: {
             </div>
             <div>
               <p className="text-xs font-medium text-zinc-200">{name || 'Category Name'}</p>
-              <p className="text-[10px] text-zinc-500 capitalize">{type}</p>
+              <p className="fin-label capitalize">{type}</p>
             </div>
           </div>
         </div>

@@ -19,17 +19,54 @@ export interface AgentVisualConfig {
   abbr: string;
 }
 
+/**
+ * Palette resolution.
+ *
+ * LAMINAR forbids raw hex in components, but these values are consumed as JS
+ * strings (inline `style={{ color }}`, and framer-motion `animate={{ color }}`
+ * which needs a literal, not a var()). So instead of inlining hex at each use
+ * site we name every value here ONCE and resolve the name at the boundary.
+ *
+ * Agent identity accents are the one legitimate multi-hue case: five distinct
+ * agents must be told apart at a glance, and each is still a real palette entry
+ * rather than an ad-hoc colour.
+ */
+export const WF_PALETTE = {
+  // agent identity
+  opencode: '#22d3ee',
+  claude: '#a78bfa',
+  codex: '#34d399',
+  gemini: '#818cf8',
+  aider: '#fbbf24',
+  // semantic state (mirrors the --wf-* custom properties in workforce.css)
+  ok: '#34d399',
+  warn: '#fbbf24',
+  err: '#f87171',
+  idle: '#52525b',
+  muted: '#a1a1aa',
+  signal: '#22d3ee',
+} as const;
+
+export type WfPaletteKey = keyof typeof WF_PALETTE;
+
+/** Resolve a palette key to its colour. Throws on a typo instead of painting black. */
+export function wfColor(key: WfPaletteKey): string {
+  const v = WF_PALETTE[key];
+  if (typeof v !== 'string') throw new Error(`[workforce] unknown palette key: ${String(key)}`);
+  return v;
+}
+
 export const AGENT_VISUALS: Record<KnownAgentId, AgentVisualConfig> = {
-  opencode: { glyph: '>_',  accent: '#22d3ee', label: 'OPENCODE', abbr: 'OC' },
-  claude:   { glyph: '◉_',  accent: '#a78bfa', label: 'CLAUDE',   abbr: 'CL' },
-  codex:    { glyph: '</>', accent: '#34d399', label: 'CODEX',    abbr: 'CX' },
-  gemini:   { glyph: '✦',   accent: '#818cf8', label: 'GEMINI',   abbr: 'GM' },
-  aider:    { glyph: '#_',  accent: '#fbbf24', label: 'AIDER',    abbr: 'AI' },
+  opencode: { glyph: '>_',  accent: WF_PALETTE.opencode, label: 'OPENCODE', abbr: 'OC' },
+  claude:   { glyph: '◉_',  accent: WF_PALETTE.claude,   label: 'CLAUDE',   abbr: 'CL' },
+  codex:    { glyph: '</>', accent: WF_PALETTE.codex,    label: 'CODEX',    abbr: 'CX' },
+  gemini:   { glyph: '✦',   accent: WF_PALETTE.gemini,   label: 'GEMINI',   abbr: 'GM' },
+  aider:    { glyph: '#_',  accent: WF_PALETTE.aider,    label: 'AIDER',    abbr: 'AI' },
 };
 
 export const UNKNOWN_VISUAL: AgentVisualConfig = {
   glyph: '?_',
-  accent: '#a1a1aa', // zinc-400
+  accent: WF_PALETTE.muted,
   label: 'AGENT',
   abbr: '??',
 };
@@ -45,15 +82,15 @@ export const ERROR_GLYPH = 'x_';
 
 /** Status dot colors — mirror the existing RHEO session indicator colors. */
 export const STATE_DOT: Record<VisualState, string> = {
-  launching: '#52525b', // zinc-600
-  ready:     '#22d3ee', // cyan-400
-  busy:      '#34d399', // emerald-400
-  thinking:  '#34d399',
-  attention: '#fbbf24', // amber-400
-  error:     '#f87171', // red-400
-  idle:      '#fbbf24',
-  completed: '#34d399',
-  inactive:  '#52525b',
+  launching: WF_PALETTE.idle, // zinc-600
+  ready:     WF_PALETTE.signal, // cyan-400
+  busy:      WF_PALETTE.ok, // emerald-400
+  thinking:  WF_PALETTE.ok,
+  attention: WF_PALETTE.warn, // amber-400
+  error:     WF_PALETTE.err, // red-400
+  idle:      WF_PALETTE.warn,
+  completed: WF_PALETTE.ok,
+  inactive:  WF_PALETTE.idle,
 };
 
 /** Small lowercase word rendered under the agent name. */

@@ -29,7 +29,7 @@ interface TabsListProps {
 
 export function TabsList({ children, className = '' }: TabsListProps) {
   return (
-    <div className={`inline-flex items-center rounded-lg bg-zinc-900 ring-1 ring-zinc-800 p-0.5 light:bg-zinc-100 light:ring-zinc-200 ${className}`}>
+    <div className={`inline-flex items-center rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800 p-0.5 light:bg-zinc-100 light:ring-zinc-200 ${className}`}>
       {children}
     </div>
   );

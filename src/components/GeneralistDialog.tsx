@@ -211,7 +211,7 @@ export default function GeneralistDialog({ onClose, onUseSkill }: GeneralistDial
                 return (
                   <div
                     key={skill.id}
-                    className={`bg-zinc-900/50 rounded-lg border-l-2 ${borderColor} cursor-pointer hover:bg-zinc-800/50 transition-colors`}
+                    className={`bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-lg border-l-2 ${borderColor} cursor-pointer hover:bg-zinc-800/50 transition-colors`}
                     onClick={() => setExpandedSkill(isExpanded ? null : skill.id)}
                   >
                     <div className="p-3">

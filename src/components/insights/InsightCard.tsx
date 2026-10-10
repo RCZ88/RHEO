@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Award, BarChart3, Zap, Flame, Target, Moon, Timer, Activity } from 'lucide-react';
 import type { InsightAtom } from '../../shared/insights';
 import type { RewindTheme } from './rewind-themes';
-import { REWIND_THEME_MAP, DEFAULT_THEME_ID } from './rewind-themes';
+import { REWIND_THEME_MAP, DEFAULT_THEME_ID, resolveRewindTheme, isLightTheme } from './rewind-themes';
 
 // ─── Kind-specific icon lookup ───────────────────────────
 const KIND_ICONS: Record<string, React.FC<{ className?: string }>> = {
@@ -35,7 +35,7 @@ const KIND_LABELS: Record<string, string> = {
 function SuperlativeCardCompact({ atom }: { atom: InsightAtom }) {
   const direction = atom.comparison?.direction;
   return (
-    <div className="relative rounded-xl border border-indigo-500/20 bg-[#0a0a0f] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
+    <div className="relative rounded-xl border border-indigo-500/20 bg-[var(--ws-surface-raised)] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.12)_0%,transparent_70%)]" />
       <div className="relative z-10 text-center">
         <span className="text-[9px] uppercase tracking-[0.15em] text-indigo-400/60 font-medium">TOP APP</span>
@@ -62,7 +62,7 @@ function SuperlativeCardCompact({ atom }: { atom: InsightAtom }) {
 
 function RecordCardCompact({ atom }: { atom: InsightAtom }) {
   return (
-    <div className="relative rounded-xl border border-amber-500/20 bg-[#0f0a05] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
+    <div className="relative rounded-xl border border-amber-500/20 bg-[var(--ws-surface-raised)] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
       <div className="absolute top-3 right-3">
         <div className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
           <span className="text-[8px] uppercase tracking-[0.2em] text-amber-400 font-bold">NEW RECORD</span>
@@ -84,7 +84,7 @@ function RecordCardCompact({ atom }: { atom: InsightAtom }) {
 
 function StreakCardCompact({ atom }: { atom: InsightAtom }) {
   return (
-    <div className="relative rounded-xl border border-emerald-500/20 bg-[#050f0a] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
+    <div className="relative rounded-xl border border-emerald-500/20 bg-[var(--ws-surface-raised)] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
       <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-500 via-emerald-400 to-emerald-600 rounded-l-xl" />
       <div className="pl-3">
         <div className="flex items-center justify-between">
@@ -102,12 +102,12 @@ function StreakCardCompact({ atom }: { atom: InsightAtom }) {
 
 function AnomalyCardCompact({ atom }: { atom: InsightAtom }) {
   return (
-    <div className="relative rounded-xl border border-orange-500/20 bg-[#0f0805] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
+    <div className="relative rounded-xl border border-orange-500/20 bg-[var(--ws-surface-raised)] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
       <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(249,115,22,1) 10px, rgba(249,115,22,1) 11px)' }} />
       <div className="relative z-10">
         <div className="flex items-center gap-2 mb-2">
           <Activity className="w-3.5 h-3.5 text-orange-400" />
-          <span className="text-[9px] uppercase tracking-[0.15em] text-orange-400/60 font-medium">ANOMALY</span>
+          <span className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-muted)] font-medium">ANOMALY</span>
         </div>
         <div className="flex items-baseline gap-1">
           <span className="text-3xl font-bold text-orange-400 tabular-nums">{atom.value}</span>
@@ -122,7 +122,7 @@ function AnomalyCardCompact({ atom }: { atom: InsightAtom }) {
 function RatioCardCompact({ atom }: { atom: InsightAtom }) {
   const ratio = typeof atom.value === 'number' ? atom.value : 0;
   return (
-    <div className="relative rounded-xl border border-rose-500/20 bg-[#0f0508] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
+    <div className="relative rounded-xl border border-rose-500/20 bg-[var(--ws-surface-raised)] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[9px] uppercase tracking-[0.15em] text-rose-400/60 font-medium">PRODUCTIVITY</span>
         <span className="text-2xl font-bold text-white tabular-nums">{ratio}%</span>
@@ -140,7 +140,7 @@ function RatioCardCompact({ atom }: { atom: InsightAtom }) {
 
 function PatternCardCompact({ atom }: { atom: InsightAtom }) {
   return (
-    <div className="relative rounded-xl border border-indigo-500/20 bg-[#08080f] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
+    <div className="relative rounded-xl border border-indigo-500/20 bg-[var(--ws-surface-raised)] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
       <svg className="absolute bottom-0 left-0 right-0 h-12 opacity-10" viewBox="0 0 200 40" preserveAspectRatio="none">
         <path d="M0 30 Q25 10 50 25 T100 20 T150 25 T200 15 V40 H0Z" fill="currentColor" className="text-indigo-400" />
       </svg>
@@ -159,7 +159,7 @@ function PatternCardCompact({ atom }: { atom: InsightAtom }) {
 function DeltaCardCompact({ atom }: { atom: InsightAtom }) {
   const direction = atom.comparison?.direction;
   return (
-    <div className="relative rounded-xl border border-cyan-500/20 bg-[#050a0f] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
+    <div className="relative rounded-xl border border-cyan-500/20 bg-[var(--ws-surface-raised)] p-4 min-w-[220px] max-w-[280px] overflow-hidden">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[9px] uppercase tracking-[0.15em] text-cyan-400/60 font-medium">CHANGE</span>
         {direction && direction !== 'flat' && (
@@ -502,7 +502,22 @@ export function InsightCard({ atom, compact = false, onClick, themeId }: Insight
   }
 
   // Full mode: themed per-kind cards
-  const theme = REWIND_THEME_MAP[themeId || DEFAULT_THEME_ID] || REWIND_THEME_MAP[DEFAULT_THEME_ID];
+  // Same resolution the Rewind player uses: the palette is only correct for the
+  // theme it was authored in. Resolving the raw map here is what left the
+  // full-view card with light-theme ink on a near-black surface.
+  const [isLight, setIsLight] = React.useState<boolean>(isLightTheme);
+  React.useEffect(() => {
+    if (typeof MutationObserver === 'undefined' || !document.documentElement) return;
+    const mo = new MutationObserver(() => setIsLight(isLightTheme()));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    setIsLight(isLightTheme());
+    return () => mo.disconnect();
+  }, []);
+
+  const theme = resolveRewindTheme(
+    REWIND_THEME_MAP[themeId || DEFAULT_THEME_ID] || REWIND_THEME_MAP[DEFAULT_THEME_ID],
+    isLight,
+  );
   const FullCard = FULL_CARDS[atom.kind] || DeltaFull;
 
   return <FullCard atom={atom} theme={theme} />;

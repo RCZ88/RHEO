@@ -66,15 +66,15 @@ export function ConsoleWidget({ stats, loading, error }: ConsoleWidgetProps) {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <div className="p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/50 text-center">
+        <div className="p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-center">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Commands</div>
           <div className="text-[18px] font-display font-bold text-zinc-100 tabular-nums">{commandCount.toLocaleString()}</div>
         </div>
-        <div className="p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/50 text-center">
+        <div className="p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-center">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Active</div>
           <div className="text-[18px] font-display font-bold text-zinc-100 tabular-nums">{activeSessions}</div>
         </div>
-        <div className="p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/50 text-center">
+        <div className="p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-center">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Handbook</div>
           <div className="text-[18px] font-display font-bold text-zinc-100 tabular-nums">{handbookPct}%</div>
         </div>

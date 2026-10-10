@@ -108,7 +108,7 @@ export function BudgetModal({ budget, categories, onClose, onSave }: Props) {
               </label>
               <input type="range" min={50} max={100} step={5} value={form.alert_threshold}
                 onChange={e => setForm(f => ({ ...f, alert_threshold: Number(e.target.value) }))}
-                className="w-full accent-amber-500" />
+                className="w-full" />
               <div className="flex justify-between text-[9px] text-zinc-600">
                 <span>50%</span><span>75%</span><span>100%</span>
               </div>

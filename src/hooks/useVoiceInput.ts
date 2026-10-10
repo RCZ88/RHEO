@@ -478,9 +478,14 @@ export function useVoiceInput({
     sttGetStatus().then((status) => {
       if (userStoppedRef.current) return;
 
-      if (status.engine === 'api' || status.engine === 'native') {
+      // 'local' (on-device faster-whisper) transcribes a batch exactly like
+      // 'api' does. It MUST be listed here: when stt:get-status started
+      // returning 'local', this branch was skipped, the code fell through to the
+      // browser engine, and Electron has no webkitSpeechRecognition — which
+      // silently killed every per-field mic button in the app.
+      if (status.engine === 'local' || status.engine === 'api' || status.engine === 'native') {
         engineRef.current = status.engine;
-        const stopFn = status.engine === 'api'
+        const stopFn = (status.engine === 'api' || status.engine === 'local')
           ? sttStartApi(langRef.current, {
               onState: (s) => {
                 if (s === 'processing' && !hasProvider) setLocalState('processing');

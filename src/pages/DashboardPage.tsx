@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore, Suspense } from 'react';
+import { AFK_TRIPPED_EVENT, shouldResetStreak, type AfkPrefs } from '../lib/afk';
 import { getToastDurationMs, isSticky } from '../lib/toastDuration';
 import { PageShell } from '../components/PageShell';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -22,12 +23,15 @@ import { InsightStrip } from './dashboard/InsightStrip';
 import { useSmartSearch } from '../hooks/useSmartSearch';
 import { MomentumHero } from '../components/dashboard/MomentumHero';
 
-import { VCalendar } from '../components/ui/v-calendar';
-
 import { SectionHeader } from '../components/SectionHeader';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { DayDetailPopup } from '../components/DayDetailPopup';
+import {
+  ProductivityHeatmap,
+  type HeatmapCell,
+  type HeatmapMode,
+} from '../components/dashboard/ProductivityHeatmap';
 import { DeskFlowCardMotion } from '../components/dashboard/DeskFlowCard';
 import { WidgetJumpButton } from '../components/dashboard/WidgetJumpButton';
 import OrbitSystem from '../components/OrbitSystem';
@@ -37,11 +41,13 @@ import { Bar } from 'react-chartjs-2';
 import { motion, AnimatePresence } from "motion/react";
 
 import { getDateRange } from '../lib/dateRange';
+import { formatLocalDateKey } from '../lib/localDate';
+import { stopwatch } from '../lib/stopwatchStore';
 import type { Period } from '../lib/dateRange';
 import { awaitApi } from '../lib/awaitApi';
 import { TimerResetOverlay } from '../components/dashboard/TimerResetOverlay';
 import { CardLibrary } from '../components/dashboard/CardLibrary';
-import { LayoutGrid, Grid3X3, X, BarChart3, Clock, Terminal, ChevronLeft, ChevronRight, Sun, Minimize2, Maximize2, Check } from 'lucide-react';
+import { LayoutGrid, Grid3X3, X, BarChart3, Clock, Terminal, Sun, Minimize2, Maximize2, Check, ChevronDown } from 'lucide-react';
 import { maxBy } from '../utils/safeMath';
 
 import { AiUsageWidget } from '../components/dashboard/AiUsageWidget';
@@ -65,6 +71,7 @@ import { MomentumScore } from '../components/dashboard/MomentumScore';
 import { buildDashboardData } from './dashboard/aggregateNormalizer';
 import { useDashStats } from './dashboard/useDashStats';
 import { useDashTheme } from './dashboard/useDashTheme';
+import { chartTooltip, watchChartTokens } from '../components/finance/_fx/chartTokens';
 
 interface ActivityFeedItem {
   id: string;
@@ -120,17 +127,6 @@ interface DashboardPageProps {
 
 
 
-interface HeatmapCell {
-  hour: number;
-  day: number;
-  value: number;
-  productivity: number;
-  deviceSeconds?: number;
-  externalSeconds?: number;
-  deviceBreakdown?: Record<string, { seconds: number; category: string }>;
-  externalBreakdown?: Record<string, { seconds: number; color: string; icon: string }>;
-}
-
 interface ExternalActivity {
   id: number;
   name: string;
@@ -160,6 +156,8 @@ interface TimelineItem {
   color: string;
   duration: number;
   details?: string;
+  /** raw `logs.category` (or external session type) so the day page can tier it */
+  categoryName?: string;
 }
 
 interface ForegroundData {
@@ -171,7 +169,70 @@ interface ForegroundData {
 }
 
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/**
+ * Fold a `get-day-detail` payload into the timeline shape DayDetailPopup renders.
+ * Shared by the heatmap's day click and the popup's own prev/next-day navigation
+ * so the two can never drift apart again.
+ */
+function buildDayTimelineItems(detail: { logs?: any[]; externalSessions?: any[] }): TimelineItem[] {
+  const items: TimelineItem[] = [];
+
+  (detail.logs || []).forEach((log: any) => {
+    const logDate = new Date(log.timestamp);
+    const startHour = logDate.getHours() + logDate.getMinutes() / 60;
+    const durationSec = (log.duration_ms || 0) / 1000;
+    if (durationSec <= 0) return;
+    const isBrowser = !!log.is_browser_tracking;
+    const label = isBrowser ? (log.domain || log.app) : log.app;
+    items.push({
+      id: `log-${log.id}`,
+      startHour,
+      endHour: Math.min(startHour + durationSec / 3600, 24),
+      label: label || 'Unknown',
+      category: isBrowser ? 'browser' : 'app',
+      // Category is carried through so the popup can resolve a real tier instead
+      // of treating every row as equally productive.
+      color: isBrowser ? 'var(--tier-productive)' : 'var(--tier-neutral)',
+      duration: Math.round(durationSec),
+      details: log.title || log.category,
+      categoryName: log.category,
+    });
+  });
+
+  (detail.externalSessions || []).forEach((session: any) => {
+    const startDate = new Date(session.started_at);
+    const endDate = session.ended_at ? new Date(session.ended_at) : new Date();
+    const startHour = startDate.getHours() + startDate.getMinutes() / 60;
+    const durationSec = Math.max(0, (endDate.getTime() - startDate.getTime()) / 1000);
+    if (durationSec <= 0) return;
+    items.push({
+      id: `ext-${session.id}`,
+      startHour,
+      endHour: Math.min(startHour + durationSec / 3600, 24),
+      label: session.activity_name || 'External',
+      category: 'external',
+      color: 'var(--info)',
+      duration: Math.round(durationSec),
+      categoryName: session.type,
+    });
+  });
+
+  return items.sort((a, b) => a.startHour - b.startHour);
+}
+
+// One source of truth for the productivity chart's three series. The bars
+// hardcoded these hexes while the legend swatches read
+// var(--success) / var(--warning) / var(--info). Those are identical in dark
+// mode (#34d399 / #fbbf24 / #38bdf8), so the legend looked correct — but in
+// LIGHT mode the tokens flip to #166534 / #92400e / #1d4ed8 while the bars
+// stayed pastel, so the legend described colours the chart was not drawing.
+// Canvas cannot resolve `var(--x)` in fillStyle, so the bars keep literals and
+// the legend is bound to the same literals instead of diverging from them.
+const PRODUCTIVITY_SERIES = {
+  productive: '#34d399',
+  other: '#fbbf24',
+  external: '#38bdf8',
+} as const;
 
 // Tier assignments for categorizing productivity
 const DEFAULT_TIER_ASSIGNMENTS = {
@@ -266,6 +327,10 @@ interface DashboardPageProps {
   onActivityFeedChange?: (items: any[]) => void;
   externalActivities?: any[];
   externalWeeklyStats?: any;
+  /** Raw log rows, when the parent already has them. Lets the heatmap skip its own
+   *  full-table fetch (~10 MB / 29k rows on every dashboard mount).
+   *  Optional: with no prop supplied the original fetch path still runs. */
+  sharedLogs?: any[] | null;
 }
 
 // Map browser brand names to OS process names (what active-win returns)
@@ -277,7 +342,12 @@ const BROWSER_PROCESS_NAMES_DASHBOARD: Record<string, string[]> = {
   'edge': ['msedge', 'edge'],
   'opera': ['opera'],
   'vivaldi': ['vivaldi'],
-  'firefox': ['firefox'],
+    // Zen/Floorp are Firefox-based: the extension reports browserName "Firefox",
+  // but the FOREGROUND PROCESS is "zen". Without these aliases the comparison
+  // was 'zen'.includes('firefox') -> false, so the website never replaced the
+  // app name and the stopwatch just showed "zen".
+  'firefox': ['firefox', 'firefox-esr', 'zen', 'zen-browser', 'zenbrowser', 'floorp'],
+  'zen': ['zen', 'firefox', 'firefox-esr', 'zen-browser', 'zenbrowser', 'floorp'],
   'arc': ['arc'],
   'safari': ['safari'],
 };
@@ -299,7 +369,9 @@ export default function DashboardPage({
   externalActivities = [],
   appColors = {},
   categoryOverrides = {},
-  timerBehavior = { neutralAction: 'ignore', distractingAction: 'ignore' },
+  // Default must MATCH App.tsx:1627, which always passes a real value —
+  // this one was 'ignore'/'ignore' and silently contradicted it.
+  timerBehavior = { neutralAction: 'pause', distractingAction: 'reset' },
   selectedPeriod = 'week',
   onSelectedPeriodChange,
   dateOffset = 0,
@@ -311,7 +383,8 @@ export default function DashboardPage({
   timerState = null,
   onTimerStateChange,
   activityFeed: feedFromParent = [],
-  onActivityFeedChange
+  onActivityFeedChange,
+  sharedLogs = null
 }: DashboardPageProps) {
   const { isVisible, toggleVisible, moveCell, reset, orderedRow, hiddenCount } = useDashboardLayout();
 
@@ -345,9 +418,18 @@ export default function DashboardPage({
     return null;
   });
 
-  const [currentProductiveMs, setCurrentProductiveMs] = useState(persistedTimer.productiveMs);
-  const [currentDistractingMs, setCurrentDistractingMs] = useState(persistedTimer.distractingMs || 0);
-  const [isPaused, setIsPaused] = useState(persistedTimer.paused);
+  // Stopwatch readouts now come from a module-level store, NOT page-local state.
+  // `App.tsx` renders `<Routes key={location.pathname}>`, which force-remounts the
+  // page on every navigation — page-local accumulators died with it and the timer
+  // restarted from 00:00 whenever the user left the dashboard. The store outlives
+  // the component, so a remount re-reads the running value instead of resetting.
+  const stopwatchSnap = useSyncExternalStore(stopwatch.subscribe, stopwatch.getSnapshot, stopwatch.getSnapshot);
+  const currentProductiveMs = stopwatchSnap.productiveMs;
+  const currentDistractingMs = stopwatchSnap.distractingMs;
+  const isPaused = stopwatchSnap.paused;
+  // Local setters now drive the store. `setIsPaused` writes through so every
+  // existing call site (pause button, tracker auto-pause, resume) keeps working.
+  const setIsPaused = useCallback((paused: boolean) => stopwatch.setPaused(paused), []);
   const [lastTier, setLastTier] = useState<'productive' | 'neutral' | 'distracting' | null>(persistedTimer.lastTier);
   // Display helpers — directly reflect the current app's tier, not timerBehavior settings
   const isCurrentlyProductive = lastTier === 'productive' && !isPaused;
@@ -356,13 +438,10 @@ export default function DashboardPage({
   // Distraction log — records which app/site broke the stopwatch
   const [distractions, setDistractions] = useState<Array<{ name: string; type: 'app' | 'website'; timestamp: number }>>([]);
 
-  // Stopwatch refs - declared early to avoid TDZ issues
-  const stopwatchTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const stopwatchAccumulatedRef = useRef(0); // tracks accumulated productive ms
-  const distractingAccumulatedRef = useRef(0); // tracks accumulated distracting ms
-  const stopwatchLastTickRef = useRef(0); // tracks last tick time
-  const stopwatchActiveRef = useRef(false); // is timer actively running
-  const stopwatchPausedRef = useRef(false); // is timer paused
+  // When the current productive segment began. Persisted so the Longest Focus
+  // card gets a real start/end pair instead of "now"/"now".
+  const stopwatchAccumulatedStartRef = useRef<number>(0);
+  // Last tier we handed the store, for transition logging only.
   const prevTierRef = useRef<'productive' | 'neutral' | 'distracting' | null>(null);
 
 
@@ -564,6 +643,20 @@ export default function DashboardPage({
   const [masteryMastered, setMasteryMastered] = useState(0);
   const [masteryTotal, setMasteryTotal] = useState(0);
   const [streak, setStreak] = useState(0);
+
+  // AFK action "reset streak" / "reset both": the stopwatch store owns the timer
+  // side of this, the streak lives here, so the two halves meet on one event.
+  useEffect(() => {
+    const onAfk = (e: Event) => {
+      const p = (e as CustomEvent).detail as AfkPrefs | undefined;
+      if (p && shouldResetStreak(p)) {
+        setStreak(0);
+        console.log('[AFK] streak reset — user was away');
+      }
+    };
+    window.addEventListener(AFK_TRIPPED_EVENT, onAfk);
+    return () => window.removeEventListener(AFK_TRIPPED_EVENT, onAfk);
+  }, []);
   const [bestDay, setBestDay] = useState('--');
   const [productivityScore, setProductivityScore] = useState(0);
   const [longestFocus, setLongestFocus] = useState<any>({ today: [], week: [], allTime: [] });
@@ -586,28 +679,75 @@ export default function DashboardPage({
   const [isInBrowser, setIsInBrowser] = useState(false); // Track if currently in tracking browser
   const [currentWebsite, setCurrentWebsite] = useState<{ title?: string; url?: string; category?: string; domain?: string; browserName?: string; profileName?: string; profileId?: string } | null>(null);
 
+  // ── Live current website ────────────────────────────────────────────────────
+  // THE BUG: setCurrentWebsite was declared here and then called with `null` from
+  // four separate places, but NO path ever supplied a real value. So
+  // currentWebsite was permanently null, and although StatusBand was already
+  // wired to receive `currentWebsite.title` / `.domain` / `.category` whenever
+  // isInBrowser was true, every one of those resolved to undefined and the band
+  // silently fell back to the app name. The website never appeared.
+  //
+  // The desktop main process now emits a `live-site` browser-tracking-event on
+  // every ACCEPTED /browser-data payload (and a null-domain one when the browser
+  // is no longer foreground). Accepting is exactly the condition "a browser that
+  // has the extension is the foreground app", so no extra check is needed.
+  // When the extension last reported a live site. The foreground poll runs about
+  // once a second and used to wipe `currentWebsite` whenever it saw a non-browser
+  // app or a momentary null read — which on this machine happens often enough to
+  // win the race against the site event, leaving the band on "No site tracked"
+  // while real data was already flowing. A site we heard about moments ago is
+  // better evidence than a poll sample, so it wins for a short grace window.
+  const liveSiteAtRef = useRef(0);
+  const LIVE_SITE_GRACE_MS = 12000;
+  const clearWebsiteUnlessLive = () => {
+    if (Date.now() - liveSiteAtRef.current < LIVE_SITE_GRACE_MS) return;
+    liveSiteAtRef.current = 0;
+    setCurrentWebsite(null);
+  };
+
+  useEffect(() => {
+    if (!window.deskflowAPI?.onBrowserTrackingEvent) return;
+    const unsub = window.deskflowAPI.onBrowserTrackingEvent((d: any) => {
+      if (!d || d.type !== 'live-site') return;
+      if (!d.domain) { liveSiteAtRef.current = 0; setCurrentWebsite(null); return; }
+      liveSiteAtRef.current = Date.now();
+      setCurrentWebsite({
+        domain: d.domain,
+        url: d.url,
+        title: d.title || d.domain,
+        browserName: d.browser || undefined,
+      });
+      // Deliberately NOT calling setIsInBrowser(true) here. I did, and it
+      // paused the stopwatch: the foreground poll owns that flag, and
+      // forcing it from a 30s cadence event desynced the tier logic that
+      // decides productive vs distracting. This handler's only job is to
+      // carry WHAT the site is. The poll already decides THAT a browser is up.
+    });
+    return () => { unsub && unsub(); };
+  }, []);
+
   // ── Adaptive display time (hoisted: widgetData below reads displayTime) ──
   // Adaptive display: show what's actually running
+  //
+  // The NUMBER is `stopwatchSnap.displayMs` — decided once, in the store, and
+  // rendered by the sidebar rail from the same field. This used to reimplement
+  // the choice here from four different conditions, which is how the hero and
+  // the sidebar ended up showing two unrelated clocks. Only the LABEL is
+  // composed here, because it needs the app/site name the store does not know.
   const displayTime = useMemo(() => {
-    // External takes priority (user wants to see it when running)
-    if (externalSessionRunning && externalElapsedMs > 0) {
-      return { ms: externalElapsedMs, label: `External: ${selectedExternalActivity?.name || 'Running'}` };
+    const source = stopwatchSnap.displaySource;
+    if (source === 'external') {
+      return { ms: stopwatchSnap.displayMs, label: `External: ${stopwatchSnap.externalLabel || selectedExternalActivity?.name || 'Running'}` };
     }
-
-    // Distracting app — show distracting timer with app name
-    if (lastTier === 'distracting' && !isPaused) {
+    if (source === 'distracting') {
       const appName = currentApp?.app || currentWebsite?.title || currentWebsite?.domain || 'Unknown';
-      return { ms: currentDistractingMs, label: `Distracting: ${appName}` };
+      return { ms: stopwatchSnap.displayMs, label: `Distracting: ${appName}` };
     }
-
-    // Productive app — show productive timer
-    if (lastTier === 'productive' && !isPaused) {
-      return { ms: currentProductiveMs, label: 'Productive' };
+    if (source === 'productive') {
+      return { ms: stopwatchSnap.displayMs, label: 'Productive' };
     }
-
-    // Neutral/idle — show whichever timer was last active
-    return { ms: currentProductiveMs, label: isPaused ? 'Paused' : 'Idle' };
-  }, [externalSessionRunning, externalElapsedMs, currentProductiveMs, currentDistractingMs, selectedExternalActivity, lastTier, isPaused, currentApp, currentWebsite]);
+    return { ms: stopwatchSnap.displayMs, label: isPaused ? 'Paused' : 'Idle' };
+  }, [stopwatchSnap.displayMs, stopwatchSnap.displaySource, stopwatchSnap.externalLabel, selectedExternalActivity, currentApp, currentWebsite, isPaused]);
 
   // ── Live focus session for the Longest Focus widget ──────────────────────
   //
@@ -622,27 +762,39 @@ export default function DashboardPage({
   // flagged `live` so the card can mark it as still-running rather than
   // presenting an unfinished session as a completed record.
   const liveFocusSession = useMemo(() => {
-    if (lastTier !== 'productive' || isPaused) return null;
-    if (!currentProductiveMs || currentProductiveMs < 1000) return null;
+    // Gate on the STOPWATCH, not on `lastTier`.
+    //
+    // `lastTier` describes the foreground app right now and flips the moment you
+    // alt-tab, while the productive total keeps accruing across that. Gating on it
+    // meant a running session vanished from the card the instant focus moved, so
+    // "longest today" kept showing the last *persisted* row (a 2-minute terminal
+    // stint) while the stopwatch showed 7+ minutes. The stopwatch's own tier is
+    // the thing that actually accumulated this time.
+    const storeTier = stopwatchSnap.activeTier;
+    const hasRealTime = (currentProductiveMs || currentDistractingMs || 0) >= 1000;
+    if (isPaused || !hasRealTime) return null;
+    if (storeTier !== 'productive' && lastTier !== 'productive') return null;
+
     const isWeb = isInBrowser;
     const name = isWeb
       ? (currentWebsite?.title || currentWebsite?.domain || 'Browser')
       : (currentApp?.app || currentApp?.title || 'Current session');
     const endMs = Date.now();
-    const startMs = persistedTimer.startTime || (endMs - currentProductiveMs);
+    const startMs = stopwatchAccumulatedStartRef.current || (endMs - currentProductiveMs);
+    const seconds = Math.floor((storeTier === 'distracting' ? currentDistractingMs : currentProductiveMs) / 1000);
     return {
       apps: [name],
       app: name,
       category: (isWeb ? currentWebsite?.category : currentApp?.category) || 'Other',
       title: isWeb ? (currentWebsite?.title || '') : '',
-      durationSeconds: Math.floor(currentProductiveMs / 1000),
+      durationSeconds: seconds,
       startTime: new Date(startMs).toISOString(),
       endTime: new Date(endMs).toISOString(),
       live: true,
     };
     // currentProductiveMs ticks each second, so this recomputes each second —
     // which is what makes the widget climb in real time.
-  }, [lastTier, isPaused, currentProductiveMs, isInBrowser, currentApp, currentWebsite, persistedTimer.startTime]);
+  }, [lastTier, isPaused, stopwatchSnap.activeTier, currentProductiveMs, currentDistractingMs, isInBrowser, currentApp, currentWebsite]);
 
   // Merge the live session into today's and this week's lists, re-sorted so a
   // running session that has passed the stored best becomes the new #1.
@@ -655,6 +807,10 @@ export default function DashboardPage({
       ...longestFocus,
       today: merge(longestFocus?.today),
       week: merge(longestFocus?.week),
+      // The live session was NOT merged here before, so on the "Best" (allTime)
+      // tab a running session could never win — "max focus time" looked stuck
+      // even after you focused for longer than the stored record.
+      allTime: merge(longestFocus?.allTime),
     };
   }, [longestFocus, liveFocusSession]);
 
@@ -663,6 +819,9 @@ export default function DashboardPage({
   // the hook, so one failing endpoint never blanks another widget.
   const dashStats = useDashStats({ enabled: true });
   const { theme: dashTheme, toggle: toggleDashTheme } = useDashTheme();
+  /* A <canvas> cannot recompute its own colours, so this observer is what
+     makes the Dashboard chart tooltip re-skin when the theme flips. */
+  useEffect(() => watchChartTokens(), []);
 
   const widgetData = useMemo(() => ({
     goals,
@@ -697,6 +856,11 @@ export default function DashboardPage({
     lastTxDate: null,
     dashboardCurrency: 'USD',
     weeklyHeatmap: dashboardData?.weeklyHeatmap || [],
+    // The SAME arrays the 3D Orbit modal is handed at :3408. Previously absent
+    // from the context, which is why the app-ecosystem grid slot rendered null
+    // and why any widget needing this data had to re-fetch it independently.
+    appStats: dashboardData?.appStats || [],
+    websiteStats: dashboardData?.websiteStats || [],
     aiInsights,
     momentum: null,
     unfilledMinutes: 0,
@@ -740,12 +904,15 @@ export default function DashboardPage({
     (async () => {
       try {
         const api = await awaitApi();
-        console.log('[FROZEN-DBG] Dashboard fetch START period=', fetchPeriod, 'dateOffset=', dateOffset, 'weekOffset=', weekOffset);
+        console.log('[FROZEN-DBG] Dashboard fetch START period=', fetchPeriod, 'dateOffset=', dateOffset);
         const t0 = performance.now();
+        // NOTE: `weekOffset` is deliberately NOT sent. The heatmap owns its own week
+        // cursor (see ProductivityHeatmap) and `get-dashboard-aggregates` ignores the
+        // field anyway — sending it only forced a redundant full re-fetch of every
+        // widget on the page each time the user paged the heatmap.
         const data = await api.getDashboardAggregates({
           period: fetchPeriod,
           dateOffset,
-          weekOffset,
           platform: platformFilter === 'all' ? undefined : platformFilter,
         });
         if (cancelled) return;
@@ -798,7 +965,9 @@ export default function DashboardPage({
       }
     })();
     return () => { cancelled = true; };
-  }, [fetchPeriod, dateOffset, weekOffset]);
+    // `weekOffset` intentionally absent — see the note above. The heatmap's week
+    // cursor must never drag the rest of the dashboard along with it.
+  }, [fetchPeriod, dateOffset]);
 
   // Fetch longest focus data.
   //
@@ -918,17 +1087,20 @@ export default function DashboardPage({
     localStorage.setItem('deskflow-activity-feed', JSON.stringify(activityFeed));
   }, [activityFeed]);
 
-  // Sync weekOffset for heatmap when selectedPeriod changes
-  useEffect(() => {
-    setWeekOffset(0);
-  }, [selectedPeriod]);
-
   // Persist timer state to parent and localStorage
   useEffect(() => {
+    // The persisted `startTime` must be the current SEGMENT's start, not the
+    // last tick (which moves every second) and not "now". Derive it from the
+    // authoritative stopwatch total: the current segment started this long ago.
+    const stopwatchStartedAt = (isPaused || !lastTier || !currentProductiveMs)
+      ? (stopwatchAccumulatedStartRef.current || Date.now())
+      : (Date.now() - currentProductiveMs);
+    stopwatchAccumulatedStartRef.current = stopwatchStartedAt;
+
     const newState = {
       productiveMs: currentProductiveMs,
       distractingMs: currentDistractingMs,
-      startTime: stopwatchLastTickRef.current || Date.now(),
+      startTime: stopwatchStartedAt,
       paused: isPaused,
       lastTier: lastTier,
       externalRunning: externalSessionRunning,
@@ -972,13 +1144,14 @@ export default function DashboardPage({
     }
   }, [timerState, externalSessionRunning]);
 
-  const [resetCount, setResetCount] = useState(0);
-  const [resetTrigger, setResetTrigger] = useState(0);
+  // The RESET overlay is driven by the store's real reset counter, not by tier
+  // changes. It used to be bumped on every productive<->distracting flip, which
+  // announced a reset that (correctly) no longer happens — and which made the
+  // stopwatch look like it was being wiped at random.
+  const resetTrigger = stopwatchSnap.resetCount;
   // (currentApp/isInBrowser/currentWebsite hoisted above widgetData)
   const [lastNonBrowserApp, setLastNonBrowserApp] = useState<ForegroundData | null>(null);
-  const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number; value: number; productivity: number; deviceSeconds?: number; externalSeconds?: number } | null>(null);
-  const [selectedCell, setSelectedCell] = useState<{ day: number; hour: number } | null>(null);
-  const [heatmapMode, setHeatmapMode] = useState<'device' | 'external' | 'combined'>('combined');
+  const [heatmapMode, setHeatmapMode] = useState<HeatmapMode>('combined');
   const [externalHourlyData, setExternalHourlyData] = useState<Map<string, { externalSeconds: number; breakdown: Record<string, { seconds: number; color: string; icon: string }> }>>(new Map());
   const [externalSessions, setExternalSessions] = useState<any[]>([]);
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
@@ -1000,6 +1173,7 @@ export default function DashboardPage({
   const hasRealApp = !!currentApp?.app || (isInBrowser && !!currentWebsite?.domain);
   const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
   const [dayDetailItems, setDayDetailItems] = useState<TimelineItem[]>([]);
+  const [dayDetailLoading, setDayDetailLoading] = useState(false);
   const computeChartDateRange = (period: string, offset: number): { start: Date; end: Date; label: string } =>
     getDateRange(period, offset);
 
@@ -1053,11 +1227,13 @@ export default function DashboardPage({
   const aggregateHourlyForDate = (dateStr: string) => {
     const dayHours = dashboardData?.hourlyHeatmap?.[dateStr] || {};
     let totalProd = 0, totalNonProd = 0;
+    // Keys are HOUR STRINGS ('0'..'23'), so the loop must read the string key.
+    // The old `dayHours[h]` numeric index never matched anything and returned 0.
     for (let h = 0; h < 24; h++) {
-      const cell = (dayHours as any)[h];
-      if (!cell) continue;
-      totalProd += (cell.productive || 0);
-      totalNonProd += (cell.neutral || 0) + (cell.distracting || 0);
+      const secs = (dayHours as any)[String(h)];
+      if (!secs) continue;
+      totalProd += secs;
+      totalNonProd += 0; // hour rows carry no tier split; treat the fallback as neutral
     }
     return { prod: totalProd, nonProd: totalNonProd };
   };
@@ -1072,9 +1248,13 @@ export default function DashboardPage({
     const getBarData = (dateStr: string) => {
       const bar = dashboardData?.weeklyHeatmap?.find((d: any) => d.date === dateStr);
       if (bar) {
+        // Guard every term: a missing field used to produce `undefined + undefined`
+        // = NaN, and Chart.js silently drops NaN points — so the bars simply did not
+        // render, with no error anywhere. Coerce to a finite number instead.
+        const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
         return {
-          productiveSeconds: bar.productiveHours * 3600,
-          nonProductiveSeconds: (bar.neutralHours + bar.distractingHours) * 3600,
+          productiveSeconds: num(bar.productiveHours) * 3600,
+          nonProductiveSeconds: (num(bar.neutralHours) + num(bar.distractingHours)) * 3600,
         };
       }
       // Fallback: aggregate from hourlyHeatmap
@@ -1087,22 +1267,23 @@ export default function DashboardPage({
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const todayHours = dashboardData?.hourlyHeatmap?.[todayStr] || {};
         for (let h = 0; h < 24; h++) {
-          const cell = (todayHours as any)[h];
-          const totalSec = cell ? ((cell.appSeconds || 0) + (cell.domainSeconds || 0)) : 0;
-          const prodSec = cell ? (cell.productive || 0) : 0;
-          const nonProdSec = totalSec - prodSec;
+          // Keyed by HOUR STRING now that hourlyHeatmap is a per-date map.
+          const secs = (todayHours as any)[String(h)];
+          const totalSec = typeof secs === 'number' && Number.isFinite(secs) ? secs : 0;
+          // Hour rows carry no tier split, so everything tracked counts as
+          // non-productive here. Guessing otherwise would overstate focus.
+          const nonProdSec = totalSec;
           const extSec = chartExternalData.get(`${h}`) || 0;
-          const totalWithExt = prodSec + nonProdSec + extSec;
-          let finalProd = prodSec, finalNonProd = nonProdSec, finalExt = extSec;
+          const totalWithExt = nonProdSec + extSec;
+          let finalNonProd = nonProdSec, finalExt = extSec;
           if (totalWithExt > 3600) {
             const scale = 3600 / totalWithExt;
-            finalProd = Math.round(prodSec * scale);
             finalNonProd = Math.round(nonProdSec * scale);
             finalExt = Math.round(extSec * scale);
           }
           bars.push({
             label: h === 0 ? '12a' : h === 12 ? '12p' : h < 12 ? `${h}a` : `${h - 12}p`,
-            productiveSeconds: finalProd,
+            productiveSeconds: 0,
             nonProductiveSeconds: finalNonProd,
             externalSeconds: finalExt,
             isToday: now.getHours() === h,
@@ -1247,15 +1428,6 @@ export default function DashboardPage({
     }
   }, [pinnedActivities]);
 
-  // Count resets today
-  useEffect(() => {
-    const count = activityFeed.filter(item =>
-      item.tier === 'distracting' &&
-      new Date(item.timestamp).toDateString() === new Date().toDateString()
-    ).length;
-    setResetCount(count);
-  }, [activityFeed]);
-
   // Determine tier from category
   /**
    * Resolve an app's tier.
@@ -1297,20 +1469,34 @@ export default function DashboardPage({
   }, [currentWebsite]);
 
   const getTierFromCategory = (category?: string, appOrDomain?: string): 'productive' | 'neutral' | 'distracting' => {
+    // The CATEGORY decides. The per-app/domain map is only a fallback for an app
+    // with NO category. It used to be checked FIRST, so a single per-app entry
+    // could re-tier a whole category — which is why a category appeared to shift
+    // tier depending on which app was focused.
+    const tiers = tierAssignments || DEFAULT_TIER_ASSIGNMENTS;
+    if (category) {
+      if (tiers.productive.includes(category)) return 'productive';
+      if (tiers.distracting.includes(category)) return 'distracting';
+      return 'neutral';
+    }
     if (appOrDomain) {
       const o = appTierMap?.[appOrDomain] ?? domainTierMap?.[appOrDomain];
       if (o === 'productive' || o === 'neutral' || o === 'distracting') return o;
     }
-    if (!category) return 'neutral';
-    const tiers = tierAssignments || DEFAULT_TIER_ASSIGNMENTS;
-    if (tiers.productive.includes(category)) return 'productive';
-    if (tiers.distracting.includes(category)) return 'distracting';
     return 'neutral';
   };
 
   // Refs for values the foreground listener needs without stale closures
   const trackingBrowserRef = useRef(trackingBrowser);
   const trackingBrowsersRef = useRef(trackingBrowsers);
+  // These checks used to be gated on `!!tb` — the SINGULAR trackingBrowser. When
+  // that was empty the whole expression was false even with a populated detected
+  // list, so the website never replaced the app name. Whichever list we actually
+  // have is what should decide.
+  const browserListFor = (tb?: string): string[] =>
+    (trackingBrowsersRef.current && trackingBrowsersRef.current.length > 0)
+      ? trackingBrowsersRef.current
+      : (tb ? [tb] : []);
   trackingBrowserRef.current = trackingBrowser;
   trackingBrowsersRef.current = trackingBrowsers;
   const trackerAppModeRef = useRef(trackerAppMode);
@@ -1340,7 +1526,8 @@ export default function DashboardPage({
       console.log('[Focus] Foreground change:', data.app, '| category:', data.category);
 
       // Check if this is the tracking browser
-      const isTrackingBrowser = !!tb && !!data.app && isAppMatchingBrowserDashboard(data.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
+      const isTrackingBrowser = !!data.app && browserListFor(tb).length > 0
+        && isAppMatchingBrowserDashboard(data.app, browserListFor(tb));
 
       // Check if this is Tracker app (DeskFlow/Electron/RHEO)
       const isTrackerApp = data.app && (
@@ -1361,7 +1548,7 @@ export default function DashboardPage({
       if (!data.app || data.isReal === false) {
         console.log('[Focus] No real app — keeping last known app, isInBrowser=false');
         setIsInBrowser(false);
-        setCurrentWebsite(null);
+        clearWebsiteUnlessLive();
         setCurrentApp(lnb || null);
         return;
       }
@@ -1381,7 +1568,7 @@ export default function DashboardPage({
 
       console.log('[Focus] Not tracking browser — tracking app:', data.app);
       setIsInBrowser(false);
-      setCurrentWebsite(null);
+      clearWebsiteUnlessLive();
 
       console.log('[Focus] Setting currentApp:', data.app, '| category:', data.category);
       setLastNonBrowserApp(data);
@@ -1440,7 +1627,8 @@ export default function DashboardPage({
         const tam = trackerAppModeRef.current;
         const lnb = lastNonBrowserAppRef.current;
 
-        const isTrackingBrowser = !!tb && !!(initialData.app) && isAppMatchingBrowserDashboard(initialData.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
+        const isTrackingBrowser = !!initialData.app && browserListFor(tb).length > 0
+          && isAppMatchingBrowserDashboard(initialData.app, browserListFor(tb));
         const isTrackerApp = !!(initialData.app) && (initialData.app.toLowerCase() === 'deskflow' || initialData.app.toLowerCase() === 'electron' || initialData.app.toLowerCase() === 'rheo');
 
         if (isTrackingBrowser) { setIsInBrowser(true); setCurrentApp(lnb || null); return; }
@@ -1450,7 +1638,7 @@ export default function DashboardPage({
           else if (tam === 'pause') { setIsPaused(true); setPausedByTrackerApp(true); return; }
         }
         setIsInBrowser(false);
-        setCurrentWebsite(null);
+        clearWebsiteUnlessLive();
 
         console.log('[Focus] Initial foreground:', initialData.app, '| category:', initialData.category);
         setLastNonBrowserApp(initialData);
@@ -1509,7 +1697,8 @@ export default function DashboardPage({
        window.deskflowAPI.getCurrentForeground().then((data: any) => {
          if (!data || !data.isReal) return;
         const tb = trackingBrowserRef.current;
-        const isTrackingBrowser = !!tb && isAppMatchingBrowserDashboard(data.app, trackingBrowsersRef.current.length > 0 ? trackingBrowsersRef.current : tb);
+        const isTrackingBrowser = browserListFor(tb).length > 0
+          && isAppMatchingBrowserDashboard(data.app, browserListFor(tb));
         const isTrackerApp = data.app.toLowerCase() === 'deskflow' || data.app.toLowerCase() === 'electron' || data.app.toLowerCase() === 'rheo';
 
         if (isTrackerApp) return; // don't overwrite with tracker app
@@ -1521,7 +1710,7 @@ export default function DashboardPage({
         // (Previously this only refreshed currentApp; a stale isInBrowser/currentWebsite would
         // keep the dashboard showing the last website instead of the real app.)
         setIsInBrowser(false);
-        setCurrentWebsite(null);
+        clearWebsiteUnlessLive();
         // If we have a real non-browser app and currentApp is null or stale, refresh it
         setCurrentApp(prev => {
           if (!prev?.app || prev.app !== data.app) {
@@ -1568,6 +1757,7 @@ export default function DashboardPage({
       if (data.type === 'clear') {
         console.log('[Dashboard] Clearing website — browser no longer foreground');
         setIsInBrowser(false);
+        liveSiteAtRef.current = 0;
         setCurrentWebsite(null);
         activityFeedRef.current = activityFeedRef.current.filter((item) => item.type !== 'browser' || !item.isActive);
         updateFeed([...activityFeedRef.current]);
@@ -1649,95 +1839,61 @@ export default function DashboardPage({
       ? (currentWebsite?.category || lastNonBrowserApp?.category)
       : currentApp?.category;
     const tier = getTierFromCategory(currentCategory || '', currentApp?.app || currentApp?.title || undefined);
+
+    // Tier transition: log it, but do NOT reset anything. This used to zero both
+    // totals (and fire the RESET overlay) on every productive↔distracting flip,
+    // so alt-tabbing between two windows threw the reading away — and because
+    // the "is it running" flag below was page-local, simply REMOUNTING this page
+    // re-ran the same code path and wiped the day a second time. A tier change
+    // is a change of attribution; the store banks the outgoing segment under the
+    // old tier and keeps both totals.
     const prevTier = prevTierRef.current;
-
-    // Tier transition: reset the OUTGOING tier's timer when switching productive ↔ distracting
-    if (prevTier && prevTier !== tier) {
-      const switchingProductiveToDistracting = prevTier === 'productive' && tier === 'distracting';
-      const switchingDistractingToProductive = prevTier === 'distracting' && tier === 'productive';
-
-      if (switchingProductiveToDistracting) {
-        console.log(`[Dashboard] Stopwatch: RESET productive (productive → distracting)`);
-        stopwatchAccumulatedRef.current = 0;
-        setCurrentProductiveMs(0);
-        setResetTrigger(prev => prev + 1);
-      } else if (switchingDistractingToProductive) {
-        console.log(`[Dashboard] Stopwatch: RESET distracting (distracting → productive)`);
-        distractingAccumulatedRef.current = 0;
-        setCurrentDistractingMs(0);
-        setResetTrigger(prev => prev + 1);
+    // NEUTRAL honours timerBehavior.neutralAction. Only productive <-> distracting
+    // was handled in this effect, so 'pause' in Settings did nothing for neutral:
+    // the timer kept running and the time banked as focus.
+    if (tier === 'neutral' && prevTier && prevTier !== 'neutral') {
+      const action = timerBehavior.neutralAction;
+      if (action === 'pause') {
+        console.log('[Dashboard] Stopwatch: NEUTRAL -> PAUSE (timerBehavior)');
+        setIsPaused(true);
+      } else if (action === 'reset') {
+        console.log('[Dashboard] Stopwatch: NEUTRAL -> RESET (timerBehavior)');
+        // Reset the STORE, not just an overlay counter. This used to bump
+        // `setResetTrigger`, which only played the "timer reset" animation —
+        // the totals carried on, so the overlay was announcing something that
+        // never happened. `stopwatch.reset()` zeroes the accumulators and bumps
+        // the same counter the overlay reads.
+        stopwatch.reset();
       }
-      stopwatchLastTickRef.current = Date.now();
+    }
+    if (prevTier && prevTier !== tier) {
+      console.log(`[Dashboard] Stopwatch: tier ${prevTier} → ${tier} (totals kept)`);
     }
     prevTierRef.current = tier;
 
-    // Clear existing timer
-    if (stopwatchTimerRef.current) {
-      clearInterval(stopwatchTimerRef.current);
-      stopwatchTimerRef.current = null;
+    const isExternal = externalSessionRunning && !!externalSessionStart;
+
+    // Hand the tier to the store and let IT own the clock. This page used to
+    // keep a 1s interval and an `activeRef` to decide whether to call
+    // run()/halt(); both were torn down by `<Routes key={pathname}>` on every
+    // navigation, which is why the timer froze off-dashboard and restarted on
+    // return. The interval now lives in lib/stopwatchStore.ts and runs for the
+    // whole app lifetime.
+    stopwatch.setTier(tier === 'distracting' ? 'distracting' : 'productive');
+
+    // Publish the external session so the sidebar rail shows the same clock
+    // during one. The DB session stays owned by this page; only the readout is
+    // shared.
+    if (isExternal && externalSessionStart) {
+      stopwatch.setExternalSession({
+        running: true,
+        startedAtMs: externalSessionStart.getTime(),
+        label: selectedExternalActivity?.name || 'Running',
+      });
+    } else {
+      stopwatch.setExternalSession({ running: false });
     }
-
-    const isExternal = externalSessionRunning && externalSessionStart;
-
-    // Only accumulate when there's a real app to track (or external session)
-    const hasRealApp = !!currentApp?.app || (isInBrowser && !!currentWebsite?.domain);
-
-    // Always accumulate when there's a real app — tier only affects labeling/color, not whether timer runs.
-    // Neutral apps no longer pause the stopwatch.
-    const shouldAccumulate = !isPaused && (hasRealApp || isExternal);
-    const shouldPause = isPaused || (!shouldAccumulate && hasRealApp && !isExternal);
-
-    // Handle pause
-    if (shouldPause) {
-      console.log(`[Dashboard] Stopwatch: PAUSED (tier=${tier}, isPaused=${isPaused})`);
-      stopwatchActiveRef.current = false;
-      stopwatchPausedRef.current = true;
-      return;
-    }
-
-    // Resume or start timer
-    const now = Date.now();
-    if (!stopwatchActiveRef.current) {
-      stopwatchLastTickRef.current = now;
-      stopwatchActiveRef.current = true;
-      stopwatchPausedRef.current = false;
-    }
-
-    if (shouldAccumulate || isExternal) {
-      const accMs = tier === 'distracting' ? distractingAccumulatedRef.current : stopwatchAccumulatedRef.current;
-      console.log(`[Dashboard] Stopwatch: timer RUNNING (tier: ${tier}, accumulated: ${Math.floor(accMs / 1000)}s)`);
-    }
-
-    stopwatchTimerRef.current = setInterval(() => {
-      const tickNow = Date.now();
-      // Don't accumulate during idle periods (no interaction for 5+ minutes)
-      if (tickNow - lastInteractionRef.current > 300000) {
-        stopwatchLastTickRef.current = tickNow;
-        return;
-      }
-      const delta = tickNow - stopwatchLastTickRef.current;
-      stopwatchLastTickRef.current = tickNow;
-
-      if (isExternal) {
-        setExternalElapsedMs(prev => prev + delta);
-      } else if (shouldAccumulate) {
-        if (tier === 'distracting') {
-          distractingAccumulatedRef.current += delta;
-          setCurrentDistractingMs(distractingAccumulatedRef.current);
-        } else {
-          stopwatchAccumulatedRef.current += delta;
-          setCurrentProductiveMs(stopwatchAccumulatedRef.current);
-        }
-      }
-    }, 1000);
-
-    return () => {
-      if (stopwatchTimerRef.current) {
-        clearInterval(stopwatchTimerRef.current);
-        stopwatchTimerRef.current = null;
-      }
-    };
-  }, [currentApp, currentWebsite, isInBrowser, lastNonBrowserApp, isPaused, externalSessionRunning, externalSessionStart, timerBehavior]);
+  }, [currentApp, currentWebsite, isInBrowser, lastNonBrowserApp, externalSessionRunning, externalSessionStart, selectedExternalActivity, timerBehavior]);
 
   // Track and save productivity sessions — respects timerBehavior settings
   useEffect(() => {
@@ -2091,482 +2247,199 @@ export default function DashboardPage({
 
   // Load all logs for heatmap calculations
   const [allLogs, setAllLogs] = useState<any[]>([]);
+  // A dedicated flag, NOT `allLogs.length === 0`: a user who has never tracked
+  // anything would leave allLogs empty forever and the heatmap would spin on its
+  // skeleton indefinitely instead of showing the empty state.
+  const [logsLoaded, setLogsLoaded] = useState(false);
+  // Reuse the parent's already-loaded rows when we have them. App's loadData
+  // pulls the same full table (~10 MB / 29k rows) on startup, so fetching a third
+  // copy here was pure duplication. This was the LAST of three full-table reads
+  // before first paint.
+  const usableShared = Array.isArray(sharedLogs) && sharedLogs.length > 0 ? sharedLogs : null;
   useEffect(() => {
+    // `category` MUST be carried through: it is the only thing that lets the
+    // heatmap resolve a productivity tier per log. It was being dropped here, so
+    // every cell fell back to the neutral tier and the red→green ramp collapsed
+    // to a single flat colour.
+    const format = (rows: any[]) => rows.map(l => ({
+      timestamp: l.timestamp instanceof Date ? l.timestamp : new Date(l.timestamp),
+      app: l.app,
+      category: l.category,
+      is_browser_tracking: l.is_browser_tracking === 1 || l.is_browser_tracking === true,
+      domain: l.domain,
+      // App's ActivityLog carries `duration` in SECONDS; the raw row carries
+      // `duration_ms`. Normalise to ms so the heatmap maths below is unchanged.
+      duration_ms: l.duration_ms ?? (typeof l.duration === 'number' ? l.duration * 1000 : 0),
+    }));
+
+    if (usableShared) {
+      setAllLogs(format(usableShared));
+      setLogsLoaded(true);
+      return;
+    }
+
     if (window.deskflowAPI?.getLogs) {
       window.deskflowAPI.getLogs().then((logs: any[]) => {
-        const formatted = logs.map(l => ({
-          timestamp: new Date(l.timestamp),
-          app: l.app,
-          is_browser_tracking: l.is_browser_tracking === 1 || l.is_browser_tracking === true,
-          domain: l.domain,
-          duration_ms: l.duration_ms,
-        }));
-        setAllLogs(formatted);
-      }).catch(e => console.warn('[Dashboard] Failed to load all logs', e));
+        setAllLogs(format(logs));
+      }).catch(e => console.warn('[Dashboard] Failed to load all logs', e))
+        .finally(() => setLogsLoaded(true));
+    } else {
+      setLogsLoaded(true);
     }
-  }, []);
+    // `usableShared`, NOT `[]`. With an empty dep list this effect ran ONCE per
+    // mount, so `allLogs` was a snapshot frozen at the moment the dashboard was
+    // opened: the heatmap never saw a single row recorded after that, while the
+    // Activity page — fed by App's live `allLogs` — kept counting. That is the
+    // whole "the heatmap is empty but the activity page is full" report.
+    // `usableShared` is `sharedLogs` itself (or a stable `null`), so App's
+    // fingerprint-guarded refresh re-runs this and the heatmap tracks the tracker.
+    // The no-prop fallback above still fetches exactly once.
+  }, [usableShared]);
 
-  // Compute heatmap data for the selected week (respecting weekOffset)
-  const heatmapData = useMemo(() => {
+  // The 7 local-midnight Dates of the loaded week. Built with setDate (not
+  // toISOString) on purpose — see heatmapWeekDates usage in openHeatmapDay.
+  const heatmapWeekDates = useMemo(() => {
     const now = new Date();
     const weekStart = new Date(now);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay() + weekOffset * 7);
     weekStart.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      return d;
+    });
+  }, [weekOffset]);
+
+  // Compute heatmap data for the selected week (respecting weekOffset)
+  const heatmapData = useMemo<HeatmapCell[]>(() => {
+    const weekStart = heatmapWeekDates[0];
     const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    const cellMap = new Map<string, { seconds: number; productive: number; appBreakdown: Record<string, { seconds: number; category: string }>; appSeconds: number; domainSeconds: number }>();
+    interface Acc {
+      deviceSeconds: number;
+      /** seconds spent in productive-tier sources — the numerator of `productivity` */
+      productiveSeconds: number;
+      appSeconds: number;
+      domainSeconds: number;
+      appBreakdown: Record<string, { seconds: number; category: string }>;
+      appCount: number;
+      segmentCount: number;
+    }
+    const cellMap = new Map<string, Acc>();
     for (let d = 0; d < 7; d++) {
       for (let h = 0; h < 24; h++) {
-        cellMap.set(`${d}-${h}`, { seconds: 0, productive: 0, appBreakdown: {}, appSeconds: 0, domainSeconds: 0 });
+        cellMap.set(`${d}-${h}`, {
+          deviceSeconds: 0, productiveSeconds: 0, appSeconds: 0, domainSeconds: 0,
+          appBreakdown: {}, appCount: 0, segmentCount: 0,
+        });
       }
     }
 
-    allLogs.forEach(log => {
+    // Read the tier assignment through a ref: getTierFromCategory is a fresh
+    // closure on every render, so depending on it would recompute 168 cells at
+    // mouse-event frequency for no reason.
+    const tiers = tierAssignmentsRef.current || DEFAULT_TIER_ASSIGNMENTS;
+    const tierOf = (category?: string): 'productive' | 'neutral' | 'distracting' => {
+      if (!category) return 'neutral';
+      if (tiers.productive.includes(category)) return 'productive';
+      if (tiers.distracting.includes(category)) return 'distracting';
+      return 'neutral';
+    };
+
+    for (const log of allLogs) {
       const ts = new Date(log.timestamp);
-      if (ts < weekStart || ts >= weekEnd) return;
+      if (ts < weekStart || ts >= weekEnd) continue;
       const day = ts.getDay();
       const hour = ts.getHours();
-      const key = `${day}-${hour}`;
-      const entry = cellMap.get(key);
-      if (!entry) return;
+      const entry = cellMap.get(`${day}-${hour}`);
+      if (!entry) continue;
       const secs = (log.duration_ms || 0) / 1000;
-      entry.seconds += secs;
-      entry.productive += secs;
+      if (secs <= 0) continue;
+
+      entry.segmentCount += 1;
+      // Only TRACKED time counts toward the productivity ratio. Previously every
+      // log — browser rows included — was added to both `seconds` and
+      // `productive`, which made the ratio >= 1 for any cell with browser
+      // activity; the `Math.min(1, …)` clamp then pinned every cell to 1.0 and the
+      // entire red→amber→green ramp was dead code.
       if (log.is_browser_tracking) {
+        entry.deviceSeconds += secs;
         entry.domainSeconds += secs;
+        const key = log.domain || log.app;
+        if (key && !entry.appBreakdown[key]) {
+          entry.appBreakdown[key] = { seconds: 0, category: log.category || 'Browser' };
+          entry.appCount += 1;
+        }
+        if (key) entry.appBreakdown[key].seconds += secs;
+        if (tierOf(log.category) === 'productive') entry.productiveSeconds += secs;
       } else {
+        entry.deviceSeconds += secs;
         entry.appSeconds += secs;
         const appName = log.app;
-        if (!entry.appBreakdown[appName]) {
-          entry.appBreakdown[appName] = { seconds: 0, category: log.category || 'app' };
+        if (appName) {
+          if (!entry.appBreakdown[appName]) {
+            entry.appBreakdown[appName] = { seconds: 0, category: log.category || 'Uncategorized' };
+            entry.appCount += 1;
+          }
+          entry.appBreakdown[appName].seconds += secs;
         }
-        entry.appBreakdown[appName].seconds += secs;
+        if (tierOf(log.category) === 'productive') entry.productiveSeconds += secs;
       }
-    });
+    }
 
     const result: HeatmapCell[] = [];
     cellMap.forEach((v, key) => {
       const [dayStr, hourStr] = key.split('-');
-      const day = Number(dayStr);
-      const hour = Number(hourStr);
-      const productivity = v.appSeconds > 0 ? v.productive / v.appSeconds : 0;
       const extData = externalHourlyData.get(key);
       result.push({
-        day,
-        hour,
-        value: v.appSeconds,
-        productivity,
-        deviceSeconds: v.appSeconds,
+        day: Number(dayStr),
+        hour: Number(hourStr),
+        value: v.deviceSeconds,
+        // denominator = tracked time only, so 0 means "nothing tracked", not NaN
+        productivity: v.deviceSeconds > 0 ? v.productiveSeconds / v.deviceSeconds : 0,
+        deviceSeconds: v.deviceSeconds,
         externalSeconds: extData?.externalSeconds || 0,
         deviceBreakdown: v.appBreakdown,
         externalBreakdown: extData?.breakdown || {},
+        appCount: v.appCount,
+        segmentCount: v.segmentCount,
       });
     });
     return result;
-  }, [allLogs, weekOffset, externalHourlyData]);
+  }, [allLogs, heatmapWeekDates, externalHourlyData]);
 
   const heatmapWeekLabel = useMemo(() => {
-    const now = new Date();
-    const currentWeekStart = new Date(now);
-    currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
-    currentWeekStart.setHours(0, 0, 0, 0);
-    const targetWeekStart = new Date(currentWeekStart.getTime() + (weekOffset * 7 * 24 * 60 * 60 * 1000));
-    const targetWeekEnd = new Date(targetWeekStart.getTime() + (6 * 24 * 60 * 60 * 1000));
-    const formatDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return `${formatDate(targetWeekStart)} - ${formatDate(targetWeekEnd)}`;
-  }, [weekOffset]);
+    const a = heatmapWeekDates[0];
+    const b = heatmapWeekDates[6];
+    const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const sameMonth = a.getMonth() === b.getMonth();
+    return sameMonth
+      ? `${fmt(a)} – ${b.getDate()}, ${b.getFullYear()}`
+      : `${fmt(a)} – ${fmt(b)}, ${b.getFullYear()}`;
+  }, [heatmapWeekDates]);
 
-  const renderHeatmap = () => {
-    const currentHour = new Date().getHours();
-    const currentDay = new Date().getDay();
+  /**
+   * Open the day-detail page for a day-of-week index in the loaded week.
+   *
+   * The date string is formatted from the LOCAL Date fields. The old code did
+   * `toISOString().split('T')[0]`, and because `timestamp` is stored as UTC ISO,
+   * a local midnight in any timezone east of UTC (UTC+7 here) serialised to the
+   * PREVIOUS day — so every one of the 7 columns opened the wrong date.
+   */
+  const openHeatmapDay = useCallback((dayIdx: number) => {
+    const targetDate = heatmapWeekDates[dayIdx];
+    if (!targetDate) return;
+    const dateStr = formatLocalDateKey(targetDate);
 
-    const getHeatColor = (cell: HeatmapCell | undefined) => {
-      if (!cell) return 'var(--border)';
-
-      let valueToUse = 0;
-      let productivityToUse = 0;
-      let isExternalOnly = false;
-      let hasBoth = false;
-
-      if (heatmapMode === 'device') {
-        valueToUse = cell.deviceSeconds || cell.value || 0;
-        productivityToUse = cell.productivity || 0;
-      } else if (heatmapMode === 'external') {
-        valueToUse = cell.externalSeconds || 0;
-        productivityToUse = valueToUse > 0 ? 1 : 0;
-        isExternalOnly = valueToUse > 0;
-      } else {
-        // Combined mode
-        const hasExternal = (cell.externalSeconds || 0) > 0;
-        const hasDevice = (cell.deviceSeconds || cell.value || 0) > 0;
-
-        if (hasExternal && !hasDevice) {
-          valueToUse = cell.externalSeconds || 0;
-          productivityToUse = 1;
-          isExternalOnly = true;
-        } else if (!hasExternal && hasDevice) {
-          valueToUse = cell.deviceSeconds || cell.value || 0;
-          productivityToUse = cell.productivity || 0;
-        } else {
-          hasBoth = true;
-          valueToUse = Math.max(cell.deviceSeconds || 0, cell.externalSeconds || 0);
-          const deviceProd = cell.productivity || 0;
-          const externalProd = (cell.externalSeconds || 0) > 0 ? 1 : 0;
-          productivityToUse = (deviceProd + externalProd) / 2;
-        }
-      }
-
-      if (valueToUse === 0) return 'var(--border)';
-
-      // Intensity based on usage: max 1 hour = full opacity, more = saturated
-      const maxSeconds = heatmapMode === 'external' ? 3600 : 7200; // External max 1h, device max 2h
-      const intensity = Math.min(1, valueToUse / maxSeconds);
-      const opacity = 0.2 + intensity * 0.8; // Range: 0.2 - 1.0
-
-      // External color scheme (distinct purple)
-      if (isExternalOnly || (heatmapMode === 'combined' && (cell.externalSeconds || 0) > (cell.deviceSeconds || 0))) {
-        // Purple gradient: light purple = low usage, deep purple = high usage
-        const r = Math.round(147 + (99 - 147) * intensity);
-        const g = Math.round(51 + (102 - 51) * intensity);
-        const b = Math.round(234 + (236 - 234) * intensity);
-        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-      }
-
-      // Device color scheme (red -> yellow -> green based on productivity)
-      // Also used for "both" in combined mode
-      const prod = Math.max(0, Math.min(1, productivityToUse));
-      let r, g, b;
-
-      if (hasBoth) {
-        // "Both" mode: mix green (device) + purple (external) tints
-        const deviceColor = prod < 0.5
-          ? { r: 239 - (239 - 234) * prod * 2, g: 68 + (216 - 68) * prod * 2, b: 68 + (8 - 68) * prod * 2 }
-          : { r: 234 + (34 - 234) * (prod - 0.5) * 2, g: 216 + (197 - 216) * (prod - 0.5) * 2, b: 8 + (94 - 8) * (prod - 0.5) * 2 };
-
-        // Blend with purple (external) - 30% purple tint
-        const purpleTint = 0.3;
-        r = Math.round(deviceColor.r * (1 - purpleTint) + 99 * purpleTint);
-        g = Math.round(deviceColor.g * (1 - purpleTint) + 102 * purpleTint);
-        b = Math.round(deviceColor.b * (1 - purpleTint) + 236 * purpleTint);
-      } else {
-        // Pure device mode: red -> green gradient
-        if (prod < 0.5) {
-          r = Math.round(239 * (1 - prod * 2) + 234 * prod * 2);
-          g = Math.round(68 * (1 - prod * 2) + 216 * prod * 2);
-          b = Math.round(68 * (1 - prod * 2) + 8 * prod * 2);
-        } else {
-          r = Math.round(234 * (1 - (prod - 0.5) * 2) + 34 * (prod - 0.5) * 2);
-          g = Math.round(216 * (1 - (prod - 0.5) * 2) + 197 * (prod - 0.5) * 2);
-          b = Math.round(8 * (1 - (prod - 0.5) * 2) + 94 * (prod - 0.5) * 2);
-        }
-      }
-
-      return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${opacity})`;
-    };
-
-    const handleDayClick = (dayIdx: number) => {
-      console.log('[Dashboard] Day clicked:', dayIdx, 'weekOffset:', weekOffset);
-      const now = new Date();
-      const currentWeekStart = new Date(now);
-      currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
-      currentWeekStart.setHours(0, 0, 0, 0);
-      const targetWeekStart = new Date(currentWeekStart.getTime() + (weekOffset * 7 * 24 * 60 * 60 * 1000));
-      const targetDate = new Date(targetWeekStart);
-      targetDate.setDate(targetDate.getDate() + dayIdx);
-      const dateStr = targetDate.toISOString().split('T')[0];
-      console.log('[Dashboard] Day click date:', dateStr);
-      setSelectedCell(null);
-
-      if (window.deskflowAPI?.getDayDetail) {
-        window.deskflowAPI.getDayDetail(dateStr).then(detail => {
-          if (!detail) return;
-          const items: TimelineItem[] = [];
-
-          // Transform logs into timeline items
-          (detail.logs || []).forEach((log: any) => {
-            const logDate = new Date(log.timestamp);
-            const startHour = logDate.getHours() + logDate.getMinutes() / 60;
-            const durationSec = (log.duration_ms || 0) / 1000;
-            const endHour = startHour + durationSec / 3600;
-            const isBrowser = log.is_browser_tracking;
-            const label = isBrowser ? (log.domain || log.app) : log.app;
-            items.push({
-              id: `log-${log.id}`,
-              startHour,
-              endHour: Math.min(endHour, 24),
-              label,
-              category: isBrowser ? 'browser' : 'app',
-              color: isBrowser ? 'var(--success)' : 'var(--info)',
-              duration: Math.round(durationSec),
-              details: log.title
-            });
-          });
-
-          // Transform external sessions into timeline items
-          (detail.externalSessions || []).forEach((session: any) => {
-            const startDate = new Date(session.started_at);
-            const endDate = session.ended_at ? new Date(session.ended_at) : new Date();
-            const startHour = startDate.getHours() + startDate.getMinutes() / 60;
-            const durationSec = (endDate.getTime() - startDate.getTime()) / 1000;
-            const endHour = startHour + durationSec / 3600;
-            items.push({
-              id: `ext-${session.id}`,
-              startHour,
-              endHour: Math.min(endHour, 24),
-              label: session.activity_name || 'External',
-              category: 'external',
-              color: session.color || 'var(--page-accent)',
-              duration: Math.round(durationSec)
-            });
-          });
-
-          items.sort((a, b) => a.startHour - b.startHour);
-          setDayDetailDate(dateStr);
-          setDayDetailItems(items);
-        });
-      }
-    };
-
-    return (
-      <div className="relative w-full">
-        <div className="overflow-x-auto">
-          <div className="w-full bg-zinc-900/60 backdrop-blur-xl rounded-xl border border-zinc-800/50 p-5 light:bg-white/85 light:border-[var(--ws-border)]">
-            <VCalendar
-              selected={calendarDate}
-              onSelect={(d) => { if (d && !Array.isArray(d)) setCalendarDate(d); }}
-            />
-            {/* Day Headers - aligned with grid */}
-            <div className="flex items-center mb-3">
-              <div className="w-14 flex-shrink-0"></div>
-              <div className="flex-1 flex">
-                {DAYS.map((day, dayIdx) => (
-                  <div
-                    key={dayIdx}
-                    className={`flex-1 text-center text-sm font-semibold mx-px cursor-pointer hover:text-white transition ${dayIdx === currentDay ? 'text-emerald-400' : 'text-zinc-400'} light:text-[var(--text-secondary)]`}
-                    onClick={() => handleDayClick(dayIdx)}
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Mode Toggle - below day headers */}
-            <div className="flex justify-end mb-3">
-              <div className="flex bg-zinc-800 rounded-lg p-1 gap-1 light:bg-[var(--ws-surface-sunken)]">
-                {(['device', 'external', 'combined'] as const).map(mode => (
-                  <button
-                    key={mode}
-                    onClick={() => setHeatmapMode(mode)}
-                    className={`px-3 py-1.5 text-xs rounded-md transition capitalize ${heatmapMode === mode ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'} light:${heatmapMode === mode ? 'bg-white text-stone-900 border border-[var(--ws-border-strong)]' : 'text-stone-600 hover:text-stone-900'}`}
-                  >
-                    {mode === 'device' ? 'Device' : mode === 'external' ? 'External' : 'Combined'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {Array.from({ length: 24 }, (_, hourIdx) => {
-              const hourStr = hourIdx.toString().padStart(2, '0');
-              return (
-                <div key={hourIdx} className="flex items-center py-[1px]">
-                  <div className={`w-10 flex-shrink-0 pr-1 text-[10px] font-mono text-right text-zinc-500 light:text-[var(--text-muted)]`}>
-                    {hourStr}
-                  </div>
-                  {DAYS.map((_, dayIdx) => {
-                    const actualHour = hourIdx;
-                    const cell = heatmapData.find(c => c.day === dayIdx && c.hour === actualHour);
-                    if (!cell) return <div key={dayIdx} className="flex-1 h-6 mx-px" />;
-
-                    const bgColor = getHeatColor(cell);
-                    const isToday = dayIdx === currentDay;
-                    const isCurrentHour = actualHour === currentHour;
-
-                    const rgbaMatch = bgColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
-                    const glowRgb = rgbaMatch ? `${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}` : '34, 197, 94';
-
-                    return (
-                      <motion.div
-                        key={dayIdx}
-                        className="flex-1 h-6 mx-px rounded-md cursor-pointer relative min-w-[28px]"
-                        style={{
-                          backgroundColor: bgColor,
-                          boxShadow: (cell.deviceSeconds || cell.externalSeconds || 0) > 70 ? `0 0 12px rgba(${glowRgb}, 0.5)` : 'inset 0 0 2px rgba(255,255,255,0.08)'
-                        }}
-                        onClick={() => {
-                          const sameCell = selectedCell?.day === dayIdx && selectedCell?.hour === actualHour;
-                          setSelectedCell(sameCell ? null : { day: dayIdx, hour: actualHour });
-                          setHoveredCell({
-                            day: dayIdx,
-                            hour: actualHour,
-                            value: cell.value,
-                            productivity: cell.productivity,
-                            deviceSeconds: cell.deviceSeconds,
-                            externalSeconds: cell.externalSeconds
-                          });
-                        }}
-                        onMouseEnter={() => setHoveredCell({
-                          day: dayIdx,
-                          hour: actualHour,
-                          value: cell.value,
-                          productivity: cell.productivity,
-                          deviceSeconds: cell.deviceSeconds,
-                          externalSeconds: cell.externalSeconds
-                        })}
-                        onMouseLeave={() => setHoveredCell(null)}
-                        whileHover={{ scale: 1.08, zIndex: 20 }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                      >
-                        {isCurrentHour && isToday && (
-                          <div className="absolute inset-0 rounded-md ring-2 ring-emerald-400 ring-offset-1 ring-offset-zinc-950" />
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Hover Tooltip */}
-        <AnimatePresence>
-          {hoveredCell && !selectedCell && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              className="absolute glass px-4 py-2.5 rounded-xl border border-zinc-700 z-50 pointer-events-none light:bg-white light:border-[var(--ws-border-strong)]"
-              style={{
-                minWidth: '220px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                top: `${(hoveredCell.hour * 26) + 50}px`
-              }}
-            >
-              <div className="font-semibold text-white text-xs mb-2 light:text-stone-900">
-                {DAYS[hoveredCell.day]} • {hoveredCell.hour.toString().padStart(2, '0')}:00 – {(hoveredCell.hour + 1).toString().padStart(2, '0')}:00
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-zinc-400 text-xs light:text-stone-500">Device:</span>
-                  <span className="font-mono text-sm text-emerald-400 tabular-nums">
-                    {formatDuration((hoveredCell.deviceSeconds || 0) * 1000)}
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-zinc-400 text-xs light:text-stone-500">External:</span>
-                  <span className="font-mono text-sm text-purple-400 tabular-nums">
-                    {formatDuration((hoveredCell.externalSeconds || 0) * 1000)}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Click Detail Panel */}
-        <AnimatePresence>
-          {selectedCell !== null && (() => {
-            const clickedCell = heatmapData.find(c => c.day === selectedCell.day && c.hour === selectedCell.hour);
-            if (!clickedCell) return null;
-            return (
-              <motion.div
-                initial={{ opacity: 0, y: 20, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: 'auto' }}
-                exit={{ opacity: 0, y: 20, height: 0 }}
-                className="mt-6 p-4 rounded-xl border border-zinc-700 bg-zinc-900/30 space-y-4 light:bg-white light:border-[var(--ws-border-strong)] light:text-stone-900"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold text-white">
-                    {DAYS[clickedCell.day]} • {selectedCell.hour.toString().padStart(2, '0')}:00 – {(selectedCell.hour + 1).toString().padStart(2, '0')}:00
-                  </div>
-                  <button
-                    onClick={() => setSelectedCell(null)}
-                    className="light:text-stone-500 light:hover:text-stone-700 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Device Column */}
-                  <div className="space-y-3">
-                    <div className="font-semibold text-emerald-400 text-sm flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                      Device Activity
-                    </div>
-                    {clickedCell.deviceSeconds === 0 ? (
-                      <div className="text-xs light:text-stone-500 italic">No device activity this hour</div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-baseline justify-between text-xs">
-                          <span className="light:text-stone-500">Total Time:</span>
-                          <span className="font-mono text-emerald-400">{formatDuration((clickedCell.deviceSeconds || 0) * 1000)}</span>
-                        </div>
-                        {(() => {
-                          const breakdown = clickedCell.deviceBreakdown || {};
-                          const apps = Object.entries(breakdown).sort((a, b) => b[1].seconds - a[1].seconds);
-                          return apps.length > 0 ? (
-                            <div className="space-y-1 border-t border-zinc-700 pt-2 mt-2 light:border-[var(--ws-border)]">
-                              {apps.map(([app, data]) => (
-                                <div key={app} className="flex items-baseline justify-between text-xs">
-                                  <span className="text-zinc-400 truncate flex items-center gap-1 light:text-stone-500">
-                                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: appColors[app] || 'var(--muted-foreground)' }} />
-                                    {app}:
-                                  </span>
-                                  <span className="font-mono text-emerald-400 ml-2 flex-shrink-0">{formatDuration(data.seconds * 1000)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null;
-                        })()}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* External Column */}
-                  <div className="space-y-3">
-                    <div className="font-semibold text-purple-400 text-sm flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-purple-400" />
-                      External Activity
-                    </div>
-                    {clickedCell.externalSeconds === 0 ? (
-                      <div className="text-xs light:text-stone-500 italic">No external activity this hour</div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-baseline justify-between text-xs">
-                          <span className="light:text-stone-500">Total Time:</span>
-                          <span className="font-mono text-purple-400">{formatDuration((clickedCell.externalSeconds || 0) * 1000)}</span>
-                        </div>
-                        {(() => {
-                          const breakdown = clickedCell.externalBreakdown || {};
-                          const activities = Object.entries(breakdown).sort((a, b) => b[1].seconds - a[1].seconds);
-
-                          return activities.length > 0 ? (
-                            <div className="space-y-1 border-t border-zinc-700 pt-2 mt-2">
-                                {activities.map(([activity, data]) => (
-                                  <div key={activity} className="flex items-baseline justify-between text-xs">
-                                    <span className="text-zinc-400 truncate flex items-center gap-1 light:text-stone-500">
-                                    {data.icon || '?'} {activity}:
-                                  </span>
-                                  <span className="font-mono text-purple-300 ml-2 flex-shrink-0">{formatDuration(data.seconds * 1000)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null;
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })()}
-        </AnimatePresence>
-      </div>
-    );
-  };
+    if (!window.deskflowAPI?.getDayDetail) return;
+    setDayDetailDate(dateStr);
+    setDayDetailItems([]);
+    setDayDetailLoading(true);
+    window.deskflowAPI.getDayDetail(dateStr)
+      .then(detail => { if (detail) setDayDetailItems(buildDayTimelineItems(detail)); })
+      .catch(err => console.error('[Dashboard] getDayDetail failed:', err))
+      .finally(() => setDayDetailLoading(false));
+  }, [heatmapWeekDates]);
 
   // Compute website data from allLogs (filtered by selectedPeriod + dateOffset)
   // Toggle for App/Website view in solar system
@@ -2679,6 +2552,27 @@ export default function DashboardPage({
   }, [activityFeed]);
 
   // Transform dashboardData.appStats/websiteStats → ActivityLog[] for OrbitSystem
+  //
+  // NORMALIZER CONTRACT: `appStats` rows are `{ app, category, seconds }` and
+  // `websiteStats` rows are `{ domain, seconds }` (aggregateNormalizer.ts:75).
+  // These adapters used to read `s.totalSeconds` — a field that only exists on
+  // `overview`. On appStats/websiteStats it is `undefined`, so `|| 0` silently
+  // gave EVERY app a duration of 0; computePlanets then dropped every planet
+  // below MIN_PLANET_TIME_SECONDS and the solar system rendered with zero
+  // systems. A missing field on an aggregate is indistinguishable from "no time
+  // spent", so the whole view was empty rather than erroring.
+  //
+  // Accept every spelling the aggregates have used, in ms-aware order, so a
+  // future rename degrades to "still renders" instead of "silently empty".
+  const orbitSeconds = (s: any): number => {
+    const candidates = [s?.seconds, s?.totalSeconds, s?.duration];
+    for (const c of candidates) {
+      if (typeof c === 'number' && Number.isFinite(c) && c > 0) return Math.round(c);
+    }
+    const ms = [s?.total_ms, s?.duration_ms].find(v => typeof v === 'number' && Number.isFinite(v) && v > 0);
+    return ms ? Math.round(ms / 1000) : 0;
+  };
+
   const orbitLogs = useMemo(() => {
     if (!dashboardData?.appStats) return [];
     return dashboardData.appStats.map((s: any, i: number) => ({
@@ -2686,7 +2580,7 @@ export default function DashboardPage({
       timestamp: new Date(),
       app: s.app || s.app_name || '',
       category: s.category || 'Other',
-      duration: Math.round(s.totalSeconds || 0),
+      duration: orbitSeconds(s),
     })).filter((l: any) => l.app);
   }, [dashboardData?.appStats]);
 
@@ -2697,7 +2591,7 @@ export default function DashboardPage({
       timestamp: new Date(),
       app: s.domain || s.app_name || '',
       category: s.category || 'Other',
-      duration: Math.round(s.totalSeconds || 0),
+      duration: orbitSeconds(s),
       domain: s.domain || s.app_name || '',
     })).filter((l: any) => l.app);
   }, [dashboardData?.websiteStats]);
@@ -2725,6 +2619,19 @@ export default function DashboardPage({
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   const [showCardLibrary, setShowCardLibrary] = useState(false);
+
+  // ── Signals disclosure ────────────────────────────────────────────────
+  // The 8 cross-domain stat tiles (AI / Console / Finance / Learn / Browser /
+  // Brain / Covenant / Health) used to render as a full-width 4-across grid
+  // directly under the day's primary cards, so eight small readouts competed
+  // with Goals, Deadlines and the productivity chart for the same attention.
+  // They are secondary signals — reference, not briefing — so they collapse
+  // behind one control and the day reads top-down. Collapsed by default.
+  const SIGNALS_KEY = 'deskflow-signals-open';
+  const [signalsOpen, setSignalsOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem(SIGNALS_KEY) === 'true'; } catch { return false; }
+  });
+  useEffect(() => { try { localStorage.setItem(SIGNALS_KEY, String(signalsOpen)); } catch {} }, [signalsOpen]);
 
   // ── Card layering: z-index + pinning ──
   const Z_KEY = 'deskflow-widget-zindices';
@@ -2782,7 +2689,10 @@ export default function DashboardPage({
 
   return (
     <PageShell page="dashboard" variant="dashboard" className="text-white dash-root">
-      <CurrentCanvas accent="#34d399" render={renderStream} />
+      {/* Canvas accent follows [data-page="dashboard"] --page-accent (#ec4899).
+          It was hardcoded emerald #34d399, so the ambient canvas stream ran in
+          a different hue from every accent-linked element on the page. */}
+      <CurrentCanvas accent="#ec4899" render={renderStream} />
       <TimerResetOverlay trigger={resetTrigger} />
 
       {/* Card Library */}
@@ -2801,7 +2711,7 @@ export default function DashboardPage({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/95 max-w-7xl w-full max-h-[88vh] overflow-auto p-4"
+              className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] max-w-7xl w-full max-h-[88vh] overflow-auto p-4"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -2816,7 +2726,7 @@ export default function DashboardPage({
                 </div>
                 <button
                   onClick={() => setShowCardLibrary(false)}
-                  className="p-1.5 rounded-lg hover:bg-zinc-800/50 text-zinc-400 hover:text-white transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-zinc-800/50 text-zinc-400 hover:text-white transition-colors light:hover:bg-[var(--ws-surface-hover)]"
                 >
                   <X size={16} />
                 </button>
@@ -2838,73 +2748,118 @@ export default function DashboardPage({
         )}
       </AnimatePresence>
 
-      {/* Platform Filter Toggle */}
-      {availablePlatforms.length > 0 && (
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-medium">OS</span>
+      {/* ── Utility bar ──────────────────────────────────────────────────
+          This used to be THREE stacked rows above the fold — an OS filter, a
+          right-aligned pair of heavy elevated buttons, and a debug readout
+          reading "Layers: / PINNED: / Click any card to bring it to front".
+          So the first screen of the dashboard contained no dashboard: it was
+          configuration, styled louder than the data, plus a debug string.
+          Two problems beyond the clutter:
+            1. The debug line instructed a gesture that does nothing. Cards sit
+               in normal flow with position:relative, so bringToFront()'s
+               z-index has no stacking conflict to resolve. It was scaffolding
+               shipped as product. Pinning still works from the Card Library —
+               it just no longer narrates itself in the page body.
+            2. "Theme" and "Widgets" carried bg-elevated + shadow-lg + an
+               accent border, i.e. the visual weight of a primary CTA, while
+               the day's actual content had none. Accent on a control should
+               mean "this is the action", and the action here is reading the
+               day, not restyling it.
+          One row now: the two drill-down destinations (the most distinctive
+          surfaces on the page, previously buried as pale ghost buttons at the
+          bottom of the chart card) lead on the left as the only emphasised
+          pair; the OS filter and the two settings controls sit quiet on the
+          right as hairline ghost buttons. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setPlatformFilter('all')}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
-              platformFilter === 'all'
-                ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
+            onClick={() => setExpandedModal('heatmap')}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/[0.08] text-[12px] font-semibold text-[var(--page-accent)] hover:bg-[var(--page-accent)]/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 transition-colors duration-200"
           >
-            All
+            <Clock size={14} />
+            Review the week
           </button>
-          {availablePlatforms.map(p => (
-            <button
-              key={p}
-              onClick={() => setPlatformFilter(p)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
-                platformFilter === p
-                  ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {p === 'win32' ? 'Windows' : p === 'darwin' ? 'macOS' : p}
-            </button>
-          ))}
+          <button
+            onClick={() => setExpandedModal('solar')}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/[0.08] text-[12px] font-semibold text-[var(--page-accent)] hover:bg-[var(--page-accent)]/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 transition-colors duration-200"
+          >
+            <Sun size={14} />
+            App ecosystem
+          </button>
         </div>
-      )}
 
-      {/* Widget Library Toggle — inside dashboard content, part of page flow */}
-      <div className="flex items-center justify-end gap-2 mb-3">
-        {/* Theme toggle: CURRENT (default) <-> TERMINAL. Applies a
-            [data-dash-theme] attribute on <html>; with it absent the dashboard
-            is byte-for-byte the current design. */}
-        <button
-          onClick={toggleDashTheme}
-          data-dash-theme-toggle
-          aria-pressed={dashTheme === 'terminal'}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--page-accent)]/40 hover:border-[var(--page-accent)] hover:bg-[var(--page-accent)]/10 transition-colors duration-200 text-[12px] font-semibold text-[var(--page-accent)] cursor-pointer"
-          title={dashTheme === 'terminal'
-            ? 'Terminal theme is ON — click to switch back to the current theme'
-            : 'Current theme — click to switch to the Terminal theme'}
-        >
-          <Terminal size={14} />
-          Theme: {dashTheme === 'terminal' ? 'TERMINAL' : 'CURRENT'}
-        </button>
-        <button
-          onClick={() => setShowCardLibrary(v => !v)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--ws-border)] hover:border-[var(--page-accent)]/50 transition-colors duration-200 text-[12px] font-medium text-zinc-300 hover:text-[var(--page-accent)] shadow-lg"
-          title="Customize Dashboard Widgets"
-        >
-          {showCardLibrary ? <X size={14} /> : <LayoutGrid size={14} />}
-          {showCardLibrary ? 'Close' : 'Widgets'}
-        </button>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {availablePlatforms.length > 0 && (
+            <>
+              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-medium mr-0.5">Source</span>
+              <button
+                onClick={() => setPlatformFilter('all')}
+                aria-pressed={platformFilter === 'all'}
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
+                  platformFilter === 'all'
+                    ? 'border-[var(--page-accent)]/40 text-[var(--page-accent)]'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-subtle)]'
+                }`}
+              >
+                All
+              </button>
+              {availablePlatforms.map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPlatformFilter(p)}
+                  aria-pressed={platformFilter === p}
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
+                    platformFilter === p
+                      ? 'border-[var(--page-accent)]/40 text-[var(--page-accent)]'
+                      : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-subtle)]'
+                  }`}
+                >
+                  {p === 'win32' ? 'Windows' : p === 'darwin' ? 'macOS' : p}
+                </button>
+              ))}
+              <span className="w-px h-4 bg-[var(--border-subtle)] mx-1" aria-hidden="true" />
+            </>
+          )}
+
+          {/* Theme toggle: CURRENT (default) <-> TERMINAL. Applies a
+              [data-dash-theme] attribute on <html>; with it absent the dashboard
+              is byte-for-byte the current design. */}
+          <button
+            onClick={toggleDashTheme}
+            data-dash-theme-toggle
+            aria-pressed={dashTheme === 'terminal'}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--page-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 transition-colors duration-200"
+            title={dashTheme === 'terminal'
+              ? 'Terminal theme is ON — click to switch back to the current theme'
+              : 'Current theme — click to switch to the Terminal theme'}
+          >
+            <Terminal size={13} />
+            {dashTheme === 'terminal' ? 'Terminal' : 'Current'}
+          </button>
+          <button
+            onClick={() => setShowCardLibrary(v => !v)}
+            aria-expanded={showCardLibrary}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--page-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 transition-colors duration-200"
+            title="Choose which cards appear on your dashboard"
+          >
+            {showCardLibrary ? <X size={13} /> : <LayoutGrid size={13} />}
+            {showCardLibrary ? 'Close' : 'Widgets'}
+          </button>
+        </div>
       </div>
 
 <div className="relative z-10 flex flex-col flex-1 min-h-0 w-full">
            <div className="mx-auto px-4 lg:px-6 flex flex-col flex-1 min-h-0 w-full">
 
-           {/* Z-Index Layer Indicator */}
+           {/* ── Band: NOW ────────────────────────────────────────────────
+               The dashboard answers three questions in order — what am I
+               doing, is today on track, what needs me. This band is the
+               first. Labelled rather than free-floating so the wall of cards
+               below reads as a briefing with sections instead of 15 boxes
+               competing at equal weight. */}
            <div className="flex items-center gap-2 mb-2 px-1">
-             <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-wider">Layers:</span>
-             {pinnedWidgets.size > 0 && (
-               <span className="text-[9px] font-mono text-amber-400/60">PINNED: {[...pinnedWidgets].join(', ')}</span>
-             )}
-             <span className="text-[9px] font-mono text-zinc-700">Click any card to bring it to front</span>
+             <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--page-accent)]/80">Now</h2>
+             <span className="h-px flex-1 bg-[var(--border-subtle)]" aria-hidden="true" />
            </div>
 
 {/* Row 1: HeroBand (Stopwatch) + Momentum Hero */}
@@ -2922,11 +2877,18 @@ export default function DashboardPage({
                    ? (currentWebsite?.title || currentWebsite?.domain || '')
                    : (currentApp?.app || currentApp?.title || '')}
                  isReal={currentApp?.isReal}
-                                 totalFocusedMs={(dashboardData?.overview?.productiveSeconds || 0) * 1000}
+                                 totalFocusedMs={currentProductiveMs}
+                                 /* was (dashboardData?.overview?.productiveSeconds || 0) * 1000 —
+                                    a DB snapshot refreshed only on data reload, while the timer
+                                    beside it read the live store. The ring could therefore show a
+                                    different number than the timer it was tracking. */
+                                 dailyFocusTarget={240}
                                  isInBrowser={isInBrowser}
                  isPaused={isPaused}
                  onChangeTier={changeTrackedTier}
                  websiteTitle={currentWebsite?.title}
+                 websiteDomain={currentWebsite?.domain}
+                 websiteUrl={currentWebsite?.url}
                  websiteCategory={currentWebsite?.category}
                  appCategory={currentApp?.category}
                />
@@ -2941,7 +2903,7 @@ export default function DashboardPage({
                      animate={{ opacity: 1, y: 0, scale: 1 }}
                      exit={{ opacity: 0, y: -6, scale: 0.97 }}
                      transition={{ duration: 0.18 }}
-                     className="absolute z-50 bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700/60 bg-zinc-900/98 light:bg-white shadow-xl"
+                     className="absolute z-50 bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700/60 bg-zinc-900/98 light:bg-[var(--ws-surface-raised)] light:bg-white shadow-xl"
                    >
                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                      <span className="text-[12px] text-zinc-200 light:text-zinc-800">{tierToast.text}</span>
@@ -2958,7 +2920,7 @@ export default function DashboardPage({
                </div>
                )}
 {isVisible('momentum') && (
-                 <div data-section="Momentum Hero" className="relative min-w-0 flex-1 pl-5 ml-1 border-l border-dashed border-[var(--dk-border-subtle,rgba(255,255,255,0.07))] self-stretch">
+                 <div data-section="Momentum Hero" className="relative min-w-0 flex-1 pl-5 ml-1 border-l border-dashed border-[var(--border-subtle)] self-stretch">
                 <div className="absolute top-2 right-2 z-40"><WidgetJumpButton widgetId="momentum" iconOnly /></div>
                 <MomentumHero
                   momentum={
@@ -3011,6 +2973,15 @@ export default function DashboardPage({
            </div>
           </DeskFlowCardMotion>
           )}
+
+{/* ── Band: TODAY ──────────────────────────────────────────────────
+          Second question: is the day on track, and what does it still need?
+          Sits below the NOW band so the two are read as distinct registers —
+          live state first, the day's commitments second. */}
+           <div className="flex items-center gap-2 mb-2 mt-4 px-1">
+             <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--page-accent)]/80">Today</h2>
+             <span className="h-px flex-1 bg-[var(--border-subtle)]" aria-hidden="true" />
+           </div>
 
 {/* Row 4: Quadruple Column — Goals + Deadlines + Focus + Longest Focus */}
 {(isVisible('goals') || isVisible('quick-focus') || isVisible('deadlines')) && (
@@ -3110,61 +3081,64 @@ export default function DashboardPage({
                <div>
                <SectionHeader title="Productivity" icon={<BarChart3 size={14} />} />
                <div className="h-52 mt-2">
-                 {chartBarsResult.chartBars.length === 0 ? (
-                   <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No data yet" description="Start tracking to see productivity" />
+                 {chartBarsResult.chartBars.length === 0 ||
+                  chartBarsResult.maxBarSeconds <= 1 ? (
+                   <EmptyState icon={<BarChart3 className="w-8 h-8 opacity-30" />} title="No tracked time in this range" description="Switch period, or start tracking — this chart fills in as the tracker records activity." />
                  ) : (
                    <Bar data={{
                      labels: chartBarsResult.chartBars.map(b => b.label),
                      datasets: [
                        {
-                         label: 'Productive',
-                         data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
-                         backgroundColor: '#34d399',
+label: 'Productive',
+                          data: chartBarsResult.chartBars.map(b => Math.round(b.productiveSeconds / 3600 * 100) / 100),
+                          backgroundColor: PRODUCTIVITY_SERIES.productive,
                          borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
                        },
                        {
-                         label: 'Other',
-                         data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
-                         backgroundColor: '#fbbf24',
+label: 'Other',
+                          data: chartBarsResult.chartBars.map(b => Math.round(b.nonProductiveSeconds / 3600 * 100) / 100),
+                          backgroundColor: PRODUCTIVITY_SERIES.other,
                          borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
                        },
                        {
-                         label: 'External',
-                         data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
-                         backgroundColor: '#38bdf8',
+label: 'External',
+                          data: chartBarsResult.chartBars.map(b => Math.round(b.externalSeconds / 3600 * 100) / 100),
+                          backgroundColor: PRODUCTIVITY_SERIES.external,
                          borderRadius: 6, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7
                        },
                      ],
                    }} options={{
                      responsive: true, maintainAspectRatio: false,
-                     plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', titleColor: '#fafafa', bodyColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+                     plugins: { legend: { display: false }, tooltip: {
+                      /* Hardcoded #18181b dark tooltip. This is the FOURTH one: the three
+                         ProductivityChart* components were tokenised earlier and this one
+                         lives on the page itself, so it was missed. A canvas tooltip is
+                         painted from JS, so no CSS override can reach it. */
+                      ...chartTooltip(),yColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
                      scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } }, y: { stacked: true, grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 11 } } } },
                    }} />
                  )}
                </div>
-               {/* Custom Legend */}
-               <div className="flex items-center gap-4 mt-4 text-[11px] text-[var(--text-muted)]">
-                 <div className="flex items-center gap-1.5">
-                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--success)' }}></span> Productive
-                 </div>
-                 <div className="flex items-center gap-1.5">
-                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--warning)' }}></span> Other
-                 </div>
-                 <div className="flex items-center gap-1.5">
-                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--info)' }}></span> External
-                 </div>
-               </div>
-               <div className="flex gap-3 mt-4">
-                 <button onClick={() => setExpandedModal('heatmap')}
-                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-pink-500/50 hover:text-pink-400 transition-colors duration-200">
-                   View Heatmap
-                 </button>
-                 <button onClick={() => setExpandedModal('solar')}
-                   className="flex-1 py-2.5 rounded-lg text-[12px] font-medium light:text-stone-500 border border-[var(--ws-border)] hover:border-indigo-500/50 hover:text-indigo-400 transition-colors duration-200">
-                   View Solar System
-                 </button>
-               </div>
-               </div>
+{/* Custom legend — swatches bound to the same literals the bars
+                    use, so a legend can never describe a colour that isn't
+                    drawn. See PRODUCTIVITY_SERIES. */}
+                <div className="flex items-center gap-4 mt-4 text-[11px] text-[var(--text-muted)]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: PRODUCTIVITY_SERIES.productive }}></span> Productive
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: PRODUCTIVITY_SERIES.other }}></span> Other
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: PRODUCTIVITY_SERIES.external }}></span> External
+                  </div>
+                </div>
+{/* The "Review the week" / "App ecosystem" pair used to live here as two pale
+                    ghost buttons at the very bottom of the chart card — the most
+                    distinctive surfaces on the page were the least findable, and
+                    styled quieter than the config buttons above the fold. They
+                    now lead the utility bar as the only emphasised controls. */}
+                </div>
              </div>
              </DeskFlowCardMotion>
            )}
@@ -3183,7 +3157,7 @@ export default function DashboardPage({
                    const durationStr = isActive ? getElapsedDuration(item) : item.elapsedStr;
                    return (
                      <div key={item.id}
-                       className="flex items-center justify-between p-3 rounded-lg border border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group cursor-pointer"
+                       className="flex items-center justify-between p-3 rounded-lg border border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group cursor-pointer light:hover:bg-[var(--ws-surface-hover)]"
                      >
                        <div className="flex items-center gap-3 min-w-0">
                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -3214,16 +3188,54 @@ export default function DashboardPage({
         </div>
       </div>
 
-        {/* BUG FIX: these 6 stat widgets used to be rendered inside 2 grouped
-            `isVisible()` gates, so hiding ONE of them (e.g. learn-widget) also
-            hid the two widgets sharing its grid — their layout-editor toggles
-            did nothing and their jump buttons vanished with them. Every widget
-            now carries its own gate and the grid reflows around the visible
-            ones, so any combination of on/off renders correctly. */}
+        {/* ── Band: SIGNALS ────────────────────────────────────────────
+            BUG FIX (preserved): these 8 stat widgets used to render inside 2
+            grouped `isVisible()` gates, so hiding ONE of them (e.g. learn-widget)
+            also hid the two widgets sharing its grid — their layout-editor
+            toggles did nothing and their jump buttons vanished with them. Every
+            widget still carries its own gate and the grid reflows around the
+            visible ones.
+
+            What changed is WHERE they sit. Eight same-scale tiles directly
+            under the day's primary cards meant Goals, Deadlines and the
+            productivity chart had to share attention with a wall of small
+            readouts, and nothing on the page had a clear entry point. These are
+            secondary signals — reference, not briefing — so they collapse
+            behind one control (remembered in localStorage) and the day reads
+            top-down. Collapsed state still names what is inside, so the
+            disclosure is honest rather than a hidden drawer. */}
         {(isVisible('ai-usage') || isVisible('console-widget') || isVisible('finance-widget')
           || isVisible('learn-widget') || isVisible('browser-widget') || isVisible('brain-widget')
           || isVisible('covenant-widget') || isVisible('health-widget')) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="mt-4">
+            <button
+              onClick={() => setSignalsOpen(v => !v)}
+              aria-expanded={signalsOpen}
+              className="w-full flex items-center gap-2 px-1 py-1.5 rounded-lg group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+            >
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--page-accent)]/80">Signals</h2>
+              <span className="h-px flex-1 bg-[var(--border-subtle)] group-hover:bg-[var(--page-accent)]/30 transition-colors" aria-hidden="true" />
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)] group-hover:text-[var(--page-accent)] transition-colors">
+                {[
+                  isVisible('ai-usage') && 'AI',
+                  isVisible('console-widget') && 'Console',
+                  isVisible('finance-widget') && 'Finance',
+                  isVisible('learn-widget') && 'Learn',
+                  isVisible('browser-widget') && 'Browser',
+                  isVisible('brain-widget') && 'Brain',
+                  isVisible('covenant-widget') && 'Covenant',
+                  isVisible('health-widget') && 'Health',
+                ].filter(Boolean).join(' · ')}
+                <ChevronDown
+                  size={13}
+                  className={`transition-transform duration-200 ${signalsOpen ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+              </span>
+            </button>
+
+            {signalsOpen && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mt-3">
             {isVisible('ai-usage') && (
               <AiUsageWidget usage={widgetData?.aiUsage} />
             )}
@@ -3247,6 +3259,8 @@ export default function DashboardPage({
             )}
             {isVisible('health-widget') && (
               <HealthWidget stats={widgetData?.sleepStats} />
+            )}
+              </div>
             )}
           </div>
         )}
@@ -3333,78 +3347,43 @@ export default function DashboardPage({
         </div>
       )}
 
-      {/* Modals — UNCHANGED */}
-      <AnimatePresence>
-        {expandedModal === 'heatmap' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setExpandedModal(null)}>
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="relative rounded-xl p-5 border max-w-7xl w-full max-h-[90vh] overflow-auto bg-zinc-900/95 backdrop-blur-xl border-zinc-800/60 light:bg-white light:border-[var(--ws-border-strong)]"
-              onClick={(e) => e.stopPropagation()}>
-              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-pink-500/30 via-pink-500/10 to-transparent" />
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center">
-                    <BarChart3 className="w-4 h-4 text-pink-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-[15px] font-semibold text-zinc-100 light:text-stone-900">Activity Heatmap</h2>
-                    <p className="text-[11px] text-zinc-500 light:text-stone-500">{heatmapWeekLabel}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-colors duration-150 border border-zinc-700/30 hover:border-zinc-600/60 light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)]" title="Previous week">
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setWeekOffset(0)} className="px-2 py-1 text-xs text-zinc-400 hover:text-white transition-colors duration-150 rounded hover:bg-zinc-800/40 light:text-stone-900 light:hover:bg-stone-100">Today</button>
-                  <button onClick={() => setWeekOffset(w => Math.min(w + 1, 0))} disabled={weekOffset >= 0}
-                    className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/80 text-zinc-400 hover:text-white transition-colors duration-150 border border-zinc-700/30 hover:border-zinc-600/60 disabled:opacity-30 disabled:cursor-not-allowed light:bg-white light:text-stone-900 light:hover:bg-stone-100 light:border-[var(--ws-border)] light:disabled:opacity-30 light:disabled:cursor-not-allowed" title="Next week">
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setExpandedModal(null)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-colors duration-150 border border-transparent hover:border-zinc-700/50 ml-2 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]">
-                    <X className="w-5 h-5 text-zinc-400" />
-                  </button>
-                </div>
-              </div>
-              {renderHeatmap()}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Productivity heatmap — full surface, own week cursor, own selection state. */}
+      <ProductivityHeatmap
+        open={expandedModal === 'heatmap'}
+        onClose={() => setExpandedModal(null)}
+        cells={heatmapData}
+        weekOffset={weekOffset}
+        onWeekOffsetChange={setWeekOffset}
+        weekLabel={heatmapWeekLabel}
+        mode={heatmapMode}
+        onModeChange={setHeatmapMode}
+        onDayClick={openHeatmapDay}
+        getAppColor={(app) => appColors[app]}
+        isLoading={!logsLoaded}
+      />
 
       <Suspense fallback={null}>
         {dayDetailDate && (
-          <DayDetailPopup date={dayDetailDate} items={dayDetailItems}
-            onClose={() => { setDayDetailDate(null); setDayDetailItems([]); }}
+          <DayDetailPopup
+            date={dayDetailDate}
+            items={dayDetailItems}
+            isLoading={dayDetailLoading}
+            // The page's own tier resolver, so a day uses exactly the same
+            // productive/neutral/distracting assignments as the heatmap cells.
+            getTier={getTierFromCategory}
+            onClose={() => { setDayDetailDate(null); setDayDetailItems([]); setDayDetailLoading(false); }}
             onDateChange={(newDate) => {
               setDayDetailDate(newDate);
-              if (window.deskflowAPI?.getDayDetail) {
-                window.deskflowAPI.getDayDetail(newDate).then(detail => {
-                  if (!detail) return;
-                  const newItems: TimelineItem[] = [];
-                  (detail.logs || []).forEach((log: any) => {
-                    const logDate = new Date(log.timestamp);
-                    const startHour = logDate.getHours() + logDate.getMinutes() / 60;
-                    const durationSec = (log.duration_ms || 0) / 1000;
-                    const endHour = startHour + durationSec / 3600;
-                    const isBrowser = log.is_browser_tracking;
-                    const label = isBrowser ? (log.domain || log.app) : log.app;
-                    newItems.push({ id: `log-${log.id}`, startHour, endHour: Math.min(endHour, 24), label, category: isBrowser ? 'browser' : 'app', color: isBrowser ? 'var(--success)' : 'var(--info)', duration: Math.round(durationSec), details: log.title });
-                  });
-                  (detail.externalSessions || []).forEach((session: any) => {
-                    const startDate = new Date(session.started_at);
-                    const endDate = session.ended_at ? new Date(session.ended_at) : new Date();
-                    const sHour = startDate.getHours() + startDate.getMinutes() / 60;
-                    const durSec = (endDate.getTime() - startDate.getTime()) / 1000;
-                    const eHour = sHour + durSec / 3600;
-                    newItems.push({ id: `ext-${session.id}`, startHour: sHour, endHour: Math.min(eHour, 24), label: session.activity_name || 'External', category: 'external', color: session.color || 'var(--page-accent)', duration: Math.round(durSec) });
-                  });
-                  newItems.sort((a, b) => a.startHour - b.startHour);
-                  setDayDetailItems(newItems);
-                });
-              }
-            }} />
+              if (!window.deskflowAPI?.getDayDetail) return;
+              setDayDetailLoading(true);
+              window.deskflowAPI.getDayDetail(newDate)
+                .then(detail => {
+                  if (detail) setDayDetailItems(buildDayTimelineItems(detail));
+                })
+                .catch(err => console.error('[Dashboard] getDayDetail failed:', err))
+                .finally(() => setDayDetailLoading(false));
+            }}
+          />
         )}
       </Suspense>
 
@@ -3423,17 +3402,17 @@ export default function DashboardPage({
                     <Sun className="w-4 h-4 text-indigo-400" />
                   </div>
                   <div>
-                    <h2 className="text-[15px] font-semibold light:text-stone-900">App Ecosystem</h2>
-                    <p className="text-[11px] light:text-stone-500">Your top tools in orbit</p>
+                    <h2 className="text-[15px] font-semibold light:text-[var(--text-primary)]">App Ecosystem</h2>
+                    <p className="text-[11px] light:text-[var(--text-muted)]">Your top tools in orbit</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setSolarFullscreenWithEvent(!solarFullscreen)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-colors duration-150 border border-transparent hover:border-zinc-700/50 light:hover:bg-stone-100 light:hover:border-[var(--ws-border)]"
+                  <button onClick={() => setSolarFullscreenWithEvent(!solarFullscreen)} className="p-2 hover:bg-zinc-800/60 rounded-lg transition-colors duration-150 border border-transparent hover:border-zinc-700/50 light:hover:bg-[var(--ws-surface-hover)] light:hover:border-[var(--ws-border)]"
                     title={solarFullscreen ? "Exit fullscreen" : "Fullscreen"}>
-                    {solarFullscreen ? <Minimize2 className="w-5 h-5 light:text-stone-500" /> : <Maximize2 className="w-5 h-5 text-zinc-400" />}
+                    {solarFullscreen ? <Minimize2 className="w-5 h-5 light:text-[var(--text-muted)]" /> : <Maximize2 className="w-5 h-5 text-zinc-400" />}
                   </button>
                   <button onClick={() => { setExpandedModal(null); setSolarFullscreenWithEvent(false); }} className="p-2 hover:bg-red-900/50 rounded-lg transition-colors duration-150 border border-transparent hover:border-red-500/30" title="Close">
-                    <X className="w-5 h-5 light:text-stone-500" />
+                    <X className="w-5 h-5 light:text-[var(--text-muted)]" />
                   </button>
                 </div>
               </div>

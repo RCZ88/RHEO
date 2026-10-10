@@ -64,8 +64,14 @@ function createSQLiteStore(): SttStore {
         const id = `stt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         return { ...entry, id } as SttTranscript;
       }
-      const id = await api.sttTranscriptSave(entry);
-      return { ...entry, id } as SttTranscript;
+      // The IPC handler returns `{ ok, id }`. Storing that whole object as the
+      // id made every transcript's id an OBJECT, so any later update/remove by
+      // id matched zero rows and the save silently looked successful.
+      const res = await api.sttTranscriptSave(entry);
+      if (!res?.ok || !res.id) {
+        throw new Error(res?.error || 'Could not save the transcript.');
+      }
+      return { ...entry, id: res.id } as SttTranscript;
     },
 
     async update(id, changes) {
@@ -115,7 +121,13 @@ function createSQLiteStore(): SttStore {
         const id = `stt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         return id;
       }
-      return await api.sttTranscriptSave(entry);
+      // Same contract as save(): unwrap `{ ok, id }` and throw on failure so a
+      // failed write can never be rendered as a successful save.
+      const res = await api.sttTranscriptSave(entry);
+      if (!res?.ok || !res.id) {
+        throw new Error(res?.error || 'Could not save the transcript.');
+      }
+      return res.id;
     },
 
     async updateInLibrary(id, changes) {

@@ -118,7 +118,7 @@ export function RiverMap({
     <div
       data-lifephase="river-map"
       data-river-map
-      className="sticky top-0 z-40 bg-zinc-950/60 backdrop-blur-xl border-b border-zinc-800/50"
+      className="sticky top-0 z-40 bg-zinc-950 light:bg-[var(--ws-surface)]/60 backdrop-blur-xl border-b border-zinc-800/50"
     >
       <div className="px-5 py-3">
         <div className="mb-2 flex items-center justify-between gap-3">

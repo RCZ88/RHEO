@@ -25,7 +25,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
   const update = (key: string, value: any) => setCustom({ ...custom, [key]: value })
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-5 bg-zinc-950 text-white scrollbar-thin">
+    <div className="h-full overflow-y-auto p-4 space-y-5 bg-zinc-950 light:bg-[var(--ws-surface)] text-white scrollbar-thin">
       {/* ── Typography ── */}
       <section>
         <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-3">
@@ -37,7 +37,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
             <select
               value={custom.fontFamily}
               onChange={(e) => update('fontFamily', e.target.value)}
-              className="w-full h-8 px-2 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-purple-500/40"
+              className="w-full h-8 px-2 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-purple-500/40"
             >
               {FONT_OPTIONS.map((f) => (
                 <option key={f.label} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>
@@ -52,7 +52,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
             <input
               type="range" min={12} max={18} step={1} value={custom.fontSize}
               onChange={(e) => update('fontSize', Number(e.target.value))}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-purple-500 bg-zinc-800"
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-zinc-800"
             />
           </div>
         </div>
@@ -99,7 +99,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
             <input
               type="range" min={0} max={24} step={2} value={custom.radius}
               onChange={(e) => update('radius', Number(e.target.value))}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-purple-500 bg-zinc-800"
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-zinc-800"
             />
           </div>
           <div>
@@ -110,7 +110,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
             <input
               type="range" min={8} max={32} step={4} value={custom.padding}
               onChange={(e) => update('padding', Number(e.target.value))}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-purple-500 bg-zinc-800"
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-zinc-800"
             />
           </div>
         </div>
@@ -130,7 +130,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
             <input
               type="range" min={0} max={500} step={50} value={custom.duration}
               onChange={(e) => update('duration', Number(e.target.value))}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-purple-500 bg-zinc-800"
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-zinc-800"
             />
           </div>
           <div>
@@ -138,7 +138,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
             <select
               value={custom.easing}
               onChange={(e) => update('easing', e.target.value)}
-              className="w-full h-8 px-2 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-purple-500/40"
+              className="w-full h-8 px-2 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-purple-500/40"
             >
               {EASING_OPTIONS.map((e) => (
                 <option key={e.label} value={e.value}>{e.label}</option>

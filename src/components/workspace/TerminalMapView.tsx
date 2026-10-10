@@ -65,7 +65,7 @@ export function TerminalMapView({
           className={`relative rounded-xl p-3 cursor-pointer transition-all ${
             isActive ? 'bg-zinc-800/80 ring-1 ring-inset ring-green-500/40' :
             isDropTarget2 ? 'bg-zinc-800/60 ring-1 ring-inset ring-cyan-500/40' :
-            'bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 hover:bg-zinc-800/40'
+            'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 hover:bg-zinc-800/40'
           } ${isDragged ? 'opacity-40' : 'opacity-100'}`}
         >
           <div className="flex items-center gap-2">
@@ -85,7 +85,7 @@ export function TerminalMapView({
       return (
         <div
           key={`split-${depth}`}
-          className={`flex gap-2 p-2 rounded-xl bg-zinc-950/30 ring-1 ring-inset ring-zinc-800/40 ${
+          className={`flex gap-2 p-2 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/30 ring-1 ring-inset ring-zinc-800/40 ${
             node.direction === 'col' ? 'flex-col' : 'flex-row'
           }`}
         >

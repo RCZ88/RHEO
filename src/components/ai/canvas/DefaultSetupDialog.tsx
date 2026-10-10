@@ -118,9 +118,9 @@ export function DefaultSetupDialog({ open, onClose }: DefaultSetupDialogProps) {
                     <LayoutTemplate size={16} />
                   </div>
                   <div>
-                    <h3 className="text-[14px] font-semibold text-white light:text-stone-900">Default Canvas Setup</h3>
-                    <p className="text-[12px] text-zinc-400 mt-0.5 leading-relaxed max-w-[380px] light:text-stone-500">
-                      Choose which cards appear on every <span className="text-zinc-200 light:text-stone-700">new blank canvas</span>.
+                    <h3 className="text-[14px] font-semibold text-white light:text-[var(--text-primary)]">Default Canvas Setup</h3>
+                    <p className="text-[12px] text-zinc-400 mt-0.5 leading-relaxed max-w-[380px] light:text-[var(--text-muted)]">
+                      Choose which cards appear on every <span className="text-zinc-200 light:text-[var(--text-secondary)]">new blank canvas</span>.
                       Your saved setup becomes the default layout.
                     </p>
                   </div>
@@ -138,7 +138,7 @@ export function DefaultSetupDialog({ open, onClose }: DefaultSetupDialogProps) {
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
                 {grouped.map(({ category, label, cards }) => (
                   <div key={category}>
-                    <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-2 light:text-stone-500">{label}</div>
+                    <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-2 light:text-[var(--text-muted)]">{label}</div>
                     <div className="space-y-1.5">
                       {cards.map(template => {
                         const isOn = selected.has(template.type)
@@ -151,7 +151,7 @@ export function DefaultSetupDialog({ open, onClose }: DefaultSetupDialogProps) {
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dk-accent)] ${
                               isOn
                                 ? 'border-sky-500/30 bg-sky-500/[0.06]'
-                                : 'border-transparent bg-zinc-900/40 hover:bg-zinc-900/70 light:bg-stone-100 light:hover:bg-stone-200/70'
+                                : 'border-transparent bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-900/70 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-raised)] light:hover:bg-stone-200/70'
                             }`}
                           >
                             <div
@@ -161,16 +161,16 @@ export function DefaultSetupDialog({ open, onClose }: DefaultSetupDialogProps) {
                               <template.icon size={16} />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className={`text-[13px] font-medium truncate ${isOn ? 'text-zinc-100 light:text-stone-900' : 'text-zinc-500 light:text-stone-500'}`}>
+                              <div className={`text-[13px] font-medium truncate ${isOn ? 'text-zinc-100 light:text-[var(--text-primary)]' : 'text-zinc-500 light:text-[var(--text-muted)]'}`}>
                                 {template.label}
                               </div>
-                              <div className={`text-[11px] truncate ${isOn ? 'text-zinc-500 light:text-stone-500' : 'text-zinc-600 light:text-stone-400'}`}>
+                              <div className={`text-[11px] truncate ${isOn ? 'text-zinc-500 light:text-[var(--text-muted)]' : 'text-zinc-600 light:text-[var(--text-secondary)]'}`}>
                                 {template.description}
                               </div>
                             </div>
                             <div
                               className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-all duration-150 shrink-0 ${
-                                isOn ? 'bg-sky-500/80 border-sky-400' : 'border-zinc-700 bg-zinc-900 light:border-stone-300 light:bg-white'
+                                isOn ? 'bg-sky-500/80 border-sky-400' : 'border-zinc-700 bg-zinc-900 light:border-[var(--ws-border-strong)] light:bg-white'
                               }`}
                             >
                               {isOn && <Check size={12} className="text-white" />}
@@ -181,8 +181,8 @@ export function DefaultSetupDialog({ open, onClose }: DefaultSetupDialogProps) {
                     </div>
                   </div>
                 ))}
-                <p className="text-[11px] text-zinc-500 leading-relaxed light:text-stone-500">
-                  Cards you leave off can still be added anytime via the <span className="text-zinc-300 light:text-stone-700">+ Add Card</span> drawer.
+                <p className="text-[11px] text-zinc-500 leading-relaxed light:text-[var(--text-muted)]">
+                  Cards you leave off can still be added anytime via the <span className="text-zinc-300 light:text-[var(--text-secondary)]">+ Add Card</span> drawer.
                 </p>
               </div>
 
@@ -190,7 +190,7 @@ export function DefaultSetupDialog({ open, onClose }: DefaultSetupDialogProps) {
               <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-zinc-800/50 light:border-[var(--ws-border)]">
                 <button
                   onClick={handleReset}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-stone-500 light:hover:bg-stone-100"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-[var(--text-muted)] light:hover:bg-stone-100"
                   title="Forget saved setup; new canvases use built-in defaults"
                 >
                   <RefreshCcw size={13} />
@@ -204,7 +204,7 @@ export function DefaultSetupDialog({ open, onClose }: DefaultSetupDialogProps) {
                   )}
                   <button
                     onClick={onClose}
-                    className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-stone-500 light:hover:bg-stone-100"
+                    className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-[var(--text-muted)] light:hover:bg-stone-100"
                   >
                     Cancel
                   </button>

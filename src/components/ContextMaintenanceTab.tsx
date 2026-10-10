@@ -457,7 +457,7 @@ export const ContextMaintenanceTab: React.FC<ContextMaintenanceTabProps> = ({
 
 // Small overview stat card kept local for layout cohesion.
 const StatCard: React.FC<{ label: string; value: number; hint?: string }> = ({ label, value, hint }) => (
-  <div className="rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800/70 px-3 py-2.5">
+  <div className="rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/70 px-3 py-2.5">
     <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
     <p className="mt-0.5 text-lg font-semibold tabular-nums text-zinc-100">{value}</p>
     {hint && <p className="text-[10px] text-zinc-500">{hint}</p>}

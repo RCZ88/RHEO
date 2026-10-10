@@ -20,8 +20,12 @@ export function ZoomPan({ children }: ZoomPanProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const interactedRef = useRef(false);
+  // Last applied fit. A fit that changes nothing by more than this tolerance
+  // returns early, which is what terminates the ResizeObserver feedback loop.
+  const lastFitRef = useRef({ h: -1, s: -1, tx: -1, ty: -1 });
   const PAN_STEP = 60;
   const clamp = (v: number) => Math.min(4, Math.max(0.1, v));
+  const EPS = 0.5;
 
   const fitToContainer = useCallback(() => {
     const el = containerRef.current;
@@ -45,15 +49,35 @@ export function ZoomPan({ children }: ZoomPanProps) {
     // Compute container height from aspect ratio (width is fixed by card layout)
     const aspectH = Math.round((cw / nw) * nh);
     const ch = Math.max(120, aspectH);
-    el.style.height = ch + 'px';
 
     const s = Math.min(1, cw / nw, ch / nh);
+    const nextTx = (cw - nw * s) / 2;
+    const nextTy = (ch - nh * s) / 2;
+
+    // IDEMPOTENCE GATE. `el.style.height` resizes the container we observe, and
+    // scale/translate resize the content — so without this guard the observer
+    // re-delivers its own notification forever ("ResizeObserver loop completed
+    // with undelivered notifications"), which trips the app error boundary.
+    const last = lastFitRef.current;
+    if (
+      Math.abs(ch - last.h) < EPS &&
+      Math.abs(s - last.s) < EPS / 100 &&
+      Math.abs(nextTx - last.tx) < EPS &&
+      Math.abs(nextTy - last.ty) < EPS
+    ) {
+      return;
+    }
+    lastFitRef.current = { h: ch, s, tx: nextTx, ty: nextTy };
+
+    el.style.height = ch + 'px';
     setScale(s);
-    setTx((cw - nw * s) / 2);
-    setTy((ch - nh * s) / 2);
+    setTx(nextTx);
+    setTy(nextTy);
   }, []);
 
-  // Fit on mount + whenever content/container resizes (async render, window resize)
+  // Fit on mount + whenever the CONTAINER resizes (window resize, layout shift).
+  // We deliberately do NOT observe `content`: the callback writes to `content`'s
+  // transform, so observing it closes the feedback edge that caused the loop.
   useEffect(() => {
     fitToContainer();
     const el = containerRef.current;
@@ -63,7 +87,6 @@ export function ZoomPan({ children }: ZoomPanProps) {
       if (!interactedRef.current) fitToContainer();
     });
     ro.observe(el);
-    ro.observe(content);
     return () => ro.disconnect();
   }, [fitToContainer]);
 
@@ -86,6 +109,9 @@ export function ZoomPan({ children }: ZoomPanProps) {
 
   const reset = () => {
     interactedRef.current = false;
+    // Invalidate the idempotence cache: the user has moved/zoomed since the last
+    // fit, so "no change" is no longer true and the fit must actually re-apply.
+    lastFitRef.current = { h: -1, s: -1, tx: -1, ty: -1 };
     fitToContainer();
   };
 
@@ -110,7 +136,7 @@ export function ZoomPan({ children }: ZoomPanProps) {
   const btnCls = 'p-1 rounded bg-zinc-800/80 text-zinc-300 hover:text-white transition';
 
   return (
-    <div className={full ? 'fixed inset-4 z-50 bg-zinc-900 rounded-xl border border-zinc-700 flex flex-col' : 'relative'}>
+    <div className={full ? 'fixed inset-4 z-50 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl border border-zinc-700 flex flex-col' : 'relative'}>
       {/* Top-right: zoom controls */}
       <div className="absolute top-2 right-2 z-10 flex gap-1">
         <button onClick={zoomIn} className={btnCls} title="Zoom in (+)">

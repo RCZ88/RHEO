@@ -18,15 +18,25 @@ export function MemoryCollageGrid({ items, onOpen }: MemoryCollageGridProps) {
       animate="show"
       variants={gridVariants}
     >
-      {items.map((m, i) => (
-        <motion.div
-          key={m.meta.id}
-          variants={tileVariants}
-          className={i % 7 === 0 ? 'col-span-2 row-span-2' : ''}
-        >
-          <MemoryCard memory={m} onOpen={() => onOpen(m)} span={i % 7 === 0 ? 'lg' : 'sm'} />
-        </motion.div>
-      ))}
+      {items.map((m, i) => {
+        /* Feature a photo for a REASON. `i % 7` was positional: nothing about
+           the 7th photo earned double size. A photo earns the large tile when
+           it is the FIRST from its month, so the collage reads as a calendar
+           rather than a lottery. */
+        const month = (m.meta.date || '').slice(0, 7);
+        const prev = items[i - 1];
+        const prevMonth = prev ? (prev.meta.date || '').slice(0, 7) : null;
+        const big = month !== '' && month !== prevMonth && i < items.length - 1;
+        return (
+          <motion.div
+            key={m.meta.id}
+            variants={tileVariants}
+            className={big ? 'col-span-2 row-span-2' : ''}
+          >
+            <MemoryCard memory={m} onOpen={() => onOpen(m)} span={big ? 'lg' : 'sm'} />
+          </motion.div>
+        );
+      })}
     </motion.div>
   );
 }

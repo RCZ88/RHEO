@@ -99,7 +99,7 @@ export function ExternalAITrail() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm p-4 space-y-2">
+      <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm p-4 space-y-2">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-4 h-4 border-2 border-zinc-700 border-t-zinc-500 rounded-full animate-spin" />
           <span className="text-[11px] text-zinc-500">Loading external AI feed…</span>
@@ -115,7 +115,7 @@ export function ExternalAITrail() {
 
   if (error || sessions.length === 0) {
     return (
-      <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm p-4">
+      <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm p-4">
         <div className="flex items-center gap-2 mb-2">
           <Brain size={13} style={{ color: ACCENTS.purple }} />
           <span className="text-[12px] font-semibold text-zinc-300">External AI Feed</span>
@@ -126,7 +126,7 @@ export function ExternalAITrail() {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm p-4">
+    <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">

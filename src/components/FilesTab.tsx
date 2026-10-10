@@ -197,7 +197,7 @@ export const FilesTab: React.FC<{ projectId?: string; projectPath?: string; proj
           <select
             value=""
             onChange={(e) => { if (e.target.value) onSelectProject?.(e.target.value); }}
-            className="w-full bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600"
+            className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600"
           >
             <option value="">-- Choose project --</option>
             {projects?.filter(p => p.id).map(p => (
@@ -265,7 +265,7 @@ export const FilesTab: React.FC<{ projectId?: string; projectPath?: string; proj
       )}
 
       {selectedFile && fileContent && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 max-h-[45%] flex flex-col bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-700/50 rounded-t-lg shadow-2xl">
+        <div className="absolute bottom-0 left-0 right-0 z-20 max-h-[45%] flex flex-col bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm border-t border-zinc-700/50 rounded-t-lg shadow-2xl">
           <div className="flex items-center justify-between px-2.5 py-1.5 bg-zinc-800/60 border-b border-zinc-700/30 rounded-t-lg flex-shrink-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${

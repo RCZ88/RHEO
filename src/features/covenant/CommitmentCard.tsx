@@ -72,7 +72,7 @@ export function CommitmentCard({ commitment, stats, isDoneToday, hasJournalToday
 
   return (
     <motion.div
-      className="relative rounded-xl p-5 bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/50 overflow-hidden group hover:border-zinc-700/60 transition-colors duration-300"
+      className="relative rounded-xl p-5 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/50 overflow-hidden group hover:border-zinc-700/60 transition-colors duration-300"
       whileHover={reduce ? undefined : { y: -2 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
     >
@@ -123,7 +123,7 @@ export function CommitmentCard({ commitment, stats, isDoneToday, hasJournalToday
               title={isDoneToday ? 'Undo completion' : needsJournal ? 'Write journal to confirm' : 'Mark complete'}
               className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                 isDoneToday
-                  ? 'bg-[#6fb38f] text-white shadow-sm shadow-[#6fb38f]/30'
+                  ? 'bg-[var(--color-mem-400)] text-white shadow-sm shadow-[var(--color-mem-400)]/30'
                   : 'bg-zinc-800/60 text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200 border border-zinc-700/40'
               }`}
             >
@@ -137,7 +137,7 @@ export function CommitmentCard({ commitment, stats, isDoneToday, hasJournalToday
                 <MoreVertical className="w-3.5 h-3.5" />
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-8 z-50 w-36 rounded-lg bg-zinc-900 border border-zinc-700/60 shadow-xl shadow-black/30 overflow-hidden">
+                <div className="absolute right-0 top-8 z-50 w-36 rounded-lg bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700/60 shadow-xl shadow-black/30 overflow-hidden">
                   <button
                     onClick={() => { onEdit(); setMenuOpen(false); }}
                     className="flex items-center gap-2 w-full px-3 py-2 text-[12px] text-zinc-300 hover:bg-zinc-800 transition-colors"

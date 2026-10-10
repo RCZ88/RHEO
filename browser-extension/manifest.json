@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DeskFlow Browser Bridge",
-  "version": "1.3.0",
+  "version": "1.7.0",
   "description": "Bridge between DeskFlow and AI chat websites. Captures conversations, injects context, shows capture status and content creation tools directly on ChatGPT, Claude, Gemini, Perplexity, and You.com.",
   "permissions": [
     "tabs",
@@ -25,7 +25,9 @@
     }
   },
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
   "host_permissions": [
     "http://localhost:54321/*",
@@ -33,13 +35,21 @@
   ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["focusOverlay.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "focusOverlay.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["overlay.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "overlay.js"
+      ],
       "run_at": "document_idle",
       "world": "MAIN"
     },
@@ -59,9 +69,17 @@
         "https://character.ai/*",
         "https://deepseek.com/*"
       ],
-      "js": ["ai-context-content.js"],
+      "js": [
+        "ai-context-content.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     }
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "deskflow-bridge@rheo.app",
+      "strict_min_version": "115.0"
+    }
+  }
 }

@@ -79,10 +79,14 @@ node agent-coordination/coord.mjs done    --agent "$AGENT_ID"
 wrappers so the locks are enforced automatically:
 
 ```bash
-# Build (refuses if the app is running; takes the exclusive build lock)
-node agent-coordination/run-exclusive.mjs build --forbid app -- npm run build
+# BUILD: an agent does NOT build. Per AGENTS.md §0-0 (Option B, 2026-10-02) only CZ
+# builds — `package.json:14` permits an 8192 MB heap on a box with ~4 GB available,
+# which produced 12 global OOM events in 24 h and killed VS Code/Electron/Spotify as
+# collateral. CZ runs `npm run build` directly; it self-logs to agent/logs/build.log.
+# There is deliberately no `build` example here. Verify with scoped tsc/esbuild and
+# `npm run validate:pages` instead.
 
-# Start the app (single instance; refuses during a build)
+# Start app: single instance; must not overlap a build.
 node agent-coordination/run-exclusive.mjs app --forbid build app -- npm start
 
 # DB migration / bulk import (backs up first; refuses if app is running)
@@ -98,9 +102,10 @@ node agent-coordination/db-guard.mjs backup
 
 ### A. Build / compile collisions
 - **Duplicate builds** overwrite `dist/` mid-write → corrupt/partial output.
-  → *Exclusive `build` lock (R3).* Second build is refused, not queued blindly.
+  → *CZ is the only builder (§0-0 Option B).* No agent build can collide with CZ's.
+  The exclusive `build` lock remains in `run-exclusive.mjs` as a backstop, not a workflow.
 - **Build while app runs** → app loads swapped assets → white screen / errors.
-  → *`build --forbid app`.*
+  → *CZ: `npm run build` only while the app is closed.*
 - **Port already in use** (`EADDRINUSE`) from a leftover dev server/app.
   → *Single `app` lock (R2)* + kill stale instance before starting.
 - **Concurrent `npm install`** mutating `node_modules`/lockfile → corruption.
@@ -152,12 +157,66 @@ node agent-coordination/db-guard.mjs backup
 
 ### G. The coordination layer itself
 - **Crashed agent holding a lock forever** → everyone blocked.
-  → *Heartbeat + TTL:* dead agents (90s silent) and expired locks are reaped.
+  → **Heartbeat + TTL:** dead agents (90s silent) and expired locks are reaped.
 - **Registry read-modify-write race** → lost updates.
-  → *Atomic mkdir mutex* around every registry mutation.
+  → **Atomic mkdir mutex** around every registry mutation.
 - **Clock/lease drift, ignored denials** → an agent that ignores a DENIED
-  result and edits anyway defeats the system. **A denial is a hard stop, not a
-  suggestion.**
+  result and edits anyway defeats the system. A denial is a hard stop, not a
+  suggestion.
+
+### H. Leaked processes (the node pile-up) — read this, it is the #1 resource leak
+
+Every extra `node` process on this box makes the next agent's **build** more likely
+to be OOM-killed. A build that dies silently is a symptom of a process leak, not
+of a code error. So process hygiene is a *correctness* rule here, not tidiness.
+
+| Owner | Rule | Action |
+|---|---|---|
+| You (Probe) | Every `probe_open` has a matching `probe_close` | `open` → act → `report` → **`close`**. Also on failure. Also when out of context. |
+| You (npm/npx/dev server) | Capture the PID at launch, kill it at end | `npm run dev & echo "pid=$!"` … `kill -- -$PGID` (kill the group, not the leaf) |
+| opencode host (MCP) | You did **not** start it → you must **not** kill it | Report the count; end your cycle cleanly so opencode reaps them |
+
+- **`probe_close` is mandatory and idempotent.** Never end a cycle with a live
+  Probe session. It holds a debug port, an Electron tree (~350MB), and a
+  `/tmp/opencode/df-*` profile dir.
+- **opencode spawns all FOURTEEN servers in `opencode.json` `mcp`, per session,**
+  and most resolve via `npx -y` — so ~5 extra node processes per session before
+  you write a line. They leak only when a session dies hard (`kill -9`, crash,
+  timeout) — so **exit cleanly**. A sweep, if CZ authorises one, is a targeted
+  sweep by the **generic** signature below, run once by a named agent — never a
+  self-service pattern-kill, and never `pkill node`.
+  ```bash
+  # every npx-resolved MCP server, whatever package it is — NEVER hardcode names
+  ps -eo pid=,args= | awk '{a=$0; sub(/^[ ]*[0-9]+[ ]+/,"",a);
+      if (a ~ /_npx\/[a-z0-9]+\/node_modules\/\.bin\//) print $1}'
+  ```
+  Hardcoding a short list (e.g. only `shadcn` + `playwright`) silently leaves 12
+  servers per dead session running — this exact bug shipped once already.
+- **NEVER `pkill node` / `killall node` / `pkill -f vite`.** The IDE's
+  `js-language-service`, RHEO's own Electron main process, the sync server, and
+  every other agent's build are all `node`.
+- **Repeat offenders to self-check:** `vite dev`, `vite preview`, `esbuild --watch`,
+  `tsc --watch`, `npm run tailwind`, `node --watch`, and anything resolved from
+  `_npx/<hash>/`.
+- **Dry-run and print before any kill, and dry-run the filter itself.** A
+  `ps | grep` filter whose own command line contains the search string matches
+  **itself and its own shell**; and `for p in $(ps -eo pid=,etimes=,args=)`
+  word-splits, so `$2` is a *word of the command* and the age test throws
+  `integer expected` while appending garbage PIDs. Parse PIDs in `awk`, exclude
+  `$$`, then verify the user's real apps (RHEO, WebStorm, `sync-server`, Spotify,
+  Obsidian) are absent from the list.
+- **Leak census at the start AND end of every cycle:**
+  ```bash
+  ps -eo pid,ppid,rss,etimes,args --sort=-rss | grep -E "[n]ode|[e]lectron" | head -30
+  echo "TOTAL NODE: $(pgrep -c -f '[n]ode')"
+  ```
+  The only acceptable delta is processes you can name and can point at a PID you
+  killed. **Report the delta in your cycle report.** A cycle that changed source
+  and reports a positive net delta is an incomplete cycle.
+  A healthy baseline here is **~20 node/electron processes** (RHEO + zygotes,
+  WebStorm, sync-server, one live session's MCP set). A count in the 90s means
+  ~9 dead sessions leaked their MCP servers.
+
 
 ---
 
@@ -170,15 +229,19 @@ node agent-coordination/db-guard.mjs backup
 5. **Prefer additive + surgical.** Small targeted edits over whole-file rewrites;
    new files over mutating shared ones.
 6. **Back up before destruction.** No DELETE/DROP/bulk-overwrite without a snapshot.
-7. **Never build while running, never run while building.** (R3)
+7. **Never build while running, never run while building.** (R3) — and per §0-0,
+   **agents never build at all**; only CZ does.
 8. **Leave it clean.** Always `release`/`done` (wrappers do this on exit + crash).
-9. **Idempotency.** Assume your step may be retried; guard with `IF NOT EXISTS`,
-   upserts, and "already done?" checks.
-10. **Least blast radius.** Claim the narrowest path set that gets the job done;
+   Every process you opened is closed too — see §H.
+9. **Nothing survives your cycle.** `probe_close` for every `probe_open`; `kill`
+   for every npm/npx/dev-server you started, by recorded PID. See §H.
+10. **Idempotency.** Assume your step may be retried; guard with `IF NOT EXISTS`,
+    upserts, and "already done?" checks.
+11. **Least blast radius.** Claim the narrowest path set that gets the job done;
     don't lock `src/` when you only touch one file.
-11. **Partition, don't overlap.** When fanning out sub-agents, give each a
+12. **Partition, don't overlap.** When fanning out sub-agents, give them a
     **disjoint** set of files/dirs. Overlap = collision by construction.
-12. **Humans own history & destructive infra.** No force-push, no dropping
+13. **Humans own history & destructive infra.** No force-push, no dropping
     tables, no deleting the DB without explicit human confirmation.
 
 ---

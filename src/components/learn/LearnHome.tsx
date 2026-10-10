@@ -54,7 +54,7 @@ export function LearnHome(props: LearnHomeProps) {
             </BlurFade>
 
             <BlurFade delay={0.08} inView>
-              <h1 className="mt-5 font-serif text-5xl font-semibold leading-[1.05] text-glow light:text-stone-900">
+              <h1 className="mt-5 font-serif text-5xl font-semibold leading-[1.05] text-glow light:text-[var(--text-primary)]">
                 A library that
                 <br />
                 writes itself.
@@ -62,7 +62,7 @@ export function LearnHome(props: LearnHomeProps) {
             </BlurFade>
 
             <BlurFade delay={0.16} inView>
-              <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-400 light:text-stone-500">
+              <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-400 light:text-[var(--text-muted)]">
                 A personal library of grounded, citation-backed lessons.
                 Study what you've already built, or compose something new.
               </p>
@@ -84,20 +84,20 @@ export function LearnHome(props: LearnHomeProps) {
                 <div className="flex items-center gap-4 text-[11px] font-mono uppercase tracking-[0.15em]">
                   <button
                     onClick={props.onCompose}
-                    className="text-zinc-500 hover:text-clay-300 transition-colors light:text-stone-500 light:hover:text-clay-600"
+                    className="text-zinc-500 hover:text-clay-300 transition-colors light:text-[var(--text-muted)] light:hover:text-clay-600"
                   >
                     <Wand2 className="w-3 h-3 inline mr-1" />
                     New lesson
                   </button>
                   <button
                     onClick={props.onTryExample}
-                    className="text-zinc-500 hover:text-clay-300 transition-colors light:text-stone-500 light:hover:text-clay-600"
+                    className="text-zinc-500 hover:text-clay-300 transition-colors light:text-[var(--text-muted)] light:hover:text-clay-600"
                   >
                     Read a sample
                   </button>
                   <button
                     onClick={scrollToFeatures}
-                    className="text-zinc-600 hover:text-amber-300 transition-colors light:text-stone-500 light:hover:text-amber-600"
+                    className="text-zinc-600 hover:text-amber-300 transition-colors light:text-[var(--text-muted)] light:hover:text-amber-600"
                   >
                     Features
                   </button>
@@ -126,40 +126,40 @@ export function LearnHome(props: LearnHomeProps) {
           <div className="grid gap-3 sm:grid-cols-3">
             <button
               onClick={props.onTryExample}
-              className="group rounded-xl border border-white/10 bg-white/[0.02] p-4 text-left transition-colors hover:border-clay-400/40 hover:bg-clay-500/[0.06] light:border-stone-300/50 light:bg-stone-100/60 light:hover:border-clay-400/30 light:hover:bg-stone-200/80"
+              className="group rounded-xl border border-white/10 bg-white/[0.02] p-4 text-left transition-colors hover:border-clay-400/40 hover:bg-clay-500/[0.06] light:border-[color-mix(in_srgb,var(--ws-border)_50%,transparent)] light:bg-[color-mix(in_srgb,var(--ws-surface-raised)_60%,transparent)] light:hover:border-clay-400/30 light:hover:bg-stone-200/80"
             >
               <Compass className="h-4 w-4 text-clay-300 transition-transform group-hover:scale-110 light:text-clay-500" />
-              <p className="mt-2 font-serif text-[15px] font-semibold text-glow light:text-stone-900">Open a sample</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-zinc-500 light:text-stone-500">Study a finished, grounded lesson to see the format in action.</p>
+              <p className="mt-2 font-serif text-[15px] font-semibold text-glow light:text-[var(--text-primary)]">Open a sample</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-zinc-500 light:text-[var(--text-muted)]">Study a finished, grounded lesson to see the format in action.</p>
             </button>
             <button
               onClick={props.onImport}
-              className="group rounded-xl border border-white/10 bg-white/[0.02] p-4 text-left transition-colors hover:border-clay-400/40 hover:bg-clay-500/[0.06] light:border-stone-300/50 light:bg-stone-100/60 light:hover:border-clay-400/30 light:hover:bg-stone-200/80"
+              className="group rounded-xl border border-white/10 bg-white/[0.02] p-4 text-left transition-colors hover:border-clay-400/40 hover:bg-clay-500/[0.06] light:border-[color-mix(in_srgb,var(--ws-border)_50%,transparent)] light:bg-[color-mix(in_srgb,var(--ws-surface-raised)_60%,transparent)] light:hover:border-clay-400/30 light:hover:bg-stone-200/80"
             >
               <FileUp className="h-4 w-4 text-clay-300 transition-transform group-hover:scale-110 light:text-clay-500" />
-              <p className="mt-2 font-serif text-[15px] font-semibold text-glow light:text-stone-900">Import a file</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-zinc-500 light:text-stone-500">Bring in a .lmd or .ldoc you already have on disk.</p>
+              <p className="mt-2 font-serif text-[15px] font-semibold text-glow light:text-[var(--text-primary)]">Import a file</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-zinc-500 light:text-[var(--text-muted)]">Bring in a .lmd or .ldoc you already have on disk.</p>
             </button>
             <button
               onClick={props.onPaste}
-              className="group rounded-xl border border-white/10 bg-white/[0.02] p-4 text-left transition-colors hover:border-clay-400/40 hover:bg-clay-500/[0.06] light:border-stone-300/50 light:bg-stone-100/60 light:hover:border-clay-400/30 light:hover:bg-stone-200/80"
+              className="group rounded-xl border border-white/10 bg-white/[0.02] p-4 text-left transition-colors hover:border-clay-400/40 hover:bg-clay-500/[0.06] light:border-[color-mix(in_srgb,var(--ws-border)_50%,transparent)] light:bg-[color-mix(in_srgb,var(--ws-surface-raised)_60%,transparent)] light:hover:border-clay-400/30 light:hover:bg-stone-200/80"
             >
               <ClipboardPaste className="h-4 w-4 text-clay-300 transition-transform group-hover:scale-110 light:text-clay-500" />
-              <p className="mt-2 font-serif text-[15px] font-semibold text-glow light:text-stone-900">Paste a draft</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-zinc-500 light:text-stone-500">Drop in Lesson Markdown and we compile it for you.</p>
+              <p className="mt-2 font-serif text-[15px] font-semibold text-glow light:text-[var(--text-primary)]">Paste a draft</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-zinc-500 light:text-[var(--text-muted)]">Drop in Lesson Markdown and we compile it for you.</p>
             </button>
           </div>
         </BlurFade>
       </section>
 
       {/* Features showcase — embedded section */}
-      <section id="learn-features" className="relative border-t border-white/10 px-6 py-16 light:border-stone-300/50">
+      <section id="learn-features" className="relative border-t border-white/10 px-6 py-16 light:border-[color-mix(in_srgb,var(--ws-border)_50%,transparent)]">
         <div className="mx-auto max-w-6xl">
           <BlurFade inView>
             <div className="mb-8 text-center">
-              <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-clay-300 light:text-stone-500">Capabilities</span>
-              <h2 className="mt-2 font-serif text-3xl font-semibold text-glow light:text-stone-900">Everything you need to learn</h2>
-              <p className="mt-2 text-sm text-zinc-500 light:text-stone-500">Every block type the AI can generate and the system can parse.</p>
+              <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-clay-300 light:text-[var(--text-muted)]">Capabilities</span>
+              <h2 className="mt-2 font-serif text-3xl font-semibold text-glow light:text-[var(--text-primary)]">Everything you need to learn</h2>
+              <p className="mt-2 text-sm text-zinc-500 light:text-[var(--text-muted)]">Every block type the AI can generate and the system can parse.</p>
             </div>
           </BlurFade>
           <FeatureShowcase embedded />

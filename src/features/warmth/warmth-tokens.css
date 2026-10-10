@@ -36,15 +36,20 @@
 
 .memory-reel {
   display: flex;
-  gap: 14px;
-  padding: 20px;
+  gap: 10px;
+  padding: 4px 2px 10px;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   outline: none;
-  background:
-    repeating-linear-gradient(90deg, #0a0908 0 8px, transparent 8px 34px) top / 100% 12px no-repeat,
-    repeating-linear-gradient(90deg, #0a0908 0 8px, transparent 8px 34px) bottom / 100% 12px no-repeat,
-    #141210;
+  /* No perforation stripes. They were pure decoration and made the strip read
+     as a toy film prop instead of letting the photographs be the content. */
+  scrollbar-width: thin;
+}
+
+.memory-reel:focus-visible {
+  outline: 2px solid var(--page-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .reel-frame {
@@ -56,25 +61,33 @@
   background: none;
   cursor: pointer;
   border-radius: 8px;
-  transform: scale(0.92);
-  filter: saturate(0.82) brightness(0.8);
-  transition: transform var(--warmth-dur-base) var(--warmth-ease-out),
+  opacity: 0.7;
+  filter: saturate(0.9);
+  transition: opacity var(--warmth-dur-base) var(--warmth-ease-out),
               filter var(--warmth-dur-base) var(--warmth-ease-out),
-              box-shadow var(--warmth-dur-base) var(--warmth-ease-out);
+              outline-color var(--warmth-dur-base) var(--warmth-ease-out);
 }
+
 .reel-frame img {
   display: block;
-  height: 168px;
+  height: 112px;
   width: auto;
-  max-width: 260px;
+  max-width: 168px;
   object-fit: cover;
   border-radius: 8px;
 }
+
+.reel-frame:hover,
 .reel-frame.reel-active {
-  transform: scale(1);
+  opacity: 1;
   filter: none;
-  box-shadow: 0 0 44px -10px rgba(111, 179, 143, 0.5);
 }
+
+.reel-frame:focus-visible {
+  outline: 2px solid var(--page-accent);
+  outline-offset: 2px;
+}
+
 .reel-play {
   position: absolute;
   inset: 0;

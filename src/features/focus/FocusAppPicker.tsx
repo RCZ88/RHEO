@@ -105,7 +105,7 @@ export function FocusAppPicker({
             }}
             onKeyDown={onKeyDown}
             placeholder={placeholder}
-            className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-lg pl-8 pr-3 py-2 text-[13px] text-zinc-200 focus:border-pink-500/40 outline-none placeholder:text-zinc-600"
+            className="w-full bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg pl-8 pr-3 py-2 text-[13px] text-zinc-200 focus:border-pink-500/40 outline-none placeholder:text-zinc-600"
           />
         </div>
 

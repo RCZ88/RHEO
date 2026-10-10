@@ -14,6 +14,18 @@ interface MissedTimePanelProps {
 
 const STRIPE = 'repeating-linear-gradient(45deg, rgba(251,191,36,0.10) 0px 6px, transparent 6px 12px)';
 
+// One shared keyframe for the drift, declared once instead of a per-element
+// framer animation. transform-only, so it never triggers layout or paint.
+const STRIPE_KEYFRAMES = `
+@keyframes df-stripe-drift { from { transform: translate3d(0,0,0); } to { transform: translate3d(-50%,0,0); } }
+`;
+if (typeof document !== 'undefined' && !document.getElementById('df-stripe-keyframes')) {
+  const el = document.createElement('style');
+  el.id = 'df-stripe-keyframes';
+  el.textContent = STRIPE_KEYFRAMES;
+  document.head.appendChild(el);
+}
+
 function fmtDur(sec: number): string {
   const h = Math.floor(sec / 3600);
   const m = Math.round((sec % 3600) / 60);
@@ -34,6 +46,24 @@ export default function MissedTimePanel({ onFillNow }: MissedTimePanelProps) {
   const reduced = useReducedMotion();
   const [gaps, setGaps] = useState<Gap[] | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const [stripW, setStripW] = useState(0);
+
+  // A segment's label can only be drawn if it fits the segment's ACTUAL pixel
+  // width. The previous test was `w >= 6` — a PERCENTAGE. On a narrow strip 6%
+  // is ~30px while "8h 34m" at 10px mono needs ~45px, so the label rendered
+  // anyway and `truncate` ate it. The threshold has to be in pixels, and pixels
+  // require measuring the strip, which is responsive.
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setStripW(el.getBoundingClientRect().width);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [gaps, collapsed]);
 
   const loadGaps = useCallback(async () => {
     try {
@@ -123,29 +153,51 @@ export default function MissedTimePanel({ onFillNow }: MissedTimePanelProps) {
 
       {/* ── Day strip: tracked light vs eroding voids ── */}
       <div className="relative">
-        <div className="h-9 rounded-lg overflow-hidden border border-zinc-700/30 relative">
+        <div ref={stripRef} className="h-9 rounded-lg overflow-hidden border border-zinc-700/30 relative">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-emerald-500/5 to-indigo-500/10" />
           {gaps.map((g, i) => {
             const s = Math.max(0, (new Date(g.start).getTime() - dayStart) / 1000);
             const left = Math.min(99.5, (s / elapsedSec) * 100);
             const w = Math.max(0.8, Math.min(100 - left, (g.durationSeconds / elapsedSec) * 100));
-            const labelFits = w >= 6;
+            const text = fmtDur(g.durationSeconds);
+            // 10px monospace is ~6.05px/advance; px-1 adds 4px each side.
+            const neededPx = text.length * 6.05 + 8;
+            const segPx = (w / 100) * stripW;
+            const labelFits = stripW > 0 && segPx >= neededPx;
+            // Below ~28px the 45deg stripe reads as flat grey anyway, so animating
+            // it is pure cost.
+            const canStripe = !reduced && segPx >= 28;
             return (
-              <div key={i} className="absolute top-0 bottom-0" style={{ left: `${left}%`, width: `${w}%`, minWidth: 6 }}>
-                <div className="absolute inset-0 bg-[#0d0d10]/90 border-x border-amber-500/30 shadow-[inset_0_0_14px_rgba(0,0,0,0.7)]" />
-                <motion.div
-                  className="absolute inset-0"
-                  style={{ width: '200%', backgroundImage: STRIPE, opacity: 0.9 }}
-                  animate={reduced ? undefined : { x: ['0%', '-50%'] }}
-                  transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
-                />
-                {labelFits && (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0"
+                style={{ left: `${left}%`, width: `${w}%`, minWidth: 6 }}
+                title={`${fmtClock(new Date(g.start))} – ${fmtClock(new Date(g.end))} · ${text} untracked`}
+              >
+                <div className="absolute inset-0 bg-[var(--ws-surface-scrim)] border-x border-amber-500/30" />
+                {/* The drifting stripe was a per-gap INFINITE framer animation on a
+                    width:200% repeating gradient, plus an inset blur shadow on every
+                    gap. With several gaps that is several always-running animation
+                    layers and a blur pass each, on a component that renders INSIDE
+                    the AFK prompt — i.e. the prompt was animating forever even when
+                    the user did nothing. Now a CSS transform animation, which the
+                    compositor handles off the main thread, and only for gaps wide
+                    enough for the pattern to read at all. */}
+                {canStripe ? (
+                  <div className="absolute inset-0 overflow-hidden">
+                    <div
+                      className="absolute inset-y-0 left-0 w-[200%] motion-safe:[animation:df-stripe-drift_9s_linear_infinite]"
+                      style={{ backgroundImage: STRIPE, opacity: 0.9 }}
+                    />
+                  </div>
+                ) : null}
+                {labelFits ? (
                   <div className="absolute inset-0 flex items-center justify-center px-1">
-                    <span className="text-[10px] font-semibold font-mono text-amber-200/90 truncate drop-shadow">
-                      {fmtDur(g.durationSeconds)}
+                    <span className="text-[10px] font-semibold font-mono text-amber-200/90 drop-shadow">
+                      {text}
                     </span>
                   </div>
-                )}
+                ) : null}
               </div>
             );
           })}

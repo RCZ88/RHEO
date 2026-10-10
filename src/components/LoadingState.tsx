@@ -9,7 +9,7 @@ export function LoadingState({ variant = 'spinner', rows = 3, className = '' }: 
     return (
       <div className={`space-y-3 ${className}`}>
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="animate-pulse bg-zinc-800 rounded-xl h-16 light:bg-stone-200/70" />
+          <div key={i} className="animate-pulse bg-zinc-800 rounded-xl h-16 light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_70%,transparent)]" />
         ))}
       </div>
     );
@@ -17,7 +17,7 @@ export function LoadingState({ variant = 'spinner', rows = 3, className = '' }: 
 
   return (
     <div className={`flex items-center justify-center py-12 ${className}`}>
-      <div className="w-5 h-5 border-2 border-zinc-700 rounded-full animate-spin light:border-stone-200" style={{ borderTopColor: 'var(--page-accent)' }} />
+      <div className="w-5 h-5 border-2 border-zinc-700 rounded-full animate-spin light:border-[var(--ws-border)]" style={{ borderTopColor: 'var(--page-accent)' }} />
     </div>
   );
 }

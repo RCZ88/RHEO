@@ -379,7 +379,7 @@ export const SkillsTab: React.FC<{
         </div>
         {expandedId === skill.id && (
           <div className="px-2 pb-2 border-t border-zinc-700/30">
-            <pre className="mt-2 p-2 bg-zinc-900 rounded text-[10px] text-zinc-400 overflow-x-auto max-h-60 overflow-y-auto whitespace-pre-wrap font-mono">
+            <pre className="mt-2 p-2 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded text-[10px] text-zinc-400 overflow-x-auto max-h-60 overflow-y-auto whitespace-pre-wrap font-mono">
               {skill.content}
             </pre>
             <div className="flex gap-2 mt-2">
@@ -406,7 +406,7 @@ export const SkillsTab: React.FC<{
       )}
 
       {/* Tabs */}
-      <div className="flex gap-0.5 mb-2.5 bg-zinc-900/50 rounded p-0.5 border border-zinc-700/40">
+      <div className="flex gap-0.5 mb-2.5 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded p-0.5 border border-zinc-700/40">
         <button
           onClick={() => setActiveView('project')}
           className={`flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
@@ -469,7 +469,7 @@ export const SkillsTab: React.FC<{
         value={searchQuery}
         onChange={e => setSearchQuery(e.target.value)}
         placeholder="Search skills..."
-        className="w-full mb-2 px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+        className="w-full mb-2 px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
       />
 
       {/* Category Filter */}
@@ -533,14 +533,14 @@ export const SkillsTab: React.FC<{
                   onChange={setSkillFormValues}
                 />
               ) : (
-                <div className="mb-3 p-2 bg-zinc-900 rounded max-h-28 overflow-y-auto">
+                <div className="mb-3 p-2 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded max-h-28 overflow-y-auto">
                   <pre className="text-[10px] text-zinc-400 whitespace-pre-wrap font-mono">{runningSkill.content.slice(0, 500)}{runningSkill.content.length > 500 ? '...' : ''}</pre>
                 </div>
               )}
               <select
                 value={targetTerminal}
                 onChange={e => setTargetTerminal(e.target.value)}
-                className="w-full mt-3 mb-2 px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                className="w-full mt-3 mb-2 px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
               >
                 <option value="">Active terminal ({activeTerminalId ? terminalTabs[activeTerminalId]?.name || 'unnamed' : 'none'})</option>
                 {Object.entries(terminalTabs).map(([id, tab]) => (
@@ -552,7 +552,7 @@ export const SkillsTab: React.FC<{
                   value={skillPrompt}
                   onChange={e => setSkillPrompt(e.target.value)}
                   placeholder={runningSkill.inputs && runningSkill.inputs.length > 0 ? "Additional instructions or context..." : "Enter your prompt or instructions for this skill..."}
-                  className="w-full px-2.5 py-2 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 min-h-[60px] resize-y"
+                  className="w-full px-2.5 py-2 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 min-h-[60px] resize-y"
                 />
               </VoiceInputWrapper>
             </div>
@@ -598,11 +598,11 @@ export const SkillsTab: React.FC<{
               <button onClick={() => setEditingSkill(null)} className="text-zinc-400 hover:text-zinc-200">✕</button>
             </div>
             <div className="px-4 py-3 overflow-y-auto flex-1 space-y-2">
-              <input type="text" value={editName} onChange={e => setEditName(e.target.value)} placeholder="Skill name" className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200" />
-              <input type="text" value={editCategory} onChange={e => setEditCategory(e.target.value)} placeholder="Category" className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200" />
-              <input type="text" value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="Description" className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200" />
+              <input type="text" value={editName} onChange={e => setEditName(e.target.value)} placeholder="Skill name" className="w-full px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200" />
+              <input type="text" value={editCategory} onChange={e => setEditCategory(e.target.value)} placeholder="Category" className="w-full px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200" />
+              <input type="text" value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="Description" className="w-full px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200" />
               <VoiceInputWrapper>
-                <textarea value={editContent} onChange={e => setEditContent(e.target.value)} placeholder="Skill content (markdown)" className="w-full px-2.5 py-2 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 font-mono min-h-[200px] resize-y" />
+                <textarea value={editContent} onChange={e => setEditContent(e.target.value)} placeholder="Skill content (markdown)" className="w-full px-2.5 py-2 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200 font-mono min-h-[200px] resize-y" />
               </VoiceInputWrapper>
             </div>
             <div className="px-4 py-3 border-t border-zinc-700 flex gap-2 justify-end flex-shrink-0">
@@ -622,11 +622,11 @@ export const SkillsTab: React.FC<{
               <button onClick={() => setShowNewForm(false)} className="text-zinc-400 hover:text-zinc-200">✕</button>
             </div>
             <div className="px-4 py-3 overflow-y-auto flex-1 space-y-2">
-              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Skill name *" className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200" />
-              <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="Category (e.g., coding, testing, review)" className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200" />
-              <input type="text" value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Short description" className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200" />
+              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Skill name *" className="w-full px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200" />
+              <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="Category (e.g., coding, testing, review)" className="w-full px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200" />
+              <input type="text" value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Short description" className="w-full px-2.5 py-1.5 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200" />
               <VoiceInputWrapper>
-                <textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Skill content (markdown) — include instructions, examples, and rules..." className="w-full px-2.5 py-2 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 font-mono min-h-[200px] resize-y" />
+                <textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Skill content (markdown) — include instructions, examples, and rules..." className="w-full px-2.5 py-2 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded text-xs text-zinc-200 font-mono min-h-[200px] resize-y" />
               </VoiceInputWrapper>
             </div>
             <div className="px-4 py-3 border-t border-zinc-700 flex gap-2 justify-end flex-shrink-0">

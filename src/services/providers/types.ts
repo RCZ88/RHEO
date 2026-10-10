@@ -30,6 +30,15 @@ export interface CanonicalRequest {
   temperature?: number;
   tools?: Array<{ type: 'function'; function: { name: string; description: string; parameters: any } }>;
   toolChoice?: 'auto' | 'none';
+  // ---- AI observability (Phase 1). Optional, so every existing object literal
+  // that builds a CanonicalRequest still compiles untouched. runWithFallback
+  // prefers its explicit `trace` argument and falls back to these.
+  /** Joins every row emitted by one call: route-decision + attempt + prompt + output. */
+  traceId?: string;
+  /** Which product surface asked. Replaces the racy module-level `currentFeature`. */
+  feature?: string;
+  /** Thread / session / terminal id, for grouping a conversation. */
+  contextId?: string;
 }
 
 export interface CanonicalResponse {

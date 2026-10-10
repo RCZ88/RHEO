@@ -102,6 +102,42 @@ async function main() {
     }
   }
 
+  // Compile EVERY module main.cjs requires at runtime, not just migrations.
+  // main.ts is bundled to one file, but its literal `require('./x')` calls are
+  // left as runtime requires and must exist next to main.cjs. The build copied
+  // only src/main/services/*.cjs, so 46 of them were absent from dist-electron
+  // and main.cjs died at boot with `Cannot find module './procmon'`. Derived from
+  // main.ts's own require() calls, so a new runtime module cannot regress it again.
+  {
+    const modScript = resolve(ROOT, 'scripts', 'build-main-modules.mjs');
+    if (existsSync(modScript)) {
+      // execSync is what this file imports; execFileSync is not, and `node --check`
+      // does not catch an unresolved identifier.
+      execSync(`"${process.execPath}" "${modScript}"`, { cwd: ROOT, stdio: 'inherit', shell: true });
+    }
+  }
+
+  // Pre-compile src/main/migrations/ — main.cjs requires it at runtime
+  // (`require('./main/migrations/runMigrations')`). Without this, dist-electron
+  // kept serving a STALE compiled runMigrations.js, so every edit to
+  // runMigrations.ts was silently ignored at runtime.
+  console.log('\n=== Compiling main/migrations/ service files ===');
+  const migDir = resolve(SRC, 'main', 'migrations');
+  if (existsSync(migDir)) {
+    for (const entry of readdirSync(migDir)) {
+      if (entry.endsWith('.ts') && !entry.endsWith('.d.ts') && !entry.endsWith('.test.ts')) {
+        const srcPath = resolve(migDir, entry);
+        const outPath = resolve(OUT, 'main', 'migrations', entry.replace(/\.ts$/, '.js'));
+        mkdirSync(dirname(outPath), { recursive: true });
+        execSync(
+          `npx esbuild "${srcPath}" --outfile="${outPath}" --format=cjs --platform=node --target=node22 2>&1`,
+          { cwd: ROOT, stdio: 'inherit', shell: true }
+        );
+        console.log(`  main/migrations/${entry} → ${entry.replace(/\.ts$/, '.js')}`);
+      }
+    }
+  }
+
   console.log('✅ Build complete!');
 }
 

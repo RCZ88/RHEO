@@ -41,13 +41,12 @@ import { LoadingState } from '../components/LoadingState';
 import TransferSessionModal from '../components/TransferSessionModal';
 import { EmptyState } from '../components/EmptyState';
 import { computeActivityGridLayout } from '@/lib/external/grid';
-import { fillGapWithSegments, type Gap } from '@/lib/external/gaps';
+import type { Gap } from '@/lib/external/gaps';
 import { buildDailyTimeline, buildWeeklyTimeline, buildMonthlyTimeline } from '@/lib/external/timelines';
 import { ActivityMosaic } from '@/components/external/ActivityMosaic';
 import { DailyTimeline } from '@/components/external/DailyTimeline';
 import { WeeklyTimeline } from '@/components/external/WeeklyTimeline';
 import { MonthlyTimeline } from '@/components/external/MonthlyTimeline';
-import { GapFillModal } from '@/components/external/GapFillModal';
 import { GapsListModal } from '@/components/external/GapsListModal';
 import { ManualAssignModal } from '@/components/external/ManualAssignModal';
 import { ActivitySelectionOverlay } from '@/components/external/ActivitySelectionOverlay';
@@ -325,8 +324,18 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
   const [sleepLatencyMinutes, setSleepLatencyMinutes] = useState(15);
   const [wakeUpMinutes, setWakeUpMinutes] = useState(5);
   const [vizTab, setVizTab] = useState<'grid' | 'daily' | 'weekly' | 'monthly'>('grid');
-  const [gapTarget, setGapTarget] = useState<{ id: string; start: Date; end: Date; duration_seconds: number } | null>(null);
-  const [gapTargets, setGapTargets] = useState<Gap[]>([]);
+  /**
+   * Gaps are explained by the ONE "While you were away" prompt, which App owns.
+   * This page used to mount its own `GapFillModal` for them — a second gap UI
+   * with its own state, its own save path, and no split-lock. So a gap picked
+   * here is handed to App's single `gapFillQueue` over an event instead.
+   */
+  const enqueueGapFill = (gaps: Array<{ start: Date; end: Date; duration_seconds: number }>) => {
+    if (!gaps.length) return;
+    window.dispatchEvent(
+      new CustomEvent('enqueue-gap-fill', { detail: { gaps: gaps.map(g => ({ ...g })) } }),
+    );
+  };
   const [showGapsList, setShowGapsList] = useState(false);
   const [showManualAssign, setShowManualAssign] = useState(false);
   const [manualAssignGap, setManualAssignGap] = useState<{ start: Date; end: Date } | null>(null);
@@ -1031,7 +1040,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
             >
               <div className="relative overflow-hidden rounded-xl">
                 <div className="absolute -inset-1 opacity-15 blur-2xl rounded-xl" style={{ background: `radial-gradient(ellipse at center, ${activeSession.activity.color} 0%, transparent 70%)` }} />
-                <div className="relative rounded-xl bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/50 p-5 flex flex-col items-center">
+                <div className="relative rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/50 p-5 flex flex-col items-center">
                   {activeSession.activity.type === 'sleep' ? (
                     <div className="text-center">
                       <div className="text-6xl mb-4">😴</div>
@@ -1369,7 +1378,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                               return (
                                 <div key={idx} className="flex-1 flex flex-col items-center gap-0.5 group relative" style={{ minWidth: selectedPeriod === 'month' || selectedPeriod === '30day' ? '16px' : selectedPeriod === 'week' || selectedPeriod === '7day' ? '28px' : '20px' }}>
                                   {/* Tooltip */}
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-zinc-900/95 border border-zinc-700 rounded-lg px-2 py-1 text-[10px] text-zinc-300 whitespace-nowrap z-20 backdrop-blur-sm pointer-events-none">
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg px-2 py-1 text-[10px] text-zinc-300 whitespace-nowrap z-20 backdrop-blur-sm pointer-events-none">
                                     {bar.label}: {formatHours(bar.seconds)}
                                   </div>
                                   {/* Bar */}
@@ -1435,7 +1444,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                             return (
                               <div key={h} className="flex-1 flex flex-col items-center group relative">
                                 {/* Tooltip */}
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-zinc-900/95 border border-zinc-700 rounded px-1.5 py-0.5 text-[9px] text-zinc-300 whitespace-nowrap z-20 pointer-events-none">
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded px-1.5 py-0.5 text-[9px] text-zinc-300 whitespace-nowrap z-20 pointer-events-none">
                                   {h % 12 || 12}{h < 12 ? 'a' : 'p'}: {formatHours(sec)}
                                 </div>
                                 {sec > 0 ? (
@@ -1485,7 +1494,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                                   type="datetime-local"
                                   value={editingSessionTimes.started_at}
                                   onChange={(e) => setEditingSessionTimes(prev => ({ ...prev, started_at: e.target.value }))}
-                                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
+                                  className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
                                 />
                               </div>
                               <div>
@@ -1494,7 +1503,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                                   type="datetime-local"
                                   value={editingSessionTimes.ended_at}
                                   onChange={(e) => setEditingSessionTimes(prev => ({ ...prev, ended_at: e.target.value }))}
-                                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
+                                  className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
                                 />
                               </div>
                             </div>
@@ -1714,7 +1723,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
       <ChevronLeft className="w-4 h-4" />
     </button>
      <button
-       className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200 text-center"
+       className="w-full px-4 py-2 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg text-sm text-zinc-200 text-center"
      >
        {formattedDate}
      </button>
@@ -1967,7 +1976,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                         {/* 3-segment sleep bar: amber pre-sleep → indigo sleep → rose post-wake */}
                         <div className="relative w-full h-72">
                           {/* Tooltip - positioned at bottom of bar area */}
-                          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900/95 border border-zinc-700 rounded-lg px-3 py-2 text-[10px] text-zinc-300 whitespace-nowrap z-[100] pointer-events-none shadow-xl" style={{ transform: 'translate(-50%, 0)' }}>
+                          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-lg px-3 py-2 text-[10px] text-zinc-300 whitespace-nowrap z-[100] pointer-events-none shadow-xl" style={{ transform: 'translate(-50%, 0)' }}>
                             {!hasSleepData ? (
                               <div className="text-center py-1">
                                 <div className="text-zinc-500 font-medium mb-0.5">No sleep logged</div>
@@ -2087,7 +2096,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
             Fix Sleep Dates
           </button>
           {sleepDebugData && (
-            <div className="text-[10px] font-mono text-zinc-500 bg-zinc-900/50 rounded-xl p-4 mt-1 overflow-auto max-h-96 space-y-2">
+            <div className="text-[10px] font-mono text-zinc-500 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl p-4 mt-1 overflow-auto max-h-96 space-y-2">
               <div className="font-semibold text-zinc-400">Query Filter: {sleepDebugData.queryRange?.dateFilter || 'none'}</div>
               <div className="font-semibold text-zinc-400">All Sleep Sessions ({sleepDebugData.sessions?.length || 0})</div>
               {sleepDebugData.sessions?.map((s: any) => (
@@ -2127,7 +2136,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
         {/* Timeline Visualization */}
           <div data-tutorial="external.streak" className="mb-8">
             {/* Tab Switcher */}
-            <div className="flex items-center gap-1 bg-zinc-900/50 rounded-xl p-1 mb-6 border border-zinc-800/50">
+            <div className="flex items-center gap-1 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl p-1 mb-6 border border-zinc-800/50">
               {[
                 { key: 'grid' as const, label: 'Overview', icon: LayoutGrid },
                 { key: 'daily' as const, label: 'Daily', icon: Timer },
@@ -2198,7 +2207,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                       return (
                         <div className="relative w-32 h-32">
                           <div className="w-full h-full rounded-full ring-1 ring-white/10" style={{ background: `conic-gradient(${conicStr})`, filter: 'drop-shadow(0 0 16px rgba(255,255,255,0.06)) drop-shadow(0 0 24px rgba(0,0,0,0.4))' }}>
-                            <div className="absolute inset-3 rounded-full bg-zinc-900 flex items-center justify-center">
+                            <div className="absolute inset-3 rounded-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] flex items-center justify-center">
                               <span className="font-display text-lg font-bold text-zinc-100">{Math.round(total)}h</span>
                             </div>
                           </div>
@@ -2261,12 +2270,11 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               <DailyTimeline
                 data={dailyData}
                 onGapClick={(gapBlock) => {
-                  setGapTarget({
-                    id: gapBlock.id,
+                  enqueueGapFill([{
                     start: gapBlock.start,
                     end: gapBlock.end,
                     duration_seconds: gapBlock.durationSeconds,
-                  });
+                  }]);
                 }}
               />
             )}
@@ -2276,12 +2284,11 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               <WeeklyTimeline
                 days={weeklyData}
                 onGapClick={(gapBlock) => {
-                  setGapTarget({
-                    id: gapBlock.id,
+                  enqueueGapFill([{
                     start: gapBlock.start,
                     end: gapBlock.end,
                     duration_seconds: gapBlock.durationSeconds,
-                  });
+                  }]);
                 }}
               />
             )}
@@ -2315,7 +2322,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-md w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-md w-full mx-4"
             >
               <div className="text-center mb-6">
                 {recoverySession.activity.type === 'sleep' ? (
@@ -2377,7 +2384,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-md w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-md w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-6">
@@ -2445,7 +2452,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-md w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-md w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -2589,7 +2596,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-md w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-md w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -2703,7 +2710,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                           daily_target_minutes: parseInt(e.target.value) || null
                         } as any)}
                         placeholder="e.g. 60"
-                        className="w-full bg-zinc-900/60 border border-zinc-700/30 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600"
+                        className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/30 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600"
                       />
                     </div>
                     <div>
@@ -2718,7 +2725,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
                           weekly_target_days: parseInt(e.target.value) || null
                         } as any)}
                         placeholder="e.g. 5"
-                        className="w-full bg-zinc-900/60 border border-zinc-700/30 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600"
+                        className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/30 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600"
                       />
                     </div>
                     <div className="flex items-center justify-between">
@@ -2801,7 +2808,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-sm w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-sm w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-5">
@@ -2863,7 +2870,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-md w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-md w-full mx-4"
             >
               <div className="text-center mb-6">
                 <div className="text-6xl mb-4">🌤️</div>
@@ -2949,7 +2956,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-sm w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-sm w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-4">
@@ -3053,7 +3060,7 @@ const [sleepDebugData, setSleepDebugData] = useState<any>(null);
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-zinc-900 rounded-xl p-5 max-w-md w-full mx-4"
+              className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 max-w-md w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-2">
@@ -3382,11 +3389,11 @@ const selectedSleepDay = new Date(pastSleepDate + 'T00:00:00');
           defaultTimeframe={gapsDefaultTimeframe}
           onClose={() => setShowGapsList(false)}
           onPickGap={(gap) => {
-            setGapTarget(gap);
+            enqueueGapFill([gap]);
             setShowGapsList(false);
           }}
           onFillGaps={(gaps) => {
-            setGapTargets(gaps);
+            enqueueGapFill(gaps as any);
             setShowGapsList(false);
           }}
           onAssignTime={(gap) => {
@@ -3406,31 +3413,6 @@ const selectedSleepDay = new Date(pastSleepDate + 'T00:00:00');
             setManualAssignGap(null);
           }}
           onChanged={() => setManualVersion((v) => v + 1)}
-        />
-        {/* Gap Fill Modal */}
-        <GapFillModal
-          open={!!gapTarget || gapTargets.length > 0}
-          gap={gapTarget as any}
-          multiGaps={gapTargets.length > 0 ? gapTargets : undefined}
-          activities={activities}
-          sessions={allSessions}
-          onClose={() => {
-            setGapTarget(null);
-            setGapTargets([]);
-          }}
-          onFillGap={async (gap, segments) => {
-            await fillGapWithSegments(
-              gap,
-              segments,
-              async (activityId, minutes, startedAt, endedAt) => {
-                await window.deskflowAPI?.addExternalTime(activityId, minutes, startedAt, endedAt);
-              }
-            );
-            refreshStats();
-            if (window.deskflowAPI?.getExternalActivities) {
-              window.deskflowAPI.getExternalActivities().then((data: any[]) => setActivities(data));
-            }
-          }}
         />
         {transferSession && (
           <TransferSessionModal

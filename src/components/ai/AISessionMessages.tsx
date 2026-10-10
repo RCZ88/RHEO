@@ -8,6 +8,7 @@ import {
   Loader2,
   MessageSquare,
   Hash,
+  Wrench,
 } from "lucide-react"
 import { cn } from "./lib/cn"
 
@@ -40,6 +41,15 @@ const ROLE_STYLES: Record<string, { bg: string; border: string; icon: typeof Use
     icon: Bot,
     label: "Assistant",
     iconColor: "text-emerald-400",
+  },
+  // Tools (e.g. Hermes tool calls) previously fell through to the assistant
+  // style, so every tool invocation was mislabelled "Assistant".
+  tool: {
+    bg: "bg-amber-500/5",
+    border: "border-amber-500/15",
+    icon: Wrench,
+    label: "Tool",
+    iconColor: "text-amber-400",
   },
 }
 
@@ -88,7 +98,7 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
         <MessageSquare className="w-3 h-3" />
         <span>View Messages</span>
         {messages.length > 0 && (
-          <span className="text-zinc-600 light:text-stone-500">({messages.length})</span>
+          <span className="text-zinc-600 light:text-[var(--text-muted)]">({messages.length})</span>
         )}
       </button>
 
@@ -104,12 +114,12 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
             <div className="px-4 pb-3 space-y-2 max-h-[400px] overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-6 gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-zinc-500 light:text-stone-500" />
-                  <span className="text-[11px] text-zinc-500 light:text-stone-500">Loading messages...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-500 light:text-[var(--text-muted)]" />
+                  <span className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">Loading messages...</span>
                 </div>
               ) : messages.length === 0 ? (
                 <div className="text-center py-4">
-                  <span className="text-[11px] text-zinc-600 light:text-stone-500">No messages found in source files</span>
+                  <span className="text-[11px] text-zinc-600 light:text-[var(--text-muted)]">No messages found in source files</span>
                 </div>
               ) : (
                 messages.map((msg) => {
@@ -142,13 +152,13 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
                           </span>
                         )}
                         {msg.tokens ? (
-                          <span className="flex items-center gap-0.5 text-zinc-600 light:text-stone-500">
+                          <span className="flex items-center gap-0.5 text-zinc-600 light:text-[var(--text-muted)]">
                             <Hash className="w-2.5 h-2.5" />
                             {formatTokens(msg.tokens)}
                           </span>
                         ) : null}
                       </div>
-                      <div className="text-zinc-300 light:text-stone-700 whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6]">
+                      <div className="text-zinc-300 light:text-[var(--text-secondary)] whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6]">
                         {display}
                         {truncated && (
                           <button
@@ -163,7 +173,7 @@ export function AISessionMessages({ sessionId, tool, color }: AISessionMessagesP
                                 )
                               )
                             }}
-                            className="ml-1 text-zinc-500 hover:text-zinc-300 light:text-stone-500 underline"
+                            className="ml-1 text-zinc-500 hover:text-zinc-300 light:text-[var(--text-muted)] underline"
                           >
                             show all
                           </button>

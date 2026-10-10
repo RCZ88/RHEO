@@ -343,7 +343,7 @@ export default function ManualFillModal({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-violet-500"
+        className="w-full"
       />
     </div>
   );
@@ -362,7 +362,7 @@ export default function ManualFillModal({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.97, opacity: 0, y: 8 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-4xl max-h-[88vh] overflow-hidden rounded-2xl border border-zinc-700/70 bg-zinc-900/95 shadow-2xl flex flex-col"
+          className="w-full max-w-4xl max-h-[88vh] overflow-hidden rounded-2xl border border-zinc-700/70 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] shadow-2xl flex flex-col"
         >
           {/* Header */}
           <div className="flex items-center gap-3 px-5 py-3.5 border-b border-zinc-800">
@@ -418,7 +418,7 @@ export default function ManualFillModal({
               </div>
 
               {/* Reuse a past day as the template */}
-              <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/40 px-2.5 py-2">
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-2.5 py-2">
                 <History className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                 <span className="text-[11px] text-zinc-400">Reuse a day you already have:</span>
                 <input
@@ -463,7 +463,7 @@ export default function ManualFillModal({
                       onChange={(e) =>
                         setApps((prev) => prev.map((x, j) => (j === i ? { ...x, weight: Number(e.target.value) } : x)))
                       }
-                      className="flex-1 accent-violet-500"
+                      className="flex-1"
                     />
                     <span className="text-[11px] text-zinc-500 font-mono tabular-nums w-6 text-right">{a.weight}</span>
                     <button
@@ -620,7 +620,7 @@ export default function ManualFillModal({
               )}
 
               {days.length > 0 && (
-                <div className="mt-2.5 max-h-32 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/50 p-2 space-y-0.5">
+                <div className="mt-2.5 max-h-32 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-2 space-y-0.5">
                   {days.slice(0, 12).map((d) => (
                     <div key={d.date} className="flex gap-2 text-[10px] font-mono">
                       <span className="text-zinc-500 w-[86px] shrink-0">
@@ -645,7 +645,7 @@ export default function ManualFillModal({
             </section>
 
             {result && (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-[11px]">
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/50 px-3 py-2 text-[11px]">
                 {result.created > 0 && (
                   <p className="text-emerald-400">
                     Created {result.created} {result.created === 1 ? 'entry' : 'entries'}.
@@ -668,7 +668,7 @@ export default function ManualFillModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-zinc-800 bg-zinc-950/40">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40">
             <div className="text-[11px] text-zinc-500">
               {generating && progress
                 ? `Writing ${progress.done}/${progress.total}…`

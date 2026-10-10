@@ -88,7 +88,7 @@ function GoalsDialog({ open, onOpenChange, config, onSave }: GoalsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm bg-zinc-950 border border-zinc-800/60">
+      <DialogContent className="sm:max-w-sm bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60">
         <DialogHeader>
           <DialogTitle className="flex ites-center gap-2">
             <Target className="w-4 h-4 text-[var(--page-accent)]" />
@@ -190,7 +190,7 @@ export function FocusGoals({ history }: { history: FocusHistoryRow[] }) {
   };
 
   return (
-    <GlassCard className="bg-zinc-900/95 border-zinc-800/60">
+    <GlassCard className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border-zinc-800/60">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
           <Target className="w-4 h-4 text-[var(--page-accent)]" />

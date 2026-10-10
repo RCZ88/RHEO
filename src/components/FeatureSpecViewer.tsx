@@ -122,7 +122,7 @@ function SidebarTree({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search specs..."
-          className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+          className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
         />
         {searchQuery && (
           <button onClick={() => onSearchChange('')} className="absolute right-5 top-1/2">
@@ -454,7 +454,7 @@ export default function FeatureSpecViewer({ noShell }: { noShell?: boolean }) {
 
   const content = (
       <div className="flex h-full" data-tutorial="feature-spec-viewer">
-        <div className="w-64 shrink-0 border-r border-zinc-800/60 bg-zinc-950/50 flex flex-col">
+        <div className="w-64 shrink-0 border-r border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/50 flex flex-col">
           <div className="px-4 py-3 border-b border-zinc-800/60 shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
@@ -476,7 +476,7 @@ export default function FeatureSpecViewer({ noShell }: { noShell?: boolean }) {
         </div>
 
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex items-center justify-between px-5 py-2.5 border-b border-zinc-800/60 shrink-0 bg-zinc-950/30">
+          <div className="flex items-center justify-between px-5 py-2.5 border-b border-zinc-800/60 shrink-0 bg-zinc-950 light:bg-[var(--ws-surface)]/30">
             <div className="text-xs text-zinc-500">
               {selectedFeature && (
                 <span>

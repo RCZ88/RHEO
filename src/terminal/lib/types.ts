@@ -199,7 +199,7 @@ export interface ZoomState {
   paneId: string;
 }
 
-export type RightPanelTab = "inspect" | "layout" | "commands" | "history" | "stats" | "keys" | "mcp" | "theme" | "sys" | "notes" | "handbook";
+export type RightPanelTab = "inspect" | "layout" | "commands" | "history" | "stats" | "metrics" | "keys" | "mcp" | "theme" | "sys" | "notes" | "handbook" | "handbook-ref" | "handbook-part";
 
 export interface DailyStat {
   date: string;

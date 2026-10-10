@@ -100,7 +100,7 @@ function PlainTable({ block }: { block: TableBlockType }) {
         </thead>
         <tbody>
           {block.rows.map((row, ri) => (
-            <tr key={ri} className="odd:bg-zinc-900/40">
+            <tr key={ri} className="odd:bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]">
               {block.columns.map((c) => (
                 <td key={c.field} className="px-3 py-1.5 border-b border-zinc-800/60 align-top">{String(row[c.field] ?? '')}</td>
               ))}

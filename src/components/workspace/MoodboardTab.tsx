@@ -61,7 +61,7 @@ export function MoodboardTab({ activeTerminalId, onInjectContext }: MoodboardTab
           value={searchQuery}
           onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Search aesthetic vibes (e.g., Frutiger Aero, Y2K, Cyberpunk)..."
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60 text-zinc-200 text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all duration-150"
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-800/60 text-zinc-200 text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all duration-150"
           disabled={isLoading}
         />
       </div>
@@ -112,7 +112,7 @@ export function MoodboardTab({ activeTerminalId, onInjectContext }: MoodboardTab
           {items.map((item, idx) => (
             <div
               key={idx}
-              className="break-inside-avoid mb-4 group relative rounded-xl overflow-hidden bg-zinc-900/60 border border-zinc-800/40"
+              className="break-inside-avoid mb-4 group relative rounded-xl overflow-hidden bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40"
               onMouseEnter={() => setHoveredIndex(idx)}
               onMouseLeave={() => setHoveredIndex(null)}
             >

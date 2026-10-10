@@ -25,6 +25,31 @@ import {
   type VisualState,
 } from './workforceTypes';
 
+/**
+ * Session statuses that mean "this agent is NOT currently running".
+ *
+ * Why this is its own concept: a closed session is not the same thing as a dead
+ * one, and it is definitely not the same as a running one. Before, `status` was
+ * the only signal and every row defaulted to 'active', so a session whose
+ * terminal had been closed still presented as live. The caller now writes
+ * 'completed' on close and 'active' on resume, so these can be trusted.
+ *
+ *   completed  — ran and finished, or was closed by the operator
+ *   inactive   — exists but is parked
+ *   cancelled  — abandoned
+ *   error      — ended in failure (still shown, but as a failure, not as "closed")
+ */
+export const CLOSED_STATUSES = new Set(['completed', 'inactive', 'cancelled', 'closed']);
+
+/**
+ * Whether this worker currently holds a live terminal.
+ *
+ * `inactive` is part of the contract with the Conductor: a killed conductor node
+ * is 'killed'/'inactive' rather than 'completed', because it did not finish.
+ */
+export function isClosedStatus(status: string | null | undefined): boolean {
+  return CLOSED_STATUSES.has((status ?? '').trim().toLowerCase());
+}
 /** Mirrors ConductorStatus in src/services/conductor/ConductorService.ts */
 export type ConductorStatus =
   | 'pending'
@@ -35,6 +60,18 @@ export type ConductorStatus =
   | 'done'
   | 'failed'
   | 'killed';
+
+/**
+ * Node statuses that mean "currently holding a running terminal".
+ * Mirrors ACTIVE_STATUSES in ConductorService. `pending` is excluded on purpose:
+ * a queued node has not started yet, so it is not "open".
+ */
+const ACTIVE_NODE_STATUSES = new Set([
+  'spawning',
+  'running',
+  'blocked',
+  'awaiting-review',
+]);
 
 /** Mirrors ConductorRole in the service — kept as a string union for safety. */
 export type ConductorRole =
@@ -88,6 +125,12 @@ export interface WorkforceWorker {
   // ── conductor enrichment (absent for non-conductor terminals) ────────────
   /** true when this worker is a Conductor coworker rather than a plain terminal */
   conductor: boolean;
+  /**
+   * True only while the worker actually holds a running terminal.
+   * Closed/finished/cancelled workers stay in the list (so history is legible)
+   * but render in a separate, quieter treatment — see AgentCharacter.
+   */
+  open: boolean;
   missionId: string | null;
   missionObjective: string | null;
   role: ConductorRole | string | null;
@@ -190,8 +233,6 @@ export interface BuildWorkforceInput {
   nodes?: ConductorNodeInput[];
   /** conductor missions, from conductor:list-missions */
   missions?: ConductorMissionInput[];
-  /** currently focused terminal id, so the scene can highlight it */
-  activeTerminalId?: string | null;
 }
 
 /**
@@ -210,7 +251,6 @@ export function buildWorkforceWorkers({
   sessions,
   nodes = [],
   missions = [],
-  activeTerminalId = null,
 }: BuildWorkforceInput): WorkforceWorker[] {
   const missionById = new Map(missions.map((m) => [m.id, m]));
   const workers: WorkforceWorker[] = [];
@@ -224,6 +264,9 @@ export function buildWorkforceWorkers({
     const state = conductorStatusToVisualState(node.status);
     const activity =
       state === 'busy' ? conductorRoleToActivity(node.role) : 'none';
+    // A conductor node is live only while its status is one the service treats
+    // as active. `pending` has not started; killed/done have finished.
+    const open = ACTIVE_NODE_STATUSES.has((node.status ?? '').trim().toLowerCase());
 
     workers.push({
       key: `conductor:${node.id}`,
@@ -237,6 +280,7 @@ export function buildWorkforceWorkers({
       tag: 1,
       multi: false,
       conductor: true,
+      open,
       missionId: node.missionId ?? null,
       missionObjective: node.missionId
         ? missionById.get(node.missionId)?.objective ?? null
@@ -265,6 +309,13 @@ export function buildWorkforceWorkers({
     if (!s.agent && !known) continue;
 
     const { state, activity } = deriveVisualState(s.status, null, null);
+    // "Open" means two things agree: the status is not a closed one, AND the
+    // row still has a terminal bound. A session whose terminal was closed now
+    // has terminal_id NULL and status 'completed' (closeTerminal writes both),
+    // so either signal alone is enough — requiring both avoids showing a
+    // half-closed session as live if only one was written.
+    const open = !isClosedStatus(s.status) && !!terminalId;
+
     workers.push({
       key: `session:${s.id}`,
       sessionId: s.id,
@@ -277,6 +328,7 @@ export function buildWorkforceWorkers({
       tag: 1,
       multi: false,
       conductor: false,
+      open,
       missionId: null,
       missionObjective: null,
       role: null,
@@ -289,12 +341,12 @@ export function buildWorkforceWorkers({
 
   const tagged = tagAgents(workers);
 
-  // Focus: mark the row whose terminal is currently active.
-  if (activeTerminalId) {
-    for (const w of tagged) {
-      if (w.terminalId === String(activeTerminalId)) w.state = 'busy';
-    }
-  }
+  // Deliberately NOT doing what this used to do:
+  //   if (activeTerminalId) w.state = 'busy';
+  // Focus is a view concern, not an activity signal. That line painted a merely
+  // FOCUSED idle agent as "busy"/working, which is a lie the viz must never tell
+  // (see the absent-signal rule in WORKFORCE_VIZ_PROMPT.md). The scene already
+  // receives `selectedSessionId` and renders focus as a highlight ring.
 
   return tagged;
 }
@@ -302,6 +354,10 @@ export function buildWorkforceWorkers({
 /** Counts for a scene header: how many are working vs waiting on a human. */
 export function summarizeWorkforce(workers: WorkforceWorker[]): {
   total: number;
+  /** workers holding a live terminal right now */
+  open: number;
+  /** workers that finished, were closed, or were cancelled */
+  closed: number;
   working: number;
   needsHuman: number;
   conductor: number;
@@ -310,12 +366,17 @@ export function summarizeWorkforce(workers: WorkforceWorker[]): {
   const missionIds = new Set(
     workers.map((w) => w.missionId).filter((m): m is string => !!m)
   );
+  // "working"/"needsHuman" only ever count OPEN workers. Counting a finished
+  // one as needing attention would make the header cry wolf.
+  const live = workers.filter((w) => w.open);
   return {
     total: workers.length,
-    working: workers.filter(
+    open: live.length,
+    closed: workers.length - live.length,
+    working: live.filter(
       (w) => w.state === 'busy' || w.state === 'thinking'
     ).length,
-    needsHuman: workers.filter(
+    needsHuman: live.filter(
       (w) => w.state === 'attention' || w.state === 'error'
     ).length,
     conductor: workers.filter((w) => w.conductor).length,

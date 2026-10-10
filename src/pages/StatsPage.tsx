@@ -777,7 +777,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
   const pageContent = (
     <div className={embedded ? 'space-y-6' : ''}>
       {!embedded && (
-      <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900/20 backdrop-blur-md border-b border-zinc-800/50 py-3">
+      <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] backdrop-blur-md border-b border-zinc-800/50 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl grid place-items-center bg-[rgba(99,102,241,0.14)]">
@@ -793,7 +793,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
               className={`flex items-center gap-1.5 px-4 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
                 timeLock
                   ? 'bg-[rgba(99,102,241,0.14)] border border-[rgba(99,102,241,0.40)] text-indigo-300'
-                  : 'bg-zinc-900/40 border border-zinc-800/50 text-zinc-400 hover:text-white'
+                  : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-zinc-400 hover:text-white'
               }`}
               title={timeLock ? 'Unlock timeframe (use nav)' : 'Lock to All Time'}
             >
@@ -1210,7 +1210,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
                   <SelectItem value="ide">IDE</SelectItem>
                 </Select>
               </div>
-              <div className="bg-zinc-950/60 rounded-xl border border-zinc-800/50 h-48 overflow-y-auto font-mono text-xs">
+              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 rounded-xl border border-zinc-800/50 h-48 overflow-y-auto font-mono text-xs">
                 {displayedLogs.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
@@ -1310,7 +1310,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
                   { label: 'Peak Hour', value: `${selectedAppData.peakHour.hour.toString().padStart(2, '0')}:00`, icon: Zap, accentColor: 'amber', chipBg: 'rgba(245,158,11,0.14)', iconColor: '#f59e0b' },
                   { label: 'Longest Session', value: formatDuration(selectedAppData.longestSession), icon: Award, accentColor: 'violet', chipBg: 'rgba(139,92,246,0.14)', iconColor: '#8b5cf6' },
                 ].map((metric, idx) => (
-                  <div key={idx} className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                  <div key={idx} className="bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl p-4 border border-zinc-800/50">
                     <div className="h-8 w-8 rounded-lg grid place-items-center mb-2.5" style={{ background: metric.chipBg }}>
                       <metric.icon className="w-4.5 h-4.5" style={{ color: metric.iconColor }} />
                     </div>
@@ -1458,7 +1458,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
 
               {/* Additional Info */}
               <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                <div className="bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl p-4 border border-zinc-800/50">
                   <div className="text-sm text-zinc-500 mb-1">First Seen</div>
                   <div className="font-mono text-white">
                     {new Date(selectedAppData.stat.first_seen).toLocaleDateString('en-US', {
@@ -1466,7 +1466,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
                     })}
                   </div>
                 </div>
-                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                <div className="bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl p-4 border border-zinc-800/50">
                   <div className="text-sm text-zinc-500 mb-1">Last Seen</div>
                   <div className="font-mono text-white">
                     {new Date(selectedAppData.stat.last_seen).toLocaleDateString('en-US', {
@@ -1477,7 +1477,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
               </div>
 
               {/* Productivity Score */}
-              <div className="bg-zinc-900/50 rounded-xl p-5 border border-zinc-800/50">
+              <div className="bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl p-5 border border-zinc-800/50">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Award className="w-5 h-5 text-emerald-400" />
@@ -1525,7 +1525,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
                                     type="datetime-local"
                                     value={editingAppLogTimes.started_at}
                                     onChange={(e) => setEditingAppLogTimes(prev => ({ ...prev, started_at: e.target.value }))}
-                                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
+                                    className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
                                   />
                                 </VoiceInputWrapper>
                               </div>
@@ -1536,7 +1536,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
                                     type="datetime-local"
                                     value={editingAppLogTimes.ended_at}
                                     onChange={(e) => setEditingAppLogTimes(prev => ({ ...prev, ended_at: e.target.value }))}
-                                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
+                                    className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200"
                                   />
                                 </VoiceInputWrapper>
                               </div>

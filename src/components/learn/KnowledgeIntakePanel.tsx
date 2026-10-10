@@ -250,7 +250,7 @@ export function KnowledgeIntakePanel({ profile, onProfileUpdate }: Props) {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="flex flex-col h-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-zinc-800/50">
         <Brain size={18} className="text-amber-400 shrink-0" />

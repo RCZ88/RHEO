@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, Sparkles, Loader2, MousePointerClick, MessageCircleQuestion, StickyNote } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Sparkles, Loader2, MousePointerClick, MessageCircleQuestion, StickyNote, Files, ClipboardList } from 'lucide-react';
 import InlineNotice from '../components/InlineNotice';
 import api from '../lib/api';
 import TokenMeter from '../components/TokenMeter';
 import AIBridge from '../components/AIBridge';
 import { estimateTokens, optimizePrompt } from '../lib/tokens';
 import { detectLanguage } from '../lib/lang';
+import { buildDeckText, buildDeckPrompt, describeSelection } from '../lib/deck';
 const Q_TEMPLATES = [
   'Explain this slide to me like I missed the lecture.',
   'Give a worked CS/math example for the key idea here.',
@@ -26,6 +27,9 @@ export default function SlideViewer() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<{ tone: 'info' | 'error' | 'success'; text: string } | null>(null);
+  /** Slide ids chosen for deck-level copy. Empty = "all slides". */
+  const [selSlides, setSelSlides] = useState<Set<number>>(new Set());
+  const [bulkCopied, setBulkCopied] = useState<'text' | 'prompt' | null>(null);
   useEffect(() => {
     (async () => {
       try {
@@ -73,6 +77,51 @@ export default function SlideViewer() {
     setPrompt(optimizePrompt(head + '\n\n[SELECTED ELEMENTS]\n' + content.slice(0, 3000) + '\n\n[TASK] ' + question + '\nGround every claim in the slide content above. End with 2 retrieval questions.'));
   }, [slides, active, elements, picked, question, deck]);
   const toggle = (eid: number) => { const n = new Set(picked); if (n.has(eid)) n.delete(eid); else n.add(eid); setPicked(n); };
+
+  // ── Deck-level ("copy the whole PPT at once") ──────────────────────────────
+  const orderedSlides = [...slides].sort((a, b) => (a.slide_number || 0) - (b.slide_number || 0));
+  // Empty selection means the whole deck — that is the default the user asked
+  // for, so the common case is one click with no setup.
+  const scopeSlides = selSlides.size
+    ? orderedSlides.filter(s => selSlides.has(s.id))
+    : orderedSlides;
+
+  const toggleSlide = (sid: number) => {
+    const n = new Set(selSlides);
+    if (n.has(sid)) n.delete(sid); else n.add(sid);
+    setSelSlides(n);
+  };
+
+  const deckDoc = { title: deck?.title || 'Deck', slides: scopeSlides };
+  const deckTextOut = buildDeckText(deckDoc);
+  const deckLang = detectLanguage(deckTextOut).lang;
+  const deckPromptOut = buildDeckPrompt(deckDoc, question, deckLang, 8000);
+
+  const copyBulk = async (kind: 'text' | 'prompt') => {
+    const payload = kind === 'text' ? deckTextOut : deckPromptOut.text;
+    if (!payload.trim()) {
+      setNotice({ tone: 'error', text: 'Nothing to copy — the selected slides have no extracted text.' });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(payload);
+      setBulkCopied(kind);
+      setTimeout(() => setBulkCopied(null), 1600);
+      const scope = describeSelection(scopeSlides);
+      if (kind === 'text') {
+        setNotice({ tone: 'success', text: `Copied the full deck text (slides ${scope}) — ${estimateTokens(payload).toLocaleString()} tokens.` });
+      } else {
+        const { included, omitted } = deckPromptOut;
+        setNotice({
+          tone: omitted ? 'info' : 'success',
+          text: `Copied a whole-deck prompt (slides ${scope}) — ${included} slide${included === 1 ? '' : 's'} included` +
+            (omitted ? `, ${omitted} omitted to stay within 8000 tokens.` : '.') ,
+        });
+      }
+    } catch {
+      setNotice({ tone: 'error', text: 'Clipboard write was blocked by the OS.' });
+    }
+  };
   const copy = async () => {
     try { await navigator.clipboard.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 1600); }
     catch { setNotice({ tone: 'error', text: 'Clipboard write was blocked by the OS.' }); }
@@ -95,23 +144,82 @@ export default function SlideViewer() {
     }
   };
   if (loading) return <div className="text-white/50 text-sm flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading slides...</div>;
-  if (!slides.length) return <div className="text-white/50 text-sm">No slides found. <Link to="/lecture/decks" className="underline text-amber-300">Back</Link></div>;
+  if (!slides.length) return <div className="text-white/50 text-sm">No slides found. <Link to="/lecture/ingest" className="underline text-amber-300">Back</Link></div>;
   const s = slides[active];
   return (
     <div className="space-y-4">
-      <Link to="/lecture/decks" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white"><ArrowLeft className="w-3.5 h-3.5" /> All decks</Link>
+      <Link to="/lecture/ingest" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white"><ArrowLeft className="w-3.5 h-3.5" /> All files</Link>
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
         <div><h1 className="font-display text-xl font-bold text-white tracking-tight">{deck?.title || 'Deck'}</h1><p className="text-xs text-white/45 mt-0.5">Slide {s.slide_number} of {slides.length} — click elements to scope your prompt (← → to navigate)</p></div>
         <div className="flex gap-2"><button onClick={copy} className="inline-flex items-center gap-1.5 rounded-xl bg-white text-black text-xs font-semibold px-3 py-2">{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}{copied ? 'Copied!' : 'Copy prompt'}</button>
         <button onClick={save} className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black text-xs font-semibold px-3 py-2"><Sparkles className="w-3.5 h-3.5" /> Save to Forge</button></div>
       </div>
       {notice && <InlineNotice tone={notice.tone}>{notice.text}</InlineNotice>}
+
+      {/* ── Bulk copy: the whole PPT, not one slide at a time ─────────────── */}
+      <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.04] p-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-amber-100">
+            <Files className="w-4 h-4" /> Copy the whole deck
+          </div>
+          <span className="text-[11px] font-mono text-white/45">
+            scope: {selSlides.size ? `${scopeSlides.length}/${slides.length} selected (slides ${describeSelection(scopeSlides)})` : `all ${slides.length} slides`}
+          </span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              onClick={() => copyBulk('text')}
+              data-testid="lecture-copy-all-text"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white text-black text-xs font-semibold px-3 py-2"
+            >
+              {bulkCopied === 'text' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {bulkCopied === 'text' ? 'Copied' : 'Copy all text'}
+            </button>
+            <button
+              onClick={() => copyBulk('prompt')}
+              data-testid="lecture-copy-all-prompt"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black text-xs font-semibold px-3 py-2"
+            >
+              {bulkCopied === 'prompt' ? <Check className="w-3.5 h-3.5" /> : <ClipboardList className="w-3.5 h-3.5" />}
+              {bulkCopied === 'prompt' ? 'Copied' : 'Copy whole-deck prompt'}
+            </button>
+          </div>
+        </div>
+        <div className="mt-2 grid sm:grid-cols-2 gap-2">
+          <div>
+            <div className="text-[10px] font-mono text-white/40 mb-1">Deck text · {estimateTokens(deckTextOut).toLocaleString()} tok</div>
+            <TokenMeter value={estimateTokens(deckTextOut)} max={8000} label="" />
+          </div>
+          <div>
+            <div className="text-[10px] font-mono text-white/40 mb-1">Deck prompt · {deckPromptOut.included} of {scopeSlides.length} slides</div>
+            <TokenMeter value={deckPromptOut.tokens} max={8000} label="" />
+          </div>
+        </div>
+      </div>
       <div className="grid lg:grid-cols-[220px_1fr_380px] gap-4">
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2 max-h-[560px] overflow-y-auto space-y-1.5">
+          <div className="flex items-center gap-2 px-1 pb-1">
+            <button
+              onClick={() => setSelSlides(selSlides.size ? new Set() : new Set(slides.map(s => s.id)))}
+              className="text-[10px] font-mono rounded-lg border border-white/10 px-2 py-1 text-white/50 hover:text-white hover:border-white/25 transition-colors"
+            >
+              {selSlides.size ? 'Clear selection' : 'Select all'}
+            </button>
+            <span className="text-[10px] font-mono text-white/30">checkbox = bulk-copy scope</span>
+          </div>
           {slides.map((sl, i) => (
-            <button key={sl.id} onClick={() => setActive(i)} className={'w-full text-left rounded-xl p-2.5 border transition-all ' + (i === active ? 'border-amber-300/40 bg-amber-300/10' : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.06]')}>
-              <div className="text-[10px] font-mono text-white/40">SLIDE {sl.slide_number} - {(sl.token_estimate || 0)} tok</div>
-              <div className="text-xs font-semibold text-white mt-0.5 line-clamp-2">{sl.title}</div>
+            <button key={sl.id} onClick={() => setActive(i)} className={'w-full text-left rounded-xl p-2.5 border transition-all flex items-start gap-2 ' + (i === active ? 'border-amber-300/40 bg-amber-300/10' : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.06]')}>
+              <input
+                type="checkbox"
+                checked={selSlides.has(sl.id)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={() => toggleSlide(sl.id)}
+                aria-label={`Include slide ${sl.slide_number} in bulk copy`}
+                className="mt-0.5 accent-amber-400 shrink-0"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[10px] font-mono text-white/40">SLIDE {sl.slide_number} · {(sl.token_estimate || 0)} tok</span>
+                <span className="block text-xs font-semibold text-white mt-0.5 line-clamp-2">{sl.title}</span>
+              </span>
             </button>
           ))}
         </div>

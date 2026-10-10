@@ -123,7 +123,7 @@ export default function GitSafetyPanel() {
             onChange={(e) => setCustomPatternInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addCustomPattern(); }}
             placeholder="e.g., ^drop\s+database"
-            className="flex-1 px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded text-xs text-zinc-200 placeholder-zinc-600 font-mono"
+            className="flex-1 px-2 py-1.5 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded text-xs text-zinc-200 placeholder-zinc-600 font-mono"
           />
           <button
             onClick={addCustomPattern}
@@ -135,7 +135,7 @@ export default function GitSafetyPanel() {
         {settings.customPatterns.length > 0 && (
           <div className="space-y-1 max-h-32 overflow-y-auto">
             {settings.customPatterns.map((p, i) => (
-              <div key={i} className="flex items-center justify-between px-2 py-1 bg-zinc-900 rounded border border-zinc-800/40">
+              <div key={i} className="flex items-center justify-between px-2 py-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-800/40">
                 <code className="text-[10px] text-zinc-400 font-mono truncate">{p}</code>
                 <button onClick={() => removeCustomPattern(i)} className="text-zinc-600 hover:text-red-400 transition shrink-0 ml-1">
                   <X className="w-3 h-3" />
@@ -156,7 +156,7 @@ export default function GitSafetyPanel() {
             onChange={(e) => setTestCommand(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleTestCommand(); }}
             placeholder="Type a command to test..."
-            className="flex-1 px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded text-xs text-zinc-200 placeholder-zinc-600 font-mono"
+            className="flex-1 px-2 py-1.5 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded text-xs text-zinc-200 placeholder-zinc-600 font-mono"
           />
           <button
             onClick={handleTestCommand}
@@ -195,7 +195,7 @@ export default function GitSafetyPanel() {
 
 function ToggleRow({ label, enabled, onChange }: { label: string; enabled: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between px-2 py-1.5 bg-zinc-900/60 rounded border border-zinc-800/30">
+    <div className="flex items-center justify-between px-2 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded border border-zinc-800/30">
       <span className="text-xs text-zinc-300">{label}</span>
       <button
         onClick={() => onChange(!enabled)}

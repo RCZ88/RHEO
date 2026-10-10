@@ -231,12 +231,7 @@ function KnobSlider({
         max={10}
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
-          [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
-          [&::-webkit-slider-thumb]:bg-amber-400
-          [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(245,158,11,0.4)]
-          [&::-webkit-slider-thumb]:cursor-pointer"
+        className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(245,158,11,0.4)] [&::-webkit-slider-thumb]:cursor-pointer"
       />
       <div className="flex justify-between mt-0.5">
         <span className="text-[9px] text-zinc-600">{lowLabel}</span>
@@ -556,7 +551,7 @@ export default function WorkspaceSettingsDialog({
                         className={`relative rounded-xl p-3 border transition-all duration-200 ${
                           isEnabled
                             ? 'bg-zinc-800/80 border-zinc-600/50'
-                            : 'bg-zinc-900/50 border-zinc-800/50 opacity-60'
+                            : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-zinc-800/50 opacity-60'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -599,10 +594,7 @@ export default function WorkspaceSettingsDialog({
                                   max_tokens: parseInt(e.target.value),
                                 })
                               }
-                              className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer
-                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5
-                                [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full
-                                [&::-webkit-slider-thumb]:bg-zinc-400 [&::-webkit-slider-thumb]:cursor-pointer"
+                              className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-400 [&::-webkit-slider-thumb]:cursor-pointer"
                             />
                           </div>
                         )}
@@ -751,10 +743,7 @@ export default function WorkspaceSettingsDialog({
                                   max_tokens: parseInt(e.target.value),
                                 })
                               }
-                              className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer
-                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5
-                                [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full
-                                [&::-webkit-slider-thumb]:bg-pink-400 [&::-webkit-slider-thumb]:cursor-pointer"
+                              className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-pink-400 [&::-webkit-slider-thumb]:cursor-pointer"
                             />
                           </div>
                         </div>
@@ -763,7 +752,7 @@ export default function WorkspaceSettingsDialog({
                 </AnimatePresence>
               </section>
 
-              <section className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
+              <section className="p-3 rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-zinc-400">
                     Total Active Token Budget
@@ -797,7 +786,7 @@ export default function WorkspaceSettingsDialog({
                   Behaviors
                 </h3>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
+                  <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
                     <div className="flex items-center gap-2">
                       <Info className="w-3.5 h-3.5 text-zinc-500" />
                       <div>
@@ -819,7 +808,7 @@ export default function WorkspaceSettingsDialog({
                       }
                     />
                   </div>
-                  <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
+                  <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
                     <div className="flex items-center gap-2">
                       <Info className="w-3.5 h-3.5 text-zinc-500" />
                       <div>
@@ -848,7 +837,7 @@ export default function WorkspaceSettingsDialog({
                 <h3 className="text-xs font-medium text-zinc-300 uppercase tracking-wider mb-3">
                   Context Assembly Map
                 </h3>
-                <div className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
+                <div className="p-3 rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50">
                   <ContextMapSVG config={config} />
                 </div>
               </section>

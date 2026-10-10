@@ -66,6 +66,15 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
   terminalPrevTab: 'Ctrl+Shift+Tab',
   terminalSplitH: 'Ctrl+Shift+H',
   terminalSplitV: 'Ctrl+Shift+V',
+  /*
+   * THE HALO ISLAND TOGGLE. Lives here beside the terminal splits because it is the OTHER half
+   * of that collision: these are RENDERER shortcuts, and a globalShortcut is consumed by the OS
+   * before any renderer sees it. `haloIslandToggle` is registered globally (it must be — the
+   * island never takes keyboard focus), so it is deliberately NOT one of the taken
+   * Ctrl+Shift+<letter> combos. C, O, U and X are the only letters unclaimed anywhere in src/;
+   * O is the default. U was rejected because it is the GTK unicode-input accelerator.
+   */
+  haloIslandToggle: 'Ctrl+Shift+O',
   terminalNextPane: 'Ctrl+Shift+ArrowRight',
   terminalPrevPane: 'Ctrl+Shift+ArrowLeft',
   terminalZoom: 'Ctrl+Shift+Z',

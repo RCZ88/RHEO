@@ -33,7 +33,7 @@ export function CardShell({
 }: CardShellProps) {
   return (
     <div
-      className={"rounded-xl ring-1 ring-zinc-800/60 bg-zinc-900/40 overflow-hidden " + (className || "")}
+      className={"rounded-xl ring-1 ring-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden " + (className || "")}
       style={{ position: "relative" }}
     >
       {/* Left accent bar */}

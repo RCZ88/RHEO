@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Plus, X, Flame, Clock, Trash2, CalendarDays, Link2, Pin, PinOff } from 'lucide-react';
 import { LinkPicker, type LinkValue } from './LinkPicker';
@@ -44,9 +44,19 @@ interface TodoListProps {
   goalOptions?: GoalOption[];
   deadlineOptions?: DeadlineOption[];
   scheduleOptions?: ScheduleOption[];
+  /** Called after any successful mutation (create / toggle / delete / update).
+   *  TodoList owns its todos outright — it never lifted state — so a parent that
+   *  also renders a todo due-date on a calendar had no way to learn about a
+   *  change and silently showed a stale mark until something else forced a
+   *  reload. Optional: callers that don't care about a calendar keep working. */
+  onChanged?: () => void;
+  /** Render without this component's own card chrome, so a parent can seat
+   *  several inventories inside ONE surface instead of N boxes. Also drops the
+   *  frosted-glass fill this file carried, which LAMINAR §7.3 bans on chrome. */
+  bare?: boolean;
 }
 
-export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptions = [] }: TodoListProps) {
+export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptions = [], onChanged, bare = false }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +152,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
         setLinkedParentTodoId('');
         setDueDate('');
         setLink({ type: 'none' });
+        onChanged?.();
       }
     } catch (e) {
       console.error('Failed to create todo:', e);
@@ -154,6 +165,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
       setTodos(prev => prev.map(t => 
         t.id === id ? { ...t, done: !t.done, completedAt: !t.done ? null : new Date().toISOString() } : t
       ));
+      onChanged?.();
     } catch (e) {
       console.error('Failed to toggle todo:', e);
     }
@@ -163,6 +175,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
     try {
       await api.todoDelete(id);
       setTodos(prev => prev.filter(t => t.id !== id));
+      onChanged?.();
     } catch (e) {
       console.error('Failed to delete todo:', e);
     }
@@ -172,6 +185,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
     try {
       await api.todoUpdate(id, patch);
       setTodos(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+      onChanged?.();
     } catch (e) {
       console.error('Failed to update todo:', e);
     }
@@ -188,38 +202,43 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
     setLink({ type: 'none' });
   };
 
+  /* One shell for all three states (loading / error / populated) so a `bare`
+     parent gets a seamless section rather than three differently-chromed
+     boxes. Non-bare keeps the original chrome exactly, for callers that render
+     TodoList on its own. */
+  const shell = (inner: ReactNode) => (
+    <div className={bare ? '' : 'bg-[var(--color-muted)]/35 border border-[var(--color-border)] rounded-xl p-4'}>
+      {inner}
+    </div>
+  );
+
   if (loading) {
-    return (
-      <div className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.40)] rounded-xl p-4">
-        <div className="animate-pulse space-y-2">
-          <div className="h-4 w-32 bg-zinc-700/50 rounded"></div>
-          <div className="h-10 w-full bg-zinc-700/50 rounded"></div>
-          <div className="space-y-1">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-8 w-full bg-zinc-700/50 rounded"></div>
-            ))}
-          </div>
-        </div>
+    return shell(
+      <div className="animate-pulse space-y-2" aria-hidden>
+        <div className="h-4 w-32 rounded bg-[var(--color-muted)]" />
+        <div className="h-10 w-full rounded bg-[var(--color-muted)]" />
+        {[1, 2, 3].map(i => <div key={i} className="h-8 w-full rounded bg-[var(--color-muted)]" />)}
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.40)] rounded-xl p-4">
-        <p className="text-[11px] text-rose-400 text-center">Error: {error}</p>
+    return shell(
+      <div className="py-2">
+        <p className="text-[11px] text-center" style={{ color: 'var(--error)' }}>RHEO could not load your tasks.</p>
         <button
           onClick={loadTodos}
-          className="mt-2 w-full text-[10px] text-zinc-500 hover:text-zinc-300"
+          className="mt-2 w-full rounded-lg text-[11px] transition-colors duration-150 hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+          style={{ color: 'var(--page-accent)' }}
         >
-          Retry
+          Retry loading tasks
         </button>
       </div>
     );
   }
 
   return (
-    <div className="bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.40)] rounded-xl p-4">
+    <div className={bare ? '' : 'bg-[var(--color-muted)]/35 border border-[var(--color-border)] rounded-xl p-4'}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <CheckCircle2 size={14} className="text-cyan-400" />
@@ -251,14 +270,14 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
 
       {/* Add/Edit Form */}
       {showForm && (
-        <div className="mb-3 p-3 border border-zinc-800/50 rounded-xl bg-zinc-950/30">
+        <div className="mb-3 p-3 border border-zinc-800/50 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/30">
           <input
             value={newText}
             onChange={e => setNewText(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAdd()}
             placeholder={editingTodo ? "Edit todo..." : "Add todo..."}
             autoFocus
-            className="w-full px-3 py-2 rounded-lg bg-zinc-900/80 border border-zinc-700/50 text-[12px] text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/50 mb-2"
+            className="w-full px-3 py-2 rounded-lg bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-[12px] text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/50 mb-2"
           />
           
           <div className="mb-2">
@@ -287,7 +306,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
       {!showForm && (
         <button
           onClick={() => setShowForm(true)}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/60 border border-zinc-700/50 text-[11px] text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 mb-3"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-[11px] text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 mb-3"
         >
           <Plus size={12} />
           Add todo
@@ -309,7 +328,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 8 }}
-                className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors bg-zinc-900/30 border border-zinc-800/30 hover:border-zinc-700/40"
+                className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30 hover:border-zinc-700/40"
               >
                 <button
                   onClick={() => handleToggle(todo.id)}
@@ -344,7 +363,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
                 
                 <button
                   onClick={() => handleDelete(todo.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-red-400 transition-all"
+                  className="p-1 text-zinc-600 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
                 >
                   <Trash2 size={10} />
                 </button>

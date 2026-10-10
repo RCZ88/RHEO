@@ -187,7 +187,7 @@ export function FocusSection() {
     return (
       <div>
         <SectionHeader title="Deep Focus" icon={<FocusIcon className="w-5 h-5 text-[var(--page-accent)]" />} />
-        <div className="rounded-xl border border-rose-500/30 bg-zinc-900/95 p-5">
+        <div className="rounded-xl border border-rose-500/30 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] p-5">
           <p className="text-[13px] font-semibold text-rose-300 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
             Failed to load Focus data.
@@ -267,7 +267,7 @@ export function FocusSection() {
               key={t.id}
               onClick={() => removeToast(t.id)}
               className={cn(
-                `flex items-start gap-2.5 text-left px-4 py-3 rounded-xl bg-zinc-900/95 border transition-opacity hover:opacity-90`,
+                `flex items-start gap-2.5 text-left px-4 py-3 rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border transition-opacity hover:opacity-90`,
                 t.type === 'success' ? 'border-emerald-500/40' :
                 t.type === 'error' ? 'border-rose-500/40' :
                 'border-zinc-800/60'

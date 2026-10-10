@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Nfc } from 'lucide-react'
 import { TransactionModalShell } from './TransactionModalShell'
+import { SubmitGate } from './SubmitGate'
 import { useTransactionForm } from './useTransactionForm'
 import { ContextBand, TypeToggle, AmountInput, OnBehalfOfSection, HistoricalToggle } from './modalParts'
 import { CategoryChipGrid } from './CategoryChipGrid'
@@ -44,7 +45,7 @@ export const PrepaidCardTransactionModal: React.FC<TxModalProps> = (props) => {
 			}}
 		>
 			{({ setCanSubmit }) => {
-				useEffect(() => setCanSubmit(valid), [valid, setCanSubmit])
+				<SubmitGate valid={valid} setCanSubmit={setCanSubmit} />
 				return (
 					<>
 						<ContextBand accent={ACCENT}>

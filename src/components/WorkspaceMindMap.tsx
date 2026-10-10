@@ -21,7 +21,7 @@ export function WorkspaceMindMap({ projectPath }: { projectPath: string }) {
   }, [tree, searchQuery]);
 
   return (
-    <div className="h-full flex flex-col bg-zinc-950 text-zinc-100">
+    <div className="h-full flex flex-col bg-zinc-950 light:bg-[var(--ws-surface)] text-zinc-100">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/60">
         <Network className="w-4 h-4 text-cyan-400" />
@@ -78,7 +78,7 @@ export function WorkspaceMindMap({ projectPath }: { projectPath: string }) {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search files or symbols..."
-          className="w-full px-3 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/40"
+          className="w-full px-3 py-1.5 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/40"
         />
       </div>
 
@@ -227,7 +227,7 @@ function StatusView({ dashboard }: { dashboard: { completion: number; blocked: s
   return (
     <div className="space-y-4">
       {/* Completion bar */}
-      <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/40">
+      <div className="p-3 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-zinc-300">Overall Progress</span>
           <span className="text-xs text-cyan-400">{dashboard.completion}%</span>
@@ -242,7 +242,7 @@ function StatusView({ dashboard }: { dashboard: { completion: number; blocked: s
 
       {/* In Progress */}
       {dashboard.inProgress.length > 0 && (
-        <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/40">
+        <div className="p-3 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="w-3 h-3 text-amber-400" />
             <span className="text-xs font-medium text-zinc-300">In Progress</span>
@@ -260,7 +260,7 @@ function StatusView({ dashboard }: { dashboard: { completion: number; blocked: s
 
       {/* Blocked */}
       {dashboard.blocked.length > 0 && (
-        <div className="p-3 rounded-xl bg-zinc-900/60 border border-red-500/20">
+        <div className="p-3 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-red-500/20">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="w-3 h-3 text-red-400" />
             <span className="text-xs font-medium text-zinc-300">Blocked</span>
@@ -278,7 +278,7 @@ function StatusView({ dashboard }: { dashboard: { completion: number; blocked: s
 
       {/* Recent Activity */}
       {dashboard.recentActivity.length > 0 && (
-        <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/40">
+        <div className="p-3 rounded-xl bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40">
           <div className="flex items-center gap-2 mb-2">
             <Circle className="w-3 h-3 text-zinc-500" />
             <span className="text-xs font-medium text-zinc-300">Recent Activity</span>

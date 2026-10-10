@@ -133,7 +133,7 @@ export function ChapterGroupsModal({ open, onClose }: ChapterGroupsModalProps) {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.96, opacity: 0, y: 8 }}
           transition={{ type: 'spring', duration: 0.3, bounce: 0.06 }}
-          className="relative w-full max-w-md max-h-[70vh] flex flex-col rounded-xl border border-zinc-800/50 bg-zinc-900/80 backdrop-blur-xl shadow-2xl shadow-black/40"
+          className="relative w-full max-w-md max-h-[70vh] flex flex-col rounded-xl border border-zinc-800/50 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl shadow-2xl shadow-black/40"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

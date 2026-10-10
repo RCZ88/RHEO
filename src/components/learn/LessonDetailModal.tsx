@@ -151,7 +151,7 @@ export function LessonDetailModal({ lesson, open, onClose, onDeleted, onUpdated,
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.96, opacity: 0, y: 8 }}
           transition={{ type: 'spring', duration: 0.3, bounce: 0.06 }}
-          className="relative w-full max-w-3xl max-h-[88vh] flex flex-col rounded-xl border border-zinc-800/50 bg-zinc-900/80 backdrop-blur-xl shadow-2xl shadow-black/40"
+          className="relative w-full max-w-3xl max-h-[88vh] flex flex-col rounded-xl border border-zinc-800/50 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl shadow-2xl shadow-black/40"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -247,7 +247,7 @@ export function LessonDetailModal({ lesson, open, onClose, onDeleted, onUpdated,
                   <textarea
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
-                    className="flex-1 min-h-[40vh] w-full rounded-xl border border-zinc-800/50 bg-zinc-950/80 p-4 font-mono text-[11px] leading-relaxed text-zinc-300 resize-y focus:outline-none focus:border-clay-500/40 transition-all"
+                    className="flex-1 min-h-[40vh] w-full rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/80 p-4 font-mono text-[11px] leading-relaxed text-zinc-300 resize-y focus:outline-none focus:border-clay-500/40 transition-all"
                     spellCheck={false}
                   />
                 )}
@@ -268,31 +268,31 @@ export function LessonDetailModal({ lesson, open, onClose, onDeleted, onUpdated,
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3">
                         <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Phase</p>
                         <p className="text-sm text-zinc-200">
                           {part.phase === 1 ? 'Core Engineering' : part.phase === 2 ? 'AI/ML Depth' : 'Mastery & Meta'}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3">
                         <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Target Mastery</p>
                         <p className="text-sm text-zinc-200">{part.defaultMasteryTarget}</p>
                       </div>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3">
                         <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Rarity</p>
                         <p className="text-sm text-amber-400">{'★'.repeat(part.rarity)}</p>
                       </div>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3">
                         <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Checklist Items</p>
                         <p className="text-sm text-zinc-200">{part.checklist.length} competencies</p>
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3">
                       <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2">What you'll learn</p>
                       <p className="text-sm text-zinc-400 leading-relaxed">{part.trailer.what}</p>
                     </div>
-                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-3">
                       <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2">Why it matters</p>
                       <p className="text-sm text-zinc-400 leading-relaxed">{part.trailer.why}</p>
                     </div>
@@ -401,7 +401,7 @@ export function LessonDetailModal({ lesson, open, onClose, onDeleted, onUpdated,
                       <FileText className="w-3 h-3" />
                       Original Prompt
                     </label>
-                    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950/80 p-4 font-mono text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap overflow-x-auto max-h-[30vh]">
+                    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/80 p-4 font-mono text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap overflow-x-auto max-h-[30vh]">
                       {originalPrompt}
                     </div>
                     <p className="text-[10px] text-zinc-600 mt-1">The prompt used to generate this lesson. Read-only.</p>

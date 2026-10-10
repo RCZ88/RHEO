@@ -35,7 +35,7 @@ const ACCENT = {
   dot: 'bg-cyan-400',
 }
 
-const inputCls = 'w-full bg-zinc-900 light:bg-white border border-zinc-800 light:border-[var(--ws-border)] rounded-xl px-3 py-2 text-sm text-zinc-200 light:text-stone-800 outline-none transition-colors'
+const inputCls = 'w-full bg-[var(--dk-bg-raised)] light:bg-white border border-[var(--dk-border-default)] light:border-[var(--ws-border)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] light:text-[var(--text-primary)] outline-none transition-colors'
 
 function parseExisting(dsl: string): AutomationDef {
   const def = emptyAutomationDef()
@@ -100,13 +100,13 @@ function ActionEditor({ action, onChange, onRemove }: { action: ActionConfig; on
     onChange({ ...action, params: next })
   }
   return (
-    <div className="bg-zinc-900/60 ring-1 ring-violet-500/20 rounded-xl p-4">
+    <div className="bg-[var(--dk-bg-raised)] light:bg-[var(--ws-surface-raised)] ring-1 ring-violet-500/20 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-medium text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-full">{def.label}</span>
-          <span className="text-[10px] text-zinc-500">{def.description}</span>
+          <span className="text-[10px] text-[var(--text-muted)]">{def.description}</span>
         </div>
-        <button onClick={onRemove} className="p-1 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+        <button onClick={onRemove} className="p-1 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {def.params.map(p => {
@@ -114,7 +114,7 @@ function ActionEditor({ action, onChange, onRemove }: { action: ActionConfig; on
           if (p.options) {
             return (
               <div key={p.key}>
-                <label className="text-[10px] text-zinc-500 mb-1 block">{p.label}</label>
+                <label className="text-[10px] text-[var(--text-muted)] mb-1 block">{p.label}</label>
                 <select value={val} onChange={e => setParam(p.key, e.target.value)} className={inputCls}>
                   <option value="">—</option>
                   {p.options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -124,7 +124,7 @@ function ActionEditor({ action, onChange, onRemove }: { action: ActionConfig; on
           }
           return (
             <div key={p.key}>
-              <label className="text-[10px] text-zinc-500 mb-1 block">{p.label}</label>
+              <label className="text-[10px] text-[var(--text-muted)] mb-1 block">{p.label}</label>
               <input value={val} onChange={e => setParam(p.key, e.target.value)} placeholder={p.placeholder} className={inputCls} />
             </div>
           )
@@ -182,13 +182,13 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
 
   return (
     <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose} variants={dialogVariants} initial="hidden" animate="show" exit="exit">
-      <div className="bg-[rgba(24,24,27,0.95)] backdrop-blur-xl border border-zinc-800 rounded-xl w-[760px] max-h-[86vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+      <div className="bg-[var(--dk-bg-surface)] backdrop-blur-xl border border-[var(--dk-border-default)] rounded-xl w-[760px] max-h-[86vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--dk-border-default)]">
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${ACCENT.dot}`} />
-            <h2 className="text-sm font-medium text-white">{rule ? 'Edit Automation' : 'New Automation'}</h2>
+            <h2 className="text-sm font-medium text-[var(--text-primary)]">{rule ? 'Edit Automation' : 'New Automation'}</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--dk-bg-input)] transition-colors"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="px-5 pt-4">
@@ -199,7 +199,7 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
               onChange={e => setNl(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') applyNl() }}
               placeholder="Describe it in plain words — e.g. “notify me when a transaction over $100 is recorded”"
-              className="w-full bg-zinc-900/80 border border-cyan-500/20 focus:border-cyan-500/50 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white outline-none transition-colors"
+              className="w-full bg-[var(--dk-bg-raised)] light:bg-[var(--ws-surface-raised)] border border-cyan-500/20 focus:border-cyan-500/50 rounded-xl pl-9 pr-4 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors"
             />
             <button onClick={applyNl} disabled={nlBusy || !nl.trim()} className="absolute right-2 top-2 flex items-center gap-1 px-3 py-1 text-xs rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-colors disabled:opacity-40">
               {nlBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Create
@@ -213,7 +213,7 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
             const active = step === s.id
             const done = i < stepIndex
             return (
-              <button key={s.id} onClick={() => setStep(s.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${active ? ACCENT.pill : done ? 'text-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}>
+              <button key={s.id} onClick={() => setStep(s.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${active ? ACCENT.pill : done ? 'text-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-500/20' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
                 <Icon className="w-3 h-3" />
                 {s.label}
                 {done && <CheckCircle className="w-3 h-3 text-emerald-400" />}
@@ -228,17 +228,17 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
           {step === 'trigger' && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <button onClick={() => triggerDef({ kind: 'event', source: def.trigger.source, event: def.trigger.event })} className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl text-sm transition-colors ${def.trigger.kind === 'event' ? ACCENT.pill : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>
+                <button onClick={() => triggerDef({ kind: 'event', source: def.trigger.source, event: def.trigger.event })} className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl text-sm transition-colors ${def.trigger.kind === 'event' ? ACCENT.pill : 'bg-[var(--dk-bg-raised)] light:bg-[var(--ws-surface-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
                   <Zap className="w-4 h-4" /> When an event happens
                 </button>
-                <button onClick={() => triggerDef({ kind: 'schedule', interval: def.trigger.interval || 5, intervalUnit: def.trigger.intervalUnit || 'minutes' })} className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl text-sm transition-colors ${def.trigger.kind === 'schedule' ? ACCENT.pill : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>
+                <button onClick={() => triggerDef({ kind: 'schedule', interval: def.trigger.interval || 5, intervalUnit: def.trigger.intervalUnit || 'minutes' })} className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl text-sm transition-colors ${def.trigger.kind === 'schedule' ? ACCENT.pill : 'bg-[var(--dk-bg-raised)] light:bg-[var(--ws-surface-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
                   <CalendarClock className="w-4 h-4" /> On a schedule
                 </button>
               </div>
               {def.trigger.kind === 'event' ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-zinc-400 mb-1 block">Source</label>
+                    <label className="text-xs text-[var(--text-muted)] mb-1 block">Source</label>
                     <select value={def.trigger.source} onChange={e => {
                       const src = EVENT_SOURCES.find(s => s.id === e.target.value)
                       triggerDef({ kind: 'event', source: e.target.value, event: src?.events[0]?.id || 'app.launched' })
@@ -247,7 +247,7 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-zinc-400 mb-1 block">Event</label>
+                    <label className="text-xs text-[var(--text-muted)] mb-1 block">Event</label>
                     <select value={def.trigger.event} onChange={e => triggerDef({ kind: 'event', source: def.trigger.source, event: e.target.value })} className={inputCls}>
                       {EVENT_SOURCES.find(s => s.id === def.trigger.source)?.events.map(ev => <option key={ev.id} value={ev.id}>{ev.label}</option>)}
                     </select>
@@ -256,11 +256,11 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
               ) : (
                 <div className="flex items-end gap-4">
                   <div className="flex-1">
-                    <label className="text-xs text-zinc-400 mb-1 block">Every</label>
+                    <label className="text-xs text-[var(--text-muted)] mb-1 block">Every</label>
                     <input type="number" min={1} value={def.trigger.interval} onChange={e => triggerDef({ kind: 'schedule', interval: parseInt(e.target.value) || 1, intervalUnit: def.trigger.intervalUnit })} className={inputCls} />
                   </div>
                   <div className="flex-1">
-                    <label className="text-xs text-zinc-400 mb-1 block">Unit</label>
+                    <label className="text-xs text-[var(--text-muted)] mb-1 block">Unit</label>
                     <select value={def.trigger.intervalUnit} onChange={e => triggerDef({ kind: 'schedule', interval: def.trigger.interval, intervalUnit: e.target.value })} className={inputCls}>
                       {INTERVAL_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
@@ -273,15 +273,15 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
           {step === 'conditions' && (
             <div className="space-y-3">
               {def.conditions.length === 0 && (
-                <div className="text-center text-xs text-zinc-500 py-8 bg-zinc-900/40 rounded-xl ring-1 ring-zinc-800">
+                <div className="text-center text-xs text-[var(--text-muted)] py-8 bg-[var(--dk-bg-raised)] light:bg-[var(--ws-surface-raised)] rounded-xl ring-1 ring-zinc-800">
                   No conditions — this will run on every matching trigger. Add one to narrow it down.
                 </div>
               )}
               {def.conditions.map((c, i) => {
                 const fields = FIELD_OPTIONS[def.trigger.source || 'system'] || FIELD_OPTIONS.system
                 return (
-                  <div key={c.id} className="flex items-center gap-3 bg-zinc-900/60 ring-1 ring-amber-500/20 rounded-xl p-3">
-                    <span className="text-[10px] text-zinc-500 w-4">{i + 1}</span>
+                  <div key={c.id} className="flex items-center gap-3 bg-[var(--dk-bg-raised)] light:bg-[var(--ws-surface-raised)] ring-1 ring-amber-500/20 rounded-xl p-3">
+                    <span className="text-[10px] text-[var(--text-muted)] w-4">{i + 1}</span>
                     <select value={c.field} onChange={e => {
                       const f = fields.find(x => x.id === e.target.value)
                       const conds = def.conditions.map(x => x.id === c.id ? { ...x, field: e.target.value, valueType: f?.type || 'string' } : x)
@@ -296,7 +296,7 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
                       const isNum = !Number.isNaN(Number(e.target.value)) && e.target.value !== ''
                       setDef({ ...def, conditions: def.conditions.map(x => x.id === c.id ? { ...x, value: e.target.value, valueType: isNum ? 'number' : 'string' } : x) })
                     }} className={`${inputCls} flex-1`} placeholder="value" />
-                    <button onClick={() => setDef({ ...def, conditions: def.conditions.filter(x => x.id !== c.id) })} className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setDef({ ...def, conditions: def.conditions.filter(x => x.id !== c.id) })} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 )
               })}
@@ -326,7 +326,7 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
                   <option value="">Add action…</option>
                   {ACTION_DEFS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                 </select>
-                <span className="text-[10px] text-zinc-600">Actions run left to right</span>
+                <span className="text-[10px] text-[var(--text-muted)]">Actions run left to right</span>
               </div>
             </div>
           )}
@@ -335,32 +335,32 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">Name</label>
+                  <label className="text-xs text-[var(--text-muted)] mb-1 block">Name</label>
                   <input value={def.name} onChange={e => setDef({ ...def, name: e.target.value })} className={inputCls} placeholder="My automation" />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">Category</label>
+                  <label className="text-xs text-[var(--text-muted)] mb-1 block">Category</label>
                   <select value={def.category} onChange={e => setDef({ ...def, category: e.target.value })} className={inputCls}>
                     {['general', 'finance', 'focus', 'goals', 'learning', 'ide', 'system'].map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">Lifecycle</label>
+                  <label className="text-xs text-[var(--text-muted)] mb-1 block">Lifecycle</label>
                   <select value={def.lifecycle} onChange={e => setDef({ ...def, lifecycle: e.target.value })} className={inputCls}>
                     {['manual', 'forever', 'once', 'schedule'].map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">Priority</label>
+                  <label className="text-xs text-[var(--text-muted)] mb-1 block">Priority</label>
                   <input type="number" value={def.priority} onChange={e => setDef({ ...def, priority: parseInt(e.target.value) || 0 })} className={inputCls} />
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-zinc-400">Generated DSL</label>
+                  <label className="text-xs text-[var(--text-muted)]">Generated DSL</label>
                   <button onClick={validate} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"><Shield className="w-3 h-3" /> Validate</button>
                 </div>
-                <pre className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-mono text-zinc-300 whitespace-pre-wrap min-h-[64px]">{dsl}</pre>
+                <pre className="w-full bg-[var(--dk-bg-deep)] light:bg-[var(--ws-surface)] border border-[var(--dk-border-default)] rounded-xl px-3 py-2.5 text-xs font-mono text-[var(--text-secondary)] whitespace-pre-wrap min-h-[64px]">{dsl}</pre>
               </div>
               {validation && (
                 <div className={`rounded-xl p-3 text-xs ${validation.valid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -376,14 +376,14 @@ export function VisualBuilderModal({ rule, onClose, onSaved }: VisualBuilderModa
           )}
         </div>
 
-        <div className="flex items-center justify-between px-5 py-4 border-t border-zinc-800">
-          <button onClick={() => setStep(STEPS[Math.max(0, stepIndex - 1)].id)} disabled={stepIndex === 0} className="flex items-center gap-1.5 px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors rounded-xl disabled:opacity-30">
+        <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--dk-border-default)]">
+          <button onClick={() => setStep(STEPS[Math.max(0, stepIndex - 1)].id)} disabled={stepIndex === 0} className="flex items-center gap-1.5 px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors rounded-xl disabled:opacity-30">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors rounded-xl">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors rounded-xl">Cancel</button>
             {stepIndex < STEPS.length - 1 ? (
-              <button onClick={() => setStep(STEPS[stepIndex + 1].id)} className="flex items-center gap-1.5 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-sm transition-colors">
+              <button onClick={() => setStep(STEPS[stepIndex + 1].id)} className="flex items-center gap-1.5 px-4 py-2 bg-[var(--dk-bg-input)] hover:bg-[var(--dk-bg-input)] text-[var(--text-primary)] rounded-xl text-sm transition-colors">
                 Next <ChevronRight className="w-4 h-4" />
               </button>
             ) : (

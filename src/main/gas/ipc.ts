@@ -8,7 +8,11 @@ import { Database } from 'better-sqlite3'
 import { GasSyncPayload, GasExportPayload, GasResponse, PendingSyncEntry } from './types'
 import { post, get as gasGet } from './client'
 import { loadGasSecrets } from './secrets'
-import { contextBrain } from '../ai/contextBrain'
+// contextBrain.ts exports individual named functions, NOT a `contextBrain`
+// namespace object. The phantom named import was `undefined`, so the very first
+// call threw and registerGasHandlers aborted — taking gas:sync, gas:export and
+// the whole context mirror with it.
+import { setBrainDb } from '../ai/contextBrain'
 import { pushTriples, pullTriples, getSyncStatus } from './context-mirror'
 import { exportToDocs, exportToSheets, exportToForms } from './exporters'
 
@@ -22,7 +26,7 @@ const PENDING_QUEUE_FILE = 'gas-pending-syncs.json'
 
 export function registerGasHandlers(deps: GasIpcDeps) {
   db = deps.db
-  contextBrain.setBrainDb(db)
+  setBrainDb(db)
 
   // ── gas:sync channel ──
   ipcMain.handle('gas:sync', async (_event, payload: GasSyncPayload) => {

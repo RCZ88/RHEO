@@ -60,7 +60,9 @@ const VALID_CHANNELS = new Set([
   'wordTrackerSetConfig', 'wordTrackerResetCounts', 'wordTrackerScanJsonl',
   'wordTrackerCountText',
   // STT
-  'stt:transcript-save', 'stt:transcript-update', 'stt:transcript-delete',
+  // NOTE: the registered handler is 'stt:transcript-remove' (main.ts), so the
+  // old 'stt:transcript-delete' allowlist entry matched nothing.
+  'stt:transcript-save', 'stt:transcript-update', 'stt:transcript-remove',
   // Auth
   'auth:update-sync-url', 'auth:get-sync-url',
   // Conductor
@@ -109,6 +111,49 @@ ipcRenderer.on('external-data-changed', () => {
   window.dispatchEvent(new CustomEvent('external-data-changed'));
 });
 
+// ── Performance profiler: automatic IPC timing ───────────────────────────────
+// WHY HERE, AND NOT AT 2000 CALL SITES
+// The profiler's problem is that a main-thread freeze can only be blamed on an
+// operation the code DECLARED as expensive — React strips `<Profiler onRender>`
+// from production builds, and Chromium's task attribution is `window`/`unknown`
+// for same-document JS. The highest-value thing to declare is every IPC call,
+// because a slow main-process handler is the single most common cause of a
+// renderer stall, and there are ~2000 bridge methods to instrument.
+//
+// So `ipcRenderer.invoke` is wrapped ONCE, here, and every call is timed and
+// buffered. The renderer drains the buffer via `drainIpcMarks()` (see
+// `src/lib/perfRecorder.ts`), which joins those durations against the Long Tasks
+// API. That gives "blocked 412ms, 380ms of it inside ipc:getLogs" with zero
+// changes to any feature code.
+//
+// SAFETY: timing is read-only and cannot change a call's result. A throwing
+// invoke still propagates, because the buffer append happens in a `finally`
+// BEFORE the original promise is returned. The buffer is bounded, so a channel
+// that gets called in a tight loop cannot grow it without limit. This is inert
+// unless the renderer asks for the marks.
+type IpcMark = { label: string; startMs: number; durationMs: number };
+
+const IPC_MARKS: IpcMark[] = [];
+const IPC_MARKS_MAX = 400;
+
+const nativeInvoke = ipcRenderer.invoke.bind(ipcRenderer);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(ipcRenderer as any).invoke = (channel: string, ...args: any[]): Promise<any> => {
+  const startMs = performance.now();
+  return nativeInvoke(channel, ...args).then(
+    (result: any) => {
+      if (IPC_MARKS.length >= IPC_MARKS_MAX) IPC_MARKS.splice(0, IPC_MARKS.length - IPC_MARKS_MAX);
+      IPC_MARKS.push({ label: `ipc:${channel}`, startMs, durationMs: performance.now() - startMs });
+      return result;
+    },
+    (err: any) => {
+      if (IPC_MARKS.length >= IPC_MARKS_MAX) IPC_MARKS.splice(0, IPC_MARKS.length - IPC_MARKS_MAX);
+      IPC_MARKS.push({ label: `ipc:${channel} (failed)`, startMs, durationMs: performance.now() - startMs });
+      throw err;
+    },
+  );
+};
+
 contextBridge.exposeInMainWorld('deskflowAPI', {
   // SECURITY: Send an IPC message to the main process after validating the channel
   send: (channel: string, data?: any) => {
@@ -153,6 +198,9 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // Get recent activity logs
   getLogs: () => ipcRenderer.invoke('get-logs'),
+  // O(1) "did anything change?" probe, so the renderer can skip the ~10 MB
+  // full fetch on app switches and periodic refreshes that would change nothing.
+  getLogsVersion: () => ipcRenderer.invoke('get-logs-version'),
 
   // Update/delete individual app log entries
   updateAppLog: (id: number, data: { timestamp?: string; duration_ms?: number; title?: string }) =>
@@ -197,6 +245,19 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   toggleTracking: () => ipcRenderer.invoke('toggle-tracking'),
   setTracking: (enabled: boolean) => ipcRenderer.invoke('set-tracking', enabled),
   restartTracking: () => ipcRenderer.invoke('restart-tracking'),
+  // Auto-update (packaged builds only; the main process no-ops under dev)
+  checkForAppUpdate: () => ipcRenderer.invoke('app:check-for-update'),
+  installAppUpdate: () => ipcRenderer.invoke('app:install-update'),
+  onUpdateAvailable: (callback: (data: any) => void) => {
+    const listener = (_e: any, payload: any) => callback(payload);
+    ipcRenderer.on('update-available', listener);
+    return () => ipcRenderer.removeListener('update-available', listener);
+  },
+  onUpdateDownloaded: (callback: (data: any) => void) => {
+    const listener = (_e: any, payload: any) => callback(payload);
+    ipcRenderer.on('update-downloaded', listener);
+    return () => ipcRenderer.removeListener('update-downloaded', listener);
+  },
   // Platform + tracking mode (Linux Wayland resilience)
   getPlatformInfo: () => ipcRenderer.invoke('get-platform-info'),
   getTrackingMode: () => ipcRenderer.invoke('get-tracking-mode'),
@@ -247,6 +308,10 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   sttTranscriptUpdate: (id: string, changes: any) => ipcRenderer.invoke('stt:transcript-update', id, changes),
   sttTranscriptRemove: (id: string) => ipcRenderer.invoke('stt:transcript-remove', id),
   sttTranscriptToggleFavorite: (id: string) => ipcRenderer.invoke('stt:transcript-toggle-favorite', id),
+
+  // ── On-device transcription (primary; no API key, works offline) ──
+  sttLocalAvailability: () => ipcRenderer.invoke('stt:local-availability'),
+  sttTranscribeLocal: (payload: { audioBase64: string; mime?: string; lang?: string }) => ipcRenderer.invoke('stt:transcribe-local', payload),
 
   // ── Local STT overlay (R-46/R-47/R-48) ──
   sttLocalStatus: () => ipcRenderer.invoke('stt:local-status'),
@@ -312,6 +377,9 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   // Browser profile management
   getBrowserProfiles: () => ipcRenderer.invoke('get-browser-profiles'),
   getExtensionStatus: () => ipcRenderer.invoke('get-extension-status'),
+  getExtensionSetup: () => ipcRenderer.invoke('get-extension-setup'),
+  copyToClipboard: (text: string) => ipcRenderer.invoke('copy-to-clipboard', text),
+  revealExtensionFolder: () => ipcRenderer.invoke('reveal-extension-folder'),
   toggleBrowserProfile: (args: { profileId: number; isActive: boolean }) => ipcRenderer.invoke('toggle-browser-profile', args),
   renameBrowserProfile: (args: { profileId: number; newName: string }) => ipcRenderer.invoke('rename-browser-profile', args),
   deleteBrowserProfile: (args: { profileId: number }) => ipcRenderer.invoke('delete-browser-profile', args),
@@ -336,6 +404,13 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   getSessions: () => ipcRenderer.invoke('get-sessions'),
   getTableSchema: (tableName: string) => ipcRenderer.invoke('get-table-schema', tableName),
   getDatabaseTables: () => ipcRenderer.invoke('get-database-tables'),
+  getDatabaseTableStats: () => ipcRenderer.invoke('get-database-table-stats'),
+  getErdSchema: () => ipcRenderer.invoke('get-erd-schema'),
+  onCategoryConfigChanged: (cb: (p: { appCategoryMap: Record<string,string>; domainCategoryMap: Record<string,string> }) => void) => {
+    const l = (_e: unknown, p: any) => cb(p);
+    ipcRenderer.on('category-config-changed', l);
+    return () => ipcRenderer.removeListener('category-config-changed', l);
+  },
   getTableData: (tableName: string, limit?: number, offset?: number) => ipcRenderer.invoke('get-table-data', tableName, limit, offset),
   getTableDataCount: (tableName: string) => ipcRenderer.invoke('get-table-data-count', tableName),
   getTableChanges: (tableName: string, limit?: number) => ipcRenderer.invoke('get-table-changes', tableName, limit),
@@ -638,6 +713,8 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   forceSyncAIUsage: () => ipcRenderer.invoke('force-sync-ai-usage'),
   getAISyncStatus: () => ipcRenderer.invoke('get-ai-sync-status'),
   clearAISyncState: () => ipcRenderer.invoke('clear-ai-sync-state'),
+  getAIDisplayTimezoneOffset: () => ipcRenderer.invoke('get-ai-display-timezone-offset'),
+  setAIDisplayTimezoneOffset: (offsetMinutes: number) => ipcRenderer.invoke('set-ai-display-timezone-offset', offsetMinutes),
   getAISessionsPaginated: (tool: string, limit?: number, offset?: number) => ipcRenderer.invoke('get-ai-sessions-paginated', tool, limit, offset),
   getAISessionMessages: (sessionId: string, tool: string) => ipcRenderer.invoke('get-ai-session-messages', sessionId, tool),
   debugAIAgents: () => ipcRenderer.invoke('debug-ai-agents'),
@@ -670,12 +747,89 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   resizeTerminal: (terminalId: string, cols: number, rows: number) => ipcRenderer.invoke('resize-terminal', terminalId, cols, rows),
   killTerminal: (terminalId: string) => ipcRenderer.invoke('kill-terminal', terminalId),
   getResourceStats: () => ipcRenderer.invoke('terminal:get-resource-stats'),
+  consoleMetrics: () => ipcRenderer.invoke('console:metrics'),
   getSystemStats: () => ipcRenderer.invoke('terminal:get-system-stats'),
-  onResourceStats: (callback: (stats: Record<string, { pid: number | null; alive: boolean; memMB: number; cpuPct: number; eventLoopLagMs: number; ts: number }>) => void) => {
+  // App performance profiler. `perf:ping` is a no-op main-process handler; the
+  // renderer brackets it in a monotonic clock to get a true IPC round-trip.
+  // Direct `invoke` is intentional and matches `consoleMetrics` above — the
+  // VALID_CHANNELS allowlist only gates the generic `send()` helper above, so
+  // these channels do not need to be listed.
+  perfPing: () => ipcRenderer.invoke('perf:ping'),
+  /**
+   * Drain the automatically-collected IPC timings.
+   *
+   * Draining (rather than subscribing) keeps the preload stateless and means the
+   * profiler can be armed, disarmed and re-armed without the preload needing to
+   * know anything about it. Returns [] when nothing was buffered, so the caller
+   * can poll it cheaply on its existing 250ms publish tick.
+   */
+  drainIpcMarks: (): IpcMark[] => IPC_MARKS.splice(0, IPC_MARKS.length),
+  /**
+   * Legacy per-terminal stats channel. UNCHANGED name and unchanged field
+   * semantics, so existing consumers keep working; the payload gained optional
+   * fields rather than replacing any.
+   *
+   * memMB is an RSS sum over the process tree, which double-counts pages shared
+   * between the CLI and its children. pssMB is the additive-correct figure.
+   * cpuPct is percent of ONE core over the sampling interval.
+   * `alive` means "not terminated" -- a workspace whose shell exited but whose
+   * descendants survive still reports its real memory.
+   */
+  onResourceStats: (callback: (stats: Record<string, {
+    pid: number | null;
+    alive: boolean;
+    memMB: number;
+    pssMB: number | null;
+    swapMB: number | null;
+    cpuPct: number;
+    cpuUserPct: number | null;
+    cpuSysPct: number | null;
+    processCount: number;
+    threadCount: number;
+    state: string;
+    eventLoopLagMs: number;
+    ts: number;
+  }>) => void) => {
     const handler = (_event: any, stats: any) => callback(stats);
     ipcRenderer.on('terminal:resource-stats', handler);
     return () => ipcRenderer.removeListener('terminal:resource-stats', handler);
   },
+
+  /**
+   * Full AI-facing telemetry for every tracked workspace: identity (pid +
+   * starttime, posix session, pgrp, tty), application-vs-workspace split,
+   * per-process breakdown, orphans, history, growth verdict, findings, and the
+   * mandatory provenance block (pss_stale, pss_age_sec, scan_gap_sec,
+   * sampler_overhead_cpu_pct).
+   */
+  onResourceTelemetry: (callback: (telemetry: any[]) => void) => {
+    const handler = (_event: any, telemetry: any) => callback(telemetry);
+    ipcRenderer.on('terminal:resource-telemetry', handler);
+    return () => ipcRenderer.removeListener('terminal:resource-telemetry', handler);
+  },
+
+  /**
+   * Force a fresh hot+cold pass and return current telemetry. Pass a
+   * workspaceId for one workspace, or nothing for all of them.
+   */
+  getResourceTelemetry: (workspaceId?: string) =>
+    ipcRenderer.invoke('terminal:get-resource-telemetry', workspaceId),
+
+  /**
+   * T3 on-demand: re-measure PSS (smaps_rollup, ~30 ms per heavy process) for
+   * every process in a workspace. Only call this when a fresh PSS number is
+   * actually needed -- it is deliberately not on the sampler.
+   */
+  refreshWorkspacePss: (workspaceId: string) =>
+    ipcRenderer.invoke('terminal:refresh-pss', workspaceId),
+
+  /**
+   * T3 on-demand deep inspection of one process: smaps_rollup breakdown,
+   * /proc/<pid>/io, fd count, and per-thread CPU. Accepts a pid or a
+   * `pid:starttime` identity key.
+   */
+  inspectTerminalProcess: (workspaceId: string, pidOrKey: number | string) =>
+    ipcRenderer.invoke('terminal:inspect-process', workspaceId, pidOrKey),
 
   onTerminalData: (callback: (terminalId: string, data: string) => void) => {
     const handler = (_event: any, terminalId: string, data: string) => callback(terminalId, data);
@@ -693,6 +847,9 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   conductorPause: (missionId: string) => ipcRenderer.invoke('conductor:pause', missionId),
   conductorResume: (missionId: string) => ipcRenderer.invoke('conductor:resume', missionId),
   conductorKill: (missionId: string) => ipcRenderer.invoke('conductor:kill', missionId),
+  conductorCloseNode: (missionId: string, nodeId: string, opts?: { reason?: string; checkpointFirst?: boolean; raiseEscalation?: boolean }) =>
+    ipcRenderer.invoke('conductor:close-node', missionId, nodeId, opts),
+  conductorCrowd: (missionId: string) => ipcRenderer.invoke('conductor:crowd', missionId),
   conductorSetAutonomy: (missionId: string, level: string) => ipcRenderer.invoke('conductor:set-autonomy', missionId, level),
   conductorSendDirective: (missionId: string, text: string) => ipcRenderer.invoke('conductor:send-directive', missionId, text),
   conductorResolveEscalation: (missionId: string, escalationId: string, decision: string, note?: string) => ipcRenderer.invoke('conductor:resolve-escalation', missionId, escalationId, decision, note),
@@ -773,6 +930,22 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     const handler = (_event: any, data: { terminalId: string; agentType: string }) => callback(data);
     ipcRenderer.on('agent:timeout', handler);
     return () => ipcRenderer.removeListener('agent:timeout', handler);
+  },
+  /**
+   * Workforce scene feed (integration plan §1). Receives BATCHES of ActionEvent
+   * at ~10Hz — never one message per event. Returns an unsubscribe function,
+   * which every workforce subscriber must honour: a leaked listener here is a
+   * permanent per-batch React update on a dead component.
+   */
+  onWorkforceEvent: (callback: (events: any[]) => void) => {
+    const handler = (_event: any, events: any[]) => {
+      // Defensive: a malformed batch must not throw inside the IPC listener,
+      // because an exception there kills the renderer for every other channel.
+      if (!Array.isArray(events) || events.length === 0) return;
+      try { callback(events); } catch (_e) { /* silent */ }
+    };
+    ipcRenderer.on('workforce:event', handler);
+    return () => ipcRenderer.removeListener('workforce:event', handler);
   },
   retryAgentInit: (terminalId: string, agentType: string) => ipcRenderer.invoke('retry-agent-init', terminalId, agentType),
   verifyAgent: (agentType: string) => ipcRenderer.invoke('agent:verify', agentType),
@@ -877,7 +1050,16 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // ========== System (Advanced Configuration / New Session) ==========
   system: {
-    list: () => ipcRenderer.invoke("get-context-systems"),
+    // projectPath MUST be passed through. The main handler falls back to
+    // `global.__projectPath`, which is never assigned anywhere in main.ts, so
+    // calling this with no argument made every context system report as
+    // unavailable — which is why New Session's infrastructure list was always
+    // empty regardless of which project was open.
+    list: (projectPath?: string) => ipcRenderer.invoke("get-context-systems", projectPath),
+    // NOTE: `get-context-system-detail` expects a POSITIONAL systemId string and
+    // returns { success, data: <one system> } — it is NOT the batch graph feed the
+    // dialog's loadSystemStatus() expects ({ ok, items, nodes, usedTokens }).
+    // That mismatch is why the panel shows nothing; see the terminal gap list.
     status: (data: any) => ipcRenderer.invoke("get-context-system-detail", data),
     verify: (data: any) => ipcRenderer.invoke("verify-system-integrity", data),
     getAgentsContext: (data: any) => ipcRenderer.invoke("read-agent-files", data),
@@ -986,7 +1168,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   resetWindowState: () => ipcRenderer.invoke('reset-window-state'),
    getTypicalDay: (days?: number, dateOffset?: number) => ipcRenderer.invoke('get-typical-day', days, dateOffset),
    getTypicalActivityAtTime: (timestamp: string) => ipcRenderer.invoke('get-typical-activity-at-time', timestamp),
-   detectUsageGaps: (options?: { period?: string; minGapMinutes?: number }) => ipcRenderer.invoke('detect-usage-gaps', options || {}),
+   detectUsageGaps: (options?: { period?: string; minGapMinutes?: number; dateOffset?: number }) => ipcRenderer.invoke('detect-usage-gaps', options || {}),
    manualAssignList: (date: string) => ipcRenderer.invoke('manual-assign:list', { date }),
    manualAssignDayContext: (date: string) => ipcRenderer.invoke('manual-assign:day-context', { date }),
    manualAssignCreate: (data: { startedAt: string; endedAt: string; mode?: 'random' | 'custom'; app?: string | null; category?: string | null }) => ipcRenderer.invoke('manual-assign:create', data),
@@ -1264,6 +1446,9 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     ipcRenderer.invoke('ai-chat:send', data),
 
   // ── Chat Library — unified store for every AI conversation ──────────────
+  // ── External AI launcher (opens the user's REAL browser, not an Electron window)
+  openExternalUrl: (url: string) => ipcRenderer.invoke('open-external-url', url),
+
   chatLibrarySearch: (opts?: { query?: string; groupId?: string | null; source?: string | null; limit?: number }) =>
     ipcRenderer.invoke('chat-library:search', opts || {}),
   chatLibraryStats: () => ipcRenderer.invoke('chat-library:stats'),
@@ -1292,6 +1477,22 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   aiDebugQuery: (opts: { sources?: string[]; events?: string[]; search?: string; fromMs?: number; toMs?: number; limit?: number; offset?: number }) =>
     ipcRenderer.invoke('ai-debug:query', opts),
   aiDebugStats: () => ipcRenderer.invoke('ai-debug:stats'),
+  aiDebugInsights: (opts: { sources?: string[]; events?: string[]; search?: string; fromMs?: number; toMs?: number }) =>
+    ipcRenderer.invoke('ai-debug:insights', opts),
+
+  // ========== AI Eval Harness ==========
+  aiEvalListCases: (feature?: string) => ipcRenderer.invoke('ai-eval:list-cases', feature),
+  aiEvalSaveCase: (c: { id?: string; feature: string; name: string; prompt: string; systemPrompt?: string; maxTokens?: number; expectContains?: string[]; expectNotContains?: string[]; checks?: any[]; enabled?: boolean }) =>
+    ipcRenderer.invoke('ai-eval:save-case', c),
+  aiEvalDeleteCase: (id: string) => ipcRenderer.invoke('ai-eval:delete-case', id),
+  aiEvalSeedCases: () => ipcRenderer.invoke('ai-eval:seed-cases'),
+  aiEvalRun: (opts?: { label?: string; feature?: string; caseIds?: string[] }) =>
+    ipcRenderer.invoke('ai-eval:run', opts || {}),
+  aiEvalListRuns: (limit?: number) => ipcRenderer.invoke('ai-eval:list-runs', limit),
+  aiEvalGetRun: (runId: string) => ipcRenderer.invoke('ai-eval:get-run', runId),
+  aiEvalCompareRuns: (runId: string) => ipcRenderer.invoke('ai-eval:compare-runs', runId),
+  aiEvalDeleteRun: (runId: string) => ipcRenderer.invoke('ai-eval:delete-run', runId),
+  aiEvalStats: () => ipcRenderer.invoke('ai-eval:stats'),
   aiDebugExport: (opts: { sources?: string[]; events?: string[]; search?: string; fromMs?: number; toMs?: number; limit?: number }) =>
     ipcRenderer.invoke('ai-debug:export', opts),
   aiDebugClear: (opts: { sources?: string[]; events?: string[]; olderThanMs?: number }) =>
@@ -1327,6 +1528,73 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   deleteGoal: (goalId: string) => ipcRenderer.invoke('delete-goal', goalId),
   saveGoalReview: (date: string, reviewSummary: string) => ipcRenderer.invoke('save-goal-review', date, reviewSummary),
   getGoalReview: (date: string) => ipcRenderer.invoke('get-goal-review', date),
+  // The `goal:get-habits` handler has been registered in main since it was
+  // written, but was never bridged here — so every `api.getHabits?.()` call
+  // resolved to `undefined` and the weekly habit grid silently rendered
+  // nothing. Habits ARE goals (goals.is_habit = 1), which is why this is a
+  // range query rather than a single row.
+  getHabits: (startDate: string, endDate: string) => ipcRenderer.invoke('goal:get-habits', startDate, endDate),
+  // ── habit completions (the real store; localStorage is legacy) ──
+  // ── the training log (features 1-7) ──────────────────────────────────────
+  // Split into `parse` (never writes) and `commit` / `apply` (writes once).
+  // The renderer has no way to reach a write from a pasted AI reply or a
+  // keystroke: it must go parse -> human review -> commit. That is what makes
+  // "show a diff before applying" a property of the API, not of a UI's
+  // carefulness. `planCommit` re-validates anyway, because a renderer is not a
+  // trust boundary you can rely on to have called prepare first.
+  /** Fires when the user presses the global quick-capture hotkey. Returns an
+   *  UNSUBSCRIBE function so a component can clean up -- a listener registered in
+   *  an effect and never removed is what makes a shortcut feel like it "fires
+   *  twice" after the tab has been opened a few times. */
+  onFocusCapture: (cb: () => void): (() => void) => {
+    const fn = () => { try { cb(); } catch { /* a renderer throw must not kill the listener */ } };
+    ipcRenderer.on('training:focus-capture', fn);
+    return () => ipcRenderer.removeListener('training:focus-capture', fn);
+  },
+  trainingGetPrefs: () => ipcRenderer.invoke('training:get-prefs'),
+  trainingSetPrefs: (patch: { minimumDayMinutes?: number; weeklyWinDays?: number }) =>
+    ipcRenderer.invoke('training:set-prefs', patch),
+  captureParse: (payload: { text: string; nowMinutes?: number; foreground?: { app?: string; category?: string } | null }) =>
+    ipcRenderer.invoke('capture:parse', payload),
+  captureCommit: (payload: {
+    date?: string; count?: number | null; minutes?: number | null; pattern?: string | null;
+    result?: string | null; platform?: string; topic?: string; app?: string | null; category?: string | null;
+  }) => ipcRenderer.invoke('capture:commit', payload),
+
+  trainingOutcomesList: (startDate: string, endDate: string) =>
+    ipcRenderer.invoke('training:outcomes:list', startDate, endDate),
+  trainingCardsDue: (today?: string) => ipcRenderer.invoke('training:cards:due', today),
+  trainingCardReview: (payload: { cardId: string; rating: string; today?: string }) =>
+    ipcRenderer.invoke('training:cards:review', payload),
+  trainingWeekScore: (weekOf: string) => ipcRenderer.invoke('training:week:score', weekOf),
+  trainingReviewWeekly: (weekOf: string) => ipcRenderer.invoke('training:review:weekly', weekOf),
+  trainingReviewAccept: (payload: { weekKey: string; text?: string }) =>
+    ipcRenderer.invoke('training:review:accept', payload),
+  trainingPhaseCurrent: () => ipcRenderer.invoke('training:phase:current'),
+  trainingPhaseSetMode: (payload: { phaseId: string; mode: string; checklist?: unknown[] }) =>
+    ipcRenderer.invoke('training:phase:set-mode', payload),
+  trainingPhaseAnswerDrift: (payload: { answer: 'yes' | 'not_now' | 'no'; reason?: string }) =>
+    ipcRenderer.invoke('training:phase:answer-drift', payload),
+  planModeStatus: (payload?: { coreIds?: string[]; doneIds?: string[] }) =>
+    ipcRenderer.invoke('planmode:status', payload ?? {}),
+  planModeBreak: (payload: { phrase: string; outstanding?: number }) =>
+    ipcRenderer.invoke('planmode:break', payload),
+  trainingPlanPrepare: (raw: string) => ipcRenderer.invoke('training:plan:prepare', { raw }),
+  trainingPlanPrompt: () => ipcRenderer.invoke('training:plan:prompt'),
+  trainingPlanCommit: (raw: string) => ipcRenderer.invoke('training:plan:commit', { raw }),
+
+  habitCompletionsList: (startDate: string, endDate: string) =>
+    ipcRenderer.invoke('habit-completions:list', startDate, endDate),
+  /** `done: false` clears the habit-day. `met_minimum` is decided in main and
+   *  stored, so editing the minimum later never retroactively un-counts a day. */
+  habitCompletionsSet: (payload: { habitId: string; date: string; minutes?: number; done?: boolean; source?: string }) =>
+    ipcRenderer.invoke('habit-completions:set', payload),
+  /** Weekly score. A WEEK, not a streak — see the handler for why. */
+  habitCompletionsWeekly: (weekOf: string) => ipcRenderer.invoke('habit-completions:weekly', weekOf),
+  /** One-shot: move `deskflow.covenant.completions.v1` rows into SQLite.
+   *  The renderer passes them because only it can read localStorage. */
+  habitCompletionsMigrateLegacy: (legacy: Array<{ commitmentId: string; date: string; completedAt?: number; source?: string }>) =>
+    ipcRenderer.invoke('habit-completions:migrate-legacy', legacy),
   getDailyReflection: (date: string) => ipcRenderer.invoke('get-daily-reflection', date),
   saveGoalSuggestion: (data: { title: string; category: string; date: string; source: string; reason?: string }) =>
     ipcRenderer.invoke('save-goal-suggestion', data),
@@ -1369,9 +1637,25 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
 
   // ========== Goal Reminders ==========
   getReminders: () => ipcRenderer.invoke('get-reminders'),
-  createReminder: (data: { text: string; due_date?: string; goal_id?: string; due_time?: string }) => ipcRenderer.invoke('create-reminder', data),
+  // Both casings accepted: this channel has always been snake_case, but
+  // HabitsPage calls it camelCase, which silently discarded the due date.
+  // The handler reads either — see the comment on `create-reminder`.
+  createReminder: (data: {
+    text: string;
+    due_date?: string; dueDate?: string;
+    goal_id?: string;  goalId?: string;
+    due_time?: string; dueTime?: string;
+  }) => ipcRenderer.invoke('create-reminder', data),
   toggleReminder: (id: string, done: boolean) => ipcRenderer.invoke('toggle-reminder', id, done),
   deleteReminder: (id: string) => ipcRenderer.invoke('delete-reminder', id),
+  updateReminder: (id: string, data: {
+    text?: string; due_date?: string; dueDate?: string;
+    goal_id?: string; goalId?: string;
+    due_time?: string; dueTime?: string;
+    reminder_lead_min?: number;
+    description?: string; links?: string; location?: string;
+    done?: boolean;
+  }) => ipcRenderer.invoke('update-reminder', id, data),
 
   // ========== Schedule & Planning ==========
   getSchedule: () => ipcRenderer.invoke('get-schedule'),
@@ -1405,6 +1689,12 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   todoDelete: (id: string) => ipcRenderer.invoke('todo:delete', id),
   todoGetConnections: (entityType: string, entityId: string) => ipcRenderer.invoke('todo:get-connections', entityType, entityId),
   goalGetConnections: (goalId: string) => ipcRenderer.invoke('goal:get-connections', goalId),
+  goalGetConnectionsBulk: (goalIds: string[]) => ipcRenderer.invoke('goal:connections-bulk', goalIds),
+  /* Generic entity↔goal linking. `feature` matches CrossFeatureLink['feature']:
+     note | learn | finance | project | brain | reminder. */
+  entityLink: (payload: { feature: string; entityId: string; goalId: string | null; label?: string; meta?: any }) =>
+    ipcRenderer.invoke('entity:link', payload),
+  entityGetLinks: (feature: string, entityId: string) => ipcRenderer.invoke('entity:get-links', feature, entityId),
   getScheduleTemplates: () => ipcRenderer.invoke('get-schedule-templates'),
   applyScheduleTemplate: (templateId: string) => ipcRenderer.invoke('apply-schedule-template', templateId),
   saveScheduleTemplate: (data: { name: string; entries: any[] }) => ipcRenderer.invoke('save-schedule-template', data),
@@ -1421,6 +1711,28 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   writePlanningMd: (content: string) => ipcRenderer.invoke('write-planning-md', content),
 
   // ========== Connectors ==========
+  // ========== AI Router (ai-router console) ==========
+  // Provider-side calls use the normal provider path and need no IPC. These are
+  // the console endpoints (live provider health, group failover chains, request
+  // log). Routed through main so the renderer never opens its own socket to a
+  // local service. NOTE: this file, not preload2.ts — preload2 is dead code and
+  // is not what main.ts loads.
+  airouter: {
+    status: (opts?: { baseUrl?: string }) => ipcRenderer.invoke('airouter:status', opts),
+    groups: (opts?: { baseUrl?: string }) => ipcRenderer.invoke('airouter:groups', opts),
+    log: (opts?: { baseUrl?: string; limit?: number }) => ipcRenderer.invoke('airouter:log', opts),
+    ping: (opts?: { baseUrl?: string }) => ipcRenderer.invoke('airouter:ping', opts),
+    resetProvider: (provider: string, opts?: { baseUrl?: string }) =>
+      ipcRenderer.invoke('airouter:reset-provider', { provider, ...opts }),
+    resetCooldowns: (opts?: { baseUrl?: string }) => ipcRenderer.invoke('airouter:reset-cooldowns', opts),
+    // ---- process lifecycle: let the app own the router instead of a terminal ----
+    processStatus: () => ipcRenderer.invoke('airouter:process-status'),
+    start: () => ipcRenderer.invoke('airouter:start'),
+    stop: () => ipcRenderer.invoke('airouter:stop'),
+    restart: () => ipcRenderer.invoke('airouter:restart'),
+    diagnose: () => ipcRenderer.invoke('airouter:diagnose'),
+  },
+
   connectors: {
     list: () => ipcRenderer.invoke('connectors:list'),
     add: (connector: { type: string; provider: string; displayName: string; config: any }) => ipcRenderer.invoke('connectors:add', connector),
@@ -1764,10 +2076,6 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   getKnownApps: () => ipcRenderer.invoke('get-known-apps'),
   getKnownBrowserApps: () => ipcRenderer.invoke('get-known-browser-apps'),
   getKnownSites: () => ipcRenderer.invoke('get-known-sites'),
-  predictGapFill: (start: string, end: string, mode?: 'combined' | 'separate') =>
-    ipcRenderer.invoke('predict-gap-fill', { start, end, mode: mode || 'combined' }),
-   confirmGapFill: (fills: Array<{ slotStart: string; slotEnd: string; app: string; category: string; activityId?: string }>) =>
-     ipcRenderer.invoke('confirm-gap-fill', fills),
   predictDayGaps: (date: string, mode?: 'combined' | 'separate') =>
     ipcRenderer.invoke('predict-day-gaps', { date, mode: mode || 'combined' }),
 
@@ -1780,7 +2088,9 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
     exportCSV: (tables: string[]) => ipcRenderer.invoke('backup:exportCSV', tables),
     status: () => ipcRenderer.invoke('backup:status'),
     verify: (name: string) => ipcRenderer.invoke('backup:verify', name),
-    settingsGet: () => ipcRenderer.invoke('backup:settings:get'),
+    appSettingGet: (key: string) => ipcRenderer.invoke('app-setting:get', key),
+  appSettingSet: (key: string, value: string | null) => ipcRenderer.invoke('app-setting:set', key, value),
+  settingsGet: () => ipcRenderer.invoke('backup:settings:get'),
     settingsSet: (patch: Record<string, unknown>) => ipcRenderer.invoke('backup:settings:set', patch),
     pickMirrorDir: () => ipcRenderer.invoke('backup:pickMirrorDir'),
   },
@@ -1826,6 +2136,12 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   listDevices: () => ipcRenderer.invoke('list-devices'),
   revokeDevice: (deviceId: string) => ipcRenderer.invoke('revoke-device', deviceId),
   revokeAllDevices: () => ipcRenderer.invoke('revoke-all-devices'),
+  // ========== Phone telemetry (the desktop half of the phone-stats feature) ==========
+  // These back src/main.ts 'phone-telemetry-live' / 'phone-telemetry-summary'. They
+  // are invoke() (not send()), so they do NOT need a VALID_CHANNELS entry — that
+  // allowlist only gates `api.send`.
+  phoneTelemetryLive: () => ipcRenderer.invoke('phone-telemetry-live'),
+  phoneTelemetrySummary: (args?: { from?: string; to?: string }) => ipcRenderer.invoke('phone-telemetry-summary', args || {}),
   // ========== Auth: Register / Login / Pair Generate / State ==========
   authGetState: () => ipcRenderer.invoke('auth:get-state'),
   authRegister: (args: { email: string; password: string }) => ipcRenderer.invoke('auth:register', args),
@@ -1986,6 +2302,21 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
     ipcRenderer.invoke('lecture:local-ai:vision', opts),
   lectureLocalStt: (opts: { audioBase64?: string; mime?: string; filename?: string; language?: string; model?: string; endpoint?: string }) =>
     ipcRenderer.invoke('lecture:local-ai:stt', opts),
+  // PDF → text via Poppler, in the MAIN process (a renderer cannot exec poppler).
+  lectureParsePdf: (opts: { pdfBase64?: string; filename?: string; rasteriseScanned?: boolean; maxPageImages?: number }) =>
+    ipcRenderer.invoke('lecture:pdf:parse', opts),
+});
+
+// ── Embedded in-app browser panel (a native WebContentsView, not an iframe) ──
+// The renderer only sends the panel's screen rect; the actual web page is a
+// native view layered over the window by the main process.
+contextBridge.exposeInMainWorld('embeddedBrowser', {
+  open: (url?: string) => ipcRenderer.invoke('embedded-browser:open', { url }),
+  close: () => ipcRenderer.invoke('embedded-browser:close'),
+  resize: (b: { x: number; y: number; width: number; height: number }) => ipcRenderer.invoke('embedded-browser:resize', b),
+  navigate: (url: string) => ipcRenderer.invoke('embedded-browser:navigate', url),
+  state: () => ipcRenderer.invoke('embedded-browser:state'),
+  reload: () => ipcRenderer.invoke('embedded-browser:reload'),
 });
 
 // R-10: Splash renderer preload bridge (single IPC channel for splash↔main)
@@ -1993,6 +2324,68 @@ contextBridge.exposeInMainWorld('splashAPI', {
   getBootAnimationConfig: () => ipcRenderer.invoke('boot-animation-config'),
   onReplay: (cb: () => void) => ipcRenderer.on('replay-splash', () => cb()),
   sendComplete: () => ipcRenderer.invoke('splash-complete'),
+});
+
+// ── HALO ISLAND ────────────────────────────────────────────────────────────
+// A separate global rather than more `deskflowAPI` keys, because the island is a
+// different window with a different trust posture: it needs only four verbs and
+// must never see the ~972-key application surface. Raw ipcRenderer is never
+// exposed (§42); every payload arrives already validated by main (§43).
+contextBridge.exposeInMainWorld('haloBridge', {
+  getSnapshot: () => ipcRenderer.invoke('halo:get-snapshot'),
+  open: () => ipcRenderer.invoke('halo:open'),
+  close: () => ipcRenderer.invoke('halo:close'),
+  setPinned: (pinned: boolean) => ipcRenderer.invoke('halo:set-pinned', !!pinned),
+    // Re-read + push every preference to the LIVE island. Without this the renderer only
+    // ever saw the prefs that existed at `did-finish-load`, so every setting in the Halo
+    // section of Settings was stored and ignored until a relaunch.
+    applyPrefs: () => ipcRenderer.invoke('halo:apply-prefs'),
+    // Monitor list for the position picker. See listHaloDisplays in haloIsland.ts.
+    listDisplays: () => ipcRenderer.invoke('halo:list-displays'),
+    // HALO §51 "click outside -> unpin + collapse". Sent by the island's own document-level
+    // pointer listener, so it can only fire for a click that did NOT land on the island.
+    clickOutside: () => ipcRenderer.invoke('halo:click-outside'),
+  onPrefs: (cb: (prefs: unknown) => void) => {
+    const handler = (_event: unknown, prefs: unknown) => cb(prefs);
+    ipcRenderer.on('halo:prefs', handler);
+    return () => ipcRenderer.removeListener('halo:prefs', handler);
+  },
+  onCommand: (cb: (cmd: { command: string }) => void) => {
+    const handler = (_event: unknown, cmd: { command?: string }) =>
+      cb({ command: String(cmd?.command ?? '') });
+    ipcRenderer.on('halo:command', handler);
+    return () => ipcRenderer.removeListener('halo:command', handler);
+  },
+  onHover: (cb: (intent: { inside: boolean; pinned: boolean }) => void) => {
+    const handler = (_event: unknown, intent: { inside: boolean; pinned: boolean }) =>
+      cb({ inside: !!intent?.inside, pinned: !!intent?.pinned });
+    ipcRenderer.on('halo:hover', handler);
+    return () => ipcRenderer.removeListener('halo:hover', handler);
+  },
+  /* The island window has NO `deskflowAPI` — it loads halo.html with only haloBridge.
+     So the widget producers must be reachable through this bridge, not the main API. */
+  /* Report the streams main cannot compute. The stopwatch store and the mic stream are
+     renderer-owned module singletons, so the window that owns them reports up and main
+     republishes to every consumer. This is what collapses the island's private second
+     stopwatch copy into ONE shared clock. */
+  reportStream: (payload: { stopwatch?: unknown; dictation?: unknown }) => {
+    ipcRenderer.send('halo:report-stream', payload ?? {});
+  },
+  /* A card's route lives in the MAIN window — the island has no router. */
+  navigate: (route: string) => {
+    ipcRenderer.send('halo:navigate', String(route ?? '/'));
+  },
+  getAiUsage: () => ipcRenderer.invoke('halo:get-ai-usage'),
+  /* `count` is a MEASUREMENT: `count: 0` with `ok: true` means the table answered and the
+     answer was "none", which the card renders as the zero literal. `ok: false` means we could
+     not read it at all, which is the only case that earns the unknown literal. */
+  getNextDeadline: () => ipcRenderer.invoke('halo:get-next-deadline'),
+  getTerminalUsage: () => ipcRenderer.invoke('halo:get-terminal-usage'),
+  onSnapshot: (cb: (snapshot: unknown) => void) => {
+    const handler = (_event: unknown, snapshot: unknown) => cb(snapshot);
+    ipcRenderer.on('halo:snapshot', handler);
+    return () => ipcRenderer.removeListener('halo:snapshot', handler);
+  },
 });
 
 // R-10: Single preference getter (needed by SettingsPage mount-load)

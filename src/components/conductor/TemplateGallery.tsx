@@ -26,7 +26,7 @@ export function TemplateGallery({ onSelect, onCreate }: { onSelect: (tpl: any) =
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search templates..."
-            className="w-full bg-zinc-950/50 border border-zinc-800/70 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-rose-500/40"
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/70 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-rose-500/40"
           />
         </div>
         <button onClick={onCreate} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 text-rose-300 text-[11px] font-medium hover:bg-rose-500/25">
@@ -39,7 +39,7 @@ export function TemplateGallery({ onSelect, onCreate }: { onSelect: (tpl: any) =
           <button
             key={tpl.id}
             onClick={() => onSelect(tpl)}
-            className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 text-left hover:bg-zinc-800/40 transition-colors"
+            className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 text-left hover:bg-zinc-800/40 transition-colors"
           >
             <div className="w-10 h-10 rounded-xl bg-zinc-800/60 flex items-center justify-center shrink-0">
               <Sparkles className="w-5 h-5 text-rose-400" />

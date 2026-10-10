@@ -403,7 +403,7 @@ export function VoiceInputWrapper({ children, silenceMs = 8000 }: VoiceInputWrap
         }}
       >
         <div
-          className="rounded-xl bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 shadow-xl shadow-black/20 overflow-hidden"
+          className="rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 shadow-xl shadow-black/20 overflow-hidden"
           style={{ padding: Math.max(8, fontSize * 0.75) }}
         >
           <div className="flex items-center gap-2">
@@ -513,7 +513,7 @@ export function VoiceInputWrapper({ children, silenceMs = 8000 }: VoiceInputWrap
                 ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/40'
                 : listening
                   ? 'bg-[#d96846]/15 text-[#e8866b] ring-1 ring-[#d96846]/30'
-                  : 'text-zinc-400 bg-zinc-900/60 ring-1 ring-zinc-800/60 hover:text-[#e8866b] hover:ring-[#d96846]/30'
+                  : 'text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-[#e8866b] hover:ring-[#d96846]/30'
               }
             `}
           >

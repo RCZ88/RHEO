@@ -274,7 +274,7 @@ export default function ConductorPanel({ projectId, projectPath }: { projectId: 
           {missions.map(m => (
             <button key={m.id} onClick={() => handleSelectMission(m.id)}
               className={`text-left px-2.5 py-2 rounded-lg border transition-colors ${
-                selectedId === m.id ? 'bg-zinc-800 border-zinc-600' : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-600'
+                selectedId === m.id ? 'bg-zinc-800 border-zinc-600' : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-zinc-800 hover:border-zinc-600'
               }`}>
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dotColor(m.status) }} />

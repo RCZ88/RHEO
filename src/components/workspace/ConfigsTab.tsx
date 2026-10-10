@@ -75,7 +75,7 @@ export function ConfigsTab({
               <input
                 type="range" min={3} max={30} value={modelReinjectThreshold}
                 onChange={(e) => onReinjectThresholdChange(Number(e.target.value))}
-                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-500 bg-zinc-800"
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-zinc-800"
               />
               <div className="flex justify-between text-[9px] text-zinc-600 mt-1">
                 <span>3</span><span>30</span>
@@ -232,7 +232,7 @@ export function ConfigsTab({
                   <input
                     type="range" min={30} max={600} step={30} value={fileLockTTL}
                     onChange={(e) => onFileLockTTLChange(Number(e.target.value))}
-                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-amber-500 bg-zinc-800"
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-zinc-800"
                   />
                   <div className="flex justify-between text-[9px] text-zinc-600 mt-1">
                     <span>30s</span><span>10m</span>

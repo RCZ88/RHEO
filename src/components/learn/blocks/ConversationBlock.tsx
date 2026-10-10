@@ -39,8 +39,8 @@ export function ConversationBlock({ block, nodeId, onAddMessage, onResolve }: Pr
   };
 
   return (
-    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60">
+    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)]">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-sky-400" />
           <span className="text-xs font-medium text-zinc-300">

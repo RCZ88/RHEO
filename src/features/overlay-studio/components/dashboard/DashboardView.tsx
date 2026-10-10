@@ -9,7 +9,7 @@ function ToolCard({ icon: Icon, title, description, status, onClick, delay = 0 }
   return (
     <BlurFade delay={delay} direction="up">
       <button onClick={onClick}
-        className="w-full text-left rounded-xl border border-white/[0.08] bg-zinc-900/80 p-4 hover:border-white/[0.15] hover:bg-zinc-900 transition-all duration-200 min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900">
+        className="w-full text-left rounded-xl border border-white/[0.08] bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] p-4 hover:border-white/[0.15] hover:bg-zinc-900 light:bg-[var(--ws-surface-raised)] transition-all duration-200 min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900">
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0"><Icon size={16} className="text-white/70" /></div>
           <div className="min-w-0 flex-1">
@@ -27,7 +27,7 @@ function LoadingSkeleton() {
   return (
     <div className="p-5 space-y-5">
       <div className="space-y-2"><div className="h-5 w-48 bg-zinc-800/50 rounded-lg animate-pulse" /><div className="h-3 w-80 bg-zinc-800/30 rounded-lg animate-pulse" /></div>
-      <div className="rounded-xl border border-white/[0.08] bg-zinc-900/80 p-4"><div className="h-4 w-40 bg-zinc-800/50 rounded animate-pulse mb-2" /><div className="h-3 w-60 bg-zinc-800/30 rounded animate-pulse" /></div>
+      <div className="rounded-xl border border-white/[0.08] bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] p-4"><div className="h-4 w-40 bg-zinc-800/50 rounded animate-pulse mb-2" /><div className="h-3 w-60 bg-zinc-800/30 rounded animate-pulse" /></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[1,2,3,4].map(i => <div key={i} className="h-24 bg-zinc-800/30 rounded-xl animate-pulse" />)}</div>
     </div>
   )
@@ -62,7 +62,7 @@ export function DashboardView() {
 
       {activeSession ? (
         <BlurFade delay={0.1}>
-          <div className="rounded-xl border border-white/[0.08] bg-zinc-900/80 p-4">
+          <div className="rounded-xl border border-white/[0.08] bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[13px] font-semibold text-zinc-200">{activeSession.name}</div>
@@ -80,7 +80,7 @@ export function DashboardView() {
         </BlurFade>
       ) : (
         <BlurFade delay={0.1}>
-          <div className="rounded-xl border border-dashed border-white/[0.08] bg-zinc-950/30 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface)]/30 p-8 text-center">
             <Film size={28} className="mx-auto mb-3 text-zinc-600" />
             <p className="text-[13px] font-medium text-zinc-400">No active overlay session</p>
             <p className="text-[11px] text-zinc-500 mt-1 mb-4">Overlay sessions always belong to an episode. Select one from the sidebar or import a video.</p>

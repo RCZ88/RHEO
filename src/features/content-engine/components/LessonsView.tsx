@@ -69,7 +69,7 @@ export function LessonsView() {
                     <span className="text-[9px] tracking-wider text-zinc-500 uppercase">Confidence</span>
                     <span className="font-mono text-[10px] text-zinc-400">{lesson.confidence != null ? `${Math.round(lesson.confidence * 100)}%` : '—'}</span>
                   </div>
-                  <input type="range" min={0} max={1} step={0.05} value={lesson.confidence ?? 0.5} onChange={(e) => setConfidence(lesson, Number(e.target.value))} className="h-1 w-28 cursor-pointer accent-amber-400" />
+                  <input type="range" min={0} max={1} step={0.05} value={lesson.confidence ?? 0.5} onChange={(e) => setConfidence(lesson, Number(e.target.value))} className="h-1 w-28 cursor-pointer" />
                 </div>
               </div>
 

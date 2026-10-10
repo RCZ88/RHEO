@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import AgentCharacter from './AgentCharacter';
-import { visualForAgent } from './agentVisuals';
+import { visualForAgent, WF_PALETTE } from './agentVisuals';
 import {
   DENSITY_SCALE,
   SCENE_HEIGHT,
@@ -41,6 +41,9 @@ export interface WorkforceSceneProps {
   reducedMotion?: boolean;
   selectedSessionId?: string | null;
   onSelectSession?: (sessionId: string) => void;
+  /** Focus mode: show ONLY the selected worker, hide the rest. Needs a selection. */
+  isolateSelected?: boolean;
+  onToggleIsolate?: () => void;
   className?: string;
   title?: ReactNode;
 }
@@ -127,6 +130,8 @@ export function WorkforceScene({
   density = 'compact',
   reducedMotion = false,
   selectedSessionId = null,
+  isolateSelected = false,
+  onToggleIsolate,
   onSelectSession,
   className,
   title,
@@ -202,7 +207,7 @@ export function WorkforceScene({
   const taskChip = taskAgent
     ? {
         mark: attentionAgent ? '!' : '▸',
-        color: attentionAgent ? '#fbbf24' : visualForAgent(taskAgent.agent, taskAgent.known).accent,
+        color: attentionAgent ? WF_PALETTE.warn : visualForAgent(taskAgent.agent, taskAgent.known).accent,
         name:
           tier.labelMode === 'full'
             ? visualForAgent(taskAgent.agent, taskAgent.known).label
@@ -256,6 +261,25 @@ export function WorkforceScene({
             <span className="wf-overflow-chip">+{hiddenCount}</span>
           )}
         </span>
+        {onToggleIsolate && (
+          <button
+            type="button"
+            className="wf-focus-toggle"
+ data-on={isolateSelected ? 'true' : 'false'}
+            aria-pressed={isolateSelected}
+            disabled={!selectedSessionId}
+            title={
+              selectedSessionId
+                ? isolateSelected
+                  ? 'Focus mode on — showing only the selected worker'
+                  : 'Focus mode off — show every worker'
+                : 'Select a worker to enable focus mode'
+            }
+            onClick={onToggleIsolate}
+          >
+            {isolateSelected ? 'FOCUSED' : 'FOCUS'}
+          </button>
+        )}
       </div>
 
       {taskChip && taskChip.text && (

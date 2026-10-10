@@ -39,7 +39,7 @@ export function AgentProgressBar({ visible, steps, statusText, className }: Agen
 					transition={ { duration: reduce ? 0 : MOTION.normal, ease: MOTION.easeInOut } }
 					className={cn("overflow-hidden", className)}
 				>
-					<div className="rounded-lg bg-zinc-900/60 p-3 ring-1 ring-zinc-800/60">
+					<div className="rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] p-3 ring-1 ring-zinc-800/60">
 						<div className="mb-2 flex items-center gap-2">
 							<Loader2 size={13} className="text-pink-300 animate-spin motion-reduce:animate-none" />
 							<span className={cn("flex-1 truncate text-[12px]", TEXT.secondary)}>

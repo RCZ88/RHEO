@@ -49,7 +49,7 @@ export function HandbookReference() {
 
   if (loading || !data) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-zinc-950">
+      <div className="flex-1 flex items-center justify-center bg-zinc-950 light:bg-[var(--ws-surface)]">
         <p className="text-zinc-500 text-sm font-mono">Loading reference...</p>
       </div>
     );
@@ -58,7 +58,7 @@ export function HandbookReference() {
   const depthOrder = ['core', 'daily', 'power', 'rescue', 'sudo'];
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-zinc-950 p-6">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-zinc-950 light:bg-[var(--ws-surface)] p-6">
       {/* Header */}
       <div className="mb-5">
         <h2 className="text-[21px] font-semibold text-zinc-100 tracking-[-0.3px] mb-1">Quick Reference</h2>
@@ -100,7 +100,7 @@ export function HandbookReference() {
                 <span className={`font-mono text-[10px] uppercase tracking-wider font-semibold ${meta.color.split(' ')[0]}`}>{meta.icon} {meta.label}</span>
                 <span className="font-mono text-[10px] text-zinc-500">— {meta.description}</span>
               </div>
-              <div className="bg-zinc-900 border border-zinc-800/60 rounded-xl overflow-hidden">
+              <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 rounded-xl overflow-hidden">
                 {cmds.map((cmd, i) => {
                   const doesRow = cmd.rows?.find(r => r.tag.toLowerCase() === 'does');
                   return (

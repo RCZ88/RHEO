@@ -5,7 +5,7 @@ import * as React from "react";
 // LAMINAR: design.md wins over all skill defaults
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from "motion/react";
 import { Bar } from 'react-chartjs-2';
@@ -13,8 +13,10 @@ import {
   AlertCircle, Clock, Target, Zap, BarChart3, Moon, Brain,
   Flame, TrendingUp, Calendar, Sparkles, ArrowRight, Check,
   Bot, Wallet, BookOpen, Activity, Lock,
+  Plus, Loader2, RefreshCw,
 } from 'lucide-react';
 import { useDashboardDataContext } from './DashboardContext';
+import { openQuickNote } from '../life-river/QuickNoteCapture';
 import { CATEGORY_COLORS } from '../CategoryColors';
 
 // ── Progress bar (shadcn-style) ──
@@ -50,6 +52,135 @@ function StatValue({ value, label, icon: Icon, accent }: { value: string | numbe
 }
 
 // ── Goals Summary ──
+interface NoteRow { id: string; title?: string; content?: string; updated_at?: string; created_at?: string }
+
+const notesApi = () => (window as any).deskflowAPI;
+
+export function NotesWidget() {
+  const [rows, setRows] = useState<NoteRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await notesApi()?.notesList?.({ includeDrafts: true });
+      if (!Array.isArray(res)) throw new Error('Notes are unavailable right now.');
+      setRows(res.slice(0, 5));
+    } catch (e: any) {
+      setError(e?.message || 'Could not load notes.');
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load() }, [load]);
+  useEffect(() => {
+    const onChanged = () => load();
+    window.addEventListener('rheo:notes-changed', onChanged);
+    return () => window.removeEventListener('rheo:notes-changed', onChanged);
+  }, [load]);
+
+  return (
+    <div className="card-shell flex flex-col h-full" data-widget-id="notes-card">
+      <div className="flex items-center justify-between gap-2 px-3 pt-3">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <BookOpen size={14} className="shrink-0" style={{ color: 'var(--page-accent)' }} aria-hidden />
+          <span className="text-[12px] font-semibold text-zinc-200 truncate">Notes</span>
+          {!loading && !error && rows.length > 0 && (
+            <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{rows.length}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={load}
+            aria-label="Refresh notes"
+            className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50"
+          >
+            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => openQuickNote()}
+            aria-label="Capture a note"
+            className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50"
+            style={{
+              color: 'var(--page-accent)',
+              backgroundColor: 'color-mix(in srgb, var(--page-accent) 14%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--page-accent) 26%, transparent)',
+            }}
+          >
+            <Plus size={10} aria-hidden />
+            Note
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 pt-2">
+        {loading ? (
+          <div className="space-y-1.5" aria-busy="true">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="h-7 rounded-lg bg-zinc-800/50 animate-pulse" />
+            ))}
+          </div>
+        ) : error ? (
+          <div role="alert" className="flex flex-col items-center gap-2 py-4 text-center">
+            <p className="text-[11px]" style={{ color: 'var(--error)' }}>{error}</p>
+            <button
+              type="button"
+              onClick={load}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <RefreshCw size={10} aria-hidden /> Retry
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          /* Empty state says what would be here and offers the action (PAINT P5). */
+          <div className="flex flex-col items-center justify-center text-center py-6">
+            <BookOpen size={20} className="mb-2 opacity-30" style={{ color: 'var(--page-accent)' }} aria-hidden />
+            <p className="text-[12px] text-zinc-300">No notes yet</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5 mb-2 max-w-[200px]">
+              Capture a thought and it will show up here and on the Notes tab.
+            </p>
+            <button
+              type="button"
+              onClick={() => openQuickNote()}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded-md transition-colors"
+              style={{
+                color: 'var(--page-accent)',
+                backgroundColor: 'color-mix(in srgb, var(--page-accent) 14%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--page-accent) 26%, transparent)',
+              }}
+            >
+              <Plus size={10} aria-hidden /> Capture your first note
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {rows.map(r => (
+              <motion.button
+                key={r.id}
+                type="button"
+                onClick={() => { window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { path: '/life', tab: 'notes', noteId: r.id } })); }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50"
+              >
+                <span className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: 'var(--page-accent)' }} />
+                <span className="text-[11px] text-zinc-300 truncate flex-1">
+                  {r.title || r.content?.slice(0, 60) || 'Untitled note'}
+                </span>
+                <ArrowRight size={10} className="shrink-0 text-zinc-700" aria-hidden />
+              </motion.button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default NotesWidget;
+
 export function GoalsSummary() {
   const ctx = useDashboardDataContext();
   const navigate = useNavigate();

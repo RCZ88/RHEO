@@ -158,7 +158,7 @@ export function LessonLibrary({ lessons, loading, onOpen, onInfo, onCompose, onI
               className={`group relative flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] transition-all ${
                 active
                   ? 'border-zinc-600/70 bg-zinc-800/70 text-zinc-100'
-                  : 'border-white/10 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700/60'
+                  : 'border-white/10 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-500 hover:text-zinc-300 hover:border-zinc-700/60'
               }`}
               title={branch.description}
             >
@@ -195,7 +195,7 @@ export function LessonLibrary({ lessons, loading, onOpen, onInfo, onCompose, onI
         <LibrarySkeletons spine={viewMode === 'spines'} />
       ) : branchLessons.length === 0 ? (
         // ── Empty branch shelf ──
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-zinc-900/30 px-6 py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] px-6 py-16 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-zinc-800/60" style={{ color: activeBranch.color }}>
             <LibraryBig className="h-7 w-7" />
           </div>

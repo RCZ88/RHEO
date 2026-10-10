@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Type, LayoutGrid, MousePointerClick, List, Sparkles, Box,
-  Wind, Copy, Plus, X, ChevronRight, Play, AlertCircle, Loader2
+  Wind, Copy, Plus, X, ChevronRight, Play, AlertCircle, Loader2, Check
 } from 'lucide-react';
 import { SWISHY_PRESETS, EASING_PRESETS, getDifficultyColor, getCategoryIcon, MotionPreset } from './MotionPresets';
 import { EasingCurveBrowser } from './EasingCurveBrowser';
@@ -162,7 +162,7 @@ export function MotionExplorer({ onAddMotionSnippet, onClose }: MotionExplorerPr
             placeholder="Search presets..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full sm:w-56 bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-pink-500/40 focus:ring-1 focus:ring-pink-500/20"
+            className="w-full sm:w-56 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-pink-500/40 focus:ring-1 focus:ring-pink-500/20"
           />
           {onClose && (
             <IconButton onClick={onClose} title="Close" className="shrink-0">
@@ -210,7 +210,7 @@ export function MotionExplorer({ onAddMotionSnippet, onClose }: MotionExplorerPr
                   group relative flex flex-col gap-3 p-4 rounded-xl border cursor-pointer transition-all
                   ${selectedPreset?.id === preset.id
                     ? 'bg-pink-500/10 border-pink-500/40 shadow-[0_0_24px_rgba(244,114,182,0.12)]'
-                    : 'bg-zinc-900/80 border-zinc-800/60 hover:border-zinc-700/80 hover:bg-zinc-800/60'}
+                    : 'bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-zinc-800/60 hover:border-zinc-700/80 hover:bg-zinc-800/60'}
                 `}
               >
                 <div className="flex items-start justify-between">
@@ -266,7 +266,7 @@ export function MotionExplorer({ onAddMotionSnippet, onClose }: MotionExplorerPr
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/60 overflow-hidden">
+            <div className="rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
                 <div className="flex items-center gap-2">
                   <ChevronRight className="w-4 h-4 text-pink-400" />
@@ -282,7 +282,7 @@ export function MotionExplorer({ onAddMotionSnippet, onClose }: MotionExplorerPr
                     step="0.1"
                     value={duration}
                     onChange={(e) => setDuration(parseFloat(e.target.value))}
-                    className="w-24 accent-pink-500"
+                    className="w-24"
                   />
                   <span className="text-xs text-zinc-400 w-10 text-right">{duration}s</span>
                 </div>

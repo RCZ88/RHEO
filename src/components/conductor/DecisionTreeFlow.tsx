@@ -27,7 +27,7 @@ export function DecisionTreeFlow({ nodes }: { nodes: any[] }) {
     const color = STATUS_COLORS[node.status] || 'text-zinc-500';
     return (
       <div key={node.id} className="flex flex-col">
-        <div className={`flex items-center gap-2 py-1.5 px-3 rounded-lg bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70`} style={{ marginLeft: depth * 16 }}>
+        <div className={`flex items-center gap-2 py-1.5 px-3 rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70`} style={{ marginLeft: depth * 16 }}>
           <Icon className={`w-3.5 h-3.5 ${color}`} />
           <span className="text-xs font-medium text-zinc-200">{node.roleConfig?.customName || node.role}</span>
           <span className={`text-[10px] ${color}`}>{node.status}</span>

@@ -267,7 +267,7 @@ export function TransactionDetailModal({
             exit={{ opacity: 0, scale: 0.94, y: 12 }}
             transition={{ duration: 0.25, ease }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md max-h-[85vh] rounded-xl border border-zinc-700/50 bg-zinc-900/95 backdrop-blur-xl overflow-hidden flex flex-col"
+            className="w-full max-w-md max-h-[85vh] rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl overflow-hidden flex flex-col"
           >
             <div className="pointer-events-none absolute inset-0 rounded-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent_40%)]" />
 

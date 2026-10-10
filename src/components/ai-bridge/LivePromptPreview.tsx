@@ -98,7 +98,7 @@ export function LivePromptPreview({
     return (
       <div
         className={cn(
-          'rounded-xl border border-dashed border-zinc-800 bg-zinc-900/40 px-3 py-6 text-center',
+          'rounded-xl border border-dashed border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] px-3 py-6 text-center',
           className
         )}
       >
@@ -113,7 +113,7 @@ export function LivePromptPreview({
   return (
     <div
       className={cn(
-        'rounded-xl border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm overflow-hidden',
+        'rounded-xl border border-zinc-800 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-sm overflow-hidden',
         className
       )}
     >

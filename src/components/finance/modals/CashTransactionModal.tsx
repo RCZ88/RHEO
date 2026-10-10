@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { PiggyBank } from 'lucide-react'
 import { TransactionModalShell } from './TransactionModalShell'
+import { SubmitGate } from './SubmitGate'
 import { useTransactionForm } from './useTransactionForm'
 import { ContextBand, TypeToggle, AmountInput, OnBehalfOfSection, HistoricalToggle } from './modalParts'
 import { CategoryChipGrid } from './CategoryChipGrid'
@@ -53,7 +54,7 @@ export const CashTransactionModal: React.FC<TxModalProps> = (props) => {
 			}}
 		>
 			{({ setCanSubmit }) => {
-				useEffect(() => setCanSubmit(valid), [valid, setCanSubmit])
+				<SubmitGate valid={valid} setCanSubmit={setCanSubmit} />
 				return (
 					<>
 						<ContextBand accent={ACCENT}>

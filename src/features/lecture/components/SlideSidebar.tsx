@@ -1,11 +1,14 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Layers, ScanSearch, Mic, Globe2, Sparkles, KeyRound, FlaskConical, BrainCircuit } from 'lucide-react';
-const items = [
+import { LayoutDashboard, Layers, ScanSearch, Mic, Globe2, Sparkles, KeyRound, FlaskConical, BrainCircuit, Combine } from 'lucide-react';
+// Exported so the /labs hub page can DERIVE the tool count rather than
+// hardcoding a number that silently rots when a tool is added or removed.
+export const items = [
   { to: '/lecture', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/lecture/decks', label: 'Slide Decks', icon: Layers },
+  { to: '/lecture/ingest', label: 'File Ingestion', icon: Layers },
   { to: '/lecture/image-lab', label: 'Image Lab', icon: ScanSearch },
   { to: '/lecture/transcriber', label: 'Lecture STT', icon: Mic },
   { to: '/lecture/web-digest', label: 'Web & YouTube', icon: Globe2 },
+  { to: '/lecture/compose', label: 'Prompt Composer', icon: Combine },
   { to: '/lecture/prompts', label: 'Prompt Forge', icon: Sparkles },
   { to: '/lecture/auth-vault', label: 'Auth Vault', icon: KeyRound },
   { to: '/lecture/research', label: 'Research', icon: FlaskConical },
@@ -24,7 +27,7 @@ export default function Sidebar() {
       </div>
       <div className="mx-4 mb-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        <span className="text-xs text-emerald-200/90">Token-saver engine online</span>
+        <span className="text-xs text-[var(--text-muted)]">Token-saver engine online</span>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 space-y-1">
         {items.map(it => (

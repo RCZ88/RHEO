@@ -124,7 +124,7 @@ export default function CultUIRegistry({ onAddComponent, onInstall }: CultUIRegi
     return (
       <div
         key={comp.slug}
-        className="group flex items-start gap-3 p-2.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 hover:border-zinc-700/60 hover:bg-zinc-900/60 transition-all"
+        className="group flex items-start gap-3 p-2.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 hover:border-zinc-700/60 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] transition-all"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export default function CultUIRegistry({ onAddComponent, onInstall }: CultUIRegi
             <div key={cat} className="rounded-lg border border-zinc-800/30 overflow-hidden">
               <button
                 onClick={() => toggleSection(cat)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-zinc-900/60 hover:bg-zinc-900/80 transition-colors text-[11px] font-medium text-zinc-400"
+                className="w-full flex items-center justify-between px-3 py-2 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] hover:bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] transition-colors text-[11px] font-medium text-zinc-400"
               >
                 <span>{cat} ({comps.length})</span>
                 <ChevronDown className={`w-3 h-3 transition-transform ${expandedSections.has(cat) ? 'rotate-180' : ''}`} />

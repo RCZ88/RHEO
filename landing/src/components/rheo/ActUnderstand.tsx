@@ -2,10 +2,13 @@
 
 import { motion, useInView } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { usePrefersReducedMotion } from "./use-reduced-motion";
+import { useShouldAnimate } from "./use-motion-preference";
 import DecryptedText from "./DecryptedText";
 
 type Scenario = {
+  id: string;
+  /** short label for the segmented control; `q` is the full question it asks */
+  short: string;
   q: string;
   traces: string[];
   answer: string;
@@ -14,6 +17,8 @@ type Scenario = {
 
 const SCENARIOS: Scenario[] = [
   {
+    id: "deep-work",
+    short: "Deep work",
     q: "> why was tuesday's deep work down 22%?",
     traces: [
       "querying timeline…",
@@ -25,6 +30,8 @@ const SCENARIOS: Scenario[] = [
     bars: [0.9, 0.82, 0.42, 0.78, 0.86, 0.7, 0.9],
   },
   {
+    id: "learning",
+    short: "Learning",
     q: "> what did I learn this week?",
     traces: ["collecting lyceum sessions…", "grouping by topic…"],
     answer:
@@ -32,6 +39,8 @@ const SCENARIOS: Scenario[] = [
     bars: [0.4, 0.55, 0.6, 0.9, 0.7, 0.5, 0.45],
   },
   {
+    id: "sharpest",
+    short: "Sharpest",
     q: "> when am I sharpest?",
     traces: ["scoring 30-day focus…", "clustering by hour…"],
     answer:
@@ -54,28 +63,23 @@ export default function ActUnderstand() {
             style={{ fontSize: 16, lineHeight: 1.6, color: "#a1a1aa" }}
           >
             It doesn&apos;t guess about your time. It queries the record — and
-            answers with receipts.
+            answers with receipts. Keep asking, and the record teaches back — your
+            process, redrawn as your habits change.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center">
-          <Console />
-          <NodeGraph />
-        </div>
-
-        {/* caption under the console */}
-        <p
-          className="mono"
-          style={{
-            fontSize: 11,
-            color: "#8a8a94",
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            marginTop: 18,
-          }}
-        >
-          SIMULATED RECORD SHOWN — RHEO&apos;S AI QUERIES YOUR ACTUAL TIMELINE
-        </p>
+        {/* REMOVED 2026-10-07 — app-ai.png is rendered by #gallery as one of the
+            17 screens. RESULT.md §1.2 gives the gallery exclusive ownership of
+            every still, precisely so a capture is never shown twice. */}
+        {/* R6 composition ruling — the static EXAMPLE card and NodeGraph are BOTH
+            deleted. The card was the placeholder for exactly this content and the
+            Console is the stronger artifact; keeping both said the same claim twice
+            ("DEEP WORK PEAKS 09:12–11:40" vs "focus peaks 09:00–11:30"). NodeGraph was
+            a fourth, weakest rendering of "queries, not guesses" — aria-hidden
+            decoration restating the body copy, and it carried its own reduce bug (the
+            0.9s path draw ran under reduce). Source kept at
+            .bak-20261008-actunderstand/. One thing, said once, demonstrated once. */}
+        <Console />
       </div>
     </section>
   );
@@ -85,7 +89,7 @@ export default function ActUnderstand() {
 function Console() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { margin: "-15% 0px" });
-  const reduced = usePrefersReducedMotion();
+  const reduced = !useShouldAnimate();
 
   const [idx, setIdx] = useState(0);
   const [typed, setTyped] = useState("");
@@ -139,26 +143,24 @@ function Console() {
     return () => clearTimeout(t);
   }, [phase, traceShown, inView, scenario.traces.length, reduced]);
 
-  // hold then advance
-  useEffect(() => {
-    if (!inView || reduced) return;
-    if (phase !== "answer") return;
-    const t = setTimeout(() => {
-      setIdx((i) => (i + 1) % SCENARIOS.length);
-    }, 4200);
-    return () => clearTimeout(t);
-  }, [phase, inView, reduced]);
-
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-    setIdx((i) => (i + 1) % SCENARIOS.length);
-    setInput("");
-  };
+  // R6 blocker 1 — the 4.2s auto-advance is DELETED. It was WCAG 2.2.2 (Pause,
+  // Stop, Hide): content that moves by itself with no control. It also meant a
+  // visitor could never stay on a scenario they were reading. Scenarios now
+  // advance ONLY on user action, via the segmented button row below.
+  //
+  // R6 blocker 2 — the free-text input is DELETED too. `onSubmit` ignored what
+  // was typed and advanced a canned script, so the box promised a capability it
+  // did not have: the single worst thing a trust-first page can do, and this
+  // section IS the trust argument. Three real controls that really select is
+  // strictly better than one fake input.
 
   return (
     <div
       ref={ref}
+      id="console-panel"
+      role="tabpanel"
+      aria-labelledby={`console-tab-${SCENARIOS[idx].id}`}
+      tabIndex={0}
       className="surface-card sheen-top"
       style={{
         border: "1px solid rgba(255,255,255,0.08)",
@@ -200,7 +202,7 @@ function Console() {
             <motion.div
               key={`${idx}-${i}`}
               className="mono"
-              initial={{ opacity: 0, x: -6 }}
+              initial={{ opacity: reduced ? 1 : 0, x: reduced ? 0 : -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               style={{ fontSize: 12, color: "#8a8a94", marginBottom: 4 }}
@@ -214,7 +216,7 @@ function Console() {
       <div style={{ minHeight: 120 }}>
         {phase === "answer" && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: reduced ? 1 : 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
@@ -226,44 +228,67 @@ function Console() {
         )}
       </div>
 
-      {/* input box */}
-      <form onSubmit={onSubmit} style={{ marginTop: 14 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 12px",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 6,
-            background: "#0a0a0c",
-          }}
-        >
-          <span className="mono" style={{ fontSize: 12, color: "#8a8a94" }}>
-            ›
-          </span>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="ask about your time — press enter"
-            className="mono"
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: 12,
-              color: "#f4f4f5",
-              fontFamily: "var(--font-mono), monospace",
-            }}
-          />
-        </div>
-      </form>
+      {/* R6 blocker 2 — real controls. Each button selects the scenario it names. */}
+      <div
+        role="tablist"
+        aria-label="Example questions"
+        style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 6 }}
+      >
+        {SCENARIOS.map((sc, i) => {
+          const active = i === idx;
+          return (
+            <button
+              key={sc.id}
+              role="tab"
+              type="button"
+              id={`console-tab-${sc.id}`}
+              aria-selected={active}
+              aria-controls="console-panel"
+              // Roving tabindex: exactly one tab is in the tab order, so Tab moves
+              // OUT of the widget and arrows move WITHIN it. Without this, Tab walks
+              // through all three and the role promises a keyboard contract the
+              // markup does not provide.
+              tabIndex={active ? 0 : -1}
+              data-scenario={sc.id}
+              onClick={() => { setIdx(i); setPhase("query"); setTraceShown(0); }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  const next = e.key === "ArrowRight"
+                    ? Math.min(SCENARIOS.length - 1, i + 1)
+                    : Math.max(0, i - 1);
+                  setIdx(next);
+                  setPhase("query");
+                  setTraceShown(0);
+                  document.getElementById(`console-tab-${SCENARIOS[next].id}`)?.focus();
+                }
+              }}
+              className="mono"
+              style={{
+                fontSize: 11,
+                padding: "6px 10px",
+                borderRadius: 6,
+                cursor: "pointer",
+                background: active ? "#ffffff" : "transparent",
+                color: active ? "#050506" : "#a1a1aa",
+                border: `1px solid ${active ? "#ffffff" : "rgba(255,255,255,0.12)"}`,
+                transition: "background 0.3s cubic-bezier(0.16,1,0.3,1), color 0.3s cubic-bezier(0.16,1,0.3,1)",
+              }}
+            >
+              {sc.short}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function BarChart({ values }: { values: number[] }) {
+  // Own hook instance: BarChart is a separate component, so the Console's `reduced`
+  // is not in scope here. Getting this wrong threw "reduced is not defined" and
+  // took the entire reduced-motion render down with it.
+  const reduced = !useShouldAnimate();
   const days = ["M", "T", "W", "T", "F", "S", "S"];
   return (
     <div
@@ -281,19 +306,24 @@ function BarChart({ values }: { values: number[] }) {
     >
       {values.map((v, i) => (
         <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          {/* R6 blocker 3 — the WRAPPER holds the final height; the bar is a
+              full-height child animated with scaleY from the bottom. Animating
+              `height` is a layout-property animation: it reflows every frame and
+              fights the scroll-snap rail it lives inside. */}
           <div style={{ width: "100%", height: 40, display: "flex", alignItems: "flex-end" }}>
             <motion.div
-              initial={{ height: 0 }}
-              animate={{ height: `${v * 100}%` }}
+              initial={{ scaleY: reduced ? 1 : 0 }}
+              animate={{ scaleY: 1 }}
               transition={{
-                duration: 0.6,
-                delay: i * 0.07,
+                duration: reduced ? 0 : 0.6,
+                delay: reduced ? 0 : i * 0.07,
                 ease: [0.16, 1, 0.3, 1],
               }}
               style={{
                 width: "100%",
+                height: "100%",
+                transformOrigin: "bottom",
                 background: i === 2 ? "#ffffff" : "rgba(255,255,255,0.4)",
-                minHeight: 2,
               }}
             />
           </div>
@@ -302,72 +332,6 @@ function BarChart({ values }: { values: number[] }) {
           </span>
         </div>
       ))}
-    </div>
-  );
-}
-
-/* ---------- Node graph (central node + 3 tools, lines draw on inView) ---------- */
-function NodeGraph() {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { margin: "-15% 0px", once: true });
-  const reduced = usePrefersReducedMotion();
-  const draw = reduced || inView ? 1 : 0;
-
-  const center = { x: 60, y: 120 };
-  const tools = [
-    { x: 180, y: 40, label: "timeline" },
-    { x: 200, y: 120, label: "calendar" },
-    { x: 180, y: 200, label: "baseline" },
-  ];
-  return (
-    <div ref={ref} style={{ width: 260 }}>
-      <svg viewBox="0 0 230 240" width="100%" height="260" aria-hidden>
-        {tools.map((t, i) => (
-          <motion.path
-            key={i}
-            d={`M ${center.x} ${center.y} C ${(center.x + t.x) / 2} ${center.y}, ${(center.x + t.x) / 2} ${t.y}, ${t.x} ${t.y}`}
-            fill="none"
-            stroke="rgba(255,255,255,0.32)"
-            strokeWidth={1}
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: draw }}
-            transition={{
-              duration: 0.9,
-              delay: 0.2 + i * 0.15,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-          />
-        ))}
-        {/* central node */}
-        <circle cx={center.x} cy={center.y} r={18} fill="#0a0a0c" stroke="rgba(255,255,255,0.4)" strokeWidth={1} />
-        <circle cx={center.x} cy={center.y} r={4} fill="#ffffff" />
-        <text
-          x={center.x}
-          y={center.y + 34}
-          textAnchor="middle"
-          fill="#a1a1aa"
-          style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, letterSpacing: "0.1em" }}
-        >
-          RHEO
-        </text>
-        {/* tool nodes */}
-        {tools.map((t, i) => (
-          <g key={i}>
-            <circle cx={t.x} cy={t.y} r={10} fill="#0a0a0c" stroke="rgba(255,255,255,0.16)" strokeWidth={1} />
-            <text
-              x={t.x + 16}
-              y={t.y + 3}
-              fill="#8a8a94"
-              style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, letterSpacing: "0.08em" }}
-            >
-              {t.label}
-            </text>
-          </g>
-        ))}
-      </svg>
-      <p className="mono-label" style={{ fontSize: 10, textAlign: "center", marginTop: 6 }}>
-        queries · not guesses
-      </p>
     </div>
   );
 }

@@ -17,17 +17,27 @@ export function AnnotatedMathBlock({ block, onAsk, activeRefId, onRefHover, onRe
 
   useEffect(() => {
     if (!containerRef.current) return;
-    try {
-      import('katex').then((katex) => {
+    let cancelled = false;
+    // A `try/catch` around `import()` catches nothing — a failed dynamic import
+    // is a rejection, so it escaped this component, hit the global error router,
+    // and was classified as a stale chunk → `window.location.reload()`. One
+    // missing KaTeX chunk restarted the entire app from inside a lesson.
+    import('katex')
+      .then((katex) =>
         import('katex/dist/katex.min.css').then(() => {
-          katex.default.render(block.tex, containerRef.current!, {
+          if (cancelled || !containerRef.current) return;
+          katex.default.render(block.tex, containerRef.current, {
             displayMode: true,
             throwOnError: false,
             trust: true,
           });
-        });
+        })
+      )
+      .catch((err: any) => {
+        if (cancelled) return;
+        console.warn('[AnnotatedMathBlock] KaTeX unavailable:', err?.message ?? err);
       });
-    } catch { /* KaTeX load error — already handled by MathBlock pattern */ }
+    return () => { cancelled = true; };
   }, [block.tex]);
 
   // Highlight matching KaTeX spans when activeRefId changes
@@ -77,7 +87,7 @@ export function AnnotatedMathBlock({ block, onAsk, activeRefId, onRefHover, onRe
                   className={`p-2.5 rounded-lg border text-xs transition-all duration-100 ${
                     isActive
                       ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
-                      : 'border-zinc-700/30 bg-zinc-900/40 text-zinc-300 hover:border-zinc-600/50'
+                      : 'border-zinc-700/30 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-600/50'
                   }`}
                   onMouseEnter={() => handleCardMouseEnter(a.id)}
                   onMouseLeave={handleCardMouseLeave}

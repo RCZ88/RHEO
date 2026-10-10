@@ -77,11 +77,19 @@ interface ScheduleCardProps {
   /** true = show the whole week, false = only selectedDay. Was typed `?: false`,
    *  which hard-locked the prop to `false` and rejected every real caller. */
   showAll?: boolean;
+  /** Opens the goal hub for a block's linked goal. Without this the chip
+   *  was display-only, so a linked block was a dead end. */
+  onOpenGoalHub?: (goalId: string) => void;
   onDayChange?: (day: number) => void;
+  /** The parent owns the day selector (it renders its own, richer rail). Added so
+   *  a page that has a day control does not end up with two controls for one
+   *  value — the same value surfaced twice is the "six parallel registries" bug
+   *  in miniature. Callers that do not pass it keep the built-in row. */
+  hideDaySelector?: boolean;
 }
 
 export function ScheduleCard({
-  entries, selectedDate, selectedDay: selectedDayProp, loading = false, error = null, onAdd, onUpdate, onDelete, linkedGoals, showAll = false, onDayChange,
+  entries, selectedDate, selectedDay: selectedDayProp, loading = false, error = null, onAdd, onUpdate, onDelete, linkedGoals, showAll = false, onDayChange, hideDaySelector = false, onOpenGoalHub,
 }: ScheduleCardProps) {
   const theme = getWidgetTheme('schedule-hero');
   const selectedDay = selectedDayProp ?? new Date().getDay();
@@ -210,21 +218,27 @@ export function ScheduleCard({
       }
     >
       <div className="flex flex-col gap-3 min-h-[320px]">
-        {/* Day selector (hidden in showAll mode) */}
-        {!showAll && (
-          <div className="flex items-center gap-1 shrink-0">
+        {/* Day selector (hidden in showAll mode, or when the parent owns it) */}
+        {!showAll && !hideDaySelector && (
+          <div className="flex items-center gap-1 shrink-0" role="group" aria-label="Day of week">
             {DAY_LETTER.map((letter, i) => (
-              <span
+              /* Was a <span onClick>: reachable by mouse only, no role, no
+                 keyboard path, and invisible to a screen reader as a control.
+                 Gate D — nothing on this surface may be mouse-only. */
+              <button
                 key={i}
+                type="button"
                 onClick={() => handleDayClick(i)}
-                className={`flex-1 h-8 rounded-md text-[11px] font-medium flex items-center justify-center transition-colors cursor-pointer ${
+                aria-pressed={i === selectedDay}
+                aria-label={DAY_SHORT[i]}
+                className={`flex-1 min-h-[36px] rounded-md text-[11px] font-medium flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${
                   i === selectedDay
                     ? 'border border-[var(--border-subtle)] text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] border border-transparent hover:border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {letter}
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -260,7 +274,23 @@ export function ScheduleCard({
                   placeholder="Location (optional)"
                   className="flex-1 bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9"
                 />
-                <Select value={form.day} onValueChange={(v: string) => setForm(p => ({ ...p, day: v }))} className="w-[90px]">
+                {/* `valueLabel` is REQUIRED here, not decoration. The Select's
+                    trigger renders `SelectPrimitive.Value`, which falls back to
+                    the raw `value` when no label map is supplied — and this
+                    control's value is the DAY INDEX. So the trigger showed "3"
+                    where it should have shown "Wed". Every consumer of that day
+                    value is numeric by necessity (`day_of_week` is 0-6), so the
+                    number is not a mistake in the data model, only in the
+                    presentation. Mapping it back to a name at the last possible
+                    moment is the whole fix, and it keeps the wire format integer
+                    so nothing downstream has to change. */}
+                <Select
+                  value={form.day}
+                  onValueChange={(v: string) => setForm(p => ({ ...p, day: v }))}
+                  className="w-[90px]"
+                  aria-label="Day of the week"
+                  valueLabel={Object.fromEntries(DAYS.map((_d, i) => [i.toString(), DAY_SHORT[i]]))}
+                >
                   {DAYS.map((d, i) => <SelectItem key={i} value={i.toString()}>{DAY_SHORT[i]}</SelectItem>)}
                 </Select>
               </div>
@@ -270,7 +300,17 @@ export function ScheduleCard({
                   <span className="text-[var(--text-muted)] text-xs">to</span>
                   <Input type="time" value={form.end} onChange={e => setForm(p => ({ ...p, end: e.target.value }))} className="bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9" />
                 </div>
-                <Select value={form.category} onValueChange={(v: string) => setForm(p => ({ ...p, category: v as ScheduleCategory }))} className="w-[110px]">
+                {/* Same defect, same fix: a category is stored as a snake_case
+                    enum, so without a label map the trigger printed
+                    "deep_work" at the user. An enum code is a system token and
+                    must never reach the surface (PAINT Gate F). */}
+                <Select
+                  value={form.category}
+                  onValueChange={(v: string) => setForm(p => ({ ...p, category: v as ScheduleCategory }))}
+                  className="w-[110px]"
+                  aria-label="Category"
+                  valueLabel={CATEGORY_LABELS as Record<string, string>}
+                >
                   {(Object.keys(CATEGORY_LABELS) as ScheduleCategory[]).map(cat => (
                     <SelectItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</SelectItem>
                   ))}
@@ -329,7 +369,7 @@ export function ScheduleCard({
                         <MapPin size={10} />{currentEntry.location}
                       </span>
                     )}
-                    {currentEntry.goal_id && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === currentEntry.goal_id)?.title || 'Linked goal'} />}
+                    {currentEntry.goal_id && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === currentEntry.goal_id)?.title || 'Linked goal'} onClick={onOpenGoalHub ? () => onOpenGoalHub(currentEntry.goal_id!) : undefined} />}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -373,7 +413,7 @@ export function ScheduleCard({
                        {entry.location && !dayIsPast && (
                          <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1"><MapPin size={10} />{entry.location}</span>
                        )}
-                       {entry.goal_id && !dayIsPast && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === entry.goal_id)?.title || 'Linked goal'} />}
+                       {entry.goal_id && !dayIsPast && <EntityChip kind="goal" label={linkedGoals?.find(g => g.id === entry.goal_id)?.title || 'Linked goal'} onClick={onOpenGoalHub ? () => onOpenGoalHub(entry.goal_id!) : undefined} />}
                      </div>
                    </div>
                    <div className="flex items-center gap-2 shrink-0">

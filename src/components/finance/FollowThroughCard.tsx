@@ -53,7 +53,7 @@ export function FollowThroughCard({
   return (
     <motion.section
       {...fadeIn}
-      className="relative rounded-xl border border-zinc-800/60 bg-zinc-900/60 backdrop-blur-xl p-5 overflow-hidden"
+      className="relative rounded-xl border border-zinc-800/60 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 overflow-hidden"
     >
       {/* Gradient glow background */}
       <div

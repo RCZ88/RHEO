@@ -40,7 +40,7 @@ export function InlineCovenantForm({ phaseId, onClose }: Props) {
         </label>
         <VoiceInputWrapper>
           <textarea value={text} onChange={e => setText(e.target.value)} placeholder="I will..." autoFocus rows={3}
-            className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-rose-500/40 focus:outline-none resize-none" />
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-rose-500/40 focus:outline-none resize-none" />
         </VoiceInputWrapper>
       </div>
       <div>

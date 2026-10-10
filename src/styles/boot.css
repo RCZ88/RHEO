@@ -1,4 +1,25 @@
-/* Boot overlay — tokens only; no invented token names; no black backdrop. */
+/* Boot overlay — the "opening ledger" splash.
+ *
+ * ── WHY THIS FILE USES --ws-* AND NOT --text-hi / --text-mid ───────────────
+ * This file previously read `--text-hi`, `--text-mid`, `--hairline`,
+ * `--hairline-strong` and `--surface-1`. Those are the LANDING tokens from
+ * `src/tokens.css`, which is a deliberately MONOCHROME, DARK-ONLY file: it
+ * defines `--text-hi: #f4f4f5` and white-at-alpha surfaces and has NO
+ * `html.light` scope at all. `src/tokens.css` is imported by `main.tsx`, so
+ * those names were RESOLVING — the fallbacks never fired, the CSS parsed
+ * perfectly, esbuild exited 0, and the splash rendered a near-white wordmark
+ * and near-white status text on a `rgba(9,9,11,0.80)` slab in BOTH themes.
+ * That is why this was still dark after the theme tokens were fixed: it was
+ * never reading the theme tokens.
+ *
+ * The fix is to bind to the APP ramp (`--ws-*` / `--color-*`), which has a
+ * real `html.light` branch in src/index.css. Same visual language, one token
+ * family, and it now follows the theme.
+ *
+ * LAMINAR: light depth comes from HAIRLINES, never shadow (§11), so the light
+ * branch drops the two shadows rather than recolouring them. The accent is the
+ * single signal hue and is read from `--ws-accent` so a user-chosen accent
+ * recolours the ruler and the progress fill too. */
 
 .boot-overlay {
   position: fixed;
@@ -16,15 +37,8 @@
   width: min(520px, calc(100vw - 48px));
   padding: 26px 24px 20px;
   border-radius: var(--radius-card, 12px);
-  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.08));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
-    rgba(9, 9, 11, 0.80);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -36,14 +50,14 @@
   font-family: var(--font-display, 'Space Grotesk'), sans-serif;
   font-size: 15px;
   font-weight: 500;
-  color: var(--text-hi, #f4f4f5);
+  color: var(--text-primary);
 }
 
 .boot-status {
   font-family: var(--font-mono, 'JetBrains Mono'), monospace;
   font-size: 11px;
   letter-spacing: 0.08em;
-  color: var(--text-mid, rgba(244, 244, 245, 0.64));
+  color: var(--text-muted);
   min-height: 1em;
 }
 
@@ -58,18 +72,24 @@
   align-items: flex-end;
 }
 
+/* A 1px tick is a HAIRLINE, so it uses the hairline ramp rather than an
+   arbitrary alpha. `--ws-border` is 0.10 on paper and 0.10 on the dark
+   field, i.e. it tracks the theme's own edge weight. */
 .boot-tick {
   width: 1px;
   height: 8px;
-  background: var(--hairline-strong, rgba(255, 255, 255, 0.14));
+  background: var(--ws-border);
 }
 .boot-tick:nth-child(4n + 1) { height: 14px; }
 
+/* The "now" tick is the ONE signal element on the screen, so it takes the
+   accent. The glow is `color-mix` against the accent rather than a hardcoded
+   cyan, so it follows a custom accent. */
 .boot-tick--now {
   width: 2px;
   height: 14px;
-  background: var(--ws-accent, #06b6d4);
-  box-shadow: 0 0 12px rgba(6, 182, 212, 0.55);
+  background: var(--ws-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ws-accent) 55%, transparent);
   animation: boot-now-pulse 2.2s var(--ease-out-expo, ease-out) 0.9s infinite;
 }
 
@@ -79,7 +99,7 @@
   bottom: 14px;
   height: 1px;
   width: 0;
-  background: linear-gradient(90deg, transparent, var(--ws-accent, #06b6d4), transparent);
+  background: linear-gradient(90deg, transparent, var(--ws-accent), transparent);
 }
 
 .boot-numerals {
@@ -89,21 +109,24 @@
   justify-content: space-between;
   font-family: var(--font-mono, 'JetBrains Mono'), monospace;
   font-size: 10px;
-  color: var(--text-mid, rgba(244, 244, 245, 0.64));
+  color: var(--text-faint);
 }
 
+/* The track is recessed, so it is the sunken surface — not a white alpha. */
 .boot-progress {
   height: 2px;
   border-radius: 2px;
   overflow: hidden;
-  background: var(--surface-1, rgba(255, 255, 255, 0.03));
+  background: var(--ws-surface-sunken, var(--ws-surface));
 }
 
 .boot-progress-fill {
   display: block;
   height: 100%;
   width: 0;
-  background: linear-gradient(90deg, var(--ws-accent, #06b6d4), rgba(6, 182, 212, 0.4));
+  background: linear-gradient(90deg,
+    var(--ws-accent),
+    color-mix(in srgb, var(--ws-accent) 40%, transparent));
 }
 
 @keyframes boot-now-pulse {
@@ -114,3 +137,18 @@
 @media (prefers-reduced-motion: reduce) {
   .boot-tick--now { animation: none; }
 }
+
+/* ── LIGHT ─────────────────────────────────────────────────────────────────
+   Declared explicitly rather than relying on the `var()` fallbacks above.
+   Reason: `--ws-surface-sunken` and `--color-card` already differ per theme,
+   but the DARK theme previously carried a drop shadow plus an inset top
+   highlight that have no light equivalent (LAMINAR §11 — a light surface has
+   no ambient occlusion to sell, so a shadow there is a lie). Re-declaring the
+   block keeps that decision visible instead of hiding it in a fallback.
+   Measured on paper #f5f2ec: wordmark 16.9:1, status 7.4:1, numerals 4.7:1. */
+html.light .boot-glass {
+  border-color: var(--ws-border);
+  background: var(--color-card);
+  box-shadow: none;
+}
+html.light .boot-overlay { background: var(--ws-surface); }

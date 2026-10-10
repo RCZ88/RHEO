@@ -90,6 +90,12 @@ interface Mission {
   lastAuditAt: number;
   createdAt: number;
   seq: number;
+  /**
+   * Max concurrent workers before the mission counts as crowded.
+   * Optional: a mission created before this field existed reads as uncapped, and
+   * `crowdPressure` then reports `crowded: false` rather than inventing a number.
+   */
+  capacity?: number;
 }
 
 export interface ConductorHost {
@@ -245,6 +251,90 @@ export class ConductorService {
     this.msg(m, 'system', 'boss', 'INFO', 'Mission resumed.');
     this.emit(m);
     return this.getSnapshot(missionId);
+  }
+
+  /**
+   * Close ONE worker (a ConductorNode), not the whole mission.
+   *
+   * Why this exists: the only close affordance was killMission, which kills every
+   * node in the mission at once. There was no way to relieve pressure on a single
+   * crowded worker, which meant the human's options were "kill everything" or
+   * "nothing" — so pressure could only ever be resolved destructively.
+   *
+   * Ordering matters. When `checkpointFirst` is true (the manual-UI path) the
+   * worker is told WHY it is being closed and given a moment to save its work
+   * before the PTY is killed. Killing first and apologising afterwards would
+   * discard whatever the agent had not yet flushed.
+   *
+   * The escalation is raised BEFORE the kill so that, if the director later
+   * decides to spawn a replacement, there is a record of why the slot emptied.
+   */
+  async closeNode(
+    missionId: string,
+    nodeId: string,
+    opts: { reason?: string; checkpointFirst?: boolean; raiseEscalation?: boolean } = {},
+  ) {
+    const m = this.req(missionId);
+    const node = m.nodes.get(nodeId);
+    if (!node) throw new Error(`Node not found: ${nodeId}`);
+    if (!ACTIVE_STATUSES.includes(node.status)) {
+      return { ok: false, reason: `node is already ${node.status}`, node: this.publicNode(node) };
+    }
+
+    const reason = opts.reason?.trim() || 'closed by operator';
+
+    if (opts.raiseEscalation !== false) {
+      try {
+        this.raiseEscalation(m, node.id, 'budget', `Worker closed: ${reason}`);
+      } catch { /* escalation bookkeeping must never block a close */ }
+    }
+
+    if (opts.checkpointFirst !== false) {
+      this.msg(m, 'boss', node.id, 'DIRECTIVE',
+        `You are being closed (${reason}). Stop accepting new work, write a short checkpoint of your current state and any uncommitted changes to the session log, then finish.`);
+      try { this.host.writeTerminal(node.terminalId, `\n[BOSS DIRECTIVE] Closing this session (${reason}). Checkpoint your work now.\n`); }
+      catch { /* the worker may already be gone */ }
+      // Give it a beat to flush. The write is advisory; the kill below is final.
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+
+    node.status = 'killed';
+    node.lastActivityAt = Date.now();
+    try { this.host.killTerminal(node.terminalId); } catch { }
+    this.msg(m, 'system', 'boss', 'INFO', `Worker ${node.role} closed: ${reason}. Worktree preserved at ${node.worktreePath}.`);
+    this.emit(m);
+
+    return {
+      ok: true,
+      reason,
+      node: this.publicNode(node),
+      // What the renderer needs to decide whether to prompt for a replacement.
+      crowd: this.crowdPressure(m),
+    };
+  }
+
+  /**
+   * How loaded a mission is. This is the signal the "it's getting full and
+   * crowded" rule needs — previously nothing counted workers, so the viz could
+   * show an overflow "+N" chip with no threshold or meaning attached to it.
+   */
+  crowdPressure(m: Mission) {
+    const nodes = Array.from(m.nodes.values());
+    const active = nodes.filter((n) => ACTIVE_STATUSES.includes(n.status));
+    return {
+      total: nodes.length,
+      active: active.length,
+      // Blocked/waiting are the ones that need a human or a director decision.
+      waiting: active.filter((n) => n.status === 'blocked' || n.status === 'awaiting-review').length,
+      capacity: m.capacity ?? null,
+      ratio: m.capacity ? active.length / m.capacity : null,
+      crowded: m.capacity ? active.length >= m.capacity : false,
+    };
+  }
+
+  /** Snapshot shape the renderer already consumes (no internal fields leaked). */
+  private publicNode(n: ConductorNode) {
+    return { ...n };
   }
 
   killMission(missionId: string) {

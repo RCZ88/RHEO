@@ -18,7 +18,7 @@ export interface DialogProps {
 
 /**
  * Lightweight modal (portal + overlay + focus trap-lite via Escape/backdrop).
- * DeskFlow-skinned: bg-zinc-900, ring-1, rounded-xl, p-5. Overlay is a blurred
+ * DeskFlow-skinned: bg-zinc-900 light:bg-[var(--ws-surface-raised)], ring-1, rounded-xl, p-5. Overlay is a blurred
  * scrim. Content scales 0.98 -> 1 (transform/opacity only). Used for bulk import
  * and destructive confirmations.
  */
@@ -68,7 +68,7 @@ export function Dialog({
 						exit={ { opacity: 0, scale: reduce ? 1 : 0.98 } }
 						transition={ { duration: reduce ? 0 : MOTION.fast, ease: MOTION.ease } }
 						className={cn(
-							"relative w-full max-w-lg rounded-xl bg-zinc-900 p-5 ring-1 ring-zinc-800/60",
+							"relative w-full max-w-lg rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] p-5 ring-1 ring-zinc-800/60",
 							className,
 						)}
 					>

@@ -217,7 +217,14 @@ export async function loadUserLessons(): Promise<UserLessonSummary> {
 }
 
 export function resetProfile(): void {
-  localStorage.removeItem(KEY);
+  // localStorage access must stay in try/catch (§7). If this throws when storage
+  // is disabled, the DB delete and the `profile-changed` event below never run
+  // and every subscribed panel keeps rendering the stale profile.
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // storage unavailable — the DB delete below is the source of truth
+  }
   clearSetupComplete();
   if (api?.learnDeleteProfile) {
     api.learnDeleteProfile({ key: KEY }).catch(() => {});

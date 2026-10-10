@@ -137,7 +137,7 @@ export function ReceiptGeneratorModal({ open, onClose, person, transactions, dis
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative w-full max-w-[1100px] max-h-[92vh] overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl flex flex-col"
+        className="relative w-full max-w-[1100px] max-h-[92vh] overflow-hidden rounded-xl bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 shadow-2xl flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -316,7 +316,7 @@ export function ReceiptGeneratorModal({ open, onClose, person, transactions, dis
           </div>
 
           {/* Right Panel — Live Preview */}
-          <div className="flex-1 overflow-auto p-6 flex justify-center items-start" style={{ background: '#1a1a2e' }}>
+          <div className="flex-1 overflow-auto p-6 flex justify-center items-start" style={{ background: 'var(--ws-surface)' }}>
             <div className="w-full max-w-[720px] flex flex-col items-center gap-4">
               <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

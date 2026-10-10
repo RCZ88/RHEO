@@ -80,7 +80,7 @@ export function CalendarStrip({ selectedDate, onDateChange, goalDates, marks, we
               className={`flex flex-col items-center gap-0.5 py-2 px-2.5 rounded-xl min-w-[48px] transition-all duration-200 relative ${
                 selected ? 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
                   : today ? 'bg-zinc-800/40 text-zinc-300 border border-zinc-700/30'
-                    : 'bg-zinc-900/40 text-zinc-500 border border-transparent hover:bg-zinc-800/30 hover:text-zinc-300'
+                    : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] text-zinc-500 border border-transparent hover:bg-zinc-800/30 hover:text-zinc-300'
               }`}
             >
               <span className="text-[10px] font-medium uppercase tracking-wider">{dayName}</span>

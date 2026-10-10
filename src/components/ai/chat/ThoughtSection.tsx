@@ -45,7 +45,7 @@ export function ThoughtSection({ thoughts, forceOpen }: ThoughtSectionProps) {
         {forceOpen && (
           <span className="ml-auto flex items-center gap-1">
             <span className="h-1.5 w-1.5 rounded-full bg-pink-400/80 animate-pulse" />
-            <span className="text-[10px] text-pink-400/60">streaming</span>
+            <span className="text-[10px] text-[var(--text-muted)]">streaming</span>
           </span>
         )}
       </div>

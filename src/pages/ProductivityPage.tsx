@@ -1,10 +1,11 @@
 import { useMemo, useEffect, useState, useCallback } from 'react';
 import { tierColor as getTierColor } from '../lib/tierColors';
+import { cssVar, hexA, monoStep, MONO_STEPS, formatClock } from '../lib/usageScale';
 import {
   Target, TrendingUp, TrendingDown, Clock, Award, Zap,
   Monitor, Globe, BarChart3, Info, Timer, Eye, EyeOff,
   PieChart as PieChartIcon, ArrowUp, ArrowDown, Minus,
-  ChevronRight, ChevronDown, ChevronLeft, Activity, Layers
+  ChevronRight, ChevronDown, ChevronLeft, Activity, Layers, ArrowLeftRight
 } from 'lucide-react';
 import { Switch } from '../components/ui/switch';
 import { Pie, Bar, Line } from 'react-chartjs-2';
@@ -13,13 +14,11 @@ import { getDateRange } from '../lib/dateRange';
 import type { Period } from '../lib/dateRange';
 import { PageShell } from '../components/PageShell';
 import { GlassCard } from '../components/GlassCard';
-import { MagicCard } from '../components/ui/magic-card';
 import { SectionHeader } from '../components/SectionHeader';
 import { NumberTicker } from '../components/ui/number-ticker';
 import { DotPattern } from '../components/ui/dot-pattern';
-import { AnimatedGradientText } from '../components/ui/animated-gradient-text';
 import { Badge } from '../components/ui/badge';
-import { glassBackdrop, centerText, makeGradient, sharedTooltipStyle, sharedScales, barAnimation, pieAnimation } from '../lib/chart-plugins';
+import { glassBackdrop, centerText, sharedTooltipStyle, barAnimation, pieAnimation } from '../lib/chart-plugins';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -143,33 +142,108 @@ function formatDuration(seconds: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function formatHours(seconds: number): string {
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-  const h = (seconds / 3600).toFixed(1);
-  return `${h}h`;
-}
+// NOTE: the old local formatHours() is gone. Every inline label now uses
+// usageScale.formatClock(), which keeps sub-minute values ("40s") instead of
+// collapsing them to "0m", and axis ticks format hours inline.
 
-function getCategoryColor(category: string): string {
-  const colors: Record<string, string> = {
-    'IDE': '#6366f1',
-    'AI Tools': '#8b5cf6',
-    'Education': '#10b981',
-    'Productivity': '#14b8a6',
-    'Tools': '#f59e0b',
-    'Browser': '#3b82f6',
-    'Communication': '#14b8a6',
-    'Design': '#ec4899',
-    'News': '#f97316',
-    'Search Engine': '#3b82f6',
-    'Entertainment': '#ef4444',
-    'Social Media': '#64748b',
-    'Shopping': '#f97316',
-    'Uncategorized': '#71717a',
-    'Other': '#71717a',
-    'Developer Tools': '#6366f1'
-  };
-  return colors[category] || '#71717a';
-}
+// ============================================================
+// CHART COLOUR SYSTEM
+//
+// This file used to define its OWN 16-entry saturated category palette and
+// feed it to inline styles. That is a straight LAMINAR §5 breach
+// (src/lib/CategoryColors.ts is the only sanctioned source) and it was the
+// single loudest thing on the page: with ~12 live web categories the
+// Websites card rendered as a wall of unrelated hues, none of which meant
+// anything at this level of the funnel.
+//
+// Two rules replace it:
+//
+// 1. HUE IS RESERVED FOR TIER. Productive / Neutral / Distracting is the
+//    only dimension this page judges on, and those come from the
+//    user-overridable --tier-* tokens (tierColor reads them live), so the
+//    charts follow both the theme AND the user's Settings override.
+//
+// 2. NEUTRAL RECEDES, THE VERDICT DOES NOT. Productive and distracting
+//    are the two buckets that carry a judgement, so they render loud.
+//    Neutral is the filler bucket and drops back. One saturation story,
+//    applied identically in the trend fill, the donut, the stacked bars
+//    and the split bars — which is what makes four charts read as one
+//    system instead of four.
+//
+// Chart.js resolves colours on a canvas and cannot parse CSS custom
+// properties, so the live token values are read off :root here and the
+// alpha is composited by hand (usageScale.hexA).
+// ============================================================
+const TIER_FILL_ALPHA = {
+  productive: 0.85,
+  neutral: 0.42,
+  distracting: 0.85,
+} as const;
+
+type TierKey = keyof typeof TIER_FILL_ALPHA;
+
+const tierHex = (tier: TierKey): string => getTierColor(tier);
+const tierFill = (tier: TierKey): string => hexA(tierHex(tier), TIER_FILL_ALPHA[tier]);
+const tierWash = (tier: TierKey): string => hexA(tierHex(tier), 0.14);
+
+/**
+ * DOM-side tier colour is the CSS custom property ITSELF, not a hex read
+ * out of computed style. Three reasons, in order of importance:
+ *   1. no raw hex lands in the DOM (LAMINAR §7 #7);
+ *   2. `var(--tier-X)` re-resolves at paint time, so a Settings → Colors
+ *      change updates the page without any re-render, whereas a hex
+ *      captured during render goes stale;
+ *   3. it follows the theme for free. Chart.js genuinely cannot do this —
+ *      canvas does not parse var() — which is the only reason tierHex()
+ *      still exists, and it is used ONLY for chart datasets.
+ */
+const tierVar = (tier: TierKey): string => `var(--tier-${tier})`;
+const tierVarFill = (tier: TierKey): string =>
+  `color-mix(in srgb, var(--tier-${tier}) ${Math.round(TIER_FILL_ALPHA[tier] * 100)}%, transparent)`;
+
+/** Live value of any design token, for the bits Chart.js cannot read. */
+const tok = (name: string, fallback: string): string => cssVar(name, fallback);
+
+const chartSurface = (): string => tok('--color-card', '#18181b');
+const chartMutedText = (): string => tok('--chart-text', '#a1a1aa');
+const chartGrid = (): string => hexA(tok('--color-border', '#27272a'), 0.7);
+
+/** Axis/label styling shared by every chart on the page (replaces the
+ *  hardcoded grey tick/grid colours that each chart repeated).
+ *
+ *  These return `any` on purpose. Chart.js types `options` as a deeply-nested
+ *  `_DeepPartialObject<...>` keyed by chart type, and it resolves the literal
+ *  at compile time from JSX usage — a factory function can never satisfy it,
+ *  so every shared helper in the file had to be inlined per chart instead
+ *  (which is how the same six colours got copy-pasted four times in the
+ *  first place). One shared, typed-as-any factory is the smaller trade. */
+const chartScales = (): any => {
+  const ticks = { color: chartMutedText(), font: { family: '"JetBrains Mono", monospace' as const, size: 11 } };
+  const axis = { grid: { color: chartGrid() }, border: { display: false }, ticks };
+  return { x: axis, y: axis };
+};
+
+const chartTooltip = (extra?: Record<string, unknown>): any => ({
+  ...sharedTooltipStyle,
+  backgroundColor: hexA(tok('--color-popover', '#18181b'), 0.96),
+  borderColor: tok('--color-border', '#27272a'),
+  titleColor: tok('--text-secondary', '#a1a1aa'),
+  bodyColor: tok('--text-primary', '#fafafa'),
+  ...extra,
+});
+
+const chartLegend = (position: 'top' | 'bottom' = 'bottom'): any => ({
+  position,
+  labels: {
+    color: chartMutedText(),
+    padding: 16,
+    usePointStyle: true,
+    pointStyle: 'circle' as const,
+    boxWidth: 6,
+    boxHeight: 6,
+    font: { family: '"JetBrains Mono", monospace' as const, size: 11 },
+  },
+});
 
 export default function ProductivityPage({
   embedded,
@@ -833,19 +907,24 @@ export default function ProductivityPage({
   }, [dailyTrend, selectedPeriod, logs, browserLogsProp, tierAssignments]);
 
   // Chart data for daily trend
-  const trendChartData = {
+  const trendChartData: any = {
     labels: dailyTrend.map(d => d.label),
     datasets: [{
       label: 'Productivity Score',
       data: dailyTrend.map(d => d.score),
-      borderColor: '#10b981',
-      backgroundColor: (ctx: any) => makeGradient(ctx, '#10b981'),
+      borderColor: tierHex('productive'),
+      // Flat wash, NOT makeGradient(). The old full-height gradient put the
+      // most saturated pixels at the very top of the plot, which is what made
+      // this chart read as neon against an otherwise flat surface.
+      backgroundColor: tierWash('productive'),
       fill: true,
       tension: 0.4,
       pointRadius: 0,
       pointHoverRadius: 4,
-      pointBackgroundColor: '#10b981',
-      pointBorderColor: '#10b981',
+      pointBackgroundColor: tierHex('productive'),
+      pointBorderColor: chartSurface(),
+      pointHoverBorderWidth: 2,
+      pointHoverBorderColor: tierHex('productive'),
       borderWidth: 2,
     }]
   };
@@ -859,31 +938,23 @@ export default function ProductivityPage({
         productivityData.tiers.neutral.seconds,
         productivityData.tiers.distracting.seconds
       ],
-      backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(59, 130, 246, 0.8)', 'rgba(239, 68, 68, 0.8)'],
-      borderColor: '#0a0a0a',
+      backgroundColor: [tierFill('productive'), tierFill('neutral'), tierFill('distracting')],
+      // Hairline in the surface colour rather than a hard black — the
+      // segments read as one ring instead of three pasted-on discs.
+      borderColor: chartSurface(),
       borderWidth: 2,
-      hoverOffset: 6,
+      hoverOffset: 3,
     }]
   };
 
-  const distributionOptions = {
+  const distributionOptions: any = {
     responsive: true,
     maintainAspectRatio: false,
-    cutout: '64%',
+    cutout: '68%',
     plugins: {
-      glassBackdrop: true,
       centerText: { enabled: true },
-      legend: {
-        position: 'bottom' as const,
-        labels: {
-          color: '#a1a1aa',
-          padding: 18,
-          usePointStyle: true,
-          font: { family: '"JetBrains Mono", monospace', size: 11 },
-        }
-      },
-      tooltip: {
-        ...sharedTooltipStyle,
+      legend: chartLegend('bottom'),
+      tooltip: chartTooltip({
         callbacks: {
           label: (ctx: any) => {
             const total = (ctx.dataset.data as number[]).reduce((a: number, b: number) => a + b, 0);
@@ -892,7 +963,7 @@ export default function ProductivityPage({
             return ` ${ctx.label}: ${formatDuration(val)} (${pct}%)`;
           }
         }
-      }
+      })
     },
     animation: pieAnimation,
   };
@@ -904,48 +975,38 @@ export default function ProductivityPage({
       {
         label: 'Productive',
         data: dailyTrend.map(d => d.productive / 3600),
-        backgroundColor: (ctx: any) => makeGradient(ctx, '#10b981'),
-        borderRadius: 6,
+        backgroundColor: tierFill('productive'),
+        borderRadius: 4,
         borderSkipped: false,
       },
       {
         label: 'Neutral',
         data: dailyTrend.map(d => d.neutral / 3600),
-        backgroundColor: (ctx: any) => makeGradient(ctx, '#3b82f6'),
-        borderRadius: 6,
+        backgroundColor: tierFill('neutral'),
+        borderRadius: 4,
         borderSkipped: false,
       },
       {
         label: 'Distracting',
         data: dailyTrend.map(d => d.distracting / 3600),
-        backgroundColor: (ctx: any) => makeGradient(ctx, '#ef4444'),
-        borderRadius: 6,
+        backgroundColor: tierFill('distracting'),
+        borderRadius: 4,
         borderSkipped: false,
       }
     ]
   };
 
-  const timeBreakdownOptions = {
+  const timeBreakdownOptions: any = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      glassBackdrop: true,
-      legend: {
-        display: true,
-        position: 'top' as const,
-        labels: {
-          color: '#a1a1aa',
-          padding: 15,
-          usePointStyle: true,
-          font: { family: '"JetBrains Mono", monospace', size: 11 },
-        }
-      },
-      tooltip: { ...sharedTooltipStyle, callbacks: { label: (ctx: any) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}h` } }
+      legend: chartLegend('top'),
+      tooltip: chartTooltip({ callbacks: { label: (ctx: any) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}h` } })
     },
     scales: {
-      ...sharedScales,
-      x: { ...sharedScales.x, stacked: true },
-      y: { ...sharedScales.y, stacked: true, ticks: { ...sharedScales.y.ticks, callback: (v: any) => `${v}h` } },
+      ...chartScales(),
+      x: { ...chartScales().x, stacked: true },
+      y: { ...chartScales().y, stacked: true, ticks: { ...chartScales().y.ticks, callback: (v: any) => `${v}h` } },
     },
     animation: barAnimation,
   };
@@ -999,135 +1060,159 @@ export default function ProductivityPage({
   const pageContent = (
     <div className={embedded ? 'space-y-6' : ''}>
       {!embedded && (
-        <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900/20 backdrop-blur-md border-b border-zinc-800/50 py-3">
+        <div className="sticky top-0 z-30 -mx-5 px-5 bg-[var(--color-background)] border-b border-[var(--color-border)] py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl grid place-items-center bg-[rgba(16,185,129,0.14)]">
-                <Target className="w-5 h-5 text-[#10b981]" />
+              <div className="h-9 w-9 rounded-lg grid place-items-center bg-[var(--page-accent)]/12 border border-[var(--page-accent)]/25">
+                <Target className="w-4.5 h-4.5 text-[var(--page-accent)]" />
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight">Productivity</h1>
-              <span className="text-sm text-zinc-500 font-mono tabular-nums">{getViewLabel()}</span>
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Productivity</h1>
+              <span className="text-xs text-[var(--text-muted)] font-mono tabular-nums">{getViewLabel()}</span>
             </div>
             <div className="flex items-center gap-2">
-              {excludeExternal ? <EyeOff className="w-3.5 h-3.5 text-zinc-500" /> : <Eye className="w-3.5 h-3.5 text-zinc-500" />}
-              <span className="text-xs text-zinc-500">External</span>
+              {excludeExternal ? <EyeOff className="w-3.5 h-3.5 text-[var(--text-muted)]" /> : <Eye className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
+              <span className="text-xs text-[var(--text-muted)]">External</span>
               <Switch checked={!excludeExternal} onCheckedChange={(v) => toggleExcludeExternal(!v)} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Score Card */}
-      <GlassCard data-tutorial="prod.score" className="group relative overflow-hidden border-zinc-800/50 hover:border-zinc-700/80 transition-colors duration-300">
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(120%_120%_at_50%_0%,rgba(16,185,129,0.12),transparent_60%)]" />
-        <div className="relative">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-emerald-500/30">
-                <span className="text-3xl font-bold font-mono tabular-nums text-white">
+      {/* Main Score Card. Was: a green→green gradient disc with a coloured
+          drop shadow, an emerald→cyan animated-gradient heading, and a
+          radial hover glow — three decorative layers (§7 #1/#6/#9) wrapped
+          around one number. Now: a flat ring showing where the score sits
+          against its own 0–100 scale, so the disc is informative rather
+          than ornamental, and the hue comes from the tier it lands in. */}
+      <GlassCard data-tutorial="prod.score" variant="notebook" className="border border-[var(--color-border)]">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4">
+            <div className="relative w-20 h-20 flex-shrink-0">
+              <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90" aria-hidden="true">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="var(--color-muted)" strokeWidth="6" />
+                <circle
+                  cx="50" cy="50" r="42" fill="none"
+                  stroke={tierVar(productivityData.score >= 70 ? 'productive' : productivityData.score >= 40 ? 'neutral' : 'distracting')}
+                  strokeWidth="6" strokeLinecap="round"
+                  strokeDasharray={`${Math.max(0, Math.min(100, productivityData.score)) * 2.639} 263.9`}
+                  className="motion-safe:transition-[stroke-dasharray] duration-700"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-bold font-mono tabular-nums text-[var(--text-primary)]">
                   <NumberTicker value={Math.round(productivityData.score)} />
                 </span>
               </div>
-              <div>
-                <div className="text-2xl font-semibold">
-                  <AnimatedGradientText colorFrom="#10b981" colorTo="#06b6d4">Productivity Score</AnimatedGradientText>
-                </div>
-                <div className="text-sm text-zinc-500 font-mono">
-                  Based on {formatDuration(productivityData.totalSeconds)} of tracked activity
-                </div>
-              </div>
             </div>
-
-            {comparison && (
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl ${comparison.direction === 'up' ? 'bg-emerald-500/20 text-emerald-400' :
-                  comparison.direction === 'down' ? 'bg-red-500/20 text-red-400' :
-                    'bg-zinc-800 text-zinc-400'
-                }`}>
-                {comparison.direction === 'up' && <ArrowUp className="w-5 h-5" />}
-                {comparison.direction === 'down' && <ArrowDown className="w-5 h-5" />}
-                {comparison.direction === 'neutral' && <Minus className="w-5 h-5" />}
-                <span className="font-semibold font-mono tabular-nums">{comparison.diff.toFixed(1)}%</span>
-                <span className="text-sm opacity-70">vs avg</span>
-              </div>
-            )}
+            <div className="min-w-0">
+              <h2 className="text-xl font-semibold text-[var(--text-primary)]">Productivity Score</h2>
+              <p className="text-xs text-[var(--text-secondary)] font-mono">
+                {formatDuration(productivityData.totalSeconds)} of tracked activity
+              </p>
+            </div>
           </div>
+
+          {comparison && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+              comparison.direction === 'up'
+                ? 'border-[var(--tier-productive)]/30 bg-[var(--tier-productive)]/10 text-[var(--tier-productive)]'
+                : comparison.direction === 'down'
+                  ? 'border-[var(--tier-distracting)]/30 bg-[var(--tier-distracting)]/10 text-[var(--tier-distracting)]'
+                  : 'border-[var(--color-border)] bg-[var(--color-muted)] text-[var(--text-secondary)]'
+            }`}>
+              {comparison.direction === 'up' && <ArrowUp className="w-4 h-4" />}
+              {comparison.direction === 'down' && <ArrowDown className="w-4 h-4" />}
+              {comparison.direction === 'neutral' && <Minus className="w-4 h-4" />}
+              <span className="font-semibold font-mono tabular-nums">{comparison.diff.toFixed(1)}%</span>
+              <span className="text-xs opacity-70">vs avg</span>
+            </div>
+          )}
         </div>
       </GlassCard>
 
       {/* Source Breakdown + Day Utilization */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Source Breakdown */}
-        <GlassCard className="group relative overflow-hidden border-zinc-800/50">
-          <SectionHeader title="Tracked Sources" icon={<Layers className="w-5 h-5 text-zinc-400" />} />
+        {/* Source Breakdown. The four sources were indigo / cyan / amber /
+            violet — four decorative hues carrying no judgement. Now every
+            bar is one monochrome ramp and identity is the icon + label. */}
+        <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+          <SectionHeader title="Tracked Sources" icon={<Layers className="w-4.5 h-4.5" />} />
           <div className="space-y-3">
             {[
-              { key: 'app', label: 'Desktop Apps', icon: Monitor, bgClass: 'bg-indigo-500/15', iconClass: 'text-indigo-400', barClass: 'bg-indigo-400', sec: productivityData.sources.app.totalSec, count: productivityData.sources.app.count },
-              { key: 'website', label: 'Websites', icon: Globe, bgClass: 'bg-cyan-500/15', iconClass: 'text-cyan-400', barClass: 'bg-cyan-400', sec: productivityData.sources.website.totalSec, count: productivityData.sources.website.count },
-              { key: 'external', label: 'External', icon: Activity, bgClass: 'bg-amber-500/15', iconClass: 'text-amber-400', barClass: 'bg-amber-400', sec: productivityData.sources.external.totalSec, count: productivityData.sources.external.count, disabled: excludeExternal },
-              { key: 'focus', label: 'Focus', icon: Zap, bgClass: 'bg-violet-500/15', iconClass: 'text-violet-400', barClass: 'bg-violet-400', sec: productivityData.sources.focus.totalSec, count: productivityData.sources.focus.count },
-            ].map(src => {
+              { key: 'app', label: 'Desktop Apps', icon: Monitor, sec: productivityData.sources.app.totalSec, count: productivityData.sources.app.count },
+              { key: 'website', label: 'Websites', icon: Globe, sec: productivityData.sources.website.totalSec, count: productivityData.sources.website.count },
+              { key: 'external', label: 'External', icon: Activity, sec: productivityData.sources.external.totalSec, count: productivityData.sources.external.count, disabled: excludeExternal },
+              { key: 'focus', label: 'Focus', icon: Zap, sec: productivityData.sources.focus.totalSec, count: productivityData.sources.focus.count },
+            ].map((src, i) => {
               const Icon = src.icon;
               const pct = productivityData.totalSeconds > 0 ? (src.sec / productivityData.totalSeconds) * 100 : 0;
               return (
-                <div key={src.key} className={`flex items-center gap-3 p-2 rounded-lg ${src.disabled ? 'opacity-40' : ''}`}>
-                  <div className={`w-8 h-8 rounded-lg ${src.bgClass} flex items-center justify-center flex-shrink-0`}>
-                    <Icon className={`w-4 h-4 ${src.iconClass}`} />
+                <div key={src.key} className={`flex items-center gap-3 ${src.disabled ? 'opacity-40' : ''}`}>
+                  <div className="w-8 h-8 rounded-lg bg-[var(--color-muted)] border border-[var(--color-border)] flex items-center justify-center flex-shrink-0 text-[var(--text-secondary)]">
+                    <Icon className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-zinc-300">{src.label}{src.disabled ? ' (excluded)' : ''}</span>
-                      <span className="text-xs font-mono text-zinc-400">{formatHours(src.sec)}</span>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-sm text-[var(--text-primary)] truncate">
+                        {src.label}{src.disabled ? ' (excluded)' : ''}
+                      </span>
+                      <span className="text-xs font-mono tabular-nums text-[var(--text-secondary)] shrink-0">
+                        {formatClock(src.sec)}
+                      </span>
                     </div>
-                    <div className="w-full bg-zinc-800 rounded-full h-1.5">
-                      <div className={`h-1.5 rounded-full ${src.barClass} transition-all duration-500`}
-                        style={{ width: `${Math.min(100, pct)}%` }} />
+                    <div className="w-full bg-[var(--color-muted)] rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="h-1.5 rounded-full motion-safe:transition-[width] duration-500"
+                        style={{ width: `${Math.min(100, pct)}%`, background: monoStep(i) }}
+                      />
                     </div>
                   </div>
-                  <span className="text-xs text-zinc-500 w-12 text-right font-mono">{Math.round(pct)}%</span>
+                  <span className="text-xs font-mono tabular-nums text-[var(--text-muted)] w-10 text-right shrink-0">
+                    {Math.round(pct)}%
+                  </span>
                 </div>
               );
             })}
           </div>
         </GlassCard>
 
-        {/* Day Utilization Ring */}
-        <GlassCard className="group relative overflow-hidden border-zinc-800/50 flex flex-col">
-          <SectionHeader title="Day Utilization" icon={<Clock className="w-5 h-5 text-zinc-400" />}
-            action={<span className="text-xs text-zinc-500">{formatHours(productivityData.daySeconds)} / day avg</span>} />
+        {/* Day Utilization Ring. Was an emerald→cyan SVG gradient — two hues
+            on one arc, meaning nothing. Utilization is a single magnitude,
+            so it is now one hue: the surface accent, theme-aware. */}
+        <GlassCard variant="notebook" className="border border-[var(--color-border)] flex flex-col">
+          <SectionHeader title="Day Utilization" icon={<Clock className="w-4.5 h-4.5" />}
+            action={<span className="text-xs text-[var(--text-muted)] font-mono tabular-nums">{formatClock(productivityData.daySeconds)} / day avg</span>} />
           <div className="flex-1 flex items-center justify-center py-4">
-            <div className="relative w-40 h-40">
-              <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(39,39,42,0.8)" strokeWidth="8" />
-                <circle cx="50" cy="50" r="42" fill="none" stroke="url(#dayGrad)" strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={`${productivityData.dayUtilization * 2.639} ${263.9 - productivityData.dayUtilization * 2.639}`}
-                  className="transition-all duration-1000" />
-                <defs>
-                  <linearGradient id="dayGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#10b981" />
-                    <stop offset="100%" stopColor="#06b6d4" />
-                  </linearGradient>
-                </defs>
+            <div className="relative w-36 h-36">
+              <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90" aria-hidden="true">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="var(--color-muted)" strokeWidth="7" />
+                <circle
+                  cx="50" cy="50" r="42" fill="none"
+                  stroke="var(--page-accent)" strokeWidth="7" strokeLinecap="round"
+                  strokeDasharray={`${Math.max(0, Math.min(100, productivityData.dayUtilization)) * 2.639} ${263.9 - Math.max(0, Math.min(100, productivityData.dayUtilization)) * 2.639}`}
+                  className="motion-safe:transition-[stroke-dasharray] duration-1000"
+                />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold font-mono tabular-nums text-white">{Math.round(productivityData.dayUtilization)}%</span>
-                <span className="text-xs text-zinc-500 mt-0.5">of 24h tracked</span>
+                <span className="text-2xl font-bold font-mono tabular-nums text-[var(--text-primary)]">{Math.round(productivityData.dayUtilization)}%</span>
+                <span className="text-[11px] text-[var(--text-muted)] mt-0.5">of 24h tracked</span>
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 px-4 pb-3">
-            <div className="text-center">
-              <div className="text-sm font-semibold font-mono text-emerald-400">{formatHours(productivityData.tiers.productive.seconds)}</div>
-              <div className="text-[10px] text-zinc-500">Productive</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm font-semibold font-mono text-blue-400">{formatHours(productivityData.tiers.neutral.seconds)}</div>
-              <div className="text-[10px] text-zinc-500">Neutral</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm font-semibold font-mono text-red-400">{formatHours(productivityData.tiers.distracting.seconds)}</div>
-              <div className="text-[10px] text-zinc-500">Distracting</div>
-            </div>
+          {/* Same alpha story as the charts: the two verdicts loud, the
+              filler bucket quiet. */}
+          <div className="grid grid-cols-3 gap-2 px-1 pb-1">
+            {(['productive', 'neutral', 'distracting'] as const).map(t => (
+              <div key={t} className="text-center">
+                <div
+                  className="text-sm font-semibold font-mono tabular-nums"
+                  style={{ color: tierVar(t), opacity: t === 'neutral' ? 0.75 : 1 }}
+                >
+                  {formatClock(productivityData.tiers[t].seconds)}
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] capitalize">{t}</div>
+              </div>
+            ))}
           </div>
         </GlassCard>
       </div>
@@ -1153,215 +1238,208 @@ export default function ProductivityPage({
 
           return (
             <div data-tutorial="prod.breakdown" className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <GlassCard className="group relative overflow-hidden hover:border-emerald-500/30">
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(120%_120%_at_50%_0%,rgba(16,185,129,0.12),transparent_60%)]" />
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                    <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Productive</span>
-                  </div>
-                  <div className="text-2xl font-bold font-mono tabular-nums text-emerald-400">{formatHours(filteredProductiveSec)}</div>
-                  <div className="text-xs text-zinc-500 mt-1 font-mono">
-                    {filteredTotalSec > 0
-                      ? Math.round((filteredProductiveSec / filteredTotalSec) * 100)
-                      : 0}% of time
-                  </div>
-                </div>
-              </GlassCard>
+              {(['productive', 'neutral', 'distracting'] as const).map(t => {
+                const sec = t === 'productive' ? filteredProductiveSec : t === 'neutral' ? filteredNeutralSec : filteredDistractingSec;
+                return (
+                  <GlassCard key={t} variant="notebook" className="border border-[var(--color-border)]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: tierVar(t), opacity: t === 'neutral' ? 0.55 : 1 }}
+                      />
+                      <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--text-muted)]">
+                        {t}
+                      </span>
+                    </div>
+                    <div
+                      className="text-2xl font-bold font-mono tabular-nums"
+                      style={{ color: tierVar(t) }}
+                    >
+                      {formatClock(sec)}
+                    </div>
+                    <div className="text-xs text-[var(--text-muted)] mt-1 font-mono tabular-nums">
+                      {filteredTotalSec > 0 ? Math.round((sec / filteredTotalSec) * 100) : 0}% of time
+                    </div>
+                  </GlassCard>
+                );
+              })}
 
-              <GlassCard className="group relative overflow-hidden hover:border-blue-500/30">
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(120%_120%_at_50%_0%,rgba(59,130,246,0.12),transparent_60%)]" />
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-400" />
-                    <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Neutral</span>
-                  </div>
-                  <div className="text-2xl font-bold font-mono tabular-nums text-blue-400">{formatHours(filteredNeutralSec)}</div>
-                  <div className="text-xs text-zinc-500 mt-1 font-mono">
-                    {filteredTotalSec > 0
-                      ? Math.round((filteredNeutralSec / filteredTotalSec) * 100)
-                      : 0}% of time
-                  </div>
+              {/* Total is the anchor, so it stays neutral chrome rather than
+                  taking a fourth hue off the meaning budget. */}
+              <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-[var(--page-accent)]" />
+                  <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--text-muted)]">
+                    Total Time
+                  </span>
                 </div>
-              </GlassCard>
-
-              <GlassCard className="group relative overflow-hidden hover:border-red-500/30">
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(120%_120%_at_50%_0%,rgba(239,68,68,0.12),transparent_60%)]" />
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 rounded-full bg-red-400" />
-                    <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Distracting</span>
-                  </div>
-                  <div className="text-2xl font-bold font-mono tabular-nums text-red-400">{formatHours(filteredDistractingSec)}</div>
-                  <div className="text-xs text-zinc-500 mt-1 font-mono">
-                    {filteredTotalSec > 0
-                      ? Math.round((filteredDistractingSec / filteredTotalSec) * 100)
-                      : 0}% of time
-                  </div>
+                <div className="text-2xl font-bold font-mono tabular-nums text-[var(--text-primary)]">
+                  {formatDuration(filteredTotalSec)}
                 </div>
-              </GlassCard>
-
-              <GlassCard className="group relative overflow-hidden hover:border-purple-500/30">
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(120%_120%_at_50%_0%,rgba(168,85,247,0.12),transparent_60%)]" />
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 rounded-full bg-purple-400" />
-                    <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Total Time</span>
-                  </div>
-                  <div className="text-2xl font-bold font-mono tabular-nums text-purple-400">{formatDuration(filteredTotalSec)}</div>
-                  <div className="text-xs text-zinc-500 mt-1 font-mono">
-                    {filteredAppCount} apps + {filteredWebCount} sites
-                  </div>
+                <div className="text-xs text-[var(--text-muted)] mt-1 font-mono">
+                  {filteredAppCount} apps + {filteredWebCount} sites
                 </div>
               </GlassCard>
             </div>
           );
         })()}
 
-        {/* Apps vs Websites Comparison */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div className="bg-zinc-900/50 rounded-xl p-4 border border-indigo-500/20">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Monitor className="w-4 h-4 text-indigo-400" />
-                <span className="text-sm font-medium text-zinc-300">Applications</span>
-              </div>
-              <span className="text-lg font-bold text-indigo-400">{Math.round(productivityData.appVsWeb.app.score)}%</span>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-emerald-400">Productive</span>
-                <span className="text-zinc-400">{formatDuration(productivityData.appVsWeb.app.productiveSec)}</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-emerald-400 h-2 rounded-full transition-colors duration-150" style={{ width: `${productivityData.appVsWeb.app.totalSec > 0 ? (productivityData.appVsWeb.app.productiveSec / productivityData.appVsWeb.app.totalSec) * 100 : 0}%` }} />
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-blue-400">Neutral</span>
-                <span className="text-zinc-400">{formatDuration(productivityData.appVsWeb.app.neutralSec)}</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-blue-400 h-2 rounded-full transition-colors duration-150" style={{ width: `${productivityData.appVsWeb.app.totalSec > 0 ? (productivityData.appVsWeb.app.neutralSec / productivityData.appVsWeb.app.totalSec) * 100 : 0}%` }} />
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-red-400">Distracting</span>
-                <span className="text-zinc-400">{formatDuration(productivityData.appVsWeb.app.distractingSec)}</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-red-400 h-2 rounded-full transition-colors duration-150" style={{ width: `${productivityData.appVsWeb.app.totalSec > 0 ? (productivityData.appVsWeb.app.distractingSec / productivityData.appVsWeb.app.totalSec) * 100 : 0}%` }} />
-              </div>
-              <div className="pt-1 border-t border-zinc-800 flex justify-between text-xs">
-                <span className="text-zinc-500">Total</span>
-                <span className="text-zinc-300 font-medium">{formatDuration(productivityData.appVsWeb.app.totalSec)}</span>
-              </div>
-            </div>
-          </div>
+        {/* Apps vs Websites — THE SPLIT.
+            It was two near-identical cards differing only by an indigo/cyan
+            border and three bare 2px bars each. Two problems: the bars were
+            scaled to each source's OWN total, so a 30%-productive hour of
+            browsing drew the same-width bar as a 30%-productive 200-hour
+            desktop session — the comparison the card exists to make was
+            literally impossible to see. And each tier got its own row, so
+            six bars fought for attention on a card with two subjects.
 
-          <div className="bg-zinc-900/50 rounded-xl p-4 border border-cyan-500/20">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-cyan-400" />
-                <span className="text-sm font-medium text-zinc-300">Websites</span>
-              </div>
-              <span className="text-lg font-bold text-cyan-400">{Math.round(productivityData.appVsWeb.web.score)}%</span>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-emerald-400">Productive</span>
-                <span className="text-zinc-400">{formatDuration(productivityData.appVsWeb.web.productiveSec)}</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-emerald-400 h-2 rounded-full transition-colors duration-150" style={{ width: `${productivityData.appVsWeb.web.totalSec > 0 ? (productivityData.appVsWeb.web.productiveSec / productivityData.appVsWeb.web.totalSec) * 100 : 0}%` }} />
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-blue-400">Neutral</span>
-                <span className="text-zinc-400">{formatDuration(productivityData.appVsWeb.web.neutralSec)}</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-blue-400 h-2 rounded-full transition-colors duration-150" style={{ width: `${productivityData.appVsWeb.web.totalSec > 0 ? (productivityData.appVsWeb.web.neutralSec / productivityData.appVsWeb.web.totalSec) * 100 : 0}%` }} />
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-red-400">Distracting</span>
-                <span className="text-zinc-400">{formatDuration(productivityData.appVsWeb.web.distractingSec)}</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-red-400 h-2 rounded-full transition-colors duration-150" style={{ width: `${productivityData.appVsWeb.web.totalSec > 0 ? (productivityData.appVsWeb.web.distractingSec / productivityData.appVsWeb.web.totalSec) * 100 : 0}%` }} />
-              </div>
-              <div className="pt-1 border-t border-zinc-800 flex justify-between text-xs">
-                <span className="text-zinc-500">Total</span>
-                <span className="text-zinc-300 font-medium">{formatDuration(productivityData.appVsWeb.web.totalSec)}</span>
-              </div>
-            </div>
+            Now: both sources share ONE width scale, each is a single
+            stacked tier bar, so the split is legible in one glance and the
+            hue budget is spent only on the tier dimension. */}
+        <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+          <SectionHeader
+            title="Applications vs Websites"
+            icon={<ArrowLeftRight className="w-4.5 h-4.5" />}
+            action={<span className="text-xs text-[var(--text-muted)] font-mono tabular-nums">
+              {formatClock(productivityData.appVsWeb.app.totalSec + productivityData.appVsWeb.web.totalSec)} tracked
+            </span>}
+          />
+
+          <div className="space-y-4">
+            {([
+              { key: 'app', label: 'Applications', icon: Monitor, data: productivityData.appVsWeb.app },
+              { key: 'web', label: 'Websites', icon: Globe, data: productivityData.appVsWeb.web },
+            ] as const).map(({ key, label, icon: Icon, data }) => {
+              // One scale across both rows: 100% = whichever source has more
+              // time. This is the comparison the card is named for.
+              const scale = Math.max(productivityData.appVsWeb.app.totalSec, productivityData.appVsWeb.web.totalSec, 1);
+              const widthPct = (data.totalSec / scale) * 100;
+              const segments = (['productive', 'neutral', 'distracting'] as const).map(t => ({
+                tier: t,
+                sec: t === 'productive' ? data.productiveSec : t === 'neutral' ? data.neutralSec : data.distractingSec,
+              }));
+              const unit = key === 'app' ? 'apps' : 'sites';
+
+              return (
+                <div key={key}>
+                  <div className="flex items-baseline gap-2 mb-1.5">
+                    <Icon className="w-4 h-4 text-[var(--text-secondary)] self-center" />
+                    <span className="text-sm font-medium text-[var(--text-primary)]">{label}</span>
+                    <span className="font-mono text-xs tabular-nums text-[var(--text-muted)]">
+                      {formatClock(data.totalSec)}
+                    </span>
+                    <span className="ml-auto font-mono text-xs tabular-nums text-[var(--text-secondary)]">
+                      {Math.round(data.score)}% productive
+                    </span>
+                  </div>
+
+                  <div
+                    className="h-2.5 w-full rounded-full bg-[var(--color-muted)] overflow-hidden"
+                    role="img"
+                    aria-label={`${label}: ${segments.map(s => `${s.tier} ${formatClock(s.sec)}`).join(', ')}`}
+                  >
+                    <div
+                      className="h-full flex motion-safe:transition-[width] duration-500"
+                      style={{ width: `${widthPct}%` }}
+                    >
+                      {segments.map(({ tier, sec }) =>
+                        sec > 0 ? (
+                          <div
+                            key={tier}
+                            className="h-full"
+                            style={{
+                              width: `${(sec / data.totalSec) * 100}%`,
+                              background: tierVarFill(tier),
+                            }}
+                            title={`${label} · ${tier} — ${formatClock(sec)}`}
+                          />
+                        ) : null
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Legend row: the numbers, not the colour, carry the read. */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono tabular-nums">
+                    {segments.map(({ tier, sec }) => (
+                      <span key={tier} className="flex items-center gap-1.5 text-[var(--text-muted)]">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ background: tierVar(tier), opacity: tier === 'neutral' ? 0.55 : 1 }}
+                        />
+                        <span className="capitalize">{tier}</span>
+                        <span className="text-[var(--text-secondary)]">{formatClock(sec)}</span>
+                      </span>
+                    ))}
+                    <span className="ml-auto text-[var(--text-muted)]">
+                      {data.count} {unit} · {Math.round((data.totalSec / (productivityData.appVsWeb.app.totalSec + productivityData.appVsWeb.web.totalSec || 1)) * 100)}% of tracked
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        </GlassCard>
       </div>
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Productivity Trend */}
-        <GlassCard data-tutorial="prod.trends" className="group relative overflow-hidden border-zinc-800/50 hover:border-zinc-700/80 transition-colors duration-300">
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(120%_120%_at_50%_0%,rgba(16,185,129,0.06),transparent_60%)]" />
-          <div className="relative">
-            <SectionHeader title="Productivity Trend" icon={<TrendingUp className="w-5 h-5 text-emerald-400" />} />
-            <div className="h-64">
-              <Line
-                data={trendChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    glassBackdrop: true,
-                    legend: { display: false },
-                    tooltip: { ...sharedTooltipStyle, callbacks: { label: (ctx: any) => ` Score: ${ctx.parsed.y}%` } }
-                  },
-                  scales: {
-                    ...sharedScales,
-                    y: { ...sharedScales.y, min: 0, max: 100, ticks: { ...sharedScales.y.ticks, callback: (v: any) => `${v}%` } }
-                  },
-                  animation: barAnimation,
-                }}
-              />
-            </div>
+        <GlassCard data-tutorial="prod.trends" variant="notebook" className="border border-[var(--color-border)]">
+          <SectionHeader title="Productivity Trend" icon={<TrendingUp className="w-4.5 h-4.5" />} />
+          <div className="h-64">
+            <Line
+              data={trendChartData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: chartTooltip({ callbacks: { label: (ctx: any) => ` Score: ${ctx.parsed.y}%` } })
+                },
+                scales: {
+                  ...chartScales(),
+                  y: { ...chartScales().y, min: 0, max: 100, ticks: { ...chartScales().y.ticks, callback: (v: any) => `${v}%` } }
+                },
+                animation: barAnimation,
+              }}
+            />
           </div>
         </GlassCard>
 
         {/* Time Distribution */}
-        <GlassCard className="group relative overflow-hidden border-zinc-800/50 hover:border-zinc-700/80 transition-colors duration-300">
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(120%_120%_at_50%_0%,rgba(16,185,129,0.06),transparent_60%)]" />
-          <div className="relative">
-            <SectionHeader title="Time Distribution" icon={<PieChartIcon className="w-5 h-5 text-emerald-400" />} />
-            <div className="h-80 flex items-center justify-center">
-              <Pie
-                data={distributionData}
-                options={distributionOptions}
-              />
-            </div>
+        <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+          <SectionHeader title="Time Distribution" icon={<PieChartIcon className="w-4.5 h-4.5" />} />
+          <div className="h-72">
+            <Pie
+              data={distributionData}
+              options={distributionOptions}
+            />
           </div>
         </GlassCard>
       </div>
 
       {/* Horizontal Tier Filter */}
-      <GlassCard>
+      <GlassCard variant="notebook" className="border border-[var(--color-border)]">
         <div className="flex items-center gap-2">
-          <button onClick={() => setTierFilter('productive')}
-            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 ${tierFilter === 'productive'
-                ? 'bg-[var(--tier-productive)]/20 text-[var(--tier-productive)] border border-[var(--tier-productive)]/40'
-                : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white hover:bg-zinc-800'
-              }`}>
-            <div className="w-2 h-2 rounded-full bg-[var(--tier-productive)]" /> Productive
-          </button>
-          <button onClick={() => setTierFilter('neutral')}
-            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 ${tierFilter === 'neutral'
-                ? 'bg-[var(--tier-neutral)]/20 text-[var(--tier-neutral)] border border-[var(--tier-neutral)]/40'
-                : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white hover:bg-zinc-800'
-              }`}>
-            <div className="w-2 h-2 rounded-full bg-[var(--tier-neutral)]" /> Neutral
-          </button>
-          <button onClick={() => setTierFilter('distracting')}
-            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 ${tierFilter === 'distracting'
-                ? 'bg-[var(--tier-distracting)]/20 text-[var(--tier-distracting)] border border-[var(--tier-distracting)]/40'
-                : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-white hover:bg-zinc-800'
-              }`}>
+              <button onClick={() => setTierFilter('productive')}
+                className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${tierFilter === 'productive'
+                    ? 'bg-[var(--tier-productive)]/15 text-[var(--tier-productive)] border border-[var(--tier-productive)]/40'
+                    : 'bg-[var(--color-muted)] border border-[var(--color-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}>
+                <div className="w-2 h-2 rounded-full bg-[var(--tier-productive)]" /> Productive
+              </button>
+              <button onClick={() => setTierFilter('neutral')}
+                className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${tierFilter === 'neutral'
+                    ? 'bg-[var(--tier-neutral)]/15 text-[var(--tier-neutral)] border border-[var(--tier-neutral)]/40'
+                    : 'bg-[var(--color-muted)] border border-[var(--color-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}>
+                <div className="w-2 h-2 rounded-full bg-[var(--tier-neutral)]" /> Neutral
+              </button>
+              <button onClick={() => setTierFilter('distracting')}
+                className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${tierFilter === 'distracting'
+                    ? 'bg-[var(--tier-distracting)]/15 text-[var(--tier-distracting)] border border-[var(--tier-distracting)]/40'
+                    : 'bg-[var(--color-muted)] border border-[var(--color-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}>
             <div className="w-2 h-2 rounded-full bg-[var(--tier-distracting)]" /> Distracting
           </button>
           {(() => {
@@ -1387,7 +1465,7 @@ export default function ProductivityPage({
             const extCount = totalItems.filter(i => i.type === 'external').length;
             const focusCount = totalItems.filter(i => i.type === 'focus').length;
             return (
-              <div className="ml-auto text-xs text-zinc-500">
+              <div className="ml-auto text-xs text-[var(--text-muted)] font-mono tabular-nums">
                 {tierFilter === 'all'
                   ? `${appCount + webCount + extCount + focusCount} items`
                   : `${totalItems.length} items in ${tierFilter}`
@@ -1401,8 +1479,8 @@ export default function ProductivityPage({
       {/* Apps vs Websites Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Apps Breakdown */}
-        <GlassCard>
-          <SectionHeader title="Desktop Apps" icon={<Monitor className="w-5 h-5" />}
+        <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+          <SectionHeader title="Desktop Apps" icon={<Monitor className="w-4.5 h-4.5" />}
             action={(() => {
               let sourceArray = productivityData.topProductive;
               if (tierFilter === 'neutral') sourceArray = productivityData.topNeutral;
@@ -1415,13 +1493,13 @@ export default function ProductivityPage({
                   tierFilter === 'neutral' ? productivityData.tiers.neutral.seconds :
                     productivityData.tiers.distracting.seconds);
               return (
-                <div className="text-sm text-zinc-500">
+                <div className="text-xs text-[var(--text-muted)] font-mono tabular-nums">
                   {formatDuration(totalSec)} ({filteredTotal > 0 ? Math.round((totalSec / filteredTotal) * 100) : 0}% of {tierFilter === 'all' ? 'total' : tierFilter})
                 </div>
               );
             })()} />
 
-          <div className="space-y-3">
+          <div className="space-y-1">
             {(() => {
               // Select correct array based on tierFilter
               let sourceArray = productivityData.topProductive;
@@ -1430,117 +1508,141 @@ export default function ProductivityPage({
               else if (tierFilter === 'all') sourceArray = [...productivityData.topProductive, ...productivityData.topNeutral, ...productivityData.topDistracting];
 
               const apps = sourceArray.filter(i => i.type === 'app').slice(0, 5);
+              const max = Math.max(1, ...apps.map(i => i.duration_sec));
 
               return apps.length > 0 ? apps.map((item, idx) => {
                 const itemTier = tierAssignments.productive.includes(item.category) ? 'productive' :
                   tierAssignments.distracting.includes(item.category) ? 'distracting' : 'neutral';
-                const tierColor = getTierColor(itemTier);
 
                 return (
-                  <div key={idx} className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tierColor }} />
-                      <span className="text-sm font-medium text-white">{item.name}</span>
-                      <span className="text-xs text-zinc-500">({item.category})</span>
+                  <div key={idx} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--color-muted)] transition-colors duration-150">
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: tierVar(itemTier), opacity: itemTier === 'neutral' ? 0.55 : 1 }}
+                    />
+                    <span className="text-sm text-[var(--text-primary)] truncate">{item.name}</span>
+                    <span className="text-xs text-[var(--text-muted)] truncate hidden sm:inline">({item.category})</span>
+                    <div className="ml-auto flex items-center gap-2.5 flex-shrink-0">
+                      {/* Bar on the shared 0→max scale, so the top-5 actually
+                          rank instead of five equal-length rows. */}
+                      <div className="w-16 h-1.5 rounded-full bg-[var(--color-muted)] overflow-hidden">
+                        <div
+                          className="h-full rounded-full motion-safe:transition-[width] duration-500"
+                          style={{ width: `${(item.duration_sec / max) * 100}%`, background: monoStep(MONO_STEPS.length - 1 - Math.min(idx, MONO_STEPS.length - 1)) }}
+                        />
+                      </div>
+                      <span className="text-xs font-mono tabular-nums text-[var(--text-secondary)] w-14 text-right">
+                        {formatDuration(item.duration_sec)}
+                      </span>
                     </div>
-                    <div className="text-sm text-zinc-400">{formatDuration(item.duration_sec)}</div>
                   </div>
                 );
               }) : (
-                <div className="text-center py-8 text-zinc-500">
+                <div className="text-center py-8 text-[var(--text-muted)]">
                   <Monitor className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No {tierFilter === 'all' ? '' : tierFilter} apps in this period</p>
+                  <p className="text-sm">No {tierFilter === 'all' ? '' : tierFilter} apps tracked in this period</p>
+                  <p className="text-xs mt-1">Applications appear here once the tracker logs foreground time</p>
                 </div>
               );
             })()}
           </div>
         </GlassCard>
 
-        {/* Websites Breakdown */}
-        <GlassCard>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Globe className="w-5 h-5 text-cyan-400" />
+        {/* Websites Breakdown. The category chips used to be inline
+            `backgroundColor: ${hex}20` from this file's own 16-colour
+            palette — ~12 live categories rendered as a rainbow wall. On
+            this page the category is a label, not a judgement: the tier is
+            what the filter and the score act on. So the tier dot carries
+            the colour and the category is plain text. */}
+        <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="text-[15px] font-semibold text-[var(--text-primary)] flex items-center gap-2.5">
+              <Globe className="w-4.5 h-4.5 text-[var(--text-secondary)]" />
               {tierFilter === 'all' ? 'All Websites' : tierFilter === 'productive' ? 'Productive Websites' : tierFilter === 'neutral' ? 'Neutral Websites' : 'Distracting Websites'}
             </h2>
-            <div className="text-sm text-zinc-500">
+            <div className="text-xs text-[var(--text-muted)] font-mono tabular-nums shrink-0">
               {formatDuration(filteredWebsites.reduce((sum, d) => sum + d.totalSeconds, 0))} total
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             {filteredWebsites.length > 0 ? (
               filteredWebsites.map((domainData) => {
                 const isExpanded = expandedDomains.has(domainData.domain);
-                const domainColor = getCategoryColor(domainData.dominantCategory);
+                const domainTier = tierAssignments.productive.includes(WEBSITE_CATEGORY_MAP[domainData.dominantCategory] || domainData.dominantCategory) ? 'productive'
+                  : tierAssignments.distracting.includes(WEBSITE_CATEGORY_MAP[domainData.dominantCategory] || domainData.dominantCategory) ? 'distracting' : 'neutral';
 
                 return (
-                  <div key={domainData.domain} className="rounded-xl overflow-hidden">
+                  <div key={domainData.domain} className="rounded-lg overflow-hidden">
                     {/* Domain Header Row */}
                     <button
                       onClick={() => toggleDomain(domainData.domain)}
-                      className="w-full flex items-center justify-between p-3 bg-zinc-900/50 hover:bg-zinc-800/70 transition-colors duration-150 rounded-xl"
+                      aria-expanded={isExpanded}
+                      className="w-full flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-[var(--color-muted)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] text-left"
                     >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
                         {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                          <ChevronDown className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
                         )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate">{domainData.domain}</div>
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ background: tierVar(domainTier), opacity: domainTier === 'neutral' ? 0.55 : 1 }}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm text-[var(--text-primary)] truncate">{domainData.domain}</div>
                           {domainData.hasKeywordRules && (
-                            <span className="text-xs text-emerald-400">Smart website</span>
+                            <span className="text-[11px] text-[var(--page-accent)]">Smart website</span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded"
-                          style={{ backgroundColor: `${domainColor}20`, color: domainColor }}
-                        >
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-xs text-[var(--text-muted)] truncate max-w-[9rem] hidden md:inline">
                           {domainData.dominantCategory}
                         </span>
-                        <span className="text-sm text-zinc-400">{formatDuration(domainData.totalSeconds)}</span>
+                        <span className="text-xs font-mono tabular-nums text-[var(--text-secondary)]">
+                          {formatDuration(domainData.totalSeconds)}
+                        </span>
                       </div>
                     </button>
 
                     {/* Subpages (expanded) */}
                     {isExpanded && (
-                      <div className="mt-1 ml-6 space-y-1 border-l-2 border-zinc-700/50 pl-4">
+                      <div className="mt-1 ml-6 space-y-0.5 border-l border-[var(--color-border)] pl-3">
                         {domainData.logs.slice(0, 20).map((log: any, idx: number) => {
                           const logCategory = WEBSITE_CATEGORY_MAP[log.category] || log.category || 'Other';
-                          const logColor = getCategoryColor(logCategory);
+                          const logTier = tierAssignments.productive.includes(logCategory) ? 'productive'
+                            : tierAssignments.distracting.includes(logCategory) ? 'distracting' : 'neutral';
                           const logTitle = log.title || log.url || 'Unknown page';
                           // Truncate long titles
-                          const displayTitle = logTitle.length > 60 ? logTitle.substring(0, 57) + '...' : logTitle;
+                          const displayTitle = logTitle.length > 60 ? logTitle.substring(0, 57) + '…' : logTitle;
 
                           return (
                             <div
                               key={idx}
-                              className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-zinc-800/30 transition-colors duration-150"
+                              className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-[var(--color-muted)] transition-colors duration-150"
                             >
                               <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <div
-                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: logColor }}
-                                />
-                                <span className="text-xs text-zinc-300 truncate">{displayTitle}</span>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                                 <span
-                                  className="text-xs px-1.5 py-0.5 rounded"
-                                  style={{ backgroundColor: `${logColor}15`, color: logColor }}
-                                >
+                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                  style={{ background: tierVar(logTier), opacity: logTier === 'neutral' ? 0.5 : 1 }}
+                                />
+                                <span className="text-xs text-[var(--text-secondary)] truncate">{displayTitle}</span>
+                              </div>
+                              <div className="flex items-center gap-2.5 flex-shrink-0">
+                                <span className="text-xs text-[var(--text-muted)] truncate max-w-[8rem] hidden lg:inline">
                                   {logCategory}
                                 </span>
-                                <span className="text-xs text-zinc-500">{formatDuration(log.duration)}</span>
+                                <span className="text-xs font-mono tabular-nums text-[var(--text-muted)]">
+                                  {formatDuration(log.duration)}
+                                </span>
                               </div>
                             </div>
                           );
                         })}
                         {domainData.logs.length > 20 && (
-                          <div className="text-xs text-zinc-500 text-center py-1">
+                          <div className="text-xs text-[var(--text-muted)] pl-2 py-1 font-mono">
                             +{domainData.logs.length - 20} more pages
                           </div>
                         )}
@@ -1550,10 +1652,10 @@ export default function ProductivityPage({
                 );
               })
             ) : (
-              <div className="text-center py-8 text-zinc-500">
+              <div className="text-center py-8 text-[var(--text-muted)]">
                 <Globe className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No productive website data</p>
-                <p className="text-xs mt-1">Configure smart websites in Settings to track productivity</p>
+                <p className="text-sm">No {tierFilter === 'all' ? '' : tierFilter} website activity in this period</p>
+                <p className="text-xs mt-1">Websites appear here once the tracking browser logs a visit</p>
               </div>
             )}
           </div>
@@ -1561,84 +1663,50 @@ export default function ProductivityPage({
       </div>
 
       {/* Daily Stacked Bar Chart */}
-      <GlassCard>
-        <SectionHeader title="Daily Activity Breakdown" icon={<BarChart3 className="w-5 h-5" />} />
+      <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+        <SectionHeader title="Daily Activity Breakdown" icon={<BarChart3 className="w-4.5 h-4.5" />} />
         <div className="h-64">
           <Bar
             data={timeBreakdownData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: 'bottom',
-                  labels: { color: '#a1a1aa', padding: 20 }
-                },
-                tooltip: {
-                  backgroundColor: '#18181b',
-                  borderColor: '#3f3f46',
-                  borderWidth: 1,
-                  titleColor: '#e4e4e7',
-                  bodyColor: '#a1a1aa',
-                  padding: 10,
-                  cornerRadius: 8,
-                  callbacks: {
-                    label: (ctx) => {
-                      const label = ctx.dataset.label || '';
-                      return ` ${label}: ${formatDuration((ctx.raw as number) * 3600)}`;
-                    }
-                  }
-                }
-              },
-              scales: {
-                x: {
-                  stacked: true,
-                  grid: { display: false },
-                  ticks: { color: '#71717a' }
-                },
-                y: {
-                  stacked: true,
-                  grid: { color: '#27272a' },
-                  ticks: {
-                    color: '#71717a',
-                    callback: (v: number) => formatHours(v * 3600) // convert back to seconds for formatting
-                  }
-                }
-              }
-            }}
+            options={timeBreakdownOptions}
           />
         </div>
       </GlassCard>
 
       {/* Top Distracting */}
       {productivityData.topDistracting.length > 0 && (
-        <GlassCard>
-          <SectionHeader title="Areas to Improve" icon={<TrendingDown className="w-5 h-5" />}
-            action={<span className="text-sm text-zinc-500">Distracting activities that reduced your score</span>} />
+        <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+          <SectionHeader title="Areas to Improve" icon={<TrendingDown className="w-4.5 h-4.5" />}
+            action={<span className="text-xs text-[var(--text-muted)]">Distracting activities that lowered your score</span>} />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {productivityData.topDistracting.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between p-4 bg-red-500/10 rounded-xl border border-red-500/20">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
+              <div
+                key={idx}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--tier-distracting)]/[0.07] border border-[var(--tier-distracting)]/20"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-[var(--tier-distracting)]/12 flex items-center justify-center flex-shrink-0 text-[var(--tier-distracting)]">
                     {item.type === 'app' ? (
-                      <Monitor className="w-4 h-4 text-red-400" />
+                      <Monitor className="w-4 h-4" />
                     ) : item.type === 'website' ? (
-                      <Globe className="w-4 h-4 text-red-400" />
+                      <Globe className="w-4 h-4" />
                     ) : item.type === 'focus' ? (
-                      <Timer className="w-4 h-4 text-red-400" />
+                      <Timer className="w-4 h-4" />
                     ) : (
-                      <Activity className="w-4 h-4 text-red-400" />
+                      <Activity className="w-4 h-4" />
                     )}
                   </div>
-                  <div>
-                    <div className="text-sm font-medium">{item.name}</div>
-                    <div className="text-xs text-zinc-500">{item.category}</div>
+                  <div className="min-w-0">
+                    <div className="text-sm text-[var(--text-primary)] truncate">{item.name}</div>
+                    <div className="text-xs text-[var(--text-muted)] truncate">{item.category}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-semibold text-red-400">{formatDuration(item.duration_sec)}</div>
-                  <div className="text-xs text-zinc-500">
+                <div className="text-right flex-shrink-0">
+                  <div className="text-sm font-semibold font-mono tabular-nums text-[var(--tier-distracting)]">
+                    {formatDuration(item.duration_sec)}
+                  </div>
+                  <div className="text-xs font-mono tabular-nums text-[var(--text-muted)]">
                     {productivityData.totalSeconds > 0
                       ? Math.round((item.duration_sec / productivityData.totalSeconds) * 100)
                       : 0}%
@@ -1652,43 +1720,36 @@ export default function ProductivityPage({
 
       {/* Peak Productivity Hours */}
       {peakHours && (
-        <GlassCard>
-          <SectionHeader title="Peak Productivity Hours" icon={<Clock className="w-5 h-5" />}
-            action={<span className="text-xs text-zinc-500">Average across period</span>} />
+        <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+          <SectionHeader title="Peak Productivity Hours" icon={<Clock className="w-4.5 h-4.5" />}
+            action={<span className="text-xs text-[var(--text-muted)]">Average across period</span>} />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {/* Most Productive Hour */}
-            <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm text-zinc-400">Most Productive</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            {([
+              { key: 'most', label: 'Most Productive', data: peakHours.mostProductive, icon: TrendingUp, tier: 'productive' as const },
+              { key: 'least', label: 'Least Productive', data: peakHours.leastProductive, icon: TrendingDown, tier: 'distracting' as const },
+            ]).map(({ key, label, data, icon: Icon, tier }) => (
+              <div key={key} className="rounded-lg p-4 bg-[var(--color-muted)] border border-[var(--color-border)]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon className="w-4 h-4" style={{ color: tierVar(tier) }} />
+                  <span className="text-xs text-[var(--text-secondary)]">{label}</span>
+                </div>
+                <div className="text-2xl font-bold font-mono tabular-nums" style={{ color: tierVar(tier) }}>
+                  {data.label}
+                </div>
+                <div className="text-xs text-[var(--text-muted)] mt-1 font-mono tabular-nums">
+                  {data.score}% score
+                  <span className="ml-2" style={{ color: tierVar(tier) }}>
+                    {data.diff > 0 ? `+${data.diff}%` : `${data.diff}%`}
+                  </span>
+                </div>
               </div>
-              <div className="text-2xl font-bold font-mono tabular-nums text-emerald-400">{peakHours.mostProductive.label}</div>
-              <div className="text-sm text-zinc-400 mt-1">
-                {peakHours.mostProductive.score}% score
-                <span className="ml-2 text-emerald-400">
-                  {peakHours.mostProductive.diff > 0 ? `+${peakHours.mostProductive.diff}%` : `${peakHours.mostProductive.diff}%`}
-                </span>
-              </div>
-            </div>
-
-            {/* Least Productive Hour */}
-            <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingDown className="w-4 h-4 text-red-400" />
-                <span className="text-sm text-zinc-400">Least Productive</span>
-              </div>
-              <div className="text-2xl font-bold font-mono tabular-nums text-red-400">{peakHours.leastProductive.label}</div>
-              <div className="text-sm text-zinc-400 mt-1">
-                {peakHours.leastProductive.score}% score
-                <span className="ml-2 text-red-400">
-                  {peakHours.leastProductive.diff > 0 ? `+${peakHours.leastProductive.diff}%` : `${peakHours.leastProductive.diff}%`}
-                </span>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Hourly bar chart */}
+          {/* Hourly bar chart. Peak/valley keep the verdict hue; every other
+              hour drops to a quiet step so the two extremes are the only
+              saturated things in the row. */}
           <div className="h-32">
             <Bar
               data={{
@@ -1701,8 +1762,11 @@ export default function ProductivityPage({
                   label: 'Productivity Score',
                   data: peakHours.hourlyData.map(h => h.score),
                   backgroundColor: peakHours.hourlyData.map(h =>
-                    h.hour === peakHours.mostProductive.hour ? '#22c55e' :
-                      h.hour === peakHours.leastProductive.hour ? '#ef4444' : 'rgba(34, 197, 94, 0.5)'
+                    h.hour === peakHours.mostProductive.hour
+                      ? tierHex('productive')
+                      : h.hour === peakHours.leastProductive.hour
+                        ? tierHex('distracting')
+                        : hexA(tierHex('productive'), 0.34)
                   ),
                   borderRadius: 4
                 }]
@@ -1710,9 +1774,17 @@ export default function ProductivityPage({
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#18181b', borderColor: '#3f3f46', borderWidth: 1, titleColor: '#e4e4e7', bodyColor: '#a1a1aa', padding: 10, cornerRadius: 8 } },
+                plugins: {
+                  legend: { display: false },
+                  tooltip: chartTooltip({
+                    callbacks: {
+                      title: (items: any[]) => items[0]?.label ?? '',
+                      label: (ctx: any) => ` Score: ${ctx.parsed.y}%`,
+                    }
+                  })
+                },
                 scales: {
-                  x: { display: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 10 } } },
+                  x: { grid: { display: false }, border: { display: false }, ticks: { color: chartMutedText(), font: { family: '"JetBrains Mono", monospace', size: 10 } } },
                   y: { display: false, min: 0, max: 100 }
                 }
               }}
@@ -1721,108 +1793,62 @@ export default function ProductivityPage({
         </GlassCard>
       )}
 
-      {/* Insights Card */}
-      <GlassCard>
-        <SectionHeader title="Insights" icon={<Info className="w-5 h-5" />} />
+      {/* Insights Card. Six tiles each with its OWN hover hue
+          (emerald / emerald / indigo / cyan / amber / violet) plus
+          backdrop-blur — the same information as the four tier tiles above,
+          re-stated in six more colours. Flat surface, one hover hue for all
+          six, numbers in the foreground ramp. */}
+      <GlassCard variant="notebook" className="border border-[var(--color-border)]">
+        <SectionHeader title="Insights" icon={<Info className="w-4.5 h-4.5" />} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <div className="group relative overflow-hidden p-5 bg-zinc-900/30 backdrop-blur-xl rounded-xl border border-zinc-800/50 hover:border-emerald-500/40 transition-colors duration-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-yellow-400" />
-              <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Focus Time</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          {([
+            { key: 'focus-time', label: 'Focus Time', icon: Zap, value: formatDuration(productivityData.tiers.productive.seconds), note: 'Time on productive activities' },
+            { key: 'avg-trend', label: 'Avg Trend Score', icon: Award, value: `${trendAverageScore}%`, note: 'Average of daily trend scores' },
+            { key: 'app-time', label: 'App Time', icon: Monitor, value: formatDuration(productivityData.sources.app.totalSec), note: `${Math.round(productivityData.appVsWeb.app.score)}% productive` },
+            { key: 'site-time', label: 'Website Time', icon: Globe, value: formatDuration(productivityData.sources.website.totalSec), note: `${Math.round(productivityData.appVsWeb.web.score)}% productive` },
+            { key: 'external', label: 'External', icon: Activity, value: formatDuration(productivityData.sources.external.totalSec), note: `${productivityData.sources.external.count} sessions` },
+            { key: 'focus-sessions', label: 'Focus Sessions', icon: Timer, value: formatDuration(productivityData.sources.focus.totalSec), note: `${productivityData.sources.focus.count} sessions` },
+          ]).map(({ key, label, icon: Icon, value, note }) => (
+            <div
+              key={key}
+              className="p-3.5 rounded-lg bg-[var(--color-muted)] border border-[var(--color-border)] hover:border-[var(--page-accent)]/40 transition-colors duration-200"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className="w-4 h-4 text-[var(--text-secondary)] flex-shrink-0" />
+                <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--text-muted)] truncate">
+                  {label}
+                </span>
+              </div>
+              <div className="text-xl font-bold font-mono tabular-nums tracking-tight text-[var(--text-primary)]">
+                {value}
+              </div>
+              <div className="text-[11px] text-[var(--text-muted)] mt-1">{note}</div>
             </div>
-            <div className="text-2xl font-bold font-mono tabular-nums tracking-tight text-white">
-              {formatDuration(productivityData.tiers.productive.seconds)}
-            </div>
-            <div className="text-xs text-zinc-500 mt-1">
-              Time spent on productive activities
-            </div>
-          </div>
-
-          <div className="group relative overflow-hidden p-5 bg-zinc-900/30 backdrop-blur-xl rounded-xl border border-zinc-800/50 hover:border-emerald-500/40 transition-colors duration-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Award className="w-4 h-4 text-purple-400" />
-              <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Avg Trend Score</span>
-            </div>
-            <div className="text-2xl font-bold font-mono tabular-nums tracking-tight text-white">
-              {trendAverageScore}%
-            </div>
-            <div className="text-xs text-zinc-500 mt-1">
-              Average of daily trend scores
-            </div>
-          </div>
-
-          <div className="group relative overflow-hidden p-5 bg-zinc-900/30 backdrop-blur-xl rounded-xl border border-zinc-800/50 hover:border-indigo-500/40 transition-colors duration-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Monitor className="w-4 h-4 text-indigo-400" />
-              <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">App Time</span>
-            </div>
-            <div className="text-2xl font-bold font-mono tabular-nums tracking-tight text-white">
-              {formatDuration(productivityData.sources.app.totalSec)}
-            </div>
-            <div className="text-xs text-zinc-500 mt-1">
-              {Math.round(productivityData.appVsWeb.app.score)}% productive
-            </div>
-          </div>
-
-          <div className="group relative overflow-hidden p-5 bg-zinc-900/30 backdrop-blur-xl rounded-xl border border-zinc-800/50 hover:border-cyan-500/40 transition-colors duration-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Globe className="w-4 h-4 text-cyan-400" />
-              <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Website Time</span>
-            </div>
-            <div className="text-2xl font-bold font-mono tabular-nums tracking-tight text-white">
-              {formatDuration(productivityData.sources.website.totalSec)}
-            </div>
-            <div className="text-xs text-zinc-500 mt-1">
-              {Math.round(productivityData.appVsWeb.web.score)}% productive
-            </div>
-          </div>
-
-          <div className="group relative overflow-hidden p-5 bg-zinc-900/30 backdrop-blur-xl rounded-xl border border-zinc-800/50 hover:border-amber-500/40 transition-colors duration-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="w-4 h-4 text-amber-400" />
-              <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">External</span>
-            </div>
-            <div className="text-2xl font-bold font-mono tabular-nums tracking-tight text-white">
-              {formatDuration(productivityData.sources.external.totalSec)}
-            </div>
-            <div className="text-xs text-zinc-500 mt-1">
-              {productivityData.sources.external.count} sessions
-            </div>
-          </div>
-
-          <div className="group relative overflow-hidden p-5 bg-zinc-900/30 backdrop-blur-xl rounded-xl border border-zinc-800/50 hover:border-violet-500/40 transition-colors duration-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Timer className="w-4 h-4 text-violet-400" />
-              <span className="text-[11px] uppercase tracking-[0.08em] font-medium text-zinc-500">Focus Sessions</span>
-            </div>
-            <div className="text-2xl font-bold font-mono tabular-nums tracking-tight text-white">
-              {formatDuration(productivityData.sources.focus.totalSec)}
-            </div>
-            <div className="text-xs text-zinc-500 mt-1">
-              {productivityData.sources.focus.count} sessions
-            </div>
-          </div>
+          ))}
         </div>
       </GlassCard>
 
       {/* Calculation Explanation */}
-      <details className="rounded-xl p-5 bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/60">
-        <summary className="cursor-pointer text-sm text-zinc-400 hover:text-white">
+      <details className="rounded-xl p-4 bg-[var(--color-card)] border border-[var(--color-border)]">
+        <summary className="cursor-pointer text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] rounded">
           How is productivity calculated?
         </summary>
-        <div className="mt-4 group relative overflow-hidden p-5 bg-zinc-900/30 backdrop-blur-xl rounded-xl border border-zinc-800/50 hover:border-emerald-500/40 transition-colors duration-200 text-sm text-zinc-300 space-y-2">
-          <p><strong>Formula:</strong></p>
-          <code className="block bg-zinc-800 p-2 rounded text-emerald-400">
+        <div className="mt-4 text-sm text-[var(--text-secondary)] space-y-3">
+          <p><strong className="text-[var(--text-primary)]">Formula:</strong></p>
+          <code className="block bg-[var(--color-muted)] p-2 rounded-lg border border-[var(--color-border)] font-mono text-xs text-[var(--text-primary)]">
             Score = (Productive + Neutral × 0.5) / Total × 100
           </code>
-          <p className="mt-4"><strong>Tier Weights:</strong></p>
+          <p><strong className="text-[var(--text-primary)]">Tier Weights:</strong></p>
           <ul className="list-disc list-inside space-y-1">
-            <li><span className="text-emerald-400">Productive</span> = 100% credit (weight: 1.0)</li>
-            <li><span className="text-blue-400">Neutral</span> = 50% credit (weight: 0.5)</li>
-            <li><span className="text-red-400">Distracting</span> = 0% credit (weight: 0.0)</li>
+            {(['productive', 'neutral', 'distracting'] as const).map(t => (
+              <li key={t}>
+                <span className="capitalize" style={{ color: tierVar(t) }}>{t}</span>
+                {' = '}{t === 'productive' ? '100' : t === 'neutral' ? '50' : '0'}% credit (weight: {t === 'productive' ? '1.0' : t === 'neutral' ? '0.5' : '0.0'})
+              </li>
+            ))}
           </ul>
-          <p className="mt-4"><strong>Data Sources:</strong></p>
+          <p><strong className="text-[var(--text-primary)]">Data Sources:</strong></p>
           <ul className="list-disc list-inside space-y-1">
             <li>Desktop apps from activity tracking</li>
             <li>Websites from browser activity tracking</li>

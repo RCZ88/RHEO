@@ -16,6 +16,38 @@ const STAR_WARM = [
   [232, 134, 107],
 ];
 
+/**
+ * The same four hues, darkened toward the light theme's ink so they read as
+ * MARKS on cream instead of adding to it.
+ *
+ * Why this exists: the canvas paints with `globalCompositeOperation = 'lighter'`,
+ * which is ADDITIVE — it adds light to whatever is underneath. That is only
+ * ever correct on a near-black base, which is why this component looked right
+ * in dark mode and broke in light: measured against paper #f5f2ec, all four
+ * additive stars CLIP to `rgb(255,255,255)`. Four indistinguishable white
+ * blobs, and the streak threads (a 0.28-alpha peach added to an already-bright
+ * field) vanish completely.
+ *
+ * In light mode the composite becomes `multiply`, which darkens, and the stars
+ * become the ink side of the same palette. Measured against paper:
+ *   cream 3.75:1 · peach 3.71:1 · amber 3.28:1 · clay 4.65:1   (3:1 = WCAG 1.4.11)
+ * and the four stay mutually distinguishable (smallest pair ΔRGB 24), which
+ * matters because the colours encode streak state rather than being decoration.
+ *
+ * Hue identity is preserved — same four colours, same order, same hash
+ * assignment — so a given date keeps its colour across a theme switch.
+ */
+const STAR_WARM_LIGHT = [
+  [127, 123, 120],
+  [159, 114, 99],
+  [166, 128, 31],
+  [154, 93, 75],
+];
+
+/** Streak thread: a peach that survives both fields. */
+const THREAD_DARK = 'rgba(240,168,146,0.28)';
+const THREAD_LIGHT = 'rgba(154,93,75,0.34)';
+
 function hash01(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
@@ -60,6 +92,22 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ x: number; y: number; date: string } | null>(null);
+  // Which way the canvas composites. `lighter` adds light (dark field only);
+  // `multiply` darkens, which is the only mode that reads on paper.
+  const [isLight, setIsLight] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('light'),
+  );
+
+  // Re-read on theme change. The canvas redraws every frame, so this must not
+  // go through a stale closure or the stars keep clipping until a reload.
+  useEffect(() => {
+    const html = document.documentElement;
+    const sync = () => setIsLight(html.classList.contains('light'));
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(html, { attributes: true, attributeFilter: ['class'] });
+    return () => mo.disconnect();
+  }, []);
 
   const stars = useMemo<Star[]>(() => {
     const sorted = [...new Set(dates)].sort();
@@ -80,11 +128,11 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
         phase: hash01(date + 'p') * Math.PI * 2,
         speed: 0.6 + hash01(date + 'v') * 0.8,
         size: 1.1 + hs * 1.9,
-        color: STAR_WARM[Math.floor(hash01(date + 'c') * STAR_WARM.length)],
+        color: (isLight ? STAR_WARM_LIGHT : STAR_WARM)[Math.floor(hash01(date + 'c') * STAR_WARM.length)],
         inStreak: streakSet.has(date),
       };
     });
-  }, [dates]);
+  }, [dates, isLight]);
 
   const starsRef = useRef<Star[]>(stars);
   starsRef.current = stars;
@@ -139,7 +187,7 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
     const drawThread = () => {
       const streak = starsRef.current.filter(s => s.inStreak);
       if (streak.length < 2) return;
-      ctx.strokeStyle = 'rgba(240,168,146,0.28)';
+      ctx.strokeStyle = isLight ? THREAD_LIGHT : THREAD_DARK;
       ctx.lineWidth = 1;
       ctx.beginPath();
       streak.forEach((s, i) => {
@@ -151,7 +199,7 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
 
     const render = (time: number) => {
       ctx.clearRect(0, 0, w, h);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = isLight ? 'multiply' : 'lighter';
       drawThread();
       const positions: Array<{ sx: number; sy: number; date: string }> = [];
       for (const s of starsRef.current) {
@@ -165,8 +213,9 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
         const tailX = st.x - st.vx * 0.06;
         const tailY = st.y - st.vy * 0.06;
         const grad = ctx.createLinearGradient(tailX, tailY, st.x, st.y);
-        grad.addColorStop(0, 'rgba(247,243,238,0)');
-        grad.addColorStop(1, `rgba(247,243,238,${st.life})`);
+        const tail = isLight ? '154,93,75' : '247,243,238';
+        grad.addColorStop(0, `rgba(${tail},0)`);
+        grad.addColorStop(1, `rgba(${tail},${st.life})`);
         ctx.strokeStyle = grad;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -217,7 +266,7 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('resize', onResize);
     };
-  }, [stars.length]);
+  }, [stars, isLight]);
 
   useEffect(() => {
     if (milestone && milestone !== milestoneRef.current) {
@@ -245,7 +294,7 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
   return (
     <div
       ref={wrapRef}
-      className={`relative overflow-hidden rounded-xl border border-[#e8866b]/20 bg-gradient-to-b from-[#1a1512] to-[#0f0c0b] ${className}`}
+      className={`relative overflow-hidden rounded-xl border border-[#e8866b]/20 light:border-[var(--ws-border-strong)] bg-gradient-to-b from-[#1a1512] to-[#0f0c0b] light:from-[var(--ws-surface-raised)] light:to-[var(--ws-surface-sunken)] ${className}`}
       style={{ height }}
       onMouseMove={onMove}
       onMouseLeave={() => setHover(null)}
@@ -254,7 +303,7 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
       <div className="relative z-10 h-full">{children}</div>
       {hover && (
         <div
-          className="pointer-events-none absolute z-20 px-2 py-1 rounded-md bg-zinc-950/90 border border-zinc-700/60 text-[10px] text-zinc-200 whitespace-nowrap"
+          className="pointer-events-none absolute z-20 px-2 py-1 rounded-md bg-zinc-950 light:bg-[var(--ws-surface)]/90 border border-zinc-700/60 text-[10px] text-zinc-200 whitespace-nowrap"
           style={{ left: Math.min(hover.x + 12, 240), top: Math.max(hover.y - 8, 4) }}
         >
           {fmtDate(hover.date)} · practiced

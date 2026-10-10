@@ -10,6 +10,12 @@ import {
   Hash,
 } from "lucide-react"
 import { cn } from "./lib/cn"
+import {
+  formatRelativeTime,
+  formatFullDateTime,
+  formatDayLabel,
+  formatOffsetLabel,
+} from "./lib/timeDisplay"
 import { MOTION, TEXT, SURFACE, RING } from "./tokens"
 import { AISessionMessages } from "./AISessionMessages"
 
@@ -53,39 +59,13 @@ function formatCost(n: number): string {
   return `$${n.toFixed(3)}`
 }
 
-function formatTime(dateStr: string): string {
-  try {
-    const d = new Date(dateStr)
-    if (isNaN(d.getTime())) return dateStr
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    if (diffMins < 1) return "just now"
-    if (diffMins < 60) return `${diffMins}m ago`
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours}h ago`
-    const diffDays = Math.floor(diffHours / 24)
-    if (diffDays < 7) return `${diffDays}d ago`
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  } catch {
-    return dateStr
-  }
-}
-
-function formatFullDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr)
-    if (isNaN(d.getTime())) return dateStr
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  } catch {
-    return dateStr
-  }
-}
+// These now live in ./lib/timeDisplay so the same UTC parsing and the same
+// user-adjustable display offset are used everywhere AI timestamps are shown.
+// `new Date(sqliteText)` used to reinterpret UTC as local, rendering every
+// timestamp 7h (Jakarta) / 12h off — the "data is behind" symptom.
+const formatTime = (dateStr: string): string => formatRelativeTime(dateStr)
+const formatFullDate = (dateStr: string): string => formatFullDateTime(dateStr)
+const formatDay = (dateStr: string): string => formatDayLabel(dateStr)
 
 function truncatePath(p: string): string {
   if (!p) return ""
@@ -97,11 +77,11 @@ function truncatePath(p: string): string {
 function SkeletonRow() {
   return (
     <div className="flex items-center gap-3 py-3 px-4 animate-pulse">
-      <div className="h-3 w-16 rounded bg-zinc-800 light:bg-stone-200" />
-      <div className="h-3 w-24 rounded bg-zinc-800 light:bg-stone-200" />
+      <div className="h-3 w-16 rounded bg-zinc-800 light:bg-[var(--ws-surface-sunken)]" />
+      <div className="h-3 w-24 rounded bg-zinc-800 light:bg-[var(--ws-surface-sunken)]" />
       <div className="flex-1" />
-      <div className="h-3 w-14 rounded bg-zinc-800 light:bg-stone-200" />
-      <div className="h-3 w-12 rounded bg-zinc-800 light:bg-stone-200" />
+      <div className="h-3 w-14 rounded bg-zinc-800 light:bg-[var(--ws-surface-sunken)]" />
+      <div className="h-3 w-12 rounded bg-zinc-800 light:bg-[var(--ws-surface-sunken)]" />
     </div>
   )
 }
@@ -198,10 +178,10 @@ export function AISessionHistory({ activeToolIds, selectedTool, forceRefresh = 0
             className="w-2.5 h-2.5 rounded-full shrink-0"
             style={{ backgroundColor: meta.color }}
           />
-          <span className="text-[13px] font-medium text-zinc-100 light:text-stone-800">
+          <span className="text-[13px] font-medium text-zinc-100 light:text-[var(--text-primary)]">
             {meta.name}
           </span>
-          <span className="text-[11px] text-zinc-600 tabular-nums light:text-stone-500">
+          <span className="text-[11px] text-zinc-600 tabular-nums light:text-[var(--text-muted)]">
             {total} session{total !== 1 ? "s" : ""}
           </span>
         </div>
@@ -237,7 +217,7 @@ export function AISessionHistory({ activeToolIds, selectedTool, forceRefresh = 0
             {/* Load more */}
             <div className="px-5 py-3 flex justify-center border-t border-zinc-800/30 light:border-[var(--ws-border)]">
               {loading ? (
-                <div className="flex items-center gap-2 text-[11px] text-zinc-500 light:text-stone-500">
+                <div className="flex items-center gap-2 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Loading...
                 </div>
@@ -247,7 +227,7 @@ export function AISessionHistory({ activeToolIds, selectedTool, forceRefresh = 0
                   onClick={() => fetchSessions(activeTool, sessions.length)}
                   className={cn(
                     "px-4 py-1.5 rounded-lg text-[11px] font-medium transition-colors duration-150",
-                    "bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-400 hover:text-zinc-200 light:hover:bg-stone-200 light:hover:text-stone-800 light:text-stone-500",
+                    "bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-400 hover:text-zinc-200 light:hover:bg-stone-200 light:hover:text-stone-800 light:text-[var(--text-muted)]",
                     "ring-1 ring-zinc-700/60",
                     RING.focus
                   )}
@@ -255,7 +235,7 @@ export function AISessionHistory({ activeToolIds, selectedTool, forceRefresh = 0
                   Load More
                 </button>
               ) : (
-                <span className="text-[10px] text-zinc-700 light:text-stone-500">
+                <span className="text-[10px] text-zinc-700 light:text-[var(--text-muted)]">
                   All {total} sessions shown
                 </span>
               )}
@@ -297,7 +277,7 @@ function SessionRow({
         className={cn(
           "flex items-center gap-3 px-5 py-2.5 transition-colors duration-150 group cursor-pointer",
           "hover:bg-zinc-800/20 light:hover:bg-stone-100",
-          expanded && "bg-zinc-800/10 light:bg-stone-100"
+          expanded && "bg-zinc-800/10 light:bg-[var(--ws-surface-raised)]"
         )}
         onClick={() => setExpanded(!expanded)}
       >
@@ -305,19 +285,25 @@ function SessionRow({
         <div className="w-4 flex-shrink-0">
           <ChevronDown
             className={cn(
-              "w-3 h-3 text-zinc-600 light:text-stone-500 transition-transform duration-150",
+              "w-3 h-3 text-zinc-600 light:text-[var(--text-muted)] transition-transform duration-150",
               expanded && "rotate-180"
             )}
           />
         </div>
       {/* Time */}
       <div className="flex items-center gap-1.5 min-w-[64px]">
-        <Clock className="w-3 h-3 text-zinc-700 light:text-stone-500 shrink-0" />
+        <Clock className="w-3 h-3 text-zinc-700 light:text-[var(--text-muted)] shrink-0" />
         <span
-          className="text-[11px] text-zinc-500 tabular-nums light:text-stone-500"
-          title={formatFullDate(session.created_at || session.date)}
+          className="text-[11px] text-zinc-500 tabular-nums light:text-[var(--text-muted)]"
+          // Show the session's OWN day. created_at is when the row happened to be
+          // written, so after one bulk sync every session shares a single
+          // timestamp (all 2,205 opencode rows were recorded 2026-08-28 while
+          // their real session days range back to April) — rendering that as
+          // "1 month ago" for everything is simply wrong. The recorded instant
+          // stays available in the tooltip, correctly UTC-parsed and offset.
+          title={`${formatFullDate(session.created_at || session.date)} recorded · shown in ${formatOffsetLabel()}`}
         >
-          {formatTime(session.created_at || session.date)}
+          {session.date ? formatDay(session.date) : formatTime(session.created_at || '')}
         </span>
       </div>
 
@@ -338,8 +324,8 @@ function SessionRow({
       {/* Project path */}
       {session.project_path && (
         <div className="flex items-center gap-1 min-w-0 flex-1">
-          <FolderOpen className="w-3 h-3 text-zinc-700 light:text-stone-500 shrink-0" />
-          <span className="text-[11px] text-zinc-600 truncate light:text-stone-500">
+          <FolderOpen className="w-3 h-3 text-zinc-700 light:text-[var(--text-muted)] shrink-0" />
+          <span className="text-[11px] text-zinc-600 truncate light:text-[var(--text-muted)]">
             {truncatePath(session.project_path)}
           </span>
         </div>
@@ -349,17 +335,17 @@ function SessionRow({
 
       {/* Tokens */}
       <div className="flex items-center gap-1 tabular-nums">
-        <Hash className="w-3 h-3 text-zinc-700 light:text-stone-500" />
-        <span className="text-[11px] text-zinc-400 font-medium light:text-stone-400">
+        <Hash className="w-3 h-3 text-zinc-700 light:text-[var(--text-muted)]" />
+        <span className="text-[11px] text-zinc-400 font-medium light:text-[var(--text-secondary)]">
           {formatTokenCount(totalTokens)}
         </span>
-        <span className="text-[10px] text-zinc-700 light:text-stone-500">tok</span>
+        <span className="text-[10px] text-zinc-700 light:text-[var(--text-muted)]">tok</span>
       </div>
 
       {/* Cost */}
       {session.cost_usd > 0 && (
         <div className="flex items-center gap-1 tabular-nums min-w-[52px] justify-end">
-          <Coins className="w-3 h-3 text-zinc-700 light:text-stone-500" />
+          <Coins className="w-3 h-3 text-zinc-700 light:text-[var(--text-muted)]" />
           <span className="text-[11px] text-emerald-400/80 font-medium">
             {formatCost(session.cost_usd)}
           </span>
@@ -377,7 +363,7 @@ function EmptyToolState({ tool }: { tool: string }) {
   const meta = AGENT_META[tool]
   return (
     <div className="flex flex-col items-center gap-2 px-5 py-8 text-center">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900/60 text-zinc-600 ring-1 ring-zinc-800/50 light:bg-stone-200 light:text-stone-500 light:ring-stone-300">
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-600 ring-1 ring-zinc-800/50 light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-muted)] light:ring-[var(--ws-border-strong)]">
         <Sparkles className="w-4 h-4" />
       </span>
       <p className={cn("text-[13px] font-medium", TEXT.secondary)}>

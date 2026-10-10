@@ -51,6 +51,12 @@ export interface MonthWallProps {
   renderDay?: (dayData: { date: string; events: WallEvent[]; isToday: boolean; isPast: boolean }) => React.ReactNode;
   viewDate?: Date;
   selectedDate?: string;
+  /** Fired when a day tile is picked. Optional and additive: the wall already
+   *  *displayed* `selectedDate`, it just could never *report* a new one, so on a
+   *  page whose whole job is "look at the month, then act on a day" the centrepiece
+   *  was inert — you clicked a date and the page never moved. Callers that omit
+   *  this (the Gold tab) behave exactly as before. */
+  onDateChange?: (date: string) => void;
 }
 
 function loadEvents(): WallEvent[] {
@@ -82,7 +88,12 @@ export function getEventsForDay(events: WallEvent[], date: string): WallEvent[] 
   return events.filter(e => e.date === date).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 }
 
-function deriveEvents(goals: Goal[], deadlines: Deadline[], reminders: Reminder[], schedule: ScheduleEntry[], longTermGoals: any[], viewDate?: Date): WallEvent[] {
+/* Exported for testability only. This is the whole data path from the page's
+   props to what the wall draws, and it is pure — so it is the one thing worth
+   asserting on directly. The grid it feeds sits behind an effect-fed `loading`
+   flag, which means a server render can never reach the cells; without this
+   export "does the wall react to an addition?" is unanswerable without a build. */
+export function deriveEvents(goals: Goal[], deadlines: Deadline[], reminders: Reminder[], schedule: ScheduleEntry[], longTermGoals: any[], viewDate?: Date): WallEvent[] {
   const viewYear = viewDate?.getFullYear() ?? new Date().getFullYear();
   const viewMonth = viewDate?.getMonth() ?? new Date().getMonth();
   const events: WallEvent[] = [];
@@ -121,7 +132,7 @@ function deriveEvents(goals: Goal[], deadlines: Deadline[], reminders: Reminder[
   return events;
 }
 
-export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = [], reminders = [], schedule = [], longTermGoals = [], viewDate: viewDateProp, selectedDate }: MonthWallProps) {
+export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = [], reminders = [], schedule = [], longTermGoals = [], viewDate: viewDateProp, selectedDate, onDateChange }: MonthWallProps) {
   const [userEvents, setUserEvents] = useState<WallEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -231,12 +242,34 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
     undoRef.current = null;
   }, [userEvents]);
 
-  const openDay = (date: string) => { setOpenDate(date); setForm({ title: '', category: 'work', time: '' }); };
+  const openDay = (date: string) => {
+    // Report the pick BEFORE opening the popover, so the surrounding page has
+    // already re-rendered its day-scoped content by the time the panel appears.
+    // The popover itself is wall-local (its events are a separate store), so this
+    // is the only channel through which a day click can reach the page.
+    onDateChange?.(date);
+    setOpenDate(date);
+    setForm({ title: '', category: 'work', time: '' });
+  };
   const dayEvents = openDate ? getEventsForDay(events, openDate) : [];
 
   const hueFor = useCallback((category: string): string => {
     const style = getCategoryColor(category);
-    return style?.bg || style?.border || 'var(--color-muted-foreground)';
+    const cls = style?.bg || style?.border || '';
+    /* THE EVENT DOTS WERE NEVER DRAWN. `CategoryColors` stores TAILWIND CLASSES
+       ("bg-violet-500/15"), and this value is written into
+       `style={{ backgroundColor }}`. A class name is not a colour, so the
+       declaration was invalid and dropped — every dot on the wall rendered with
+       no fill, which is why a wall full of events looked empty. Invisible to
+       `tsc`, to `esbuild`, and to a green build: it is a valid string.
+
+       Take the hue out of the class and emit the palette token's 400 step — the
+       same step `ENTITY_COLORS.bar` uses elsewhere, and one that clears 3:1 on
+       both the raised and sunken tiles. The category→hue decision is unchanged:
+       it still comes from CategoryColors (LAMINAR §5). Only the delivery is
+       corrected. */
+    const m = /-(violet|sky|pink|red|blue|fuchsia|emerald|cyan|amber|orange|rose|zinc|stone|yellow|indigo|teal|lime|slate|neutral)-/.exec(cls);
+    return m ? `var(--color-${m[1]}-400)` : 'var(--color-muted-foreground)';
   }, []);
 
   const applyTilt = useCallback((nx: number, ny: number) => {
@@ -328,7 +361,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
   return (
     <div
       data-monthwall="wall"
-      className="relative rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 p-5"
+      className="relative rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5"
 
     >
       {/* Header */}
@@ -404,7 +437,26 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
             style={{ transformStyle: 'preserve-3d' }}
             onPointerDown={onPointerDown}
           >
-            <div className="grid grid-cols-7 gap-[10px]" style={{ transformStyle: 'preserve-3d', padding: 10 }}>
+            {/* FLAT, deliberately. This grid was `transformStyle: 'preserve-3d'`
+                and every cell carried `translateZ(z)` + its own `zIndex`, under a
+                scene rotated `rotateX(9deg) rotateY(7deg)`. In a preserve-3d
+                context the browser sorts and HIT-TESTS siblings in three
+                dimensions, so a cell on a nearer Z plane projects over — and
+                swallows the pointer events for — the cell behind it. The result
+                was a month wall that looked perfectly clickable (`cursor-pointer`
+                on every cell, correct brightness, correct dots) and silently sent
+                your click to a DIFFERENT date. "I can't click the calendar" is
+                exactly what that looks like from the outside, and no amount of
+                reading the JSX reveals it: the handler is wired, the colour is
+                right, the number is right. Only `document.elementFromPoint` over
+                the real geometry shows the hit landing on the wrong cell.
+
+                The depth cue is NOT lost — it moves to `opacity`, which is applied
+                per row as a STATIC value. Same read of "this row is nearer",
+                computed once, with no geometry to mis-hit. `preserve-3d` on the
+                OUTER wrapper is left alone; it only tilts the card, and it has no
+                transformed descendants left to reorder. */}
+            <div className="grid grid-cols-7 gap-[10px]" style={{ padding: 10 }}>
               {grid.map((day, idx) => {
                 if (!day) return <div key={`empty-${idx}`} className="h-11" />;
                 const key = localDateKey(day);
@@ -412,17 +464,30 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                 const isPast = key < todayKey;
                 const row = Math.floor(idx / 7);
                 const rowOffset = row - 2.5;
-                const z = Math.max(-64, 48 - Math.abs(rowOffset) * 16);
                 const brightness = isPast ? 0.75 : isToday ? 1 : 0.55;
                 const list = eventsByDate[key] || [];
+                /* PER-DAY dots. These used to be read from the module-level
+                   `dots`, which is derived from `openDate` — so every day cell
+                   drew the marks belonging to whichever day happened to be open,
+                   and drew NOTHING at all until you clicked one. The wall
+                   therefore counted correctly (`+N`, and the caption in the
+                   header) while mis-depicting the month, which is exactly the
+                   "the calendar doesn't change when I add things" report.
+                   Deriving them from this cell's own `list` is what the unused
+                   `renderCell` above already did correctly. */
+                const cellDots = list.slice(0, 2);
+                const cellOverflow = list.length - cellDots.length;
 
                 return (
                   <Popover key={key} open={openDate === key} onOpenChange={(o) => (o ? openDay(key) : setOpenDate(null))}>
                     <PopoverTrigger asChild>
                       <div
                         style={{
-                          transform: showFlat ? 'none' : `translateZ(${z}px)`,
-                          zIndex: Math.round(100 - Math.abs(rowOffset)),
+                          // Static per-row depth. Opacity, not translateZ: it keeps
+                          // the "nearer row reads stronger" cue that the 3D used to
+                          // give, while leaving the cell in normal 2D flow so a
+                          // pointer event lands on the cell you actually aimed at.
+                          opacity: showFlat ? 1 : 1 - Math.abs(rowOffset) * 0.055,
                           transition: reactiveTransition,
                         }}
                         className={`h-11 rounded-lg border cursor-pointer
@@ -435,10 +500,10 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                           <span className={`text-[11px] leading-none tabular-nums ${isToday ? 'font-bold text-zinc-100' : isPast ? 'text-zinc-500' : 'text-zinc-400'}`}>{day.getDate()}</span>
                           {list.length > 0 ? (
                             <div className="flex items-center gap-0.5 mt-0.5 flex-wrap justify-center">
-                              {dots.map(d => (
+                              {cellDots.map(d => (
                                 <span key={d.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hueFor(d.category) }} />
                               ))}
-                              {overflow > 0 && <span className="text-[8px] text-zinc-500">+{overflow}</span>}
+                              {cellOverflow > 0 && <span className="text-[8px] text-zinc-500">+{cellOverflow}</span>}
                             </div>
                           ) : (
                             <span className="mt-0.5 h-1 w-1 rounded-full opacity-0 group-hover:opacity-40" style={{ backgroundColor: 'var(--page-accent)' }} />
@@ -447,7 +512,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                         <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'var(--hairline)' }} />
                       </div>
                     </PopoverTrigger>
-                    <PopoverContent className="w-72 bg-zinc-900 border-zinc-800 text-zinc-200">
+                    <PopoverContent className="w-72 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border-zinc-800 text-zinc-200">
                       <DayPanel date={day} events={getEventsForDay(events, key)} hueFor={hueFor} form={form} setForm={setForm} onSave={addEvent} onDelete={deleteEvent} inputRef={inputRef} />
                     </PopoverContent>
                   </Popover>
@@ -514,7 +579,7 @@ function DayPanel({ date, events, hueFor, form, setForm, onSave, onDelete, input
       ) : (
         <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
           {events.map(e => (
-            <div key={e.id} className="group flex items-center gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
+            <div key={e.id} className="group flex items-center gap-2 p-2 rounded-lg bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: hueFor(e.category) }} />
               <span className="flex-1 min-w-0"><span className="block text-[12px] text-zinc-200 truncate">{e.title}</span>
                 <span className="text-[9px] text-zinc-500 uppercase">{e.source}</span>
@@ -529,14 +594,14 @@ function DayPanel({ date, events, hueFor, form, setForm, onSave, onDelete, input
         </div>
       )}
       <div className="pt-2 border-t border-zinc-800/60 space-y-2">
-        <input ref={inputRef} value={form.title} onChange={e => setForm((p: any) => ({ ...p, title: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') onSave(); }} placeholder="Event title" className="w-full h-8 px-2 rounded-lg bg-zinc-900/80 border border-zinc-700/50 focus:border-zinc-600 outline-none text-[12px] text-zinc-200 placeholder:text-zinc-600" />
+        <input ref={inputRef} value={form.title} onChange={e => setForm((p: any) => ({ ...p, title: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') onSave(); }} placeholder="Event title" className="w-full h-8 px-2 rounded-lg bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 focus:border-zinc-600 outline-none text-[12px] text-zinc-200 placeholder:text-zinc-600" />
         <div className="flex items-center gap-2">
           <Select value={form.category} onValueChange={(v: any) => setForm((p: any) => ({ ...p, category: v }))} className="flex-1 h-8">
             {categoryKeys.map(cat => <SelectItem key={cat} value={cat}><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: hueFor(cat) }} />{cat}</span></SelectItem>)}
           </Select>
-          <input type="time" value={form.time || ''} onChange={e => setForm((p: any) => ({ ...p, time: e.target.value }))} className="h-8 px-2 rounded-lg bg-zinc-900/80 border border-zinc-700/50 outline-none text-[11px] text-zinc-300 w-[72px]" aria-label="Event time (optional)" />
+          <input type="time" value={form.time || ''} onChange={e => setForm((p: any) => ({ ...p, time: e.target.value }))} className="h-8 px-2 rounded-lg bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 outline-none text-[11px] text-zinc-300 w-[72px]" aria-label="Event time (optional)" />
         </div>
-        <button onClick={onSave} disabled={!form.title.trim()} className="w-full h-8 rounded-lg flex items-center justify-center gap-1 text-[12px] font-medium disabled:opacity-40 bg-zinc-800 text-zinc-200 border border-zinc-700 hover:border-zinc-600">
+        <button onClick={onSave} disabled={!form.title.trim()} className="w-full h-8 rounded-lg flex items-center justify-center gap-1 text-[12px] font-medium disabled:opacity-40 bg-zinc-800 light:bg-zinc-200 text-zinc-200 light:text-zinc-900 border border-zinc-700 light:border-zinc-300 hover:border-zinc-600 light:hover:border-zinc-400">
           <Plus size={12} /> Add event
         </button>
       </div>

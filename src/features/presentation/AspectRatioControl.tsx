@@ -136,7 +136,7 @@ export function AspectRatioControl({ ratio, onRatioChange, variant = 'toolbar', 
     return (
       <div
         data-slot="card"
-        className="flex flex-col gap-4 rounded-xl border border-white/[0.08] bg-zinc-900/60 backdrop-blur-xl p-5 text-zinc-100"
+        className="flex flex-col gap-4 rounded-xl border border-white/[0.08] bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 text-zinc-100"
       >
         <div data-slot="card-header" className="text-[13px] font-semibold">
           Aspect Ratio

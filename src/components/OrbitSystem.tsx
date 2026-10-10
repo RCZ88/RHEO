@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { webglSupported } from '@/lib/webgl';
+import * as THREE from 'three';
 import {
   OrbitScene
 } from './orbit';
@@ -182,6 +184,25 @@ export default function OrbitSystem({ logs, appColors, categoryOverrides, websit
     animate();
   };
   const handlePlanetPositionUpdate = (name: string, position: THREE.Vector3) => { if (!isMountedRef.current) return; planetPositionsRef.current.set(name, position.clone()); };
+
+  // OrbitScene mounts a three.js Canvas. Without WebGL the renderer throws
+  // in a layout effect and unwinds the subtree — show a message that says WHY
+  // instead of a dead end, because the usual cause is a launch flag, not the
+  // hardware: `webglSupported()` is cached per page session, so this verdict is
+  // decided at startup and cannot change until the app is restarted.
+  if (!webglSupported()) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-6 text-center">
+        <p className="text-[11px] text-zinc-600">
+          Orbit view needs WebGL. This renderer was launched without a GL backend.
+        </p>
+        <p className="text-[10px] text-zinc-700 max-w-sm">
+          Restart the app so the software-GL flags take effect. If it persists, launch with
+          {' '}<code className="font-mono text-zinc-500">DESKFLOW_GPU=1</code> to use the real GPU.
+        </p>
+      </div>
+    );
+  }
 
   // Delegate all rendering to OrbitScene sub-component
   return <OrbitScene

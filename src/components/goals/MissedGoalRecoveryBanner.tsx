@@ -41,7 +41,7 @@ export function MissedGoalRecoveryBanner({ missedGoals, onRecover, onDismiss }: 
           >
             <div className="px-4 pb-3 space-y-2">
               {missedGoals.map(goal => (
-                <div key={goal.id} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30">
+                <div key={goal.id} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]">
                   <span className="text-[12px] text-zinc-300 flex-1 truncate">{goal.title}</span>
                   <span className="text-[10px] text-zinc-500 shrink-0">{goal.date}</span>
                   <div className="flex items-center gap-1 shrink-0">

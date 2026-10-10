@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useContentEngine } from '../ContentEngineContext'
 import { BarChart3, Bot, CheckCircle2, ChevronLeft, Clapperboard, FileSearch, FileText, Film, Plus, RefreshCw, Search, ShieldCheck, ShieldX, Sparkles, Trash2, TrendingUp, Wand2, X, ExternalLink, ClipboardPaste, Check, Zap, Route } from 'lucide-react'
 import type { ScriptFrame, ScoringSchemeInfo, FrameScoreBreakdown } from '@/types/deskflow-api'
-import { AmberButton, Card, Chip, ConfirmIconButton, EmptyState, ErrorState, FieldLabel, GhostButton, LoadingBlock, SectionHeader, SelectInput, StatusChip, TextArea, TextInput, toast } from './ui'
+import { AmberButton, Card, Chip, ConfirmIconButton, CopyPromptButton, EmptyState, ErrorState, FieldLabel, GhostButton, LoadingBlock, SectionHeader, SelectInput, StatusChip, TextArea, TextInput, toast } from './ui'
 import { BridgeField } from '@/components/ai-bridge/BridgeField'
 import { RetentionPanel } from './RetentionPanel'
 import { RetentionCurveChart } from './SvgRetentionChart'
@@ -216,9 +216,12 @@ function EpisodeDetail({ ep, onBack, onChanged }: { ep: any; onBack: () => void;
             <GhostButton onClick={sendToExternalAI} disabled={externalSending}>{externalSending ? <Zap size={13} className="animate-pulse" /> : <ExternalLink size={13} />} {externalSending ? 'Building…' : 'External AI'}</GhostButton>
             <GhostButton onClick={validateBatch} disabled={validating}><Search size={13} /> {validating ? 'Validating…' : 'Validate Evidence (AI)'}</GhostButton>
           </div>
-          <DynamicPipeline episodeId={ep.id} onStepResult={() => { load(); onChanged() }} />
+          {/* `load` is defined in EpisodesView (below), not in EpisodeDetail, so
+              calling it here was a ReferenceError. onChanged is the prop EpisodesView
+              passes down for exactly this refresh, and it already re-fetches. */}
+          <DynamicPipeline episodeId={ep.id} onStepResult={() => { onChanged() }} />
           <TemplateSelector selected={selectedTemplates} onChange={setSelectedTemplates} />
-          <PlanningModeSelector episodeId={ep.id} onPlanGenerated={() => { load(); onChanged() }} />
+          <PlanningModeSelector episodeId={ep.id} onPlanGenerated={() => { onChanged() }} />
           <HookStackDisplay episode={ep} />
           {frames.length > 0 && <EpisodeScoreSummary scheme={scoringScheme} breakdown={scoringBreakdown} average={scoringAverage} threshold={scoringThreshold} rubricVersion={scoringVersion} totalFrames={frames.length} loading={scoringLoading} />}
           <KeywordSEOPanel episode={ep} />

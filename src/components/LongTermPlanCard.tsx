@@ -268,13 +268,13 @@ export function LongTermPlanCard() {
                   transition={{ duration: MOTION.normal, ease: MOTION.ease }}
                   className="overflow-hidden mb-4"
                 >
-                  <div className="rounded-xl p-3.5 bg-zinc-900/40 ring-1 ring-zinc-800/60 space-y-2.5">
+                  <div className="rounded-xl p-3.5 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 space-y-2.5">
                     <input
                       value={newTitle}
                       onChange={e => setNewTitle(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
                       placeholder="What do you want to achieve?"
-                      className="w-full bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none"
+                      className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none"
                       autoFocus
                     />
                     <textarea
@@ -282,13 +282,13 @@ export function LongTermPlanCard() {
                       onChange={e => setNewDescription(e.target.value)}
                       placeholder="Optional description or notes..."
                       rows={2}
-                      className="w-full bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none resize-none"
+                      className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none resize-none"
                     />
                     <div className="flex items-center gap-2">
                       <select
                         value={newCategory}
                         onChange={e => setNewCategory(e.target.value)}
-                        className="flex-1 bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none"
+                        className="flex-1 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none"
                       >
                         {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
@@ -429,7 +429,7 @@ export function LongTermPlanCard() {
                     onChange={e => setBulkText(e.target.value)}
                     placeholder="Paste your thoughts, notes, or a brain dump here...&#10;&#10;Example:&#10;'I want to learn TypeScript deeply this quarter, finish my portfolio site, start running 3x a week, save $5000 for a trip to Japan, and read 12 books this year. Also need to improve my relationship with my family by having weekly dinners.'"
                     rows={8}
-                    className="w-full bg-zinc-950/60 ring-1 ring-zinc-800/60 rounded-xl px-3.5 py-3 text-xs text-zinc-100 placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none resize-none"
+                    className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-xl px-3.5 py-3 text-xs text-zinc-100 placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:outline-none resize-none"
                   />
                   <div className="absolute bottom-3 right-3 text-[9px] text-zinc-600">
                     {bulkText.length} chars

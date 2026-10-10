@@ -20,12 +20,12 @@ export function MemoryUploader({ onFiles }: MemoryUploaderProps) {
       }}
       onClick={() => inputRef.current?.click()}
       className={`relative flex flex-col items-center justify-center gap-2 cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors overflow-hidden ${
-        dragOver ? 'border-[#6fb38f]/60 bg-[#6fb38f]/[0.06]' : 'border-zinc-700/50 hover:border-[#6fb38f]/40'
+        dragOver ? 'border-[var(--color-mem-400)]/60 bg-[var(--color-mem-400)]/[0.06]' : 'border-zinc-700/50 hover:border-[var(--color-mem-400)]/40'
       }`}
     >
       <div className="warmth-aurora" />
       <div className="relative z-10 flex flex-col items-center gap-2">
-        <div className="w-10 h-10 rounded-full bg-[#6fb38f]/15 flex items-center justify-center text-[#6fb38f]">
+        <div className="w-10 h-10 rounded-full bg-[var(--color-mem-400)]/15 flex items-center justify-center text-[var(--color-mem-400)]">
           <ImagePlus className="w-5 h-5" />
         </div>
         <p className="text-[13px] text-[var(--text-primary)] font-medium">Add photos or videos</p>

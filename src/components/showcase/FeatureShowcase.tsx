@@ -46,7 +46,7 @@ function FeatureCard({ feature, expanded, onToggle }: { feature: typeof features
               </div>
               <div>
                 <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">Live Demo</p>
-                <div className="rounded-lg bg-zinc-900/50 border border-zinc-800/50 p-3">
+                <div className="rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 p-3">
                   {feature.demo}
                 </div>
               </div>

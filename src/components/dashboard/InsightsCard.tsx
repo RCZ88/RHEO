@@ -18,7 +18,7 @@ import { AnimatedShinyText } from '../ui/animated-shiny-text';
 import { MomentumOrb } from './MomentumOrb';
 import { StreakBadge } from './StreakBadge';
 import { BlurText } from './BlurText';
-import { Card } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';import { Card, CardContent } from '@/components/ui/card';
 import type { DashboardInsights } from './types';
 
 interface InsightsCardProps {
@@ -158,7 +158,7 @@ function MetricPill({
   return (
     <motion.div
       whileHover={{ y: -1, scale: 1.02 }}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/30"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30"
     >
       {icon}
       <span className="text-[11px] text-zinc-500">{label}</span>

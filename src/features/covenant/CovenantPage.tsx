@@ -71,7 +71,7 @@ export default function CovenantPage({ embedded = false }: CovenantPageProps = {
               </div>
               <div className="w-px h-6 bg-white/15" />
               <div className="flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-[#6fb38f]" />
+                <Sparkles className="w-4 h-4 text-[var(--color-mem-400)]" />
                 <span className="text-xl font-bold tabular-nums text-white">{totalPracticeDays}</span>
                 <span className="text-[11px] text-white/60">days of practice, kept forever</span>
               </div>

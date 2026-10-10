@@ -37,10 +37,26 @@ export class BrowserManager {
     try { fs.mkdirSync(path.join(dataDir, 'profiles'), { recursive: true }); } catch {}
   }
 
-  /** Is the playwright npm package importable? (Browsers checked at launch.) */
-  availability(): { available: boolean; error: string | null } {
-    this.tryLoadPlaywright();
-    return { available: !!this.playwrightMod, error: this.playwrightError };
+  /**
+   * Is automation actually usable? Checks the npm package AND that a browser
+   * binary resolves. The old check only tested `require('playwright')`, so the UI
+   * confidently said "automation available" while every launch then failed.
+   */
+  availability(): { available: boolean; error: string | null; browserPath?: string } {
+    const pw = this.tryLoadPlaywright();
+    if (!pw) return { available: false, error: this.playwrightError || 'playwright not installed' };
+    try {
+      const exe = pw.chromium?.executablePath?.();
+      if (exe && !fs.existsSync(exe)) {
+        return {
+          available: false,
+          error: 'Playwright is installed but no browser binary is downloaded. Run: npx playwright install chromium',
+        };
+      }
+      return { available: true, error: null, browserPath: exe || undefined };
+    } catch (e: any) {
+      return { available: true, error: null };
+    }
   }
 
   private tryLoadPlaywright(): any {
@@ -142,7 +158,24 @@ export class BrowserManager {
     const page = context.pages()[0] || (await context.newPage());
     try { await page.setViewportSize(vp); } catch {}
     if (opts?.url) {
-      try { await page.goto(opts.url, { waitUntil: 'domcontentloaded', timeout: 45000 }); } catch {}
+      // This was a bare `catch {}`. A failed navigation therefore looked exactly
+      // like a slow one: the window opened, the app reported success, and the
+      // user got a black/blank panel with no explanation. Report what actually
+      // happened, including what the page ended up showing.
+      try {
+        await page.goto(opts.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      } catch (err: any) {
+        let where = '';
+        let title = '';
+        try { where = page.url(); } catch {}
+        try { title = await page.title(); } catch {}
+        throw new Error(
+          `Opened the window but could not load ${opts.url} — ${err?.message || String(err)}. ` +
+          `The page ended at "${where || 'about:blank'}" (title: ${title || 'none'}). ` +
+          'This usually means the site refused the automated browser, the URL needs a sign-in first, ' +
+          'or the network is blocking it.',
+        );
+      }
     }
 
     // Best-effort: hide the Node/playwright env leak via CDP is not available

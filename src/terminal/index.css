@@ -1,7 +1,22 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+/* Same trap as src/index.css: agent/ is not gitignored, so Tailwind's scan reads
+   class names out of markdown session-log prose and Lightning CSS chokes on them.
+   Keep this exclusion in BOTH files that pull in tailwindcss. */
+@source not "../../agent";
+@source not "../../*.md";
 
+/* color-scheme tells the UA how to render native widgets, scrollbars, form
+   controls and ::selection. Pinned to `dark` it forced every native control in
+   the terminal to stay dark in light mode even though every --t-* surface is
+   token-driven. Follows the theme now — the terminal mounts inside the main
+   app's #root, so `html.light` reaches it.
+   NOTE: `html.light :root` was tempting but is INVALID — :root cannot be a
+   descendant of <html> — and LightningCSS drops the entire rule (both
+   selectors) when any one selector in the list is invalid. `html.light` alone
+   is correct because <html> IS :root. */
 :root { color-scheme: dark; }
+html.light { color-scheme: light; }
 
 html, body, #root { height: 100%; }
 
@@ -18,15 +33,30 @@ body {
 [data-theme="rheo-dark"] {
   --t-bg: var(--ws-surface);
   --t-panel: var(--ws-surface-raised);
-  --t-panel2: #1f1f23;
+  --t-panel2: var(--ws-surface-sunken, #1f1f23);
   --t-fg: var(--color-foreground);
   --t-muted: var(--color-muted-foreground);
   --t-accent: #f472b6;
-  --t-accent2: #2dd4bf;
+  --t-accent2: var(--ws-accent, #2dd4bf);
   --t-border: var(--ws-border);
-  --t-promptUser: #f472b6;
-  --t-promptPath: #2dd4bf;
+  --t-promptUser: var(--page-accent, #f472b6);
+  --t-promptPath: var(--ws-accent, #2dd4bf);
   --t-selection: #3f3f46;
+}
+
+/* Light-mode terminal: the four hardcoded values above are the ONLY things
+   that did not follow the shared tokens. #f472b6 pink and #2dd4bf cyan are
+   tuned for black (they fail 4.5:1 on paper); #3f3f46 selection is invisible
+   on a light field. Re-chroma'd to the same accent the rest of the app uses
+   in light mode. Surfaces already read --ws-surface / --color-foreground, so
+   they need no entry here. */
+html.light [data-theme="rheo-dark"] {
+  --t-panel2: var(--ws-surface-sunken);
+  --t-accent: var(--ws-accent-text);
+  --t-accent2: var(--ws-accent);
+  --t-promptUser: var(--ws-accent-text);
+  --t-promptPath: var(--ws-accent);
+  --t-selection: rgb(14 116 144 / 0.22);
 }
 
 .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }

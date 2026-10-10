@@ -11,8 +11,8 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, iconComponent: IconComp, title, description, hint, action, className = '' }: EmptyStateProps) {
   const iconEl = icon || (IconComp ? (
-    <div className="w-9 h-9 rounded-lg border border-zinc-800/60 bg-zinc-900 flex items-center justify-center light:border-[var(--ws-border)] light:bg-white">
-      <IconComp className="w-4 h-4 text-zinc-600 light:text-stone-500" />
+    <div className="w-9 h-9 rounded-lg border border-zinc-800/60 bg-zinc-900 light:bg-[var(--ws-surface-raised)] flex items-center justify-center light:border-[var(--ws-border)] light:bg-white">
+      <IconComp className="w-4 h-4 text-zinc-600 light:text-[var(--text-muted)]" />
     </div>
   ) : null);
 

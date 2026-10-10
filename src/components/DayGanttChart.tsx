@@ -148,7 +148,7 @@ export function DayGanttChart({ date, items, height = 300, onHourClick }: DayGan
                     </div>
                     
                     {/* Tooltip */}
-                    <div className="absolute left-0 top-full mt-1 px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <div className="absolute left-0 top-full mt-1 px-2 py-1 rounded bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">
                       <div className="text-zinc-200 font-medium">{item.label}</div>
                       <div className="text-zinc-400">
                         {Math.floor(item.startHour)}:00 - {Math.floor(item.endHour)}:00 ({formatDuration(item.duration)})

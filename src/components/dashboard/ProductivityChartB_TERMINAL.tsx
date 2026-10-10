@@ -1,7 +1,7 @@
 // ============================================================
 // RHEO Dashboard — Productivity Chart PROTOTYPE B: "TERMINAL CHIC"
 // Chart.js wire-frame style. Thin 2px bars, dot markers, no fill.
-// Flat bg-zinc-900 panel. Mono labels. Terminal aesthetic.
+// Flat bg-zinc-900 light:bg-[var(--ws-surface-raised)] panel. Mono labels. Terminal aesthetic.
 // ============================================================
 
 import { useState, useRef, useEffect } from 'react';
@@ -10,6 +10,7 @@ import { ChevronDown, BarChart3 } from 'lucide-react';
 import { Chart, registerables } from 'chart.js';
 import type { WidgetCardProps } from './WidgetCardB_TERMINAL';
 import { WidgetCardB } from './WidgetCardB_TERMINAL';
+import { chartTooltip, watchChartTokens } from '../finance/_fx/chartTokens';
 
 Chart.register(...registerables);
 
@@ -81,7 +82,7 @@ export function ProductivityChartB({
             borderRadius: 0,
             pointRadius: 4,
             pointBackgroundColor: 'rgba(236, 72, 153, 0.9)',
-            pointBorderColor: '#18181b',
+            pointBorderColor: chartTokens().surface,
             pointBorderWidth: 1,
             barPercentage: 0.6,
           },
@@ -94,7 +95,7 @@ export function ProductivityChartB({
             borderRadius: 0,
             pointRadius: 3,
             pointBackgroundColor: 'rgba(113, 113, 122, 0.7)',
-            pointBorderColor: '#18181b',
+            pointBorderColor: chartTokens().surface,
             pointBorderWidth: 1,
             barPercentage: 0.6,
           },
@@ -107,7 +108,7 @@ export function ProductivityChartB({
             borderRadius: 0,
             pointRadius: 3,
             pointBackgroundColor: 'rgba(244, 63, 94, 0.8)',
-            pointBorderColor: '#18181b',
+            pointBorderColor: chartTokens().surface,
             pointBorderWidth: 1,
             barPercentage: 0.6,
           },
@@ -146,12 +147,9 @@ export function ProductivityChartB({
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#18181b',
-            titleColor: '#71717a',
-            bodyColor: '#a1a1aa',
-            borderColor: '#3f3f46',
-            borderWidth: 1,
-            padding: 6,
+            /* Hardcoded #18181b box; canvas-painted, so CSS cannot reach it.
+               Token-driven now. */
+            ...chartTooltip(),
             titleFont: { size: 10, family: 'JetBrains Mono, monospace' },
             bodyFont: { size: 11, family: 'JetBrains Mono, monospace' },
             callbacks: {

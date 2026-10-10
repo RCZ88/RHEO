@@ -67,7 +67,7 @@ function TreeNode({ node, depth, expanded, onToggle, onSelect, filter, onFilterC
     >
       <div
         onClick={() => onToggle(node.id)}
-        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-900/40 cursor-pointer transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] cursor-pointer transition-colors"
         style={{ paddingLeft: 12 + depth * 16 }}
       >
         {/* Expand/Collapse */}

@@ -94,7 +94,7 @@ export function ManualBridgePanel() {
       <AnimatePresence mode="wait">
         {bridge.step === 'prompt' && (
           <motion.div key="prompt" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.2 }} className="space-y-2">
-            <div className="rounded-xl border border-white/[0.08] bg-zinc-950/60 p-3 max-h-[400px] overflow-auto">
+            <div className="rounded-xl border border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 max-h-[400px] overflow-auto">
               <pre className="text-[11px] text-zinc-500 leading-relaxed whitespace-pre-wrap font-mono">{activePrompt.slice(0, 4000)}{activePrompt.length > 4000 ? '\n\n...(truncated)' : ''}</pre>
             </div>
             <div className="flex items-center justify-between">
@@ -111,7 +111,7 @@ export function ManualBridgePanel() {
           <motion.div key="paste" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.2 }} className="space-y-2">
             <textarea value={bridge.rawResponse} onChange={e => dispatch({ type: 'SET_BRIDGE_RESPONSE', rawResponse: e.target.value })}
               placeholder={bridge.mode === 'visual-digest' ? 'Paste the visual analysis JSON from your vision AI here.\n\nExample:\n```json\n{"gist": "...", "keywords": [...], "frames": [...]}\n```' : 'Paste the raw JSON response from your AI model here.'}
-              className="h-[250px] w-full resize-none rounded-xl border border-white/[0.08] bg-zinc-950/60 p-3 font-mono text-[11px] leading-relaxed text-zinc-300 placeholder-zinc-600 outline-none transition-all duration-150 focus:border-white/[0.15]" />
+              className="h-[250px] w-full resize-none rounded-xl border border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 font-mono text-[11px] leading-relaxed text-zinc-300 placeholder-zinc-600 outline-none transition-all duration-150 focus:border-white/[0.15]" />
             <div className="flex gap-2">
               <button onClick={validateResponse} disabled={!bridge.rawResponse.trim()} className="studio-btn-primary flex-1 rounded-lg px-4 py-2.5 text-[11px]">Validate</button>
               <button onClick={() => dispatch({ type: 'SET_BRIDGE_STEP', step: 'prompt' })} className="studio-btn-secondary rounded-lg px-3 py-2.5 text-[11px]">← Back</button>
@@ -121,7 +121,7 @@ export function ManualBridgePanel() {
 
         {bridge.step === 'validate' && (
           <motion.div key="validate" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.2 }} className="space-y-2">
-            <div className="rounded-xl border border-white/[0.08] bg-zinc-950/60 p-3 max-h-[300px] overflow-auto">
+            <div className="rounded-xl border border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 max-h-[300px] overflow-auto">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[13px] font-semibold text-zinc-300">Validation</span>
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${allPassed(bridge.validationChecks) ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>{passedCount(bridge.validationChecks).passed}/{passedCount(bridge.validationChecks).total} passed</span>

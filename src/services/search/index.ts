@@ -12,9 +12,15 @@ export interface SearchableSegment {
   pageId: string;        // which page/overlay owns this
   title: string;         // heading / label
   text: string;          // full searchable text
-  section?: string;      // sub-section within page
+  section?: string;      // human-readable sub-section label (NOT a DOM anchor)
   keywords?: string[];   // extra tokens that aren't in text
   rank?: number;         // 0-1 boost (higher = appears first for tie-breaking)
+  /**
+   * How to find this segment's element in the DOM again: either a `data-df-locator`
+   * attribute value or a `text:` probe. Optional — but when it is absent a result
+   * click cannot navigate anywhere, so harvesters should always supply one.
+   */
+  locator?: string;
 }
 
 interface IndexedSegment extends SearchableSegment {
@@ -140,6 +146,12 @@ class SearchIndex {
         section: seg.section ?? '',
         snippet,
         score: scores.get(id) ?? 0,
+        // `text` is deliberately NOT part of SearchHit (it would flood every
+        // result row), so the renderer has no way to find the target again and
+        // clicking a result silently did nothing. Send it only to the renderer,
+        // where it is consumed by locateHit() and never displayed.
+        text: seg.text,
+        locator: seg.locator,
       };
     });
   }
@@ -222,6 +234,17 @@ export interface SearchHit {
   section: string;
   snippet: string;
   score: number;
+  /**
+   * How to find this hit in the DOM again. `section` is a HUMAN label (a card
+   * title), which is what you want to read in a result row — but it is not a
+   * `[data-section]` anchor, so it cannot be scrolled to. This carries the
+   * machine-usable locator: a `data-df-locator` value when the source element
+   * had one, otherwise a text probe. Without it, clicking a result silently
+   * did nothing.
+   */
+  locator?: string;
+  /** Full segment text. Populated ONLY on query results (never stored/displayed). */
+  text?: string;
 }
 
 export interface Suggestion {

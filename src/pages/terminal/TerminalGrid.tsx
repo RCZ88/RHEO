@@ -112,11 +112,6 @@ export const SUBPAGE_LABELS: Record<string, string> = {
   'studio/skills': 'Studio / Skills',
   'studio/styles': 'Studio / Styles',
   'studio/design': 'Studio / Design',
-  'ai-gateway/status': 'AI Gateway / Status',
-  'ai-gateway/chat': 'AI Gateway / Chat',
-  'ai-gateway/providers': 'AI Gateway / Providers',
-  'ai-gateway/runs': 'AI Gateway / Runs',
-  'ai-gateway/settings': 'AI Gateway / Settings',
   'context/context': 'Context / Context',
   'context/context-maintenance': 'Context / Maintenance',
   'context/page-context': 'Context / Page Context',
@@ -136,7 +131,7 @@ export const accentStyle = (accent: string): React.CSSProperties => ({ ['--page-
 
 export const WS_ICON_BTN = 'p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/80 transition-colors duration-150 active:scale-95';
 
-export const WS_SELECT = 'h-7 w-full rounded-md bg-zinc-900 border border-zinc-800/60 px-2 pr-7 text-[11px] text-zinc-200 appearance-none bg-no-repeat bg-[right_0.5rem_center] hover:border-zinc-700 focus:border-[color:var(--page-accent)]/60 focus:ring-1 focus:ring-[color:var(--page-accent)]/25 focus:outline-none transition-colors duration-150';
+export const WS_SELECT = 'h-7 w-full rounded-md bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800/60 px-2 pr-7 text-[11px] text-zinc-200 appearance-none bg-no-repeat bg-[right_0.5rem_center] hover:border-zinc-700 focus:border-[color:var(--page-accent)]/60 focus:ring-1 focus:ring-[color:var(--page-accent)]/25 focus:outline-none transition-colors duration-150';
 
 export const TAB_ACTIVE: Record<string, string> = {
   green: 'text-green-400 border-green-500', emerald: 'text-emerald-400 border-emerald-500',

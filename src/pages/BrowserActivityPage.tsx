@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Globe, BarChart3, Clock, TrendingUp, AlertCircle, RefreshCw, X, ChevronLeft, ChevronRight, ChevronDown, Activity, Terminal, Save, Play, Pause, TrendingUp as TrendingUpIcon, Layers, Search, Filter, Monitor, Tags, ListOrdered, AppWindow, Zap, Award, Timer, LayoutGrid, Pencil, Trash2, Check, X as XIcon, Plus, Link } from 'lucide-react';
+import ExtensionSetupPanel from '../components/ExtensionSetupPanel';
 import { MagicCard } from '../components/ui/magic-card';
 import { PageShell } from '../components/PageShell';
 import { GlassCard } from '../components/GlassCard';
@@ -134,7 +135,11 @@ function browserBrandColor(name?: string | null): string {
 export default function BrowserActivityPage({ embedded, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments: tierAssignmentsProp, allLogs, platformFilter = 'all', compareMode = false, availablePlatforms = [] }: BrowserActivityPageProps) {
   const [domainStats, setDomainStats] = useState<any[]>([]);
   const [categoryStats, setCategoryStats] = useState<any[]>([]);
-  const [browserLogs, setBrowserLogs] = useState<any[]>([]);
+  // The install hint is dismissible and the choice survives a reload — there was
+  // previously no way to hide it at all.
+  const [showBridgeHint, setShowBridgeHint] = useState<boolean>(() => {
+    try { return localStorage.getItem('df.hideBridgeHint') !== '1'; } catch { return true; }
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingDomain, setEditingDomain] = useState<string | null>(null);
@@ -914,8 +919,9 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
 
   const mainContent = (
     <div className={embedded ? 'space-y-6' : ''}>
+      <ExtensionSetupPanel compact />
       {!embedded && (
-        <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900/20 backdrop-blur-md border-b border-zinc-800/50 py-3">
+        <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] backdrop-blur-md border-b border-zinc-800/50 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl grid place-items-center bg-[rgba(59,130,246,0.14)]">
@@ -1032,9 +1038,35 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
             {browserProfiles.length > 0 && <span className="text-xs text-zinc-500">{browserProfiles.filter(p => p.is_active).length} active / {browserProfiles.length} total</span>}
           </div>}
         />
-        {browserProfiles.length === 0 ? (
-          <SectionState kind="empty" message="No browser profiles detected" hint="Install the DeskFlow Browser Tracker extension to start tracking per-profile activity" />
-        ) : (
+          {showBridgeHint && browserProfiles.length === 0 ? (
+          <SectionState
+            kind="empty"
+            message="No browser profiles detected"
+            hint="The DeskFlow Browser Bridge is a local add-on — there is no store page."
+          >
+            <div className="mt-4 max-w-md w-full space-y-2.5 text-left">
+              <ol className="text-xs text-zinc-500 space-y-1.5 list-decimal list-inside">
+                <li>Open Firefox / Zen and go to <code className="text-zinc-400">about:debugging#/runtime/this-firefox</code></li>
+                <li>Click <span className="text-zinc-400">This Firefox</span></li>
+                <li>Click <span className="text-zinc-400">Load Temporary Add-on…</span></li>
+                <li>Choose <code className="text-zinc-400">deskflow-bridge-firefox.xpi</code></li>
+              </ol>
+              <p className="text-[11px] text-zinc-600">
+                The file ships in <code className="text-zinc-500">release/deskflow-bridge/</code>. A temporary add-on is removed when the
+                browser restarts — re-add it then, or use Settings → Tracking to see which browsers are detected.
+              </p>
+              <button
+                onClick={() => {
+                  try { localStorage.setItem('df.hideBridgeHint', '1'); } catch { /* ignore */ }
+                  setShowBridgeHint(false);
+                }}
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
+              >
+                Hide this
+              </button>
+            </div>
+          </SectionState>
+          ) : browserProfiles.length === 0 ? null : (
           <motion.div className="space-y-2" initial="hidden" animate="visible" variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.04 } } }}>
             {browserProfiles.map(profile => (
               <motion.div
@@ -1052,7 +1084,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                     className="w-3 h-3 rounded-full cursor-pointer ring-2 ring-white/10"
                     style={{ backgroundColor: profile.color_tag }}
                   />
-                  <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 border border-white/10 rounded-lg p-1.5 z-10 shadow-xl">
+                  <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-lg p-1.5 z-10 shadow-xl">
                     {PROFILE_COLORS.map(c => (
                       <button
                         key={c}
@@ -1195,7 +1227,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
         {/* Add Profile Dialog */}
         {showAddProfile && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowAddProfile(false)}>
-            <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
               <h3 className="text-sm font-semibold text-zinc-200 mb-3">Add Browser Profile</h3>
               <p className="text-xs text-zinc-500 mb-3">Select a detected browser to create a profile for it</p>
               <div className="space-y-2 max-h-48 overflow-y-auto mb-3">
@@ -1326,7 +1358,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex gap-1 bg-zinc-900 rounded-lg p-0.5 border border-zinc-800">
+            <div className="flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-lg p-0.5 border border-zinc-800">
               <button
                 onClick={() => setSelectedBrowserProfile('all')}
                 className={`px-2 py-1 text-[11px] rounded-md font-medium transition ${
@@ -1472,7 +1504,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                     />
                   </VoiceInputWrapper>
                 </div>
-                <div className="flex gap-1 bg-zinc-900 rounded-lg p-0.5 border border-zinc-800">
+                <div className="flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] rounded-lg p-0.5 border border-zinc-800">
                   {(['all', 'info', 'warning', 'error'] as const).map(level => (
                     <button
                       key={level}
@@ -1488,7 +1520,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                   ))}
                 </div>
               </div>
-              <div className="bg-zinc-950 rounded-xl border border-zinc-800/50 p-3 h-48 overflow-y-auto font-mono text-xs">
+              <div className="bg-zinc-950 light:bg-[var(--ws-surface)] rounded-xl border border-zinc-800/50 p-3 h-48 overflow-y-auto font-mono text-xs">
                 {displayedLiveLogs.length === 0 ? (
                   <div className="text-zinc-500 text-center py-8">
                     {liveLogs.length === 0 ? 'No browser tracking events yet' : 'No matching events'}

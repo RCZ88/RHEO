@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Landmark } from 'lucide-react'
 import { TransactionModalShell } from './TransactionModalShell'
+import { SubmitGate } from './SubmitGate'
 import { useTransactionForm } from './useTransactionForm'
 import { ContextBand, TypeToggle, AmountInput, AdvancedToggle, OnBehalfOfSection, HistoricalToggle } from './modalParts'
 import { CategoryChipGrid } from './CategoryChipGrid'
@@ -47,9 +48,9 @@ export const BankTransactionModal: React.FC<TxModalProps> = (props) => {
 			}}
 		>
 			{({ setCanSubmit }) => {
-				useEffect(() => setCanSubmit(valid), [valid, setCanSubmit])
 				return (
 					<>
+						<SubmitGate valid={valid} setCanSubmit={setCanSubmit} />
 						<ContextBand accent={ACCENT}>
 							<div className="flex items-center justify-between">
 								<span className="text-[11px] text-zinc-400">Balance</span>

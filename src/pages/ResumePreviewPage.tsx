@@ -44,7 +44,7 @@ export default function ResumePreviewPage() {
       </div>
 
       {/* Preview Area */}
-      <div className="flex-1 overflow-auto p-5 flex justify-center bg-zinc-950/50">
+      <div className="flex-1 overflow-auto p-5 flex justify-center bg-zinc-950 light:bg-[var(--ws-surface)]/50">
         <motion.div
           key={previewMode}
           initial={{ opacity: 0.8, scale: 0.99 }}

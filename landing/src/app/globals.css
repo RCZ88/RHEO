@@ -589,8 +589,14 @@ section[id] {
    slide is the affordance that a wrap-around carousel destroys.
    =================================================================== */
 .gallery-rail {
+  /* ONE RULE, ONE TRUTH. This file previously declared `.gallery-rail` twice and
+     the second silently won — which is exactly how `gap` drifted 24 -> 16 with
+     the JS RAIL_GAP constant agreeing with only one of them. Consolidated here. */
+  --slide-w: 78vw;
+  --rail-gap: 16px;
+  --content: 1280px;
   display: flex;
-  gap: 24px;
+  gap: var(--rail-gap);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   /* let the rail bleed to the viewport edge so the cut-off slide reads as
@@ -687,217 +693,6 @@ section[id] {
 }
 
 /* ===================================================================
-   SURFACE ORBIT — the whole app as a ring, plus the one card you read
-   ===================================================================
-   Ring geometry is computed in JS (orbit-layout.ts) and written to transforms,
-   so there is NO transition here: a CSS transition on transform would fight
-   the per-frame rAF settle and lag the pointer. Only opacity transitions here.
-   Radii 12/8 only (LAMINAR). No backdrop-blur on chrome. */
-.orbit-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.orbit-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.orbit-modes,
-.orbit-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.orbit-meta {
-  gap: 14px;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: #8a8a94;
-}
-
-.orbit-mode {
-  font-family: var(--font-mono), "JetBrains Mono", monospace;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  color: #63636b;
-  padding: 7px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  transition: color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-    background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.orbit-mode:hover {
-  color: #a1a1aa;
-  border-color: rgba(255, 255, 255, 0.16);
-}
-.orbit-mode[data-active="true"] {
-  color: #f4f4f5;
-  border-color: rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.04);
-}
-.orbit-mode:active {
-  transform: scale(0.97);
-}
-.orbit-mode:focus-visible,
-.orbit-card:focus-visible,
-.orbit-grid-item:focus-visible,
-.orbit-stage:focus-visible {
-  outline: 1px solid #ffffff;
-  outline-offset: 3px;
-}
-
-/* ---- the big readable card ---- */
-.orbit-front {
-  position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  overflow: hidden;
-  background: #050506;
-}
-.orbit-front-media {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-}
-.orbit-front-caption {
-  position: absolute;
-  left: 14px;
-  bottom: 12px;
-  font-size: 9px;
-  letter-spacing: 0.16em;
-  color: #a1a1aa;
-  background: rgba(5, 5, 6, 0.7);
-  padding: 5px 9px;
-  border-radius: 8px;
-}
-.orbit-clip {
-  display: inline-flex;
-  gap: 6px;
-}
-.orbit-clip[data-big="true"] {
-  position: absolute;
-  right: 12px;
-  top: 12px;
-  z-index: 2;
-}
-.orbit-clip[data-big="true"] .orbit-mode {
-  background: rgba(5, 5, 6, 0.72);
-}
-
-/* ---- the ring itself ---- */
-.orbit-stage {
-  position: relative;
-  height: clamp(300px, 42vw, 620px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  background: #050506;
-  overflow: hidden;
-  touch-action: pan-y;
-  cursor: grab;
-}
-.orbit-stage[data-dragging="true"] {
-  cursor: grabbing;
-}
-.orbit-card {
-  position: absolute;
-  left: 0;
-  top: 0;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  overflow: hidden;
-  background: #050506;
-  cursor: pointer;
-  will-change: transform;
-  opacity: 0.42;
-  /* opacity only — transform is driven per-frame by rAF, never transitioned */
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.orbit-card[data-front="true"] {
-  opacity: 1;
-  border-color: rgba(255, 255, 255, 0.28);
-}
-.orbit-card img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-  -webkit-user-drag: none;
-}
-.orbit-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  color: #52525b;
-  pointer-events: none;
-  white-space: nowrap;
-}
-
-/* ---- grid fallback: when a 17-card ring cannot close on this stage ---- */
-.orbit-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(var(--orbit-cols, 4), minmax(0, 1fr));
-  gap: 10px;
-}
-.orbit-grid-item {
-  width: 100%;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  overflow: hidden;
-  background: #050506;
-  cursor: pointer;
-  transition: border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  opacity: 0.6;
-}
-.orbit-grid-item[data-active="true"] {
-  opacity: 1;
-  border-color: rgba(255, 255, 255, 0.28);
-}
-.orbit-grid-item img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-}
-.orbit-grid-item span {
-  display: block;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  color: #8a8a94;
-  padding: 7px 8px;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .orbit-card,
-  .orbit-mode,
-  .orbit-grid-item {
-    transition: none;
-  }
-}
-
 /* ===================================================================
    ASCII SURFACE — photo <-> characters, same pixels both sides
    =================================================================== */
@@ -1894,16 +1689,23 @@ section[id] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* a dot, not a ▶ glyph: this screen has a recording */
-.thumb-dot {
+/* REC chip (§3): "this one moves", stated before any click, with the count.
+   A bare dot was ambiguous — it did not say how many. */
+.rec-chip {
   position: absolute;
-  top: 7px;
   right: 7px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.7);
-  padding: 0;
+  bottom: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  background: rgba(5, 5, 6, 0.72);
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  line-height: 1;
+  color: #f4f4f5;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1913,3 +1715,291 @@ section[id] {
     transition: none;
   }
 }
+
+/* ===================================================================
+   RESULT.md §2.3 — measured layout. The MECHANISM (native scroll-snap) is
+   carried forward unchanged; only the numbers are specified here.
+   =================================================================== */
+/* The duplicate `.gallery-rail` rule that lived here is GONE. It redeclared
+   --slide-w/--rail-gap/--content and `gap`, silently overriding the rule at the top
+   of this section — which is how `gap` drifted 24 -> 16 while the JS RAIL_GAP
+   constant agreed with only one of them. The tokens now live in ONE place.
+
+   It also carried `scroll-padding-inline-start: max(24px, calc((100vw - 1280px)/2))`
+   — the edge-bleed formula applied with the wrong tool. scroll-padding shifts snap
+   stops by a VISUAL INSET, and the rail's leading inset is 0 (the 144px measured is
+   the CONTAINER's, not the rail's). It never aligned anything; it only dislocated
+   every stop from its own step, measured as delta -80px at 1440 and +112px at 2048.
+   With it removed, stop N is exactly N * step. */
+@media (min-width: 640px) {
+  .gallery-rail { --slide-w: 44vw; }
+}
+@media (min-width: 1024px) {
+  .gallery-rail { --slide-w: clamp(360px, 38vw, 480px); }
+}
+.gallery-slide {
+  flex: 0 0 var(--slide-w);
+  width: var(--slide-w);
+  scroll-snap-align: start;
+}
+/* GLM R4: the tail. These slides' start-stops exceed maxScroll, so they can never be
+   snapped flush-left; end-aligning makes the rail's final state "last slide fully
+   visible" instead of "two slides hanging past the edge". */
+.gallery-slide[data-snap="end"] {
+  scroll-snap-align: end;
+}
+/* §2.4: touch is native. The browser arbitrates diagonal swipes — vertical goes
+   to the page, horizontal to the rail. Restricting touch-action here is the
+   precise inverse of the ring's sin, which trapped the scroll. */
+.gallery-rail {
+  overscroll-behavior-x: contain;
+  touch-action: auto;
+}
+
+/* §2.4: focus ring uses the monochrome signal hue (white) at 2px */
+.gallery-slide:focus-visible,
+.thumb:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+  border-radius: var(--radius-xs);
+}
+
+/* §2.6: 18 cells divides 2 / 3 / 6 at every breakpoint. Named columns rather
+   than auto-fill so the grid never lands on a 4- or 5-column orphan row. */
+.thumb-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+  .thumb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .thumb-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* the terminal cell of the index */
+.thumb-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 100%;
+  text-decoration: none;
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.thumb-cta:hover {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.thumb-cta-mark {
+  display: flex;
+  color: #f4f4f5;
+}
+.thumb-cta span.mono {
+  padding: 0;
+  color: #f4f4f5;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+/* ===================================================================
+   LEDGER — the trust counter row. Four facts, one per cell.
+   Invariant chrome so the set reads as a set; no colour, no glow: the
+   argument is arithmetic, and decoration would devalue it.
+   =================================================================== */
+.ledger {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+@media (min-width: 640px) {
+  .ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.ledger-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 0 26px;
+}
+@media (min-width: 640px) {
+  .ledger-cell {
+    padding: 30px 24px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .ledger-cell:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .ledger-cell:last-child {
+    padding-right: 0;
+  }
+}
+/* the digits. JetBrains Mono so a rolling column cannot jitter its width;
+   tabular-nums on the inner digit window for the same reason. */
+.ledger-value {
+  display: block;
+  color: #f4f4f5;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.ledger-claim {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+.ledger-how {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: #63636b;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===================================================================
+   EXAMPLE CARD — the typeset AI readout in #understand.
+   §4.2: typeset output carries EXAMPLE, never REAL CAPTURE. It is a log
+   line, not a photograph, and it must never be mistakable for one.
+   =================================================================== */
+.example-card {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 10px;
+  background: #050506;
+  padding: 16px 18px;
+}
+.example-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.example-card-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+}
+.example-card-tag {
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: #8a8a94;
+}
+.example-card-line {
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #f4f4f5;
+  letter-spacing: 0.02em;
+}
+.example-card-cite {
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1.7;
+  color: #63636b;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ---- Reduced motion owns the INITIAL PAINT (pre-JS) ------------------------
+ *
+ * framer-motion emits `style="opacity:0"` on the SERVER for every entrance and
+ * scroll reveal, because the server has no media query to ask. Measured with
+ * JavaScript disabled (i.e. the genuine pre-hydration paint):
+ *
+ *   [JS OFF, reduce] h1.display-h1  computed opacity: 0
+ *   [JS OFF, reduce] inline          opacity:0; transform:translateY(12px)
+ *
+ * So a reduced-motion visitor got an invisible hero headline until the bundle
+ * hydrated and `useShouldAnimate` flipped. CSS runs before JS, so this block
+ * owns the first paint and the store owns branching after it.
+ *
+ * `!important` is required, not stylistic: it has to beat framer-motion's inline
+ * style. Scoped to the content-bearing reveal classes only — the gallery
+ * crossfade wrappers are deliberately left alone, because there opacity is the
+ * signal, not an artefact.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .display-h1,
+  .display-h2,
+  .display-h3,
+  .mono-label,
+  .mono-label-strong,
+  .ledger-cell,
+  .mono,
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ---- Hero entrance: CSS owns FIRST PAINT, framer owns POST-SYNC ------------
+ *
+ * GLM §2 ruling (d). The 12px post-hydration translate was not a bug in one
+ * component — it was the visible instance of a structural limit: the motion store
+ * CANNOT govern first paint. useSyncExternalStore's hydration contract requires the
+ * server snapshot during hydration, so any store-gated `initial` is committed with
+ * the pre-hydration value and only corrects afterwards.
+ *
+ * The media query is the platform mechanism for exactly this contract. It applies
+ * at style-resolution time, before AND after hydration, with no store to race. Same
+ * philosophy as the !important block above — do the whole job, not half.
+ *
+ * This also fixes something I mislabelled. I recorded
+ * `[JS OFF, no-preference] h1 effectiveOpacity 0.00` as "entrance intact". It is
+ * the entrance — and it is also an INVISIBLE HERO for every visitor without JS,
+ * inline `opacity: 0` with nothing to resolve it. Keyframes run without JS.
+ */
+@keyframes hero-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+.hero-enter {
+  animation: hero-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-enter--kicker    { animation-delay: 0.6s; }
+.hero-enter--manifesto { animation-delay: 0.9s; }
+.hero-enter--ctas      { animation-delay: 1.05s; }
+
+/* Reduced motion: no animation at all, so the element is at its `to` state from
+   the first frame. Not a 0s fade — a genuinely different rendering path. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter { animation: none; opacity: 1; transform: none; }
+}
+/* EXPLICIT choices, stamped onto <html> by writeMode. These two rules are what the
+   media query must NOT be able to override: an attribute selector outranks it, and
+   that ordering is the whole point.
+ *
+ * GLM §2 caught the precedence hole this closes. Without the `on` rule, a user who
+ * set MOTION ON while their OS said reduce got: every framer component animating
+ * (the hook honours the explicit choice) while the hero entrance never ran (the
+ * media query won). Divergent behaviour for the most deliberate user on the page —
+ * the one who overrode their own OS.
+ *
+ * The media query keeps exactly two jobs: live governance for `auto` users (it
+ * tracks an OS setting changing mid-session, which a stamp never would), and the
+ * no-JS first paint. */
+html[data-motion="off"] .hero-enter { animation: none; opacity: 1; transform: none; }
+html[data-motion="on"]  .hero-enter {
+  animation: hero-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* The preloader covers the hero for ~1.2s. Pause the choreography rather than
+   spending it unseen. No-JS visitors never set the flag, so they never pause —
+   which is correct: they were never covered either. */
+html[data-preload] .hero-enter { animation-play-state: paused; }

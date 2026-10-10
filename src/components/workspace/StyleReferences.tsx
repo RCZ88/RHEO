@@ -60,7 +60,7 @@ export function StyleReferences({ selectedRefs, onChange, projectPath }: StyleRe
   }, []);
 
   return (
-    <div className="p-4 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
+    <div className="p-4 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 rounded-lg">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Style References</h3>
         <span className="text-[9px] text-zinc-600">{selectedRefs.length}/{KNOWN_REFS.length} active</span>
@@ -92,8 +92,8 @@ export function StyleReferences({ selectedRefs, onChange, projectPath }: StyleRe
       </div>
 
       {previewContent && previewName && (
-        <div className="mt-3 bg-zinc-950 rounded border border-zinc-700/50 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/80 border-b border-zinc-800/50">
+        <div className="mt-3 bg-zinc-950 light:bg-[var(--ws-surface)] rounded border border-zinc-700/50 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border-b border-zinc-800/50">
             <div className="flex items-center gap-1.5">
               <ExternalLink className="w-2.5 h-2.5 text-zinc-500" />
               <span className="text-[9px] text-zinc-500">{previewName}</span>

@@ -87,7 +87,7 @@ export function RepaymentModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-sm bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl overflow-hidden"
+        className="w-full max-w-sm bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

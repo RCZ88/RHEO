@@ -70,7 +70,7 @@ export function WorkspaceDetailModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-[700px] max-h-[80vh] rounded-xl bg-zinc-950 ring-1 ring-inset ring-zinc-800/70 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-[700px] max-h-[80vh] rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)] ring-1 ring-inset ring-zinc-800/70 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
           <div className="flex items-center gap-2">
             <Save className="w-4 h-4 text-zinc-400" />
@@ -122,7 +122,7 @@ export function WorkspaceDetailModal({
                 </div>
 
                 {/* Active group */}
-                <div className="rounded-lg bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-3">
+                <div className="rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-3">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Monitor className="w-3 h-3 text-cyan-400" />
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Active Group</span>
@@ -131,7 +131,7 @@ export function WorkspaceDetailModal({
                 </div>
 
                 {/* Terminal Sessions */}
-                <div className="rounded-lg bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-3">
+                <div className="rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-3">
                   <div className="flex items-center gap-1.5 mb-2">
                     <MessageSquare className="w-3 h-3 text-violet-400" />
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Sessions</span>
@@ -142,7 +142,7 @@ export function WorkspaceDetailModal({
                   ) : (
                     <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
                       {savedSessions.map((s: any, i: number) => (
-                        <div key={s.id || i} className="flex items-center justify-between py-1.5 px-2 rounded bg-zinc-950/50">
+                        <div key={s.id || i} className="flex items-center justify-between py-1.5 px-2 rounded bg-zinc-950 light:bg-[var(--ws-surface)]/50">
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                               s.status === 'active' ? 'bg-emerald-500' :
@@ -166,7 +166,7 @@ export function WorkspaceDetailModal({
                 </div>
 
                 {/* Open Terminals */}
-                <div className="rounded-lg bg-zinc-900/50 ring-1 ring-inset ring-zinc-800/70 p-3">
+                <div className="rounded-lg bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-3">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Terminal className="w-3 h-3 text-emerald-400" />
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Open Terminals</span>
@@ -177,7 +177,7 @@ export function WorkspaceDetailModal({
                   ) : (
                     <div className="flex flex-col gap-1">
                       {savedTerminals.map((t: any, i: number) => (
-                        <div key={t.id || i} className="flex items-center gap-2 py-1 px-2 rounded bg-zinc-950/50">
+                        <div key={t.id || i} className="flex items-center gap-2 py-1 px-2 rounded bg-zinc-950 light:bg-[var(--ws-surface)]/50">
                           <Terminal className="w-3 h-3 text-emerald-500" />
                           <span className="text-[11px] text-zinc-400 truncate">{t.name || t.id}</span>
                           {t.agent && <span className="text-[9px] text-zinc-600 ml-auto">{t.agent}</span>}

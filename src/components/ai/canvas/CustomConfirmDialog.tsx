@@ -102,8 +102,8 @@ export function CustomConfirmDialog({
                   <Icon size={20} className={v.iconColor} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-[14px] font-semibold text-white light:text-stone-900">{title}</h3>
-                  <p className="text-[12px] text-zinc-400 mt-1 leading-relaxed light:text-stone-500">{message}</p>
+                  <h3 className="text-[14px] font-semibold text-white light:text-[var(--text-primary)]">{title}</h3>
+                  <p className="text-[12px] text-zinc-400 mt-1 leading-relaxed light:text-[var(--text-muted)]">{message}</p>
                 </div>
                 <button
                   onClick={onCancel}
@@ -117,7 +117,7 @@ export function CustomConfirmDialog({
               <div className="flex items-center justify-end gap-2 p-4 mt-2">
                 <button
                   onClick={onCancel}
-                  className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-stone-500 light:hover:bg-stone-100"
+                  className="px-4 py-2 rounded-xl text-[12px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors light:text-[var(--text-muted)] light:hover:bg-stone-100"
                 >
                   {cancelLabel}
                 </button>

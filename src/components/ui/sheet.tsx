@@ -57,7 +57,7 @@ function SheetContent({
       <DrawerPrimitive.Popup
         data-slot="sheet-content"
         className={cn(
-          "fixed z-50 flex flex-col gap-4 overflow-y-auto border border-zinc-800/60 bg-zinc-900/95 p-4 text-sm text-zinc-100 shadow-2xl backdrop-blur-xl duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 light:border-zinc-200/60 light:bg-white/95 light:text-zinc-900",
+          "fixed z-50 flex flex-col gap-4 overflow-y-auto border border-zinc-800/60 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] p-4 text-sm text-zinc-100 shadow-2xl backdrop-blur-xl duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 light:border-zinc-200/60 light:bg-white/95 light:text-zinc-900",
           sideClasses[side],
           className
         )}

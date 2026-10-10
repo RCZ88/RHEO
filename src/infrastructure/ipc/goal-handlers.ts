@@ -4,7 +4,30 @@
  */
 
 import { ipcMain, BrowserWindow } from 'electron';
+
+// ── WHY THIS IS A STATIC IMPORT, NOT require() ─────────────────────────────
+// These were `require('../../…')` calls. That path is correct for the SOURCE
+// file but wrong for the OUTPUT: the build leaves a bare require() in
+// dist-electron/main.cjs, where `../../` resolves ABOVE the repo root.
+// The aiEval twin of this bug KILLED THE APP AT BOOT:
+//     Cannot find module '../../services/aiEval'
+// These ones never threw, because each sat inside `catch {}` — which converts a
+// crash into a SILENT NO-OP. `airouter` has been quietly failing to configure
+// its router this entire time. Silence is strictly worse than a crash.
+// A static import is inlined by the bundler, so there is no path to misresolve.
+// Verified: none of these modules run code at module scope.
+import { weekDays, isoWeekKey, daysActiveInWeek } from '../../lib/week';
+import { PATTERN_VOCABULARY, PLAN_SCHEMA_VERSION } from '../../shared/aiPlanSchema';
 import Database from 'better-sqlite3';
+import { upsertGoalRow } from '../../shared/goalUpsert';
+import { publishAutomationEvent } from '../../services/automation/AutomationBus';
+import { parseCaptureLine } from '../../shared/captureParse';
+import { scheduleCard, dueCards, nextDueHint, type SrsCard, type Rating } from '../../shared/srs';
+import { computeWeeklyScore, describeWeeklyScore, type DayMark } from '../../shared/weeklyScore';
+import { buildWeeklyReview } from '../../shared/weeklyReview';
+import { detectDrift, driftQuestion, phaseLabel, phaseChangeSummary, PHASE_RULES, DRIFT_COOLDOWN_DAYS, type TrainingMode } from '../../shared/phaseRules';
+import { evaluatePlanMode, breakWarning, BREAK_PHRASE } from '../../shared/planMode';
+import { preparePlanReply } from '../../shared/aiPlanSchema';
 
 // Types (mirrored from main.ts)
 interface GoalEntity {
@@ -28,6 +51,62 @@ export interface GoalHandlerDeps {
   runWithFallback: (chain: any[], opts: any) => Promise<{ result: any }>;
   GOAL_DUMP_SYSTEM?: string;
   GOAL_FEEDBACK_SYSTEM?: string;
+}
+
+/**
+ * The `save-goal` behavior, extracted verbatim so automation executors can
+ * import the BEHAVIOR rather than re-implement it (RESULT.md §10 clause
+ * (behavior unit), class i-b). Lives here, not in main.ts, by design.
+ *
+ * NOTE: the body below is the original `save-goal` closure body, unchanged
+ * except for the addition of the automation emit at the end. If you change
+ * the write, change it here and the IPC handler below inherits it.
+ */
+export function saveGoalEntry(db: Database.Database, date: string, goal: any): { success: boolean; id?: string; error?: string } {
+  try {
+    const id = ensureGoalId(goal.id);
+    // `date` arrives as its own argument and is authoritative for this write.
+    const payload = { ...goal, date };
+    const action = upsertGoalRow(db, id, payload, {
+      date,
+      category: goal.category || 'work',
+      targetType: goal.target?.type || 'time',
+      status: goal.status || 'pending',
+      period: goal.period || 'daily',
+      source: goal.source || 'manual',
+    });
+
+    // ONE discrimination, reused for both the episode write and the event emit:
+    // created > completed > updated. Reading it twice would let the two drift.
+    const discrimination = action === 'created' ? 'created'
+      : (goal.status === 'done' ? 'completed' : 'updated');
+
+    // Capture goal episode into context brain
+    try { episodeWriters.writeGoalEpisode({ ...goal, id }, discrimination); } catch {}
+
+    // Automation emit. Fire-and-forget: a broken automation must never fail the
+    // goal write that triggered it. Wrapped so it cannot throw out of here.
+    try {
+      if (discrimination === 'created') {
+        publishAutomationEvent('goals.goal.created', {
+          id,
+          title: String(goal.title || goal.text || ''),
+          priority: Number(goal.priority ?? 0),
+        }, { kind: 'goal', id });
+      } else if (discrimination === 'completed') {
+        publishAutomationEvent('goals.goal.completed', {
+          id,
+          title: String(goal.title || goal.text || ''),
+          result: String(goal.title || goal.text || ''),
+          completedAt: Date.now(),
+        }, { kind: 'goal', id });
+      }
+    } catch { /* automation is never allowed to break the write */ }
+
+    return { success: true, id };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
 export function registerGoalHandlers(deps: GoalHandlerDeps) {
@@ -136,29 +215,7 @@ function ensureGoalId(raw: any): string {
 }
 
 ipcMain.handle('save-goal', async (_event, date: string, goal: any) => {
-  try {
-    const { parentId, parentIdsJson } = goalParentIdsToColumns(goal);
-    const id = ensureGoalId(goal.id);
-    db!.prepare(`
-      INSERT OR REPLACE INTO goals (id, date, title, description, category, target_type, target_seconds, match_category, status, period, source, links, progress_seconds, completed_at, priority, parent_id, parent_ids, deadline)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, date, goal.title, goal.description || null,
-      goal.category || 'work', goal.target?.type || 'time', goal.target?.targetSeconds || null, goal.target?.matchCategory || null,
-      goal.status || 'pending', goal.period || 'daily', goal.source || 'manual',
-      JSON.stringify(goal.links || []), goal.progressSeconds || 0, goal.completedAt || null,
-      goal.priority ?? 0, parentId, parentIdsJson, goal.deadline || null,
-    );
-    // Capture goal episode into context brain
-    try {
-      const existing = db!.prepare('SELECT status FROM goals WHERE id = ?').get(id) as any;
-      const action = goal.status === 'done' ? 'completed' : (!existing ? 'created' : 'updated');
-      episodeWriters.writeGoalEpisode({ ...goal, id }, action);
-    } catch {}
-    return { success: true, id };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
+  return saveGoalEntry(db!, date, goal);
 });
 
 ipcMain.handle('get-longterm-goals', async () => {
@@ -188,6 +245,15 @@ ipcMain.handle('delete-goal', async (_event, goalId: string) => {
     db!.prepare('DELETE FROM goals WHERE id = ?').run(goalId);
     if (goalRow) {
       try { episodeWriters.writeGoalEpisode({ id: goalId, title: goalRow.title || goalId, category: goalRow.category }, 'deleted'); } catch {}
+      // Closes the emission hole: goals.goal.deleted was a live-advertised
+      // trigger with no emitter. Same fire-and-forget contract as the write path.
+      try {
+        publishAutomationEvent('goals.goal.deleted', {
+          id: goalId,
+          title: String(goalRow.title || ''),
+          category: String(goalRow.category || 'work'),
+        }, { kind: 'goal', id: goalId });
+      } catch { /* automation is never allowed to break the delete */ }
     }
     return { success: true };
   } catch (err: any) {
@@ -250,13 +316,14 @@ function mapLifePhaseRow(r: any) {
     reflectionSource: r.reflection_source || null,
     reflectionGeneratedAt: r.reflection_generated_at || null,
     status: r.status || 'complete',
+    scale: r.scale ?? null,
     updatedAt: r.updated_at,
   };
 }
 
 const LIFE_PHASE_INSERT = `
-  INSERT OR REPLACE INTO life_phases (id, title, description, category, start_month, start_year, end_month, end_year, magnitude, color, reflection, era_trends, impact_notes, milestones, connections, people, mood_start, mood_end, mood_tags, feelings_note, lessons_learned, header_image_memory_id, color_source, reflection_source, reflection_generated_at, status, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  INSERT OR REPLACE INTO life_phases (id, title, description, category, start_month, start_year, end_month, end_year, magnitude, color, reflection, era_trends, impact_notes, milestones, connections, people, mood_start, mood_end, mood_tags, feelings_note, lessons_learned, header_image_memory_id, color_source, reflection_source, reflection_generated_at, status, scale, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
 `;
 
 function upsertLifePhase(phase: any) {
@@ -267,10 +334,11 @@ function upsertLifePhase(phase: any) {
     phase.eraTrends || '', phase.impactNotes || '',
     JSON.stringify(phase.milestones || []), JSON.stringify(phase.connections || []),
     JSON.stringify(phase.people || []), phase.moodStart ?? null, phase.moodEnd ?? null,
-    JSON.stringify(phase.moodTags || []), phase.feelingsNote || null,
-    phase.lessonsLearned || null, phase.headerImageMemoryId || null,
+    JSON.stringify(phase.moodTags || []), phase.feelingsNote ?? null,
+    phase.lessonsLearned ?? null, phase.headerImageMemoryId ?? null,
     phase.colorSource || 'category', phase.reflectionSource || null,
     phase.reflectionGeneratedAt || null, phase.status || 'complete',
+    phase.scale ?? null,
   );
 }
 
@@ -761,24 +829,21 @@ ipcMain.handle('get-child-goals', async (_event, parentId: string) => {
 
 ipcMain.handle('save-goals-batch', async (_event, goals: any[]) => {
   try {
-    const insert = db!.prepare(`
-      INSERT OR REPLACE INTO goals (id, date, title, description, category, target_type, target_seconds, match_category, status, period, source, links, progress_seconds, completed_at, parent_id, parent_ids, priority, deadline)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
     const txn = db!.transaction((items: any[]) => {
       for (const g of items) {
-        const { parentId, parentIdsJson } = goalParentIdsToColumns(g);
-        // This is the writer that produced the 9 NULL-id rows in the live DB:
-        // its default source is 'ai_assistant', and g.id was inserted raw.
-        // Report the minted ids back so the caller can reconcile its own state.
+        // Same INSERT OR REPLACE column-loss defect as the single writer — this
+        // one is worse, because the AI-assistant path calls it with partial
+        // goal objects, so every batch import silently reset habit/cadence/
+        // detection metadata on any row it touched. Now shares one upsert.
         g.id = ensureGoalId(g.id);
-        insert.run(
-          g.id, g.date || '2000-01-01', g.title, g.description || null,
-          g.category || 'work', g.target?.type || 'custom', g.target?.targetSeconds || null, g.target?.matchCategory || null,
-          g.status || 'pending', g.period || 'daily', g.source || 'ai_assistant',
-          JSON.stringify(g.links || []), g.progressSeconds || 0, g.completedAt || null,
-          parentId, parentIdsJson, g.priority ?? 0, g.deadline || null,
-        );
+        upsertGoalRow(db!, g.id, g, {
+          date: g.date || '2000-01-01',
+          category: g.category || 'work',
+          targetType: g.target?.type || 'custom',
+          status: g.status || 'pending',
+          period: g.period || 'daily',
+          source: g.source || 'ai_assistant',
+        });
       }
     });
     txn(goals);
@@ -1011,6 +1076,739 @@ ipcMain.handle('get-goal-timeline', async (_event, date: string) => {
 
 // --- Reminders IPC -----------------------------------------------------------
 
+// ═══════════════════ habit completions ═══════════════════
+//
+// THE SPLIT BRAIN THIS REPLACES. A habit's DEFINITION has always lived in
+// SQLite (`goals.is_habit = 1`), but the act of completing one lived in the
+// `deskflow.covenant.completions.v1` localStorage key
+// (src/features/covenant/storage.ts). Two stores, one concept. The
+// localStorage half is unsynced, absent from every database backup, and
+// destroyed by a Chromium profile reset — while the definition survives, so the
+// habit came back empty and the streak silently read zero.
+//
+// This is the real home. `migrate-legacy-habit-completions` moves the old rows
+// across once; until that is called the readers below UNION the two sources, so
+// nothing is lost and nothing has to happen in a specific order.
+
+/** The minimum-day threshold that applied on a given day, in minutes. */
+const DEFAULT_MINIMUM_MINUTES = 20;
+
+function habitMinimumMinutes(userPreferences: Record<string, any>): number {
+  const n = Number(userPreferences?.training_minimum_day_minutes);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_MINIMUM_MINUTES;
+}
+
+ipcMain.handle('habit-completions:list', async (_event, startDate: string, endDate: string) => {
+  try {
+    const rows = db!.prepare(
+      `SELECT habit_id, date, minutes, met_minimum, source, completed_at
+         FROM habit_completions
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date ASC, completed_at ASC`
+    ).all(startDate, endDate) as any[];
+    return {
+      success: true,
+      completions: rows.map((r) => ({
+        habitId: r.habit_id, date: r.date, minutes: r.minutes,
+        metMinimum: !!r.met_minimum, source: r.source, completedAt: r.completed_at,
+      })),
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message, completions: [] };
+  }
+});
+
+/**
+ * Record (or clear) one habit-day.
+ *
+ * `met_minimum` is DECIDED HERE and stored, not derived at read time: whether a
+ * bad day "counted" must be settled against the threshold that was in force on
+ * that day, not re-computed later against a threshold that may have changed.
+ * That is the whole point of the minimum-day rule — a 10-minute day still keeps
+ * the habit alive, and it must keep having kept it alive even if CZ later edits
+ * the minimum to 30.
+ *
+ * Idempotent: re-posting the same habit+date updates in place rather than
+ * accumulating rows (the table also enforces UNIQUE(habit_id, date)).
+ */
+ipcMain.handle('habit-completions:set', async (_event, payload: {
+  habitId: string; date: string; minutes?: number; done?: boolean; source?: string;
+}) => {
+  try {
+    const { habitId, date } = payload || ({} as any);
+    if (!habitId || !date) return { success: false, error: 'habitId and date are required' };
+
+    if (payload.done === false) {
+      db!.prepare('DELETE FROM habit_completions WHERE habit_id = ? AND date = ?').run(habitId, date);
+      return { success: true, done: false };
+    }
+
+    const minutes = Math.max(0, Math.round(Number(payload.minutes ?? habitMinimumMinutes(userPreferences))));
+    const met = minutes >= habitMinimumMinutes(userPreferences) ? 1 : 0;
+    db!.prepare(
+      `INSERT INTO habit_completions (id, habit_id, date, minutes, met_minimum, source, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(habit_id, date) DO UPDATE SET
+         minutes      = excluded.minutes,
+         met_minimum  = excluded.met_minimum,
+         source       = excluded.source,
+         completed_at = excluded.completed_at`
+    ).run(
+      `hc_${habitId}_${date}`, habitId, date, minutes, met,
+      payload.source || 'manual', new Date().toISOString()
+    );
+    return { success: true, done: true, minutes, metMinimum: !!met };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/**
+ * The weekly score — feature 4's headline number.
+ *
+ * Deliberately NOT a streak. A streak is a single bad day from zero, and that is
+ * the mechanic that kills trackers. Here the unit is the WEEK: count the days
+ * that counted, compare to a threshold (default 5 of 7), and report. A 4/7 week
+ * that misses the bar is still visibly a 4, not a zero.
+ *
+ * Monday-anchored, from src/lib/week.ts — this replaces a third competing anchor.
+ */
+ipcMain.handle('habit-completions:weekly', async (_event, weekOf: string) => {
+  try {
+    // `src/infrastructure/ipc/` → `src/lib` is `../../`, not `../../../`. esbuild did
+    // not catch the bad path because a dynamic `require()` is left alone at bundle time;
+    // the scoped `tsc` run did.
+        const days = weekDays(weekOf);
+    const start = days[0];
+    const end = days[6];
+
+    const rows = db!.prepare(
+      `SELECT date, met_minimum FROM habit_completions WHERE date BETWEEN ? AND ?`
+    ).all(start, end) as any[];
+
+    // Two counts, because they answer different questions and the plan uses both:
+    //  · countedDays — any day with a completion. This is the SCORE.
+    //  · qualifiedDays — only days that met the minimum. A 10-minute day keeps
+    //    the habit alive (it is in countedDays) but is visibly flagged as a
+    //    minimum day rather than a full one.
+    const countedDates = rows.map((r) => r.date);
+    const qualifiedDates = rows.filter((r) => r.met_minimum).map((r) => r.date);
+    const counted = daysActiveInWeek(weekOf, countedDates);
+    const qualified = daysActiveInWeek(weekOf, qualifiedDates);
+
+    const target = Number(userPreferences?.training_weekly_win_days);
+    const winTarget = Number.isFinite(target) && target > 0 ? Math.min(7, target) : 5;
+
+    return {
+      success: true,
+      weekOf, weekKey: isoWeekKey(weekOf), start, end, days,
+      countedDays: counted,
+      qualifiedDays: qualified,
+      winTarget,
+      isWin: counted >= winTarget,
+      minimumMinutes: habitMinimumMinutes(userPreferences),
+      completions: rows.map((r) => ({ date: r.date, metMinimum: !!r.met_minimum })),
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/**
+ * Move legacy localStorage completions into the table, once.
+ *
+ * Caller passes the raw localStorage payload because the renderer is the only
+ * process that can read it. Idempotent via the table's UNIQUE(habit_id, date):
+ * running it twice cannot double-count.
+ */
+ipcMain.handle('habit-completions:migrate-legacy', async (_event, legacy: Array<{
+  commitmentId: string; date: string; completedAt?: number; source?: string;
+}>) => {
+  try {
+    const minimum = habitMinimumMinutes(userPreferences);
+    let migrated = 0, skipped = 0;
+    const stmt = db!.prepare(
+      `INSERT INTO habit_completions (id, habit_id, date, minutes, met_minimum, source, completed_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?)
+       ON CONFLICT(habit_id, date) DO NOTHING`
+    );
+    const tx = db!.transaction((items: any[]) => {
+      for (const it of items) {
+        if (!it?.commitmentId || !it?.date) { skipped++; continue; }
+        const res = stmt.run(
+          `hc_${it.commitmentId}_${it.date}`, String(it.commitmentId), String(it.date),
+          // A legacy completion has no duration. It counted, so it is recorded as
+          // meeting the minimum rather than silently demoted to a half-day.
+          minimum, it.source === 'detected' ? 'detected' : 'migrated',
+          it.completedAt ? new Date(it.completedAt).toISOString() : new Date().toISOString()
+        );
+        res.changes ? migrated++ : skipped++;
+      }
+    });
+    tx(Array.isArray(legacy) ? legacy : []);
+    return { success: true, migrated, skipped };
+  } catch (err: any) {
+    return { success: false, error: err.message, migrated: 0, skipped: 0 };
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE TRAINING LOG — features 1, 3, 5, 6, 7
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Every handler here follows ONE rule: `parse` never writes, `commit` writes once.
+// That split is what makes "show a diff before applying, never apply silently"
+// implementable at all — there is no code path from a pasted AI reply to the
+// database that skips a review step, because the write lives behind a channel
+// the paste path never calls.
+
+// NOTE: today is `getLocalDateStr()`, the dep the main process already injects
+// (src/main.ts:635). An earlier revision of this file defined a second,
+// byte-identical `trainDateStr` beside it. Two definitions of "today, in the
+// user's timezone" is precisely how a UTC bug comes back after someone fixes the
+// other one — so the duplicate is gone and every call site uses the injected one.
+function shiftDateStr(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return getLocalDateStr(d);
+}
+const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+/* ── F1 · capture ───────────────────────────────────────────────────────── */
+
+// FEATURE 1, and the one rule that makes the feature true: this handler NEVER
+// writes. It returns an interpretation plus the ambiguities the parser could not
+// settle. The UI shows those as editable, amber-flagged fields, and the human
+// presses Enter. Auto-filling is the promise; auto-saving is the failure mode.
+ipcMain.handle('capture:parse', async (_event, payload: {
+  text: string;
+  nowMinutes?: number;
+  /** Passed in by the RENDERER, which already holds the live foreground app from
+   *  `getCurrentForeground()` / the tracking heartbeat. An earlier version tried
+   *  to read it here and reached for `globalThis.deskflowAPI`, which does not
+   *  exist in the main process — so it silently returned null forever. The
+   *  renderer is the process that actually knows; asking it costs nothing. */
+  foreground?: { app?: string; category?: string } | null;
+}) => {
+  try {
+    const text = String(payload?.text ?? '');
+    const now = Number.isFinite(payload?.nowMinutes)
+      ? (payload!.nowMinutes as number)
+      : new Date().getHours() * 60 + new Date().getMinutes();
+    const parsed = parseCaptureLine(text, now);
+
+    // Offered as a default the user can correct, never applied behind their back.
+    const fg = payload?.foreground;
+    const foreground = fg?.app ? { app: String(fg.app), category: String(fg.category || 'other') } : null;
+
+    return { success: true, parsed, foreground, canCommit: !parsed.empty };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// F1 commit. ONE transaction, and the time row goes into `logs` with
+// `source='manual'` rather than a side table — which is deliberate: the two
+// `AFTER INSERT` triggers on `logs` feed stats_hourly/stats_daily/app_totals, so
+// a captured session shows up in every existing chart with no query change. That
+// is the same reasoning the original manual-fill path used.
+ipcMain.handle('capture:commit', async (_event, payload: {
+  date?: string; count?: number | null; minutes?: number | null; pattern?: string | null;
+  result?: string | null; platform?: string; topic?: string; app?: string | null; category?: string | null;
+}) => {
+  try {
+    const date = payload?.date || getLocalDateStr(new Date());
+    const minutes = Number.isFinite(payload?.minutes) ? Math.max(0, Math.round(payload!.minutes as number)) : 0;
+    const count = Number.isFinite(payload?.count) ? Math.max(0, Math.round(payload!.count as number)) : 1;
+    const result = payload?.result || null;
+    const title = (payload?.topic || '').trim() || `${count} problem${count === 1 ? '' : 's'}`;
+
+    const tx = db!.transaction(() => {
+      let logId: string | null = null;
+      if (minutes > 0) {
+        logId = uid('cap_log');
+        db!.prepare(
+          `INSERT INTO logs (timestamp, app, category, duration_ms, title, is_browser_tracking, source)
+           VALUES (?, ?, ?, ?, ?, 0, 'manual')`
+        ).run(
+          `${date} 12:00:00`,
+          payload?.app || 'Manual entry',
+          payload?.category || 'other',
+          minutes * 60_000,
+          `Captured: ${title}`,
+        );
+      }
+      const outcomeId = uid('out');
+      db!.prepare(
+        `INSERT INTO training_outcomes (id, date, kind, title, count, cold, pattern, minutes, app, source)
+         VALUES (?, ?, 'problem_solved', ?, ?, ?, ?, ?, ?, 'capture')`
+      ).run(outcomeId, date, title, count, result === 'solved' ? 1 : 0, payload?.pattern || null, minutes || null, payload?.app || null);
+
+      // F3: a COLD solve enters the spaced-repetition queue immediately. A
+      // partial or stuck solve does NOT — re-reading something you could not
+      // finish teaches nothing, and it would flood the queue with exactly the
+      // items CZ has least appetite for.
+      let cardId: string | null = null;
+      if (result === 'solved') {
+        cardId = uid('card');
+        const next = scheduleCard(
+          { id: cardId, pattern: payload?.pattern || '', title, due: null, reps: 0, lapses: 0, scheduledDays: 0 },
+          'recalled', date,
+        );
+        db!.prepare(
+          `INSERT INTO training_cards (id, pattern, title, due, reps, lapses, scheduled_days, source_outcome)
+           VALUES (?, ?, ?, ?, 1, 0, ?, ?)`
+        ).run(cardId, payload?.pattern || null, title, next.due, next.scheduledDays, outcomeId);
+      }
+      return { logId, outcomeId, cardId };
+    });
+
+    const ids = tx();
+    // Tell the calendar to refresh so the dot appears on the right day without a
+    // manual reload. Previously a todo added in TodoList never reached the wall
+    // for exactly this reason.
+    try { mainWindow?.webContents?.send('training:changed', { date }); } catch { /* window may be gone */ }
+    return { success: true, ...ids };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/* ── F3 · outcomes and the queue ────────────────────────────────────────── */
+
+ipcMain.handle('training:outcomes:list', async (_event, startDate: string, endDate: string) => {
+  try {
+    const rows = db!.prepare(
+      `SELECT id, date, kind, title, count, cold, pattern, minutes, app, source, notes, created_at
+         FROM training_outcomes WHERE date BETWEEN ? AND ? ORDER BY date DESC, created_at DESC LIMIT 500`
+    ).all(startDate, endDate) as any[];
+    return {
+      success: true,
+      outcomes: rows.map((r) => ({
+        id: r.id, date: r.date, kind: r.kind, title: r.title, count: r.count,
+        // `cold` is a tri-state in the UI: solved cold / solved with help / not applicable.
+        cold: r.cold === null ? null : !!r.cold,
+        pattern: r.pattern, minutes: r.minutes, app: r.app, source: r.source, notes: r.notes,
+      })),
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message, outcomes: [] };
+  }
+});
+
+ipcMain.handle('training:cards:due', async (_event, today?: string) => {
+  try {
+    const date = today || getLocalDateStr(new Date());
+    const rows = db!.prepare('SELECT * FROM training_cards ORDER BY due IS NULL DESC, due ASC').all() as any[];
+    const cards: SrsCard[] = rows.map((r) => ({
+      id: r.id, pattern: r.pattern || '', title: r.title, due: r.due,
+      reps: r.reps, lapses: r.lapses, scheduledDays: r.scheduled_days,
+    }));
+    const due = dueCards(cards, date, 20);
+    return {
+      success: true,
+      today: date,
+      cards: due.map((c) => ({ ...c, hint: nextDueHint(c.due, date) })),
+      total: cards.length,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message, cards: [] };
+  }
+});
+
+// Every review writes BOTH the derived card state and an immutable log row, so
+// the schedule can always be rebuilt from training_reviews alone.
+ipcMain.handle('training:cards:review', async (_event, payload: { cardId: string; rating: Rating; today?: string }) => {
+  try {
+    const date = payload?.today || getLocalDateStr(new Date());
+    const row = db!.prepare('SELECT * FROM training_cards WHERE id = ?').get(payload?.cardId) as any;
+    if (!row) return { success: false, error: 'That card no longer exists. Refresh the queue.' };
+
+    const card: SrsCard = {
+      id: row.id, pattern: row.pattern || '', title: row.title, due: row.due,
+      reps: row.reps, lapses: row.lapses, scheduledDays: row.scheduled_days,
+    };
+    const decision = scheduleCard(card, payload!.rating, date);
+    const lapses = card.lapses + (payload!.rating === 'forgotten' ? 1 : 0);
+
+    const tx = db!.transaction(() => {
+      db!.prepare(
+        'UPDATE training_cards SET due = ?, reps = reps + 1, lapses = ?, scheduled_days = ? WHERE id = ?'
+      ).run(decision.due, lapses, decision.scheduledDays, card.id);
+      db!.prepare(
+        `INSERT INTO training_reviews (card_id, rating, review_date, scheduled_days, elapsed_days, weakened)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(
+        card.id, payload!.rating, date, decision.scheduledDays,
+        card.due ? Math.max(0, Math.round((new Date(date + 'T00:00:00').getTime() - new Date(card.due + 'T00:00:00').getTime()) / 86_400_000)) : 0,
+        decision.weakened ? 1 : 0,
+      );
+    });
+    tx();
+    return { success: true, ...decision };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/* ── F4 · the weekly score ──────────────────────────────────────────────── */
+
+ipcMain.handle('training:week:score', async (_event, weekOf: string) => {
+  try {
+        const days = weekDays(weekOf);
+    const rows = db!.prepare(
+      'SELECT date, minutes, met_minimum FROM habit_completions WHERE date BETWEEN ? AND ?'
+    ).all(days[0], days[6]) as any[];
+    const marks: DayMark[] = rows.map((r) => ({ date: r.date, minutes: r.minutes, metMinimum: !!r.met_minimum }));
+    const score = computeWeeklyScore(weekOf, marks, {
+      minimumMinutes: habitMinimumMinutes(userPreferences),
+      winDays: Number(userPreferences?.training_weekly_win_days) || undefined,
+    });
+    return { success: true, score, copy: describeWeeklyScore(score) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/* ── F6 · the Sunday review, cached so it never recomputes on repaint ────── */
+
+ipcMain.handle('training:review:weekly', async (_event, weekOf: string) => {
+  try {
+        const weekKey = isoWeekKey(weekOf);
+    const days = weekDays(weekOf);
+
+    const cached = db!.prepare('SELECT * FROM weekly_reviews WHERE week_key = ?').get(weekKey) as any;
+    if (cached) {
+      try {
+        return { success: true, cached: true, review: JSON.parse(cached.stats_json), accepted: !!cached.proposal_accepted };
+      } catch { /* fall through and rebuild */ }
+    }
+
+    // One batched read per table, not one per row. The DatabasePage precedent
+    // records that the previous fan-out was ~206 serial IPC hops; a weekly
+    // digest must not reintroduce that shape inside a single handler.
+    const planned = db!.prepare(
+      `SELECT id, title, date, status, is_habit FROM goals WHERE date BETWEEN ? AND ?`
+    ).all(days[0], days[6]) as any[];
+
+    const habitIds = [...new Set(planned.filter((g) => g.is_habit).map((g) => g.id))];
+    const completions = db!.prepare(
+      'SELECT habit_id, date FROM habit_completions WHERE date BETWEEN ? AND ?'
+    ).all(days[0], days[6]) as any[];
+
+    const habitMisses: Record<string, string[]> = {};
+    for (const id of habitIds) {
+      const hit = new Set(completions.filter((c) => c.habit_id === id).map((c) => c.date));
+      habitMisses[id] = days.filter((d) => !hit.has(d));
+    }
+
+    const logs = db!.prepare(
+      `SELECT substr(timestamp, 1, 10) AS d, SUM(duration_ms) AS ms
+         FROM logs WHERE substr(timestamp, 1, 10) BETWEEN ? AND ? GROUP BY d`
+    ).all(days[0], days[6]) as any[];
+    const minsByDay = new Map(logs.map((l) => [l.d, Math.round((l.ms || 0) / 60000)]));
+    const totalMinutesByDay = days.map((d) => minsByDay.get(d) ?? 0);
+
+    const dueCardsRows = db!.prepare(
+      `SELECT COUNT(*) n FROM training_cards WHERE due IS NOT NULL AND due < ? AND due >= ?`
+    ).get(weekKey ? days[0] : days[0], days[6]) as any;
+
+    const review = buildWeeklyReview({
+      weekOf,
+      planned: planned.map((g) => ({ id: g.id, title: g.title, date: g.date, done: g.status === 'done', isHabit: !!g.is_habit })),
+      habitIdsTracked: habitIds,
+      habitMisses,
+      // New-topic minutes are not separately tracked yet; until they are, treat
+      // the whole week as review time so the drift proposal cannot fire on an
+      // absence of data. Better a missed suggestion than a wrong one.
+      newMinutesByDay: days.map(() => 0),
+      totalMinutesByDay,
+      queueMissed: dueCardsRows?.n || 0,
+    });
+
+    db!.prepare(
+      `INSERT OR REPLACE INTO weekly_reviews
+         (week_key, planned, done, most_skipped_habit, proposal, proposal_why, headline, all_clear, status, stats_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'generated', ?, datetime('now'))`
+    ).run(
+      review.weekKey, review.planned, review.done, review.mostSkippedHabit?.id || null,
+      review.proposal?.text || null, review.proposal?.why || null, review.headline,
+      review.allClear ? 1 : 0, JSON.stringify(review),
+    );
+
+    return { success: true, cached: false, review, accepted: false };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('training:review:accept', async (_event, payload: { weekKey: string; text?: string }) => {
+  try {
+    db!.prepare(
+      `UPDATE weekly_reviews SET proposal_accepted = 1,
+         proposal = COALESCE(?, proposal), created_at = datetime('now')
+       WHERE week_key = ?`
+    ).run(payload?.text || null, payload?.weekKey);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/* ── F5 · phases ────────────────────────────────────────────────────────── */
+
+ipcMain.handle('training:phase:current', async (_event) => {
+  try {
+        const today = getLocalDateStr(new Date());
+    const phase = db!.prepare(
+      `SELECT id, title, training_mode, daily_checklist_json, review_floor_minutes, plan_mode_armed
+         FROM life_phases
+        WHERE COALESCE(start_date, '') <= ? AND (end_date IS NULL OR end_date = '' OR end_date >= ?)
+        ORDER BY start_date DESC LIMIT 1`
+    ).get(today, today) as any;
+
+    const mode: TrainingMode = phase?.training_mode === 'burn_down' ? 'burn_down' : 'learn';
+    const rules = PHASE_RULES[mode];
+
+    // Drift is DETECTED here but ANSWERED in the renderer. The handler returns
+    // the question, never an action — that is the feature's requirement, and it
+    // is also why this handler cannot flip a phase by itself.
+    let question: unknown = null;
+    if (phase) {
+      const week = weekDays(today);
+      const answered = db!.prepare(
+        'SELECT answer, ask_again_after FROM phase_drift_answers WHERE week_key = ? ORDER BY id DESC LIMIT 1'
+      ).get(isoWeekKey(today)) as any;
+      const silenced = answered && (answered.answer === 'no'
+        || (answered.ask_again_after && answered.ask_again_after > today));
+
+      if (!silenced) {
+        const logs = db!.prepare(
+          `SELECT substr(timestamp,1,10) AS d, SUM(duration_ms) AS ms FROM logs
+            WHERE substr(timestamp,1,10) BETWEEN ? AND ? GROUP BY d`
+        ).all(week[0], week[6]) as any[];
+        const byDay = new Map(logs.map((l) => [l.d, Math.round((l.ms || 0) / 60000)]));
+        const total = week.map((d) => byDay.get(d) ?? 0);
+        const drift = detectDrift({
+          days: week,
+          newMinutesByDay: week.map(() => 0),
+          totalMinutesByDay: total,
+          currentMode: mode,
+        });
+        if (drift.drifting) question = driftQuestion(drift.reason);
+      }
+    }
+
+    return {
+      success: true,
+      phase: phase ? {
+        id: phase.id, title: phase.title, mode,
+        checklist: safeJson(phase.daily_checklist_json, []),
+        reviewFloorMinutes: phase.review_floor_minutes ?? rules.reviewFloorMinutes,
+        planModeArmed: !!phase.plan_mode_armed,
+      } : null,
+      rules,
+      label: phaseLabel(mode),
+      summary: phaseChangeSummary(mode),
+      driftQuestion: question,
+      cooldownDays: DRIFT_COOLDOWN_DAYS,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('training:phase:set-mode', async (_event, payload: { phaseId: string; mode: TrainingMode; checklist?: unknown[] }) => {
+  try {
+    const mode = payload?.mode === 'burn_down' ? 'burn_down' : 'learn';
+    // The checklist SWAPS with the mode. That is the feature: flipping a phase
+    // has to change what the day asks for, or "set the rules" is just a label.
+    const checklist = Array.isArray(payload?.checklist) ? payload!.checklist : defaultChecklist(mode);
+    db!.prepare('UPDATE life_phases SET training_mode = ?, daily_checklist_json = ? WHERE id = ?')
+      .run(mode, JSON.stringify(checklist), payload?.phaseId);
+    return { success: true, mode, checklist, summary: phaseChangeSummary(mode) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/** The two default checklists. Deliberately short — a checklist you do not finish
+ *  teaches you to ignore it, and the point is to be done, not to be thorough. */
+function defaultChecklist(mode: TrainingMode): string[] {
+  return mode === 'burn_down'
+    ? ['Clear the review queue', 'Finish what is already open', 'No new topics']
+    : ['One review pass', 'Up to two new problems', 'Note what you got stuck on'];
+}
+
+function safeJson<T>(raw: unknown, fallback: T): T {
+  try { const v = typeof raw === 'string' ? JSON.parse(raw) : raw; return (v ?? fallback) as T; }
+  catch { return fallback; }
+}
+
+ipcMain.handle('training:phase:answer-drift', async (_event, payload: { answer: 'yes' | 'not_now' | 'no'; reason?: string }) => {
+  try {
+        const today = getLocalDateStr(new Date());
+    const again = payload?.answer === 'no'
+      ? '9999-12-31'                                  // never for this phase
+      : payload?.answer === 'not_now' ? shiftDateStr(today, DRIFT_COOLDOWN_DAYS) : today;
+    db!.prepare(
+      'INSERT INTO phase_drift_answers (phase_id, week_key, answer, reason, ask_again_after) VALUES (?, ?, ?, ?, ?)'
+    ).run(null, isoWeekKey(today), payload?.answer || 'not_now', payload?.reason || null, again);
+    return { success: true, askAgainAfter: again };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/* ── F7 · plan mode ─────────────────────────────────────────────────────── */
+
+ipcMain.handle('planmode:status', async (_event, payload: { coreIds?: string[]; doneIds?: string[] }) => {
+  try {
+    const today = getLocalDateStr(new Date());
+    const phase = db!.prepare(
+      `SELECT id, plan_mode_armed FROM life_phases
+        WHERE COALESCE(start_date,'') <= ? AND (end_date IS NULL OR end_date='' OR end_date >= ?)
+        ORDER BY start_date DESC LIMIT 1`
+    ).get(today, today) as any;
+
+    const verdict = evaluatePlanMode({
+      // Only ever armed if CZ armed it. A guard that activates by itself is
+      // indistinguishable from a bug.
+      armed: !!phase?.plan_mode_armed,
+      coreIds: payload?.coreIds ?? [],
+      doneIds: payload?.doneIds ?? [],
+    });
+
+    const breaks = db!.prepare(
+      `SELECT COUNT(*) n FROM plan_mode_events WHERE date >= date('now','-6 days') AND kind = 'broke'`
+    ).get() as any;
+
+    return { success: true, verdict, breaksThisWeek: breaks?.n || 0, warning: breakWarning(breaks?.n || 0) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// The break writes a row. THAT is the feature: the rule exists to make editing
+// something you remember doing, and Sunday's review names it. A rule that only
+// blocks gets deleted.
+ipcMain.handle('planmode:break', async (_event, payload: { phrase: string; outstanding?: number }) => {
+  try {
+    const accepted = String(payload?.phrase || '').trim().toLowerCase() === BREAK_PHRASE;
+    if (!accepted) {
+      return { success: false, error: `Type "${BREAK_PHRASE}" exactly to confirm.` };
+    }
+    const today = getLocalDateStr(new Date());
+    const phase = db!.prepare(
+      `SELECT id FROM life_phases WHERE COALESCE(start_date,'') <= ? AND (end_date IS NULL OR end_date='' OR end_date >= ?) ORDER BY start_date DESC LIMIT 1`
+    ).get(today, today) as any;
+    db!.prepare(
+      'INSERT INTO plan_mode_events (date, phase_id, kind, outstanding, confirmation_ok) VALUES (?, ?, ?, ?, 1)'
+    ).run(today, phase?.id || null, 'broke', payload?.outstanding || 0);
+    const n = db!.prepare(
+      `SELECT COUNT(*) n FROM plan_mode_events WHERE date >= date('now','-6 days') AND kind='broke'`
+    ).get() as any;
+    return { success: true, breaksThisWeek: n?.n || 0, warning: breakWarning(n?.n || 0) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+/* ── F2 · the AI plan: prepare (never writes) and commit (writes once) ──── */
+
+// `training:plan:prepare` is the DIFF step. It parses, validates and diffs, and
+// it has no write path at all — so there is no version of "paste the AI's reply"
+// that can reach the database without a human reading the summary first.
+ipcMain.handle('training:plan:prepare', async (_event, payload: { raw: string }) => {
+  try {
+    const prepared = preparePlanReply(String(payload?.raw ?? ''));
+    return {
+      success: true,
+      ok: prepared.report.ok,
+      report: prepared.report,
+      diff: prepared.diff,
+      repairPrompt: prepared.repairPrompt,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// The prompt the user copies OUT. It carries the schema explicitly, because the
+// gateway transport is Playwright DOM-scraping of the provider's web UI — there
+// is no `response_format` / `json_schema` channel reachable through it, so the
+// schema has to live in the prompt text.
+ipcMain.handle('training:plan:prompt', async (_event) => {
+    return {
+    success: true,
+    prompt: [
+      'Return ONE JSON object and nothing else. No prose, no markdown fence, no commentary.',
+      '',
+      'Shape:',
+      JSON.stringify({
+        schemaVersion: PLAN_SCHEMA_VERSION,
+        tasks: [{ title: 'string', dueInDays: 0, priority: 'low', pattern: 'string' }],
+        outcomes: [{ kind: 'problem_solved', title: 'string', count: 1, cold: true, pattern: 'string' }],
+        deadlineMoves: [{ title: 'string', shiftDays: 0 }],
+      }, null, 2),
+      '',
+      `priority: low | medium | high`,
+      `kind: problem_solved | pr_opened | pr_merged | contest`,
+      `pattern (optional, must be exactly one of): ${PATTERN_VOCABULARY.join(', ')}`,
+      'dueInDays and shiftDays are NUMBERS of days, never date strings.',
+      'Every array may be empty if you have nothing to add.',
+    ].join('\n'),
+  };
+});
+
+// Commit runs ONLY after the user has read the diff and pressed apply. It is a
+// single transaction so a partial plan cannot land.
+ipcMain.handle('training:plan:commit', async (_event, payload: { raw: string }) => {
+  try {
+    const prepared = preparePlanReply(String(payload?.raw ?? ''));
+    if (!prepared.report.ok) {
+      // Refusing here is the point. An invalid plan must never half-apply.
+      return { success: false, error: 'That plan still has errors. Use the repair prompt first.', issues: prepared.report.issues };
+    }
+    const plan = prepared.report.plan!;
+    const today = getLocalDateStr(new Date());
+    const tx = db!.transaction(() => {
+      let tasks = 0, outcomes = 0, moved = 0;
+      for (const t of plan.tasks) {
+        if (!t.title?.trim()) continue;
+        db!.prepare(
+          `INSERT OR REPLACE INTO goals (id, date, title, category, target_type, status, period, source, links, progress_seconds, priority)
+           VALUES (?, ?, ?, 'learning', 'completion', 'active', 'daily', 'ai', '[]', 0, ?)`
+        ).run(uid('goal'), shiftDateStr(today, Math.max(0, Math.round(t.dueInDays || 0))), t.title.trim(), t.priority === 'high' ? 2 : t.priority === 'medium' ? 1 : 0);
+        tasks++;
+      }
+      for (const o of plan.outcomes) {
+        if (!o.title?.trim()) continue;
+        db!.prepare(
+          `INSERT INTO training_outcomes (id, date, kind, title, count, cold, pattern, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'import')`
+        ).run(uid('out'), today, o.kind, o.title.trim(), o.count || 1, typeof o.cold === 'boolean' ? (o.cold ? 1 : 0) : null, o.pattern || null);
+        outcomes++;
+      }
+      for (const m of plan.deadlineMoves) {
+        if (!m.title?.trim() || !m.shiftDays) continue;
+        const row = db!.prepare(
+          `SELECT id FROM deadlines WHERE title = ? ORDER BY due_date ASC LIMIT 1`
+        ).get(m.title.trim()) as any;
+        if (!row) continue;                        // a move with no match is skipped, not guessed at
+        db!.prepare(`UPDATE deadlines SET due_date = ? WHERE id = ?`).run(shiftDateStr(today, m.shiftDays), row.id);
+        moved++;
+      }
+      return { tasks, outcomes, moved };
+    });
+    const applied = tx();
+    try { mainWindow?.webContents?.send('training:changed', { date: today }); } catch { /* ignore */ }
+    return { success: true, applied };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('get-reminders', async () => {
   try {
     const rows = db!.prepare('SELECT * FROM reminders ORDER BY created_at ASC').all() as any[];
@@ -1020,21 +1818,50 @@ ipcMain.handle('get-reminders', async () => {
   }
 });
 
-ipcMain.handle('create-reminder', async (_event, data: { text: string; due_date?: string; goal_id?: string; due_time?: string }) => {
+ipcMain.handle('create-reminder', async (_event, data: {
+  text: string;
+  due_date?: string; dueDate?: string;
+  goal_id?: string;  goalId?: string;
+  due_time?: string; dueTime?: string;
+  reminder_lead_min?: number;
+  description?: string;
+  links?: string; // JSON array of {label, url}
+  location?: string;
+}) => {
   try {
     const id = 'rem_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    // Accept BOTH casings. This handler has always been declared snake_case,
+    // which makes it the only snake_case channel among the goal/todo handlers
+    // (every sibling is camelCase). `HabitsPage.tsx:530` therefore calls it
+    // with `{ text, dueDate }` and the date was silently dropped — every
+    // reminder created from the Habits page landed with a NULL due date and so
+    // never appeared on the calendar. Rather than flip this one channel's
+    // signature (other callers already send snake_case), read either.
+    const rawDueDate = data.due_date ?? data.dueDate;
+    const rawGoalId = data.goal_id ?? data.goalId;
+    const rawTimeIn = data.due_time ?? data.dueTime;
+    // reminder_lead_min: minutes before due date/time to remind. 0 = at event.
+    const rawLead = data.reminder_lead_min ?? 0;
+    const leadMin = Number.isInteger(rawLead) && rawLead >= 0 ? rawLead : 0;
+    // description / links / location
+    const description = String(data.description || '').trim();
+    let linksJson = '[]';
+    if (data.links) {
+      try { linksJson = typeof data.links === 'string' ? data.links : JSON.stringify(data.links); } catch { linksJson = '[]'; }
+    }
+    const location = String(data.location || '').trim();
     // Normalize any ISO timestamp to a YYYY-MM-DD date so the calendar grid
     // (which keys by date) and daysUntil() line up. Raw timestamps previously
     // produced NaN counts and never landed on the calendar.
-    const normDate = data.due_date ? data.due_date.slice(0, 10) : null;
+    const normDate = rawDueDate ? String(rawDueDate).slice(0, 10) : null;
     // due_time is its own HH:mm column rather than being folded into due_date,
     // so the date-keyed calendar grid keeps working while a time-of-day shows.
-    const rawTime = String(data.due_time || '').trim();
+    const rawTime = String(rawTimeIn || '').trim();
     const normTime = /^([01]?\d|2[0-3]):[0-5]\d$/.test(rawTime)
       ? rawTime.split(':').map((n: string) => n.padStart(2, '0')).join(':')
       : null;
-    db!.prepare('INSERT INTO reminders (id, text, due_date, goal_id, done, due_time) VALUES (?, ?, ?, ?, 0, ?)').run(
-      id, data.text, normDate, data.goal_id || null, normTime,
+    db!.prepare('INSERT INTO reminders (id, text, due_date, goal_id, done, due_time, reminder_lead_min, description, links, location) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)').run(
+      id, data.text, normDate, rawGoalId || null, normTime, leadMin, description, linksJson, location,
     );
     // Capture deadline episode into context brain
     try {
@@ -1059,6 +1886,72 @@ ipcMain.handle('delete-reminder', async (_event, id: string) => {
   try {
     db!.prepare('DELETE FROM reminders WHERE id = ?').run(id);
     return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('update-reminder', async (_event, id: string, data: {
+  text?: string;
+  due_date?: string; dueDate?: string;
+  goal_id?: string; goalId?: string;
+  due_time?: string; dueTime?: string;
+  reminder_lead_min?: number;
+  description?: string;
+  links?: string;
+  location?: string;
+  done?: boolean;
+}) => {
+  try {
+    const row = db!.prepare('SELECT * FROM reminders WHERE id = ?').get(id);
+    if (!row) return { success: false, error: 'Reminder not found' };
+
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.text !== undefined) { updates.push('text = ?'); params.push(data.text); }
+    if (data.due_date !== undefined || data.dueDate !== undefined) {
+      const rawDue = data.due_date ?? data.dueDate;
+      const normDate = rawDue ? String(rawDue).slice(0, 10) : null;
+      updates.push('due_date = ?'); params.push(normDate);
+    }
+    if (data.goal_id !== undefined || data.goalId !== undefined) {
+      const rawGoal = data.goal_id ?? data.goalId;
+      updates.push('goal_id = ?'); params.push(rawGoal || null);
+    }
+    if (data.due_time !== undefined || data.dueTime !== undefined) {
+      const rawTimeIn = data.due_time ?? data.dueTime;
+      const rawTime = String(rawTimeIn || '').trim();
+      const normTime = /^([01]?\d|2[0-3]):[0-5]\d$/.test(rawTime)
+        ? rawTime.split(':').map((n: string) => n.padStart(2, '0')).join(':')
+        : null;
+      updates.push('due_time = ?'); params.push(normTime);
+    }
+    if (data.reminder_lead_min !== undefined) {
+      const rawLead = data.reminder_lead_min;
+      const leadMin = Number.isInteger(rawLead) && rawLead >= 0 ? rawLead : 0;
+      updates.push('reminder_lead_min = ?'); params.push(leadMin);
+    }
+    if (data.description !== undefined) {
+      updates.push('description = ?'); params.push(String(data.description || '').trim());
+    }
+    if (data.links !== undefined) {
+      let linksJson = '[]';
+      try { linksJson = typeof data.links === 'string' ? data.links : JSON.stringify(data.links); } catch {}
+      updates.push('links = ?'); params.push(linksJson);
+    }
+    if (data.location !== undefined) {
+      updates.push('location = ?'); params.push(String(data.location || '').trim());
+    }
+    if (data.done !== undefined) {
+      updates.push('done = ?'); params.push(data.done ? 1 : 0);
+    }
+
+    if (updates.length === 0) return { success: true, id };
+
+    params.push(id);
+    db!.prepare(`UPDATE reminders SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    return { success: true, id };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -1258,14 +2151,129 @@ ipcMain.handle('todo:get-connections', async (_event, entityType: string, entity
   } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
 });
 
-function getGoalConnections(goalId: string) {
+/* ── Goal hub ──────────────────────────────────────────────────────────────
+ *
+ * RESPONSE SHAPE — THIS FUNCTION IS THE CONTRACT. ConnectionExplorer used to
+ * read `res.connections.parentLTG / linkedGoal / scheduleBlocks`, which never
+ * existed, so the hub rendered empty forever. The renderer was wrong, not the
+ * query, so the query's keys are now canonical and the explorer is written to
+ * match them.
+ *
+ * Every key is ALWAYS present (empty array rather than undefined) so the panel
+ * can distinguish "loaded, none linked" from "failed to load".
+ */
+async function getGoalConnections(goalId: string) {
   const goal = db!.prepare('SELECT id, title, category, is_habit, parent_id, parent_ids FROM goals WHERE id = ?').get(goalId) as any;
   if (!goal) return { success: false, error: 'Goal not found' };
-  return { success: true, goal, parentLtgs: goal.parent_id ? db!.prepare('SELECT id, title, category FROM goals WHERE id = ?').all(goal.parent_id) : [], childGoals: db!.prepare('SELECT id, title, category, is_habit FROM goals WHERE parent_id = ? OR parent_ids LIKE ?').all(goalId, `%"${goalId}"%`), todos: db!.prepare('SELECT * FROM todos WHERE goal_id = ? ORDER BY done, sort_order, created_at').all(goalId), schedules: db!.prepare('SELECT * FROM schedule_entries WHERE goal_id = ? ORDER BY day_of_week, start_time').all(goalId), deadlines: db!.prepare('SELECT * FROM deadlines WHERE goal_id = ? ORDER BY due_date').all(goalId), notes: [], brainEntities: [] };
+
+  const all = (sql: string, ...p: any[]) => { try { return db!.prepare(sql).all(...p) as any[]; } catch { return []; } };
+
+  // Generic links live in entity_links; the four legacy tables carry their own
+  // goal_id and are queried directly so existing rows keep working.
+  const generic = all('SELECT feature, entity_id, label, meta FROM entity_links WHERE goal_id = ? ORDER BY created_at DESC', goalId);
+  const byFeature = (f: string) => generic.filter(r => r.feature === f);
+
+  // Hydrate a generic link row with a human label by looking the entity up.
+  const labelFor = (feature: string, entityId: string, fallback?: string | null) => {
+    try {
+      const q: Record<string, [string, string]> = {
+        note: ['SELECT title FROM notes WHERE id = ?', 'title'],
+        learn: ['SELECT title FROM learn_decks WHERE id = ?', 'title'],
+        finance: ['SELECT name FROM finance_subscriptions WHERE id = ?', 'name'],
+        project: ['SELECT name FROM projects WHERE id = ?', 'name'],
+        brain: ['SELECT entity FROM brain_memories WHERE id = ?', 'entity'],
+        reminder: ['SELECT text FROM reminders WHERE id = ?', 'text'],
+      };
+      const hit = q[feature];
+      if (hit) {
+        const row = db!.prepare(hit[0]).get(entityId) as any;
+        if (row && row[hit[1]]) return row[hit[1]];
+      }
+    } catch {}
+    return fallback || entityId;
+  };
+
+  const shape = (rows: any[], titleKey: string, type: string) =>
+    rows.map(r => ({ id: r.id ?? r.entity_id, title: r[titleKey] ?? r.title ?? r.text ?? '', type, done: r.done, meta: r.meta }));
+
+  return {
+    success: true,
+    goal,
+    parentLtgs: goal.parent_id ? all('SELECT id, title, category FROM goals WHERE id = ?', goal.parent_id) : [],
+    childGoals: all('SELECT id, title, category, is_habit FROM goals WHERE parent_id = ? OR parent_ids LIKE ?', goalId, `%"${goalId}"%`),
+    todos: all('SELECT * FROM todos WHERE goal_id = ? ORDER BY done, sort_order, created_at', goalId),
+    schedules: all('SELECT * FROM schedule_entries WHERE goal_id = ? ORDER BY day_of_week, start_time', goalId),
+    deadlines: all('SELECT * FROM deadlines WHERE goal_id = ? ORDER BY due_date', goalId),
+    reminders: all('SELECT * FROM reminders WHERE goal_id = ? ORDER BY due_date, due_time', goalId),
+    notes: byFeature('note').map(r => ({ id: r.entity_id, title: labelFor('note', r.entity_id, r.label), type: 'note', meta: r.meta })),
+    learn: byFeature('learn').map(r => ({ id: r.entity_id, title: labelFor('learn', r.entity_id, r.label), type: 'learn', meta: r.meta })),
+    finance: byFeature('finance').map(r => ({ id: r.entity_id, title: labelFor('finance', r.entity_id, r.label), type: 'finance', meta: r.meta })),
+    ide: byFeature('project').map(r => ({ id: r.entity_id, title: labelFor('project', r.entity_id, r.label), type: 'ide', meta: r.meta })),
+    brain: byFeature('brain').map(r => ({ id: r.entity_id, title: labelFor('brain', r.entity_id, r.label), type: 'brain', meta: r.meta })),
+  };
 }
 
 ipcMain.handle('goal:get-connections', async (_event, goalId: string) => {
-  try { return getGoalConnections(goalId); } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+  try { return await getGoalConnections(goalId); } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+/** Batch connection counts for many goals at once.
+ *
+ *  The goal list renders one GoalCard per routine, and each card wants to show
+ *  "3 todos · 2 blocks". Calling goal:get-connections per card would be N round
+ *  trips on every render, so this does it in 6 queries total.
+ */
+ipcMain.handle('goal:connections-bulk', async (_event, goalIds: string[]) => {
+  try {
+    const ids = (goalIds || []).filter(Boolean);
+    if (ids.length === 0) return { success: true, counts: {} };
+    const marks = ids.map(() => '?').join(',');
+    const n = (sql: string) => { try { return db!.prepare(sql).all(...ids) as any[]; } catch { return [] as any[]; } };
+    const counts: Record<string, { todos: number; schedules: number; deadlines: number; reminders: number; links: number; total: number }> = {};
+    for (const id of ids) counts[id] = { todos: 0, schedules: 0, deadlines: 0, reminders: 0, links: 0, total: 0 };
+    const bump = (rows: any[], key: 'todos' | 'schedules' | 'deadlines' | 'reminders' | 'links') => {
+      for (const r of rows) { if (counts[r.gid]) counts[r.gid][key] = Number(r.c || 0); }
+    };
+    bump(n(`SELECT goal_id AS gid, COUNT(*) AS c FROM todos WHERE goal_id IN (${marks}) GROUP BY goal_id`), 'todos');
+    bump(n(`SELECT goal_id AS gid, COUNT(*) AS c FROM schedule_entries WHERE goal_id IN (${marks}) GROUP BY goal_id`), 'schedules');
+    bump(n(`SELECT goal_id AS gid, COUNT(*) AS c FROM deadlines WHERE goal_id IN (${marks}) GROUP BY goal_id`), 'deadlines');
+    bump(n(`SELECT goal_id AS gid, COUNT(*) AS c FROM reminders WHERE goal_id IN (${marks}) GROUP BY goal_id`), 'reminders');
+    bump(n(`SELECT goal_id AS gid, COUNT(*) AS c FROM entity_links WHERE goal_id IN (${marks}) GROUP BY goal_id`), 'links');
+    for (const id of ids) {
+      const c = counts[id];
+      c.total = c.todos + c.schedules + c.deadlines + c.reminders + c.links;
+    }
+    return { success: true, counts };
+  } catch (err: any) { return { success: false, error: String(err?.message || err), counts: {} }; }
+});
+
+/* ── Generic entity↔goal linking ─────────────────────────────────────────── */
+
+ipcMain.handle('entity:link', async (_event, payload: { feature: string; entityId: string; goalId: string | null; label?: string; meta?: any }) => {
+  try {
+    const { feature, entityId, goalId } = payload || ({} as any);
+    if (!feature || !entityId) return { success: false, error: 'A feature and an entity are required.' };
+    if (!goalId) {
+      db!.prepare('DELETE FROM entity_links WHERE feature = ? AND entity_id = ?').run(feature, entityId);
+      return { success: true, linked: false };
+    }
+    const id = 'lnk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    db!.prepare(`
+      INSERT INTO entity_links (id, feature, entity_id, goal_id, label, meta)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(feature, entity_id, goal_id) DO UPDATE SET label = excluded.label, meta = excluded.meta
+    `).run(id, feature, entityId, goalId, payload.label || null, payload.meta ? JSON.stringify(payload.meta) : null);
+    return { success: true, linked: true, id };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+/** Which goal (if any) is this entity attached to? Drives the linked/unlinked state
+ *  in the pickers, so they render truth rather than guessing. */
+ipcMain.handle('entity:get-links', async (_event, feature: string, entityId: string) => {
+  try {
+    const rows = db!.prepare('SELECT goal_id FROM entity_links WHERE feature = ? AND entity_id = ?').all(feature, entityId) as any[];
+    return { success: true, goalIds: rows.map(r => r.goal_id).filter(Boolean) };
+  } catch (err: any) { return { success: false, error: String(err?.message || err), goalIds: [] }; }
 });
 
 ipcMain.handle('get-schedule', async () => {

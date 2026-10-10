@@ -73,7 +73,7 @@ export function FocusLeaderboard({ history }: FocusLeaderboardProps) {
   }, [history, period]);
 
   return (
-    <GlassCard className="h-full bg-zinc-900/95 border-zinc-800/60">
+    <GlassCard className="h-full bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border-zinc-800/60">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
           <Trophy className="w-4 h-4 text-yellow-400" />

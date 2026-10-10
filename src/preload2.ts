@@ -966,10 +966,6 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   // ========== Smart Gap Fill ==========
   getKnownApps: () => ipcRenderer.invoke('get-known-apps'),
   getKnownBrowserApps: () => ipcRenderer.invoke('get-known-browser-apps'),
-  predictGapFill: (start: string, end: string, mode?: 'combined' | 'separate') =>
-    ipcRenderer.invoke('predict-gap-fill', { start, end, mode: mode || 'combined' }),
-   confirmGapFill: (fills: Array<{ slotStart: string; slotEnd: string; app: string; category: string; activityId?: string }>) =>
-    ipcRenderer.invoke('confirm-gap-fill', fills),
   predictDayGaps: (date: string, mode?: 'combined' | 'separate') =>
     ipcRenderer.invoke('predict-day-gaps', { date, mode: mode || 'combined' }),
 

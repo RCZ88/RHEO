@@ -308,12 +308,12 @@ export default function CompositionPage() {
                   <div>
                     <label className="text-xs text-zinc-400 mb-1 block">Name</label>
                     <input value={ruleName} onChange={e => setRuleName(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors" placeholder="My Rule" />
+                      className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors" placeholder="My Rule" />
                   </div>
                   <div>
                     <label className="text-xs text-zinc-400 mb-1 block">Category</label>
                     <select value={ruleCategory} onChange={e => setRuleCategory(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors">
+                      className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors">
                       <option value="general">General</option>
                       <option value="finance">Finance</option>
                       <option value="focus">Focus</option>
@@ -326,7 +326,7 @@ export default function CompositionPage() {
                   <div>
                     <label className="text-xs text-zinc-400 mb-1 block">Lifecycle</label>
                     <select value={ruleLifecycle} onChange={e => setRuleLifecycle(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors">
+                      className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors">
                       <option value="manual">Manual</option>
                       <option value="forever">Forever</option>
                       <option value="once">Once</option>
@@ -336,7 +336,7 @@ export default function CompositionPage() {
                   <div>
                     <label className="text-xs text-zinc-400 mb-1 block">Priority</label>
                     <input type="number" value={rulePriority} onChange={e => setRulePriority(parseInt(e.target.value) || 0)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors" />
+                      className="w-full bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors" />
                   </div>
                 </div>
                 <div>
@@ -347,7 +347,7 @@ export default function CompositionPage() {
                     </button>
                   </div>
                   <textarea value={dslSource} onChange={e => setDslSource(e.target.value)}
-                    className="w-full h-48 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 outline-none focus:border-emerald-500/50 transition-colors resize-none" />
+                    className="w-full h-48 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 outline-none focus:border-emerald-500/50 transition-colors resize-none" />
                 </div>
 
                 {validationResult && (
@@ -401,7 +401,7 @@ export default function CompositionPage() {
                 ) : (
                   <div className="space-y-2">
                     {history.slice(0, 50).map(h => (
-                      <div key={h.id} className="flex items-center justify-between bg-zinc-900/50 rounded-xl px-4 py-3">
+                      <div key={h.id} className="flex items-center justify-between bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] rounded-xl px-4 py-3">
                         <div className="flex items-center gap-3">
                           <StatusBadge status={h.status} />
                           <span className="text-xs text-zinc-300 font-mono">{h.action_name}</span>
