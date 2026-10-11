@@ -1,0 +1,48 @@
+[Unit]
+Description=RHEO background time tracker (always-on, no app required)
+Documentation=file://%h/.local/share/rheo-tracker/README.md
+
+# kdotool/gdbus talk to the compositor over the session bus, and Wayland window
+# titles are only visible once a graphical session exists. So order after the
+# graphical session when there is one, and keep running either way — at boot
+# with Linger=yes the unit starts before login, polls, finds nothing, and begins
+# working the instant a session appears. A tracker that exits on "no session"
+# would be a tracker that never runs.
+After=graphical-session.target
+Wants=graphical-session.target
+
+# Lives in [Unit], not [Service] — systemd logs "Unknown key ... ignoring" and the
+# restart-rate limit silently does not apply if it is put in the wrong section.
+# A tracker that cannot start must not be allowed to spin forever.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node %h/.local/share/rheo-tracker/daemon.mjs
+
+# The user manager environment already carries these, but they are pinned here so
+# the unit never depends on `systemctl --user import-environment` having run.
+Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus"
+Environment="XDG_RUNTIME_DIR=/run/user/%U"
+Environment="DISPLAY=:0"
+Environment="WAYLAND_DISPLAY=wayland-0"
+Environment="XDG_SESSION_TYPE=wayland"
+
+Restart=always
+RestartSec=5
+
+# Give up the open session on stop rather than losing it.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# A poll loop that shells out to kdotool is not a memory hog, but it should never
+# be able to starve the desktop during a build.
+MemoryMax=256M
+Nice=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rheo-tracker
+
+[Install]
+WantedBy=default.target

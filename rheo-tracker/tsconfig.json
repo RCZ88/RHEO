@@ -1,0 +1,18 @@
+{
+  "$comment": "Scoped typecheck for the daemon ONLY. Repo-wide `tsc --noEmit` on tsconfig.app.json reports 8,000+ pre-existing errors and takes minutes, so it cannot tell you whether this code is sound. Run: npx tsc --project rheo-tracker/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["src/**/*", "../src/linuxForeground.ts"]
+}
