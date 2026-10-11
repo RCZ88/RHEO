@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RHEO — visual harness</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+      html, body { margin: 0; background: #09090b; }
+      #root { min-height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!--
+      VISUAL HARNESS — test scaffolding, NOT part of the shipped app.
+
+      Purpose: run the real renderer in a plain browser (Probe electron-web mode)
+      so UI can be inspected WITHOUT launching an Electron app. Two problems this
+      solves:
+
+        1. The renderer reads `window.deskflowAPI`, which only exists in the real
+           preload. Probe's electron shim provides `window.electron`, a different
+           name, so the app never mounted and just sat on the fallback overlay.
+        2. `ipcRenderer.invoke` has no main process here. The stub resolves every
+           invoke so `await` never hangs — an app that awaits a pending promise
+           deadlocks at mount, which is exactly the symptom we saw.
+
+      It is a Proxy: any method name resolves, so it does not need to be kept in
+      sync with the ~950-key preload surface. Values that must be an object or an
+      array are special-cased, because callers do `result.data.map(...)` and a
+      bare `{}` would throw.
+
+      OVERRIDES: set window.__HARNESS_OVERRIDES = { channelName: value } from the
+      console (or via ?ovr=channelName) to control what a specific invoke returns.
+    -->
+    <script>
+      (function () {
+        var OVERRIDES = window.__HARNESS_OVERRIDES || {};
+
+        // Channels whose payload shape callers actually iterate over.
+        var ARRAY_CHANNELS = new Set([
+          'get-logs', 'get-terminal-sessions', 'get-problems', 'get-requests',
+          'get-presets', 'get-projects', 'get-dashboard-data', 'get-external-activities',
+          'list-workspaces', 'get-terminal-layouts', 'get-skills', 'get-user-dictionary',
+          'get-context-systems', 'get-sessions', 'get-goals', 'get-habits',
+        ]);
+        var OK_CHANNELS = new Set([
+          'get-storage-status', 'get-preferences', 'get-auto-start-status',
+          'get-context-dashboard', 'get-active-external-session', 'get-agent-config',
+        ]);
+
+        function listenerShim() {
+          // Every on* subscription in the preload returns an unsubscribe fn.
+          var noop = function () {};
+          return noop;
+        }
+
+        var cache = {};
+
+        function resolve(channel, args) {
+          if (Object.prototype.hasOwnProperty.call(OVERRIDES, channel)) {
+            return Promise.resolve(OVERRIDES[channel]);
+          }
+          if (channel in cache) return Promise.resolve(cache[channel]);
+          if (ARRAY_CHANNELS.has(channel)) return Promise.resolve({ success: true, data: [] });
+          if (OK_CHANNELS.has(channel)) return Promise.resolve({ success: true, data: {} });
+          // Default: a successful, non-throwing envelope. A truthy `success` keeps
+          // the renderer's error branches quiet; `data: []` satisfies .map/.forEach.
+          return Promise.resolve({ success: true, data: [], ok: true });
+        }
+
+        var api = new Proxy(
+          {},
+          {
+            get: function (_t, prop) {
+              if (typeof prop !== 'string') return undefined;
+              if (prop === 'then' || prop === Symbol.toPrimitive) return undefined; // not a thenable
+              if (/^on[A-Z]/.test(prop)) return listenerShim;
+              if (prop === 'invoke' || prop === 'send') return resolve;
+              if (prop === 'removeListener' || prop === 'off') return function () {};
+              if (prop === 'platform') return 'linux';
+              if (prop === 'versions') return { electron: '34.0.0', chrome: '130.0.0', node: '20.0.0' };
+              if (prop === 'isPackaged') return false;
+              // Everything else is treated as an IPC call that returns a promise.
+              return function (channel, ...args) { return resolve(String(prop), args); };
+            },
+            has: function () { return true; },
+          }
+        );
+
+        window.deskflowAPI = api;
+        // Some code paths reach for the raw bridge directly.
+        window.electron = window.electron || { ipcRenderer: { invoke: resolve, send: function () {}, on: listenerShim, removeListener: function () {} } };
+        window.__HARNESS_READY = true;
+      })();
+    </script>
+
+    <!--
+      Capture errors that happen while the module graph evaluates. The real
+      index.html swaps in a full-screen fallback overlay, which hides the
+      diagnostic; here we just record it so the failure can be read back.
+    -->
+    <script>
+      window.__HARNESS_ERRORS = [];
+      function record(kind, detail) {
+        try {
+          window.__HARNESS_ERRORS.push({
+            kind: kind,
+            message: (detail && (detail.message || detail)) || String(detail || ''),
+            stack: (detail && detail.stack) || null,
+            at: Date.now(),
+          });
+        } catch {}
+      }
+      window.addEventListener('error', function (e) {
+        record('error', e.error || e.message);
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) {
+        record('unhandledrejection', e.reason);
+      });
+    </script>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halo settings reference</title>
+<style>
+/* ===== Tokens and size table: identical to HALO_STATES.html ===== */
+[data-theme="dark"]{--base:#09090b;--raised:#18181b;--hover:#27272a;--hair:#2e2e33;--t1:#fafafa;--t2:#a1a1aa;--muted:#8b8b94;--signal:#6fb38f;--on:#09090b;--stage:#3b4252}
+[data-theme="warm"]{--base:#f7f4ec;--raised:#fffdf8;--hover:#efeadd;--hair:#e0d9c8;--t1:#1c1917;--t2:#57534e;--muted:#6f695f;--signal:#2f7d5b;--on:#fffdf8;--stage:#c9c3b4}
+[data-size="S"]{--w:480;--pad:8;--gap:8;--ct:48;--pg:14;--vd:36;--fl:11;--time:22;--f-track:14;--f-now:15;--f-dead:17;--f-stat:12;--f-body:11;--ic:12;--ch:28;--cp:12;--bar:61;--cbar:34;--tabtxt:0}
+[data-size="M"]{--w:560;--pad:12;--gap:8;--ct:56;--pg:16;--vd:44;--fl:11;--time:26;--f-track:16;--f-now:18;--f-dead:20;--f-stat:14;--f-body:12;--ic:14;--ch:32;--cp:14;--bar:72;--cbar:40;--tabtxt:12}
+[data-size="L"]{--w:680;--pad:16;--gap:12;--ct:64;--pg:19;--vd:52;--fl:12;--time:31;--f-track:19;--f-now:22;--f-dead:24;--f-stat:17;--f-body:14;--ic:17;--ch:40;--cp:17;--bar:86;--cbar:48;--tabtxt:14}
+*{box-sizing:border-box;margin:0}
+html{padding-top:env(safe-area-inset-top,0)}
+body{background:var(--base);color:var(--t1);font:14px/1.5 Inter,system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+/* ===== Settings screen (match the main Settings page .sf-* style when wiring) ===== */
+.dev{background:var(--hover);border-bottom:1px solid var(--hair);padding:8px 24px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--t2)}
+.dev b{font-weight:500;color:var(--t1);margin-right:8px}
+.chip{height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--hair);background:var(--raised);font-size:13px}
+.chip[aria-pressed="true"]{background:var(--hover);box-shadow:0 0 0 2px var(--signal);font-weight:500}
+.page{max-width:780px;margin:0 auto;padding:24px 24px 160px}
+h1{font-size:22px;font-weight:600;margin-bottom:4px}.lead{color:var(--t2);font-size:14px;margin-bottom:8px}
+.sec{background:var(--raised);border:1px solid var(--hair);border-radius:12px;margin:16px 0;overflow:hidden}
+.sec>.hd{padding:16px 16px 12px}
+.sec h2{font-size:15px;font-weight:500}.sec .sub{font-size:13px;color:var(--t2);margin-top:2px}
+.rx{min-height:56px;padding:6px 16px;display:flex;align-items:center;gap:12px;border-top:1px solid var(--hair);position:relative}
+.rx .tx{flex:1;min-width:0}.rx .nm{font-weight:500}.rx .ds{font-size:13px;color:var(--t2)}
+.sp{flex:1}
+.lock{color:var(--muted);font-size:13px;display:flex;gap:6px;align-items:center}
+.dis{pointer-events:none}.dis .nm,.dis .ds,.dis h2,.dis .sub{color:var(--muted)}
+.banner{padding:12px 16px;border-top:1px solid var(--hair);font-size:13px;display:flex;gap:12px;align-items:center;background:var(--hover)}
+.banner.err{box-shadow:inset 2px 0 0 var(--signal)}
+.btn{height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--hair);background:none;font-size:13px;font-weight:500}
+.btn:hover{background:var(--hover)}.btn:active{transform:scale(.97)}
+.btn.sig{background:var(--signal);color:var(--on);border-color:transparent}
+.ib{width:44px;height:44px;border-radius:999px;border:1px solid transparent;background:none;display:grid;place-items:center;color:var(--t2);flex:none}
+.ib:hover{background:var(--hover);color:var(--t1)}
+.ib svg,.i16{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.grip{cursor:grab;touch-action:none}.grip[aria-pressed="true"]{background:var(--hover);color:var(--t1);box-shadow:0 0 0 2px var(--signal)}
+/* switch: 44x44 hit area, 36x20 track */
+.sw{width:44px;height:44px;border:0;background:none;display:grid;place-items:center;flex:none}
+.sw i{width:36px;height:20px;border-radius:999px;background:var(--hover);border:1px solid var(--hair);position:relative;display:block}
+.sw i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--t2);transition:transform .15s cubic-bezier(.2,0,0,1)}
+.sw[aria-checked="true"] i{background:var(--signal);border-color:transparent}
+.sw[aria-checked="true"] i::after{transform:translateX(16px);background:var(--on)}
+.sw[aria-disabled="true"]{pointer-events:none}.sw[aria-disabled="true"] i{border-style:dashed}
+.swl{font-size:12px;color:var(--t2);display:flex;align-items:center}
+/* sortable rows */
+.srow.drag{background:var(--hover)}.srow.over{box-shadow:inset 0 2px 0 var(--signal)}
+.srow.gone .nm{color:var(--muted)}
+.menu{display:flex;gap:8px;padding:6px 16px 10px 72px;border-top:1px solid var(--hair);background:var(--hover)}
+/* size cards */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0 16px 16px}
+.card{border:1px solid var(--hair);border-radius:12px;background:var(--base);padding:12px;min-height:116px;display:flex;flex-direction:column;gap:8px;text-align:left}
+.card[aria-checked="true"]{box-shadow:0 0 0 2px var(--signal)}
+.card .mini{height:44px;display:flex;align-items:center}
+.card .mini div{border:1px solid var(--muted);border-radius:4px;background:var(--raised)}
+.card .t{font-weight:500}.card .d{font-size:12px;color:var(--t2)}
+/* position diagram */
+.screen{margin:0 16px 12px;height:150px;border:1px solid var(--hair);border-radius:8px;background:var(--base);position:relative;overflow:hidden;touch-action:none}
+.screen .bar{height:10px;background:var(--hover)}
+.screen .isl{position:absolute;height:14px;border-radius:4px;background:var(--signal);cursor:grab}
+.screen .isl:active{cursor:grabbing}
+.seg{display:flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden}
+.seg button{height:42px;padding:0 16px;border:0;background:none;font-size:13px}
+.seg button[aria-checked="true"]{background:var(--hover);font-weight:500;box-shadow:inset 0 0 0 2px var(--signal);border-radius:999px}
+input[type=range]{width:200px;accent-color:var(--signal);height:44px}
+select{height:44px;border-radius:8px;border:1px solid var(--hair);background:var(--base);color:var(--t1);padding:0 12px;font:inherit}
+/* preview (the real island) */
+.prev{padding:16px;border-top:1px solid var(--hair);background:var(--stage);display:flex;flex-direction:column;gap:12px;align-items:center;overflow-x:auto}
+.prev .halo{flex:none}
+.pvbar{display:flex;gap:8px;align-self:flex-start}
+.halo{width:calc(var(--w)*1px);padding:calc(var(--pad)*1px);border:1px solid var(--hair);border-radius:12px;background:var(--base);display:flex;flex-direction:column;gap:calc(var(--gap)*1px)}
+.content{height:calc(var(--ct)*1px);padding:0 4px;display:flex;align-items:center;gap:calc(var(--pg)*1px)}
+.blk{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lab{font:400 calc(var(--fl)*1px)/1.2 "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.vd{width:1px;height:calc(var(--vd)*1px);background:var(--hair);flex:none}
+.row{display:flex;align-items:center;gap:6px;min-width:0}
+.name{font-weight:500;white-space:nowrap}.f-now{font-size:calc(var(--f-now)*1px)}.f-track{font-size:calc(var(--f-track)*1px)}.f-dead{font-size:calc(var(--f-dead)*1px)}.f-stat{font-size:calc(var(--f-stat)*1px)}
+.sm{font-size:calc(var(--f-body)*1px);color:var(--muted);white-space:nowrap}
+.time{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:calc(var(--time)*1px);line-height:1.1;white-space:nowrap}.time i{font-style:normal;color:var(--muted)}
+.val{font-family:"JetBrains Mono",monospace;font-weight:500}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--signal);flex:none}
+.pbtn{width:44px;height:44px;border-radius:999px;border:1px solid var(--hair);display:grid;place-items:center;color:var(--t2);flex:none}
+.pbtn.fill{background:var(--signal);border-color:transparent;color:var(--on)}
+.usage{height:4px;border-radius:999px;background:var(--hover);overflow:hidden;width:calc(var(--bar)*1px)}.usage b{display:block;height:100%;background:var(--signal)}
+.tabs{height:44px;display:flex;border-radius:8px;background:var(--raised)}
+.tab{flex:1;height:44px;border:0;border-radius:8px;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;font:400 calc(var(--tabtxt)*1px) Inter,sans-serif}
+.tab[aria-selected="true"]{background:var(--hover);color:var(--t1);font-weight:500}
+[data-size="S"] .tab span{display:none}
+.pill{display:inline-flex;align-items:center;gap:8px;height:calc(var(--ch)*1px);padding:0 calc(var(--cp)*1px);border:1px solid var(--hair);border-radius:999px;background:var(--base);font-size:calc(var(--f-body)*1px);white-space:nowrap}
+.pill .vd{height:calc(var(--f-body)*1px)}.pill .time{font-size:calc(var(--f-body)*1px)}
+svg.i{width:calc(var(--ic)*1px);height:calc(var(--ic)*1px);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.t2{color:var(--t2)}.mut{color:var(--muted)}
+.sk{display:block;height:calc(var(--f-now)*1px);border-radius:4px;background:var(--hover)}
+/* spec */
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-top:1px solid var(--hair);padding:8px 16px;text-align:left;vertical-align:top}th{font-weight:500;color:var(--t2)}
+pre{font:12px/1.5 "JetBrains Mono",monospace;padding:12px 16px;background:var(--base);overflow:auto;border-top:1px solid var(--hair);max-height:220px}
+code{font-family:"JetBrains Mono",monospace;font-size:12px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--hover);border:1px solid var(--hair);border-radius:12px;padding:8px 8px 8px 16px;display:flex;gap:12px;align-items:center;font-size:13px}
+.sr{position:absolute;left:-9999px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="dev" role="group" aria-label="Reference tools"><b>Reference tools (not part of the screen)</b>
+<button class="chip" data-dev="theme" aria-pressed="false">Warm Paper</button>
+<button class="chip" data-dev="notch" aria-pressed="false">Pretend this Mac has a notch</button>
+<button class="chip" data-dev="fail" aria-pressed="false">Make saving fail</button></div>
+<main class="page" id="app"></main>
+<div class="sr" aria-live="assertive" id="live"></div>
+<script>
+var IC={
+ grip:'<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>',
+ more:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+ up:'<path d="m18 15-6-6-6 6"/>',down:'<path d="m6 9 6 6 6-6"/>',
+ timer:'<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>',
+ win:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',
+ cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
+ grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+ bot:'<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+ term:'<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+ alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+ lockI:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+ globe:'<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+ reset:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+ pause:'<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+ mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>',
+ arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>'};
+function ic(n,c){return '<svg class="'+(c||'i16')+'" viewBox="0 0 24 24" aria-hidden="true">'+IC[n]+'</svg>';}
+var PAGES={focus:{n:'Focus',i:'timer',d:'Stopwatch, what is being tracked, productive time'},now:{n:'Now',i:'win',d:'Current app and website, AI usage'},deadlines:{n:'Deadlines',i:'cal',d:'Next deadline and open count'},tools:{n:'Tools',i:'grid',d:'Dictation and console'}};
+var KINDS={stopwatch:{n:'Stopwatch',i:'timer',d:'Session time and what it is tracking'},now:{n:'Current app and website',i:'win',d:'What you are using right now'},aiUsage:{n:'AI usage',i:'bot',d:'Share of today\'s AI budget used'},nextDeadline:{n:'Next deadline',i:'cal',d:'Your closest open deadline'},hud:{n:'Console',i:'term',d:'Running console sessions'}};
+var DEF={enabled:true,scale:1,pages:{order:['focus','now','deadlines','tools'],hidden:[],open:'last'},pill:{resident:'stopwatch'},widgets:{now:{compact:true},aiUsage:{compact:true},nextDeadline:{compact:true},hud:{compact:true}},anchor:'center',offsetY:8,displayId:null,trigger:{mode:'hover',openDelayMs:110,closeDelayMs:280,leaveMarginPx:24}};
+var S=JSON.parse(JSON.stringify(DEF)),UI={theme:'dark',notch:false,fail:false,adv:false,menu:null,lift:null,pv:'expanded',pvPage:'focus',log:[],failed:null,toast:null,drag:null,over:null};
+var SIZE={0.85:'S',1:'M',1.2:'L'};var sz=function(){return SIZE[S.scale]||'M';};
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function say(t){document.getElementById('live').textContent=t;}
+/* ===== save: apply optimistic, never lose the user's value ===== */
+function save(patch,label){UI.log.unshift((UI.fail?'FAILED  ':'saved   ')+JSON.stringify(patch));UI.log=UI.log.slice(0,6);UI.failed=UI.fail?{patch:patch,label:label}:null;}
+function set(fn,patch,label){fn();save(patch,label);render();}
+/* ===== preview island ===== */
+function lab(s){return '<span class="lab">'+s+'</span>';}function vd(){return '<span class="vd"></span>';}
+function nr(i,n,t,c){return '<div class="row"><span class="t2">'+ic(i,'i')+'</span><span class="name '+c+'">'+n+'</span>'+(t?'<span class="sm">'+t+'</span>':'')+'</div>';}
+function pbtn(i,f){return '<span class="pbtn'+(f?' fill':'')+'">'+ic(i)+'</span>';}
+function pageBody(p){
+ if(p==='focus')return '<div class="blk"><div class="row"><span class="dot"></span>'+lab('Stopwatch')+'</div><span class="time"><i>00:</i>42:18</span></div>'+vd()+'<div class="blk">'+lab('Tracking')+nr('win','Figma','','f-track')+'</div>'+vd()+'<div class="blk">'+lab('Productive')+'<span class="val t2 f-track">3:12:40</span></div><span class="sp"></span>'+pbtn('reset')+pbtn('pause',1);
+ if(p==='now')return '<div class="blk">'+lab('App')+nr('win','Figma','18 min','f-now')+'</div>'+vd()+'<div class="blk">'+lab('Website')+nr('globe','github.com','6 min','f-now')+'</div>'+vd()+'<div class="blk">'+lab('AI usage')+'<div class="row" style="gap:10px"><span class="val f-now">62%</span><span class="usage"><b style="width:62%"></b></span></div></div>';
+ if(p==='deadlines')return '<div class="blk">'+lab('Next deadline')+'<span class="name f-dead">IT DIV Test</span></div>'+vd()+'<div class="blk">'+lab('Status')+'<span class="name f-stat">34 days overdue</span></div>'+vd()+'<div class="blk">'+lab('Open')+'<span class="val f-dead">4</span></div><span class="sp"></span>'+pbtn('arrow');
+ return '<div class="row" style="gap:12px">'+pbtn('mic')+'<div class="blk"><span class="name f-stat">Dictation</span><span class="sm">Tap to start</span></div></div>'+vd()+'<div class="row" style="gap:12px">'+pbtn('term')+'<div class="blk"><span class="name f-stat">Console</span><span class="sm">penguin-console, 3 sessions</span></div></div>';}
+function visPages(){return S.pages.order.filter(function(p){return S.pages.hidden.indexOf(p)<0;});}
+function expanded(){var v=visPages();var cur=v.indexOf(UI.pvPage)<0?v[0]:UI.pvPage;
+ var tabs=v.length>1?'<div class="tabs" role="tablist">'+v.map(function(p){return '<button class="tab" role="tab" data-pv="'+p+'" aria-selected="'+(p===cur)+'" aria-label="'+PAGES[p].n+'">'+ic(PAGES[p].i)+'<span>'+PAGES[p].n+'</span></button>';}).join('')+'</div>':'';
+ return '<div class="halo"><div class="content">'+pageBody(cur)+'</div>'+tabs+'</div>';}
+function pill(){var k=S.pill.resident;var m={
+ stopwatch:'<span class="dot"></span><span class="time"><i>00:</i>42:18</span>'+vd()+'<span class="t2">Figma</span>',
+ now:'<span class="t2">'+ic('win','i')+'</span><span class="name">Figma</span><span class="mut">18 min</span>',
+ aiUsage:'<span class="t2">'+ic('bot','i')+'</span><span class="usage" style="width:calc(var(--cbar)*1px)"><b style="width:62%"></b></span><span class="val">62%</span>',
+ nextDeadline:'<span>'+ic('cal','i')+'</span><span class="t2">IT DIV Test</span><span class="name">34d overdue</span>',
+ hud:'<span class="t2">'+ic('term','i')+'</span><span class="name">penguin-console</span><span class="mut mono">3</span>'}[k];
+ return '<span class="pill">'+m+'</span>';}
+/* ===== controls ===== */
+function sw(id,on,label,dis){return '<button class="sw" role="switch" aria-checked="'+on+'" aria-label="'+esc(label)+'" data-sw="'+id+'" data-fid="sw-'+id+'"'+(dis?' aria-disabled="true"':'')+'><i></i></button>';}
+function pagesList(){return S.pages.order.map(function(p,i){var hid=S.pages.hidden.indexOf(p)>=0;var last=!hid&&visPages().length===1;
+ var lifted=UI.lift&&UI.lift.id===p;
+ return '<div class="rx srow'+(hid?' gone':'')+(UI.drag===p?' drag':'')+(UI.over===p?' over':'')+'" draggable="true" data-row="'+p+'" role="listitem">'+
+ '<button class="ib grip" data-grip="'+p+'" data-fid="grip-'+p+'" aria-pressed="'+!!lifted+'" aria-label="'+(lifted?'Drop '+PAGES[p].n+' here':'Move '+PAGES[p].n+'. Position '+(i+1)+' of 4. Press Space to pick up, arrow keys to move, Space to drop, Escape to cancel.')+'">'+ic('grip')+'</button>'+
+ '<span class="t2">'+ic(PAGES[p].i)+'</span><div class="tx"><div class="nm">'+PAGES[p].n+(p==='focus'?' <span class="mut" style="font-weight:400;font-size:12px">has the stopwatch</span>':'')+'</div><div class="ds">'+PAGES[p].d+'</div></div>'+
+ '<span class="swl">'+(last?'Last one, keep it on':'Show')+'</span>'+sw('pg-'+p,!hid,'Show the '+PAGES[p].n+' page',last)+
+ '<button class="ib" data-more="'+p+'" data-fid="more-'+p+'" aria-label="More actions for '+PAGES[p].n+'" aria-expanded="'+(UI.menu===p)+'">'+ic('more')+'</button></div>'+
+ (UI.menu===p?'<div class="menu"><button class="btn" data-mv="'+p+':-1"'+(i===0?' disabled':'')+'>Move up</button><button class="btn" data-mv="'+p+':1"'+(i===3?' disabled':'')+'>Move down</button><button class="btn" data-mv="'+p+':top"'+(i===0?' disabled':'')+'>Move to top</button></div>':'');}).join('');}
+function pillList(){return Object.keys(KINDS).map(function(k){var res=S.pill.resident===k;var on=res||!S.widgets[k]||S.widgets[k].compact!==false;
+ return '<div class="rx" role="radio" aria-checked="'+res+'" tabindex="0" data-res="'+k+'" data-fid="res-'+k+'">'+
+ '<span style="width:20px;height:20px;border-radius:50%;border:2px solid '+(res?'var(--signal)':'var(--muted)')+';display:grid;place-items:center;flex:none">'+(res?'<i style="width:10px;height:10px;border-radius:50%;background:var(--signal)"></i>':'')+'</span>'+
+ '<span class="t2">'+ic(KINDS[k].i)+'</span><div class="tx"><div class="nm">'+KINDS[k].n+(res?' <span class="mut" style="font-weight:400;font-size:12px">main item</span>':'')+'</div><div class="ds">'+KINDS[k].d+'</div></div>'+
+ (res?'<span class="swl">Always shown</span>':'<span class="swl">Can appear</span>')+sw('pill-'+k,on,'Let '+KINDS[k].n+' appear in the pill',res)+'</div>';}).join('')+
+ '<div class="rx"><span style="width:20px"></span><span style="color:var(--signal)">'+ic('alert')+'</span><div class="tx"><div class="nm">Overdue alerts</div><div class="ds">Always take over the pill when a deadline is overdue.</div></div><span class="lock">'+ic('lockI')+' Always on</span></div>';}
+function sizeCards(){var o=[[0.85,'Small','480 wide, icon tabs'],[1,'Medium','560 wide, the default'],[1.2,'Large','680 wide, bigger type']],w={S:141,M:165,L:200};
+ return '<div class="cards" role="radiogroup" aria-label="Island size">'+o.map(function(x){var k=SIZE[x[0]],on=S.scale===x[0];return '<button class="card" role="radio" aria-checked="'+on+'" data-size="'+x[0]+'" data-fid="size-'+k+'" tabindex="'+(on?0:-1)+'"><div class="mini"><div style="width:'+w[k]+'px;height:'+Math.round({S:118,M:134,L:154}[k]*w[k]/(k==='S'?480:k==='M'?560:680))+'px"></div></div><span class="t">'+x[1]+'</span><span class="d">'+x[2]+'</span></button>';}).join('')+'</div>';}
+function posBlock(){var sc=0.4,W=600,isw=Math.round({S:480,M:560,L:680}[sz()]*sc*0.5),left=S.anchor==='left'?8:S.anchor==='right'?W-isw-8:Math.round((W-isw)/2);
+ var dis=UI.notch;
+ return '<div class="screen'+(dis?' dis':'')+'" id="screen" aria-hidden="true" style="max-width:'+W+'px"><div class="bar"></div><div class="isl" id="isl" style="width:'+isw+'px;left:'+left+'px;top:'+(10+Math.round(S.offsetY*0.6))+'px"></div></div>'+
+ '<div class="rx'+(dis?' dis':'')+'"><div class="tx"><div class="nm">Where on the top edge</div><div class="ds">'+(dis?'This Mac has a notch. The island stays centered and flush with the top edge.':'Drag the island above, or pick a side.')+'</div></div><div class="seg" role="radiogroup" aria-label="Horizontal position">'+['left','center','right'].map(function(a){return '<button role="radio" aria-checked="'+(S.anchor===a)+'" data-anc="'+a+'" data-fid="anc-'+a+'">'+a[0].toUpperCase()+a.slice(1)+'</button>';}).join('')+'</div></div>'+
+ '<div class="rx'+(dis?' dis':'')+'"><div class="tx"><div class="nm">Gap below the top edge</div><div class="ds">Windows and Linux only. Keep clear of your top bar.</div></div><input type="range" min="0" max="64" step="4" value="'+S.offsetY+'" id="gap" aria-label="Gap below the top edge in pixels" data-fid="gap"><span class="mono" style="width:48px;text-align:right">'+S.offsetY+' px</span></div>'+
+ '<div class="rx"><div class="tx"><div class="nm">Display</div><div class="ds">Which screen the island lives on.</div></div><select id="disp" aria-label="Display" data-fid="disp"><option value="">Main display</option><option value="2"'+(S.displayId==='2'?' selected':'')+'>Display 2 (2560 x 1440)</option></select></div>';}
+function sec(t,sub,body,dis,id){return '<section class="sec'+(dis?' dis':'')+'" aria-labelledby="h-'+t+'"><div class="hd"><h2 id="h-'+t+'">'+t+'</h2><p class="sub">'+sub+'</p></div>'+body+'</section>';}
+function render(){
+ var f=document.activeElement&&document.activeElement.dataset&&document.activeElement.dataset.fid;
+ document.documentElement.dataset.theme=UI.theme;var off=!S.enabled;
+ var h='<h1>Halo Island</h1><p class="lead">Choose what the island shows, in what order, how big it is, and where it sits.</p>';
+ h+=sec('General','',
+  '<div class="rx"><div class="tx"><div class="nm">Show Halo Island</div><div class="ds">Press Cmd+Shift+H to open or close it from any app.</div></div>'+sw('enabled',S.enabled,'Show Halo Island')+'</div>'+
+  (UI.failed?'<div class="banner err" role="alert"><span>Settings could not be saved because the settings file is locked. Your change is still applied here. Retry.</span><span class="sp"></span><button class="btn" data-retry="1" data-fid="retry">Retry</button></div>':''),0);
+ if(off)h+='<div class="banner" style="border:1px solid var(--hair);border-radius:12px;margin:16px 0">Halo Island is off. Turn it on to change these settings.</div>';
+ var prevBody='<div class="pvbar" role="group" aria-label="Preview mode"><button class="chip" data-pv-mode="expanded" aria-pressed="'+(UI.pv==='expanded')+'">Open</button><button class="chip" data-pv-mode="compact" aria-pressed="'+(UI.pv==='compact')+'">Pill</button></div>'+(UI.pv==='compact'?pill():expanded());
+ h+='<section class="sec'+(off?' dis':'')+'" aria-label="Preview"><div class="hd"><h2>Preview</h2><p class="sub">This is the real island at your size. It updates as you change things. Sample data.</p></div><div class="prev" data-size="'+sz()+'">'+prevBody+'</div></section>';
+ h+=sec('Pages','Drag to reorder. The stopwatch lives on the Focus page, so moving Focus moves the stopwatch.',
+  '<div role="list" aria-label="Pages" id="plist">'+pagesList()+'</div><div class="rx"><div class="tx"><div class="nm">Open on</div><div class="ds">Which page shows when the island opens.</div></div><select id="open" aria-label="Open on" data-fid="open"><option value="last"'+(S.pages.open==='last'?' selected':'')+'>The last page I used</option>'+S.pages.order.map(function(p){return '<option value="'+p+'"'+(S.pages.open===p?' selected':'')+'>'+PAGES[p].n+'</option>';}).join('')+'</select></div>',off);
+ h+=sec('The pill','What the small island shows when it is closed. Pick one main item. Others can appear when they have something to say.','<div role="radiogroup" aria-label="Main item in the pill">'+pillList()+'</div>',off);
+ h+=sec('Size','One size for everything on the island. Text never goes below 11 px and buttons stay 44 px.',sizeCards(),off);
+ h+=sec('Position','',posBlock(),off);
+ h+=sec('Opening','',
+  '<div class="rx"><div class="tx"><div class="nm">Open the island when I</div><div class="ds">The shortcut Cmd+Shift+H always works.</div></div><div class="seg" role="radiogroup" aria-label="Open the island when I">'+['hover','click'].map(function(m){return '<button role="radio" aria-checked="'+(S.trigger.mode===m)+'" data-trig="'+m+'" data-fid="trig-'+m+'">'+(m==='hover'?'Point at it':'Click it')+'</button>';}).join('')+'</div></div>',off);
+ h+='<section class="sec'+(off?' dis':'')+'"><div class="hd"><h2>Advanced</h2><p class="sub">Timing and reset.</p></div>'+
+  '<div class="rx"><div class="tx"><div class="nm">Timing and edge</div><div class="ds">Open delay, close delay, how far the pointer can drift.</div></div><button class="btn" data-adv="1" aria-expanded="'+UI.adv+'" data-fid="adv">'+(UI.adv?'Hide':'Show')+'</button></div>'+
+  (UI.adv?['openDelayMs|Open delay|0|600|10','closeDelayMs|Close delay|0|1000|10','leaveMarginPx|Leave margin|0|64|4'].map(function(x){x=x.split('|');return '<div class="rx"><div class="tx"><div class="nm">'+x[1]+'</div></div><input type="range" min="'+x[2]+'" max="'+x[3]+'" step="'+x[4]+'" value="'+S.trigger[x[0]]+'" data-tm="'+x[0]+'" aria-label="'+x[1]+'" data-fid="tm-'+x[0]+'"><span class="mono" style="width:64px;text-align:right">'+S.trigger[x[0]]+(x[0]==='leaveMarginPx'?' px':' ms')+'</span></div>';}).join(''):'')+
+  '<div class="rx"><div class="tx"><div class="nm">Reset Halo Island</div><div class="ds">Puts every setting on this screen back to its default.</div></div><button class="btn" data-reset="1" data-fid="reset">Reset to defaults</button></div></section>';
+ h+=specSection();
+ if(UI.toast)h+='<div class="toast" role="status"><span>'+UI.toast.t+'</span><button class="btn" data-undo="1" data-fid="undo">Undo</button></div>';
+ document.getElementById('app').innerHTML=h;
+ document.querySelectorAll('.dev [data-dev]').forEach(function(b){var k=b.dataset.dev;b.setAttribute('aria-pressed',k==='theme'?UI.theme==='warm':UI[k]);});
+ if(f){var el=document.querySelector('[data-fid="'+f+'"]');if(el)el.focus();}
+}
+function specSection(){var rows=[
+ ['Show Halo Island','enabled','{ "enabled": false }'],['Size','scale','{ "scale": 1.2 }  (0.85 / 1 / 1.2)'],['Reorder pages','pages.order','{ "pages": { "order": ["now","focus","deadlines","tools"] } }'],
+ ['Hide a page','pages.hidden','{ "pages": { "hidden": ["tools"] } }  (never all four)'],['Open on','pages.open','{ "pages": { "open": "last" | "focus" | ... } }'],
+ ['Main pill item','pill.resident','{ "pill": { "resident": "now" } }'],['Can appear in pill','widgets[k].compact','{ "widgets": { "hud": { "compact": false } } }'],
+ ['Position','anchor, offsetY, displayId','{ "anchor": "left" }  { "offsetY": 16 }  { "displayId": "2" }'],['Open mode','trigger.mode','{ "trigger": { "mode": "click" } }'],['Timing','trigger.*','{ "trigger": { "openDelayMs": 110 } }'],['Reset','all','the full DEF object']];
+ return '<section class="sec"><div class="hd"><h2>Reference: pref patch per control</h2><p class="sub">Each control writes exactly this patch. Merge it, then run normalizeHaloPrefs. Keys marked new do not exist in HaloPrefs yet: pages, pill.resident, anchor, offsetY.</p></div><table><tr><th>Control</th><th>Key</th><th>Patch</th></tr>'+rows.map(function(r){return '<tr><td>'+r[0]+'</td><td><code>'+r[1]+'</code></td><td><code>'+esc(r[2])+'</code></td></tr>';}).join('')+'</table>'+
+ '<div class="hd"><h2>Live patch log</h2></div><pre>'+(UI.log.length?esc(UI.log.join('\n')):'Change a control to see its patch.')+'</pre></section>'+
+ '<section class="sec"><div class="hd"><h2>Reference: keyboard</h2></div><table><tr><th>Where</th><th>Keys</th></tr><tr><td>Everything</td><td>Tab and Shift+Tab move through controls. Space or Enter presses buttons and flips switches.</td></tr><tr><td>Page grip</td><td>Space picks up. Up and Down arrows move it, and it is announced ("Now, position 1 of 4"). Space drops. Escape puts it back.</td></tr><tr><td>More menu</td><td>Enter opens Move up, Move down, Move to top. This is the non-drag way to reorder.</td></tr><tr><td>Size, position, open mode</td><td>Left and Right arrows change the choice, Tab leaves the group.</td></tr><tr><td>Pill main item</td><td>Space or Enter chooses it.</td></tr></table></section>';}
+/* ===== events ===== */
+document.addEventListener('click',function(e){
+ var d=e.target.closest('[data-dev]');if(d){var k=d.dataset.dev;if(k==='theme')UI.theme=UI.theme==='dark'?'warm':'dark';else UI[k]=!UI[k];render();return;}
+ var b=e.target.closest('button,[data-res]');if(!b)return;
+ if(b.dataset.sw){var id=b.dataset.sw;
+  if(id==='enabled')return set(function(){S.enabled=!S.enabled;},{enabled:S.enabled},'');
+  if(id.indexOf('pg-')===0){var p=id.slice(3),h=S.pages.hidden;return set(function(){if(h.indexOf(p)>=0)h.splice(h.indexOf(p),1);else if(visPages().length>1)h.push(p);},{pages:{hidden:S.pages.hidden.slice()}});}
+  if(id.indexOf('pill-')===0){var kk=id.slice(5);return set(function(){S.widgets[kk]=S.widgets[kk]||{};S.widgets[kk].compact=!(S.widgets[kk].compact!==false);},{widgets:(function(){var o={};o[kk]={compact:S.widgets[kk].compact};return o;})()});}}
+ if(b.dataset.res)return set(function(){S.pill.resident=b.dataset.res;},{pill:{resident:b.dataset.res}});
+ if(b.dataset.size)return set(function(){S.scale=parseFloat(b.dataset.size);},{scale:parseFloat(b.dataset.size)});
+ if(b.dataset.anc)return set(function(){S.anchor=b.dataset.anc;},{anchor:b.dataset.anc});
+ if(b.dataset.trig)return set(function(){S.trigger.mode=b.dataset.trig;},{trigger:{mode:b.dataset.trig}});
+ if(b.dataset.more){UI.menu=UI.menu===b.dataset.more?null:b.dataset.more;return render();}
+ if(b.dataset.mv){var q=b.dataset.mv.split(':'),o=S.pages.order,i=o.indexOf(q[0]);return set(function(){o.splice(i,1);o.splice(q[1]==='top'?0:Math.max(0,Math.min(3,i+parseInt(q[1]))),0,q[0]);},{pages:{order:o.slice()}});}
+ if(b.dataset.pvMode){UI.pv=b.dataset.pvMode;return render();}
+ if(b.dataset.pv){UI.pvPage=b.dataset.pv;return render();}
+ if(b.dataset.adv){UI.adv=!UI.adv;return render();}
+ if(b.dataset.retry){UI.fail=false;save(UI.failed.patch);UI.failed=null;return render();}
+ if(b.dataset.reset){UI.undo=JSON.parse(JSON.stringify(S));S=JSON.parse(JSON.stringify(DEF));UI.toast={t:'Halo Island is back to its defaults.'};save({reset:true});render();return;}
+ if(b.dataset.undo){S=UI.undo;UI.toast=null;save({undo:true});render();return;}
+});
+document.addEventListener('change',function(e){var t=e.target;
+ if(t.id==='open')return set(function(){S.pages.open=t.value;},{pages:{open:t.value}});
+ if(t.id==='disp')return set(function(){S.displayId=t.value||null;},{displayId:S.displayId});});
+document.addEventListener('input',function(e){var t=e.target;
+ if(t.id==='gap'){S.offsetY=+t.value;save({offsetY:S.offsetY});render();}
+ if(t.dataset.tm){S.trigger[t.dataset.tm]=+t.value;save({trigger:(function(){var o={};o[t.dataset.tm]=+t.value;return o;})()});render();}});
+/* keyboard: grip lift, radiogroup arrows, radio rows */
+document.addEventListener('keydown',function(e){var g=e.target.closest('[data-grip]');
+ if(g){var p=g.dataset.grip,o=S.pages.order,i=o.indexOf(p);
+  if(e.key===' '||e.key==='Enter'){e.preventDefault();if(UI.lift){UI.lift=null;save({pages:{order:o.slice()}});say(PAGES[p].n+' dropped at position '+(i+1)+' of 4.');}else{UI.lift={id:p,from:i};say(PAGES[p].n+' picked up. Position '+(i+1)+' of 4. Use arrow keys.');}render();return;}
+  if(UI.lift&&(e.key==='ArrowUp'||e.key==='ArrowDown')){e.preventDefault();var n=i+(e.key==='ArrowUp'?-1:1);if(n<0||n>3)return;o.splice(i,1);o.splice(n,0,p);say(PAGES[p].n+', position '+(n+1)+' of 4.');render();return;}
+  if(UI.lift&&e.key==='Escape'){e.preventDefault();o.splice(o.indexOf(p),1);o.splice(UI.lift.from,0,p);UI.lift=null;say('Move cancelled.');render();return;}}
+ var r=e.target.closest('[data-res]');if(r&&(e.key===' '||e.key==='Enter')){e.preventDefault();r.click();}
+ var rg=e.target.closest('[data-size],[data-anc],[data-trig]');if(rg&&(e.key==='ArrowRight'||e.key==='ArrowLeft')){e.preventDefault();var grp=[].slice.call(rg.parentNode.children),j=grp.indexOf(rg)+(e.key==='ArrowRight'?1:-1);j=(j+grp.length)%grp.length;grp[j].click();}
+ if(e.key==='Escape'&&UI.menu){UI.menu=null;render();}});
+/* pointer drag-reorder (the real build uses @dnd-kit/sortable; same result) */
+document.addEventListener('dragstart',function(e){var r=e.target.closest('[data-row]');if(!r)return;UI.drag=r.dataset.row;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',UI.drag);});
+document.addEventListener('dragover',function(e){var r=e.target.closest('[data-row]');if(!r||!UI.drag)return;e.preventDefault();if(UI.over!==r.dataset.row){UI.over=r.dataset.row;[].forEach.call(document.querySelectorAll('.srow'),function(x){x.classList.toggle('over',x.dataset.row===UI.over&&UI.over!==UI.drag);});}});
+document.addEventListener('drop',function(e){var r=e.target.closest('[data-row]');if(!r||!UI.drag)return;e.preventDefault();var o=S.pages.order,a=UI.drag,b=r.dataset.row;if(a!==b){var ia=o.indexOf(a),ib=o.indexOf(b);o.splice(ia,1);o.splice(ib,0,a);UI.drag=UI.over=null;save({pages:{order:o.slice()}});say(PAGES[a].n+' moved to position '+(ib+1)+' of 4.');render();}else{UI.drag=UI.over=null;render();}});
+document.addEventListener('dragend',function(){UI.drag=UI.over=null;render();});
+/* position diagram drag: move freely, snap on release */
+document.addEventListener('pointerdown',function(e){var isl=e.target.closest('#isl');if(!isl||UI.notch)return;var sc=document.getElementById('screen');isl.setPointerCapture(e.pointerId);var fx=0,fy=S.offsetY;
+ function mv(ev){var r=sc.getBoundingClientRect();fx=(ev.clientX-r.left)/r.width;fy=Math.max(0,Math.min(64,Math.round((ev.clientY-r.top-10)/0.6/4)*4));isl.style.left=Math.max(0,Math.min(r.width-isl.offsetWidth,fx*r.width-isl.offsetWidth/2))+'px';isl.style.top=(10+Math.round(fy*0.6))+'px';}
+ function up(){isl.removeEventListener('pointermove',mv);isl.removeEventListener('pointerup',up);S.anchor=fx<0.33?'left':fx>0.66?'right':'center';S.offsetY=fy;save({anchor:S.anchor,offsetY:S.offsetY});render();}
+ isl.addEventListener('pointermove',mv);isl.addEventListener('pointerup',up);});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-size="M">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halo states reference</title>
+<style>
+/* Tokens. Same names as Figma variables. */
+[data-theme="dark"]{--base:#09090b;--raised:#18181b;--hover:#27272a;--hair:#2e2e33;--t1:#fafafa;--t2:#a1a1aa;--muted:#8b8b94;--signal:#6fb38f;--on:#09090b;--stage:#3b4252}
+[data-theme="warm"]{--base:#f7f4ec;--raised:#fffdf8;--hover:#efeadd;--hair:#e0d9c8;--t1:#1c1917;--t2:#57534e;--muted:#6f695f;--signal:#2f7d5b;--on:#fffdf8;--stage:#c9c3b4}
+/* Size table. One block per setting. Same numbers as HALO_SPEC_v3.md section 3. */
+[data-size="S"]{--w:480;--pad:8;--gap:8;--ct:48;--pg:14;--vd:36;--fl:11;--time:22;--f-track:14;--f-now:15;--f-dead:17;--f-stat:12;--f-body:11;--ic:12;--ch:28;--cp:12;--bar:61;--cbar:34;--tabtxt:0;--maxn:160}
+[data-size="M"]{--w:560;--pad:12;--gap:8;--ct:56;--pg:16;--vd:44;--fl:11;--time:26;--f-track:16;--f-now:18;--f-dead:20;--f-stat:14;--f-body:12;--ic:14;--ch:32;--cp:14;--bar:72;--cbar:40;--tabtxt:12;--maxn:200}
+[data-size="L"]{--w:680;--pad:16;--gap:12;--ct:64;--pg:19;--vd:52;--fl:12;--time:31;--f-track:19;--f-now:22;--f-dead:24;--f-stat:17;--f-body:14;--ic:17;--ch:40;--cp:17;--bar:86;--cbar:48;--tabtxt:14;--maxn:240}
+*{box-sizing:border-box;margin:0}
+html{padding-top:env(safe-area-inset-top,0)}
+body{background:var(--stage);color:var(--t1);font:14px/1.5 Inter,system-ui,sans-serif;padding:24px}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+h1{font-size:18px;font-weight:500}h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:32px 0 12px;font-family:"JetBrains Mono",monospace;font-weight:400}
+.note{font-size:13px;opacity:1;color:var(--t1);max-width:720px;margin:4px 0 0}
+.bar{display:flex;gap:8px;margin:16px 0}
+.bar button{height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--hair);background:var(--raised);color:var(--t1);font:inherit;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--hover);font-weight:500;box-shadow:0 0 0 2px var(--signal)}
+.cap{font:400 11px "JetBrains Mono",monospace;color:var(--t1);margin:12px 0 6px}
+/* Expanded */
+.halo{width:calc(var(--w)*1px);padding:calc(var(--pad)*1px);border:1px solid var(--hair);border-radius:12px;background:var(--base);display:flex;flex-direction:column;gap:calc(var(--gap)*1px)}
+.content{height:calc(var(--ct)*1px);padding:0 4px;display:flex;align-items:center;gap:calc(var(--pg)*1px)}
+.blk{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lab{font:400 calc(var(--fl)*1px)/1.2 "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.vd{width:1px;height:calc(var(--vd)*1px);background:var(--hair);flex:none}
+.sp{flex:1}
+.row{display:flex;align-items:center;gap:6px;min-width:0}
+.name{font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.f-track{font-size:calc(var(--f-track)*1px)}.f-now{font-size:calc(var(--f-now)*1px)}.f-dead{font-size:calc(var(--f-dead)*1px)}.f-stat{font-size:calc(var(--f-stat)*1px)}
+.sm{font-size:calc(var(--f-body)*1px);color:var(--muted);white-space:nowrap}
+.t2{color:var(--t2)}.t1{color:var(--t1)}.mut{color:var(--muted)}
+.time{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:calc(var(--time)*1px);line-height:1.1;color:var(--t1);white-space:nowrap}
+.time i{font-style:normal;color:var(--muted)}
+.val{font-family:"JetBrains Mono",monospace;font-weight:500;color:var(--t1)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--signal);flex:none}.dot.off{background:var(--muted)}
+svg.i{width:calc(var(--ic)*1px);height:calc(var(--ic)*1px);flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.i16{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn{width:44px;height:44px;border-radius:999px;border:1px solid var(--hair);background:none;color:var(--t2);display:grid;place-items:center;cursor:pointer;flex:none}
+.btn.fill{background:var(--signal);border-color:transparent;color:var(--on)}
+.btn:hover{background:var(--raised)}.btn.fill:hover{outline:1px solid var(--t1)}
+.btn:active{transform:scale(.96)}
+.btn:focus-visible,.tab:focus-visible{outline:2px solid var(--signal);outline-offset:0}
+.usage{height:4px;border-radius:999px;background:var(--hover);overflow:hidden;width:calc(var(--bar)*1px)}.usage b{display:block;height:100%;background:var(--signal)}
+/* Tabs */
+.tabs{height:44px;display:flex;border-radius:8px;background:var(--raised)}
+.tab{flex:1;height:44px;border:0;border-radius:8px;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;font:400 calc(var(--tabtxt)*1px) Inter,sans-serif;cursor:pointer}
+.tab:hover{background:var(--hover);color:var(--t2)}
+.tab[aria-selected="true"]{background:var(--hover);color:var(--t1);font-weight:500}
+[data-size="S"] .tab span{display:none}
+/* Compact */
+.pill{display:inline-flex;align-items:center;gap:8px;height:calc(var(--ch)*1px);padding:0 calc(var(--cp)*1px);border:1px solid var(--hair);border-radius:999px;background:var(--base);font-size:calc(var(--f-body)*1px);white-space:nowrap;color:var(--t1)}
+.pill.crit{border-color:var(--signal)}
+.pill .vd{height:calc(var(--f-body)*1px)}
+.pill .n{max-width:140px;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.pill .time{font-size:calc(var(--f-body)*1px)}
+.wave{display:flex;align-items:center;gap:2px;height:20px}.wave s{display:block;width:2px;border-radius:1px;background:var(--signal)}
+.wave.q s{background:var(--muted)}
+/* Skeleton, no shimmer */
+.sk{display:block;height:calc(var(--f-now)*1px);border-radius:4px;background:var(--hover)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.stack{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+</style>
+</head>
+<body>
+<h1>Halo states reference</h1>
+<p class="note">Everything here uses the exact numbers in HALO_SPEC_v3.md. Read the CSS, not the picture. Use the buttons to switch theme and size. All values are sample data.</p>
+<div class="bar" id="ctl"></div>
+<div id="out"></div>
+<script>
+var P={
+ win:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',
+ globe:'<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+ lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+ pause:'<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+ play:'<polygon points="6 3 20 12 6 21 6 3"/>',
+ reset:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+ mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>',
+ term:'<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+ timer:'<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>',
+ cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
+ grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+ arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+ alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+ bot:'<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>'
+};
+function ic(n,c){return '<svg class="'+(c||'i')+'" viewBox="0 0 24 24" aria-hidden="true">'+P[n]+'</svg>';}
+function wave(q,real){var h='<span class="wave'+(q?' q':'')+'" role="img" aria-label="'+(q?'Microphone idle':'Microphone level')+'">';for(var i=0;i<24;i++){var a=q?3:3+Math.round(14*Math.abs(Math.sin(i*.7)*Math.cos(i*.3)));h+='<s style="height:'+a+'px"></s>';}return h+'</span>';}
+function lab(s){return '<span class="lab">'+s+'</span>';}
+function vd(){return '<span class="vd"></span>';}
+function clock(h,off){return '<span class="time"><i>'+h+':</i>42:18</span>';}
+function btn(i,l,f){return '<button class="btn'+(f?' fill':'')+'" aria-label="'+l+'">'+ic(i,'i16')+'</button>';}
+function tabs(sel){var t=[['Focus','timer'],['Now','win'],['Deadlines','cal'],['Tools','grid']];return '<div class="tabs" role="tablist">'+t.map(function(x){return '<button class="tab" role="tab" aria-selected="'+(x[0]===sel)+'" aria-label="'+x[0]+'">'+ic(x[1],'i16')+'<span>'+x[0]+'</span></button>';}).join('')+'</div>';}
+function halo(sel,body){return '<div class="halo"><div class="content">'+body+'</div>'+tabs(sel)+'</div>';}
+function cap(s){return '<div class="cap">'+s+'</div>';}
+function blk(l,inner,w){return '<div class="blk"'+(w?' style="max-width:calc(var(--maxn)*1px)"':'')+'>'+lab(l)+inner+'</div>';}
+function nameRow(icon,name,time,cls,muted){return '<div class="row">'+'<span class="'+(muted?'mut':'t2')+'">'+ic(icon)+'</span><span class="name '+cls+(muted?' mut':'')+'">'+name+'</span>'+(time?'<span class="sm">'+time+'</span>':'')+'</div>';}
+/* Focus */
+function focus(o){o=o||{};var trk=o.trk||nameRow('win','Figma','', 'f-track');
+ return '<div class="blk"><div class="row"><span class="dot'+(o.stopped?' off':'')+'"></span>'+lab('Stopwatch')+'</div>'+clock('00')+'</div>'+vd()+
+ blk('Tracking',trk,160)+vd()+blk('Productive','<span class="val t2 f-track">3:12:40</span>')+'<span class="sp"></span>'+btn('reset','Reset')+btn(o.stopped?'play':'pause',o.stopped?'Start':'Pause',1);}
+/* Now */
+function ai(){return '<div class="blk">'+lab('AI usage')+'<div class="row" style="gap:10px"><span class="val f-now">62%</span><span class="usage"><b style="width:62%"></b></span></div></div>';}
+function now(s){
+ if(s==='waiting')return blk('App','<span class="f-stat t2">Reading the current app...</span>')+vd()+blk('Website','<span class="sk" style="width:90px"></span>')+vd()+ai();
+ if(s==='failed')return blk('App','<span class="f-stat t1" style="max-width:230px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">App read failed: access denied. Check permissions.</span>',240)+btn('reset','Retry reading the current app')+vd()+ai();
+ var app=nameRow('win','Figma','18 min','f-now');
+ var web={ok:nameRow('globe','github.com','6 min','f-now'),nob:nameRow('globe','Not in a browser','','f-now',1),priv:nameRow('lock','Private window','','f-now')}[s]||nameRow('globe','github.com','6 min','f-now');
+ if(s==='idle')app=nameRow('win','No active app','','f-now',1),web=nameRow('globe','Not in a browser','','f-now',1);
+ return blk('App',app)+vd()+blk('Website',web)+vd()+ai();}
+/* Deadlines */
+function dead(s){
+ if(s==='empty')return blk('Next deadline','<span class="f-stat t2" style="white-space:nowrap">No open deadlines. Add one in Schedule.</span>')+'<span class="sp"></span>'+btn('arrow','Open Schedule');
+ if(s==='loading')return blk('Next deadline','<span class="sk" style="width:120px"></span>')+vd()+blk('Status','<span class="sk" style="width:100px"></span>')+vd()+blk('Open','<span class="sk" style="width:28px"></span>');
+ if(s==='error')return blk('Next deadline','<span class="f-stat t1" style="white-space:nowrap">Deadlines could not load because the database is busy. Retry.</span>')+'<span class="sp"></span>'+btn('reset','Retry loading deadlines');
+ return blk('Next deadline','<span class="name f-dead">IT DIV Test</span>')+vd()+blk('Status','<span class="name f-stat">34 days overdue</span>')+vd()+blk('Open','<span class="val f-dead">4</span>')+'<span class="sp"></span>'+btn('arrow','Open Schedule');}
+/* Tools */
+function tools(s){var mic=s==='listening'?wave(0):wave(1);
+ if(s==='denied')return '<div class="row" style="gap:12px">'+btn('mic','Retry microphone')+'<div class="blk"><span class="name f-stat">Dictation</span><span class="sm t1">Mic blocked. Allow access.</span></div></div>'+vd()+'<div class="row" style="gap:12px">'+btn('term','Open console')+'<div class="blk"><span class="name f-stat">Console</span><span class="sm">penguin-console, 3 sessions</span></div></div>';
+ return '<div class="row" style="gap:12px">'+btn('mic','Start dictation')+'<div class="blk"><span class="name f-stat">Dictation</span>'+mic+'</div></div>'+vd()+'<div class="row" style="gap:12px">'+btn('term','Open console')+'<div class="blk"><span class="name f-stat">Console</span><span class="sm">penguin-console, 3 sessions</span></div></div>';}
+/* Compact */
+function pill(k){var m={
+ stopwatch:'<span class="dot"></span><span class="time"><i>00:</i>42:18</span>'+vd()+'<span class="t2 n">Figma</span>',
+ stopwatchSite:'<span class="dot"></span><span class="time"><i>00:</i>42:18</span>'+vd()+'<span class="t2 n">github.com</span>',
+ now:'<span class="t2">'+ic('win')+'</span><span class="n">Figma</span><span class="mut">18 min</span>',
+ website:'<span class="t2">'+ic('globe')+'</span><span class="n">github.com</span><span class="mut">6 min</span>',
+ private:'<span class="t2">'+ic('lock')+'</span><span class="n">Private window</span>',
+ dictation:'<span style="color:var(--signal)">'+ic('mic')+'</span>'+wave(0)+'<span class="t2">Listening</span>',
+ aiUsage:'<span class="t2">'+ic('bot')+'</span><span class="usage" style="width:calc(var(--cbar)*1px)"><b style="width:62%"></b></span><span class="val">62%</span>',
+ hud:'<span class="t2">'+ic('term')+'</span><span class="n">penguin-console</span><span class="mut mono">3</span>',
+ nextDeadline:'<span>'+ic('cal')+'</span><span class="t2">IT DIV Test</span><span class="n">34d overdue</span>',
+ critical:'<span style="color:var(--signal)">'+ic('alert')+'</span><span class="t2">IT DIV Test</span><span class="n">34d overdue</span>'
+ }[k];return '<span class="pill'+(k==='critical'?' crit':'')+'" data-kind="'+k+'">'+m+'</span>';}
+function build(){
+ var h='';
+ h+='<h2>1. Compact kinds (all)</h2><div class="wrap">'+['stopwatch','stopwatchSite','now','website','private','dictation','aiUsage','hud','nextDeadline','critical'].map(pill).join('')+'</div>';
+ h+='<p class="note">stopwatchSite: stopwatch tracking a website. private: shown when the active window is private (no domain, not counted). Waveform has 24 bars.</p>';
+ h+='<h2>2. Focus page</h2><div class="stack">'+cap('running, tracking an app')+halo('Focus',focus())+cap('running, tracking a website')+halo('Focus',focus({trk:nameRow('globe','github.com','','f-track')}))+cap('running, private window (no name shown)')+halo('Focus',focus({trk:nameRow('lock','Private window','','f-track')}))+cap('stopped (dot and tracked name turn muted, play button)')+halo('Focus',focus({stopped:1,trk:nameRow('win','Figma','','f-track',1)}))+'</div>';
+ h+='<p class="note">The third block is labeled PRODUCTIVE because the number is productive time only. Do not label it TODAY unless it sums all tiers.</p>';
+ h+='<h2>3. Now page states</h2><div class="stack">'+[['ok','app + website'],['nob','app, not in a browser'],['priv','private window'],['idle','nothing active'],['waiting','waiting for first read'],['failed','read failed (Retry button, 44px)']].map(function(x){return cap(x[1])+halo('Now',now(x[0]));}).join('')+'</div>';
+ h+='<h2>4. Deadlines states</h2><div class="stack">'+[['ok','populated'],['empty','empty'],['loading','loading (no shimmer, no spinner)'],['error','error with Retry']].map(function(x){return cap(x[1])+halo('Deadlines',dead(x[0]));}).join('')+'</div>';
+ h+='<h2>5. Tools states</h2><div class="stack">'+cap('idle (waveform bars flat at 3px)')+halo('Tools',tools('idle'))+cap('listening (24 bars follow real mic level)')+halo('Tools',tools('listening'))+cap('microphone denied')+halo('Tools',tools('denied'))+'</div>';
+ document.getElementById('out').innerHTML=h;}
+var root=document.documentElement;
+function ctl(){var c=document.getElementById('ctl');c.innerHTML=['dark','warm'].map(function(t){return '<button data-t="'+t+'" aria-pressed="'+(root.dataset.theme===t)+'">'+(t==='dark'?'Dark':'Warm Paper')+'</button>';}).join('')+['S','M','L'].map(function(s){return '<button data-s="'+s+'" aria-pressed="'+(root.dataset.size===s)+'">'+s+'</button>';}).join('');}
+document.getElementById('ctl').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;if(b.dataset.t)root.dataset.theme=b.dataset.t;if(b.dataset.s)root.dataset.size=b.dataset.s;ctl();});
+ctl();build();
+</script>
+</body>
+</html>

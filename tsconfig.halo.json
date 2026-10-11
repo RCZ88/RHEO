@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.app.json",
+  "files": [
+    "src/halo.tsx",
+    "src/features/halo/OverlayRoot.tsx",
+    "src/features/halo/StopwatchHero.tsx",
+    "src/features/halo/DictationActivity.tsx",
+    "src/shared/halo/types.ts",
+    "src/shared/halo/activityPriority.ts",
+    "src/shared/halo/activityRouter.ts",
+    "src/shared/halo/hoverMachine.ts",
+    "src/shared/halo/geometry.ts",
+    "src/main/halo/haloIsland.ts",
+    "src/features/halo/DictationIsland.tsx",
+    "src/shared/halo/stopwatchRelay.ts"
+  ]
+}

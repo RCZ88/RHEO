@@ -1,0 +1,61 @@
+# Tool-call lines in the format opencode ACTUALLY renders.
+#
+# PROVENANCE: every `raw` string below was extracted verbatim from the render
+# functions inside ~/.opencode/bin/opencode (the shipped 185MB bun ELF), e.g.
+#   Read ${o}      Write ${s(t.input.filePath)}   Edit ${s(t.input.filePath)}
+#   Grep "${...}"  Glob "${...}"                   Skill "${t.input.name??''}"
+#   $ ${o}  (bash)      Asked ${o}      Patch ${o}      List ${s(o)}
+# Status glyphs: ✓ completed · • in_progress · ✗ error.
+#
+# This fixture exists because the previous adapter assumed the Ink-TUI shape
+# `Name(argument)` and matched almost none of it. Every assertion in the old
+# suites still passed, because they fed the assumed format back into the
+# parser that assumed it. A test suite that only ever sees its own
+# assumptions cannot detect a wrong assumption.
+#
+# Each entry: [raw line, expected ActionKind, expected command-or-target]
+[
+  ["$ npm run build",                    "build",     "npm run build"],
+  ["$ vitest run",                       "test",      "vitest run"],
+  ["$ git commit -m checkpoint",         "commit",    "git commit -m checkpoint"],
+  ["$ prisma migrate dev",               "database",  "prisma migrate dev"],
+  # For a shell tool the COMMAND is primary (the test reads command||target),
+  # so the whole invocation is the value, not just the URL inside it.
+  ["$ curl https://docs.example.dev",    "web",       "curl https://docs.example.dev"],
+
+  ["Read src/main.ts",                   "read",      "src/main.ts"],
+  ["✓ Read src/lib/auth.ts",             "read",      "src/lib/auth.ts"],
+  ["Read ~/projects/app/page.tsx",       "read",      "~/projects/app/page.tsx"],
+
+  ["Write src/components/New.tsx",       "edit",      "src/components/New.tsx"],
+  ["Edit src/pages/TerminalPage.tsx",    "edit",      "src/pages/TerminalPage.tsx"],
+  ["Patch src/shared/workforceActivity.ts", "edit",    "src/shared/workforceActivity.ts"],
+  ["✗ Edit src/broken.ts",               "edit",      "src/broken.ts"],
+
+  ["List src/pages",                     "look",      "src/pages"],
+  ["Grep \"auth\"",                      "search",    "auth"],
+  ["✓ Grep \"session\"",                 "search",    "session"],
+  ["Glob \"*.ts\"",                      "search",    "*.ts"],
+  ["Grep auth",                          "search",    "auth"],
+
+  ["WebFetch docs.example.dev/api",      "web",       "docs.example.dev/api"],
+  ["WebSearch \"xterm resize\"",         "web",       "xterm resize"],
+
+  ["Skill \"code-review\"",              "read",      "code-review"],
+  ["✓ Skill \"skill-router\"",           "read",      "skill-router"],
+
+  ["Asked which database should I use?", "blocked",   "which database should I use?"],
+  # subagent_type comes BEFORE the description in opencode's render.
+  ["Task general audit-the-parser",        "delegate",  "general audit-the-parser"],
+
+  ["probe_eval expression",              "mcp",       "expression"],
+  ["✓ probe_snapshot selector",          "mcp",       "selector"],
+  ["shadcn_get_component card",          "mcp",       "card"],
+
+  ["✗ Invalid Tool",                     "unknown",   null],
+
+  ["Process exited with code 1",         null,        null],
+  ["just some prose the model said",     null,        null],
+  ["",                                   null,        null],
+  ["   ",                                null,        null]
+]

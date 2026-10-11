@@ -1,0 +1,17 @@
+import WebSocket from 'ws';
+const list = await (await fetch('http://127.0.0.1:9222/json/list')).json();
+const page = list.find(t => t.type==='page' && t.url.includes('halo.html'));
+console.log('target url:', page?.url);
+const ws = new WebSocket(page.webSocketDebuggerUrl, { perMessageDeflate:false, maxPayload: 256*1024*1024 });
+await new Promise(r => ws.once('open', r));
+console.log('ws open');
+let id=0; const pend=new Map();
+ws.on('message', d => { const m=JSON.parse(d.toString());
+  if(m.id&&pend.has(m.id)){const p=pend.get(m.id);pend.delete(m.id);m.error?p.reject(new Error(JSON.stringify(m.error))):p.resolve(m.result);} });
+const send=(method,params={})=>{const i=++id;return new Promise((resolve,reject)=>{pend.set(i,{resolve,reject});ws.send(JSON.stringify({id:i,method,params}));setTimeout(()=>{if(pend.has(i)){pend.delete(i);reject(new Error('timeout '+method));}},8000);});};
+console.log('Runtime.enable ->', JSON.stringify(await send('Runtime.enable')));
+console.log('eval 1+1 ->', JSON.stringify(await send('Runtime.evaluate',{expression:'1+1',returnByValue:true})));
+console.log('eval readyState ->', JSON.stringify(await send('Runtime.evaluate',{expression:'document.readyState',returnByValue:true})));
+console.log('eval root present ->', JSON.stringify(await send('Runtime.evaluate',{expression:"!!document.querySelector('[data-halo-root]')",returnByValue:true})));
+console.log('eval body text ->', JSON.stringify(await send('Runtime.evaluate',{expression:'document.body.innerText.slice(0,200)',returnByValue:true})));
+ws.close(); process.exit(0);

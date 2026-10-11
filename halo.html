@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en" data-page="halo">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Halo</title>
+    <!-- FONT WEIGHTS ARE LOAD COMPLETELY ON PURPOSE.
+         JetBrains Mono was requested at 400;500 only, but the island renders numerals at
+         500-600. The browser then SYNTHESISES bold by smearing the 500 face, which on
+         tabular digits looks genuinely broken. This is why the type read as bad. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!--
+      STANDALONE ENTRY for the Halo Island.
+
+      It must draw above every other application, so it gets its own window and
+      therefore its own entry. Sharing the main bundle would boot BootGate, the
+      router and the whole App inside a small frameless window.
+    -->
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent !important;
+      }
+      #root { height: 100%; }
+
+      #halo-fallback {
+        display: none;
+        position: fixed;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        text-align: center;
+        font-family: "Inter", system-ui, sans-serif;
+        font-size: 12px;
+        color: #a1a1aa;
+        background: rgb(9 9 11 / 0.96);
+        border-radius: 12px;
+      }
+      #halo-fallback h1 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: #fafafa; }
+      #halo-fallback p { margin: 0; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <div id="halo-fallback">
+      <h1>Halo could not start</h1>
+      <p id="halo-fallback-detail">The island script did not load. Restart RHEO.</p>
+    </div>
+
+    <script>
+      window.__haloTimeout = setTimeout(function () {
+        var root = document.getElementById('root');
+        if (root && root.childElementCount === 0) {
+          var fb = document.getElementById('halo-fallback');
+          if (fb) fb.style.display = 'flex';
+        }
+      }, 5000);
+      window.__haloShowError = function (message) {
+        var root = document.getElementById('root');
+        if (root) root.innerHTML = '';
+        var fb = document.getElementById('halo-fallback');
+        if (fb) {
+          var d = fb.querySelector('#halo-fallback-detail');
+          if (d && message) d.textContent = message;
+          fb.style.display = 'flex';
+        }
+      };
+    </script>
+
+    <script
+      type="module"
+      src="/src/halo.tsx"
+      onerror="window.__haloShowError && window.__haloShowError('The island script failed to load. Restart RHEO.');"
+    ></script>
+  </body>
+</html>

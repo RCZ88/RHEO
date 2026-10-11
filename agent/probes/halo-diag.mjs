@@ -1,0 +1,32 @@
+import WebSocket from 'ws';
+const v = await (await fetch('http://127.0.0.1:9223/json/version')).json();
+const ws = new WebSocket(v.webSocketDebuggerUrl, { perMessageDeflate:false, maxPayload: 256<<20 });
+await new Promise(r => ws.once('open', r));
+let id=0; const pend=new Map(); const logs=[];
+ws.on('message', d => { const m=JSON.parse(d.toString());
+  if(m.id&&pend.has(m.id)){const p=pend.get(m.id);pend.delete(m.id);m.error?p.reject(new Error(JSON.stringify(m.error))):p.resolve(m.result);return;}
+  if(m.method==='Runtime.consoleAPICalled') logs.push('['+m.params.type+'] '+m.params.args.map(a=>a.value??a.description??'').join(' '));
+  if(m.method==='Runtime.exceptionThrown') logs.push('[EXC] '+(m.params.exceptionDetails?.exception?.description??m.params.exceptionDetails?.text));
+  if(m.method==='Log.entryAdded') logs.push('[net/'+m.params.entry.level+'] '+m.params.entry.text+' '+(m.params.entry.url??''));
+});
+const raw=(method,params={},sessionId)=>{const i=++id;const pl={id:i,method,params};if(sessionId)pl.sessionId=sessionId;
+  return new Promise((res,rej)=>{pend.set(i,{resolve:res,reject:rej});ws.send(JSON.stringify(pl));setTimeout(()=>{if(pend.has(i)){pend.delete(i);rej(new Error('timeout '+method));}},20000);});};
+const _l = await (await fetch('http://127.0.0.1:9223/json/list')).json();
+const _p = _l.find(t=>t.type==='page' && t.url.includes('halo.html'));
+if(!_p){console.error('no halo target', _l.map(t=>t.url));process.exit(2);}
+const targetId=_p.id;
+const {sessionId} = await raw('Target.attachToTarget',{targetId,flatten:true});
+await raw('Runtime.enable',{},sessionId);
+await raw('Log.enable',{},sessionId);
+await new Promise(r=>setTimeout(r,6000));
+const ev = async expr => (await raw('Runtime.evaluate',{expression:expr,returnByValue:true},sessionId)).result?.value;
+console.log('URL        :', await ev('location.href'));
+console.log('title      :', await ev('document.title'));
+console.log('readyState :', await ev('document.readyState'));
+console.log('body len   :', await ev('document.body ? document.body.innerHTML.length : -1'));
+console.log('#root html :', JSON.stringify(await ev('(document.getElementById("root")||{}).innerHTML ?? "NO #root"')));
+console.log('scripts    :', JSON.stringify(await ev('[...document.querySelectorAll("script")].map(s=>s.src||"inline")')));
+console.log('fallback   :', await ev('(()=>{const f=document.getElementById("halo-fallback");return f?getComputedStyle(f).display:"absent"})()'));
+console.log('\n--- console / network ---');
+console.log(logs.length ? logs.join('\n') : '(nothing captured)');
+await raw('Target.closeTarget',{targetId}); ws.close(); process.exit(0);

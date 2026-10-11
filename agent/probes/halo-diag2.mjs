@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ args:['--no-sandbox','--disable-gpu'] });
+const p = await b.newPage({ viewport:{width:1280,height:800} });
+const logs=[];
+p.on('console', m => logs.push(`[${m.type()}] ${m.text()}`));
+p.on('pageerror', e => logs.push(`[PAGEERROR] ${e.message}\n${(e.stack||'').split('\n').slice(0,6).join('\n')}`));
+p.on('requestfailed', r => logs.push(`[REQFAIL] ${r.url()} :: ${r.failure()?.errorText}`));
+await p.goto('http://127.0.0.1:5176/halo.html', { waitUntil:'domcontentloaded', timeout:45000 });
+await p.waitForTimeout(6000);
+console.log('root present   :', await p.evaluate(`!!document.querySelector('[data-halo-root]')`));
+console.log('#root children :', await p.evaluate(`document.getElementById('root')?.childElementCount ?? -1`));
+console.log('fallback shown :', await p.evaluate(`(()=>{const f=document.getElementById('halo-fallback');return f?getComputedStyle(f).display:'absent'})()`));
+console.log('\n--- console / errors ---');
+console.log(logs.length ? logs.join('\n') : '(nothing)');
+await b.close();
