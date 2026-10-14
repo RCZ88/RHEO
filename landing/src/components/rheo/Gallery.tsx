@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Download, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "./use-reduced-motion";
-import AsciiSurface from "./AsciiSurface";
+
 import DecryptedText from "./DecryptedText";
 import { RealClip, RealShot } from "./RealFootage";
 
@@ -84,30 +84,7 @@ const SCREENS: Screen[] = [
   { id: "profiler", label: "Profiler", still: "/media/app-profiler.png", alt: "The in-app performance profiler", caption: "RHEO measures itself with RHEO." },
 ];
 
-/** The capture the ASCII seam re-reads. Must be a real file in public/media. */
-/**
- * The capture the ASCII seam re-reads.
- *
- * CHOSEN BY MEASUREMENT, NOT BY POSITION. It was `SCREENS[0]` (the dashboard)
- * because that was the path of least resistance, and the dashboard was then
- * doing four jobs: strip slide, thumbnail tile, act-record poster, and seam
- * source. GLM flagged it as the §0.5 smell in miniature.
- *
- * `probe-ascii-surface.mjs` measures ramp indices per capture — the seam's only
- * job is glyph legibility, so the widest spread wins:
- *
- *   app-lecture.png    14/16   <- selected. peak 1.000, the only full-white pixel
- *   app-ide.png        12/16
- *   app-learn.png      12/16
- *   app-life.png       12/16
- *   app-profiler.png   12/16
- *   app-dashboard.png  11/16   <- was used, not the widest
- *   app-guide.png       9/16   <- genuinely the flattest field
- *
- * Selected BY ID, not index, so a future reorder cannot silently change which
- * capture the seam claims.
- */
-const ASCII_SOURCE = SCREENS.find((s) => s.id === "lecture")!;
+
 
 export default function Gallery() {
   const reduced = usePrefersReducedMotion();
@@ -382,23 +359,6 @@ export default function Gallery() {
           </ul>
         </div>
 
-        {/* ---- the seam, as a coda: the same pixels as characters ---- */}
-        <div className="mt-20 max-w-[680px]">
-          <p className="mono-label mb-4" style={{ fontSize: 11 }}>
-            <DecryptedText text="THE SAME PIXELS, AS CHARACTERS" speed={28} maxIterations={6} />
-          </p>
-          <p className="mb-6" style={{ fontSize: 15, lineHeight: 1.6, color: "#a1a1aa" }}>
-            The characters are read from{" "}
-            <span className="mono" style={{ color: "#f4f4f5" }}>{ASCII_SOURCE.still}</span>{" "}
-            — real luminance, real grid, computed in your browser from that
-            photograph and nothing else. Drag the seam across it.
-          </p>
-          <AsciiSurface
-            src={ASCII_SOURCE.still}
-            alt={ASCII_SOURCE.alt}
-            caption="NOT A MOCKUP — A REAL CAPTURE, RE-SAMPLED"
-          />
-        </div>
       </div>
     </section>
   );

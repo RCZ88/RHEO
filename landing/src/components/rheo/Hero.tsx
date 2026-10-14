@@ -132,6 +132,31 @@ export default function Hero() {
 
       </div>
 
+      {/* right half — real screenshot, unretouched. The hero was left with an empty
+          right side; putting a real capture here closes the dead space and keeps the
+          "unretouched" claim first thing. */}
+      <div className="hidden lg:block absolute top-1/2 -translate-y-1/2 right-6 w-[42%] z-5">
+        <div
+          className="relative"
+          style={{
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.16)",
+            overflow: "hidden",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }}
+        >
+          <img
+            src="/media/app-dashboard.png"
+            alt="The RHEO dashboard — a real day's tracked time, unretouched."
+            width={1200}
+            height={750}
+            loading="lazy"
+            decoding="async"
+            style={{ display: "block", width: "100%", height: "auto" }}
+          />
+        </div>
+      </div>
+
       {/* bottom edge live line */}
       <div
         className="absolute bottom-0 left-0 right-0 z-10 px-5 sm:px-10 lg:px-16 hero-enter"

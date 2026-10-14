@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+# prompt-copy — copy RHEO feature specs to the clipboard in one command.
+#
+# WHY THIS EXISTS
+#   Handing a spec to Claude/GPT means pasting it. Every spec in this repo is a
+#   file, and the two-step "cat the file, then paste" breaks the moment you want
+#   PROMPT.md *and* its CONTEXT_BUNDLE.md together — they have to arrive in one
+#   message or the external AI reads the brief without the code excerpts it
+#   needs. This concatenates them, in order, under one banner per file, and puts
+#   the whole thing on the clipboard.
+#
+# USAGE
+#   wl-copy                 # all three specs (default) — the usual case
+#   wl-copy layout          # spec 1  Schedule layout system
+#   wl-copy dedup           # spec 2  Life page consolidation
+#   wl-copy activities      # spec 3  Recurring Activities
+#   wl-copy index           # just the specs index
+#   wl-copy all             # index + every spec, in order
+#   wl-copy list            # print what is available, copy nothing
+#
+# NOTES
+#   - Prefers wl-copy (Wayland), falls back to xclip then xsel, so it works if
+#     you ever drop the Wayland session.
+#   - `wl-copy` forks and holds the selection. It must NOT be backgrounded with
+#     `&` on some compositors or the clipboard is cleared before it is pasted;
+#     we deliberately do not background it.
+#   - `-i` forces text/plain so Claude does not receive escaped HTML.
+
+set -uo pipefail
+
+# RESOLVE THE SYMLINK FIRST, OR THE REPO ROOT IS WRONG.
+#
+# This script is normally invoked as `~/.local/bin/prompt-copy`, which is a SYMLINK
+# into the repo. `${BASH_SOURCE[0]}` is therefore the symlink path, so a naive
+# `dirname/..` resolved to ~/.local/bin/.. == $HOME — not the repo. Every file
+# then came back MISSING and the script copied nothing while looking configured
+# correctly. `readlink -f` follows the link to the real file first, so the root is
+# right no matter which name it was invoked as.
+SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+REPO="${RHEO_REPO:-$(cd "$(dirname "$SELF")/.." && pwd)}"
+
+if [[ ! -d "$REPO/agent/docs" ]]; then
+  echo "prompt-copy: repo not found at $REPO" >&2
+  echo "  (override with RHEO_REPO=/path/to/rheo prompt-copy dedup)" >&2
+  exit 1
+fi
+cd "$REPO" || { echo "prompt-copy: cannot enter repo at $REPO" >&2; exit 1; }
+
+# ── where does the selection actually go? ──────────────────────────────────
+#
+# ABSOLUTE PATHS, ON PURPOSE.
+#
+# An earlier version of this script was installed as `wl-copy` on PATH. That made
+# `command -v wl-copy` resolve to *this script*, so it invoked itself with `-i`,
+# treated that as an unknown target, and looped until the shell hit its recursion
+# limit — spewing thousands of lines and leaving the clipboard tool unusable.
+#
+# A helper that shares a name with its dependency is a trap waiting to happen, so
+# this resolves each tool to a fixed absolute path and never searches PATH.
+# If you move a binary, edit this list; do not "fix" it by adding a PATH lookup.
+clip() {
+  if [[ -x /usr/bin/wl-copy ]]; then
+    # NOTE: no `-i`. That flag belongs to xclip. wl-copy has no -i at all — it
+    # printed its usage and exited non-zero, while this script went on reporting
+    # success because the pipeline's status came from `cat`, not from wl-copy.
+    # wl-copy infers text/plain on its own, which is what we want.
+    #
+    # NO `--paste-once`. It was here to stop wl-copy forking and lingering, and
+    # it "worked" in the sense that nothing hung — but on this machine it exits
+    # BEFORE taking ownership of the Wayland selection, so the clipboard is
+    # never actually written. Measured: `wl-copy --paste-once` exited 0 and
+    # `wl-paste` returned stale content, while the same copy WITHOUT the flag
+    # round-tripped correctly. Because this function's output is discarded and
+    # only the exit status is checked, that silent failure was reported to CZ as
+    # "copied N bytes" with an empty clipboard — the exact false PASS this file
+    # exists to prevent.
+    #
+    # FOREGROUND, stdin attached, no `&`, no --paste-once.
+    # `clip` is invoked as `clip < "$TMP"`, so the payload arrives on stdin.
+    # Two measured traps, both of which silently produced an EMPTY clipboard
+    # while this script reported success:
+    #   - `&` / `disown`: a backgrounded wl-copy forks a daemon whose
+    #     data-device offer is never served; wl-paste returns nothing.
+    #   - `</dev/null`: feeds wl-copy an empty selection. Same symptom.
+    # wl-copy daemonises by itself and the parent returns immediately, so
+    # running it in the foreground does NOT hang the caller — verified, not
+    # assumed. There was never a hang to prevent; --paste-once was the cause
+    # of the bug, not the cure.
+    /usr/bin/wl-copy -t text/plain >/dev/null 2>&1
+  elif [[ -x /usr/bin/xclip ]]; then
+    /usr/bin/xclip -selection clipboard -in >/dev/null 2>&1
+  elif [[ -x /usr/bin/xsel ]]; then
+    /usr/bin/xsel --clipboard --input >/dev/null 2>&1
+  else
+    echo "prompt-copy: no clipboard tool found (need /usr/bin/wl-copy, xclip or xsel)" >&2
+    return 1
+  fi
+}
+
+# ── the file groups ───────────────────────────────────────────────────────
+LAYOUT=(agent/docs/SCHEDULE-LAYOUT-SYSTEM.md)
+
+DEDUP=(
+  agent/docs/generate-prompt-docs/life-habits-gold-dedup-13102026/PROMPT.md
+  agent/docs/generate-prompt-docs/life-habits-gold-dedup-13102026/CONTEXT_BUNDLE.md
+)
+
+ACTIVITIES=(
+  agent/docs/generate-prompt-docs/recurring-commitments-activity-system-13102026/PROMPT.md
+  agent/docs/generate-prompt-docs/recurring-commitments-activity-system-13102026/CONTEXT_BUNDLE.md
+)
+
+INDEX=(agent/docs/SPECS-INDEX.md)
+
+# Teams + LINE messaging connectors (push-based, offline reconciliation).
+MESSAGING=(
+  agent/docs/generate-prompt-docs/teams-line-connectors-14102026/PROMPT.md
+  agent/docs/generate-prompt-docs/teams-line-connectors-14102026/CONTEXT_BUNDLE.md
+)
+
+banner() {
+  printf '\n\n════════════════════════════════════════════════════════════\n'
+  printf '  %s\n' "$1"
+  printf '  repo path: %s\n' "$1"
+  printf '════════════════════════════════════════════════════════════\n\n'
+}
+
+emit() {
+  local f
+  for f in "$@"; do
+    if [[ -f "$f" ]]; then
+      banner "$f"
+      cat "$f"
+    else
+      printf '\n\n!!! MISSING: %s\n' "$f" >&2
+    fi
+  done
+}
+
+usage() {
+  cat <<'EOF'
+prompt-copy — copy RHEO feature specs / prompts to the clipboard
+
+  SELECT ANY PROMPT (nothing needs registering — all are auto-discovered):
+
+  prompt-copy ls              numbered list of every prompt with its ID
+  prompt-copy ls <keyword>    filter that list by keyword
+  prompt-copy get <id|slug>   copy by NUMBER or by folder slug
+  prompt-copy pick            interactive menu — arrows/number, Enter to copy
+
+  DIRECT PATHS (any file or folder works):
+
+  prompt-copy path/to/PROMPT.md
+  prompt-copy path/to/some-folder        # bundles PROMPT.md + CONTEXT_BUNDLE.md
+
+  Real examples that exist right now:
+  prompt-copy agent/docs/generate-prompt-docs/canvas-redesign-31082026
+  prompt-copy agent/skills/generate-prompt/CANVAS-REDESIGN-PROMPT.md
+
+  NAMED TARGETS (legacy, still fine):
+
+  prompt-copy            all three specs (default)
+  prompt-copy layout     1. Schedule layout system
+  prompt-copy dedup      2. Life page consolidation
+  prompt-copy activities 3. Recurring Activities
+  prompt-copy index      the specs index only
+  prompt-copy all        index + all three specs
+  prompt-copy list       show what is available, copy nothing
+EOF
+}
+
+# Staged to a file rather than piped: a pipe reports the status of `cat`, not of
+# the clipboard writer, which is how a failed copy came to announce success.
+TMP="$(mktemp -t prompt-copy.XXXXXX)"
+trap 'rm -f "$TMP"' EXIT
+
+# Bare `prompt-copy` means "show me what I can copy", not "copy the target
+# `all`". The default used to be `all`, which fell through to `get all` and
+# reported the nonsensical "no prompt matches 'all'".
+cmd="${1:-list}"
+
+# ── auto-discovery ───────────────────────────────────────────────────────────
+# There are 164+ prompt folders. Hardcoding them in an array meant every new
+# prompt silently went uncopyable until someone remembered to edit this file —
+# the exact staleness the skill warns about. Discover them instead: the slug is
+# the stable ID and the number is just today's index.
+# Prompt bundles live in two trees: hand-run spec bundles (generate-prompt-docs)
+# and live back-and-forth collabs (backandfourth-docs). A bundle's SLUG is its
+# folder name — that is the stable name. Both trees are scanned so the same
+# command set works for every bundle instead of per-path invocations.
+DOCS_ROOTS=("$REPO/agent/docs/generate-prompt-docs" "$REPO/agent/docs/backandfourth-docs")
+
+discover() {
+  # Prints "<number>\t<slug>\t<relative path>" for every prompt, in name order.
+  # `-iname`, NOT `-name`: most folders in this repo ship lowercase `prompt.md`,
+  # a case-sensitive search silently hid ~a third of the library (164 of 241
+  # folders). Discovery must not care how someone capitalised a filename.
+  local n=0 p slug root
+  n=0
+  for root in "${DOCS_ROOTS[@]}"; do
+    [[ -d "$root" ]] || continue
+    while IFS= read -r p; do
+      slug="$(basename "$(dirname "$p")")"
+      n=$((n + 1))
+      printf '%d\t%s\t%s\n' "$n" "$slug" "${p#$REPO/}"
+    done < <(find "$root" -mindepth 2 -maxdepth 2 -iname 'prompt*.md' 2>/dev/null | sort)
+  done
+}
+
+# Files that make up one prompt: its PROMPT.md plus a CONTEXT_BUNDLE.md if the
+# folder has one. The receiving AI needs both or the bundle is useless.
+files_for() {
+  local dir="$1" p
+  # case-insensitive prompt match, same reason as discover()
+  for p in "$dir"/[Pp][Rr][Oo][Mm][Pp][Tt]*.md; do
+    [[ -f "$p" ]] && printf '%s\n' "$p"
+  done
+  for p in "$dir"/[Cc][Oo][Nn][Tt][Ee][Xx][Tt]_[Bb][Uu][Nn][Dd][Ll][Ee].md; do
+    [[ -f "$p" ]] && printf '%s\n' "$p"
+  done
+}
+
+case "$cmd" in
+  index)
+    # Handled HERE, in the live block. It used to live in a second `case` further
+    # down, which `exec "$SELF" get "$cmd"` had already made unreachable — so
+    # `prompt-copy index` reported "no prompt matches 'index'" despite both skills
+    # documenting it. Any name a user types must be claimed BEFORE the exec.
+    if [[ ! -f "$REPO/agent/docs/SPECS-INDEX.md" ]]; then
+      echo "prompt-copy index: agent/docs/SPECS-INDEX.md not found" >&2; exit 1
+    fi
+    emit "$REPO/agent/docs/SPECS-INDEX.md" > "$TMP"
+    if ! clip < "$TMP"; then
+      rm -f "$TMP"; echo "prompt-copy: clipboard write FAILED" >&2; exit 1
+    fi
+    BYTES=$(wc -c < "$TMP" | tr -d ' '); rm -f "$TMP"
+    echo "prompt-copy: copied index ($BYTES bytes)" >&2
+    exit 0
+    ;;
+  ls|list)
+    kw="${2:-}"
+    printf '\n  %-4s %-52s %s\n' "ID" "SLUG" "PROMPT.md"
+    printf '  %-4s %-52s %s\n' "----" "----------------------------------------------------" "----------"
+    while IFS=$'\t' read -r n slug rel; do
+      if [[ -n "$kw" ]] && ! printf '%s' "$slug" | grep -qi -- "$kw"; then continue; fi
+      printf '  %-4s %-52s %s\n' "$n" "$slug" "$rel"
+    done < <(discover)
+    printf '\n  copy one with:  prompt-copy get <ID or slug>\n'
+    exit 0
+    ;;
+
+  get)
+    want="${2:-}"
+    [[ -z "$want" ]] && { echo "prompt-copy get: need an ID or slug" >&2; exit 1; }
+    hit=""
+    while IFS=$'\t' read -r n slug rel; do
+      if [[ "$n" == "$want" || "$slug" == "$want" ]]; then hit="$REPO/$rel"; break; fi
+    done < <(discover)
+    # Prefix match, but ONLY when it is unambiguous. `get canvas` should just
+    # work. An ambiguous prefix FAILS LOUDLY and prints the candidates instead
+    # of guessing — a wrong paste into an external AI costs far more than
+    # retyping one word.
+    if [[ -z "$hit" ]]; then
+      mapfile -t CAND < <(discover | cut -f2 | grep -i -- "^$want" || true)
+      if [[ ${#CAND[@]} -eq 1 ]]; then
+        hit="$REPO/$(discover | awk -F'\t' -v s="${CAND[0]}" '$2==s {print $3}')"
+      elif [[ ${#CAND[@]} -gt 1 ]]; then
+        echo "prompt-copy get: '$want' matches ${#CAND[@]} prompts — be specific:" >&2
+        printf '  %s\n' "${CAND[@]}" >&2
+        exit 1
+      fi
+    fi
+    [[ -z "$hit" ]] && {
+      echo "prompt-copy get: no prompt matches '$want'" >&2
+      printf '  list everything: prompt-copy ls\n' >&2
+      exit 1
+    }
+    mapfile -t SEL < <(files_for "$(dirname "$hit")")
+    [[ ${#SEL[@]} -eq 0 ]] && { echo "prompt-copy get: nothing to copy in $hit" >&2; exit 1; }
+    # `emit` writes to STDOUT; the main case redirects the whole block into
+    # $TMP. These branches sit OUTSIDE that case, so they must redirect
+    # themselves or the payload lands on the terminal and the clipboard gets
+    # nothing — while the byte count still printed a plausible number.
+    emit "${SEL[@]}" > "$TMP"
+    clip < "$TMP"
+    BYTES=$(wc -c < "$TMP" | tr -d ' ')
+    rm -f "$TMP"
+    echo "prompt-copy: copied $(basename "$(dirname "$hit")") ($BYTES bytes, ${#SEL[@]} file(s))"
+    exit 0
+    ;;
+
+  pick)
+    mapfile -t ROWS < <(discover)
+    if [[ ${#ROWS[@]} -eq 0 ]]; then
+      echo "prompt-copy pick: no prompts found under any docs root" >&2; exit 1
+    fi
+    printf '\n'; i=0
+    for r in "${ROWS[@]}"; do
+      i=$((i + 1)); printf '  %3d) %s\n' "$i" "$(printf '%s' "$r" | cut -f2)"
+    done
+    printf '\n  number (blank to cancel): '
+    read -r sel || sel=""
+    [[ -z "$sel" ]] && { echo "prompt-copy: cancelled"; exit 0; }
+    exec "$SELF" get "$sel"
+    ;;
+esac
+
+# A bare path is accepted directly, so any file works without registration.
+if [[ -f "$cmd" ]]; then
+  SEL=("$cmd")
+  [[ -f "$(dirname "$cmd")/CONTEXT_BUNDLE.md" ]] && SEL+=("$(dirname "$cmd")/CONTEXT_BUNDLE.md")
+  emit "${SEL[@]}" > "$TMP"
+  clip < "$TMP"
+  BYTES=$(wc -c < "$TMP" | tr -d ' ')
+  rm -f "$TMP"
+  echo "prompt-copy: copied $(basename "$cmd") ($BYTES bytes)"
+  exit 0
+fi
+if [[ -d "$cmd" ]]; then
+  mapfile -t SEL < <(files_for "$(cd "$cmd" && pwd || echo "$cmd")")
+  [[ ${#SEL[@]} -eq 0 ]] && { echo "prompt-copy: no PROMPT.md in $cmd" >&2; exit 1; }
+  emit "${SEL[@]}" > "$TMP"
+  clip < "$TMP"
+  BYTES=$(wc -c < "$TMP" | tr -d ' ')
+  rm -f "$TMP"
+  echo "prompt-copy: copied $cmd ($BYTES bytes, ${#SEL[@]} file(s))"
+  exit 0
+fi
+
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
+
+# Bare-name form: `prompt-copy life-habits` copies, as both skills document.
+# A bare word that is not a known subcommand is treated as a name to copy
+# (prefix-matched) rather than reported as an unknown target. Without this the
+# documented `prompt-copy <name>` invocation fails outright.
+if [[ -n "$cmd" ]]; then
+  exec "$SELF" get "$cmd"
+fi

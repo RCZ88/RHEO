@@ -178,7 +178,7 @@ function Console() {
           </span>
         </div>
         <span className="mono-label" style={{ fontSize: 10 }}>
-          scenario {idx + 1}/{SCENARIOS.length}
+          scenario {idx + 1}/{SCENARIOS.length} · EXAMPLE
         </span>
       </div>
 

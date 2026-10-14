@@ -64,7 +64,8 @@ export default function Download() {
         }}
       />
 
-      <div className="relative px-5 sm:px-10 max-w-[760px] mx-auto text-center">
+      <div className="relative px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto text-center">
+        <div className="mx-auto max-w-[760px]">
         <motion.p
           className="mono-label"
           style={{ fontSize: 11 }}
@@ -344,6 +345,7 @@ export default function Download() {
           animate={inView ? { opacity: 1, scaleX: 1 } : {}}
           transition={{ duration: 0.7, delay: 0.44, ease: [0.16, 1, 0.3, 1] }}
         />
+        </div>
       </div>
     </section>
   );
