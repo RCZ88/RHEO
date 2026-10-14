@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useMotionValue, useMotionValueEvent, type MotionValue } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * RealFootage — renders ACTUAL captures of the RHEO app.
@@ -111,7 +112,17 @@ export function RealClip({
    * alternative somewhere else on the page.
    */
   pauseControl = false,
-}: Base & { poster?: string; pauseControl?: boolean }) {
+  scrub,
+}: Base & {
+  poster?: string;
+  pauseControl?: boolean;
+  /**
+   * Scroll-scrubbed playback. Pass the CALLER's `MotionValue<number>` (0→1), not
+   * a plain number: a MotionValue mutates in place and never triggers a React
+   * re-render, so a number prop would only ever deliver the value at mount.
+   */
+  scrub?: MotionValue<number>;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [reduced, setReduced] = useState(false);
@@ -139,7 +150,7 @@ export function RealClip({
       setPaused(true);
       return;
     }
-    if (!el || !video || reduced || paused) return;
+    if (!el || !video || reduced || paused || scrub) return;
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -151,7 +162,36 @@ export function RealClip({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [reduced, paused]);
+  }, [reduced, paused, scrub]);
+
+  /**
+   * Scrubbed playback seeks on every change of the caller's MotionValue.
+   *
+   * `duration` is NaN until metadata loads, so early change events are
+   * deliberate no-ops and `loadedmetadata` re-seeks once it is known.
+   */
+  const seek = useCallback((progress: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const duration = video.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const target = Math.min(Math.max(progress, 0), 1) * duration;
+    if (Math.abs(video.currentTime - target) > 0.04) video.currentTime = target;
+  }, []);
+
+  // `useMotionValueEvent` requires a MotionValue and a hook call cannot be
+  // conditional, so a scrub-less clip subscribes to this idle value instead.
+  const idle = useMotionValue(0);
+  useMotionValueEvent(scrub ?? idle, "change", seek);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !scrub) return;
+    const onMeta = () => seek(scrub.get());
+    if (video.readyState >= 1) onMeta();
+    else video.addEventListener("loadedmetadata", onMeta);
+    return () => video.removeEventListener("loadedmetadata", onMeta);
+  }, [scrub, seek]);
 
   return (
     <figure className={className} style={{ margin: 0 }}>

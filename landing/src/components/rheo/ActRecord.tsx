@@ -416,6 +416,7 @@ export default function ActRecord() {
               alt="The RHEO dashboard with the 24 hour timeline filling in as the day is recorded"
               pauseControl
               ratio={16 / 10}
+              scrub={p}
             />
           </div>
 
