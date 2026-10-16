@@ -110,10 +110,13 @@ import { initEval, listCases, runEval } from "./services/aiEval";
 import { AutomationBus, setAutomationPublisher, type AutomationRow } from "./services/automation/AutomationBus";
 import { AutomationRunner, createAutomationRunner } from "./services/automation/AutomationRunner";
 import { buildExecutors, liveExecutors, bindGoalBehavior } from "./services/automation/executors";
+import { migrateConnectors } from "./services/connectors/migrate";
 import {
     CATALOGUE_VERSION, capabilities, getTrigger, getAction, isValidAutomation, matches,
 } from "./shared/automationCatalogue";
 import { createHaloIsland, registerHaloIpc, reconcileHaloGeometry, toggleHaloIsland, sendHaloCommand, configureHaloPrefs, destroyHaloIsland } from "./main/halo/haloIsland";
+import { OffscreenHaloRenderer } from "./main/halo/offscreenRenderer";
+import { KwinBridge } from "./main/halo/offscreenRenderer";
 import { HALO_PREFS_KEY } from "./features/halo/HaloPreferences";
 
 /**
@@ -160,15 +163,29 @@ function isBrowserAppName(name) {
  * A private window NEVER carries its domain onward - that is the whole point of the state.
  */
 function haloCurrentAppSnapshot() {
+    /* `currentApp` IS A STRING — the resolved foreground app name — not an object.
+     *
+     * It is assigned as `currentApp = appName || null` (:6534) and every other reader treats it
+     * as one: `categorizeApp(currentApp)`, `currentApp !== 'RHEO'`, `isBrowserWithExtension(currentApp)`.
+     *
+     * This function was reading it as an OBJECT: `currentApp.app ?? currentApp.name ?? 'Unknown'`.
+     * On a string `'Firefox'`, `.app` is `undefined` and `.name` is `undefined`, so the whole
+     * expression fell through to the literal `'Unknown'` — on EVERY snapshot, for EVERY app.
+     * That is why the pill said "No app detected" while the dashboard's app list, reading the same
+     * variable, showed the real apps correctly.
+     *
+     * `category` and `tier` were read the same way and are likewise `undefined` on a string, so
+     * they took their `??` fallbacks and reported "Uncategorized"/"neutral" for every app.
+     *
+     * The string form below is the one the island actually receives. */
     if (typeof currentApp === 'undefined' || !currentApp) return null;
-    const app = currentApp.app ?? currentApp.name ?? 'Unknown';
+    const app = typeof currentApp === 'string' ? currentApp : (currentApp.app ?? currentApp.name ?? 'Unknown');
     const base = {
         app,
-        category: currentApp.category ?? 'Uncategorized',
-        tier: currentApp.tier ?? 'neutral',
+        category: typeof currentApp === 'string' ? categorizeApp(app) : (currentApp.category ?? 'Uncategorized'),
+        tier: typeof currentApp === 'string' ? 'neutral' : (currentApp.tier ?? 'neutral'),
     };
-    const name = typeof currentApp === 'string' ? currentApp : app;
-    if (!isBrowserAppName(name)) return base;
+    if (!isBrowserAppName(app)) return base;
     const fresh = Date.now() - lastActiveBrowserTimestamp < HALO_DOMAIN_STALE_MS;
     if (!fresh || !lastActiveBrowserDomain) return { ...base, domain: null };
     return {
@@ -3564,6 +3581,36 @@ function initializeStorage() {
             completed_at TEXT
           )
         `);
+
+        /* REMINDERS, AS THEIR OWN ROWS.
+           `deadlines.remind_at` could hold exactly ONE absolute instant, so a
+           deadline could remind you once, at a fixed time. Three things were
+           impossible and are the reason this feature read as broken:
+             - more than one reminder ("a week out AND the morning of"),
+             - RELATIVE leads, which is what people actually mean by "remind me
+               the day before" — stored as an instant it goes stale the moment
+               the deadline moves, silently becoming "the day before the OLD
+               date", which is no longer the day before anything,
+             - surviving a reschedule.
+           So each reminder is a row. `lead_min` is only read when mode is
+           'relative' and `remind_at` only when it is 'absolute'; both columns
+           exist because the two shapes are genuinely different, not for
+           symmetry. */
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS deadline_reminders (
+            id TEXT PRIMARY KEY,
+            deadline_id TEXT NOT NULL,
+            mode TEXT NOT NULL DEFAULT 'relative',
+            lead_min INTEGER NOT NULL DEFAULT 0,
+            remind_at TEXT,
+            fired INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        // One lookup when firing, and one when rendering a single deadline.
+        try { db.exec('CREATE INDEX IF NOT EXISTS idx_deadline_reminders_dl ON deadline_reminders(deadline_id)'); } catch {}
+        try { db.exec('CREATE INDEX IF NOT EXISTS idx_deadline_reminders_pending ON deadline_reminders(fired, remind_at)'); } catch {}
+
         db.exec('CREATE INDEX IF NOT EXISTS idx_goals_date ON goals(date)');
         try { db.exec('ALTER TABLE goals ADD COLUMN priority INTEGER DEFAULT 0'); } catch {} // may already exist
         try { db.exec('ALTER TABLE goals ADD COLUMN parent_id TEXT'); } catch {} // goal hierarchy
@@ -3891,6 +3938,13 @@ function initializeStorage() {
           )
         `);
 
+        // Deadline TIMES. A deadline could only carry a DATE: `due_date` is
+          // YYYY-MM-DD and there was no time column anywhere — not in the table,
+          // not in the type, not in the writer's allow-list. So "submit the form
+          // at 14:00" was unstorable, and the reminder work had to invent a 09:00
+          // default to have something to count back from. The two are separate
+          // facts about the same deadline and both are now real.
+        try { db.exec(`ALTER TABLE deadlines ADD COLUMN due_time TEXT`); } catch {}
         // Migration: add remind_at column to deadlines
         try {
           db.exec(`ALTER TABLE deadlines ADD COLUMN remind_at TEXT`);
@@ -3917,6 +3971,35 @@ function initializeStorage() {
         if (!deadlineColumns.some(c => c.name === 'goal_id')) db.exec('ALTER TABLE deadlines ADD COLUMN goal_id TEXT');
         db.exec('CREATE INDEX IF NOT EXISTS idx_schedule_entries_goal ON schedule_entries(goal_id)');
         db.exec('CREATE INDEX IF NOT EXISTS idx_deadlines_goal ON deadlines(goal_id)');
+
+        // Migration: add series_id and exceptions columns to schedule_entries for Activities series
+        const scheduleColumnsAfter = db.prepare('PRAGMA table_info(schedule_entries)').all() as any[];
+        if (!scheduleColumnsAfter.some(c => c.name === 'series_id')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN series_id TEXT');
+          db.exec('CREATE INDEX IF NOT EXISTS idx_schedule_entries_series ON schedule_entries(series_id)');
+        }
+        if (!scheduleColumnsAfter.some(c => c.name === 'exceptions')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN exceptions TEXT DEFAULT \'[]\'');
+        }
+        if (!scheduleColumnsAfter.some(c => c.name === 'archived')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN archived INTEGER DEFAULT 0');
+        }
+        if (!scheduleColumnsAfter.some(c => c.name === 'instructor')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN instructor TEXT');
+        }
+        if (!scheduleColumnsAfter.some(c => c.name === 'linked_phase_id')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN linked_phase_id TEXT');
+        }
+        if (!scheduleColumnsAfter.some(c => c.name === 'linked_goal_ids')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN linked_goal_ids TEXT DEFAULT \'[]\'');
+        }
+        if (!scheduleColumnsAfter.some(c => c.name === 'start_date')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN start_date TEXT');
+        }
+        if (!scheduleColumnsAfter.some(c => c.name === 'end_date')) {
+          db.exec('ALTER TABLE schedule_entries ADD COLUMN end_date TEXT');
+        }
+
         db.exec(`
           CREATE TABLE IF NOT EXISTS todos (
             id TEXT PRIMARY KEY,
@@ -3939,6 +4022,26 @@ function initializeStorage() {
         db.exec('CREATE INDEX IF NOT EXISTS idx_todos_parent ON todos(parent_todo_id)');
         db.exec('CREATE INDEX IF NOT EXISTS idx_todos_deadline ON todos(deadline_id)');
         db.exec('CREATE INDEX IF NOT EXISTS idx_todos_due ON todos(due_date)');
+
+        // Migration: add group_id column to todos table
+        const todoColumns = db.prepare("PRAGMA table_info(todos)").all() as any[];
+        if (!todoColumns.some(c => c.name === 'group_id')) {
+          db.exec('ALTER TABLE todos ADD COLUMN group_id TEXT');
+          db.exec('CREATE INDEX IF NOT EXISTS idx_todos_group ON todos(group_id)');
+        }
+
+        // Create todo_groups table
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS todo_groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            color TEXT,
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        db.exec('CREATE INDEX IF NOT EXISTS idx_todo_groups_sort ON todo_groups(sort_order)');
+
         const afterCounts = {
           schedule: (db.prepare('SELECT COUNT(*) AS c FROM schedule_entries').get() as any)?.c || 0,
           deadlines: (db.prepare('SELECT COUNT(*) AS c FROM deadlines').get() as any)?.c || 0,
@@ -4064,6 +4167,10 @@ function initializeStorage() {
         `);
         db.exec('CREATE INDEX IF NOT EXISTS idx_connector_items_connector ON connector_items(connector_id)');
         db.exec('CREATE INDEX IF NOT EXISTS idx_connector_items_date ON connector_items(date)');
+
+        // Additive migration for messaging connectors (Teams + LINE). Idempotent;
+        // runs at boot before any IPC handler is registered.
+        try { migrateConnectors(db, dbPath ?? ''); } catch (e) { console.error('[connectors migration]', e) }
 
         db.exec(`
           CREATE TABLE IF NOT EXISTS touched_files (
@@ -5196,6 +5303,11 @@ const MAX_LOGGED_SESSION_MS = 3600000; // 1 hour - cap logged sessions to preven
  let SLEEP_GAP_MS = 300000; // 5 minutes — gap threshold to detect system sleep (was 30s)
  const BROWSER_MAX_DELTA_MS = 10 * 60 * 1000; // 10 minutes — separate cap for browser delta (extension sends ~5s normally)
  const BROWSER_MAX_NULL_POLL = 60; // polls before closing a browser session when extension doesn't report
+// How far a periodic delta may sit from the row it belongs to. A periodic payload's
+// timestamp is its SYNC time, not its session start, so an exact match cannot find it. The
+// extension caps its own delta at 5 minutes, so 10 minutes is generous for finding the
+// session and tight enough that two separate visits to the same site stay two rows.
+const BROWSER_SESSION_MERGE_WINDOW_MS = 10 * 60 * 1000;
  const IDLE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes — OS-level idle before pausing tracking
 /**
  * AFK threshold in SECONDS, mirrored from the renderer (src/lib/afk.ts writes
@@ -6079,6 +6191,36 @@ async function pollForegroundInner() {
     const now = Date.now();
     const previousPollTime = lastPollTime;
     lastPollTime = now;
+
+    // AUTO-RESUME tracking when the user comes back, even with no window open.
+    // AFK detection pauses tracking (`set-tracking` -> false). Normally the
+    // renderer calls `setTracking(true)` on user input; with a minimised/tray
+    // app there is no renderer, so tracking would stay paused forever and the
+    // absence would keep "counting". Mirror the return-detection in the main
+    // process, which is the only always-alive component.
+    if (!isTracking) {
+        let resume = false;
+        try {
+            const thresholdSec = (typeof afkThresholdSeconds === 'number' && afkThresholdSeconds > 0)
+                ? afkThresholdSeconds : 300;
+            let sysIdleSec = electron_1.powerMonitor.getSystemIdleTime();
+            if (!isIdleApiUsable() && lastForegroundChangeMs) {
+                sysIdleSec = (now - lastForegroundChangeMs) / 1000;
+            }
+            resume = (sysIdleSec * 1000 < thresholdSec * 1000);
+        } catch { /* ignore, keep paused */ }
+        if (resume) {
+            console.log('[DeskFlow] 🔄 User present again — auto-resuming tracking (main process)');
+            setIsTracking(true);
+            const pollInterval = userPreferences.trackingPollInterval || 1000;
+            if (!trackingInterval) {
+                trackingInterval = setInterval(pollForeground, pollInterval);
+            }
+            // Let the renderer know if a window exists, so it can build the prompt.
+            safeSend(mainWindow, 'tracking-resumed', { at: now });
+        }
+    }
+
     if (!isTracking)
         return;
     // --- Idle-based sleep detection (runs every poll, independent of window focus/poll gaps) ---
@@ -7279,6 +7421,93 @@ electron_1.ipcMain.handle('notification-click', () => {
         mainWindow.focus();
     }
 });
+
+// ── Notification IPC ────────────────────────────────────────────────────────
+// WHY THIS BLOCK EXISTS
+//
+// `preload.ts` has whitelisted 'notification:send', 'notification:clear' and
+// 'notification:get-all' since before any handler existed, so `send()` passed
+// the security check and then went nowhere — an `invoke` with no handler
+// rejects in the renderer and the notification is silently dropped. That is
+// exactly why timer/alarm/reminder OS notifications appeared to "do nothing"
+// on Linux. The renderer now has ONE door into `enqueueNotification`, which is
+// the same function the deadline ticker uses, so every notification lands in
+// the SQLite inbox, fires the OS popup, plays the sound, and emits the IPC
+// event the bell badge listens for.
+try {
+    const notif = require('./main/notifications');
+    const { enqueueNotification, listNotifications, dismissNotification, markRead, unreadCount, playNotificationSound, setSoundMuted, loadSoundPreference } = notif;
+
+    electron_1.ipcMain.handle('notification:send', (_e, n) => {
+        if (!db) return { success: false, error: 'database not ready' };
+        try {
+            const id = n?.id || `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            enqueueNotification(db, {
+                id,
+                kind: n?.kind || 'generic',
+                title: n?.title || 'RHEO',
+                body: n?.body || '',
+                tier: ['info', 'warn', 'success', 'error'].includes(n?.tier) ? n.tier : 'info',
+                data: n?.data || {},
+            });
+            return { success: true, id };
+        } catch (err) {
+            console.error('[DeskFlow] notification:send failed:', err);
+            return { success: false, error: String(err?.message || err) };
+        }
+    });
+
+    electron_1.ipcMain.handle('notification:get-all', (_e, limit) => {
+        if (!db) return { success: false, error: 'database not ready', notifications: [] };
+        try {
+            return { success: true, notifications: listNotifications(db, limit || 50) };
+        } catch (err) {
+            return { success: false, error: String(err?.message || err), notifications: [] };
+        }
+    });
+
+    electron_1.ipcMain.handle('notification:clear', (_e, id) => {
+        if (!db) return { success: false, error: 'database not ready' };
+        try {
+            if (id) markRead(db, id); else dismissNotification(db, id);
+            return { success: true };
+        } catch (err) {
+            return { success: false, error: String(err?.message || err) };
+        }
+    });
+
+    electron_1.ipcMain.handle('notification:dismiss', (_e, id) => {
+        if (!db || !id) return { success: false };
+        try { dismissNotification(db, id); return { success: true }; }
+        catch (err) { return { success: false, error: String(err?.message || err) }; }
+    });
+
+    electron_1.ipcMain.handle('notification:unread-count', () => {
+        if (!db) return 0;
+        try { return unreadCount(db); } catch { return 0; }
+    });
+
+    // Sound preference, so the user can mute. Stored in app_settings so it
+    // survives restart rather than resetting to "on" every launch.
+    electron_1.ipcMain.handle('notification:sound', (_e, muted) => {
+        try {
+            if (typeof muted === 'boolean') setSoundMuted(db, muted);
+            return { success: true, muted: notif.isSoundMuted(db) };
+        } catch (err) {
+            return { success: false, error: String(err?.message || err) };
+        }
+    });
+
+    electron_1.ipcMain.handle('notification:test-sound', (_e, tier) => {
+        try { playNotificationSound(tier || 'info'); return { success: true }; }
+        catch (err) { return { success: false, error: String(err?.message || err) }; }
+    });
+
+    // Seed the mute flag from the DB as soon as it exists.
+    if (db) { try { loadSoundPreference(db); } catch {} }
+} catch (e) {
+    console.error('[DeskFlow] notification IPC registration failed:', e);
+}
 
 electron_1.ipcMain.handle('get-auto-start-status', () => {
     const settings = electron_1.app.getLoginItemSettings();
@@ -8710,15 +8939,41 @@ electron_1.ipcMain.handle('set-title-bar-mode', (_event, mode: 'always' | 'hover
 electron_1.ipcMain.handle('get-keyboard-shortcuts', () => {
     return userPreferences.keyboardShortcuts || DEFAULT_KEYBOARD_SHORTCUTS;
 });
-electron_1.ipcMain.handle('set-keyboard-shortcuts', (_event, shortcuts: Record<string, string>) => {
+/**
+ * Re-bind the global accelerators after the user edits them in Settings.
+ *
+ * WHY THESE ARE INDIRECTED INSTEAD OF CALLED DIRECTLY
+ * --------------------------------------------------
+ * `registerQuickCaptureShortcut` and `registerHaloIslandShortcut` are declared INSIDE the
+ * `app.whenReady().then(...)` callback (they end at :24403), so they are block-scoped and were
+ * invisible to this module-level IPC handler. Calling them here was a guaranteed
+ * `ReferenceError: registerHaloIslandShortcut is not defined` on every keyboard-shortcut save —
+ * which meant the handler threw AFTER writing the prefs, so Settings silently kept failing to
+ * rebind. tsc reported it as `TS2304: Cannot find name`.
+ *
+ * `globalShortcut` has no live rebind, so the Settings row was cosmetic without this: Electron
+ * captures the accelerator at `register()` time, and changing the key persisted it while the OS
+ * kept the old one until restart. Both functions are assigned to these module-scope bindings when
+ * `whenReady` runs, so the early-call case is a clean no-op rather than a throw.
+ */
+let rebindQuickCaptureShortcut: (() => void) | null = null;
+let rebindHaloIslandShortcut: (() => void) | null = null;
+
+electron_1.ipcMain.handle('set-keyboard-shortcuts', (_event: unknown, shortcuts: Record<string, string>) => {
     userPreferences.keyboardShortcuts = shortcuts;
     savePreferences();
     // Re-bind. Without this the Settings row is cosmetic: Electron captures the
     // accelerator at register() time, so editing the key here would persist it
     // and change nothing until a restart — the stored-but-never-read defect in
     // its most literal form.
-    registerQuickCaptureShortcut();
-    registerHaloIslandShortcut();
+    try {
+      rebindQuickCaptureShortcut?.();
+      rebindHaloIslandShortcut?.();
+    } catch (e: any) {
+      /* One failed accelerator must not abort the other's rebind, nor throw out of the handler
+       * after the prefs were already saved. */
+      console.error('[DeskFlow] shortcut rebind failed:', e?.message || e);
+    }
     return true;
 });
 
@@ -21362,9 +21617,14 @@ electron_1.ipcMain.handle('ai-chat:load', async (_event, threadDate: string) => 
   } catch (err: any) { return { success: false, error: err.message, messages: [] }; }
 });
 
-electron_1.ipcMain.handle('ai-chat:save', async (_event, data: { threadDate: string; messages: Array<{ role: string; content: string; parsed_json?: string; timestamp?: number }> }) => {
+electron_1.ipcMain.handle('ai-chat:save', async (_event, data: { threadDate: string; messages: Array<{ role: string; content: string; parsed_json?: string; timestamp?: number }>; workspaceName?: string; canvasName?: string }) => {
   try {
     const { threadDate, messages } = data;
+    // Origin identity. Only overwrite when the caller actually sent one, so a
+    // save from a context that doesn't know its canvas can never blank a
+    // previously-recorded origin.
+    const workspaceName = data.workspaceName?.trim() || null;
+    const canvasName = data.canvasName?.trim() || null;
 
     // Derive thread metadata
     const lastMsg = messages[messages.length - 1];
@@ -21374,14 +21634,16 @@ electron_1.ipcMain.handle('ai-chat:save', async (_event, data: { threadDate: str
     const tx = db.transaction(() => {
       // Upsert thread metadata
       db.prepare(`
-        INSERT INTO ai_chat_threads (thread_date, message_count, last_message_at, preview, updated_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO ai_chat_threads (thread_date, message_count, last_message_at, preview, updated_at, workspace_name, canvas_name)
+        VALUES (?, ?, ?, ?, ?, NULLIF(TRIM(?), ''), NULLIF(TRIM(?), ''))
         ON CONFLICT(thread_date) DO UPDATE SET
           message_count = excluded.message_count,
           last_message_at = excluded.last_message_at,
           preview = excluded.preview,
-          updated_at = excluded.updated_at
-      `).run(threadDate, messages.length, lastMsg?.timestamp ?? now, preview, now);
+          updated_at = excluded.updated_at,
+          workspace_name = COALESCE(excluded.workspace_name, ai_chat_threads.workspace_name),
+          canvas_name = COALESCE(excluded.canvas_name, ai_chat_threads.canvas_name)
+      `).run(threadDate, messages.length, lastMsg?.timestamp ?? now, preview, now, workspaceName, canvasName);
 
       // Save messages
       db.prepare('DELETE FROM ai_chat_messages WHERE thread_date = ?').run(threadDate);
@@ -21485,7 +21747,9 @@ electron_1.ipcMain.handle('ai-chat:list-threads', async () => {
         title,
         message_count as messageCount,
         last_message_at as lastMessageAt,
-        preview
+        preview,
+        workspace_name as workspaceName,
+        canvas_name as canvasName
       FROM ai_chat_threads
       ORDER BY last_message_at DESC
     `).all() as any[];
@@ -22910,6 +23174,26 @@ function handleBrowserData(data, foregroundReadSaysBrowser: boolean = false) {
     // Only log if session is meaningful (> 2 seconds)
     if (sessionDuration < 2000)
         return;
+    // HOW MUCH TIME THIS PAYLOAD REPRESENTS -- computed ONCE, here, because three separate
+    // branches below need the answer and none of them may invent its own. The extension
+    // sends two shapes that do not mean the same thing:
+    //   periodic   : timestamp = sync time,          active_duration_ms = DELTA (<= 5 min)
+    //   tab switch : timestamp = session START (constant), active_duration_ms = CUMULATIVE
+    // `magnitudeMs` is therefore a PERIODIC DELTA or a session TOTAL, never both. It used to
+    // be declared further down and read by an earlier branch, which put it in the temporal
+    // dead zone -- that branch threw a ReferenceError whenever it was taken.
+    //
+    // The two shapes need DIFFERENT bounds as well. A delta is capped tightly, because the
+    // extension re-syncs every ~30s and already caps its own delta at 5 minutes. A session
+    // TOTAL is legitimately long -- a three-hour reading session must not be truncated to
+    // ten minutes -- so it is bounded only by the same ceiling as any other row.
+    const magnitudeMs = Math.min(
+        data.is_periodic ? (data.delta_ms || data.active_duration_ms || 0) : (data.active_duration_ms || 0),
+        data.is_periodic ? BROWSER_MAX_DELTA_MS : MAX_LOGGED_SESSION_MS);
+    // New time this payload contributes on its own. A snapshot contributes NONE: it reports
+    // a total that already contains every delta counted so far, so it may only RAISE the
+    // recorded value, never add to it.
+    const creditedMs = data.is_periodic ? magnitudeMs : 0;
     // STRICT MODE: Only track the MOST RECENTLY active tab.
     // This is a PER-BROWSER rule: Chrome's background tabs must not pollute the
     // foreground, but Chrome and Firefox are separate browsers and must not
@@ -23022,7 +23306,7 @@ function handleBrowserData(data, foregroundReadSaysBrowser: boolean = false) {
                     recentBrowserApp.id
                 );
                 console.log(`[DeskFlow] 🔗 Deduplicated browser entry: ${recentBrowserApp.app} → ${data.domain}`);
-                touchBrowserProfile(identity.profileId, identity.browserName, newSessionDuration);
+                touchBrowserProfile(identity.profileId, identity.browserName, creditedMs);
                 // Still create in-memory session for delta tracking
                 activeBrowserSessions.set(sessionKey, {
                     id: recentBrowserApp.id,
@@ -23040,22 +23324,114 @@ function handleBrowserData(data, foregroundReadSaysBrowser: boolean = false) {
                 return;
             }
         }
-        // No active session for this domain — create new one
-        let newSessionDuration;
+        // No active session in MEMORY for this domain.
+        //
+        // THIS IS WHERE THE WRITE AMPLIFICATION CAME FROM. The extension sends two
+        // payload shapes and they do NOT mean the same thing:
+        //   tab switch : timestamp = session START (constant), active_duration_ms = CUMULATIVE
+        //   periodic   : timestamp = each sync time,          active_duration_ms = DELTA (<= 5 min)
+        // The old code computed a periodic-aware duration and then unconditionally
+        // OVERWROTE it with `Math.min(sessionDuration, MAX_LOGGED_SESSION_MS)` -- the
+        // CUMULATIVE value. So a tab-switch snapshot delivered N times (MV3 service-worker
+        // restarts, the extension's retry queue, an evicted in-memory session) appended N
+        // rows AT THE SAME TIMESTAMP, each carrying the entire accumulated session: 60 rows
+        // at 2026-10-13T16:15:10.675Z, 140 rows pinned at exactly 3_600_000 ms, and days
+        // claiming 139.0 h and 108.1 h from a single browsing session.
+        //
+        // The corrected semantics have no third case:
+        //   - a periodic payload contributes a DELTA of new time;
+        //   - a non-periodic snapshot contributes NO new time at all. It may only
+        //     establish, or RAISE, the total already recorded for that session.
         if (data.is_periodic) {
-            newSessionDuration = Math.min(data.delta_ms || data.active_duration_ms, MAX_LOGGED_SESSION_MS);
-            console.log(`[DeskFlow] 📝 First sync for ${data.domain}: creating new session with ${Math.floor((newSessionDuration || 0) / 1000)}s`);
+            console.log(`[DeskFlow] 📝 First sync for ${data.domain}: creating new session with ${Math.floor(magnitudeMs / 1000)}s (delta)`);
         }
-        newSessionDuration = Math.min(sessionDuration, MAX_LOGGED_SESSION_MS);
-        if (sessionDuration > MAX_LOGGED_SESSION_MS) {
-            console.warn(`[DeskFlow] ⚠️ Suspicious duration ${Math.floor(sessionDuration / 1000)}s for new session ${data.domain}, capping to 1 hour`);
+        else if (sessionDuration > BROWSER_MAX_DELTA_MS) {
+            // Informational only. A snapshot taller than the delta cap is not suspicious any
+            // more -- it is simply a session total, and it is raised, not added.
+            console.log(`[DeskFlow] ℹ️ Snapshot for ${data.domain} carries a session total of ${Math.floor(sessionDuration / 1000)}s (not added)`);
+        }
+        // THE DATABASE IS THE SESSION REGISTRY; this process's memory is only a cache.
+        // An in-memory map cannot survive an app restart, and it cannot be trusted to agree
+        // with what is already on disk. The extension defines a session's identity as
+        // (browser, domain, session-start) and puts that start time in `timestamp`, so the
+        // row already exists whenever this session has been seen before. Adopt it instead of
+        // appending a twin -- this is what makes the write idempotent, and it is the only
+        // reason the amplification above cannot recur.
+        if (!useJson) {
+            try {
+                // A snapshot names its session explicitly -- its timestamp IS the session
+                // start -- so it matches exactly. A periodic delta cannot: its timestamp is
+                // the SYNC time. Fall back to the nearest row for the same domain inside the
+                // merge window, which is the durable equivalent of the in-memory session
+                // map above and survives an app restart.
+                let twin = db.prepare(`
+                    SELECT id, timestamp, duration_ms FROM logs
+                    WHERE is_browser_tracking = 1
+                      AND timestamp = ?
+                      AND domain = ?
+                      AND (browser_name IS ? OR browser_name IS NULL)
+                    ORDER BY id DESC
+                    LIMIT 1
+                `).get(data.timestamp, data.domain, identity.browserName) as any;
+                if (!twin && data.is_periodic) {
+                    twin = db.prepare(`
+                        SELECT id, timestamp, duration_ms FROM logs
+                        WHERE is_browser_tracking = 1
+                          AND domain = ?
+                          AND ABS(julianday(timestamp) - julianday(?)) * 86400000 <= ?
+                        ORDER BY ABS(julianday(timestamp) - julianday(?)) ASC
+                        LIMIT 1
+                    `).get(data.domain, data.timestamp, BROWSER_SESSION_MERGE_WINDOW_MS, data.timestamp) as any;
+                }
+                if (twin) {
+                    const raised = data.is_periodic
+                        ? Math.min(twin.duration_ms + magnitudeMs, MAX_LOGGED_SESSION_MS)
+                        : Math.max(twin.duration_ms, magnitudeMs);
+                    const added = raised - twin.duration_ms;
+                    db.prepare(`UPDATE logs SET duration_ms = ?, title = ?, url = ?, category = ?,
+                                                  browser_name = COALESCE(?, browser_name),
+                                                  profile_id = COALESCE(?, profile_id)
+                                WHERE id = ?`).run(raised, data.title || data.domain,
+                        data.sanitized_url || data.url,
+                        categorizeDomain(data.domain, data.title, data.url),
+                        identity.browserName, identity.profileId, twin.id);
+                    if (added > 0) {
+                        touchBrowserProfile(identity.profileId, identity.browserName, added);
+                        updateAggregates(twin.timestamp, data.domain,
+                            categorizeDomain(data.domain, data.title, data.url), added, data.domain, true);
+                    }
+                    // Adopt it, so every later payload for this session takes the ordinary
+                    // in-memory update path and never re-enters this branch.
+                    activeBrowserSessions.set(sessionKey, {
+                        id: twin.id,
+                        timestamp: twin.timestamp,
+                        app: data.domain,
+                        category: categorizeDomain(data.domain, data.title, data.url),
+                        duration_ms: raised,
+                        title: data.title || data.domain,
+                        project: undefined,
+                        url: data.sanitized_url || data.url,
+                        domain: data.domain,
+                        tab_id: data.tab_id,
+                        is_browser_tracking: true,
+                        browser_name: identity.browserName,
+                        profile_id: identity.profileId,
+                        _lastActivityAt: Date.now()
+                    });
+                    console.log(`[DeskFlow] ♻️ Adopted existing session row #${twin.id} for ${data.domain} (${Math.floor(raised / 1000)}s, +${Math.floor(added / 1000)}s)`);
+                    return;
+                }
+            }
+            catch (err) {
+                console.error('[DeskFlow] Browser session adopt failed:', err);
+            }
         }
         const entry = {
             id: Date.now(),
             timestamp: data.timestamp || new Date().toISOString(),
             app: data.domain || data.app || 'Browser',
             category: categorizeDomain(data.domain, data.title, data.url),
-            duration_ms: newSessionDuration,
+            duration_ms: magnitudeMs,
             title: data.title || data.domain,
             project: undefined,
             url: data.sanitized_url || data.url,
@@ -23085,10 +23461,10 @@ function handleBrowserData(data, foregroundReadSaysBrowser: boolean = false) {
                 console.error('[DeskFlow] Browser data insert failed:', err);
             }
         }
-        touchBrowserProfile(identity.profileId, identity.browserName, newSessionDuration);
+        touchBrowserProfile(identity.profileId, identity.browserName, magnitudeMs);
         updateAggregates(entry.timestamp, entry.app, entry.category, entry.duration_ms, data.domain, true);
         activeBrowserSessions.set(sessionKey, entry);
-        console.log(`[DeskFlow] ✅ Browser logged: ${data.domain} → ${Math.floor(sessionDuration / 1000)}s (${identity.browserName || 'unknown browser'}${identity.profileId ? ` / ${identity.profileId.slice(0, 8)}` : ''})`);
+        console.log(`[DeskFlow] ✅ Browser logged: ${data.domain} → ${Math.floor(entry.duration_ms / 1000)}s (${data.is_periodic ? 'delta' : 'snapshot'}, ${identity.browserName || 'unknown browser'}${identity.profileId ? ` / ${identity.profileId.slice(0, 8)}` : ''})`);
     }
 }
 // FIX 2: Periodic flush of stale browser sessions (handles MV3 onSuspend unreliability)
@@ -23680,12 +24056,41 @@ if (db) {
 // bitten by it before (a marker file records the crash), and expose a manual
 // override via DESKFLOW_DISABLE_GPU=1.
 const GPU_DISABLE_MARKER = path.join(electron_1.app.getPath('userData'), '.gpu-disabled');
+// 2026-10-16 — the marker must NOT be an eternal latch. Measured on this box: a
+// marker written 2026-10-02 was still forcing software rendering two weeks later
+// — every page composited through SwiftShader (~1 core burned at idle, on every
+// route). So:
+//   1. A marker older than GPU_DISABLE_TTL_MS is IGNORED (hardware is retried).
+//   2. While a retry is unproven, the marker is re-armed with a fresh timestamp,
+//      so a retry that FATALs during GPU launch still lands on software on the
+//      NEXT start instead of retrying into a crash loop.
+//   3. A retry whose GPU process survives GPU_PROOF_GRACE_MS clears the marker.
+const GPU_DISABLE_TTL_MS = 24 * 60 * 60 * 1000; // retry hardware ~once a day after a recorded death
+const GPU_PROOF_GRACE_MS = 15000;              // GPU must outlive this long to call the retry proven
+let gpuDiedThisSession = false;                // set by the child-process-gone handler below
+/** Age of the recorded GPU death in ms, or null when no marker exists. */
+function gpuDisableMarkerAgeMs(): number | null {
+    try {
+        const stat = fs_1.default.statSync(GPU_DISABLE_MARKER);
+        let recorded = stat.mtimeMs;
+        try {
+            const parsed = Date.parse(fs_1.default.readFileSync(GPU_DISABLE_MARKER, 'utf8').trim());
+            if (Number.isFinite(parsed)) recorded = parsed;
+        } catch { /* unreadable body — fall back to mtime */ }
+        return Date.now() - recorded;
+    } catch {
+        return null;
+    }
+}
 try {
     const forceOff = process.env.DESKFLOW_DISABLE_GPU === '1';
     // Opt back IN to the real GPU (this box has an Intel Arc + an RTX 4050 and a
     // healthy /dev/dri, so the marker may just be stale from one bad launch).
     const forceOn = process.env.DESKFLOW_GPU === '1';
-    if (!forceOn && (forceOff || fs_1.default.existsSync(GPU_DISABLE_MARKER))) {
+    const markerAge = gpuDisableMarkerAgeMs();
+    const markerIsFresh = markerAge !== null && markerAge <= GPU_DISABLE_TTL_MS;
+    let retryingHardware = false;
+    if (!forceOn && (forceOff || markerIsFresh)) {
         electron_1.app.disableHardwareAcceleration();
         electron_1.app.commandLine.appendSwitch('disable-gpu');
         electron_1.app.commandLine.appendSwitch('disable-gpu-compositing');
@@ -23708,6 +24113,27 @@ try {
     else if (forceOn) {
         console.log('[DeskFlow] GPU: DESKFLOW_GPU=1 — forcing hardware acceleration despite the .gpu-disabled marker');
     }
+    // Hardware is being attempted despite a recorded GPU death (stale marker, or
+    // an explicit override): re-arm the marker NOW so a launch-time FATAL falls
+    // back to software on the next start, and clear it once the GPU survives the
+    // proof window. A fresh marker without an override keeps latching software
+    // rendering — that is the intended protection right after a real crash.
+    if (!forceOff && markerAge !== null && (forceOn || !markerIsFresh)) {
+        retryingHardware = true;
+        try { fs_1.default.writeFileSync(GPU_DISABLE_MARKER, new Date().toISOString()); } catch {}
+        console.log('[DeskFlow] GPU: retrying hardware acceleration (recorded marker ' + Math.round(markerAge / 3600000) + 'h old)');
+    }
+    if (retryingHardware) {
+        electron_1.app.whenReady().then(() => {
+            setTimeout(() => {
+                if (gpuDiedThisSession) return; // the handler below already re-armed the marker
+                try {
+                    fs_1.default.unlinkSync(GPU_DISABLE_MARKER);
+                    console.log('[DeskFlow] GPU: hardware acceleration proven — cleared .gpu-disabled marker');
+                } catch { /* already gone */ }
+            }, GPU_PROOF_GRACE_MS);
+        });
+    }
 } catch { /* never block startup on GPU probing */ }
 
 // If the GPU process dies at runtime, record the marker so the NEXT launch
@@ -23715,6 +24141,7 @@ try {
 try {
     electron_1.app.on('child-process-gone', (_event, details) => {
         if (details && details.type === 'GPU') {
+            gpuDiedThisSession = true;
             try { fs_1.default.writeFileSync(GPU_DISABLE_MARKER, new Date().toISOString()); } catch {}
             console.error('[DeskFlow] ⚠️ GPU process gone — software rendering will be used on next launch');
         }
@@ -23879,6 +24306,17 @@ if (!gotTheLock) {
     // warm and the surface appears instantly on first hover.
     try {
       registerHaloIpc({
+        /* `prefs` IS NOT OPTIONAL, and omitting it threw on EVERY poll tick.
+         *
+         * `startPolling`'s tick does `normalizeHaloPrefs(deps.prefs())` on every sample. With
+         * `prefs` absent that is `undefined()` — a TypeError inside the interval callback. The tick
+         * is async, so the throw became a REJECTED PROMISE nothing awaited: the interval kept
+         * firing, the hover FSM never advanced, and no `halo:hover` was ever sent. The island was
+         * deaf to the pointer, with no error anywhere a user would look.
+         *
+         * It is also why every Settings control was inert — `applyHaloPrefs` pushes whatever this
+         * reader returns, and the reader was unreachable. */
+        prefs: () => userPreferences[HALO_PREFS_KEY],
         snapshotProvider: () => ({
           // The stopwatch is still a renderer-module singleton, so main genuinely
           // cannot read it yet; the island falls back to its fixture until the
@@ -23910,6 +24348,88 @@ if (!gotTheLock) {
         } catch { /* a closed window must not take the island down */ }
       });
       configureHaloPrefs(() => userPreferences[HALO_PREFS_KEY]);
+
+      // KWin windowless bridge + offscreen renderer (research: HALO_WINDOWLESS_COMPOSITOR_RESEARCH.md)
+      /* Declared before the bridge because the bridge's pointer handler addresses it: the
+       * OFFSCREEN window is the receiving end of the pointer back-channel. */
+      let offscreenRenderer: OffscreenHaloRenderer | null = null;
+      let haloLayerHostProcess: any = null;
+      const kwinBridge = new KwinBridge({
+        onFrame: (_header, _pixels) => { /* KWin effect will pull frames via socket */ },
+        onPointerEvent: (event) => {
+          /* POINTER BACK-CHANNEL — the receiver is the OFFSCREEN island (`halo.html`), not the
+           * main window. The in-app island polls the cursor against its own geometry; the
+           * windowless capsule's cursor arrives HERE, from the layer host that owns the
+           * surface. `enter`/`leave` drive the same hover FSM the in-app path drives with
+           * `halo:hover`; motion and buttons are injected as REAL DOM input so every React
+           * handler in the island (hover styles, clicks, tab rows) runs unchanged. Coordinates
+           * are frame-local — the host already added the pill's box origin — which is also the
+           * offscreen canvas' own coordinate space. This replaces the old
+           * `mainWindow.send('halo:pointer')`, a channel no renderer ever listened on. */
+          const target = offscreenRenderer?.window();
+          if (!target) return;
+          const kind = event.kind;
+          if (kind === 'enter' || kind === 'leave') {
+            target.webContents.send('halo:hover', { inside: kind === 'enter', pinned: false });
+            return;
+          }
+          try {
+            if (kind === 'move' || kind === 'down' || kind === 'up') {
+              // A move first: Chromium positions the click at the LATEST mouse position, so a
+              // down/up that skipped it would land wherever the pointer last was.
+              target.webContents.sendInputEvent({ type: 'mouseMove', x: event.x, y: event.y });
+              if (kind !== 'move') {
+                target.webContents.sendInputEvent({
+                  type: kind === 'down' ? 'mouseDown' : 'mouseUp',
+                  x: event.x,
+                  y: event.y,
+                  button: 'left',
+                  clickCount: 1,
+                });
+              }
+            }
+          } catch { /* a closed offscreen window must not take the bridge down */ }
+        },
+      });
+      kwinBridge.start();
+
+      offscreenRenderer = new OffscreenHaloRenderer({
+        /* `appRoot` is NOT in scope here — it is only declared inside the
+         * `write-agent-file` handler at :18771. Referencing it threw
+         * `ReferenceError: appRoot is not defined` on EVERY launch, which the
+         * catch at the end of this block swallowed into
+         * `halo-diagnostic.log` as `{"event":"disabled","message":"appRoot is not defined"}`.
+         *
+         * That single line was the whole island: it threw BEFORE `createHaloIsland`
+         * ran, so there was no hover polling, no click region, no prefs push, and no
+         * surface at all. It is why the island stopped responding to hover, why the
+         * capsule would not hide when it was turned off (the renderer never received
+         * `halo:prefs`), and why nothing appeared over other apps. */
+        appRoot: electron_1.app.getAppPath(),
+        onFrame: (header, pixels) => {
+          // Push frame to KWin bridge (which forwards to connected effect)
+          kwinBridge.pushFrame(header, pixels);
+        },
+      });
+      (async () => { await offscreenRenderer.start(); })();
+
+      /* Layer-shell host: the native companion that paints the windowless island over other
+       * apps (an Electron window cannot own a layer surface). Spawned HERE so its lifetime is
+       * the app's: the host hides its surface the moment the bridge disconnects and we kill it
+       * on quit; its single-instance flock makes a duplicate spawn a silent no-op, so this is
+       * safe even when a host from a previous run is still reconnecting. */
+      try {
+        const hostBin = path_1.default.join(electron_1.app.getAppPath(), 'native', 'halo-layer-host', 'halo-layer-host');
+        if (require('fs').existsSync(hostBin)) {
+          haloLayerHostProcess = require('child_process').spawn(hostBin, [], { stdio: 'ignore' });
+          haloLayerHostProcess.unref?.();
+        }
+      } catch { /* the island is optional; it must never take the app down */ }
+      electron_1.app.on('will-quit', () => {
+        try { haloLayerHostProcess?.kill(); } catch { /* ignore */ }
+      });
+
+      // Keep the in-app island for when KWin effect isn't available
       createHaloIsland({
         prefs: () => userPreferences[HALO_PREFS_KEY],
         snapshotProvider: () => ({
@@ -23917,6 +24437,14 @@ if (!gotTheLock) {
           currentApp: haloCurrentAppSnapshot(),
           dictation: haloDictationPayload,
         }),
+        /* The windowless path renders a SECOND copy of the island in the offscreen window
+         * (`offscreenRenderer.ts`): same `OverlayRoot`, same preload, same channels — it
+         * just has to be addressed, or it renders the "No app detected" fixture while the
+         * in-app pill shows the real tracked app. See `extraTargets` in haloIsland.ts. */
+        extraTargets: () => {
+          const w = offscreenRenderer?.window();
+          return w ? [w] : [];
+        },
       }).catch((e) => {
         console.warn('[Halo] island creation failed:', e?.message ?? e);
         try {
@@ -24039,7 +24567,8 @@ if (!gotTheLock) {
      * transcript affordance mentions it), and the island needs a global record toggle because it
      * never takes keyboard focus.
      */
-    registerHaloIslandShortcut();
+    rebindHaloIslandShortcut = registerHaloIslandShortcut;
+    rebindHaloIslandShortcut();
     electron_1.globalShortcut.register('CommandOrControl+Shift+R', () => {
       sendHaloCommand('toggle-record');
     });
@@ -24063,6 +24592,7 @@ if (!gotTheLock) {
     // It reads the key OUT OF prefs rather than hardcoding it, because a
     // hardcoded registration makes the Settings row cosmetic — the exact
     // stored-but-never-read defect this repo already has a MEMORY entry about.
+    rebindQuickCaptureShortcut = registerQuickCaptureShortcut;
     registerQuickCaptureShortcut();
 
 /*
@@ -24213,6 +24743,19 @@ electron_1.ipcMain.handle('training:set-prefs', (_event, patch: { minimumDayMinu
       catch (e) { console.error('[DeskFlow] checkDeadlinesAndNotify interval error:', e); }
     }, 5 * 60 * 1000);
     } catch {}
+
+    // ── Reminder ticker (every 60s) ──
+    // `deadline_reminders` and `reminders.reminder_lead_min` have existed in the
+    // schema since they were added, with an index built for exactly this
+    // lookup, and NOTHING read them. A reminder could be set, stored, and never
+    // fire. This delivers them. Nothing is created here — only rows the user
+    // explicitly asked for are fired, each exactly once (`fired` flips to 1).
+    try {
+      const { startReminderTicker } = require('./main/reminderTicker');
+      startReminderTicker(() => db);
+    } catch (e) {
+      console.error('[DeskFlow] reminder ticker failed to start:', e);
+    }
 
     // ── Monthly recaps (auto-generate at startup + every 6 hours) ──
     try {
