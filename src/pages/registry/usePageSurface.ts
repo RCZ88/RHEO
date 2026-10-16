@@ -26,7 +26,7 @@
  * this hook. A wrong key is a validator failure, not a silent no-op.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import type { PageManifest, TabSpec } from './types'
 import { getManifest, manifestForPath } from './registry'
@@ -135,6 +135,26 @@ export function usePageSurface<T extends string = string>(
   const validIds = useMemo(() => new Set<string>(tabIds), [tabIds])
 
   /**
+   * Resolve an incoming tab id through `tabs.tabAliases`, then validate.
+   *
+   * EVERY channel (location.state, ?tab=, localStorage) must go through here,
+   * not through a bare `validIds.has()` test. A retired id that is merely
+   * rejected is indistinguishable from a typo at runtime: no error, no warning,
+   * and the page quietly lands on its default tab. That is precisely the silent
+   * failure this indirection exists to prevent.
+   */
+  const resolveTabId = useMemo(() => {
+    const aliases = manifest.tabs?.tabAliases ?? {}
+    return (raw: unknown): string | undefined => {
+      if (typeof raw !== 'string') return undefined
+      if (validIds.has(raw)) return raw
+      const mapped = aliases[raw]
+      if (mapped && validIds.has(mapped)) return mapped
+      return undefined
+    }
+  }, [manifest.tabs, validIds])
+
+  /**
    * Resolve the incoming tab from every channel, most authoritative first.
    *
    * 1. `location.state[stateKey]` — the live same-session hop from ⌘K.
@@ -150,25 +170,29 @@ export function usePageSurface<T extends string = string>(
     if (!model) return undefined
     const stateKey = model.stateKey ?? 'tab'
 
-    const fromState = (location.state as Record<string, unknown> | null)?.[stateKey]
-    if (typeof fromState === 'string' && validIds.has(fromState)) return fromState
+    const fromState = resolveTabId((location.state as Record<string, unknown> | null)?.[stateKey])
+    if (fromState) return fromState
 
     if (model.hashParam) {
-      const fromHash = hashParam(location.hash, model.hashParam)
-      if (fromHash && validIds.has(fromHash)) return fromHash
+      const fromHash = resolveTabId(hashParam(location.hash, model.hashParam))
+      if (fromHash) return fromHash
     }
 
     if (model.storageKey) {
       const fromStorage = safeGet(model.storageKey)
-      if (fromStorage && validIds.has(fromStorage)) {
+      const resolved = resolveTabId(fromStorage)
+      if (resolved) {
+        /* Removed either way: a hint that outlives its navigation snaps the user
+         * back to a tab they have since left. A RETIRED id must be cleared too,
+         * or it re-applies on every future visit. */
         safeRemove(model.storageKey)
-        return fromStorage
+        return resolved
       }
       if (fromStorage) safeRemove(model.storageKey) // stale id — drop it
     }
 
     return undefined
-  }, [location.state, location.hash, manifest.tabs, validIds])
+  }, [location.state, location.hash, manifest.tabs, resolveTabId])
 
   const requestedSection = useMemo(() => {
     const fromState = (location.state as Record<string, unknown> | null)?.section
@@ -204,19 +228,61 @@ export function usePageSurface<T extends string = string>(
    * the `/resume/build` note in `registry.ts`.
    */
   useEffect(() => {
-    const segments = manifest.find?.segments
-    if (!segments?.length) return
     const api = (window as any).deskflowAPI
     if (!api?.smartSearchIndex) return
 
-    const payload = segments.map(s => ({
-      id: `${manifest.id}:${s.id}`,
-      pageId: manifest.id,
-      title: s.title,
-      text: s.text,
-      section: s.section,
-      rank: s.rank ?? 1,
-    }))
+    /* Page-level segments, then TAB-level ones.
+       A tab that carries several panes (the Life → Goals tab carries five) needs
+       its own segments scoped to that tab's subtree. They are indexed under a
+       COMPOSITE pageId — `${page}:${tab}` — so the Ctrl+F "Page" scope can
+       separate them, and their `section` ids are already tab-namespaced by the
+       manifest author. They are gathered from `tabs.items`, NOT from
+       `tabs.children`, so a nested tab group is indexed once per leaf rather
+       than once per ancestor. */
+    const pageSegments = manifest.find?.segments ?? []
+    const tabSegments = (manifest.tabs?.items ?? []).flatMap(t =>
+      (t.find?.segments ?? []).map(s => ({ ...s, __tab: t.id, __root: t.find?.root })),
+    )
+
+    const payload = [
+      ...pageSegments.map(s => ({
+        id: `${manifest.id}:${s.id}`,
+        pageId: manifest.id,
+        title: s.title,
+        text: s.text,
+        section: s.section,
+        rank: s.rank ?? 1,
+      })),
+      ...tabSegments.map(s => ({
+        id: `${manifest.id}:${s.__tab}:${s.id}`,
+        /* Tab segments are indexed under the PAGE's own id, never a composite
+           `${page}:${tab}`.
+
+           `App.tsx:421` is why the composite was wrong:
+             if (hit.pageId !== currentPageId) {
+               const route = resolvePageRoute(hit.pageId)
+               navigateTo({ route: route?.route ?? `/${hit.pageId}` })
+             }
+           `resolvePageRoute('life:gold')` returns undefined, so the fallback
+           navigates to the literal path `/life:gold` — a route that does not
+           exist. Every Ctrl+F hit inside the Goals tab would have thrown the user
+           to NotFound.
+
+           It is also wrong for the Page SCOPE, which compares `hit.pageId` against
+           the current page id: a composite id would simply never match, so the
+           five pane segments would be invisible to it.
+
+           The tab is not lost — `section` ('life.gold.today') is already
+           unambiguous, and `id` keeps them unique. The composite bought a
+           distinction that nothing downstream reads. */
+        pageId: manifest.id,
+        title: s.title,
+        text: s.text,
+        section: s.section,
+        rank: s.rank ?? 1,
+      })),
+    ]
+    if (!payload.length) return
     try { void api.smartSearchIndex(payload) } catch { /* index is best-effort */ }
   }, [manifest])
 
@@ -233,24 +299,55 @@ export function usePageSurface<T extends string = string>(
    * chance to render. Cross-page sections (those with a `route`) are skipped:
    * they carry no anchor by design.
    */
-  const missingAnchors = useMemo<string[]>(() => {
-    if (skipAnchorAudit) return []
-    if (typeof document === 'undefined') return []
+  /**
+   * Dev-time anchor audit.
+   *
+   * ── IT HAS TO BE AN EFFECT, NOT A MEMO ──
+   * This was a `useMemo`, which runs DURING render — before React has committed
+   * the DOM for this pass. Every anchor belonging to a panel that renders on the
+   * current pass therefore read as missing, and the comment right above claimed
+   * it "runs after paint". It did not. The audit reported phantom failures for
+   * perfectly good anchors.
+   *
+   * ── AND ONLY FOR THE ACTIVE TAB ──
+   * A tab that is not mounted cannot have written its `data-section`. Auditing
+   * all tabs at once therefore flags every inactive tab's anchors as missing,
+   * which trains the reader to ignore a warning that is always firing.
+   * `requestedTab` is the tab that is actually mounted, so that is all we check.
+   */
+  const [missingAnchors, setMissingAnchors] = useState<string[]>([])
+
+  useEffect(() => {
+    if (skipAnchorAudit) return
+    if (typeof document === 'undefined') return
+
+    const activeTab = requestedTab ?? manifest.tabs?.default
+    const activeTabSpec = (manifest.tabs?.items ?? []).find(t => t.id === activeTab)
+
     const declared: string[] = [
       ...(manifest.sections ?? []).filter(s => !s.route).map(s => s.id),
-      ...(manifest.tabs?.items ?? []).flatMap(t =>
-        t.section ? [t.section] : [],
-      ),
+      ...(activeTabSpec?.section ? [activeTabSpec.section] : []),
+      /* A tab's own find.segments are anchors too. Without this they would be
+         declared, indexed and unfindable — the manifest could point at a
+         `data-section` that no component ever wrote. */
+      ...(activeTabSpec?.find?.segments ?? []).flatMap(sg => sg.section ? [sg.section] : []),
     ]
-    return declared.filter(id => {
+
+    /* One extra frame: the tab's panel is often mounted by a sibling effect in
+       the same commit, so querying in this effect can still beat it. A rAF
+       re-check is the difference between "runs after paint" being true and
+       merely aspirational. */
+    const run = () => setMissingAnchors(declared.filter(id => {
       if (!id) return false
       try {
         return document.querySelector(`[data-section="${CSS.escape(id)}"]`) === null
       } catch {
         return false
       }
-    })
-  }, [manifest, skipAnchorAudit, location.pathname])
+    }))
+    const raf = requestAnimationFrame(run)
+    return () => cancelAnimationFrame(raf)
+  }, [manifest, skipAnchorAudit, location.pathname, requestedTab])
 
   const warned = useRef<string>('')
   useEffect(() => {

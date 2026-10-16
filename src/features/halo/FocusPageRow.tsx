@@ -46,7 +46,15 @@ import { AppWindow, Globe, Lock, Pause, Play, RotateCcw } from 'lucide-react';
 import { formatStopwatch, type StopwatchSnapshot } from '../../lib/stopwatchStore';
 
 /** The file's literal. The 3-space gap is a designed separator, not a typo — do not collapse it. */
-const EYEBROW = 'STOPWATCH   HALO REDESIGN';
+/** HALO_STATES.html line 105, verbatim: `lab('Stopwatch')`.
+ *
+ * WAS `'STOPWATCH   HALO REDESIGN'` — a FIGMA FRAME NAME, not user-facing copy. It read as a
+ * design artefact on screen and it silently replaced the spec's own label, so the first block
+ * did not match the file it claims to transcribe. The file's three block labels are Stopwatch /
+ * Tracking / Productive, and the other two were already correct.
+ *
+ * Uppercase is applied by `EYEBROW_STYLE` (`text-transform`), matching `.lab` in the spec. */
+const EYEBROW = 'Stopwatch';
 
 export interface FocusPageRowProps {
   snapshot: StopwatchSnapshot;
@@ -78,7 +86,11 @@ const EYEBROW_STYLE: React.CSSProperties = {
   fontWeight: 400,
   color: 'var(--halo-dim)',
   lineHeight: 1,
-  whiteSpace: 'pre',
+  /* HALO_STATES.html line 29, verbatim: `.lab { letter-spacing:.08em; text-transform:uppercase }`.
+   * Applied in CSS so the label is stored in its real words and uppercased by the same rule the
+   * spec uses, rather than being typed in caps. */
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
 };
 
 /*
@@ -115,9 +127,26 @@ export const FocusPageRow = memo(function FocusPageRow({
       style={{ gap: 'var(--halo-gap-loose)', width: '100%' }}
       data-halo-focus-row="true"
     >
-      {/* ── LEFT GROUP: status dot + eyebrow, then the split clock ────────────── */}
-      <div className="flex flex-col justify-center" style={{ minWidth: 0 }}>
-        <div className="flex items-center" style={{ gap: 6 }}>
+      {/* ── THE STOPWATCH GROUP — dot, label, app name, clock. ONE fact. ────────────
+       *
+       * THE USER'S CORRECTION, AND IT OVERRIDES BOARD 2.
+       * "I have been in Figma for 42 minutes" is ONE statement. The previous layout split it
+       * across three blocks separated by two dividers — STOPWATCH | TRACKING Figma |
+       * PRODUCTIVE — so the app name read as an unrelated figure next to the timer, and the eye
+       * had to re-join them. The name belongs WITH the stopwatch; that is where it is now.
+       *
+       * HALO_STATES.html line 143 specifies three separate blocks. This deliberately departs
+       * from it, at the user's instruction, and departs only in GROUPING — no dimension, no
+       * colour, no token and no control changed. One divider remains, between this group and
+       * PRODUCTIVE, so the row is still two figures rather than four.
+       *
+       * The private shape is preserved verbatim: a private window shows a lock and the words
+       * "Private window" and NEVER a hostname, because main suppresses the domain for one. */}
+      <div
+        className="flex flex-col justify-center"
+        style={{ minWidth: 0, gap: 2, flex: '0 1 auto' }}
+      >
+        <div className="flex items-center" style={{ gap: 6, minWidth: 0 }}>
           <span
             aria-hidden="true"
             style={{
@@ -125,12 +154,44 @@ export const FocusPageRow = memo(function FocusPageRow({
               height: 6,
               borderRadius: 999,
               flexShrink: 0,
-              /* `live` -> the only accent. `paused` -> the dim token, NOT opacity: the file
-               * never dims text with alpha and neither do we (handoff §9). */
+              /* `live` -> the only accent. `paused` -> the dim token, NOT opacity. */
               background: live ? 'var(--halo-accent)' : 'var(--halo-dim)',
             }}
           />
-          <span style={EYEBROW_STYLE}>{EYEBROW}</span>
+          <span style={{ ...EYEBROW_STYLE, flexShrink: 0 }}>{EYEBROW}</span>
+          {tracked && (
+            <>
+              {/* hairline between the label and the name: a SEPARATOR, not a block divider.
+               * It reads as one label reading "STOPWATCH · Figma", not two figures. */}
+              <span aria-hidden="true" style={{ width: 1, height: 8, flexShrink: 0, background: 'var(--halo-border)' }} />
+              <span className="flex items-center" style={{ gap: 6, minWidth: 0, flex: '0 1 auto' }}>
+                {tracked.kind === 'priv' ? (
+                  <Lock size={13} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
+                ) : tracked.kind === 'web' ? (
+                  <Globe size={13} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
+                ) : (
+                  <AppWindow size={13} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
+                )}
+                {/* STOPPED -> the name turns MUTED (board 2 line 143). The dot already
+                 * follows `live`; a bright name beside a dim dot would still advertise an
+                 * active target. `minWidth: 0` is what lets the ellipsis work at all. */}
+                <span
+                  style={{
+                    fontSize: 'max(12px, calc(14px * var(--halo-scale, 1)))',
+                    color: live ? 'var(--halo-text)' : 'var(--halo-dim)',
+                    minWidth: 0,
+                    flex: '0 1 auto',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: 500,
+                  }}
+                >
+                  {tracked.label}
+                </span>
+              </span>
+            </>
+          )}
         </div>
         <div
           className="tabular-nums"
@@ -140,6 +201,7 @@ export const FocusPageRow = memo(function FocusPageRow({
             fontWeight: 500,
             lineHeight: 1.15,
             letterSpacing: '-0.01em',
+            whiteSpace: 'nowrap',
           }}
         >
           {/* THE SPLIT. Dimmed hours, bright minutes+seconds. One span cannot do this. */}
@@ -148,53 +210,15 @@ export const FocusPageRow = memo(function FocusPageRow({
         </div>
       </div>
 
-      {/* ── divider: 1x44, #2e2e33 ────────────────────────────────────────────── */}
+      {/* ── THE ONE REMAINING DIVIDER: this group | PRODUCTIVE ─────────────────────── */}
       <span
         aria-hidden="true"
         style={{ width: 1, height: 44, flexShrink: 0, background: 'var(--halo-border)' }}
       />
 
-      {/* ── TRACKED (HALO_STATES.html line 143) ─────────────────────────────────
-          * Three shapes: win + "Figma" / globe + "github.com" / lock + "Private window".
-          * A SEPARATE block from Stopwatch and Productive, separated by the same 1x44 divider,
-          * because the tracked target is a different question from "how long".
-          *
-          * STOPPED -> the name turns MUTED, per the same line: "stopped (dot and tracked name
-          * turn muted, play button)". The dot already follows `live`; if the name did not, a
-          * stopped timer would still advertise a bright active target next to a dim dot. */}
-      {tracked && (
-        <>
-          <span
-            aria-hidden="true"
-            style={{ width: 1, height: 44, flexShrink: 0, background: 'var(--halo-border)' }}
-          />
-          <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-            <span style={EYEBROW_STYLE}>TRACKING</span>
-            <span className="flex items-center" style={{ gap: 6, minWidth: 0 }}>
-              {tracked.kind === 'priv' ? (
-                <Lock size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
-              ) : tracked.kind === 'web' ? (
-                <Globe size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
-              ) : (
-                <AppWindow size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
-              )}
-              <span
-                className="truncate"
-                style={{
-                  fontSize: 'max(13px, calc(16px * var(--halo-scale, 1)))',
-                  color: live ? 'var(--halo-text)' : 'var(--halo-dim)',
-                }}
-              >
-                {tracked.label}
-              </span>
-            </span>
-          </div>
-        </>
-      )}
-
       {/* PRODUCTIVE, not TODAY. The number is productive time ONLY — see the block note above. */}
       <div className="flex flex-col" style={{ gap: 2 }}>
-        <span style={EYEBROW_STYLE}>PRODUCTIVE</span>
+        <span style={EYEBROW_STYLE}>Productive</span>
         <span
           className="tabular-nums"
           style={{

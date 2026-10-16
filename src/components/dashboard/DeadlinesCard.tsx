@@ -16,6 +16,9 @@ import { Badge } from '../ui/badge';
 import type { Reminder } from './types';
 import { Select, SelectItem } from '../ui/select';
 import { VoiceInputWrapper } from '../VoiceInputWrapper';
+import { ReminderEditorSheet } from './ReminderEditorSheet';
+import { DateTimePicker } from '../ui/DateTimePicker';
+import DateTimeRangePicker from '../ui/DateTimeRangePicker';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
 import { format } from 'date-fns';
@@ -140,6 +143,8 @@ export function DeadlinesCard({
   const [newDl, setNewDl] = useState<{
     title: string;
     dueDate: Date | undefined;
+    /** 'HH:mm' — the time ON the day the thing is due. Optional: null = all-day. */
+    dueTime?: string;
     priority: Priority;
     category: DeadlineCategory | '';
     description: string;
@@ -148,7 +153,7 @@ export function DeadlinesCard({
     hasReminder: boolean;
     goalId: string;
   }>({
-    title: '', dueDate: undefined, priority: 'medium', category: '', description: '',
+    title: '', dueDate: undefined, dueTime: '', priority: 'medium', category: '', description: '',
     remindAtDate: undefined, remindAtTime: '09:00', hasReminder: false, goalId: '',
   });
 
@@ -156,6 +161,18 @@ export function DeadlinesCard({
   const [editForm, setEditForm] = useState<Partial<Deadline>>({});
   const [editDate, setEditDate] = useState<Date | undefined>(undefined);
   const [editRemindAtDate, setEditRemindAtDate] = useState<Date | undefined>(undefined);
+  /* Which deadline's reminders are open. Null = closed. The id is stored
+     rather than the object so the sheet closes when that deadline is deleted
+     or completed out from under it, instead of holding a stale record. */
+  const [reminderSheetFor, setReminderSheetFor] = useState<string | null>(null);
+  /* The span the thing occupies. A deadline is not an instant — it runs from a
+     start to a finish — so the range is part of what you record, not a display
+     nicety. Short-term only: a long-term goal has no end date, so it never
+     reaches this form. */
+  const [spanOpen, setSpanOpen] = useState(false);
+  const [span, setSpan] = useState<{ startDate?: Date; endDate?: Date; startTime: string; endTime: string }>({
+    startTime: '09:00', endTime: '17:00',
+  });
   const [editRemindAtTime, setEditRemindAtTime] = useState('09:00');
   const [editHasReminder, setEditHasReminder] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -215,6 +232,10 @@ export function DeadlinesCard({
     onAdd({
       title: newDl.title.trim(),
       due_date: dueDate,
+      // Only for a real deadline. A "reminder" entry reuses this form but stores
+      // its moment in remind_at, so sending due_time there would double-book a
+      // time that belongs to the reminder, not to the thing it is about.
+      ...(addType === 'deadline' ? { due_time: newDl.dueTime || null } : {}),
       priority: newDl.priority,
       category: newDl.category || undefined,
       description: newDl.description.trim() || undefined,
@@ -307,6 +328,7 @@ export function DeadlinesCard({
   }
 
   return (
+    <>
     <Card className={['h-full', bare ? 'rounded-none border-0 bg-transparent' : 'rounded-lg'].join(' ')}>
       <CardContent className={bare ? 'flex flex-col h-full p-0' : 'p-5 flex flex-col h-full'}>
         {/* Header */}
@@ -414,6 +436,39 @@ export function DeadlinesCard({
                           />
                         </PopoverContent>
                       </Popover>
+                      {/* The deadline's own TIME. There was no field for it at all —
+                          `deadlines` had no time column, so "due Tuesday at 14:00"
+                          could not be expressed anywhere in the app. All-day stays
+                          the default; an empty value stays an all-day deadline. */}
+                      <DateTimePicker
+                        value={newDl.dueDate
+                          ? `${newDl.dueDate.getFullYear()}-${String(newDl.dueDate.getMonth()+1).padStart(2,'0')}-${String(newDl.dueDate.getDate()).padStart(2,'0')}T${newDl.dueTime || '09:00'}`
+                          : ''}
+                        onChange={v => {
+                          const t = v.slice(11, 16);
+                          const d = v.slice(0, 10);
+                          if (d && d.length === 10) {
+                            const [y, m, dd] = d.split('-').map(Number);
+                            setNewDl(p => ({ ...p, dueDate: new Date(y, m - 1, dd), dueTime: t }));
+                          }
+                        }}
+                        placeholder="Add a time"
+                        className="w-[150px]"
+                      />
+                      {/* The SPAN. Defaults its start to the day the deadline was
+                          added for, which is the whole point: a deadline you are
+                          entering while looking at Tuesday should open on
+                          Tuesday, not on today and certainly not on a demo month. */}
+                      <button
+                        type="button"
+                        onClick={() => setSpanOpen(o => !o)}
+                        aria-expanded={spanOpen}
+                        className="h-9 px-3 text-xs rounded-md border light:bg-white light:border-[var(--ws-border-strong)] border-[var(--ws-border)] text-[var(--text-secondary)] hover:border-[var(--page-accent)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
+                      >
+                        {span.startDate && span.endDate
+                          ? `${span.startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} → ${span.endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                          : 'Set start → finish'}
+                      </button>
                       <Select value={newDl.priority} onValueChange={v => setNewDl(p => ({ ...p, priority: v as Priority }))} className="w-[100px]">
                         {PRIORITIES.map(p => (
                           <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
@@ -690,7 +745,17 @@ export function DeadlinesCard({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <div className="flex items-center gap-1 group-focus-within:opacity-100 transition-opacity shrink-0">
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setReminderSheetFor(dl.id)}
+                            className="w-7 h-7 rounded-md bg-zinc-800/40 light:bg-[var(--ws-surface-sunken)] text-zinc-400 light:text-[var(--text-secondary)] hover:text-[var(--page-accent)] hover:bg-zinc-800/70 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+                            title="Reminders — when to be told about this"
+                            aria-label={`Reminders for ${dl.title}`}
+                          >
+                            <Bell size={12} />
+                          </motion.button>
                           <motion.button
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
@@ -836,5 +901,64 @@ export function DeadlinesCard({
         )}
     </CardContent>
     </Card>
+
+    {/* The reminder sheet lives here, OUTSIDE the Card, because it is a modal
+        and a modal nested in the surface it describes inherits that surface's
+        overflow and stacking context — it would be clipped by the card's own
+        rounded border, and its scrim would only cover the card. */}
+    {spanOpen && (
+      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 p-4 overflow-y-auto overscroll-contain">
+        <div className="my-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-popover)] p-4 shadow-xl">
+          <DateTimeRangePicker
+            timeFormat="24h"
+            /* Copy comes from the caller — this picker edits a DEADLINE's span,
+               so it says so. It must not present itself as a generic "date
+               range", because the same control is reused elsewhere and the words
+               would then be wrong there. */
+            labels={{
+              range: 'When this runs',
+              time: 'Start and finish time',
+              pickStart: 'Drag from the day it starts',
+              pickEnd: 'Drag to the day it finishes',
+              start: 'Starts',
+              end: 'Finishes',
+            }}
+            initialValue={{
+              startDate: span.startDate ?? newDl.dueDate ?? new Date(),
+              endDate: span.endDate ?? newDl.dueDate ?? new Date(),
+              startTime: span.startTime,
+              endTime: span.endTime,
+            }}
+            onApply={r => {
+              setSpan({ startDate: r.startDate, endDate: r.endDate, startTime: r.startTime, endTime: r.endTime });
+              // The span's start becomes the deadline's own date/time, so the
+              // two can never disagree about when the thing starts.
+              if (r.startDate) {
+                setNewDl(p => ({
+                  ...p,
+                  dueDate: r.startDate,
+                  dueTime: r.startTime,
+                }));
+              }
+            }}
+          />
+          <div className="flex justify-end mt-3">
+            <Button size="sm" variant="ghost" onClick={() => setSpanOpen(false)}>Done</Button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <ReminderEditorSheet
+      open={!!reminderSheetFor}
+      deadline={
+        reminderSheetFor
+          ? (deadlines as any[]).concat(reminders as any[])
+              .find(d => d.id === reminderSheetFor && d.due_date)
+          : null
+      }
+      onClose={() => setReminderSheetFor(null)}
+    />
+    </>
   );
 }

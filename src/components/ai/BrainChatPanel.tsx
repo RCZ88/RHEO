@@ -151,7 +151,7 @@ export function BrainChatPanel({ open, onClose }: { open: boolean; onClose?: () 
                     {m.toolCalls.length} tool call{m.toolCalls.length > 1 ? 's' : ''} — {m.toolCalls.map(t => t.tool).join(', ')}
                   </button>
                   {expandedTools === i && m.toolCalls.map((t, ti) => (
-                    <div key={ti} className="rounded-lg border border-zinc-800/70 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white px-2 py-1.5 space-y-0.5">
+                    <div key={ti} className="rounded-lg border border-zinc-800/70 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white px-2 py-1.5 space-y-0.5">
                       <div style={{ fontSize: 10, color: '#a78bfa', fontFamily: 'var(--mono)' }}>
                         {t.tool} {Object.keys(t.args || {}).length > 0 ? JSON.stringify(t.args) : ''}
                       </div>

@@ -167,7 +167,7 @@ These words all mean the same thing and should be mapped to one canonical term. 
       <div className="relative shrink-0">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search terms..."
-          className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
+          className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-60)] text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
       </div>
 
       {/* Add/Edit Form */}
@@ -178,13 +178,13 @@ These words all mean the same thing and should be mapped to one canonical term. 
             <button onClick={cancelForm} className="p-0.5 rounded hover:bg-zinc-800 transition-colors"><X className="w-3 h-3 text-zinc-500" /></button>
           </div>
           <input value={formTerm} onChange={(e) => setFormTerm(e.target.value)} placeholder="Term (e.g. 'workspace')"
-            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
+            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-60)] text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
           <input value={formDef} onChange={(e) => setFormDef(e.target.value)} placeholder="Definition (what it means to you)"
-            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
+            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-60)] text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
           <input value={formContext} onChange={(e) => setFormContext(e.target.value)} placeholder="Context (optional: when to use this term)"
-            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
+            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-60)] text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
           <input value={formAliases} onChange={(e) => setFormAliases(e.target.value)} placeholder="Aliases (comma-separated, e.g. 'ws,terminal-ws')"
-            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
+            className="w-full px-2 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-60)] text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50" />
           <button onClick={() => editingId ? handleUpdate(editingId) : handleAdd()}
             className="w-full py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-medium hover:bg-amber-500/30 transition-all">
             {editingId ? 'Update' : 'Add Term'}

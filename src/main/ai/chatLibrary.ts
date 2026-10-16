@@ -49,6 +49,8 @@ export interface ChatThreadRow {
   preview: string | null;
   url: string | null;
   brainEpisodeId: string | null;
+  workspaceName: string | null;
+  canvasName: string | null;
 }
 
 export interface GroupRow {
@@ -99,6 +101,8 @@ export function migrateChatLibrary(db: Db): { fts: boolean } {
   addColumn(db, 'ai_chat_threads', 'content_hash TEXT');
   addColumn(db, 'ai_chat_threads', 'brain_episode_id TEXT');
   addColumn(db, 'ai_chat_threads', 'last_accessed_at INTEGER');
+  addColumn(db, 'ai_chat_threads', 'workspace_name TEXT');
+  addColumn(db, 'ai_chat_threads', 'canvas_name TEXT');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS ai_chat_groups (
@@ -410,7 +414,8 @@ export function searchChats(db: Db, opts: SearchOptions = {}): SearchHit[] {
     .prepare(
       `SELECT thread_date AS threadDate, title, auto_title AS autoTitle, source, provider,
               group_id AS groupId, pinned, last_message_at AS lastMessageAt,
-              message_count AS messageCount, preview AS snippet, 0 AS rank
+              message_count AS messageCount, preview AS snippet, 0 AS rank,
+              workspace_name AS workspaceName, canvas_name AS canvasName
        FROM ai_chat_threads
        ${clause}
        ORDER BY pinned DESC, COALESCE(last_accessed_at, last_message_at, 0) DESC

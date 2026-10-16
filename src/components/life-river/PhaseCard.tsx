@@ -53,7 +53,7 @@ function Ring({ pct, size = 32 }: { pct: number; size?: number }) {
         size={size}
         strokeWidth={3}
         gaugePrimaryColor="#fbbf24"
-        gaugeSecondaryColor="rgba(63,63,70,0.5)"
+        gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
       />
       <span className="absolute inset-0 flex items-center justify-center text-[8px] font-semibold text-zinc-300 tabular-nums">
         {Math.round(pct)}

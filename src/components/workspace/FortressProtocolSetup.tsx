@@ -115,7 +115,7 @@ function TerminalOutput({ lines, status }: { lines: string[]; status: LayerStatu
       animate={{ opacity: 1, height: 'auto' }}
       exit={{ opacity: 0, height: 0 }}
       transition={{ duration: DUR.normal, ease: EASE_OUT as any }}
-      className="mt-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/80 border border-zinc-800/50 overflow-hidden"
+      className="mt-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-80)] border border-zinc-800/50 overflow-hidden"
     >
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800/40">
         <Terminal className="w-3 h-3 text-zinc-500" />

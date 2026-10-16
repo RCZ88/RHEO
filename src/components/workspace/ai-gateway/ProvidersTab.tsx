@@ -117,19 +117,19 @@ export function ProvidersTab({ providerId, onProviderChange }: {
 
           {/* Two columns on a narrow panel, three only when there is room. */}
           <div className="grid grid-cols-2 min-[420px]:grid-cols-3 gap-2 mb-3 text-center">
-            <div className="min-w-0 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-2">
+            <div className="min-w-0 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] ring-1 ring-zinc-800/60 p-2">
               <div className="text-[13px] font-semibold text-zinc-200 font-mono truncate">
                 {adapter.rateLimit.requestsPerMinute}/min
               </div>
               <div className="text-[9px] text-zinc-500 uppercase">rate</div>
             </div>
-            <div className="min-w-0 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-2">
+            <div className="min-w-0 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] ring-1 ring-zinc-800/60 p-2">
               <div className="text-[13px] font-semibold text-zinc-200 font-mono truncate">
                 {report?.requestsRemaining != null ? report.requestsRemaining : (adapter.dailyBudget ?? '—')}
               </div>
               <div className="text-[9px] text-zinc-500 uppercase">left today</div>
             </div>
-            <div className="min-w-0 col-span-2 min-[420px]:col-span-1 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-2">
+            <div className="min-w-0 col-span-2 min-[420px]:col-span-1 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] ring-1 ring-zinc-800/60 p-2">
               <div className="text-[13px] font-semibold text-zinc-200 font-mono truncate">
                 {report?.sessionValid ? 'yes' : 'no'}
               </div>
@@ -138,7 +138,7 @@ export function ProvidersTab({ providerId, onProviderChange }: {
           </div>
 
           {/* Setup flow */}
-          <div className="rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-3 mb-3">
+          <div className="rounded-xl bg-zinc-950 light:bg-[var(--ws-surface-60)] ring-1 ring-zinc-800/60 p-3 mb-3">
             <p className="text-[11px] text-zinc-300 font-medium mb-1">1 · Setup — log in inside the opened browser window</p>
             <p className="text-[10px] text-zinc-500 mb-2 break-words">
               Opens {adapter.loginUrl || adapter.url} in the automated browser (real Chrome/Chromium, persistent profile).

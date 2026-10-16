@@ -103,7 +103,7 @@ export function FeatureCard({ id, type, title, data, onQuickAction }: FeatureCar
           ) : null}
         </div>
 
-      <div className="absolute inset-x-0 bottom-0 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/90 border-t border-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between backdrop-blur-sm">
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-zinc-950 light:bg-[var(--ws-surface-90)] border-t border-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between backdrop-blur-sm">
         <span className="text-xs text-zinc-500">Click to open</span>
         <div className="flex gap-2">
           {type === 'finance' && (

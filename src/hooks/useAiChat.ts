@@ -29,6 +29,8 @@ export interface ChatThreadMeta {
   messageCount: number
   lastMessageAt?: number
   preview?: string
+  workspaceName?: string
+  canvasName?: string
 }
 
 type AnyRec = Record<string, unknown>
@@ -89,7 +91,7 @@ export interface UseAiChat {
   memories: { id: string; text: string; category: string }[]
 }
 
-export function useAiChat(): UseAiChat {
+export function useAiChat(identity?: { workspaceName?: string; canvasName?: string }): UseAiChat {
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
@@ -112,6 +114,11 @@ export function useAiChat(): UseAiChat {
   const threadDateRef = useRef(currentThreadDate)
   threadDateRef.current = currentThreadDate
 
+  // Held in a ref so `persist` stays referentially stable while still recording
+  // whichever canvas/workspace is active at the moment of the save.
+  const identityRef = useRef(identity)
+  identityRef.current = identity
+
   const persist = useCallback(
     (msgs: ChatMsg[], threadDate?: string) => {
       const b = bridge()
@@ -120,6 +127,8 @@ export function useAiChat(): UseAiChat {
       try {
         (b.aiChatSave as (a: AnyRec) => unknown)({
           threadDate: td,
+          workspaceName: identityRef.current?.workspaceName,
+          canvasName: identityRef.current?.canvasName,
           messages: msgs.map((m) => ({
             role: m.role,
             content: m.content,
@@ -158,6 +167,8 @@ export function useAiChat(): UseAiChat {
           messageCount: t.messageCount ?? 0,
           lastMessageAt: t.lastMessageAt,
           preview: t.preview,
+          workspaceName: t.workspaceName,
+          canvasName: t.canvasName,
         })))
       }
     } catch (e) {

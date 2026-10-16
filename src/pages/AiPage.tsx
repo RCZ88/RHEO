@@ -190,7 +190,12 @@ export function AiPage() {
   const [connectorsState, setConnectorsState] = useState<'loading' | 'error' | 'empty' | 'ready'>('loading');
   const [connectors, setConnectors] = useState<Array<{ id: string; name: string; status: string; detail?: string; itemCount?: number; type?: string }>>([]);
 
-  const chat = useAiChat();
+  // Every thread is stamped with where it happened, so Chat History can say
+  // which workspace/canvas a conversation belongs to.
+  const chat = useAiChat(useMemo(
+    () => ({ workspaceName: 'AI Assistant', canvasName: 'Main Canvas' }),
+    [],
+  ));
   const slash = useSlashCommands();
   const voice = useVoiceInput({
     onTranscript: useCallback((text: string) => {
@@ -1117,16 +1122,23 @@ export function AiPage() {
   }, [canvas, chat, showToast]);
 
   useEffect(() => {
-    (async () => {
+    let live = true;
+    const loadProviders = async () => {
       try {
         const state = await window.deskflowAPI!.getAiProviders();
+        if (!live) return;
         if (state?.providers) {
           setAiProviders(state.providers.map((p: any) => ({ id: p.id, label: p.label, models: p.models || [], enabled: p.enabled })));
           setAiRouting(state.routing || {});
         }
       } catch (e) { console.error('[AiPage] getAiProviders:', e); }
-      finally { setProvidersPending(false); }
-    })();
+      finally { if (live) setProvidersPending(false); }
+    };
+    void loadProviders();
+    // AiProviderManager fires this after saving, so the badges refresh without a reload.
+    const onChanged = () => { void loadProviders(); };
+    window.addEventListener('rheo:providers-changed', onChanged);
+    return () => { live = false; window.removeEventListener('rheo:providers-changed', onChanged); };
   }, []);
 
   const loadConnectors = useCallback(async () => {
@@ -2226,6 +2238,9 @@ actionResults={actionResults}
               streaming={chat.streaming}
               thinking={chat.thinking}
               connecting={chat.connecting}
+              messages={chat.messages}
+              onCardAction={onCardAction}
+              actionResults={actionResults}
               focusedCardId={focusedCardId}
               autoFocus={autoFocus}
               onToggleAutoFocus={() => setAutoFocus(v => !v)}

@@ -177,7 +177,7 @@ function previewFor(path: string, tab?: string, section?: string): PreviewKind {
   if (t === 'canvas' || t === 'deck' || p.includes('/ai')) return 'grid'
   if (p.includes('/life') || t === 'river') return 'wave'
   if (t === 'gold' || t === 'notes' || t === 'memories') return 'shelves'
-  if (t === 'schedule' || t === 'habits') return 'calendar'
+  if (t === 'schedule') return 'calendar'
   if (p.includes('/ide') || t === 'architecture' || t === 'graph') return 'nodes'
   if (p === '/' || p === '') return 'orbit'
   return 'bars'

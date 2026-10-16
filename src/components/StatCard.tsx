@@ -27,7 +27,7 @@ export function StatCard({ label, value, trend, icon, className = '' }: StatCard
           )}
         </div>
         {icon && (
-          <div className="w-8 h-8 rounded-lg bg-[var(--page-accent)]/10 flex items-center justify-center text-[var(--page-accent)]">
+          <div className="w-8 h-8 rounded-lg bg-[var(--page-accent-10)] flex items-center justify-center text-[var(--page-accent)]">
             {icon}
           </div>
         )}

@@ -364,12 +364,21 @@ export function ambientGradient(
   // Original geometry was 900x400 @15% and 800x380 @95%. Spread scales the
   // radii only — position stays pinned to the top so the wash never creeps
   // into the reading area.
-  const r1 = 900 + spread * 1400;
-  const r2 = 800 + spread * 1300;
+  //
+  // Reach was raised (radii + falloff, NOT alpha) because "the ambient should
+  // affect the background more" was asked for at a point where the alpha had
+  // already been measured down to 0.08 — see the PEAK_ALPHA history above for
+  // why alpha is not the lever. Raising alpha is what tinted clean pages; the
+  // same visible weight comes from covering more area at the same alpha.
+  const r1 = 1100 + spread * 2000;
+  const r2 = 1000 + spread * 1900;
   const c1 = accent;
   const c2 = rotateHue(accent, 42);
+  // Falloff stop moved 62% -> 78%: at 62% most of each gradient was already
+  // fully transparent, so the peak alpha only reached a small fraction of the
+  // radius and the wash read as a hotspot rather than a background tint.
   return [
-    `radial-gradient(${Math.round(r1)}px ${Math.round(400 + spread * 260)}px at 15% -5%, ${c1}${alpha(a)}, transparent 62%)`,
-    `radial-gradient(${Math.round(r2)}px ${Math.round(380 + spread * 250)}px at 95% 0%, ${c2}${alpha(a * 0.82)}, transparent 62%)`,
+    `radial-gradient(${Math.round(r1)}px ${Math.round(520 + spread * 380)}px at 15% -5%, ${c1}${alpha(a)}, transparent 78%)`,
+    `radial-gradient(${Math.round(r2)}px ${Math.round(500 + spread * 360)}px at 95% 0%, ${c2}${alpha(a * 0.82)}, transparent 78%)`,
   ].join(', ');
 }

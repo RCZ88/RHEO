@@ -179,7 +179,7 @@ export function StatusBand() {
         {/* RIGHT: Today's stats */}
         <div className="grid grid-cols-3 gap-3">
           {/* Focused */}
-          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+          <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] border border-zinc-800/50 rounded-lg px-4 py-3">
             <div className="text-[11px] font-medium text-zinc-500">Focused</div>
             <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
               {sw.currentProductiveMs > 0 ? fmtSec(sw.currentProductiveMs) : "--"}
@@ -187,7 +187,7 @@ export function StatusBand() {
           </div>
 
           {/* Distracted */}
-          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+          <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] border border-zinc-800/50 rounded-lg px-4 py-3">
             <div className="text-[11px] font-medium text-zinc-500">Distracted</div>
             <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
               {sw.currentDistractingMs > 0 ? fmtSec(sw.currentDistractingMs) : "--"}
@@ -195,7 +195,7 @@ export function StatusBand() {
           </div>
 
           {/* Sessions */}
-          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 border border-zinc-800/50 rounded-lg px-4 py-3">
+          <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] border border-zinc-800/50 rounded-lg px-4 py-3">
             <div className="text-[11px] font-medium text-zinc-500">Sessions</div>
             <div className="mt-1 text-[13px] font-semibold tabular-nums text-zinc-100 font-['JetBrains_Mono']">
               {sw.sessionCount > 0 ? sw.sessionCount : "--"}

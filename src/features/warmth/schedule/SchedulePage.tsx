@@ -1,6 +1,9 @@
 // src/features/warmth/schedule/SchedulePage.tsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ActivitiesSheet } from './activities/ActivitiesSheet';
+import { ScheduleLayoutShell } from './ScheduleLayoutShell';
+import type { ViewMode } from './layout';
 import { TodoList } from '../../../components/goals/TodoList';
 import { ConnectionExplorer } from '../../../components/goals/ConnectionExplorer';
 import { ScheduleCard } from '../../../pages/dashboard/ScheduleCard';
@@ -10,43 +13,9 @@ import { DeadlinesCard } from '../../../components/dashboard/DeadlinesCard';
 import { useFocusGoals } from '../../../hooks/useFocusGoals';
 import type { CriteriaForm } from '../../../components/goals/CriteriaBuilder';
 import type { Goal, LongTermGoal, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
+import { addDaysStr, mondayOf, daysUntil, todayStr, DAY_SHORT } from '@/lib/week';
 
-/* ── daily reflection (hard stats) ── */
-const toStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const todayStr = () => toStr(new Date())
-
-function addDaysStr(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return toStr(d);
-}
-function mondayOf(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  return addDaysStr(dateStr, -((d.getDay() + 6) % 7));
-}
-function daysUntil(dateStr: string): number | null {
-  if (!dateStr) return null;
-  const a = new Date(todayStr() + 'T00:00:00').getTime();
-  const b = new Date(dateStr + 'T00:00:00').getTime();
-  if (isNaN(a) || isNaN(b)) return null;
-  return Math.round((b - a) / 86400000);
-}
-
-function prettyDate(dateStr: string): string {
-  if (dateStr === todayStr()) return 'Today';
-  if (dateStr === addDaysStr(todayStr(), -1)) return 'Yesterday';
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-export const CAT_META: Record<string, { label: string; dot: string }> = {
-  work: { label: 'Work', dot: '#ec4899' }, personal: { label: 'Personal', dot: '#8b5cf6' },
-  health: { label: 'Health', dot: '#34d399' }, learning: { label: 'Learning', dot: '#22d3ee' },
-  finance: { label: 'Finance', dot: '#fbbf24' }, relationships: { label: 'Relationships', dot: '#fb7185' },
-};
-export const catDot = (c: string) => (CAT_META[c] || CAT_META.work).dot;
 
 export const defaultCriteria: CriteriaForm = {
   title: '', description: '', category: 'work', period: 'daily', targetType: 'completion', targetHours: 0, targetMinutes: 30,
@@ -142,8 +111,8 @@ function WeekdayRail({ selectedDay, onSelect, counts, todayDay }: {
               'transition-colors duration-150',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]',
               active
-                ? 'text-[var(--color-foreground)] bg-[var(--color-muted)]/40'
-                : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/40 hover:text-[var(--color-foreground)]',
+                ? 'text-[var(--color-foreground)] bg-[var(--color-muted-40)]'
+                : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted-40)] hover:text-[var(--color-foreground)]',
             ].join(' ')}
             /* The active day is marked by a 2px accent rule, not a fill: on a
                strip with no track, an underline is what reads as "selected". */
@@ -188,7 +157,7 @@ function DateNav({ selectedDate, onChange }: { selectedDate: string; onChange: (
         type="button"
         onClick={() => shift(-1)}
         aria-label="Previous day"
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-muted-foreground)] transition-colors duration-150 hover:bg-[var(--color-muted)]/60 hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-muted-foreground)] transition-colors duration-150 hover:bg-[var(--color-muted-60)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
       >
         <ChevronLeft size={15} aria-hidden />
       </button>
@@ -209,7 +178,7 @@ function DateNav({ selectedDate, onChange }: { selectedDate: string; onChange: (
         type="button"
         onClick={() => shift(1)}
         aria-label="Next day"
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-muted-foreground)] transition-colors duration-150 hover:bg-[var(--color-muted)]/60 hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-muted-foreground)] transition-colors duration-150 hover:bg-[var(--color-muted-60)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
       >
         <ChevronRight size={15} aria-hidden />
       </button>
@@ -224,7 +193,7 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
   return (
     <div
       role="alert"
-      className="flex flex-col items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/35 px-5 py-6 text-center"
+      className="flex flex-col items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted-35)] px-5 py-6 text-center"
     >
       <p className="text-[12px]" style={{ color: 'var(--error)' }}>{message}</p>
       <p className="text-[11px] text-[var(--color-muted-foreground)]">RHEO could not load this section.</p>
@@ -296,6 +265,13 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
    * weekday you happened to be looking at. `selectedDay` is now state, seeded
    * from the date and re-seeded whenever the date moves. */
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  /* Activities sheet visibility. Local, not persisted: the sheet is a
+     transient surface, so reopening the page should always start closed. */
+  const [activitiesOpen, setActivitiesOpen] = useState(false);
+  /* Calendar view mode for the layout shell's [Day|Week|Month] toggle (spec
+     §55). Separate from `showWeekSchedule`, which is a DISPLAY choice inside
+     the agenda panel, not a calendar view mode. */
+  const [calendarView, setCalendarView] = useState<ViewMode>('week');
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDay());
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
@@ -490,7 +466,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
 
   /* ── render ── */
   return (
-    <div className={embedded ? 'w-full h-full' : 'w-full max-w-[1600px] mx-auto px-4 py-6'}>
+    <div className={embedded ? 'w-full h-full min-h-0 overflow-hidden' : 'w-full max-w-[1600px] mx-auto px-4 py-6 min-h-0'} style={embedded ? undefined : { height: 'calc(100vh - 2rem)' }}>
 
       {/* ═══ MASTHEAD ═══ identity + the one date navigator + focus ribbon ═══
           LAMINAR §2: one signal hue per surface, resolved from --page-accent
@@ -498,259 +474,152 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
           brand pink literal here and in five other places — a DIFFERENT hue from
           the page this component lives on, which is why the tab read as bolted
           on rather than native. */}
-      <header className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-[18px] font-semibold leading-tight text-[var(--color-foreground)]">
-            <Calendar size={16} style={{ color: 'var(--page-accent)' }} aria-hidden />
-            Schedule
-          </h1>
-          <p className="mt-0.5 text-[12px] text-[var(--color-muted-foreground)]">
-            <span className="text-[var(--color-foreground)]">{prettyDate(selectedDate)}</span>
-            <span aria-hidden> · </span>
-            <span className="font-mono tabular-nums">{doneCount}/{goals.length}</span> goals closed
-          </p>
-        </div>
-        <DateNav selectedDate={selectedDate} onChange={setSelectedDate} />
-      </header>
+      <ActivitiesSheet open={activitiesOpen} onClose={() => setActivitiesOpen(false)} />
 
-      {focusState?.isActive && (
-        <div
-          role="status"
-          className="mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-[11px]"
-          style={{
-            color: 'var(--page-accent)',
-            backgroundColor: 'color-mix(in srgb, var(--page-accent) 8%, transparent)',
-            boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--page-accent) 22%, transparent)',
-          }}
-        >
-          {/* Functional loop (a live-signal dot), which LAMINAR §6 permits;
-              decorative loops are the banned ones. */}
-          <span className="relative flex h-1.5 w-1.5" aria-hidden>
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: 'var(--page-accent)' }} />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--page-accent)' }} />
-          </span>
-          {focusState.isBroken
-            ? 'Focus session broken — progress paused'
-            : `Focus session live — tracking ${activeGoalIds.length} goal${activeGoalIds.length !== 1 ? 's' : ''}`}
-        </div>
-      )}
+      {/* ═══ THE LAYOUT ═══
+          This is the part that was MISSING. `ScheduleLayoutShell` existed and
+          compiled, but nothing ever imported it, so the preset menu, the
+          drag-to-swap, the per-panel hide toggle and the clamped resizer were
+          all reachable code with zero entry points — the page rendered its own
+          bespoke header + two hard-coded grids instead. The engine and the
+          shell are now actually mounted, which is what makes the layout
+          adjustable at all.
 
-      {/* A failed write is reported here. The page no longer owns its own forms,
-          so this is the only place the handlers above can be honest about a
-          rejected save instead of rendering a success the user never got. */}
+          The shell owns the header, so the bespoke one above it is gone rather
+          than duplicated: two headers would have meant two different "today"
+          buttons and two date navs. `renderPanel` is the only seam — it maps a
+          panel id to the existing component that already renders it, so no data
+          loading moved and no panel was rewritten. */}
+      {/* A failed write has to SAY so. The handlers below set `notice`; without
+          this the error is captured and thrown away, and a save that never
+          landed then looks exactly like one that did. The old bespoke header
+          rendered this — replacing the header dropped the render but kept the
+          handlers, so the page went quiet about its own failures. */}
       {notice && (
         <div
-          role="alert"
-          className="mb-4 flex items-start gap-2 rounded-lg px-3 py-2 text-[11px]"
-          style={notice.tone === 'error'
-            ? { color: 'var(--error)', backgroundColor: 'color-mix(in srgb, var(--error) 8%, transparent)', boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--error) 22%, transparent)' }
-            : undefined}
+          role="status"
+          className={`flex shrink-0 items-start justify-between gap-3 rounded-lg border px-3 py-2 text-[12px] ${
+            notice.tone === 'error'
+              ? 'border-red-500/40 bg-red-500/5 text-red-500 light:bg-[var(--ws-surface-raised)]'
+              : 'border-zinc-800/50 bg-zinc-900/40 text-[var(--color-muted-foreground)] light:bg-[var(--ws-surface-raised)]'
+          }`}
         >
-          <span className="flex-1">{notice.text}</span>
+          <span className="min-w-0">{notice.text}</span>
           <button
             type="button"
             onClick={() => setNotice(null)}
-            className="shrink-0 opacity-60 transition-opacity duration-150 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
-            aria-label="Dismiss message"
+            aria-label="Dismiss"
+            className="shrink-0 opacity-70 transition-opacity hover:opacity-100"
           >
-            Dismiss
+            ×
           </button>
         </div>
       )}
 
-      {/* ═══ THE FIELD ═══
-          Two registers, and this band is the first one.
+      <ScheduleLayoutShell
+        selectedDate={selectedDate}
+        onDateChange={setSelectedDate}
+        view={calendarView}
+        onViewChange={setCalendarView}
+        isToday={selectedDate === todayStr()}
+        renderPanel={(panel) => {
+          switch (panel) {
+            case 'calendar':
+              return (
+                <CalendarSidebar
+                  side={side}
+                  onToggleSide={toggleSide}
+                  selectedDate={selectedDate}
+                  onDateChange={setSelectedDate}
+                  weekGoals={weekGoals}
+                  marks={radarMarks}
+                  goalDates={new Set(Object.keys(weekGoals))}
+                  goals={goals}
+                  deadlines={deadlines}
+                  reminders={reminders}
+                  schedule={schedule}
+                  longTermGoals={longTermGoals}
+                />
+              );
 
-            THE WALL (left) is a 3D object you look ACROSS — it is the page's
-            single piece of orientation. It gets its own band, its own width, and
-            no competition for attention. It was previously a 380px sidebar in a
-            column 1669px tall, so ~1000px of the page was empty beside a
-            postage stamp.
+            case 'agenda':
+              return (
+                <div className="space-y-3">
+                  <WeekBoard
+                    selectedDate={selectedDate}
+                    onSelectDate={handleBoardSelectDate}
+                    dates={boardDates}
+                    schedule={schedule}
+                    deadlines={deadlines}
+                    reminders={reminders}
+                    todos={todos.map(t => ({ id: t.id, text: t.text, done: t.done, dueDate: t.dueDate }))}
+                    goals={goals}
+                    loading={loading}
+                    error={error}
+                    onRetry={reloadAll}
+                  />
+                  <ScheduleCard
+                    entries={todaySchedule}
+                    selectedDate={selectedDate}
+                    selectedDay={selectedDay}
+                    onDayChange={setSelectedDay}
+                    hideDaySelector
+                    onAdd={addScheduleEntry}
+                    onUpdate={updateScheduleEntry}
+                    onDelete={deleteScheduleEntry}
+                    linkedGoals={goalOptions}
+                    showAll={showWeekSchedule}
+                    loading={loading}
+                    error={error}
+                    onOpenGoalHub={gid => {
+                      const g = goals.find(x => x.id === gid);
+                      setHubEntity({ type: g?.isHabit ? 'habit' : 'goal', id: gid, title: g?.title || 'Goal' });
+                    }}
+                  />
+                </div>
+              );
 
-            THE DAY SHEET (right) is flat and you read it — the selected day's
-            blocks. It sits beside the wall on purpose: month and day are one
-            gesture, and the weekday rail is the hinge between them. */}
+            case 'upcoming':
+              return loading ? (
+                <div className="space-y-3" aria-hidden>
+                  <div className="h-4 w-1/4 animate-pulse rounded bg-[var(--color-muted)]" />
+                  {[1, 2, 3].map(i => <div key={i} className="h-11 animate-pulse rounded-lg bg-[var(--color-muted)]" />)}
+                </div>
+              ) : error ? (
+                <LoadError message={error} onRetry={reloadAll} />
+              ) : (
+                <DeadlinesCard
+                  bare
+                  deadlines={deadlines}
+                  reminders={reminders}
+                  loading={loading}
+                  error={error}
+                  onAdd={handleAddDeadline}
+                  onDelete={handleDeleteDeadline}
+                  onUpdate={handleUpdateDeadline}
+                  onComplete={handleCompleteDeadline}
+                  onToggleReminder={handleToggleReminder}
+                  onDeleteReminder={handleDeleteReminder}
+                  goalOptions={goalOptions}
+                />
+              );
 
-      <div className="grid items-start gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
-        <div className={side === 'left' ? 'xl:order-1' : 'xl:order-2'}>
-          <CalendarSidebar
-            side={side}
-            onToggleSide={toggleSide}
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-            weekGoals={weekGoals}
-            marks={radarMarks}
-            goalDates={new Set(Object.keys(weekGoals))}
-            goals={goals}
-            deadlines={deadlines}
-            reminders={reminders}
-            schedule={schedule}
-            longTermGoals={longTermGoals}
-          />
-        </div>
+            case 'todos':
+              return (
+                <TodoList
+                  bare
+                  onChanged={loadTodos}
+                  goalOptions={goalOptions}
+                  deadlineOptions={deadlineOptions}
+                  scheduleOptions={scheduleOptions}
+                />
+              );
 
-        <div className={['min-w-0', side === 'left' ? 'xl:order-2' : 'xl:order-1'].join(' ')}>
-          {/* Names the day you are about to edit. This heading exists because the
-              target day is now a choice rather than an accident. */}
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="flex items-baseline gap-2">
-              <h2 className="text-[13px] font-semibold text-[var(--color-foreground)]">
-                {showWeekSchedule ? 'Whole week' : DAY_SHORT[selectedDay]}
-              </h2>
-              <span className="font-mono text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
-                {showWeekSchedule
-                  ? `${todaySchedule.length} block${todaySchedule.length === 1 ? '' : 's'}`
-                  : `${blockCounts[selectedDay]} block${blockCounts[selectedDay] === 1 ? '' : 's'}`}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowWeekSchedule(v => !v)}
-              aria-pressed={showWeekSchedule}
-              className="min-h-[32px] rounded-lg px-2.5 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
-              style={{
-                color: showWeekSchedule ? 'var(--page-accent)' : 'var(--color-muted-foreground)',
-                backgroundColor: showWeekSchedule
-                  ? 'color-mix(in srgb, var(--page-accent) 10%, transparent)'
-                  : 'transparent',
-                boxShadow: showWeekSchedule
-                  ? 'inset 0 0 0 1px color-mix(in srgb, var(--page-accent) 25%, transparent)'
-                  : 'inset 0 0 0 1px transparent',
-              }}
-            >
-              {showWeekSchedule ? 'One day at a time' : 'See whole week'}
-            </button>
-          </div>
-
-          {/* THE WEEK IS THE DEFAULT ANSWER. It sits above the day editor on
-              purpose: the question this page answers is "what does this week
-              look like", and the single-day panel is a DETAIL of it, not a
-              replacement for it. Previously the only options were "one day at a
-              time" and "see whole week" — an ungrouped dump of every block,
-              which is not a week either. Seven columns, one per date, with
-              recurring blocks repeated on every matching date. */}
-          <div className="mb-4">
-            <WeekBoard
-              selectedDate={selectedDate}
-              onSelectDate={handleBoardSelectDate}
-              dates={boardDates}
-              schedule={schedule}
-              deadlines={deadlines}
-              reminders={reminders}
-              todos={todos.map(t => ({ id: t.id, text: t.text, done: t.done, dueDate: t.dueDate }))}
-              goals={goals}
-              loading={loading}
-              error={error}
-              onRetry={reloadAll}
-            />
-          </div>
-
-          {/* THE HINGE. Blocks are stored as a recurring weekday, so the target
-              day is picked HERE — by clicking it — and the add form inside
-              ScheduleCard simply inherits it. That is the difference between
-              "add to a day you choose" and "whatever day is on screen". */}
-          {!showWeekSchedule && (
-            <div className="mb-3">
-              <WeekdayRail
-                selectedDay={selectedDay}
-                onSelect={setSelectedDay}
-                counts={blockCounts}
-                todayDay={new Date().getDay()}
-              />
-            </div>
-          )}
-
-          {/* Rendered bare, not inside a WarmCard: ScheduleCard is already a card
-              with its own title and states. Wrapping it produced a card inside a
-              card and two competing headings. loading/error go to the card, which
-              has its own skeleton and retry, rather than being duplicated here. */}
-          <ScheduleCard
-            entries={todaySchedule}
-            selectedDate={selectedDate}
-            selectedDay={selectedDay}
-            onDayChange={setSelectedDay}
-            hideDaySelector
-            onAdd={addScheduleEntry}
-            onUpdate={updateScheduleEntry}
-            onDelete={deleteScheduleEntry}
-            linkedGoals={goalOptions}
-            showAll={showWeekSchedule}
-            loading={loading}
-            error={error}
-            onOpenGoalHub={gid => {
-              const g = goals.find(x => x.id === gid);
-              setHubEntity({ type: g?.isHabit ? 'habit' : 'goal', id: gid, title: g?.title || 'Goal' });
-            }}
-          />
-        </div>
-      </div>
-
-      {/* ═══ THE LEDGER ═══
-          The second register: flat, hairline depth, read not looked across. These
-          are inventory, not navigation, so they sit below the field band's fold
-          line in a 2-up grid instead of as four equal full-width cards.
-
-          BellBoard is gone from this page on purpose — DeadlinesCard already
-          renders BOTH deadlines and reminders, and already owns a complete add
-          form for each. Two components were writing and drawing the same
-          reminders on one screen. */}
-      <div className="mt-6">
-        {/* A caption, not a heading card — the chrome cut removed a boxed
-            SectionHeading, and the counts it carried were worth keeping. */}
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          <h2 className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-muted-foreground)]">
-            Open items
-          </h2>
-          <span className="font-mono text-[10px] tabular-nums text-[var(--color-muted-foreground)]">
-            {openTodos} open task{openTodos === 1 ? '' : 's'} · {dueSoon} due this week
-          </span>
-        </div>
-
-        {/* ONE surface, two sections, separated by a hairline. These are two
-            lists of open items, not two products, so they are not two cards:
-            five boxes on one screen was the complaint this replaces. The
-            components render `bare` so the page owns the single border. */}
-        <div className="grid gap-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/35 p-5 xl:grid-cols-2">
-          <section className="min-w-0" aria-label="Tasks">
-            <TodoList
-              bare
-              onChanged={loadTodos}
-              goalOptions={goalOptions}
-              deadlineOptions={deadlineOptions}
-              scheduleOptions={scheduleOptions}
-            />
-          </section>
-
-          <section
-            className="min-w-0 xl:border-l xl:border-[var(--color-border)] xl:pl-6"
-            aria-label="Deadlines and reminders"
-          >
-            {loading ? (
-              <div className="space-y-3" aria-hidden>
-                <div className="h-4 w-1/4 animate-pulse rounded bg-[var(--color-muted)]" />
-                {[1, 2, 3].map(i => <div key={i} className="h-11 animate-pulse rounded-lg bg-[var(--color-muted)]" />)}
-              </div>
-            ) : error ? (
-              <LoadError message={error} onRetry={reloadAll} />
-            ) : (
-              <DeadlinesCard
-                bare
-                deadlines={deadlines}
-                reminders={reminders}
-                loading={loading}
-                error={error}
-                onAdd={handleAddDeadline}
-                onDelete={handleDeleteDeadline}
-                onUpdate={handleUpdateDeadline}
-                onComplete={handleCompleteDeadline}
-                onToggleReminder={handleToggleReminder}
-                onDeleteReminder={handleDeleteReminder}
-                goalOptions={goalOptions}
-              />
-            )}
-          </section>
-        </div>
-      </div>
+            default:
+              return null;
+          }
+        }}
+      />
 
       {/* Goal hub — a schedule block links to a goal, so the hub is reachable
           from here too, not only from Gold. */}

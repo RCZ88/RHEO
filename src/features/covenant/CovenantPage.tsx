@@ -58,7 +58,7 @@ export default function CovenantPage({ embedded = false }: CovenantPageProps = {
         <div className="flex items-end justify-between h-full p-4">
           <div>
             <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-[#e8866b]/20 flex items-center justify-center text-[#e8866b] backdrop-blur-sm">
+              <div className="w-8 h-8 rounded-lg bg-[var(--color-clay-500-20)] flex items-center justify-center text-[var(--color-clay-400)] backdrop-blur-sm">
                 <HeartHandshake className="w-4.5 h-4.5" />
               </div>
               <h1 className="text-lg font-semibold text-white drop-shadow">Covenant</h1>
@@ -79,7 +79,7 @@ export default function CovenantPage({ embedded = false }: CovenantPageProps = {
           </div>
           <button
             onClick={() => setShowNew(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#e8866b] text-white text-[12px] font-semibold hover:bg-[#d96846] transition-colors shadow-lg shadow-black/20"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--color-clay-500)] text-white text-[12px] font-semibold hover:bg-[#d96846] transition-colors shadow-lg shadow-black/20"
           >
             <Plus className="w-3.5 h-3.5" />
             New commitment

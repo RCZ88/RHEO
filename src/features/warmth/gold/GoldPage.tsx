@@ -25,44 +25,64 @@ import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntr
 import type { GoalStatus } from '../../../types/goals';
 import { Button } from '../../../components/ui/button';
 import { ConnectionExplorer } from '../../../components/goals/ConnectionExplorer';
-import { PhaseFormDialog } from '../../../components/life-river/phase-form-dialog';
 import { scaleOf } from '../../../lib/riverMath';
 import { loadCompletions } from '../../covenant/storage';
 import { GoalLanguageParser } from '@/components/goals/GoalLanguageParser';
 import { ProgressRing } from '@/components/ai/canvas/cards/ProgressRing';
 
+import { goalKind, isWeeklyish, type GoalKind } from '@/components/goals/goalPredicates';
+import { todayStr, addDaysStr, mondayOf, daysUntil } from '@/lib/week';
+import { formatTime, prettyDate } from '@/lib/format';
+import { covenantStreak, covenantDoneDates } from '@/lib/covenant';
+import { CATEGORY_DOTS } from '@/lib/CategoryColors';
+import { StatPill } from '@/components/goals/StatPill';
+import { DayRing } from '@/components/goals/DayRing';
+import { WeekReview } from '@/components/goals/WeekReview';
+import { HabitTracker } from '@/components/goals/HabitTracker';
+
 /* ═══════════════════ helpers ═══════════════════ */
 
-const toStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const todayStr = () => toStr(new Date());
+/* ── daily reflection (hard stats) ── */
+interface DailyReflection {
+  productiveSec: number;
+  codingSec: number;
+  goals: { total: number; completed: number };
+  habits: { total: number; completed: number };
+  reviewSummary: string | null;
+}
+const emptyReflection: DailyReflection = {
+  productiveSec: 0, codingSec: 0,
+  goals: { total: 0, completed: 0 },
+  habits: { total: 0, completed: 0 },
+  reviewSummary: null,
+};
 
-function addDaysStr(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return toStr(d);
+/* smart prompt generation — blend soft + hard into 4 max reflection prompts.
+   Spec §7.3 does NOT list buildPrompts as a duplicate: after HabitsPage was
+   deleted this has exactly one consumer, so it stays local rather than being
+   hoisted into a module with a single caller. */
+function buildPrompts(data: DailyReflection, streak: number): string[] {
+  const prompts: string[] = [];
+  const prod = formatTime(data.productiveSec);
+  if (data.goals.completed === 0 && data.goals.total === 0 && data.productiveSec === 0 && streak === 0) {
+    return ['Start with one thing — even small. What\'s the one goal that matters today?'];
+  }
+  if (data.goals.total > 0) {
+    prompts.push(data.goals.completed === data.goals.total
+      ? `You sealed all ${data.goals.total} goal${data.goals.total > 1 ? 's' : ''} — what felt most impactful?`
+      : `${data.goals.completed}/${data.goals.total} goals done — what blocked the rest?`);
+  }
+  if (data.productiveSec > 0) {
+    prompts.push(`You spent ${prod} in productive time today — where did it go?`);
+  }
+  if (data.habits.completed > 0 && data.habits.total > 0) {
+    prompts.push(`Habits: ${data.habits.completed}/${data.habits.total} — which kept you honest?`);
+  }
+  if (streak > 0) prompts.push(`Covenant day ${streak} — what's the habit that holds the streak together?`);
+  if (data.codingSec > 0) prompts.push(`You coded for ${formatTime(data.codingSec)} — something new or deep work?`);
+  return prompts.slice(0, 4);
 }
-function mondayOf(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  return addDaysStr(dateStr, -((d.getDay() + 6) % 7));
-}
-function daysUntil(dateStr: string): number | null {
-  if (!dateStr) return null;
-  const a = new Date(todayStr() + 'T00:00:00').getTime();
-  const b = new Date((dateStr || '') + 'T00:00:00').getTime();
-  if (isNaN(a) || isNaN(b)) return null;
-  return Math.round((b - a) / 86400000);
-}
-function formatTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-function prettyDate(dateStr: string): string {
-  if (dateStr === todayStr()) return 'Today';
-  if (dateStr === addDaysStr(todayStr(), -1)) return 'Yesterday';
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
+
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function formatPhaseRange(sy?: number|null, sm?: number|null, ey?: number|null, em?: number|null): string {
   const start = sy ? `${MONTH_ABBR[(sm || 1) - 1] ?? ''} ${sy}` : '';
@@ -70,8 +90,6 @@ function formatPhaseRange(sy?: number|null, sm?: number|null, ey?: number|null, 
   const end = `${MONTH_ABBR[(em || 12) - 1] ?? ''} ${ey}`;
   return start ? `${start} — ${end}` : end;
 }
-
-const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type CalendarSide = 'left' | 'right';
 
@@ -99,84 +117,6 @@ export function useCalendarSide(): [CalendarSide, () => void] {
   }), []);
   return [side, toggle];
 }
-
-/* ── daily reflection (hard stats) ── */
-interface DailyReflection {
-  productiveSec: number;
-  codingSec: number;
-  goals: { total: number; completed: number };
-  habits: { total: number; completed: number };
-  reviewSummary: string | null;
-}
-const emptyReflection: DailyReflection = {
-  productiveSec: 0, codingSec: 0,
-  goals: { total: 0, completed: 0 },
-  habits: { total: 0, completed: 0 },
-  reviewSummary: null,
-};
-
-/* covenant overall streak: count consecutive days with any completion, back from today */
-function covenantStreak(): number {
-  try {
-    const completions = loadCompletions();
-    const dates = [...new Set(completions.map(c => c.date))];
-    const set = new Set(dates);
-    if (set.size === 0) return 0;
-    let cursor = todayStr();
-    if (!set.has(cursor)) cursor = addDaysStr(cursor, -1);
-    let streak = 0;
-    while (set.has(cursor)) { streak += 1; cursor = addDaysStr(cursor, -1); }
-    return streak;
-  } catch { return 0; }
-}
-function covenantDoneDates(): Set<string> {
-  try {
-    return new Set(loadCompletions().map(c => c.date));
-  } catch { return new Set(); }
-}
-
-/* smart prompt generation — blend soft + hard into 4 max reflection prompts */
-function buildPrompts(data: DailyReflection, streak: number): string[] {
-  const prompts: string[] = [];
-  const prod = formatTime(data.productiveSec);
-  if (data.goals.completed === 0 && data.goals.total === 0 && data.productiveSec === 0 && streak === 0) {
-    return ['Start with one thing — even small. What\'s the one goal that matters today?'];
-  }
-  if (data.goals.total > 0) {
-    prompts.push(data.goals.completed === data.goals.total
-      ? `You sealed all ${data.goals.total} goal${data.goals.total > 1 ? 's' : ''} — what felt most impactful?`
-      : `${data.goals.completed}/${data.goals.total} goals done — what blocked the rest?`);
-  }
-  if (data.productiveSec > 0) {
-    prompts.push(`You spent ${prod} in productive time today — where did it go?`);
-  }
-  if (data.habits.completed > 0 && data.habits.total > 0) {
-    prompts.push(`Habits: ${data.habits.completed}/${data.habits.total} — which kept you honest?`);
-  }
-  if (streak > 0) prompts.push(`Covenant day ${streak} — what's the habit that holds the streak together?`);
-  if (data.codingSec > 0) prompts.push(`You coded for ${formatTime(data.codingSec)} — something new or deep work?`);
-  return prompts.slice(0, 4);
-}
-
-/* species predicate — this is the whole routing logic */
-// Routines = daily/weekly recurring targets. Long-term goals (period 'longterm')
-// and habits are NOT routines — they live in the Vault / habit tracker, never in
-// the routines list. (Earlier this mis-classified long-term goals as routines.)
-const isWeeklyish = (g: Goal) =>
-  !!g.isHabit ||
-  g.cadence === 'weekly' ||
-  g.period === 'weekly' ||
-  g.period === 'longterm';
-
-export const CAT_META: Record<string, { label: string; dot: string }> = {
-  work:          { label: 'Work',          dot: '#ec4899' },
-  personal:      { label: 'Personal',      dot: '#8b5cf6' },
-  health:        { label: 'Health',        dot: '#34d399' },
-  learning:      { label: 'Learning',      dot: '#22d3ee' },
-  finance:       { label: 'Finance',       dot: '#fbbf24' },
-  relationships: { label: 'Relationships', dot: '#fb7185' },
-};
-export const catDot = (c: string) => (CAT_META[c] || CAT_META.work).dot;
 
 export const defaultCriteria: CriteriaForm = {
   title: '', description: '', category: 'work', period: 'daily',
@@ -257,45 +197,76 @@ interface RadarMark { color: string; label: string; }
 
 /* ═══════════════════ unique UI pieces ═══════════════════ */
 
-const GLASS = 'bg-[rgba(24,24,27,0.60)] backdrop-blur-xl border border-[rgba(63,63,70,0.40)]';
-
-function StatPill({ icon, label, value, accent }: {
-  icon: React.ReactNode; label: string; value: string | number;
-  accent: 'amber' | 'violet' | 'emerald' | 'cyan' | 'rose';
+/* ── SealedList: a per-group disclosure over its own sealed goals ──
+   Three copies of this markup previously shared ONE boolean, which produced two
+   bugs at once: the Habits and Routines copies rendered no list at all, and all
+   three opened and closed in unison. Each instance now owns its own state and
+   renders the caller's card, so a sealed goal is always visible somewhere once
+   expanded — which is what makes the group's empty state honest. */
+function SealedList({ goals, noun, renderCard }: {
+  goals: Goal[];
+  noun: string;
+  renderCard?: (g: Goal) => React.ReactNode;
 }) {
-  const accentMap = {
-    amber: 'text-amber-400', violet: 'text-violet-400', emerald: 'text-emerald-400',
-    cyan: 'text-cyan-400', rose: 'text-rose-400',
-  };
+  const [open, setOpen] = useState(false)
+  if (goals.length === 0) return null
+  const plural = `${goals.length} ${noun}${goals.length === 1 ? '' : 's'}`
   return (
-    <div className={`${GLASS} px-3 py-2.5 flex items-center gap-2`}>
-      <span className={accentMap[accent]}>{icon}</span>
-      <div className="min-w-0">
-        <div className="text-[14px] font-semibold text-zinc-100 tabular-nums">{value}</div>
-        <div className="text-[10px] text-zinc-600">{label}</div>
-      </div>
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50 rounded"
+      >
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        Sealed ({plural})
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden space-y-1.5 mt-2"
+          >
+            {goals.map(goal => (renderCard ? renderCard(goal) : <GoalCard key={goal.id} goal={goal} />))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/* ── GroupHeader: one row per concept group ──
+   The group NAME is the point. Before this change the list was one undifferentiated
+   run of GoalCards, so a habit, a weekly routine and a long-term destination looked
+   identical in the column — which is what made "the routine and the goal are the
+   same thing" true from the user's side even where the data model was correct.
+   A header is also the scroll anchor, so it stays rendered when the group is empty:
+   a ⌘K jump to an empty group must still land somewhere legible. */
+function GroupHeader({ id, icon, title, count, noun }: {
+  id: string; icon: React.ReactNode; title: string; count: number; noun: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 mb-2">
+      {icon}
+      <h3 id={id} className="text-[13px] font-semibold text-zinc-100">{title}</h3>
+      {count > 0 && (
+        <span className="text-[10px] text-zinc-600 tabular-nums">
+          {count} {noun}{count === 1 ? '' : 's'}
+        </span>
+      )}
     </div>
   );
 }
 
-/* — DayRing: done/total donut for the header — */
-function DayRing({ done, total }: { done: number; total: number }) {
-  const pct = total ? (done / total) * 100 : 0;
-  return (
-    <div className="relative shrink-0">
-      <AnimatedCircularProgressBar
-        value={pct}
-        size={46}
-        strokeWidth={4}
-        gaugePrimaryColor="#fbbf24"
-        gaugeSecondaryColor="rgba(63,63,70,0.5)"
-      />
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-zinc-300 tabular-nums">
-        {done}/{total}
-      </span>
-    </div>
-  );
-}
+/* This was a hardcoded DARK fill — `bg-[rgba(24,24,27,0.60)]` with no light
+   branch — so on Warm Paper the pill composited to rgb(112,111,111): a grey
+   smudge that swallowed its own contents. Measured on the streak pill, the
+   Flame sat at 1.01:1 and the Sealed check at 1.10:1 against it. The token
+   pair keeps the glass read in both themes. */
+const GLASS = 'bg-[rgba(24,24,27,0.60)] light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-[rgba(63,63,70,0.40)] light:border-[var(--ws-border)]';
 
 /* — GoldHeader: opens on the date itself, ledger-style — */
 function GoldHeader({ date, done, total, tracked, bestStreak }: {
@@ -332,7 +303,7 @@ function GoldHeader({ date, done, total, tracked, bestStreak }: {
             </span>
           </div>
         )}
-        <DayRing done={done} total={total} />
+        <DayRing date={date} done={done} total={total} />
       </div>
     </div>
   );
@@ -411,8 +382,8 @@ function WeekBoard({ weekDates, weekGoals, selectedDate, onPick, onToggleDay }: 
                       title={`${grp.title}${isDone ? ' ✓' : ''}`}
                       className="w-2.5 h-2.5 rounded-[3px] border transition-transform hover:scale-125"
                       style={{
-                        background: isDone ? catDot(grp.category) : 'transparent',
-                        borderColor: isDone ? catDot(grp.category) : `${catDot(grp.category)}55`,
+                        background: isDone ? CATEGORY_DOTS[grp.category]?.dot : 'transparent',
+                        borderColor: isDone ? CATEGORY_DOTS[grp.category]?.dot : `${CATEGORY_DOTS[grp.category]?.dot}55`,
                       }}
                     />
                   );
@@ -450,9 +421,21 @@ export const PRIORITY_OPTIONS: { value: number; label: string }[] = [
   { value: 3, label: 'Low' },
 ];
 
-function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
+/* `todayGoals` was declared here, destructured, and NEVER READ — and the caller
+   was feeding it the long-term bucket through an `as unknown as Goal[]` cast. So
+   the cast was a type lie with no consumer behind it.
+
+   Worse, it hid a real defect: the Vault's list renders from `longTermGoals`
+   (`api.getLongtermGoals`), a DIFFERENT query from the `goals` batch that produces
+   `vaultGoals`. Two queries, one concept, no reconciliation — so the group header
+   could count N while the list rendered M. That is the same "two sources that can
+   disagree" failure as the double-reading completions.
+
+   The prop is deleted rather than repointed: `longTermGoals` is already the
+   component's real source, and the group header below now counts that same
+   array, so the number and the list are the same fact. */
+function TheVault({ longTermGoals, onSave, onDelete }: {
   longTermGoals: LongTermGoal[];
-  todayGoals: Goal[];
   onSave: (form: LTGForm, existing?: LongTermGoal) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
@@ -529,8 +512,8 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
               onChange={e => setForm(f => ({ ...f, category: e.target.value as GoalCategory }))}
               className="flex-1 min-w-0 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
             >
-              {Object.keys(CAT_META).map(k => (
-                <option key={k} value={k}>{CAT_META[k].label}</option>
+              {Object.keys(CATEGORY_DOTS).map(k => (
+                <option key={k} value={k}>{CATEGORY_DOTS[k].label}</option>
               ))}
             </select>
             <select
@@ -596,8 +579,8 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] text-zinc-300 truncate">{ltg.title}</div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: catDot(ltg.category || 'work') }} />
-                    <span className="text-[9px] text-zinc-600">{(CAT_META[ltg.category || 'work'] || CAT_META.work).label}</span>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: CATEGORY_DOTS[ltg.category || 'work']?.dot }} />
+                    <span className="text-[9px] text-zinc-600">{(CATEGORY_DOTS[ltg.category || 'work'] || CATEGORY_DOTS.work).label}</span>
                     {du !== null && (
                       <span className={`text-[9px] tabular-nums ${du < 0 ? 'text-red-400' : du <= 7 ? 'text-amber-300' : 'text-zinc-600'}`}>
                         {du < 0 ? `${-du}d overdue` : `${du}d left`}
@@ -653,22 +636,33 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
 }
 
 /* — BellBoard: reminders as tickets with amber time-rail — */
-function ReflectionCard({ date, data, summary, onSave }: {
-  date: string; data: DailyReflection; summary: string; onSave: (s: string) => void;
+function ReflectionCard({ date, data, summary, streak, onSave }: {
+  date: string; data: DailyReflection; summary: string;
+  /* Passed in, not read here. The card used to read the covenant store itself,
+     which meant the page read it twice — once for the recap's day-dots and once
+     for this streak — and two reads taken at different moments can disagree. The
+     page reads once and hands the same array to both. */
+  streak: number;
+  onSave: (s: string) => void;
 }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [promptOpen, setPromptOpen] = useState(true);
-  const streak = covenantStreak();
   const prompts = useMemo(() => buildPrompts(data, streak), [data, streak]);
   const text = draft[date] ?? summary;
   const dirty = draft[date] !== undefined;
 
+  /* The tint is the ICON MARK on a raised tile, so it needs the ink step, not
+   * the fill step. The raw -400 hexes measured 1.61/1.75/1.86/4.09/2.71:1 on
+   * #fcfbf8 — the Covenant (streak) Flame was effectively invisible in light.
+   * `--color-*-ink` resolves to the bright step in dark and a darkened step in
+   * `html.light`, so this row reads correctly in both themes with no `light:`
+   * branch here. */
   const tiles: { icon: typeof Timer; label: string; value: string; tint: string }[] = [
-    { icon: Timer,    label: 'Productive',  value: formatTime(data.productiveSec), tint: '#fbbf24' },
-    { icon: Code2,    label: 'Coding',      value: formatTime(data.codingSec),     tint: '#22d3ee' },
-    { icon: Target,   label: 'Goals',       value: `${data.goals.completed}/${data.goals.total}`, tint: '#34d399' },
-    { icon: Activity, label: 'Habits',      value: `${data.habits.completed}/${data.habits.total}`, tint: '#8b5cf6' },
-    { icon: Flame,    label: 'Covenant',    value: `${streak}d`,                   tint: '#f97316' },
+    { icon: Timer,    label: 'Productive',  value: formatTime(data.productiveSec), tint: 'var(--color-amber-400)' },
+    { icon: Code2,    label: 'Coding',      value: formatTime(data.codingSec),     tint: 'var(--color-cyan-ink)' },
+    { icon: Target,   label: 'Goals',       value: `${data.goals.completed}/${data.goals.total}`, tint: 'var(--color-emerald-ink)' },
+    { icon: Activity, label: 'Habits',      value: `${data.habits.completed}/${data.habits.total}`, tint: 'var(--color-violet-ink)' },
+    { icon: Flame,    label: 'Covenant',    value: `${streak}d`,                   tint: 'var(--color-orange-ink)' },
   ];
 
   return (
@@ -696,11 +690,11 @@ function ReflectionCard({ date, data, summary, onSave }: {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
         {tiles.map(t => (
           <div key={t.label} className="rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 px-2.5 py-2">
-            <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-zinc-500 mb-1">
+            <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)] mb-1">
               <t.icon size={11} style={{ color: t.tint }} />
               {t.label}
             </div>
-            <div className="text-[14px] font-semibold text-zinc-200 tabular-nums">{t.value}</div>
+            <div className="text-[14px] font-semibold text-zinc-200 light:text-[var(--text-primary)] tabular-nums">{t.value}</div>
           </div>
         ))}
       </div>
@@ -715,7 +709,9 @@ function ReflectionCard({ date, data, summary, onSave }: {
             placeholder="How did the day go? What moved the needle? What does tomorrow need?"
             className="warmth-serif w-full bg-transparent outline-none resize-none text-[14px] leading-[28px] text-zinc-300 placeholder:text-zinc-700 placeholder:italic"
             style={{
-              backgroundImage: 'repeating-linear-gradient(transparent, transparent 27px, rgba(63,63,70,0.25) 27px, rgba(63,63,70,0.25) 28px)',
+              /* Ruled-paper lines behind the reflection box. `rgba(63,63,70,.25)` is a cool
+               * grey tuned for a dark field; on cream it reads as dirt. */
+              backgroundImage: 'repeating-linear-gradient(transparent, transparent 27px, var(--ws-border) 27px, var(--ws-border) 28px)',
             }}
           />
         </VoiceInputWrapper>
@@ -768,73 +764,21 @@ function ReflectionCard({ date, data, summary, onSave }: {
 }
 
 /* — WeekReview: Mon→Sun hard-data recap with covenant streak dots — */
-function WeekReview({ weekDates, reflections }: {
-  weekDates: string[];
-  reflections: Record<string, DailyReflection>;
+/* `onManagePhases` is a PROP, not a local window event.
+   The previous implementation did
+     localStorage.setItem('life-view-mode','river') + dispatchEvent('rheo:life-view-mode')
+   and NOTHING in the repo listened for that event — verified by grep. So the
+   "Manage phases" button was a dead control: it looked like a navigator and did
+   nothing. Two fragile channels (a storage write and a global event) could not
+   have been verified anyway without a build.
+   GoldPage also mounts standalone at `/gold`, where there is no River to switch
+   to — so when the prop is absent the button is not rendered at all, rather than
+   rendering a control that cannot work. */
+export default function GoldPage({ embedded, onManagePhases }: {
+  embedded?: boolean
+  /** Provided only when Gold is rendered inside LifePage, which owns the view mode. */
+  onManagePhases?: () => void
 }) {
-  const doneDates = covenantDoneDates();
-  const streak = covenantStreak();
-  const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const maxProd = Math.max(1, ...weekDates.map(d => reflections[d]?.productiveSec || 0));
-  const avgProd = weekDates.reduce((s, d) => s + (reflections[d]?.productiveSec || 0), 0) / 7;
-  const goalsSealed = weekDates.reduce((s, d) => s + (reflections[d]?.goals.completed || 0), 0);
-  const habitsKept = weekDates.reduce((s, d) => s + (reflections[d]?.habits.completed || 0), 0);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-[12px] font-medium text-zinc-300 flex items-center gap-1.5">
-          <TrendingUp size={13} style={{ color: 'var(--page-accent)' }} aria-hidden />
-          This week, at a glance
-          <span className="warmth-serif italic text-zinc-600 font-normal">— Monday to Sunday</span>
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        {weekDates.map((d, i) => {
-          const ref = reflections[d];
-          const prod = ref?.productiveSec || 0;
-          const isToday = d === todayStr();
-          return (
-            <div key={d} className={`flex items-center gap-3 px-2.5 py-1.5 rounded-lg ${isToday ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]'}`}>
-              <div className="w-11 shrink-0">
-                <div className={`text-[9px] uppercase tracking-wider ${isToday ? 'text-amber-400' : 'text-zinc-600'}`}>{dow[i]}</div>
-                <div className={`text-[11px] font-semibold tabular-nums ${isToday ? 'text-amber-300' : 'text-zinc-500'}`}>{d.slice(5)}</div>
-              </div>
-              <div className="flex-1 h-2 rounded-full bg-zinc-800/60 overflow-hidden">
-                <motion.div
-                  /* LAMINAR §6 / PAINT Gate E: transform only, never width.
-                     scaleX from a left origin gives the same fill with no layout cost. */
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: Math.min(1, prod / maxProd) }}
-                  transition={{ duration: 0.5, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
-                  className="h-full w-full rounded-full origin-left"
-                  /* LAMINAR §7.1: no decorative chrome gradient — a flat amber fill
-                     reads the same at 2px and stops the card looking decorated. */
-                  style={{ backgroundColor: prod > 0 ? 'var(--color-amber-400)' : 'transparent' }}
-                />
-              </div>
-              <div className="w-12 text-right text-[11px] tabular-nums text-zinc-400">{prod > 0 ? formatTime(prod) : '—'}</div>
-              <div className="w-6 text-center text-[11px] tabular-nums text-emerald-400">{ref?.goals.completed || ''}</div>
-              <div className="w-5 text-center">
-                {doneDates.has(d)
-                  ? <Flame size={12} className="inline text-amber-400" aria-hidden />
-                  : <span className="text-zinc-700">·</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 pt-2.5 border-t border-zinc-800/50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-        <span>avg <span className="text-zinc-300 tabular-nums">{formatTime(Math.round(avgProd))}</span>/day</span>
-        <span><span className="text-emerald-400 tabular-nums">{goalsSealed}</span> routines sealed</span>
-        <span><span className="text-violet-400 tabular-nums">{habitsKept}</span> habits kept</span>
-        <span className="flex items-center gap-1"><Flame size={12} className="text-amber-400" aria-hidden /> <span className="text-amber-300 tabular-nums">{streak}</span> day streak</span>
-      </div>
-    </div>
-  );
-}
-
-export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const api = (window as any).deskflowAPI;
   const [side, toggleSide] = useCalendarSide();
 
@@ -854,42 +798,11 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newCriteria, setNewCriteria] = useState<CriteriaForm>(defaultCriteria);
   const [editCriteria, setEditCriteria] = useState<CriteriaForm>(defaultCriteria);
-  const [showCompleted, setShowCompleted] = useState(false);
+  /* ONE flag shared by all three groups was wrong twice over: the Habits
+     and Routines toggles rendered nothing at all (only completedDailies was
+     ever mapped), and all three opened and closed together. State now lives
+     per group, inside SealedList, so each disclosure is independent. */
   const [showSuggested, setShowSuggested] = useState(false);
-  /* D3 — Phases. These are the LONGEST time-horizon objects in the app (a
-     chapter of life), and Gold is the longitudinal tab, so this is their home.
-     3 phases already exist in the DB with nowhere to see them. */
-  const [phases, setPhases] = useState<any[]>([]);
-  const [phasesLoading, setPhasesLoading] = useState(true);
-  const [phasesError, setPhasesError] = useState<string | null>(null);
-  /* WHY A SEPARATE FLAG: `PhaseDrawer` is a DETAIL drawer — it renders nothing
-     at all when `phase` is null (phase-drawer.tsx returns a bare <Sheet/>).
-     This page used to wire "Add phase" to it, which is why the button looked
-     dead: it opened an empty panel. `PhaseFormDialog` is the real create/edit
-     form and is what the River already uses. Create, edit AND delete now all
-     go there, so the dead drawer and its state are gone. */
-  const [phaseFormOpen, setPhaseFormOpen] = useState(false);
-  const [phaseFormDraft, setPhaseFormDraft] = useState<any>(null);
-
-  const openPhaseForm = useCallback((existing: any | null) => {
-    setPhaseFormDraft(existing);
-    setPhaseFormOpen(true);
-  }, []);
-
-
-  const loadPhases = useCallback(async () => {
-    setPhasesError(null);
-    try {
-      const res = await api.lifePhaseGet?.();
-      if (res?.ok) setPhases(Array.isArray(res.data) ? res.data : []);
-      else setPhasesError(res?.error || 'RHEO could not load your phases.');
-    } catch {
-      setPhasesError('RHEO could not reach the phase store. Try again.');
-    } finally { setPhasesLoading(false); }
-  }, [api]);
-
-  useEffect(() => { loadPhases(); }, [loadPhases]);
-
   const [hubEntity, setHubEntity] = useState<{ type: 'goal' | 'habit'; id: string; title: string } | null>(null);
   const [connCounts, setConnCounts] = useState<Record<string, number>>({});
   const [showLangParser, setShowLangParser] = useState(false);
@@ -1169,17 +1082,30 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
      'pending') that the canonical GoalStatus union does not declare, so a
      direct `g.status === 'suggested'` is a type error even though the value is
      really in the DB. Widen locally rather than casting the whole goal away. */
-  type StoredGoalStatus = GoalStatus | 'suggested' | 'pending';
-  const storedStatus = (g: Goal): StoredGoalStatus => g.status as StoredGoalStatus;
-  const isSuggested = (g: Goal) => storedStatus(g) === 'suggested';
+  /* THE PARTITION — ONE bucketing pass, not four filters.
+     Four `.filter()` calls were individually defensible and jointly WRONG: the
+     cross-product over isHabit x cadence x period found 4 goals landing in two
+     buckets (`isHabit && longterm` -> Habits AND Vault; `cadence weekly &&
+     longterm` -> Routines AND Vault). That is the original "routine and goal
+     are the same thing" bug reproduced one layer up, and it survived my first
+     probe because that probe covered 7 shapes instead of the full cross
+     product. `goalKind()` is a single ordered chain, so disjointness is a
+     property of control flow rather than of five predicates agreeing. */
+  const buckets = useMemo(() => {
+    const b: Record<GoalKind, Goal[]> = { suggested: [], vault: [], habit: [], routine: [], daily: [] }
+    for (const g of goals) b[goalKind(g)].push(g)
+    return b
+  }, [goals])
 
-  const dailies = useMemo(() => goals.filter(g => !isWeeklyish(g) && !isSuggested(g)), [goals]);
-  const activeDailies = dailies.filter(g => g.status !== 'done');
-  const completedDailies = dailies.filter(g => g.status === 'done');
-  /* AI-suggested goals used to be filtered out here with no way to reach them,
-     so 11 rows in the live DB were unreachable. They are a REVIEW QUEUE: the
-     point is to accept the ones you want and dismiss the rest. */
-  const suggestedGoals = useMemo(() => goals.filter(isSuggested), [goals]);
+  const dailies = buckets.daily
+  const habitGoals = buckets.habit
+  const routineGoals = buckets.routine
+  const vaultGoals = buckets.vault
+  /* AI-suggested goals used to be filtered out with no way to reach them, so 11
+     rows in the live DB were unreachable. They are a REVIEW QUEUE: the point is
+     to accept the ones you want and dismiss the rest. */
+  const suggestedGoals = buckets.suggested
+
   const missedGoals = useMemo(() => getMissedGoals(goals, selectedDate), [goals, selectedDate]);
   const doneCount = goals.filter(g => g.status === 'done').length;
   const tracked = goals.reduce((s, g) => s + (g.progressSeconds || 0), 0);
@@ -1220,6 +1146,87 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     return () => { cancelled = true; };
   }, [weekDates, api]);
 
+  /* Adapt the reflection map to the shared WeekReview's shape. A day absent
+     from the map failed to load, so it contributes zeros rather than being
+     dropped — a missing day must not shift the other six days out of position
+     and silently mis-attribute Monday's total to Sunday. */
+  const weekReviewDays = useMemo(() => weekDates.map(d => {
+    const r = weekReflections[d];
+    return {
+      date: d,
+      productiveSec: r?.productiveSec || 0,
+      goalsCompleted: r?.goals.completed || 0,
+      habitsCompleted: r?.habits.completed || 0,
+    };
+  }), [weekDates, weekReflections]);
+
+  /* The shared WeekReview renders `buildWeeklyReview`'s output rather than
+     re-deriving the ratio, so this is the only place that assembles the input.
+     `weekGoals` already holds the planned rows for the visible week. */
+  /* `habitMisses` was hardcoded `{}`, which made `buildWeeklyReview`'s
+     most-skipped-habit branch DEAD at this call site: `mostSkipped` is always
+     null, so the "shrink that habit" proposal could never fire and the headline
+     never named one. Computed per Claude's rule — a day is a miss only if it is
+       · not after today          (a Monday review must not report 6 future days),
+       · on/after the habit's own date (days before it existed are not misses),
+       · a day the habit was actually scheduled (weeklyTargetDays / fixedDays),
+       · and not completed.
+     Without the "not after today" clause every Monday would show six misses, which
+     is how a metric gets ignored. */
+  const habitMisses = useMemo(() => {
+    const today = todayStr()
+    const out: Record<string, string[]> = {}
+    for (const g of goals) {
+      if (!g.isHabit) continue
+      const cfg: any = (g as any).cadenceConfig
+      const scheduled: string[] | null =
+        cfg?.type === 'fixed' && Array.isArray(cfg.fixedDays) && cfg.fixedDays.length
+          ? cfg.fixedDays
+          : null   // null = scheduled every day
+      const misses: string[] = []
+      for (const d of weekDates) {
+        if (d > today) continue                                   // future
+        if (d < (g.date || '0000-01-01')) continue                 // predates the habit
+        if (scheduled && !scheduled.includes(new Date(d + 'T00:00:00').getDay())) continue
+        const row = (weekGoals[d] || []).find(x => x.id === g.id)
+        if (row?.status === 'done') continue
+        misses.push(d)
+      }
+      out[g.id] = misses
+    }
+    return out
+  }, [goals, weekDates, weekGoals])
+
+  const habitTitles = useMemo(
+    () => Object.fromEntries(goals.filter(g => g.isHabit).map(g => [g.id, g.title])),
+    [goals],
+  )
+
+  const weekReviewInput = useMemo(() => ({
+    weekOf: selectedDate,
+    planned: weekDates.flatMap(d => (weekGoals[d] || []).map(g => ({
+      id: g.id, title: g.title, date: d, done: g.status === 'done', isHabit: !!g.isHabit,
+    }))),
+    habitIdsTracked: goals.filter(g => g.isHabit).map(g => g.id),
+    habitMisses,
+    habitTitles,
+    /* `codingSec` was being passed as "minutes spent on NEW material" with a
+       straight face. It is not: it is time spent coding, which says nothing about
+       whether the work was new or consolidation. Feeding it to the 70% phase-drift
+       rule meant the recap could legitimately say "Split your week" off ordinary
+       coding time. Declared absent so the rule is skipped until a real
+       new-vs-total signal exists. */
+    newMinutesByDay: weekDates.map(() => 0),
+    hasNewMinuteSignal: false,
+    /* totalMinutesByDay stays REAL — productive minutes are genuinely logged —
+       it is only the numerator that was fabricated. */
+    totalMinutesByDay: weekDates.map(d => Math.round((weekReflections[d]?.productiveSec || 0) / 60)),
+    /* Review-queue cards are a Training concept behind its own IPC. Reporting 0
+       is honest; inventing a number here would produce a suggestion the user
+       cannot act on from this page. */
+    queueMissed: 0,
+  }), [selectedDate, weekDates, weekGoals, weekReflections, goals, habitMisses, habitTitles]);
+
 
   const radarMarks = useMemo(() => {
     const m = new Map<string, RadarMark[]>();
@@ -1233,6 +1240,53 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
     todos.forEach(t => { if (t.dueDate && !t.done) push(t.dueDate, { color: '#a1a1aa', label: t.text }); });
     return m;
   }, [deadlines, reminders, longTermGoals, todos]);
+
+  /* ── one goal row ──
+     Extracted because the Today / Habits / Routines groups all render the same
+     card. It was inline JSX copied three times in this same commit's precursor,
+     which meant the "live focus timer" badge and the connection chip had to be
+     kept in sync by hand in three places. */
+  const renderGoalCard = (goal: Goal) => (
+    <div key={goal.id} className="relative">
+      {editingId === goal.id ? (
+        <WarmCard ambient>
+          <CriteriaBuilder value={editCriteria!} onChange={setEditCriteria!} onSave={handleEditSave}
+            onCancel={() => { setEditingId(null); setEditCriteria(null); }}
+            longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))} isEditing />
+        </WarmCard>
+      ) : (
+        <>
+          <GoalCard goal={goal} onToggle={handleToggle} onDelete={handleDelete} onEdit={handleEditStart}
+            longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
+            linkedTotal={connCounts[goal.id]}
+            onOpenConnections={g => setHubEntity({ type: g.isHabit ? 'habit' : 'goal', id: g.id, title: g.title })}
+          />
+          {activeGoalIds.includes(goal.id) && goal.target.type === 'time' && (
+            <div className="absolute bottom-1.5 right-3 flex items-center gap-1 text-[10px] text-amber-400">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
+              </span>
+              +{formatTime(getAccumulatedSeconds(goal.id))} live
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  /* ONE read of the covenant completions, shared by both consumers.
+     They were previously two independent reads: `covenantStreakFrom` inside
+     ReflectionCard and `covenantDoneDates()` called INLINE IN JSX, which
+     re-read and re-parsed localStorage on every single render. Worse, two reads
+     of the same store taken at different moments can disagree — the recap would
+     show a streak of 4 next to day-dots for a different 4 days. Reading once
+     makes that impossible rather than merely unlikely. */
+  const completions = useMemo(() => {
+    try { return loadCompletions() } catch { return [] as { date: string }[] }
+  }, [])
+  const doneDates = useMemo(() => covenantDoneDates(completions), [completions])
+  const covenantStreakDays = useMemo(() => covenantStreak(completions, todayStr(), addDaysStr), [completions])
 
   /* ── render ── */
   return (
@@ -1263,10 +1317,10 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
 
           {/* Stat Pills */}
           <div className="grid grid-cols-4 gap-2">
-            <StatPill icon={<Target size={14} />} label="Active" value={activeDailies.length} accent="violet" />
-            <StatPill icon={<CheckCircle2 size={14} />} label="Sealed" value={completedDailies.length} accent="emerald" />
-            <StatPill icon={<Flame size={14} />} label="Streak" value={bestStreak} accent="amber" />
-            <StatPill icon={<Clock size={14} />} label="Tracked" value={formatTime(tracked)} accent="cyan" />
+            <StatPill icon={<Target size={14} />} label="Active" value={activeDailies.length} tone="violet" />
+            <StatPill icon={<CheckCircle2 size={14} />} label="Sealed" value={completedDailies.length} tone="emerald" />
+            <StatPill icon={<Flame size={14} />} label="Streak" value={bestStreak} tone="amber" />
+            <StatPill icon={<Clock size={14} />} label="Tracked" value={formatTime(tracked)} tone="cyan" />
           </div>
 
           {/* Weekly Goals Overview */}
@@ -1372,41 +1426,98 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
               loadGoals(selectedDate);
             }} />
 
-          {/* Active Goals */}
-          {loading ? <GoalCardSkeleton /> : error ? <GoalErrorState message={error} onRetry={() => loadGoals(selectedDate)} /> : activeDailies.length === 0 && !isAdding ? (
-            <WarmCard ambient><GoalEmptyState onAdd={() => { setIsAdding(true); setNewCriteria(defaultCriteria); }} /></WarmCard>
-          ) : (
-            <div className="space-y-1.5">
-              {activeDailies.map(goal => (
-                <div key={goal.id} className="relative">
-                  {editingId === goal.id ? (
-                    <WarmCard ambient>
-                      <CriteriaBuilder value={editCriteria!} onChange={setEditCriteria!} onSave={handleEditSave}
-                        onCancel={() => { setEditingId(null); setEditCriteria(null); }}
-                        longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))} isEditing />
-                    </WarmCard>
-                  ) : (
-                    <>
-                      <GoalCard goal={goal} onToggle={handleToggle} onDelete={handleDelete} onEdit={handleEditStart}
-                        longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
-                        linkedTotal={connCounts[goal.id]}
-                        onOpenConnections={g => setHubEntity({ type: goal.isHabit ? 'habit' : 'goal', id: g.id, title: g.title })}
-                         />
-                      {activeGoalIds.includes(goal.id) && goal.target.type === 'time' && (
-                        <div className="absolute bottom-1.5 right-3 flex items-center gap-1 text-[10px] text-amber-400">
-                          <span className="relative flex h-1.5 w-1.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
-                          </span>
-                          +{formatTime(getAccumulatedSeconds(goal.id))} live
-                        </div>
-                      )}
-                    </>
-                  )}
+          {/* ── GROUP: Today (daily goals) ──
+               `data-section` is the anchor the manifest's find.segments scroll
+               to. It is written on the GROUP, not on the empty state, so a ⌘K
+               jump lands on the group header even when the group is empty —
+               otherwise the anchor exists only when there is data, which makes
+               deep-nav to an empty group silently scroll to nothing. */}
+          <section data-section="life.gold.today" aria-labelledby="grp-today">
+            <GroupHeader id="grp-today" icon={<Target size={12} style={{ color: 'var(--page-accent)' }} aria-hidden />}
+              title="Today" count={activeDailies.length} noun="goal" />
+            {loading ? <GoalCardSkeleton />
+              : error ? <GoalErrorState message={error} onRetry={() => loadGoals(selectedDate)} />
+              : dailies.length === 0 && !isAdding ? (   /* the WHOLE group — see the Habits group for why */
+                <WarmCard ambient>
+                  <GoalEmptyState onAdd={() => { setIsAdding(true); setNewCriteria(defaultCriteria); }} />
+                </WarmCard>
+              ) : (
+                <div className="space-y-1.5">
+                  {activeDailies.map(goal => renderGoalCard(goal))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
+          </section>
+
+          {/* ── GROUP: Habits ──
+               Spec §1.3: habits render in EXACTLY one place, here, via the
+               already-shared HabitTracker. This used to be the whole Habits tab. */}
+          <section data-section="life.gold.habits" aria-labelledby="grp-habits" className="mt-4">
+            <GroupHeader id="grp-habits" icon={<Flame size={12} style={{ color: 'var(--page-accent)' }} aria-hidden />}
+              title="Habits" count={activeHabits.length} noun="habit" />
+            {loading ? <GoalCardSkeleton />
+              : error ? <GoalErrorState message={error} onRetry={() => loadGoals(selectedDate)} />
+              : habitGoals.length === 0 ? (   /* the WHOLE group, not the active part */
+                                                   /* Sealing your last habit must not make the
+                                                      page claim you have none — so this tests
+                                                      the group, not the active list. */
+                <WarmCard ambient>
+                  <p className="text-[12px] text-zinc-400">
+                    No habits yet. A habit is a goal that repeats, so add one and it
+                    shows up here with its streak.
+                  </p>
+                </WarmCard>
+              ) : (
+                /* HabitTracker is the renderer here and NOTHING else is.
+                   RESULT.md §1.3 says so explicitly, and the reason is mechanical:
+                   HabitTracker loads through `api.getHabits(start, end)` — a
+                   different IPC from the `goals` batch this page reads — so
+                   rendering GoalCards for the same rows put every habit on screen
+                   TWICE, in two different shapes, from two different queries that
+                   could disagree. The week-progress strip it draws is also more
+                   information than a card carries, so it is not a subset.
+                   Sealed habits are not listed separately: the tracker's per-day
+                   dots already show which days were kept. */
+                <HabitTracker currentDate={selectedDate} />
+              )}
+          </section>
+
+          {/* ── GROUP: Routines ──
+               A weekly recurring target. NOT the same thing as a habit (that is
+               a streak) and NOT the same thing as a long-term destination. */}
+          <section data-section="life.gold.routines" aria-labelledby="grp-routines" className="mt-4">
+            <GroupHeader id="grp-routines" icon={<RefreshCw size={12} style={{ color: 'var(--page-accent)' }} aria-hidden />}
+              title="Routines" count={activeRoutines.length} noun="routine" />
+            {loading ? <GoalCardSkeleton />
+              : error ? <GoalErrorState message={error} onRetry={() => loadGoals(selectedDate)} />
+              : routineGoals.length === 0 ? (
+                <WarmCard ambient>
+                  <p className="text-[12px] text-zinc-400">
+                    No routines yet. A routine repeats on a weekly cadence.
+                  </p>
+                </WarmCard>
+              ) : (
+                <div className="space-y-1.5">
+                  {activeRoutines.map(goal => renderGoalCard(goal))}
+                  <SealedList goals={completedRoutines} noun="routine" renderCard={renderGoalCard} />
+                </div>
+              )}
+          </section>
+
+          {/* ── GROUP: The Vault (long-term destinations) ──
+               The ONLY place a `period:'longterm'` goal appears. */}
+          <section data-section="life.gold.vault" aria-labelledby="grp-vault" className="mt-4">
+            <GroupHeader id="grp-vault" icon={<Layers size={12} style={{ color: 'var(--page-accent)' }} aria-hidden />}
+              /* Counts `longTermGoals`, NOT `vaultGoals`. The list below renders
+                 from `longTermGoals`, so counting the partition bucket would put
+                 a number on screen that the list below it could contradict. One
+                 source, one number. */
+              title="The Vault" count={longTermGoals.length} noun="destination" />
+            <TheVault
+              longTermGoals={longTermGoals}
+              onSave={handleLTGSave}
+              onDelete={handleLTGDelete}
+            />
+          </section>
 
           {/* Suggested goals — a review queue.
               These used to be filtered out with no way to reach them. Empty state
@@ -1462,33 +1573,15 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
             </div>
           )}
 
-          {/* Completed Goals */}
-          {completedDailies.length > 0 && (
-            <div>
-              <button onClick={() => setShowCompleted(p => !p)} className="flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">
-                {showCompleted ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                Sealed ({completedDailies.length})
-              </button>
-              <AnimatePresence>
-                {showCompleted && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden space-y-1.5 mt-2">
-                    {completedDailies.map(goal => (
-                      <GoalCard key={goal.id} goal={goal} onToggle={handleToggle} onDelete={handleDelete}
-                        onEdit={handleEditStart} longTermGoals={longTermGoals.map(l => ({ id: l.id, title: l.title }))}
-                        linkedTotal={connCounts[goal.id]}
-                        onOpenConnections={g => setHubEntity({ type: goal.isHabit ? 'habit' : 'goal', id: g.id, title: g.title })}
-                         />
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+          {/* Sealed dailies — same component as the other two groups, so the three
+              disclosures behave identically instead of one working and two
+              silently doing nothing. */}
+          <SealedList goals={completedDailies} noun="goal" renderCard={renderGoalCard} />
 
           {/* AI Goal Coach */}
           <WarmCard ambient>
             <div className="flex items-center gap-1.5 mb-3">
-              <Sparkles size={13} className="text-violet-400" />
+              <Sparkles size={13} className="text-[var(--color-violet-ink)]" />
               <span className="text-[13px] font-semibold text-zinc-200">AI Goal Coach</span>
             </div>
             <GoalAICoach onApply={async (proposal) => { await api.goalAiApplyProposal(proposal.goalId, proposal.newConfig || {}); loadGoals(selectedDate); }} onDismiss={() => {}} />
@@ -1496,137 +1589,52 @@ export default function GoldPage({ embedded }: { embedded?: boolean }) {
         </div>
       </div>
 
-      {/* ── D3: Phases — the long horizon. Distinct from the routines above
-             (which are outcomes you repeat) and from Schedule (the day). ── */}
+      {/* ── Phases: NAVIGATION, not a second writer (spec §2.1) ──
+          Phases live in River mode. `LensId` defaults to 'phases', so that is
+          where they belong, and a second `PhaseFormDialog` here meant the user
+          could create a phase from two surfaces and not know which was
+          canonical. This card therefore creates NOTHING: it routes. */}
       <div className="mt-4">
-        <WarmCard>
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-1.5">
+          <WarmCard>
+            <div className="flex items-center gap-1.5 mb-2">
               <Layers size={13} style={{ color: 'var(--page-accent)' }} aria-hidden />
               <span className="text-[13px] font-semibold text-zinc-100">Phases</span>
-              {!phasesLoading && !phasesError && phases.length > 0 && (
-                <span className="text-[10px] text-zinc-600 tabular-nums">{phases.length}</span>
-              )}
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => openPhaseForm(null)}
-              className="gap-1.5"
-              data-lifephase="add-phase"
-            >
-              <Plus size={12} aria-hidden />
-              Add phase
-            </Button>
-          </div>
-
-          {phasesLoading ? (
-            <div className="space-y-2" aria-busy="true" aria-label="Loading phases">
-              {[0, 1].map(i => <div key={i} className="h-9 rounded-lg bg-zinc-800/50 animate-pulse" />)}
-            </div>
-          ) : phasesError ? (
-            <div role="alert" className="flex flex-col items-center gap-2 py-4 text-center">
-              <p className="text-[12px]" style={{ color: 'var(--error)' }}>{phasesError}</p>
-              <Button variant="outline" size="sm" onClick={() => { setPhasesLoading(true); loadPhases(); }} className="gap-1.5">
-                <RefreshCw size={12} aria-hidden />
-                Retry
-              </Button>
-            </div>
-          ) : phases.length === 0 ? (
-            /* Empty says what would be here, not "No data" (PAINT P5). */
-            <div className="py-6 text-center">
-              <Layers size={20} className="mx-auto mb-2 opacity-30" style={{ color: 'var(--page-accent)' }} aria-hidden />
-              <p className="text-[12px] text-zinc-200">No phases yet</p>
-              <p className="text-[11px] text-zinc-600 mt-1 mb-2 max-w-[240px] mx-auto">
-                A phase is a chapter of your life — a job, a move, a project that
-                spans months. Add one to see where your routines are taking you.
-              </p>
+            <p className="text-[12px] text-zinc-400">
+              Phases are chapters of your life — a job, a move, a project that spans
+              months. They live in the River, where the whole timeline shows.
+            </p>
+            {onManagePhases && (
               <Button
                 size="sm"
-                onClick={() => openPhaseForm(null)}
-                className="gap-1.5"
-                data-lifephase="add-first-phase"
+                variant="outline"
+                onClick={onManagePhases}
+                className="mt-3 gap-1.5"
+                data-lifephase="manage-phases"
               >
-                <Plus size={12} aria-hidden />
-                Add your first phase
+                Manage phases
+                <ChevronRight size={12} aria-hidden />
               </Button>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {phases.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => openPhaseForm(p)}
-                  title="Edit this phase"
-                  className="w-full flex items-center gap-3 px-2.5 py-2 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50"
-                >
-                  <span
-                    className="w-1.5 h-8 rounded-full shrink-0"
-                    /* Phase colour is DATA (the user picked it), not chrome. */
-                    style={{ backgroundColor: p.color || 'var(--page-accent)' }}
-                    aria-hidden
-                  />
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-[12px] text-zinc-200 truncate">{p.title || 'Untitled phase'}</span>
-                    <span className="block text-[10px] text-zinc-600 truncate">
-                      {formatPhaseRange(p.startYear, p.startMonth, p.endYear, p.endMonth)}
-                      {p.description ? ` · ${p.description}` : ''}
-                    </span>
-                  </span>
-                  {/* The scale the user chose, so it stays visible and
-                      editable later instead of being a one-time decision. */}
-                  {p.scale && (
-                    <span
-                      className="shrink-0 rounded-full border border-zinc-800 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wide text-zinc-500"
-                      title={`${scaleOf(p.scale).label} detail — ${scaleOf(p.scale).blurb}`}
-                    >
-                      {scaleOf(p.scale).label}
-                    </span>
-                  )}
-                  <Pencil size={12} className="shrink-0 text-zinc-700" aria-hidden />
-                </button>
-              ))}
-            </div>
-          )}
-        </WarmCard>
-      </div>
+            )}
+          </WarmCard>
+        </div>
 
-      {/* The real create/edit form — scale-aware, and what the "Add phase"
-          button was ALWAYS meant to open. */}
-      <PhaseFormDialog
-        open={phaseFormOpen}
-        onOpenChange={setPhaseFormOpen}
-        initial={phaseFormDraft}
-        allPhases={phases}
-        onSave={async (ph: any) => {
-          await api.lifePhaseSave?.(ph);
-          await loadPhases();
-          setPhaseFormOpen(false);
-        }}
-        onDelete={async (id: string) => {
-          await api.lifePhaseDelete?.(id);
-          await loadPhases();
-          setPhaseFormOpen(false);
-          setPhaseFormDraft(null);
-        }}
-      />
-
-      {/* `PhaseDrawer` is intentionally NOT used here. It is a detail drawer
-          that renders a bare <Sheet/> (no content) when `phase` is null, which
-          is exactly why "Add phase" looked dead before. Create, edit and
-          delete now all live in ONE surface: PhaseFormDialog. */}
-
-      {/* Bottom full-width sections */}
-      <ReflectionCard date={selectedDate} data={reflection} summary={reviewSummary}
-        onSave={async s => { setReviewSummary(s); try { await api.saveGoalReview(selectedDate, s); } catch {} }} />
-
-      {/* Week at a glance — the Monday→Sunday hard-data recap. */}
-      <div className="mt-4">
+      {/* ── GROUP: weekly recap ──
+           Fifth find.segment. Sits above the reflection card because the recap is
+           the week's SCORE and the reflection is today's note — score first. */}
+      <section data-section="life.gold.weekly" aria-labelledby="grp-weekly" className="mt-4">
+        <GroupHeader id="grp-weekly" icon={<TrendingUp size={12} style={{ color: 'var(--page-accent)' }} aria-hidden />}
+          title="Weekly recap" count={weekDates.length} noun="day" />
         <WarmCard>
-          <WeekReview weekDates={weekDates} reflections={weekReflections} />
+          <WeekReview days={weekReviewDays} weekly={weekReviewInput} streak={covenantStreakDays} doneDates={doneDates} />
         </WarmCard>
-      </div>
+      </section>
+
+      {/* Daily reflection — today's note on the day itself. */}
+      <section aria-label="Daily reflection">
+        <ReflectionCard date={selectedDate} data={reflection} summary={reviewSummary} streak={covenantStreakDays}
+          onSave={async s => { setReviewSummary(s); try { await api.saveGoalReview(selectedDate, s); } catch {} }} />
+      </section>
 
       {/* Goal hub — everything serving one goal, in one place */}
       <ConnectionExplorer

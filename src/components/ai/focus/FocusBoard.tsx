@@ -294,7 +294,7 @@ function ReviewPanel({
 	const [text, setText] = useState(initialSummary ?? "")
 	const pct = total > 0 ? Math.round((doneToday / total) * 100) : 0
 	return (
-		<div className="rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-4 ring-1 ring-zinc-800/50">
+		<div className="rounded-xl bg-zinc-950 light:bg-[var(--ws-surface-40)] p-4 ring-1 ring-zinc-800/50">
 			<div className="mb-3 flex items-center justify-between">
 				<span className={cn("text-[12px] font-medium", TEXT.secondary)}>Evening review</span>
 				<span className="text-[12px] tabular-nums text-violet-300">
@@ -307,7 +307,7 @@ function ReviewPanel({
 					onChange={(e) => setText(e.target.value)}
 					placeholder="How did today go? What will you carry into tomorrow?"
 					rows={3}
-					className="w-full resize-none rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 text-[13px] text-zinc-100 placeholder:text-zinc-600 ring-1 ring-zinc-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/60"
+					className="w-full resize-none rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] p-3 text-[13px] text-zinc-100 placeholder:text-zinc-600 ring-1 ring-zinc-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/60"
 				/>
 			</VoiceInputWrapper>
 			<div className="mt-2 flex justify-end">

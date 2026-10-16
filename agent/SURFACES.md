@@ -74,6 +74,7 @@
 | You say | Is | Note |
 |---|---|---|
 | "the tracking migration" / "rheo-sync" / "the background tracker" | `agent/docs/RHEO_TRACKING_MIGRATION.md` | The always-on `rheo-tracker` systemd service, the app profile moved off the NTFS mount, and the Windows⇄Linux DB merger. Contains the measured facts (`logs.id` is not a merge key; two profiles are intentional), the backup/rollback paths, and the 8 bugs found. |
+| "backup" / "autosave" / "restore" / "lost my work" / "files reverted" / "stash" | **GIT SAFETY** — autosave refs, bundles, source tars, and the git guard | `scripts/safety/` + **`agent/docs/GIT_SAFETY.md`** (AGENTS.md §0.7). Agents may run `rheo-safety.sh status` / `list` only; `autosave`/`backup`/`restore`/`install` are CZ's unless he says so in that message. Files reverted or gone → the **`git-trauma`** skill, never self-repair. Database backups are a *different* system — `db-guard.mjs` / `rheo-sync`, not this one. |
 
 ---
 

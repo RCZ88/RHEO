@@ -40,26 +40,35 @@ import type {
   TierBreakdownPayload,
 } from '../../shared/halo/types';
 
-/* ── Domain hue: identity, never decoration. One hue per card. ───────────────── */
-const DOMAIN_CLASS: Record<string, string> = {
-  amber: 'var(--halo-signal)',
-  clay: 'var(--color-clay-400)',
-  clayDeep: 'var(--color-clay-500)',
-  sky: 'var(--color-sky-400)',
-  sage: 'var(--color-sage-400)',
+/* ── STATUS COLOUR, NOT IDENTITY ─────────────────────────────────────────────────────
+ * RESULT.md §3.3: delete the identity-hue mapping. A kind is IDENTITY; a tier is DATA. The
+ * project's own rule is "on a data surface colour means TIER, never identity" — and mapping
+ * `aiUsage` to sky and `now` to sage made hue communicate the activity's category instead of
+ * anything about its value.
+ *
+ * This is a REDUCTION, not a new palette. Exactly three outcomes remain, all already declared in
+ * halo.css:
+ *   accent — something is live / capturing / running right now
+ *   signal — something needs attention: overdue, error, warning
+ *   muted  — everything else, including a dot for an activity with no compact content
+ *
+ * The kind is still fully legible: it carries a Lucide icon, a title, and its structure. That is
+ * how identity is communicated now, rather than with a fourth hue. */
+const STATUS_OF: Partial<Record<ActivityKind, 'accent' | 'signal'>> = {
+  dictation: 'accent',
+  critical: 'signal',
+  nextDeadline: 'signal',
 };
+const STATUS_COLOUR = {
+  accent: 'var(--halo-accent)',
+  signal: 'var(--halo-signal)',
+  muted: 'var(--halo-dim)',
+} as const;
 
-const DOMAIN_OF: Record<ActivityKind, keyof typeof DOMAIN_CLASS> = {
-  stopwatch: 'amber', focus: 'amber', afkGap: 'amber', nextDeadline: 'amber',
-  now: 'sky', tierBreakdown: 'sky', aiUsage: 'sky', hud: 'sky',
-  dictation: 'clay', critical: 'clayDeep',
-  pinnedActivity: 'sky', clock: 'sky', liveActivity: 'sky',
-  download: 'sky', battery: 'sky', clipboard: 'sky', custom: 'sky',
-  /* The site-aware kinds are DOMAIN signal, not surface identity: they report WHAT you are
-   * looking at, so they read in the same hue as the other informational kinds rather than
-   * claiming a surface of their own. */
-  website: 'sky', stopwatchSite: 'sky', private: 'clay',
-};
+/** The status colour for a kind. Defaults to `muted` — never to a colour chosen by identity. */
+function statusColour(kind: ActivityKind): string {
+  return STATUS_COLOUR[STATUS_OF[kind] ?? 'muted'];
+}
 
 const ICONS: Partial<Record<ActivityKind, LucideIcon>> = {
   stopwatch: undefined,
@@ -268,7 +277,7 @@ export function AmbientCard({
   const copy = EMPTY_COPY[activity.kind];
   const unknown = copy?.unknown ?? 'No data';
   const r = readKind(activity, unknown);
-  const hue = DOMAIN_CLASS[DOMAIN_OF[activity.kind]] ?? 'var(--halo-signal)';
+  const hue = statusColour(activity.kind);
   const Icon = ICONS[activity.kind];
   const surface: CuratedSurface | null = surfaceFor(activity.kind);
   const title = RAIL_TITLE[activity.kind] ?? (surface ? surface.kind.toUpperCase() : 'ACTIVITY');
@@ -422,7 +431,7 @@ export function AmbientPip({
 }) {
   const copy = EMPTY_COPY[activity.kind];
   const r = readKind(activity, copy?.unknown ?? 'No data');
-  const hue = DOMAIN_CLASS[DOMAIN_OF[activity.kind]] ?? 'var(--halo-signal)';
+  const hue = statusColour(activity.kind);
   const Icon = ICONS[activity.kind];
 
   return (
@@ -445,7 +454,7 @@ export function AmbientPip({
 
 /** A 4px identity dot for activities with no compact content of their own. */
 export function AmbientDot({ kind }: { kind: ActivityKind }) {
-  const hue = DOMAIN_CLASS[DOMAIN_OF[kind]] ?? 'var(--halo-signal)';
+  const hue = statusColour(kind);
   return (
     <span
       data-halo-dot={kind}

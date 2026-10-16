@@ -1088,7 +1088,7 @@ export function FinancePage() {
           {pageAccess.reason === 'locked' && (
             <button
               onClick={() => { setIsLocked(true); checkPageAccess(); }}
-              className="px-4 py-2 rounded-lg bg-[var(--page-accent)] hover:bg-[var(--page-accent)]/90 text-white text-sm font-medium transition-colors"
+              className="px-4 py-2 rounded-lg bg-[var(--page-accent)] hover:bg-[var(--page-accent-90)] text-white text-sm font-medium transition-colors"
             >
               Unlock Now
             </button>

@@ -48,7 +48,7 @@ export function PhaseNavigator({ currentPhase, phaseStatus, onPhaseClick, phaseC
             onClick={() => onPhaseClick(phase)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-150 ${
               isActive
-                ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)] ring-1 ring-[var(--page-accent)]/30'
+                ? 'bg-[var(--page-accent-20)] text-[var(--page-accent)] ring-1 ring-[var(--page-accent)]/30'
                 : status === 'complete'
                 ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/15'
                 : 'bg-zinc-800/50 text-zinc-400 ring-1 ring-zinc-700/30 hover:bg-zinc-800 hover:text-zinc-300'

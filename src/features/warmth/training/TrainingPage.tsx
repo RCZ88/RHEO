@@ -62,6 +62,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { parseCaptureLine, PATTERNS, type CaptureParse } from '../../../shared/captureParse'
 import type { Rating } from '../../../shared/srs'
+import { mondayOf } from '@/lib/week';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Panel — the one component that owns the five states.
@@ -192,12 +193,6 @@ function GhostButton({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButto
 
 const dstr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-
-function mondayOf(d: Date): string {
-  const m = new Date(d)
-  m.setDate(m.getDate() - ((m.getDay() + 6) % 7))
-  return dstr(m)
-}
 
 /* ────────────────────────────────────────────────────────────────────────────
  * F1 · QUICK CAPTURE
@@ -711,7 +706,7 @@ function TrainingRules({ onChanged }: { onChanged: () => void }) {
  * F5 · PHASE  +  F7 · PLAN MODE
  * ──────────────────────────────────────────────────────────────────────── */
 
-function PhaseCard() {
+function TrainingBlockCard() {
   const [phase, setPhase] = useState<any>(null)
   const [label, setLabel] = useState('')
   const [summary, setSummary] = useState('')
@@ -824,7 +819,27 @@ function PhaseCard() {
 
 /** ONE proposal. The copy says so explicitly, because "one change" is the
  *  difference between a coach and a to-do generator. */
-function WeeklyReview() {
+/* RENAMED from `WeeklyReview` to `TrainingWeeklyReview` — NOT merged with the
+   shared `components/goals/WeekReview`, and deliberately so.
+
+   They share a name and two field names (`proposal.text`, `headline`) and
+   nothing else that matters:
+
+     shared WeekReview   — a RECAP. Reads seven days of hard data already in the
+                           renderer and draws bars, day-dots and a streak.
+     this one            — an ACCEPTANCE FLOW. Calls `trainingReviewWeekly`, which
+                           computes the review in MAIN and caches it on
+                           `weekly_reviews.week_key`, then renders ONE proposal
+                           with a button that persists the acceptance via
+                           `trainingReviewAccept`. Dropping that call would lose
+                           the write; dropping the recap's charts would lose the
+                           data.
+
+   RESULT.md §2 does list "Training's copy" among the duplicates to unify, but
+   §0.2 sets the rule this case actually falls under: a shared NAME is not
+   evidence of a shared concept, and merging them would be a correctness bug.
+   The same reasoning that produced `TrainingBlockCard` applies here. */
+function TrainingWeeklyReview() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [review, setReview] = useState<any>(null)
   const [accepted, setAccepted] = useState(false)
@@ -1036,8 +1051,8 @@ export function TrainingPage() {
           <WeekStrip key={`week-${nonce}`} />
           <TrainingRules onChanged={refresh} />
         </div>
-        <div className="space-y-4"><PhaseCard /></div>
-        <div className="space-y-4"><WeeklyReview /></div>
+        <div className="space-y-4"><TrainingBlockCard /></div>
+        <div className="space-y-4"><TrainingWeeklyReview /></div>
         <div className="space-y-4 lg:col-span-2"><ReviewQueue /></div>
         <div className="space-y-4 lg:col-span-2"><Ledger /></div>
         <div className="space-y-4 lg:col-span-2"><AiBridge /></div>

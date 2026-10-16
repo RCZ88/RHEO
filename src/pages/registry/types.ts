@@ -62,6 +62,16 @@ export interface TabSpec {
   children?: TabSpec[]
   /** Extra `location.state` this tab needs, e.g. `{ group: 'work' }`. */
   navState?: Record<string, unknown>
+  /**
+   * Ctrl+F configuration for THIS TAB's subtree.
+   *
+   * A tab that carries several panes needs its own `find.segments`, scoped by
+   * `root`, because the page-level `find` cannot distinguish them: the panes
+   * only exist while the tab is mounted. Declaring them at page level would make
+   * each one a ⌘K row that navigates to the page, lands on the DEFAULT tab, and
+   * then scrolls to an anchor that was never rendered (AGENTS.md §5d).
+   */
+  find?: FindSpec
 }
 
 /**
@@ -75,6 +85,24 @@ export interface TabSpec {
 export interface TabModel {
   /** Name of the `useState` binding in the page. Documentation + validator cross-check. */
   variable?: string
+  /**
+   * Legacy tab ids that must still resolve to one of `items`.
+   *
+   * The Life consolidation deleted the `habits` tab. Every live emitter of that
+   * id — the dashboard's `WIDGET_NAV`, a shared `?tab=habits` link, and the
+   * persisted `/life-activeTab` value — kept working as a *string*, so nothing
+   * failed at build or at typecheck. It failed at RUNTIME, silently: every one of
+   * those three channels is validated against `validIds`, so an unknown id was
+   * discarded and the page fell back to its default tab. The dashboard widget
+   * labelled "Habits & streaks" opened the promises tab and left 'habits'
+   * sitting in storage.
+   *
+   * This is the tab-level analogue of the page-level `aliases` field, and it is
+   * the ONLY place a retired tab id can be retired safely. Fixing the emitters
+   * alone does not help: the ids also arrive from links already in the wild and
+   * from storage written by an older build.
+   */
+  tabAliases?: Record<string, string>
   /** `location.state` key carrying the incoming tab hint. Default: `'tab'`. */
   stateKey?: string
   /** localStorage key the hint is written to and read back from. */

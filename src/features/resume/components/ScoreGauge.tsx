@@ -20,14 +20,14 @@ export function ScoreGauge({ score, size = 120 }: ScoreGaugeProps) {
         size={size}
         strokeWidth={10}
         gaugePrimaryColor={getColor(score)}
-        gaugeSecondaryColor="rgba(255,255,255,0.06)"
+        gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
       />
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <NumberTicker
           value={score}
-          className="text-2xl font-bold text-white tabular-nums"
+          className="text-2xl font-bold text-[var(--color-foreground)] tabular-nums"
         />
-        <span className="text-[10px] text-zinc-500 font-medium">/ 100</span>
+        <span className="text-[10px] text-[var(--color-muted-foreground)] font-medium">/ 100</span>
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ import { useMemo, useState } from 'react';
 import { Globe, AppWindow, Lock } from 'lucide-react';
 import { resolveHaloSize, type HaloPrefs } from './HaloPreferences';
 import type { HaloPageId } from './HaloPreferences';
+import { CompactPill } from './CompactPill';
 import './halo.css';
 
 type PreviewMode = 'open' | 'pill';
@@ -37,6 +38,9 @@ const SAMPLE = {
   deadline: 'IT DIV Test',
   clock: '00:42:18',
   productive: '3:12:40',
+  /** The values CompactPill reads. 42m18s expressed in ms, matching the printed clock. */
+  displayMs: 42 * 60 * 1000 + 18 * 1000,
+  now: { app: 'Figma', category: 'design', tier: 'productive' } as const,
 } as const;
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
@@ -228,8 +232,15 @@ export function HaloSettingsPreview({
             background: 'var(--halo-surface)',
             border: '1px solid var(--halo-border)',
             boxShadow: 'var(--halo-shadow)',
-            /* size.scale drives the same type ramp the live island uses */
-            ['--halo-scale' as string]: String(prefs.scale ?? 1),
+            /* THE SAME VARIABLE THE LIVE ISLAND WRITES.
+             *
+             * The island writes `--halo-scale: resolveHaloSize(prefs.scale).typeScale`
+             * (OverlayRoot.tsx) — the preset's DESIGNED type scale, 0.85 / 1.0 / 1.2. The preview
+             * wrote the raw slider value instead, `String(prefs.scale ?? 1)`. Those coincide only
+             * at scale 1: at any other slider position the preview's type is a size that exists in
+             * no design, which is a direct cause of "the preview proportions don't match the real
+             * thing". One expression, both call sites. */
+            ['--halo-scale' as string]: String(size.typeScale),
             width: mode === 'open' ? size.expandedWidth : size.compactWidth,
             height: mode === 'open' ? size.expandedHeight : size.compactHeight,
             maxWidth: '100%',
@@ -242,14 +253,31 @@ export function HaloSettingsPreview({
           } as React.CSSProperties}
         >
           {mode === 'pill' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', width: '100%' }}>
-              <span
-                aria-hidden="true"
-                style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--halo-accent)', flexShrink: 0 }}
+            /* THE REAL COMPACT PILL, not hand-built markup.
+             *
+             * This preview used to draw its own approximation — a 6px dot, a hardcoded
+             * `fontSize: 13` clock and a `NameRow` — so it showed an approximation of the pill
+             * rather than the pill. That is why the preview "didn't match the actual size": a
+             * second implementation cannot track the first, and it had already drifted (13px is
+             * a value in no design; the spec's `--f-body` is 11/12/14).
+             *
+             * Rendering the same component the island renders is the only way for this to stay
+             * honest: a change to CompactPill changes both at once, by construction. */
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                width: '100%',
+                height: '100%',
+                padding: `0 ${size.padding}px`,
+                overflow: 'hidden',
+              }}
+            >
+              <CompactPill
+                stopwatch={{ displayMs: SAMPLE.displayMs, displaySource: 'productive' }}
+                now={SAMPLE.now}
+                fBody={size.fBody}
               />
-              <span style={{ ...Value, fontSize: 13 }}>{SAMPLE.clock}</span>
-              <span aria-hidden="true" style={{ flex: 1 }} />
-              <NameRow icon="win" name={SAMPLE.app} />
             </div>
           ) : (
             <div

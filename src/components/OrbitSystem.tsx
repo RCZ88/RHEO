@@ -192,7 +192,7 @@ export default function OrbitSystem({ logs, appColors, categoryOverrides, websit
   // decided at startup and cannot change until the app is restarted.
   if (!webglSupported()) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-6 text-center">
+      <div className="h-full w-full flex flex-col items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-60)] px-6 text-center">
         <p className="text-[11px] text-zinc-600">
           Orbit view needs WebGL. This renderer was launched without a GL backend.
         </p>

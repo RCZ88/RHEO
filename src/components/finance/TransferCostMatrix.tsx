@@ -211,7 +211,7 @@ export default function TransferCostMatrix() {
               {wallets.map((toW) => {
                 if (fromW.id === toW.id) {
                   return (
-                    <div key={`${fromW.id}-${toW.id}`} className="w-20 flex-shrink-0 bg-zinc-950 light:bg-[var(--ws-surface)]/30 border border-zinc-800/30 rounded-sm m-0.5"></div>
+                    <div key={`${fromW.id}-${toW.id}`} className="w-20 flex-shrink-0 bg-zinc-950 light:bg-[var(--ws-surface-30)] border border-zinc-800/30 rounded-sm m-0.5"></div>
                   );
                 }
                 const cell = matrixMap.get(`${fromW.id}-${toW.id}`);

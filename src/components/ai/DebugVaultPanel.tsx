@@ -99,7 +99,12 @@ export function DebugVaultPanel({ open }: { open: boolean }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [clearArmed, setClearArmed] = useState(false);
-  const [showCapture, setShowCapture] = useState(false);
+  // No collapse state. This panel was previously a chevron button that gated
+  // ALL of its content behind `showCapture`, defaulting to false — so opening
+  // the Vault from the nav rail showed a one-line header and nothing else, and
+  // the only way to see the data was to discover the chevron. A surface you
+  // explicitly navigated to renders its content; there is no second click to
+  // perform.
   const [offset, setOffset] = useState(0);
   const [limit, setLimit] = useState(50);
   const [search, setSearch] = useState('');
@@ -248,16 +253,15 @@ export function DebugVaultPanel({ open }: { open: boolean }) {
 
     return (
     <div className="h-full overflow-y-auto bg-zinc-950 light:bg-white/40 px-4 py-3 space-y-3 text-xs">
-      {/* Collapsible capture-points */}
-      <button onClick={() => setShowCapture(v => !v)} className="flex items-center gap-2 text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-300 light:text-[var(--text-secondary)] transition-colors">
-        {showCapture ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+      {/* Header — was a <button> toggling `showCapture`, so the panel opened
+          collapsed behind a chevron. Now a plain, non-interactive heading. */}
+      <div className="flex items-center gap-2 text-zinc-400 light:text-[var(--text-muted)]">
         <Bug className="w-3.5 h-3.5 text-amber-400" />
         <span className="font-medium text-zinc-200">AI Debug Vault</span>
         <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] border border-zinc-800 light:border-[var(--ws-border)] rounded-full px-1.5 py-0.5">super-debug</span>
         {stats && <span className="ml-1 text-[10px] text-zinc-500 light:text-[var(--text-muted)]">{stats.total.toLocaleString()} events</span>}
-      </button>
-      {showCapture && (
-        <div className="space-y-2 pl-5">
+      </div>
+      <div className="space-y-2 pl-5">
           {/* Stats row */}
           <div className="grid grid-cols-4 gap-2">
             <div className="bg-zinc-900 light:bg-white/40 border border-zinc-800/40 light:border-[var(--ws-border)] rounded-lg p-2.5">
@@ -402,7 +406,7 @@ export function DebugVaultPanel({ open }: { open: boolean }) {
                 {events.map(row => {
                   const isOpen = expandedId === row.id;
                   return (
-                    <div key={row.id} className="hover:bg-zinc-800 light:bg-[var(--ws-surface-sunken)]/15 transition-colors">
+                    <div key={row.id} className="hover:bg-zinc-800 light:bg-[var(--ws-surface-sunken-15)] transition-colors">
                       <button onClick={() => setExpandedId(isOpen ? null : row.id)}
                         className="w-full flex items-center gap-1.5 px-3 py-2 text-left">
                         {isOpen ? <ChevronDown className="w-3 h-3 text-zinc-500 light:text-[var(--text-muted)] shrink-0" /> : <ChevronRight className="w-3 h-3 text-zinc-500 light:text-[var(--text-muted)] shrink-0" />}
@@ -463,7 +467,6 @@ export function DebugVaultPanel({ open }: { open: boolean }) {
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }

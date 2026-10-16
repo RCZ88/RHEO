@@ -12,7 +12,7 @@ export function SectionHeader({ title, icon, action, className = '', titleClassN
     <div className={`flex items-center justify-between mb-3 ${className}`}>
       <div className="flex items-center gap-2.5">
         {icon && (
-          <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 border border-[var(--page-accent)]/20 flex items-center justify-center text-[var(--page-accent)] light:bg-[var(--page-accent)]/15 light:border-[var(--page-accent)]/30">
+          <div className="w-9 h-9 rounded-lg bg-[var(--ws-accent-10)] border border-[var(--ws-accent)]/20 flex items-center justify-center text-[var(--ws-accent-text)] light:bg-[var(--ws-accent-15)] light:border-[var(--ws-accent)]/30">
             {icon}
           </div>
         )}

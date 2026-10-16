@@ -92,7 +92,7 @@ export function AiFeedbackBox({ feedback, visible, onDismiss }: AiFeedbackProps)
               initial={{ scaleX: 1 }}
               animate={{ scaleX: 0 }}
               transition={{ duration: 8, ease: 'linear' }}
-              className="h-0.5 bg-[var(--page-accent)]/30 mt-3 origin-left rounded-full"
+              className="h-0.5 bg-[var(--page-accent-30)] mt-3 origin-left rounded-full"
             />
           )}
         </motion.div>

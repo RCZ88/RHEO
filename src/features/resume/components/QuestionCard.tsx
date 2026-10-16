@@ -29,7 +29,7 @@ export function QuestionCard({ question, questionNumber, totalQuestions }: Quest
 
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/15 flex items-center justify-center ring-1 ring-[var(--page-accent)]/20">
+            <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-15)] flex items-center justify-center ring-1 ring-[var(--page-accent)]/20">
               <MessageSquare className="w-4.5 h-4.5 text-[var(--page-accent)]" />
             </div>
             <div>
@@ -71,7 +71,7 @@ export function QuestionCard({ question, questionNumber, totalQuestions }: Quest
                   transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-2 p-3 rounded-lg bg-[var(--page-accent)]/5 ring-1 ring-[var(--page-accent)]/15">
+                  <div className="mt-2 p-3 rounded-lg bg-[var(--page-accent-5)] ring-1 ring-[var(--page-accent)]/15">
                     <p className="text-xs text-zinc-400 italic leading-relaxed">{question.exampleAnswer}</p>
                   </div>
                 </motion.div>

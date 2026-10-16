@@ -485,7 +485,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
             {activeName}
           </span>
           {dirty && (
-            <span className="shrink-0 rounded-full border border-[var(--color-amber-400)]/30 bg-[var(--color-amber-400)]/10 px-2 py-0.5 font-mono text-[10px] font-medium text-[var(--color-amber-400)]">
+            <span className="shrink-0 rounded-full border border-[var(--color-amber-400)]/30 bg-[var(--color-amber-400-10)] px-2 py-0.5 font-mono text-[10px] font-medium text-[var(--color-amber-400)]">
               unsaved
             </span>
           )}
@@ -511,7 +511,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                   <div
                     key={p.id}
                     className={`flex items-center gap-1 rounded-lg px-2 py-1.5 ${
-                      p.id === activePresetId ? 'bg-[var(--page-accent)]/10 light:bg-white light:text-[var(--text-primary)] light:border-[var(--ws-border-strong)]' : ''
+                      p.id === activePresetId ? 'bg-[var(--page-accent-10)] light:bg-white light:text-[var(--text-primary)] light:border-[var(--ws-border-strong)]' : ''
                     }`}
                   >
                     <button
@@ -531,7 +531,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                               deletePreset(p.id);
                               setConfirmDeleteId(null);
                             }}
-                            className="flex min-h-[32px] items-center rounded-md bg-[var(--error)]/15 px-2 text-[11px] font-medium text-[var(--error)]"
+                            className="flex min-h-[32px] items-center rounded-md bg-[var(--error-15)] px-2 text-[11px] font-medium text-[var(--error)]"
                             aria-label={`Confirm delete of deck ${p.name}`}
                           >
                             Delete?
@@ -572,7 +572,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                   <button
                     onClick={saveAsPreset}
                     disabled={!presetName.trim()}
-                    className="flex min-h-[32px] items-center gap-1 rounded-md bg-[var(--page-accent)]/15 px-2.5 text-[12px] font-medium text-[var(--page-accent)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-[32px] items-center gap-1 rounded-md bg-[var(--page-accent-15)] px-2.5 text-[12px] font-medium text-[var(--page-accent)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Save size={12} />
                     Save
@@ -603,7 +603,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
               <button
                 onClick={saveEdit}
                 disabled={!dirty}
-                className="flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/15 px-3 text-[12px] font-medium text-[var(--page-accent)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent-15)] px-3 text-[12px] font-medium text-[var(--page-accent)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Save deck layout"
               >
                 <Check size={13} />
@@ -678,7 +678,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                     aria-pressed={layout.columns === n}
                     aria-label={`${n} columns`}
                     className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[12px] font-mono font-medium transition-colors ${
-                      layout.columns === n ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      layout.columns === n ? 'bg-[var(--page-accent-20)] text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                     }`}
                   >
                     {n}
@@ -844,26 +844,26 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                     <>
                       {/* Edge resize handles */}
                       <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'top', position)}
-                        className="absolute left-2 right-2 -top-1 z-10 h-2 cursor-ns-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        className="absolute left-2 right-2 -top-1 z-10 h-2 cursor-ns-resize rounded bg-[var(--page-accent-30)] hover:bg-[var(--page-accent-60)] transition-colors"
                         aria-label={`Resize ${widget.name} top edge`} title="Drag to resize top" />
                       <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'bottom', position)}
-                        className="absolute left-2 right-2 -bottom-1 z-10 h-2 cursor-ns-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        className="absolute left-2 right-2 -bottom-1 z-10 h-2 cursor-ns-resize rounded bg-[var(--page-accent-30)] hover:bg-[var(--page-accent-60)] transition-colors"
                         aria-label={`Resize ${widget.name} bottom edge`} title="Drag to resize bottom" />
                       <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'left', position)}
-                        className="absolute top-2 bottom-2 -left-1 z-10 w-2 cursor-ew-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        className="absolute top-2 bottom-2 -left-1 z-10 w-2 cursor-ew-resize rounded bg-[var(--page-accent-30)] hover:bg-[var(--page-accent-60)] transition-colors"
                         aria-label={`Resize ${widget.name} left edge`} title="Drag to resize left" />
                       <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'right', position)}
-                        className="absolute top-2 bottom-2 -right-1 z-10 w-2 cursor-ew-resize rounded bg-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/60 transition-colors"
+                        className="absolute top-2 bottom-2 -right-1 z-10 w-2 cursor-ew-resize rounded bg-[var(--page-accent-30)] hover:bg-[var(--page-accent-60)] transition-colors"
                         aria-label={`Resize ${widget.name} right edge`} title="Drag to resize right" />
                       {/* Corner resize handles */}
                       <button type="button" onMouseDown={(e) => beginResize(e, widget.id, 'br', position)}
-                        className="absolute bottom-1.5 right-1.5 z-10 h-4 w-4 cursor-nwse-resize rounded bg-[var(--page-accent)]/40 border border-[var(--page-accent)]/50 text-[var(--page-accent)] opacity-80 transition-opacity hover:opacity-100"
+                        className="absolute bottom-1.5 right-1.5 z-10 h-4 w-4 cursor-nwse-resize rounded bg-[var(--page-accent-40)] border border-[var(--page-accent)]/50 text-[var(--page-accent)] opacity-80 transition-opacity hover:opacity-100"
                         aria-label={`Resize ${widget.name} corner`} title="Drag to resize corner">
                         <span aria-hidden className="mx-auto block h-3 w-3 border-b-2 border-r-2 border-current" />
                       </button>
                       {/* Split button */}
                       <button type="button" onClick={(e) => { e.stopPropagation(); handleSplit(widget.id); }}
-                        className="absolute bottom-1.5 left-1.5 z-10 h-7 w-7 cursor-pointer rounded-md border border-[var(--page-accent)]/40 bg-[var(--color-card)]/90 text-[var(--page-accent)] opacity-80 transition-opacity hover:opacity-100"
+                        className="absolute bottom-1.5 left-1.5 z-10 h-7 w-7 cursor-pointer rounded-md border border-[var(--page-accent)]/40 bg-[var(--color-card-90)] text-[var(--page-accent)] opacity-80 transition-opacity hover:opacity-100"
                         aria-label={`Split ${widget.name}`} title="Split widget">
                         <Split size={12} />
                       </button>
@@ -935,7 +935,7 @@ export function WidgetGrid({ forceEditMode = false, data, onSaved }: WidgetGridP
                     aria-label={visible ? `Hide ${config.name}` : `Show ${config.name}`}
                     className={`flex min-h-[32px] items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-medium transition-colors ${
                       visible
-                        ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                        ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent-10)] text-[var(--page-accent)]'
                         : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                     }`}
                   >

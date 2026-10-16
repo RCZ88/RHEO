@@ -1,11 +1,11 @@
-// DeskFlow focusOverlay.js v2 — ALL chrome.runtime access guarded
+// RHEO focusOverlay.js v2 — ALL chrome.runtime access guarded
 (() => {
   // IMMEDIATE bail if context is dead
   if (!chrome?.runtime?.id) return;
   if (window.__deskflowFocusInjected) return;
   window.__deskflowFocusInjected = true;
 
-  console.log('[DeskFlow] focusOverlay v2 loaded');
+  console.log('[RHEO] focusOverlay v2 loaded');
 
   let shown = false;
   function domain() { return location.hostname.replace(/^www\./, ''); }

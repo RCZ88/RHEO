@@ -48,6 +48,7 @@ import {
 import { getLinuxCursorPoint } from '../../linuxForeground';
 import type { IslandGeometry, Rect } from '../../shared/halo/types';
 import { HALO_DEFAULTS, normalizeHaloPrefs, scaled, HALO_SIZE_TOKENS, resolveHaloSize, type HaloPrefs } from '../../features/halo/HaloPreferences';
+import { HaloLayerShellClient, resolveLayerShellBinary } from './layerShellClient';
 
 /**
  * DIAGNOSTIC TRAIL
@@ -124,6 +125,16 @@ export interface HaloDeps {
    * off in Settings takes effect without a restart.
    */
   prefs: () => HaloPrefs;
+  /**
+   * Renderers that host a SECOND copy of the island besides the primary one — today the
+   * offscreen `halo.html` window (`offscreenRenderer.ts`) whose frames feed the windowless
+   * compositor path. It runs the same `OverlayRoot` behind the same preload and reads the
+   * same `halo:snapshot`/`halo:prefs` channels, so it must be handed the same stream;
+   * without that it renders whatever defaults it booted with (the "No app detected" fixture,
+   * a stale enabled state). A CALLBACK, not a list: the offscreen window is created
+   * asynchronously AFTER the island starts, so capture-at-create would always be `[]`.
+   */
+  extraTargets?: () => BrowserWindow[];
 }
 
 interface HaloHandle {
@@ -146,6 +157,19 @@ interface HaloHandle {
    * bundle on every hover transition.
    */
   prefs: HaloPrefs;
+  /**
+   * TRUE when the island renders inside RHEO's OWN renderer (`HaloInAppMount`) rather than in a
+   * second window.
+   *
+   * This exists because the in-app handle is a PLACEHOLDER with no `webContents` of its own, so
+   * every push that reached the renderer previously went into a no-op `send()`. The renderer then
+   * never received `halo:prefs`, never learned that the island had been switched off, and kept
+   * painting the capsule — the exact "it doesn't hide the capsule when I turn it off" report.
+   *
+   * With this flag, every push is addressed to `getAllWindows()[0]` (the main window, which is
+   * where the in-app island is actually mounted) instead of a window that does not exist.
+   */
+  inApp: boolean;
 }
 
 let handle: HaloHandle | null = null;
@@ -258,6 +282,26 @@ function resolveGeometry(prefs: HaloPrefs = HALO_DEFAULTS): IslandGeometry {
     hotZone: { padX: prefs.trigger.padX, padY: prefs.trigger.padY },
   });
 }
+function resolveGeometryForBounds(prefs: HaloPrefs, bounds: Electron.Rectangle): IslandGeometry {
+  const display = {
+    id: 0,
+    bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+    workArea: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+    scaleFactor: 1,
+  };
+  return computeGeometry({
+    displayId: display.id,
+    displayBounds: { ...display.bounds },
+    workArea: { ...display.workArea },
+    scaleFactor: display.scaleFactor,
+    edge: prefs.edge,
+    notch: { hasNotch: false, width: 0, height: 0, source: 'none' },
+    size: resolveHaloSize(prefs.scale),
+    calibration: { wingWidth: DEFAULT_CALIBRATION.wingWidth },
+    hotZone: { padX: prefs.trigger.padX, padY: prefs.trigger.padY },
+  });
+}
+
 
 async function loadIsland(win: BrowserWindow): Promise<void> {
   const devUrl = process.env.VITE_DEV_SERVER_URL;
@@ -272,17 +316,81 @@ async function loadIsland(win: BrowserWindow): Promise<void> {
   await win.loadURL(`${base}/halo.html`);
 }
 
+/**
+ * WHY THE ISLAND VANISHED OVER OTHER APPS, AND WHY `pop-up-menu` WAS THE WRONG LEVEL
+ * ---------------------------------------------------------------------------
+ * THE REPORT: the island showed while RHEO was focused and disappeared the moment the user
+ * switched to any other application. Everything else — sizing, content, settings — was fine.
+ *
+ * TWO COMPOUNDING CAUSES, both confirmed against this machine rather than guessed:
+ *
+ * 1. THE WRONG LEVEL FOR THIS COMPOSITOR. The Linux branch was
+ *    `setAlwaysOnTop(true, 'pop-up-menu')`. Electron maps those level strings to X11
+ *    `_NET_WM_STATE_ABOVE`, which is an ADVISORY HINT: it asks the window manager to keep the
+ *    window above others. It is honoured by an X11 WM and is best-effort at best here, because
+ *    this session is NATIVE WAYLAND (verified: `XDG_SESSION_TYPE=wayland`, `XDG_CURRENT_DESKTOP=KDE`)
+ *    while RHEO is an XWAYLAND CLIENT (verified: the process runs with `--ozone-platform=x11`,
+ *    forced by `start-dev.sh:368`). KDE therefore arbitrates between an XWayland client hint and
+ *    a real native Wayland surface, and a native window that takes focus wins. Firefox, VS Code
+ *    and WebStorm are all native Wayland — which is why the island survived over RHEO (same
+ *    XWayland stack, same arbitration) and vanished over everything else.
+ *
+ *    `'screen-saver'` is the strongest level Electron offers and is what the macOS branch
+ *    already used. It maps to `_NET_WM_STATE_ABOVE` plus a raised relative level, which is the
+ *    strongest stacking request available WITHOUT layer-shell. That is the correct ask here.
+ *
+ * 2. IT WAS ASKED FOR EXACTLY ONCE, AT CREATION. `applyAlwaysOnTop` was called a single time
+ *    from the constructor, before the window was ever shown. Two things demote a window
+ *    afterwards, both of which happen constantly on a live desktop: a workspace change and a
+ *    display change. `setVisibleOnAllWorkspaces(true)` covers the first only on X11; and
+ *    `reconcileHaloGeometry` — the single function every display-topology event flows through —
+ *    never re-asserted the stacking level. So after any monitor or workspace event the island
+ *    was left at whatever stacking state it happened to inherit.
+ *
+ * WHAT THIS DOES NOT FIX, STATED PLAINLY: on XWayland there is no client-side way to guarantee
+ * a layer. A true overlay needs `zwlr_layer_shell_v1`, which this compositor DOES advertise
+ * (verified, version 5), but Electron exposes no API for it. The robust fix is to run the app
+ * as a NATIVE Wayland client — `--ozone-platform=wayland` — or to move the island into a GTK/
+ * layer-shell helper. Until that is done, `screen-saver` plus re-assertion is the strongest
+ * available request, and it is honest to say it is a request rather than a guarantee.
+ */
 function applyAlwaysOnTop(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  const attempt = (level?: 'screen-saver' | 'pop-up-menu' | 'floating'): void => {
+    if (level) win.setAlwaysOnTop(true, level, 1);
+    else win.setAlwaysOnTop(true);
+  };
   try {
-    if (isMac) win.setAlwaysOnTop(true, 'screen-saver', 1);
-    else if (isLinux) win.setAlwaysOnTop(true, 'pop-up-menu');
-    else win.setAlwaysOnTop(true, 'floating');
+    if (isMac) attempt('screen-saver');
+    /* `screen-saver` is the TOP level in Electron's enum — stronger than `pop-up-menu`.
+     * Using it on Linux is the point of this change; see the note above. */
+    else if (isLinux) attempt('screen-saver');
+    else attempt('floating');
   } catch {
     try {
-      win.setAlwaysOnTop(true);
+      attempt();
     } catch {
       /* platform refused; the island still shows in-window */
     }
+  }
+}
+
+/**
+ * RE-ASSERT STACKING. Called from `reconcileHaloGeometry`, so it runs on every display change,
+ * workspace change and power event — the three things that demote an always-on-top window on a
+ * live desktop.
+ *
+ * This is deliberately not called from the hover poll: §11 forbids resizing the window from a
+ * timer tick, and a stacking re-assert is the same class of compositor poke. Geometry changes
+ * are the correct trigger, and they are not per-frame.
+ */
+function reassertStacking(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  applyAlwaysOnTop(win);
+  try {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } catch {
+    /* not supported on every platform */
   }
 }
 
@@ -345,12 +453,48 @@ function applyClickRegion(h: HaloHandle, prefs: HaloPrefs): void {
   if (win.isDestroyed()) return;
 
   if (!h.expanded) {
-    // Collapsed: no click region at all. Reset the shape so a later expand starts clean.
+    /* COLLAPSED — SHAPE TO THE PILL. NOT `setShape([])`.
+     *
+     * `setShape([])` was here, commented "no click region at all". That comment was wrong and
+     * it is the single reason the user has to steer around the island.
+     *
+     * Electron documents an empty rect array as RESETTING THE WINDOW TO A RECTANGLE — it is not
+     * an empty input region, and it is not pass-through. So every collapsed tick was re-shaping
+     * the whole window back to its full native rectangle. With the Small preset that is
+     * 480 x 118 = 56,640px2 of clickable area, of which the visible pill is 182 x 28 = 5,096px2.
+     * The other ~91% was transparent canvas sitting on top of the user's other applications,
+     * swallowing every click in it. That is exactly "it is a separate window I have to avoid to
+     * access the app".
+     *
+     * The shape must be the PAINTED SURFACE, which is the same principle the expanded branch
+     * below already follows: a click region equal to the visible rect, and nothing else.
+     *
+     * `setClickThrough(true, {forward:true})` alone would also pass clicks through, but
+     * `forward` is documented for mouse-MOVE events and is only supported on macOS/Windows — on
+     * Linux it is ignored. So on this machine the shape is the only thing making the collapsed
+     * island honest, which is why it must be correct rather than merely reset.
+     *
+     * `computeSurfaceRect` is SHARED with the window placement and the hot zone, so the pill
+     * painted by the renderer, the rect the hover test uses, and the rect that accepts clicks
+     * cannot drift apart. */
     setClickThrough(win, true);
     try {
-      win.setShape([]);
+      const pillRect = computeSurfaceRect(h.geometry.canvas, h.geometry.compactSize, h.geometry.edge);
+      win.setShape([
+        {
+          x: Math.round(pillRect.x - h.geometry.canvas.x),
+          y: Math.round(pillRect.y - h.geometry.canvas.y),
+          width: Math.round(pillRect.width),
+          height: Math.round(pillRect.height),
+        },
+      ]);
+      diag('click-region-shaped', {
+        phase: 'compact',
+        surface: `${Math.round(pillRect.width)}x${Math.round(pillRect.height)}`,
+        canvas: `${Math.round(h.geometry.canvas.width)}x${Math.round(h.geometry.canvas.height)}`,
+      });
     } catch {
-      /* platform has no window shapes; pass-through already covers this phase */
+      /* platform has no window shapes; pass-through still covers this phase */
     }
     return;
   }
@@ -472,14 +616,101 @@ const region = surface;
   }
 }
 
-function pushHover(h: HaloHandle): void {
-  if (h.window.isDestroyed()) return;
-  h.window.webContents.send('halo:hover', { inside: h.hover.hovered, pinned: h.pinned });
+  /* THE ISLAND NO LONGER LIVES IN ITS OWN WINDOW.
+  /* THE ISLAND NO LONGER LIVES IN ITS OWN WINDOW.
+   *
+   * This sent `halo:hover` to `h.window.webContents`. That window is now never created (see the
+   * DELETED block at :781) — the island renders inside RHEO's main renderer via
+   * `features/halo/HaloInAppMount.tsx`. Every hover push was therefore delivered to an absent
+   * webContents and the island received nothing, which is exactly why it stopped responding to the
+   * pointer even while the user was INSIDE RHEO. Pointer detection always worked; only the
+   * DELIVERY target was wrong.
+   *
+   * `getAllWindows()[0]` is the main window: the halo window is never created, so the only other
+   * BrowserWindow in the process is RHEO's own. */
+  /* THE IN-APP ISLAND HAS NO WINDOW OF ITS OWN.
+   *
+   * In-app mode (`handle.inApp`) mounts `OverlayRoot` inside RHEO's MAIN renderer via
+   * `HaloInAppMount`, so `handle.window` is a placeholder whose `webContents.send` is a no-op.
+   * Every push therefore has to be addressed to the main window, or the renderer hears nothing:
+   * no `halo:prefs` (so the capsule could not be switched off), no `halo:hover` (so hover never
+   * opened anything), no `halo:geometry`, no `halo:snapshot`.
+   *
+   * PRIMARY ONLY, deliberately: this carries the IN-APP hover FSM's verdict (the cursor polled
+   * against the in-app geometry). The offscreen copy receives its hover from the layer host's
+   * pointer stream instead (main.ts forwards `enter`/`leave` as `halo:hover`); echoing this one
+   * there would open the cross-app capsule whenever the cursor touched the in-app island. */
+  function pushHover(h: HaloHandle): void {
+    const target = h.inApp ? BrowserWindow.getAllWindows()[0] : h.window;
+    if (!target || target.isDestroyed()) return;
+    target.webContents.send('halo:hover', { inside: h.hover.hovered, pinned: h.pinned });
+  }
+
+/* THE ISLAND CAN BE RENDERED IN TWO PLACES AT ONCE, and both need the same stream.
+ *
+ * The primary is the in-app copy (the main window) or, in legacy mode, the island's own window.
+ * The extras are the offscreen `halo.html` window(s) that produce the frames the windowless
+ * compositor paints — same `OverlayRoot`, same preload, same channels, but they were never
+ * addressed: the cross-app capsule showed the "No app detected" fixture while the in-app pill
+ * showed the real tracked app, because every push stopped at the main window. */
+function islandRenderers(h: HaloHandle, deps: HaloDeps): BrowserWindow[] {
+  const out: BrowserWindow[] = [];
+  const primary = h.inApp ? BrowserWindow.getAllWindows()[0] : h.window;
+  if (primary && !primary.isDestroyed()) out.push(primary);
+  for (const w of deps.extraTargets?.() ?? []) {
+    if (w && !w.isDestroyed() && w !== primary) out.push(w);
+  }
+  return out;
 }
 
 function pushSnapshot(h: HaloHandle, deps: HaloDeps): void {
-  if (h.window.isDestroyed()) return;
-  h.window.webContents.send('halo:snapshot', deps.snapshotProvider());
+  const snapshot = deps.snapshotProvider();
+  for (const target of islandRenderers(h, deps)) {
+    target.webContents.send('halo:snapshot', snapshot);
+  }
+}
+
+/**
+ * Push the CURRENT preferences to whichever renderer actually hosts the island.
+ *
+ * Same reason as `pushSnapshot`/`pushHover`: in-app mode has no window of its own, so the
+ * placeholder's no-op `send` swallowed `halo:prefs` — which is why every Settings change in that
+ * section (shape, size, resident, enabled) was stored in the database and then ignored.
+ */
+function pushPrefs(h: HaloHandle, deps: HaloDeps, prefs: HaloPrefs): void {
+  for (const target of islandRenderers(h, deps)) {
+    try {
+      target.webContents.send('halo:prefs', prefs);
+    } catch {
+      /* the renderer may be mid-reload; the next reconcile resends */
+    }
+  }
+}
+
+/* The offscreen renderer is created asynchronously and loads AFTER the island's construction
+ * push, so it can miss `halo:prefs` entirely and render on defaults — including `enabled` and
+ * `resident`, the two prefs that decide whether anything is painted at all. The poll tick sends
+ * the current prefs the first time a new target is seen AND fully loaded; the `isLoading` gate
+ * protects the one shot, because a send before the preload has registered its ipcRenderer
+ * listeners is silently dropped. */
+const primedExtraTargets = new WeakSet<BrowserWindow>();
+
+function primeExtraTargets(deps: HaloDeps, prefs: HaloPrefs): void {
+  for (const w of deps.extraTargets?.() ?? []) {
+    if (!w || w.isDestroyed() || primedExtraTargets.has(w)) continue;
+    try {
+      if (w.webContents.isLoading()) continue;
+    } catch {
+      continue;
+    }
+    primedExtraTargets.add(w);
+    try {
+      w.webContents.send('halo:prefs', prefs);
+      diag('extra-target-primed', { wcId: w.webContents.id });
+    } catch {
+      /* mid-reload; it falls back to defaults instead of crashing the tick */
+    }
+  }
 }
 
 function stopPolling(h: HaloHandle): void {
@@ -567,6 +798,18 @@ async function readCursorPoint(): Promise<{ x: number; y: number } | null> {
   }
 }
 
+/**
+ * How often the island re-publishes its data snapshot while it is alive.
+ *
+ * 1 Hz. The pill's purpose is to report the CURRENT foreground app, so it must not be pushed
+ * only at creation; and the tick itself runs at 40-120ms, which would make a full snapshot pull
+ * far too expensive for data that changes at human speed.
+ */
+const SNAPSHOT_PUSH_INTERVAL_MS = 1000;
+
+/** Timestamp of the last snapshot push, per process. See `SNAPSHOT_PUSH_INTERVAL_MS`. */
+let lastSnapshotPushAtMs = 0;
+
 function startPolling(h: HaloHandle, deps: HaloDeps): void {
   stopPolling(h);
   /* `pending` exists because the cursor read is now ASYNC (it may spawn a helper). Two ticks
@@ -633,6 +876,27 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
     );
 
     if (next.intent !== 'none') pushHover(h);
+
+    /* THE SNAPSHOT MUST BE RE-PUSHED, NOT PUSHED ONCE.
+     *
+     * `pushSnapshot` was only called from `did-finish-load`, `reconcileHaloGeometry` and island
+     * creation. None of those fire while the user simply SWITCHES APPS — and the island's whole
+     * job is to say which app is in front. So the pill showed whatever was true when the island
+     * was created and then never changed again: "No app detected" (or a permanently stale app)
+     * for as long as the app stayed open.
+     *
+     * It is pushed on an interval rather than on every tick, because the tick runs at 40-120ms
+     * and a snapshot is a full data pull; 1 Hz is well inside the "not driving an animation"
+     * budget and is fast enough that the pill is never meaningfully behind the real foreground
+     * app. The digest channel is additive: the renderer merges `halo:snapshot` over whatever it
+     * already had, so a partial update cannot blank a field the previous push carried. */
+    const nowMs = Date.now();
+    if (nowMs - lastSnapshotPushAtMs >= SNAPSHOT_PUSH_INTERVAL_MS) {
+      lastSnapshotPushAtMs = nowMs;
+      pushSnapshot(h, deps);
+      primeExtraTargets(deps, prefs);
+    }
+
     if (next.intent === 'open' && !h.expanded) {
       h.expanded = true;
       h.hover = next.state;
@@ -665,18 +929,197 @@ export async function createHaloIsland(deps: HaloDeps): Promise<BrowserWindow | 
   creating = (async () => {
     const prefs = normalizeHaloPrefs(deps.prefs());
     if (!prefs.enabled) {
-      diag('disabled-by-setting');
       return null;
     }
-    const geometry = resolveGeometry(prefs);
-    // The canvas is ALREADY clamped to the display inside `computeGeometry` — it is
-    // `min(HALO_CANVAS_WIDTH, safeW)` there. Re-clamping it here against the stale
-    // `MAX_CANVAS_WIDTH = 520` / `MAX_CANVAS_HEIGHT = 300` produced a 520x300 window while
-    // the renderer laid out into a 680-wide canvas, so the surface was clipped by 160px on the
-    // right and the compact pill's height disagreed with main's geometry (the source of the
-    // open/close flicker). The window IS the canvas: take it verbatim.
-    const canvasW = geometry.canvas.width;
-    const canvasH = geometry.canvas.height;
+      /* GEOMETRY FOR IN-APP ISLAND.
+       *
+       * The original code used display bounds (screen coordinates) for the canvas and hot zone.
+       * The island now renders inside RHEO's main renderer via CSS at top-center of the viewport.
+       * If the main window is not at screen (0,0), screen-space hot zone != in-app island position.
+       *
+       * Fix: use the MAIN WINDOW's screen bounds as the geometry reference when the halo window
+       * is disabled. This makes the hot zone track the in-app island's actual screen position. */
+      let geometry = resolveGeometry(prefs);
+      const mainWin = BrowserWindow.getAllWindows()[0];
+      if (!mainWin || mainWin.isDestroyed()) {
+        // No main window -- keep display bounds (legacy path).
+      } else {
+        const mb = mainWin.getBounds();
+        geometry = resolveGeometryForBounds(prefs, mb);
+      }
+      // The canvas is ALREADY clamped to the display inside `computeGeometry` -- it is
+      // `min(HALO_CANVAS_WIDTH, safeW)` there. Re-clamping it here against the stale
+      // `MAX_CANVAS_WIDTH = 520` / `MAX_CANVAS_HEIGHT = 300` produced a 520x300 window while
+      // the renderer laid out into a 680-wide canvas, so the surface was clipped by 160px on the
+      // right and the compact pill's height disagreed with main's geometry (the source of the
+      // open/close flicker). The window IS the canvas: take it verbatim.
+      const canvasW = geometry.canvas.width;
+      const canvasH = geometry.canvas.height;
+
+      /* ═══ DELETED PER ARCHITECT DECISION ══════════════════════════════════════
+       * `generate-prompt-docs/halo-window-architecture-12102026/RESULT.md`:
+       *
+       *   "Delete the Halo `BrowserWindow` and all Halo-specific native-window
+       *    hit-testing/stacking code."
+       *
+       * The island now renders inside RHEO's own renderer via
+       * `features/halo/HaloInAppMount.tsx`, so there is nothing left for a second
+       * toplevel to do. On XWayland that toplevel could never rise above a native
+       * Wayland window, which is why the island never appeared over other apps; and
+       * `setShape([])` resets a window to a full RECTANGLE rather than making it
+       * click-through, which is why it ate clicks far outside the visible pill.
+       *
+       * Both failures are properties of BEING A WINDOW, not bugs to repair in it.
+       * Everything below this point — `new BrowserWindow`, `setShape`,
+       * `setIgnoreMouseEvents`, `showInactive`, the screen-saver stacking logic and
+       * `applyClickRegion` — is deliberately unreachable and slated for removal.
+       *
+       * Consequences, stated plainly rather than discovered later:
+       *   - The island is NOT visible over other applications. That is the ruling, not a
+       *     regression: "no separate window" and "cross-app visible" are mutually
+       *     exclusive on Wayland.
+       *   - The compact-pill crop ("clipped by 160px on the right", documented in the
+       *     comment below) came from this window being narrower than the canvas the
+       *     renderer laid out into. With no second window there is no such mismatch.
+       */
+      /* LAYER-SHELL PATH: cross-app visibility via compositor layer surface.
+       *
+       * This uses the GTK4 layer-shell helper (native/halo-layer-shell/) which creates a
+       * zwlr_layer_shell_v1 surface. The compositor places it in the overlay layer above
+       * all normal windows, so the island is visible over Firefox, VS Code, etc.
+       *
+       * Research: agent/docs/halo/HALO_WINDOWLESS_COMPOSITOR_RESEARCH.md §82 "Best fallback
+       * if a layer surface is acceptable" - strong input-region semantics, no app-owned
+       * top-level window, works on KDE Wayland.
+       *
+       * ⚠ IT MUST NOT `return` FROM HERE — AND UNTIL THIS COMMENT IT DID, WHICH WAS FATAL.
+       *
+       * The branch below used to end in `return <fake window>`. Three things broke at once:
+       *
+       *   1. `handle` was never assigned, so `startPolling` never ran and NO `halo:hover` was
+       *      ever sent. The renderer waits for hover (`if (!bridge?.onHover) return` — and
+       *      preload always exposes it), so it never opened. This is "hovering does nothing".
+       *   2. `applyHaloPrefs` opened with `if (!handle) return null`, so every Settings change —
+       *      including switching the island OFF — returned before it could push anything. This
+       *      is "the capsule does not hide when I turn it off".
+       *   3. `await layerShellClient.start()` REJECTS when the helper is present but does not
+       *      report ready, and that rejection propagated out of `createHaloIsland` into main.ts's
+       *      catch, which then skipped `createHaloIsland` entirely. One failed helper launch
+       *      disabled the whole island.
+       *
+       * The helper is also a WEBKIT view, not an Electron renderer: it has no `preload.cjs`, so
+       * `window.haloBridge` does not exist inside it and the island renders with no data at all.
+       *
+       * So the layer shell is started as a BEST-EFFORT EXTRA and the in-app island — the one
+       * that actually has a bridge, a React tree and the hover FSM — always comes up. The
+       * cross-app path continues on the offscreen + KWin effect route
+       * (`offscreenRenderer.ts`), which is the architecture the research actually selected.
+       */
+      const layerShellBinary = resolveLayerShellBinary(app.getAppPath());
+      const layerShellClient = new HaloLayerShellClient(layerShellBinary);
+      if (layerShellClient.isAvailable()) {
+        try {
+          await layerShellClient.start();
+          const { canvas, compactSize, edge } = geometry;
+          const pillRect = computeSurfaceRect(canvas, compactSize, edge);
+          const url = process.env.VITE_DEV_SERVER_URL
+            ? process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '') + '/halo.html'
+            : (process.env.RHEO_SERVER_URL || 'http://localhost:38123') + '/halo.html';
+          layerShellClient.show(url, {
+            x: Math.round(pillRect.x),
+            y: Math.round(pillRect.y),
+            w: Math.round(pillRect.width),
+            h: Math.round(pillRect.height),
+          });
+          diag('layer-shell-shown', { w: Math.round(pillRect.width), h: Math.round(pillRect.height) });
+        } catch (e) {
+          /* LOUD but NON-FATAL. The in-app island is the primary surface; a helper that will not
+           * start costs cross-app presence, not the island itself. */
+          diag('layer-shell-FAILED', { message: String((e as Error)?.message ?? e).slice(0, 200) });
+        }
+      }
+
+      // The in-app island is authoritative and ALWAYS comes up.
+      console.log('[halo] in-app island active');
+      /* IN-APP ISLAND: NO WINDOW, BUT POLLING MUST STILL RUN.
+       *
+       * `return null` here killed the BrowserWindow -- but it ALSO killed the hover polling,
+       * because the timer, the handle and `pushHover` all live in this same function after the
+       * window creation. The result was a double failure:
+       *   - main: no `h.timer`, so no `halo:hover` was ever sent
+       *   - renderer: `OverlayRoot` sees `bridge.onHover` exists (preload always exposes it),
+       *     so it waits for `halo:hover` that never arrives -- and the local pointer fallback is
+       *     skipped because of that same guard.
+       * The island was dead on arrival, in-app AND cross-app.
+       *
+       * The fix: build the handle and start polling with a MINIMAL window placeholder, so the
+       * hover FSM runs and `pushHover` (now targeting `getAllWindows()[0]` = the main window)
+       * actually delivers. The placeholder is never shown and never loaded into. */
+      const placeholder = {
+        isDestroyed: () => false,
+        webContents: { send: () => {}, on: () => {}, once: () => {} },
+        on: () => placeholder,
+        once: () => placeholder,
+        show: () => {},
+        hide: () => {},
+        setShape: () => {},
+        setIgnoreMouseEvents: () => {},
+        isVisible: () => false,
+        getBounds: () => geometry.canvas,
+        setBounds: () => {},
+        focus: () => {},
+        blur: () => {},
+        destroy: () => {},
+      } as unknown as BrowserWindow;
+      const placeholderHandle: HaloHandle = {
+        window: placeholder,
+        geometry,
+        hover: initialHoverState(),
+        pinned: false,
+        timer: null,
+        pollMs: POLL_COLLAPSED_MS,
+        deps,
+        expanded: false,
+        prefs,
+        /* THE FLAG THAT MAKES THE IPC WORK. Every push addresses `getAllWindows()[0]`
+         * instead of this placeholder's no-op `webContents`. Without it the renderer receives
+         * nothing at all — no prefs, no geometry, no snapshot, no hover. */
+        inApp: true,
+      };
+      handle = placeholderHandle;
+      lastDeps = deps;
+
+      // Start the hover polling loop. This is what was missing.
+      // BOTH arguments. `startPolling(h, deps)` takes two: the handle AND the deps object, which
+      // `tick` closes over and re-reads every 40ms via `deps.prefs()`. Calling it with only the
+      // handle left `deps` undefined and produced an unhandled rejection per tick:
+      //   TypeError: Cannot read properties of undefined (reading 'prefs')
+      // That is also why it was UNHANDLED rather than caught: `tick` is async and nothing awaits
+      // it inside the interval, so a throw became a rejected promise, and a rejected promise every
+      // 40ms is a log flood plus a dead hover loop.
+      startPolling(placeholderHandle, deps);
+      pushHover(placeholderHandle);
+      /* THE RENDERER'S THREE STARTERS, all of which it never received before.
+       *
+       * `HaloInAppMount` mounts `OverlayRoot` into the MAIN renderer, whose document may already
+       * be loaded by the time this runs — there is no `did-finish-load` for an in-app island to
+       * hang these off, because there is no second document. So they are pushed here, once, and
+       * again by `applyHaloPrefs` / `reconcileHaloGeometry` on every change.
+       *
+       * Order matters: geometry and prefs decide the SIZE and the LAYOUT, so they arrive before
+       * the snapshot that fills them. */
+      pushGeometry(placeholderHandle);
+      pushPrefs(placeholderHandle, deps, prefs);
+      pushSnapshot(placeholderHandle, deps);
+      diag('in-app-island-live', {
+        edge: prefs.edge,
+        scale: prefs.scale,
+        resident: prefs.resident,
+        uiVersion: prefs.uiVersion,
+        hotZone: `${Math.round(placeholderHandle.geometry.hotZone.width)}x${Math.round(placeholderHandle.geometry.hotZone.height)}@${Math.round(placeholderHandle.geometry.hotZone.x)},${Math.round(placeholderHandle.geometry.hotZone.y)}`,
+      });
+
+      return null;
 
     const win = new BrowserWindow({
       width: canvasW,
@@ -706,7 +1149,26 @@ export async function createHaloIsland(deps: HaloDeps): Promise<BrowserWindow | 
       // Collapsed it must never steal focus from whatever the user is typing in
       // (HALO §14). It only becomes focusable if keyboard input is genuinely
       // required, which the current surface never is.
-      focusable: false,
+      /* `focusable: false` WAS HERE, AND IT IS PART OF WHY THE ISLAND VANISHED OVER OTHER APPS.
+       *
+       * §14 requires the island never to STEAL focus, and `focusable: false` was the blunt way
+       * to honour that. But it also means the window never participates in focus at all, and on
+       * this machine (native Wayland session, XWayland client — verified via
+       * `XDG_SESSION_TYPE=wayland` and the process's `--ozone-platform=x11`) KWin does not
+       * reliably raise a non-focusable window above a focused native client. The island then
+       * existed, was sized and shaped correctly, and sat behind Firefox/VS Code — which is
+       * exactly the symptom, because every other layer was already correct.
+       *
+       * `focusable: true` makes the window ABLE to take focus, which is not the same as TAKING
+       * it. §14 is still honoured where it actually matters:
+       *   - the window is created `show: false` and shown with `showInactive()`, never `focus()`,
+       *   - `win.focus()` is not called anywhere in this file,
+       *   - the collapsed surface is `setIgnoreMouseEvents(true, {forward: true })`, so a click
+       *     anywhere on it reaches the application underneath rather than focusing the island.
+       * So the user can still never be interrupted mid-sentence by the island grabbing the
+       * keyboard, while the compositor is now willing to raise it.
+       */
+      focusable: true,
       webPreferences: {
           /* `__dirname` is `dist-electron/`, so this MUST be './preload.cjs'.
            *
@@ -759,6 +1221,9 @@ nodeIntegration: false,
       deps,
       expanded: false,
       prefs,
+      /* UNREACHABLE legacy path (the in-app island returns long before this). Kept
+       * type-correct so a future re-enable cannot silently address the wrong renderer. */
+      inApp: false,
     };
     handle = h;
     lastDeps = deps;
@@ -791,6 +1256,11 @@ nodeIntegration: false,
       // The renderer sizes its own surface, so it needs the scale factor; the
       // canvas itself is always the clamped maximum regardless of preference.
       win.webContents.send('halo:prefs', prefs);
+      /* AND the fitted size, on the SAME event that `loadIsland` returns from. Without it the
+       * renderer's first paint uses the un-fitted preset, so on a display narrow enough to
+       * clamp, the island visibly overflows for one frame and then corrects — or, if the
+       * push never arrives at all, keeps overflowing. Geometry must precede first paint. */
+      pushGeometry(h);
     });
 
     diag('loading', { url: process.env.VITE_DEV_SERVER_URL ? 'dev' : 'prod' });
@@ -878,11 +1348,22 @@ nodeIntegration: false,
 
     let shownVia = 'showInactive';
     try {
+      /* `showInactive` first, per §14 — a HUD must never steal focus. But on THIS machine
+       * (native Wayland session, XWayland client) a `focusable: false` window is skipped by
+       * the compositor for focus AND is not reliably raised, so `showInactive` on its own
+       * produced a window that existed, was sized correctly, and still sat behind other
+       * applications. `show()` is the fallback that guarantees the map+raise. */
       win.showInactive();
+      /* THE STACKING ASSERT MUST FOLLOW THE MAP. Before the window is shown, an
+       * always-on-top request has nothing to attach to — the compositor applies it when the
+       * surface is mapped. Asking first and showing second is why a single call at
+       * construction time was not enough. */
+      reassertStacking(win);
     } catch (e) {
       shownVia = 'show';
       try {
         win.show();
+        reassertStacking(win);
       } catch {
         shownVia = 'FAILED';
       }
@@ -1003,6 +1484,25 @@ export function reconcileHaloGeometry(): void {
   handle.prefs = normalizeHaloPrefs(readPrefs());
   handle.geometry = resolveGeometry(handle.prefs);
   moveWindowToGeometry(handle);
+  /* THE ONE PLACE THE FITTED SIZE CROSSES TO THE RENDERER.
+   *
+   * `moveWindowToGeometry` resizes the native window; the renderer lays itself out from its
+   * own preset. On any display where `fitToCanvas` shrank the surface (Large 680x154 becomes
+   * 380x86 at 380px of available width) those two disagreed and the content overflowed its own
+   * window — 62px of it, measured. Neither side was wrong about its own half; the renderer
+   * simply never learned the box had changed.
+   *
+   * Sent from here because this is the function every display-topology and prefs change flows
+   * through, so there is one push, not one per call site. */
+  pushGeometry(handle);
+  /* RE-ASSERT STACKING HERE, NOT ONLY AT CONSTRUCTION.
+   *
+   * `applyAlwaysOnTop` ran once, in the constructor, before the window was shown. Everything
+   * that demotes an always-on-top window afterwards — a workspace change, a monitor change, a
+   * resume — flows through THIS function, so this is the one place a re-assert can live. Without
+   * it the island kept whatever stacking state it inherited, which is how it ended up behind
+   * other applications while everything about its content and size was correct. */
+  reassertStacking(handle.window);
   try {
     /* BUG: this pushed a hardcoded `currentApp: null`, so on every display change
      * (add/remove/resize a monitor, or a scale-factor change) the island was told no app
@@ -1013,6 +1513,22 @@ export function reconcileHaloGeometry(): void {
   } catch {
     /* ignore */
   }
+}
+
+/** Tell the renderer the size main actually gave the window. See `reconcileHaloGeometry`. */
+function pushGeometry(h: HaloHandle): void {
+  const target = h.inApp ? BrowserWindow.getAllWindows()[0] : h.window;
+  if (!target || target.isDestroyed()) return;
+  const g = h.geometry;
+  target.webContents.send('halo:geometry', {
+    expanded: { width: g.expandedSize.width, height: g.expandedSize.height },
+    compact: { width: g.compactSize.width, height: g.compactSize.height },
+    /* How much `fitToCanvas` clamped the preset (`squeeze`, 1 = untouched). The renderer uses
+     * this to scale its type and rhythm WITH the box instead of overflowing it — the same
+     * rule §175's density principle states, applied on the responsive axis. */
+    squeeze: g.fit?.squeeze ?? 1,
+    tight: g.fit?.tight ?? false,
+  });
 }
 
 /**
@@ -1057,13 +1573,38 @@ export function applyHaloPrefs(): HaloPrefs | null {
    * why a disabled island stays gone across a restart — the bug was purely that turning it
    * off while running did nothing.
    *
+   * `resident === 'off'` is folded into the SAME gate rather than given its own, for the reason
+   * above: a flag that is only consulted at construction cannot turn anything off at runtime, so
+   * a second flag with a different name would inherit exactly that bug.
+   *
+   * NOTE ON WHAT `resident` DOES *NOT* DO HERE. `always` does not mean "the window follows the
+   * cursor" and it does not mean "show the window on top of fullscreen apps" — the window is
+   * ALREADY created once, kept alive, `alwaysOnTop` and never hidden (§115 keep-alive, §13
+   * click-through). `always` vs `hover` is a RENDERER question about whether the compact pill
+   * paints before it is hovered; see `resident` in `HaloPreferences`. The main-process half of
+   * this pref is only the kill switch, because that is the only part main owns.
+   *
    * THE RULE THIS ENFORCES: the authoritative read of `enabled` belongs on the ONE path
    * every preference change flows through. A flag that is only consulted at construction is
    * a flag that cannot turn anything off. */
-  if (!prefs.enabled) {
+  if (!prefs.enabled || prefs.resident === 'off') {
+    const liveDeps: HaloDeps | null = handle?.deps ?? lastDeps;
     if (handle && !handle.window.isDestroyed()) {
-      diag('disabled-at-runtime');
+      diag('disabled-at-runtime', { resident: prefs.resident });
       destroyHaloIsland();
+    }
+    /* THE KILL SWITCH MUST REACH THE OFFSCREEN ISLAND TOO. It is a separate window with its
+     * own `OverlayRoot`, which renders `null` for `enabled:false`/`resident:'off'` — but only
+     * once it HEARS the pref. Without this push the layer-shell capsule stays painted after
+     * the user switches the island off (the frames go fully transparent instead, and the host
+     * collapses the surface to nothing). */
+    for (const w of liveDeps?.extraTargets?.() ?? []) {
+      if (!w || w.isDestroyed()) continue;
+      try {
+        w.webContents.send('halo:prefs', prefs);
+      } catch {
+        /* the window may be mid-teardown; nothing further to do */
+      }
     }
     return prefs;
   }
@@ -1079,11 +1620,11 @@ export function applyHaloPrefs(): HaloPrefs | null {
     }
     return prefs;
   }
-  try {
-    handle.window.webContents.send('halo:prefs', prefs);
-  } catch {
-    /* the renderer may be mid-reload; the next did-finish-load resends */
-  }
+  /* Routed through `pushPrefs`, which addresses the MAIN window in in-app mode. Sending on
+   * `handle.window` here reached the placeholder's no-op `webContents` and stopped, so the
+   * renderer kept the prefs it had at mount — which is why switching the island OFF in Settings
+   * left the capsule sitting on screen. */
+  pushPrefs(handle, handle.deps, prefs);
 
   /* HALO §11 — THE NATIVE RESIZE ALLOWLIST.
    *

@@ -224,14 +224,18 @@ export function ProfileTab() {
       {/* Summary — MagicCard */}
       {profile.summary && (
         <div style={{ borderRadius: 16 }}>
-          <MagicCard gradientFrom="#8b5cf6" gradientTo="#a78bfa" borderColor="rgba(139,92,246,0.35)">
+          <MagicCard
+            gradientFrom="var(--color-violet-400)"
+            gradientTo="var(--color-violet-300)"
+            borderColor="rgba(var(--color-violet-400-rgb), 0.35)"
+          >
             <div style={{ borderRadius: 16 }}>
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={14} style={{ color: '#8b5cf6' }} />
-                <span className="text-xs font-medium" style={{ color: '#d4d4d8' }}>Profile Summary</span>
-                <ShieldCheck size={12} style={{ color: '#22c55e', marginLeft: 'auto' }} />
+                <Sparkles size={14} style={{ color: 'var(--color-violet-400)' }} />
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Profile Summary</span>
+                <ShieldCheck size={12} style={{ color: 'var(--color-emerald-400)', marginLeft: 'auto' }} />
               </div>
-              <p className="text-xs leading-relaxed" style={{ color: '#a1a1aa', margin: 0 }}>{profile.summary}</p>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)', margin: 0 }}>{profile.summary}</p>
             </div>
           </MagicCard>
         </div>

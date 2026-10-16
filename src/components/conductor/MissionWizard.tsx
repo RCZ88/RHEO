@@ -100,7 +100,7 @@ export function MissionWizard({ projectId, repoPath, userBranch, onLaunch, onClo
                   value={objective}
                   onChange={(e) => setObjective(e.target.value)}
                   placeholder="Describe what you want to accomplish. Be specific about the feature, bug, or refactoring task."
-                  className="w-full h-32 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/70 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-rose-500/40 resize-none"
+                  className="w-full h-32 bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800/70 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-rose-500/40 resize-none"
                 />
                 <p className="text-[10px] text-zinc-500 mt-1.5">{objective.length} chars · {objective.trim().split(/\s+/).filter(Boolean).length} words</p>
               </div>
@@ -162,7 +162,7 @@ export function MissionWizard({ projectId, repoPath, userBranch, onLaunch, onClo
                     <h3 className="text-xs font-semibold text-zinc-300 mb-3">Generated Role Hierarchy</h3>
                     <div className="flex flex-col gap-2">
                       {engineeredWorkflow.roles?.map((role: any, i: number) => (
-                        <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50">
+                        <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)]">
                           <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-400">{i + 1}</div>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-medium text-zinc-200">{role.customName || role.role}</p>
@@ -192,7 +192,7 @@ export function MissionWizard({ projectId, repoPath, userBranch, onLaunch, onClo
                 <h3 className="text-xs font-semibold text-zinc-300 mb-3">Agent Provider Assignment</h3>
                 <div className="flex flex-col gap-2">
                   {engineeredWorkflow.roles?.map((role: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50">
+                    <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)]">
                       <div className="w-24 shrink-0">
                         <p className="text-xs font-medium text-zinc-200">{role.customName || role.role}</p>
                       </div>
@@ -244,19 +244,19 @@ export function MissionWizard({ projectId, repoPath, userBranch, onLaunch, onClo
               <div className="rounded-xl bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] ring-1 ring-inset ring-zinc-800/70 p-4">
                 <h3 className="text-xs font-semibold text-zinc-300 mb-3">Mission Summary</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-3">
+                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)] p-3">
                     <p className="text-[10px] text-zinc-500 uppercase">Objective</p>
                     <p className="text-xs text-zinc-200 mt-1 line-clamp-3">{objective}</p>
                   </div>
-                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-3">
+                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)] p-3">
                     <p className="text-[10px] text-zinc-500 uppercase">Template</p>
                     <p className="text-xs text-zinc-200 mt-1">{TEMPLATE_CARDS.find(t => t.id === selectedTemplate)?.name || 'Custom'}</p>
                   </div>
-                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-3">
+                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)] p-3">
                     <p className="text-[10px] text-zinc-500 uppercase">Agents</p>
                     <p className="text-xs text-zinc-200 mt-1">{engineeredWorkflow?.roles?.length || 0} agents</p>
                   </div>
-                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-3">
+                  <div className="rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)] p-3">
                     <p className="text-[10px] text-zinc-500 uppercase">Budget</p>
                     <p className="text-xs text-zinc-200 mt-1">{budgetTotal.toLocaleString()} tokens · ${totalBudget.toFixed(2)}</p>
                   </div>

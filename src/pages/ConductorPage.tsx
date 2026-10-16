@@ -451,7 +451,7 @@ export default function ConductorPage() {
 
   if (pageState === 'loading-projects') {
     return (
-      <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface)]/80">
+      <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface-80)]">
         {renderHeader()}
         <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading projects...</div>
       </div>
@@ -460,7 +460,7 @@ export default function ConductorPage() {
 
   if (pageState === 'no-projects') {
     return (
-      <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface)]/80">
+      <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface-80)]">
         {renderHeader()}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -474,7 +474,7 @@ export default function ConductorPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface)]/80">
+    <div className="flex flex-col h-full bg-zinc-950 light:bg-[var(--ws-surface-80)]">
       {renderHeader()}
       {activeMissionId ? renderMissionDetail() : renderMissionList()}
       {renderNewMissionDialog()}

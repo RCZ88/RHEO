@@ -115,7 +115,7 @@ function TierBar({ prod, neut, dist }: { prod: number; neut: number; dist: numbe
       <div className="flex h-1.5 overflow-hidden rounded-full" role="img"
         aria-label={`${Math.round((prod / t) * 100)}% productive, ${Math.round((dist / t) * 100)}% distracting`}>
         {prod > 0 && <div className="bg-emerald-500/70" style={{ width: pct(prod) }} />}
-        {neut > 0 && <div className="bg-[var(--color-muted-foreground)]/25" style={{ width: pct(neut) }} />}
+        {neut > 0 && <div className="bg-[var(--color-muted-foreground-25)]" style={{ width: pct(neut) }} />}
         {dist > 0 && <div className="bg-rose-500/60" style={{ width: pct(dist) }} />}
       </div>
     </>
@@ -124,19 +124,19 @@ function TierBar({ prod, neut, dist }: { prod: number; neut: number; dist: numbe
 
 function RankChip({ rank }: { rank: number }) {
   if (rank === 1) return (
-    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--page-accent)]/15" title="1st">
+    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--page-accent-15)]" title="1st">
       <Trophy className="h-4 w-4 text-[var(--page-accent)]" aria-hidden />
       <span className="sr-only">Rank 1</span>
     </div>
   );
   if (rank === 2) return (
-    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--color-muted-foreground)]/10" title="2nd">
+    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--color-muted-foreground-10)]" title="2nd">
       <Medal className="h-4 w-4 text-[var(--color-muted-foreground)]" aria-hidden />
       <span className="sr-only">Rank 2</span>
     </div>
   );
   if (rank === 3) return (
-    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--color-muted-foreground)]/10" title="3rd">
+    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--color-muted-foreground-10)]" title="3rd">
       <Award className="h-4 w-4 text-[var(--color-muted-foreground)]" aria-hidden />
       <span className="sr-only">Rank 3</span>
     </div>
@@ -317,7 +317,7 @@ export default function RankingsPage({ selectedPeriod, dateOffset }: RankingsPag
     <div className="space-y-5 p-5">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-[var(--page-accent)]/10">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-[var(--page-accent-10)]">
           <Trophy className="h-4 w-4 text-[var(--page-accent)]" aria-hidden />
         </div>
         <div className="min-w-0">
@@ -337,8 +337,8 @@ export default function RankingsPage({ selectedPeriod, dateOffset }: RankingsPag
                 aria-current={active ? 'true' : undefined}
                 className={`gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50 ${
                   active
-                    ? 'bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                    : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted-foreground)]/10 hover:text-[var(--color-foreground)]'
+                    ? 'bg-[var(--page-accent-10)] text-[var(--page-accent)]'
+                    : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted-foreground-10)] hover:text-[var(--color-foreground)]'
                 }`}>
                 <Icon className="h-3.5 w-3.5" aria-hidden />
                 {m.label}
@@ -356,8 +356,8 @@ export default function RankingsPage({ selectedPeriod, dateOffset }: RankingsPag
               aria-pressed={granularity === g.key}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50 ${
                 granularity === g.key
-                  ? 'bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
-                  : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted-foreground)]/10 hover:text-[var(--color-foreground)]'
+                  ? 'bg-[var(--page-accent-10)] text-[var(--page-accent)]'
+                  : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted-foreground-10)] hover:text-[var(--color-foreground)]'
               }`}>{g.label}</button>
           ))}
         </div>
@@ -392,7 +392,7 @@ export default function RankingsPage({ selectedPeriod, dateOffset }: RankingsPag
               </p>
             </div>
             <button type="button" onClick={retry}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-medium transition-colors duration-150 hover:bg-[var(--color-muted-foreground)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50">
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-medium transition-colors duration-150 hover:bg-[var(--color-muted-foreground-10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50">
               <RotateCw className="h-3.5 w-3.5" aria-hidden />
               Retry rankings
             </button>
@@ -417,11 +417,11 @@ export default function RankingsPage({ selectedPeriod, dateOffset }: RankingsPag
             </div>
             {search
               ? <button type="button" onClick={() => setSearch('')}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-medium transition-colors duration-150 hover:bg-[var(--color-muted-foreground)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50">
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-medium transition-colors duration-150 hover:bg-[var(--color-muted-foreground-10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50">
                 <RotateCw className="h-3.5 w-3.5" aria-hidden />Clear filter
               </button>
               : <button type="button" onClick={retry}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-medium transition-colors duration-150 hover:bg-[var(--color-muted-foreground)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50">
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-medium transition-colors duration-150 hover:bg-[var(--color-muted-foreground-10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/50">
                 <RotateCw className="h-3.5 w-3.5" aria-hidden />Reload rankings
               </button>}
           </div>
@@ -474,9 +474,9 @@ export default function RankingsPage({ selectedPeriod, dateOffset }: RankingsPag
                   )}
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-lg bg-[var(--color-muted-foreground)]/10 px-2 py-1 text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">Rank #1</span>
-                    <span className="rounded-lg bg-[var(--color-muted-foreground)]/10 px-2 py-1 text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">{apex.days}d span</span>
-                    <span className="rounded-lg bg-[var(--color-muted-foreground)]/10 px-2 py-1 text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">{fmtH(apex.totalSec)} tracked</span>
+                    <span className="rounded-lg bg-[var(--color-muted-foreground-10)] px-2 py-1 text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">Rank #1</span>
+                    <span className="rounded-lg bg-[var(--color-muted-foreground-10)] px-2 py-1 text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">{apex.days}d span</span>
+                    <span className="rounded-lg bg-[var(--color-muted-foreground-10)] px-2 py-1 text-[10px] uppercase tracking-wider text-[var(--color-muted-foreground)]">{fmtH(apex.totalSec)} tracked</span>
                   </div>
                 </div>
 

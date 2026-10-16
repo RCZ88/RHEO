@@ -52,9 +52,18 @@ export interface HaloSize {
    * a rect the user cannot see.
    */
   compactWidth: number;
-  padding: number;
-  /** the content row inside the expanded panel. A page may never exceed it. */
-  rowHeight: number;
+padding: number;
+     /** the content row inside the expanded panel. A page may never exceed it. */
+     rowHeight: number;
+     /**
+      * Body font-size for this preset — HALO_STATES.html `--f-body`: 11 (S) / 12 (M) / 14 (L).
+      *
+      * It was missing entirely, which is why the compact pill had no way to size itself and
+      * defaulted to a hardcoded 13px in the settings preview — a value that exists in no design.
+      * The pill's DIVIDER is sized from this too (`.pill .vd { height: var(--f-body) }`), because
+      * the expanded `--halo-vd` divider is 36-52px and would be taller than the entire pill.
+      */
+     fBody: number;
   /** multiplier for every type + rhythm token, floored at 11px in CSS. */
   typeScale: number;
   /** Small hides tab labels; Medium and Large show icon + label. */
@@ -88,7 +97,9 @@ export const HALO_SIZE_PRESETS: Record<HaloSizePreset, HaloSize> = {
     compactHeight: 28,
     padding: 8,
     rowHeight: 48,
-    typeScale: 0.85,
+
+     fBody: 11,
+     typeScale: 0.85,
     iconOnlyTabs: true,
     label: 'Small',
   },
@@ -101,7 +112,9 @@ export const HALO_SIZE_PRESETS: Record<HaloSizePreset, HaloSize> = {
     compactHeight: 32,
     padding: 12,
     rowHeight: 56,
-    typeScale: 1,
+
+     fBody: 12,
+     typeScale: 1,
     iconOnlyTabs: false,
     label: 'Medium',
   },
@@ -113,7 +126,9 @@ export const HALO_SIZE_PRESETS: Record<HaloSizePreset, HaloSize> = {
     compactHeight: 40,
     padding: 16,
     rowHeight: 64,
-    typeScale: 1.2,
+
+     fBody: 14,
+     typeScale: 1.2,
     iconOnlyTabs: false,
     label: 'Large',
   },

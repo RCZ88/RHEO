@@ -73,6 +73,14 @@ html.light :where([class*="bg-black/90"]) {
    Do not remove: the error names no file, and it looks like a CSS bug. */
 @source not "../agent";
 @source not "../*.md";
+/* Backup snapshots live INSIDE src/ (`*.bak-*`, `*.backup`) and Tailwind's
+   auto-scan reads them as source. They are stale, so any utility in them is
+   generated for an element that does not exist — and the ones they contain
+   (bg-[var(--error)]/10 and friends) emit the broken `bg-[var(…)]/N` shape
+   that Lightning CSS refuses to parse, killing the whole renderer build with
+   an error that names no file. Excluded for the same reason agent/ is. */
+@source not "../src/**/*.bak-*";
+@source not "../src/**/*.backup";
 @import "./styles/finance-glass.css";
 /* /finance design contract: 5-step type scale, one signal hue, token-only colour. */
 @import "./styles/finance-ledger.css";
@@ -96,6 +104,28 @@ html.light :where([class*="bg-black/90"]) {
 	   Paired with raised on purpose: a hover fill must be one step off its own
 	   background in BOTH themes or the tab rail reads as broken on one of them. */
 	--ws-surface-hover: #27272a;
+	/* Recessed card fill — one step BELOW the page, the inverse of `raised`.
+	   Deliberately NOT `--ws-surface-sunken`: that token is declared only under
+	   `html.light`, so a theme-agnostic `linear-gradient(…, var(--ws-surface-sunken))`
+	   had NO valid second stop in dark mode. A custom property that is missing
+	   and has no fallback makes the whole declaration invalid-at-computed-value
+	   time, so the property fell back to `unset` — the card painted nothing at
+	   all in dark and silently showed whatever sat behind it. This pair is
+	   declared in BOTH scopes so a recess is a recess in either theme. */
+	--ws-surface-recess: #070708;
+	--ws-surface-recess-deep: #030304;
+
+	/* ── App-background decor stack (src/components/AppBackground.tsx) ──────
+	   These flip by THEME rather than by `light:opacity-0`. Switching the three
+	   layers off on paper was the wrong mechanism: a vignette, a luminance wash
+	   and grain are the SHEET's own depth, not dark-field artefacts, so on paper
+	   the same three layers re-resolve to warm values instead of disappearing.
+	   Dark values are byte-identical to what the component used to hardcode, so
+	   dark mode is unchanged. */
+	--ws-bg-wash: radial-gradient(ellipse at 35% 20%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 65%);
+	--ws-bg-vignette: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.35) 100%);
+	--ws-bg-grain-opacity: 0.02;
+
 	--ws-border: rgb(39 39 42 / 0.6);
 	--ws-border-strong: rgb(63 63 70 / 0.6);
 	--ws-accent: #06b6d4;
@@ -116,8 +146,32 @@ html.light :where([class*="bg-black/90"]) {
 	--color-clay-600: #c2553a;
 	--color-sage-400: #6fb38f;
 	--color-amber-400: #fbbf24;
+	--color-amber-300: #fcd34d;
 	--color-sky-400: #5ab0c9;
 	--color-glow: #f7f3ee;
+
+	/* ── HUE INK STEPS (dark scope) ──────────────────────────────────────
+	 * A `-400` step is a FILL hue: it is chosen to glow on a dark field. The
+	 * same value is unreadable as a MARK on paper — measured 1.49:1 (amber),
+	 * 1.62:1 (cyan), 1.72:1 (emerald), 2.51:1 (orange), 3.79:1 (violet).
+	 *
+	 * `--color-*-ink` is that same hue's ink step: identical to the `-400`
+	 * here in dark mode, and re-chroma'd darker in `html.light` below. So one
+	 * token serves BOTH themes and a component never needs a `light:` branch
+	 * for its icon colour. This is the accent-ink split that `--btn-on-accent`
+	 * already uses; these are the per-hue equivalents.
+	 *
+	 * Dark-mode values are the raw `-400` steps, so nothing changes in dark. */
+	--color-cyan-ink: #22d3ee;
+	--color-emerald-ink: #34d399;
+	--color-violet-ink: #8b5cf6;
+	--color-orange-ink: #f97316;
+	--color-rose-ink: #fb7185;
+	--color-sky-ink: #7dd3fc;
+	--color-red-ink: #f87171;
+	--color-teal-ink: #2dd4bf;
+	--color-blue-ink: #60a5fa;
+	--color-indigo-ink: #818cf8;
 
 	--font-serif: "Source Serif 4", Georgia, serif;
 	--font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -195,6 +249,26 @@ html.light {
 	--ws-surface-hover: #efeadd;
 	--ws-surface-overlay: #ffffff;
 	--ws-surface-sunken: #edeae2;
+	/* Recessed card fill — see the dark scope for why this is not `sunken`.
+	   Top stop sits 1.076:1 below the page: exactly the separation `raised`
+	   already uses above it, mirrored, so a recess is as quiet as an elevation.
+	   Bottom stop is 1.274:1 below. Measured on the dark bottom stop:
+	   --text-primary 12.29:1, --text-secondary 7.22:1, --text-muted 5.36:1.
+	   (--text-faint falls to 3.95:1 there, so faint text must not be placed on
+	   the deep end of a recess.) */
+	--ws-surface-recess: #edeae2;
+	--ws-surface-recess-deep: #dcd8ce;
+
+	/* Warm-Paper decor stack, the light half of the pair in the dark scope.
+	   On paper light ADDS: a white sheen reads as light falling on the sheet and
+	   a 5.5%-ink vignette reads as the sheet curving away. Both are far below the
+	   alpha that would turn the field to "snow"; grain goes UP (0.02 -> 0.05)
+	   because overlay-blended noise on a bright field needs more of it to register
+	   at all. */
+	--ws-bg-wash: radial-gradient(ellipse at 35% 20%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 65%);
+	--ws-bg-vignette: radial-gradient(ellipse at center, rgba(28,25,23,0) 45%, rgba(28,25,23,0.055) 100%);
+	--ws-bg-grain-opacity: 0.05;
+
 	--ws-veil: rgb(28 25 23 / 0.04);
 	--ws-scrim: rgb(28 25 23 / 0.32);
 
@@ -361,7 +435,138 @@ a dark hairline disappears into a bright field where a light one does
 	--color-clay-600: #93331d;
 	--color-sage-400: #3f7d5f;
 	--color-amber-400: #b45309;
+	--color-amber-300: #92400e;   /* was 1.29:1 on paper — unreadable */
 	--color-sky-400: #2b7d99;
+
+	/* Ink steps for the hues above. Measured on #f5f2ec / #fcfbf8:
+	 *   cyan    #0e7490 → 5.18:1 / 4.80:1
+	 *   emerald #047857 → 5.30:1 / 4.91:1
+	 *   violet  #6d28d9 → 6.87:1 / 6.36:1
+	 *   orange  #c2410c → 5.00:1 / 4.63:1
+	 * All clear 4.5:1 on both the page and the raised tile surface. */
+	--color-cyan-ink: #0e7490;
+	--color-emerald-ink: #047857;
+	--color-violet-ink: #6d28d9;
+	--color-orange-ink: #c2410c;
+	--color-rose-ink: #be123c;
+	--color-sky-ink: #1f5d73;
+	--color-red-ink: #b91c1c;
+	--color-teal-ink: #0f766e;
+	--color-blue-ink: #1d4ed8;
+	--color-indigo-ink: #4338ca;
+
+/* ── `.hue-*` : one hue, two themes, set per element ────────────────────────
+   Some surfaces derive their colours in JS rather than from a class — the
+   Activity page builds ~24 of them from `CATEGORY_COLORS` and
+   `profile.color_tag`, all at the 500 step. A 500 step is a FILL hue: it is
+   picked to glow on zinc-900 and it measures 1.92:1 on Warm Paper, so every
+   category badge, domain dot and profile letter washes out in light.
+
+   An inline `style={{color: '#f59e0b'}}` cannot carry a `light:` variant, so
+   the element hands CSS its raw hue as `--hue` and the theme decides the step:
+
+     <span className="hue-mark" style={{'--hue': c}} />   text in hue  c
+     <span className="hue-dot"  style={{'--hue': c}} />   swatch of    c
+     <span className="hue-tile" style={{'--hue': c}} />   tinted tile  c
+     <span className="hue-chip" style={{'--hue': c}} />   tinted pill  c
+     <span className="hue-bar"  style={{'--hue': c}} />   bar fill+cap c
+
+   Light mode mixes the hue toward ink. Measured across all 12 profile hues
+   and all 13 category hues on #f5f2ec / #fcfbf8:
+     ink  hue 46% + ink 54%  -> worst 5.54:1  (was 1.92:1)
+     dot  hue 62% + ink 38%  -> worst 4.03:1  (was 1.92:1)
+   Both clear their WCAG target for their size (4.5:1 text, 3:1 non-text).
+   Dark mode is untouched: the classes resolve to the raw hue. */
+.hue-mark { color: var(--hue); }
+.hue-dot { background-color: var(--hue); }
+.hue-tile {
+	background-color: color-mix(in srgb, var(--hue) 16%, transparent);
+	color: var(--hue);
+}
+.hue-chip {
+	background-color: color-mix(in srgb, var(--hue) 14%, transparent);
+	color: var(--hue);
+	border-color: color-mix(in srgb, var(--hue) 30%, transparent);
+}
+html.light .hue-mark { color: color-mix(in srgb, var(--hue) 46%, var(--text-primary)); }
+html.light .hue-dot { background-color: color-mix(in srgb, var(--hue) 62%, var(--text-primary)); }
+html.light .hue-tile {
+	background-color: color-mix(in srgb, var(--hue) 16%, var(--ws-surface-raised));
+	color: color-mix(in srgb, var(--hue) 46%, var(--text-primary));
+}
+html.light .hue-chip {
+	background-color: color-mix(in srgb, var(--hue) 14%, var(--ws-surface-raised));
+	color: color-mix(in srgb, var(--hue) 46%, var(--text-primary));
+	border-color: color-mix(in srgb, var(--hue) 32%, var(--ws-border-strong));
+}
+
+/* `.hue-bar` publishes the two resolved colours of a striped bar instead of
+   painting one, because the bar's body and its 2px top cap are drawn by an
+   inline `repeating-linear-gradient` and `border-top`. Hand it `--hue` (the
+   raw hue) and `--hue-glow` (that hue at low alpha — the dark-mode bloom),
+   then paint with `var(--hue-fill)`, `var(--hue-cap)`, `var(--hue-flare)`
+   and `var(--hue-hover)`.
+
+   Dark is the status quo: a 25%-alpha hue stripe under a solid hue cap, with
+   the bloom kept.
+   Light cannot reuse the 25%-alpha stripe. A translucent hue over Warm Paper
+   measures 1.12-1.52:1, i.e. invisible, and no alpha fixes it: the surface
+   underneath is itself near-paper. So the stripe becomes OPAQUE, the hue mixed
+   into ink, and the cap takes more ink than the fill so the edge still reads.
+   Measured over all 8 tool hues, fill against the groove #edeae2 and cap
+   against the card #fcfbf8:
+     fill  hue 46% + ink 54%   4.03:1 min on the groove  (was 1.12:1)
+     cap   hue 22% + ink 78%   9.67:1 min on the card, 1.46:1 against the fill
+   Bloom and hover sheen are dark-field devices. Light drops the bloom and
+   swaps the sheen for an ink shade, so hover still has feedback. */
+.hue-bar {
+	--hue-fill: color-mix(in srgb, var(--hue) 25%, transparent);
+	--hue-cap: var(--hue);
+	--hue-flare: var(--hue-glow);
+	--hue-hover: var(--hue-glow);
+}
+html.light .hue-bar {
+	--hue-fill: color-mix(in srgb, var(--hue) 46%, var(--text-primary));
+	--hue-cap: color-mix(in srgb, var(--hue) 22%, var(--text-primary));
+	--hue-flare: transparent;
+	--hue-hover: color-mix(in srgb, var(--text-primary) 12%, transparent);
+}
+
+/* ── `hover:text-*` had NO light handling at all ────────────────────────────
+   The grey ladder above nets bare `.text-zinc-300` etc., but `.hover\:text-zinc-300`
+   is a DIFFERENT class token, so the net never matched it — there were zero
+   `hover:text` rules in this file. On Warm Paper those hovers resolved to the
+   ramp's own light-grey meaning: `hover:text-zinc-300` = #d4d4d8 (1.38:1) and
+   `hover:text-white` = #ffffff (1.06:1), i.e. the label DISAPPEARS exactly when
+   the user points at it. On paper the hover affordance is to darken toward ink,
+   which is the inverse of the dark-field direction, so the two are pinned
+   separately rather than by remapping the ramp (see the note below). */
+html.light :where(.hover\:text-white, .hover\:text-zinc-50, .hover\:text-zinc-100,
+	.hover\:text-zinc-200, .hover\:text-gray-100, .hover\:text-neutral-100):hover {
+	color: var(--text-primary);
+}
+html.light :where(.hover\:text-zinc-300, .hover\:text-zinc-400, .hover\:text-gray-300,
+	.hover\:text-white\/90, .hover\:text-white\/80):hover {
+	color: var(--text-secondary);
+}
+html.light :where(.hover\:text-zinc-500, .hover\:text-zinc-600):hover {
+	color: var(--text-muted);
+}
+/* Coloured text hovers had the identical problem: `hover:text-emerald-300` is
+   #6ee7b9 (1.53:1 on paper) and `hover:text-red-400` is #f87171 (2.48:1). The
+   `-300`/`-400` steps are fills, so light hovers route to that hue's ink step —
+   the same value the element already uses at rest, which keeps the hover from
+   going invisible instead of merely going quiet. */
+html.light :where(.hover\:text-emerald-300, .hover\:text-emerald-400):hover { color: var(--color-emerald-ink); }
+html.light :where(.hover\:text-cyan-300, .hover\:text-cyan-400):hover { color: var(--color-cyan-ink); }
+html.light :where(.hover\:text-sky-300, .hover\:text-sky-400):hover { color: var(--color-sky-ink); }
+html.light :where(.hover\:text-blue-300, .hover\:text-blue-400):hover { color: var(--color-blue-ink); }
+html.light :where(.hover\:text-violet-300, .hover\:text-violet-400):hover { color: var(--color-violet-ink); }
+html.light :where(.hover\:text-orange-300, .hover\:text-orange-400):hover { color: var(--color-orange-ink); }
+html.light :where(.hover\:text-rose-300, .hover\:text-rose-400):hover { color: var(--color-rose-ink); }
+html.light :where(.hover\:text-red-300, .hover\:text-red-400):hover { color: var(--color-red-ink); }
+html.light :where(.hover\:text-teal-300, .hover\:text-teal-400):hover { color: var(--color-teal-ink); }
+html.light :where(.hover\:text-amber-300, .hover\:text-amber-400):hover { color: var(--color-amber-400); }
 
 /* ── Tailwind zinc ramp: INTENTIONALLY NOT remapped. Read this before
 	   "fixing" light mode by inverting it. ─────────────────────────────────
@@ -1305,6 +1510,30 @@ html.light :where(.text-zinc-800, .text-zinc-900, .text-zinc-950) {
 	color: var(--text-primary);
 }
 
+/* ── THE MISSING RUNG: zinc-100/200, the LIGHTEST greys ────────────────────
+ * The net ladder above starts at zinc-300. zinc-100 (#f4f4f5) and zinc-200
+ * (#e4e4e7) had no rung, and they are the WORST possible pair for light mode:
+ * near-white text on near-white paper.
+ *
+ *   text-zinc-100 on --ws-surface      1.02:1
+ *   text-zinc-200 on --ws-surface      1.14:1
+ *
+ * That is invisible, not "low contrast" — and it is exactly the reported
+ * symptom ("the text is the same colour as the background"). Measured on the
+ * reported surfaces: 6 sites in LifePage (empty-state copy and a modal heading
+ * at 857/881/905/924/949/1075), 1 in FocusTimer (144, "Session control"),
+ * 1 on Dashboard (2723, "Widget Library"). 602 + 1092 = 1694 sites app-wide.
+ *
+ * Zinc greys are SAFE to net this way, unlike `text-white`: a grey is never an
+ * on-accent label, whereas 143 bare `text-white` sites sit on saturated fills
+ * and would be destroyed by the same blanket rule. So this is a rung, not a
+ * sledgehammer — and bare `text-white` is fixed at the call site instead.
+ *
+ * --text-primary (#1c1917) on paper is 16.1:1. */
+html.light :where(.text-zinc-100, .text-zinc-200) {
+	color: var(--text-primary);
+}
+
 /* ── Background: safety net BELOW the codemod's explicit light: variants ────
    Most surfaces already carry an explicit `light:bg-[var(--ws-surface-*)]`
    (0,2,0) from the sweep, which wins over these. These catch whatever was
@@ -1314,6 +1543,74 @@ html.light :where(.bg-white) { background-color: var(--ws-surface-overlay); }
 html.light :where(.bg-black) { background-color: var(--ws-surface); }
 html.light :where(.bg-zinc-950) { background-color: var(--ws-surface); }
 html.light :where(.bg-zinc-900) { background-color: var(--ws-surface-raised); }
+
+/* ── ALPHA VARIANTS — the gap that left dark shapes on warm paper ─────────
+ * The rules above are EXACT-CLASS selectors. `bg-zinc-900` matches the class
+ * token "bg-zinc-900" and nothing else. `bg-zinc-900/60` is a DIFFERENT class
+ * token ("bg-zinc-900/60"), so it escaped every one of those nets and kept its
+ * near-black fill in light mode. That is the "weird dark shape sitting on the
+ * paper" report — and it is not a handful of sites:
+ *
+ *     bg-zinc-800/60  479      bg-zinc-900/60  201      bg-zinc-700/50  148
+ *     bg-zinc-800/50  363      bg-zinc-900/40  163      bg-zinc-900/50  133
+ *     bg-zinc-800/40  271      bg-zinc-900/80  123      bg-zinc-900/30   88
+ *     bg-zinc-800/30  172      bg-zinc-900/95   86      bg-zinc-800/20   49
+ *
+ * `[class*="…"]` is a SUBSTRING match, so one rule per step catches every alpha
+ * at once and also catches slugs like `hover:bg-zinc-900/60` and
+ * `group-hover:bg-zinc-800/40` that the exact selector can never reach.
+ *
+ * Specificity is unchanged at (0,1,1) — `:where()` still contributes zero —
+ * so explicit `light:` variants (0,2,0) still win over these, exactly as the
+ * cascade comment above requires.
+ *
+ * Values are the same ladder the solid rules use: 700→sunken, 800→sunken,
+ * 900→raised, 950→surface. Translucent dark on paper reads as mud
+ * (design.md §11), so these flatten to the opaque warm surface rather than
+ * keeping their alpha. */
+html.light :where([class*="bg-zinc-950/"]) { background-color: var(--ws-surface); }
+html.light :where([class*="bg-zinc-900/"]) { background-color: var(--ws-surface-raised); }
+
+/* ── STATE-PREFIXED DARK BACKGROUNDS (hover/focus/active/group-hover) ────────
+ * The nets above match a class TOKEN. `hover:bg-zinc-800` is a DIFFERENT token
+ * from `bg-zinc-800`, so none of them reached it — and `[class*="bg-zinc-800/"]`
+ * only catches the alpha form. The result: hovering a control in light mode
+ * painted it near-black, which is the "hover gives a dark shade" report.
+ *
+ * Measured: 499 state-prefixed dark backgrounds with no light variant —
+ *   hover:bg-zinc-800 231 · hover:bg-zinc-700 162 · hover:bg-zinc-600 28
+ *   hover:bg-gray-600 12 · disabled:bg-zinc-700 6 · hover:bg-zinc-500 5 …
+ *
+ * `[class*="hover:bg-zinc-800"]` is a SUBSTRING match on the class attribute,
+ * so it covers the bare token and the alpha token and every state prefix in one
+ * rule. Specificity is unchanged at (0,1,1) — `:where()` still contributes
+ * zero — so an explicit `light:hover:` variant (0,2,0) still wins.
+ *
+ * Only the DARK rungs are listed. 500/600/700/800/900 are dark in both themes;
+ * the alpha variants of the same steps are covered by the rules above. */
+html.light :where([class*="hover:bg-zinc-900"], [class*="focus:bg-zinc-900"], [class*="active:bg-zinc-900"], [class*="group-hover:bg-zinc-900"]) { background-color: var(--ws-surface-raised); }
+html.light :where([class*="hover:bg-zinc-800"], [class*="focus:bg-zinc-800"], [class*="focus-visible:bg-zinc-800"], [class*="active:bg-zinc-800"], [class*="group-hover:bg-zinc-800"], [class*="disabled:bg-zinc-800"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="hover:bg-zinc-700"], [class*="focus:bg-zinc-700"], [class*="focus-visible:bg-zinc-700"], [class*="active:bg-zinc-700"], [class*="group-hover:bg-zinc-700"], [class*="disabled:bg-zinc-700"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="hover:bg-zinc-600"], [class*="focus:bg-zinc-600"], [class*="active:bg-zinc-600"], [class*="group-hover:bg-zinc-600"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="hover:bg-zinc-500"], [class*="focus:bg-zinc-500"], [class*="group-hover:bg-zinc-500"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="hover:bg-neutral-900"], [class*="hover:bg-neutral-800"], [class*="hover:bg-neutral-700"], [class*="hover:bg-neutral-600"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="hover:bg-stone-900"], [class*="hover:bg-stone-800"], [class*="hover:bg-stone-700"], [class*="hover:bg-stone-600"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="hover:bg-gray-900"], [class*="hover:bg-gray-800"], [class*="hover:bg-gray-700"], [class*="hover:bg-gray-600"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="hover:bg-slate-900"], [class*="hover:bg-slate-800"], [class*="hover:bg-slate-700"], [class*="hover:bg-slate-600"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-zinc-800/"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-zinc-700/"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-neutral-9"]) { background-color: var(--ws-surface-raised); }
+html.light :where([class*="bg-neutral-8"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-neutral-7"]) { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-stone-9"])  { background-color: var(--ws-surface-raised); }
+html.light :where([class*="bg-stone-8"])  { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-stone-7"])  { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-gray-9"])   { background-color: var(--ws-surface-raised); }
+html.light :where([class*="bg-gray-8"])   { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-gray-7"])   { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-slate-9"])  { background-color: var(--ws-surface-raised); }
+html.light :where([class*="bg-slate-8"])  { background-color: var(--ws-surface-sunken); }
+html.light :where([class*="bg-slate-7"])  { background-color: var(--ws-surface-sunken); }
 
 /* ── The deepest rung: bg-zinc-950 ───────────────────────────────────────
  * The bare-surface net above stops at `bg-zinc-900`, but `bg-zinc-950` is what
@@ -1340,6 +1637,8 @@ html.light :where(.bg-zinc-950) { background-color: var(--ws-surface); }
  * still below any explicit `light:` variant (0,2,0)+, which continues to win. */
 html.light [class*="border-white/["] { border-color: var(--ws-border); }
 html.light :where(.bg-zinc-800) { background-color: var(--ws-surface-sunken); }
+html.light :where(.bg-zinc-700) { background-color: var(--ws-surface-sunken); }
+html.light :where(.bg-zinc-600) { background-color: var(--ws-surface-sunken); }
 
 /* ── ALPHA VARIANTS — the reason light mode looked broken everywhere ────────────
  *
@@ -2328,6 +2627,193 @@ html:not(.light)[data-page="penguin-console"] {
 		opacity: 1;
 		transform: translateY(0) scale(1);
 	}
+}
+
+/* ============================================================================
+   BUTTON / INTERACTIVE SURFACE SYSTEM  (--btn-*)
+   ----------------------------------------------------------------------------
+   WHY THIS EXISTS — one hue was doing three jobs.
+
+   `--page-accent` is PAGE IDENTITY. It paints the ambient wash behind the page
+   and marks which page you are on. It was ALSO filling buttons, tinting button
+   labels and drawing button focus rings — 118 `bg-[var(--page-accent)]` call
+   sites did exactly that. Because Dashboard/Activity/Insights/Rankings all take
+   `#ec4899` pink, every button on those pages rendered pink or red, and the
+   *same* control changed colour depending on the route. That is two different
+   answers being given by one knob.
+
+   THE SPLIT:
+
+     --page-accent   "where am I"    ambient wash, page identity marks, active nav
+     --btn-*         "what can I do" every interactive surface, on every page
+
+   Buttons read `--btn-*` and never `--page-accent`, so a control looks like the
+   same instrument everywhere. The accent is free to be as saturated as the page
+   needs without dragging the UI's controls along with it.
+
+   These are built from the EXISTING neutral `--ws-surface-*` / `--text-*` scale
+   rather than new hexes, so they stay in step with the rest of the theme. Per
+   theme, because a control has to sit ABOVE its page in both:
+
+     dark  → raised neutral (#18181b / #27272a) + light ink  — LIGHTER than the
+             near-black page, reads as a physical control sitting on top.
+     light → near-white raised (#fcfbf8 / #ffffff) + dark ink — LIGHTER than the
+             warm paper page (#f5f2ec), so it lifts instead of sinking.
+
+   MEASURED contrast of the default pair (worst case, both themes):
+
+     light  #1c1917 on #fcfbf8  →  16.9:1   (AAA needs 7:1)
+     dark   #fafafa on #18181b  →  15.1:1
+
+   --btn-on-accent is the only button colour that is ever allowed to be a hue,
+   and it is used exclusively when a button sits ON a saturated accent fill
+   (a primary CTA drawn in the page accent). It is NOT white in both themes —
+   that was asserted here once and measured to be wrong. Against the real dark
+   accents: pink #ec4899 on white is 3.5:1, cyan #22d3ee is 1.8:1, emerald
+   #10b981 is 2.5:1, amber #fbbf24 is 1.7:1. All fail. The dark accents are
+   BRIGHT, so dark ink is the correct label colour there, and the measured
+   result is 5.0-10.5:1. In light mode the remapped accents are DARK, so white
+   is correct and measures 5.4-7.9:1.
+
+   THREE ACCENTS CLEAR NEITHER INK at 4.5:1 — violet #8b5cf6 (4.2 white /
+   4.1 dark) and indigo #6366f1 (4.5 / 3.9). A CTA drawn in those must use a
+   darkened step of the hue, or a neutral --btn-fill. This is a real
+   constraint, not a rounding error, and it is the second reason buttons should
+   stop following the accent at all.
+   ========================================================================== */
+:root {
+	/* Default = dark, matching the base `:root` block above. */
+	--btn-fill: #18181b;            /* neutral raised control            */
+	--btn-fill-hover: #27272a;      /* lift on hover                     */
+	--btn-fill-active: #303036;    /* pressed                           */
+	--btn-on-fill: #fafafa;         /* label on that fill — 15.1:1       */
+	--btn-border: rgb(250 250 250 / 0.14);
+	--btn-border-hover: rgb(250 250 250 / 0.24);
+	--btn-ring: rgb(250 250 250 / 0.40);
+
+	/* Ghost / outline: no fill until interaction. */
+	--btn-ghost-on: #d4d4d8;
+	--btn-ghost-on-hover: #fafafa;
+	--btn-ghost-hover: rgb(250 250 250 / 0.08);
+
+	/* Selected/pressed segmented control — still neutral, but unmistakably on. */
+	--btn-selected-fill: #27272a;
+	--btn-selected-on: #ffffff;
+	--btn-selected-border: rgb(250 250 250 / 0.22);
+
+	/* The one permitted hue, for a CTA drawn on an accent fill.
+	   Dark accents are BRIGHT here, so the label is DARK ink — white on the
+	   pink/cyan/emerald/amber accents measures 1.7-3.5:1 and fails. */
+	--btn-on-accent: #1c1917;
+}
+html.light {
+	/* LIGHTER than warm paper (#f5f2ec) on purpose — the user asked for
+	   buttons to read as raised, not sunken. #1c1917 ink on #fcfbf8 is 16.9:1. */
+	--btn-fill: #fcfbf8;
+	--btn-fill-hover: #ffffff;
+	--btn-fill-active: #f4f1ea;
+	--btn-on-fill: #1c1917;         /* label on that fill — 16.9:1       */
+	--btn-border: rgb(28 25 23 / 0.14);
+	--btn-border-hover: rgb(28 25 23 / 0.26);
+	--btn-ring: rgb(28 25 23 / 0.34);
+
+	--btn-ghost-on: #57534e;
+	--btn-ghost-on-hover: #1c1917;
+	--btn-ghost-hover: rgb(28 25 23 / 0.06);
+
+	--btn-selected-fill: #ffffff;
+	--btn-selected-on: #1c1917;
+	--btn-selected-border: rgb(28 25 23 / 0.20);
+
+	--btn-on-accent: #ffffff;
+}
+
+
+
+/* ── BAKED ALPHA TOKENS ────────────────────────────────────────────────
+ * Each `--tok-N` = color-mix(var(--tok) N%, transparent). Use
+ * bg-[var(--tok-N)] instead of bg-[var(--tok)]/N.
+ *
+ * WHY: Tailwind v4 emits the /N modifier as a SOLID fallback plus a
+ * @supports(color-mix(in lab,…)) guard. `lab` is not a valid colour space,
+ * and the unlayered solid beats the layered guard regardless of source order,
+ * so every bg-[var(…)]/N surface painted SOLID (measured:
+ * .bg-[var(--page-accent)]/10 computed to rgb(190,24,93), a 10% tint expected),
+ * and the escaped selector is a Lightning CSS parse error that kills the whole
+ * renderer build. These are plain custom properties: no utility generation,
+ * no fallback, no probe. */
+@layer base {
+:root {
+  --accent-10: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-primary-30: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  --amber-400-30: color-mix(in srgb, var(--amber-400) 30%, transparent);
+  --bg-0-95: color-mix(in srgb, var(--bg-0) 95%, transparent);
+  --bg-secondary-90: color-mix(in srgb, var(--bg-secondary) 90%, transparent);
+  --border-subtle-10: color-mix(in srgb, var(--border-subtle) 10%, transparent);
+  --border-subtle-20: color-mix(in srgb, var(--border-subtle) 20%, transparent);
+  --color-accent-5: color-mix(in srgb, var(--color-accent) 5%, transparent);
+  --color-amber-400-10: color-mix(in srgb, var(--color-amber-400) 10%, transparent);
+  --color-card-50: color-mix(in srgb, var(--color-card) 50%, transparent);
+  --color-card-85: color-mix(in srgb, var(--color-card) 85%, transparent);
+  --color-card-90: color-mix(in srgb, var(--color-card) 90%, transparent);
+  --color-clay-500-15: color-mix(in srgb, var(--color-clay-500) 15%, transparent);
+  --color-clay-500-20: color-mix(in srgb, var(--color-clay-500) 20%, transparent);
+  --color-clay-500-60: color-mix(in srgb, var(--color-clay-500) 60%, transparent);
+  --color-clay-500-70: color-mix(in srgb, var(--color-clay-500) 70%, transparent);
+  --color-destructive-10: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+  --color-emerald-400-10: color-mix(in srgb, var(--color-emerald-400) 10%, transparent);
+  --color-foreground-10: color-mix(in srgb, var(--color-foreground) 10%, transparent);
+  --color-mem-400-15: color-mix(in srgb, var(--color-mem-400) 15%, transparent);
+  --color-mem-400-25: color-mix(in srgb, var(--color-mem-400) 25%, transparent);
+  --color-muted-30: color-mix(in srgb, var(--color-muted) 30%, transparent);
+  --color-muted-35: color-mix(in srgb, var(--color-muted) 35%, transparent);
+  --color-muted-40: color-mix(in srgb, var(--color-muted) 40%, transparent);
+  --color-muted-50: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  --color-muted-60: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  --color-muted-foreground-10: color-mix(in srgb, var(--color-muted-foreground) 10%, transparent);
+  --color-muted-foreground-25: color-mix(in srgb, var(--color-muted-foreground) 25%, transparent);
+  --color-red-500-10: color-mix(in srgb, var(--color-red-500) 10%, transparent);
+  --error-10: color-mix(in srgb, var(--error) 10%, transparent);
+  --error-15: color-mix(in srgb, var(--error) 15%, transparent);
+  --error-25: color-mix(in srgb, var(--error) 25%, transparent);
+  --info-60: color-mix(in srgb, var(--info) 60%, transparent);
+  --page-accent-10: color-mix(in srgb, var(--page-accent) 10%, transparent);
+  --page-accent-12: color-mix(in srgb, var(--page-accent) 12%, transparent);
+  --page-accent-14: color-mix(in srgb, var(--page-accent) 14%, transparent);
+  --page-accent-15: color-mix(in srgb, var(--page-accent) 15%, transparent);
+  --page-accent-20: color-mix(in srgb, var(--page-accent) 20%, transparent);
+  --page-accent-25: color-mix(in srgb, var(--page-accent) 25%, transparent);
+  --page-accent-30: color-mix(in srgb, var(--page-accent) 30%, transparent);
+  --page-accent-40: color-mix(in srgb, var(--page-accent) 40%, transparent);
+  --page-accent-5: color-mix(in srgb, var(--page-accent) 5%, transparent);
+  --page-accent-60: color-mix(in srgb, var(--page-accent) 60%, transparent);
+  --page-accent-90: color-mix(in srgb, var(--page-accent) 90%, transparent);
+  --pc-danger-15: color-mix(in srgb, var(--pc-danger) 15%, transparent);
+  --text-muted-30: color-mix(in srgb, var(--text-muted) 30%, transparent);
+  --tier-distracting-10: color-mix(in srgb, var(--tier-distracting) 10%, transparent);
+  --tier-distracting-12: color-mix(in srgb, var(--tier-distracting) 12%, transparent);
+  --tier-distracting-15: color-mix(in srgb, var(--tier-distracting) 15%, transparent);
+  --tier-distracting-70: color-mix(in srgb, var(--tier-distracting) 70%, transparent);
+  --tier-neutral-15: color-mix(in srgb, var(--tier-neutral) 15%, transparent);
+  --tier-neutral-70: color-mix(in srgb, var(--tier-neutral) 70%, transparent);
+  --tier-productive-10: color-mix(in srgb, var(--tier-productive) 10%, transparent);
+  --tier-productive-15: color-mix(in srgb, var(--tier-productive) 15%, transparent);
+  --tier-productive-70: color-mix(in srgb, var(--tier-productive) 70%, transparent);
+  --ws-accent-10: color-mix(in srgb, var(--ws-accent) 10%, transparent);
+  --ws-accent-15: color-mix(in srgb, var(--ws-accent) 15%, transparent);
+  --ws-surface-30: color-mix(in srgb, var(--ws-surface) 30%, transparent);
+  --ws-surface-40: color-mix(in srgb, var(--ws-surface) 40%, transparent);
+  --ws-surface-50: color-mix(in srgb, var(--ws-surface) 50%, transparent);
+  --ws-surface-60: color-mix(in srgb, var(--ws-surface) 60%, transparent);
+  --ws-surface-80: color-mix(in srgb, var(--ws-surface) 80%, transparent);
+  --ws-surface-90: color-mix(in srgb, var(--ws-surface) 90%, transparent);
+  --ws-surface-95: color-mix(in srgb, var(--ws-surface) 95%, transparent);
+  --ws-surface-raised-95: color-mix(in srgb, var(--ws-surface-raised) 95%, transparent);
+  --ws-surface-sunken-15: color-mix(in srgb, var(--ws-surface-sunken) 15%, transparent);
+  --ws-surface-sunken-20: color-mix(in srgb, var(--ws-surface-sunken) 20%, transparent);
+  --ws-surface-sunken-95: color-mix(in srgb, var(--ws-surface-sunken) 95%, transparent);
+
+}
 }
 
 /* ===== Page accent colors ===== */
@@ -4099,3 +4585,20 @@ html.light[data-page="agentic"] { --page-accent: #0e7490; --page-accent-fill: #0
 html.light[data-page="ide-help"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
 html.light[data-page="simple-terminal"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
 html.light[data-page="old-dashboard"] { --page-accent: #be185d; --page-accent-fill: #be185d; --page-accent-on-fill: #ffffff; }
+
+/* ── ALPHA bg-[var(..)]/N — MUST live INSIDE @layer utilities ────────────
+ * Measured in the running app, light mode, Settings:
+ *   CSS.supports("color","color-mix(in lab, red, red)")  -> TRUE  (probe is fine)
+ *   computed background-color of .bg-[var(--page-accent)]/10 -> rgb(190,24,93)
+ *   i.e. SOLID, not a 10%% tint. The SectionHeader chip painted solid ink and its
+ *   icon measured 1.00:1 (icon #1c1917 on #1c1917).
+ *
+ * WHY: Tailwind emits the solid fallback UNLAYERED and the color-mix inside
+ * @layer utilities + @supports. Unlayered declarations beat every layer
+ * REGARDLESS OF SOURCE ORDER, so the tint could never win. Authoring these
+ * unlayered does not help either — Tailwind strips any hand-written rule using
+ * a class name it owns (verified: 66 such rules were dropped from the bundle).
+ *
+ * Putting them back INSIDE @layer utilities puts them in the same layer as
+ * Tailwind's own utilities, where later source order finally decides.
+ */

@@ -33,7 +33,7 @@ export function Segmented<T extends string>({
 			role="tablist"
 			aria-label={rest["aria-label"]}
 			className={cn(
-				"inline-flex items-center gap-1 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-1 ring-1 ring-zinc-800/60",
+				"inline-flex items-center gap-1 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] p-1 ring-1 ring-zinc-800/60",
 				className,
 			)}
 		>

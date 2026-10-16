@@ -33,40 +33,43 @@ import {
 // down to roughly a third of its alpha, so it read as though the feature were
 // off. Page content sits above all of this, so legibility is unaffected.
 //
-// ── WHY THE OTHER THREE LAYERS STILL DISSOLVE ON LIGHT ───────────────────────
-// The wash, vignette and grain all carry `light:opacity-0`, and only the wash
-// lost it. The reason is not consistency — it is that they do opposite things.
-// The three that remain are DARK-FIELD artefacts: they *subtract* light (a
-// vignette is a shadow, grain is an overlay blend, the luminance wash is white
-// multiplied over a dark base). On a `#f5f2ec` paper field there is no ambient
-// occlusion to sell, so subtracting light only produces mud, and design.md §11
-// requires light mode to stay "warm paper, not snow". The ambient tint *adds*
-// colour, which is precisely what a warm paper field can carry — so it is the one
-// layer that should be allowed to paint in both themes, and it now does.
-
-const WASH_ALPHA = 0.04; // R-35 ceiling
-const VIGNETTE_ALPHA = 0.35; // R-35 ceiling
-const GRAIN_OPACITY = 0.02; // R-35 ceiling
+// ── WHY THE OTHER THREE LAYERS ARE THEME-RESOLVED, NOT DELETED ON LIGHT ─────
+// The wash, vignette and grain used to carry `light:opacity-0`, i.e. the decor
+// was switched OFF on paper. That was wrong, because the three layers do not
+// subtract light — they *build depth*, and paper has depth too. On a `#f5f2ec`
+// field the same three jobs re-resolve to warm values instead of vanishing:
+// a white sheen is light falling on the sheet, a low-ink vignette is the sheet
+// curving away, and the grain is the fibre of the paper. Deleting them left
+// light mode as a flat field with no surface at all — which is the bug, not the
+// design. They now read `--ws-bg-*`, declared per theme in index.css, so dark
+// mode is byte-identical to before and light mode keeps the decor intact while
+// still staying "warm paper, not snow" (design.md §11): the vignette peaks at
+// 5.5% ink, nowhere near a wash.
+//
+// The readability scrim below is the ONE layer that still carries
+// `light:opacity-0`, because it is not decor — it is a dark veil whose only job
+// is to push content away from the field behind it, and there is nothing to
+// push away from on paper.
 
 const washStyle: React.CSSProperties = {
   position: 'absolute',
   inset: 0,
   pointerEvents: 'none',
-  background: `radial-gradient(ellipse at 35% 20%, rgba(255,255,255,${WASH_ALPHA}) 0%, rgba(255,255,255,0) 65%)`,
+  background: 'var(--ws-bg-wash)',
 };
 
 const vignetteStyle: React.CSSProperties = {
   position: 'absolute',
   inset: 0,
   pointerEvents: 'none',
-  background: `radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,${VIGNETTE_ALPHA}) 100%)`,
+  background: 'var(--ws-bg-vignette)',
 };
 
 const grainStyle: React.CSSProperties = {
   position: 'absolute',
   inset: 0,
   pointerEvents: 'none',
-  opacity: GRAIN_OPACITY,
+  opacity: 'var(--ws-bg-grain-opacity)',
   backgroundImage:
     'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'><filter id=\'n\'><feTurbulence type=\'fractalNoise\' baseFrequency=\'0.85\' numOctaves=\'2\' stitchTiles=\'stitch\'/></filter><rect width=\'100%\' height=\'100%\' filter=\'url(%23n)\'/></svg>")',
   backgroundSize: '200px 200px',
@@ -134,14 +137,14 @@ export const AppBackground = memo(function AppBackground({
 
   return (
     <div className="fixed inset-0 z-[0] overflow-hidden pointer-events-none" aria-hidden="true">
-      {/* ── Layer 3: radial luminance wash (CSS only, zero cost) ──────────── */}
-      <div style={washStyle} aria-hidden="true" className="light:opacity-0"/>
+      {/* ── Layer 3: radial luminance wash — theme-resolved (see header) ──── */}
+      <div style={washStyle} aria-hidden="true"/>
 
-      {/* ── Layer 4: edge vignette (CSS only, luminance masking) ───────────── */}
-      <div style={vignetteStyle} aria-hidden="true" className="light:opacity-0"/>
+      {/* ── Layer 4: edge vignette, luminance masking ──────────────────────── */}
+      <div style={vignetteStyle} aria-hidden="true"/>
 
       {/* ── Layer 5: static grain (SVG data-URI, kills banding) ────────────── */}
-      <div style={grainStyle} aria-hidden="true" className="light:opacity-0"/>
+      <div style={grainStyle} aria-hidden="true"/>
 
       {/* ── Readability overlay — dark-mode only; dissolve on light ─────────
           `light:opacity-0`, NOT `light:bg-transparent`.

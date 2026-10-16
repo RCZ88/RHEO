@@ -246,7 +246,7 @@ export function PairPhoneModal({ terminalId, terminalLabel, onClose }: PairPhone
             </div>
 
             {/* Instructions */}
-            <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/50 rounded-lg p-3 mb-4 border border-zinc-800/30">
+            <div className="bg-zinc-950 light:bg-[var(--ws-surface-50)] rounded-lg p-3 mb-4 border border-zinc-800/30">
               <p className="text-[11px] text-zinc-500 leading-relaxed">
                 Open DeskFlow on your phone, go to <span className="text-zinc-400 font-medium">Settings → Pair Device</span>,
                 and scan the QR code or enter the 8-character code. Both devices must be on the same network (e.g., Tailscale).

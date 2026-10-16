@@ -86,7 +86,7 @@ export function DesignStudioTab() {
   }, [])
 
   return (
-    <div className="h-full w-full grid grid-cols-12 gap-0 bg-zinc-950 light:bg-[var(--ws-surface)] text-white overflow-hidden">
+    <div className="h-full w-full grid grid-cols-12 gap-0 bg-zinc-950 light:bg-[var(--ws-surface)] text-white light:text-[var(--text-primary)] overflow-hidden">
 
       {/* ── Column 1: Style Gallery (3/12) ── */}
       <div className="col-span-3 border-r border-zinc-800 overflow-y-auto p-4 space-y-3 scrollbar-thin">

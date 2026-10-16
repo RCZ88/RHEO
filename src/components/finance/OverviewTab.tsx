@@ -422,7 +422,7 @@ function GlassError({ error, onRetry }: { error: string; onRetry?: () => void })
   return (
     <div
       role="alert"
-      className="rounded-xl border border-[var(--color-destructive)]/30 bg-[var(--color-destructive)]/10 p-5 flex flex-col items-center text-center gap-3"
+      className="rounded-xl border border-[var(--color-destructive)]/30 bg-[var(--color-destructive-10)] p-5 flex flex-col items-center text-center gap-3"
     >
       <AlertTriangle className="w-6 h-6 fin-neg" aria-hidden="true" />
       {/* Gate F: "[Thing] [verb] because [reason]. [Action]." — not "Oops". */}

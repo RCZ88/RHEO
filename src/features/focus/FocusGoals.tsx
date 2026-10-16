@@ -220,7 +220,7 @@ export function FocusGoals({ history }: { history: FocusHistoryRow[] }) {
         <div className="grid grid-cols-2 gap-3">
           {/* Lenient mode */}
           <div className="relative overflow-hidden rounded-lg p-3 bg-zinc-800/40 border border-zinc-800/50">
-            <div className="absolute top-0 left-3 right-3 h-px bg-[var(--accent-primary)]/30" />
+            <div className="absolute top-0 left-3 right-3 h-px bg-[var(--accent-primary-30)]" />
             <div className="relative flex items-center gap-3">
               <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.2)' }}>
                 <EyeOff className="w-4 h-4 text-[var(--page-accent)]" />
@@ -233,7 +233,7 @@ export function FocusGoals({ history }: { history: FocusHistoryRow[] }) {
                     size={44}
                     strokeWidth={4}
                     gaugePrimaryColor="var(--accent-primary)"
-                    gaugeSecondaryColor="rgba(255,255,255,0.06)"
+                    gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
                     linear
                     linearDurationMs={800}
                   />
@@ -258,7 +258,7 @@ export function FocusGoals({ history }: { history: FocusHistoryRow[] }) {
 
           {/* Strict mode */}
           <div className="relative overflow-hidden rounded-lg p-3 bg-zinc-800/40 border border-zinc-800/50">
-            <div className="absolute top-0 left-3 right-3 h-px bg-[var(--amber-400)]/30" />
+            <div className="absolute top-0 left-3 right-3 h-px bg-[var(--amber-400-30)]" />
             <div className="relative flex items-center gap-3">
               <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)' }}>
                 <Eye className="w-4 h-4 text-amber-400" />
@@ -271,7 +271,7 @@ export function FocusGoals({ history }: { history: FocusHistoryRow[] }) {
                     size={44}
                     strokeWidth={4}
                     gaugePrimaryColor="var(--amber-400)"
-                    gaugeSecondaryColor="rgba(255,255,255,0.06)"
+                    gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
                     linear
                     linearDurationMs={800}
                   />

@@ -69,7 +69,7 @@ const NEON_CHART_COLORS = { lime: "#00FF66", cyan: "#00F0FF", magenta: "#FF007A"
 const glassTooltip = {
   backgroundColor: "rgba(20, 22, 30, 0.75)",
   titleColor: "#FFFFFF",
-  bodyColor: "#8E95A5",
+  bodyColor: "var(--text-muted)",
   borderColor: "rgba(255, 255, 255, 0.12)",
   borderWidth: 1,
   cornerRadius: 8,
@@ -269,7 +269,7 @@ const CHART_GRID = 'rgba(113,113,122,0.06)'
 const CHART_AXIS = 'rgba(113,113,122,0.12)'
 const CHART_TIP_BG = 'rgba(20, 22, 30, 0.85)'
 const CHART_TIP_TITLE = '#FFFFFF'
-const CHART_TIP_BODY = '#8E95A5'
+const CHART_TIP_BODY = 'var(--text-muted)'
 const CHART_TIP_BORDER = 'rgba(255,255,255,0.12)'
 
 // ═══ Agent / model comparison ═════════════════════════════════════════════
@@ -620,7 +620,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
 
       {/* ── States ── */}
       {errorText ? (
-        <div className="p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-400 light:text-[var(--text-muted)]">
+        <div className="p-3 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-400 light:text-[var(--text-muted)]">
           {errorText}{' '}
           <button
             type="button"
@@ -631,18 +631,18 @@ function AgentComparePanel(props: AgentComparePanelProps) {
           </button>
         </div>
       ) : isLoading ? (
-        <div className="h-48 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 animate-pulse" />
+        <div className="h-48 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50 animate-pulse" />
       ) : options.length === 0 ? (
-        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
+        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
           No {dimension === 'tools' ? 'tools' : 'models'} with recorded usage yet. Run a
           sync from the toolbar to import your AI activity.
         </div>
       ) : series.length === 0 ? (
-        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
+        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
           Select at least one {dimension === 'tools' ? 'tool' : 'model'} to compare.
         </div>
       ) : grandTotal === 0 ? (
-        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
+        <div className="p-4 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
           No {metricLabel.toLowerCase()} recorded in this period. Try a wider range or a
           different metric.
         </div>
@@ -654,7 +654,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
             {ranked.map((r) => (
               <div
                 key={r.key}
-                className="flex items-center justify-between gap-2 px-2 py-1 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-lg ring-1 ring-zinc-800/50"
+                className="flex items-center justify-between gap-2 px-2 py-1 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-lg ring-1 ring-zinc-800/50"
               >
                 <span className="flex items-center gap-1.5 min-w-0">
                   <span
@@ -674,7 +674,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
               </div>
             ))}
           </div>
-          <div className="h-56 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50">
+          <div className="h-56 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50">
             {chartType === 'bar' ? (
               <Bar data={overlayData as any} options={barOptions as any} />
             ) : (
@@ -690,7 +690,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
             return (
               <div
                 key={r.key}
-                className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50"
+                className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50"
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="flex items-center gap-1.5 min-w-0">
@@ -1913,7 +1913,7 @@ export default function AIToolsTab({
               </div>
 
               {agentDebugInfo.database && (
-                <div className="mb-4 p-4 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50">
+                <div className="mb-4 p-4 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)] mb-2">
                     Database State
                   </h4>
@@ -1957,7 +1957,7 @@ export default function AIToolsTab({
                   ([agentId, info]: [string, any]) => (
                     <div
                       key={agentId}
-                      className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50"
+                      className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -2069,7 +2069,7 @@ export default function AIToolsTab({
                   {agentPaths.map((agent) => (
                     <div
                       key={agent.id}
-                      className="p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl ring-1 ring-zinc-800/50"
+                      className="p-3 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">
@@ -2801,7 +2801,7 @@ export default function AIToolsTab({
                           ].map((stat) => (
                             <div
                               key={stat.label}
-                              className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
+                              className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
                             >
                               <div className={cn('text-base font-bold tabular-nums', stat.color)}>
                                 {stat.comp}
@@ -2823,7 +2823,7 @@ export default function AIToolsTab({
                           ].map((stat) => (
                             <div
                               key={stat.label}
-                              className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
+                              className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50"
                             >
                               <div className={cn('text-base font-bold tabular-nums', stat.color)}>
                                 {stat.comp || stat.value}
@@ -2843,15 +2843,15 @@ export default function AIToolsTab({
                           const dMsgs = totalMessages / timeframeDays
                           return (
                             <div className="grid grid-cols-3 gap-3">
-                              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-amber-500/20">
+                              <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-amber-500/20">
                                 <div className="text-base font-bold text-amber-400 tabular-nums"><TokenValue value={Math.round(dTokens)} /></div>
                                 <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Tokens/Day ({timeframeDays}d)</div>
                               </div>
-                              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-cyan-500/20">
+                              <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-cyan-500/20">
                                 <div className="text-base font-bold text-cyan-400 tabular-nums"><CostValue value={dCost} /></div>
                                 <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Cost/Day</div>
                               </div>
-                              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-pink-500/20">
+                              <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-pink-500/20">
                                 <div className="text-base font-bold text-pink-400 tabular-nums">{Math.round(dMsgs).toLocaleString()}</div>
                                 <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Msgs/Day</div>
                               </div>
@@ -2860,7 +2860,7 @@ export default function AIToolsTab({
                         })()}
 
                         {/* Daily Usage Timeline Chart */}
-                        <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                        <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
                           <div className="flex items-center justify-between mb-4">
                             <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider font-semibold">
                               Daily Usage Timeline
@@ -3009,7 +3009,7 @@ export default function AIToolsTab({
                           if (modelDatasets.length === 0) return null
 
                           return (
-                            <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                            <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
                               <div className="flex items-center justify-between mb-3">
                                 <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider font-semibold">
                                   Models — {modelMetricLabel}
@@ -3050,7 +3050,7 @@ export default function AIToolsTab({
                                     responsive: true, maintainAspectRatio: false,
                                     plugins: {
                                       legend: { display: true, position: 'bottom', labels: { color: '#71717a', font: { size: 9 }, boxWidth: 10, padding: 8, usePointStyle: true } },
-                                      tooltip: { backgroundColor: 'rgba(20,22,30,0.85)', titleColor: '#fff', bodyColor: '#8E95A5', borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1, cornerRadius: 8, usePointStyle: true,
+                                      tooltip: { backgroundColor: 'rgba(20,22,30,0.85)', titleColor: '#fff', bodyColor: 'var(--text-muted)', borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1, cornerRadius: 8, usePointStyle: true,
                                         callbacks: { label: (ctx: any) => ` ${ctx.dataset.label}: ${aiChartMode === 'tokens' ? formatTokens(ctx.parsed.y) : aiChartMode === 'cost' ? formatCurrency(ctx.parsed.y) : ctx.parsed.y}` }
                                       },
                                     },
@@ -3068,7 +3068,7 @@ export default function AIToolsTab({
 
                         {/* Models list */}
                         {agent.models.length > 0 && (
-                          <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                          <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
                             <div className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mb-3 font-semibold">
                               Models Used
                             </div>
@@ -3169,7 +3169,7 @@ export default function AIToolsTab({
                           { label: 'Messages', comp: <span>{totalMessages.toLocaleString()}</span>, color: 'text-blue-400' },
                           { label: 'Cost', comp: <CostValue value={totalCost} />, color: 'text-emerald-400' },
                         ].map((s) => (
-                          <div key={s.label} className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-lg p-2 text-center ring-1 ring-zinc-800/50">
+                          <div key={s.label} className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-lg p-2 text-center ring-1 ring-zinc-800/50">
                             <div className={cn('text-sm font-bold tabular-nums', s.color)}>{s.comp}</div>
                             <div className="text-[8px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-0.5">{s.label}</div>
                           </div>
@@ -3920,7 +3920,7 @@ export default function AIToolsTab({
                               tooltip: {
                                 backgroundColor: 'rgba(20, 22, 30, 0.85)',
                                 titleColor: '#FFFFFF',
-                                bodyColor: '#8E95A5',
+                                bodyColor: 'var(--text-muted)',
                                 borderColor: 'rgba(255,255,255,0.12)',
                                 borderWidth: 1,
                                 cornerRadius: 10,
@@ -4011,7 +4011,7 @@ export default function AIToolsTab({
                               tooltip: {
                                 backgroundColor: 'rgba(20, 22, 30, 0.85)',
                                 titleColor: '#FFFFFF',
-                                bodyColor: '#8E95A5',
+                                bodyColor: 'var(--text-muted)',
                                 borderColor: 'rgba(255,255,255,0.12)',
                                 borderWidth: 1,
                                 cornerRadius: 10,
@@ -4188,19 +4188,19 @@ export default function AIToolsTab({
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-rose-400 tabular-nums">{formatCurrency(avgDailyCost)}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Avg/Day</div>
                       </div>
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-amber-400 tabular-nums">{formatCurrency(projectedMonthly)}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Projected Month</div>
                       </div>
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-orange-400 tabular-nums">{formatCurrency(projectedYearly)}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Projected Year</div>
                       </div>
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
                         <div className="text-base font-bold text-emerald-400 tabular-nums">{freeModels.length}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Free Models</div>
                       </div>
@@ -4532,7 +4532,7 @@ export default function AIToolsTab({
                             tooltip: {
                               backgroundColor: 'rgba(20, 22, 30, 0.85)',
                               titleColor: '#FFFFFF',
-                              bodyColor: '#8E95A5',
+                              bodyColor: 'var(--text-muted)',
                               borderColor: 'rgba(255,255,255,0.12)',
                               borderWidth: 1,
                               cornerRadius: 10,
@@ -4844,7 +4844,7 @@ export default function AIToolsTab({
                             tooltip: {
                               backgroundColor: 'rgba(20, 22, 30, 0.85)',
                               titleColor: '#FFFFFF',
-                              bodyColor: '#8E95A5',
+                              bodyColor: 'var(--text-muted)',
                               borderColor: 'rgba(255,255,255,0.12)',
                               borderWidth: 1,
                               cornerRadius: 10,
@@ -5142,7 +5142,7 @@ export default function AIToolsTab({
                                 backgroundColor:
                                   'rgba(20, 22, 30, 0.85)',
                                 titleColor: '#FFFFFF',
-                                bodyColor: '#8E95A5',
+                                bodyColor: 'var(--text-muted)',
                                 borderColor: 'rgba(255,255,255,0.12)',
                                 borderWidth: 1,
                                 cornerRadius: 10,

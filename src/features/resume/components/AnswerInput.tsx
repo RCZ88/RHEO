@@ -55,13 +55,13 @@ export function AnswerInput({
           {tags.map((t) => (
             <span
               key={t}
-              className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-lg bg-[var(--page-accent)]/15 ring-1 ring-[var(--page-accent)]/25 text-[11px] text-[var(--page-accent)]"
+              className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-lg bg-[var(--page-accent-15)] ring-1 ring-[var(--page-accent)]/25 text-[11px] text-[var(--page-accent)]"
             >
               {t}
               <button
                 type="button"
                 onClick={() => onChange(tags.filter((x) => x !== t))}
-                className="w-4 h-4 inline-flex items-center justify-center rounded hover:bg-[var(--page-accent)]/25"
+                className="w-4 h-4 inline-flex items-center justify-center rounded hover:bg-[var(--page-accent-25)]"
               >
                 <X className="w-2.5 h-2.5" />
               </button>

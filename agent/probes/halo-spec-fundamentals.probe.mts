@@ -70,7 +70,10 @@ const tick = main.match(/setInterval\(tick, h\.pollMs\)/);
 ok(tick !== null, '§11 the hover poll is an interval (its body must not resize)');
 // Read the real tick body rather than a fixed-width window, which used to run past its end and
 // match a setBounds belonging to a DIFFERENT function.
-const tickBody = main.match(/const tick = \(\) => \{[\s\S]*?\n  \};/);
+// The tick is `async` — the cursor read spawns a helper and is awaited, so two ticks must never
+// be in flight at once. The regex allowed `() =>` only, so it silently stopped matching and the
+// assertion reported "tick not found" rather than failing loudly. `async` is optional here.
+const tickBody = main.match(/const tick = (?:async )?\(\) => \{[\s\S]*?\n  \};/);
 ok(tickBody !== null && !/\.setBounds\(/.test(tickBody[0]),
   '§11 the poll body does not call setBounds',
   tickBody === null ? 'tick not found' : (tickBody[0].includes('setBounds') ? 'setBounds present' : 'clean'));
@@ -129,7 +132,15 @@ ok(/SURFACE_TWEEN = \{ duration: 0\.2, ease: \[0\.2, 0, 0, 1\] \}/.test(root),
 ok(/'--halo-move-ease': 'cubic-bezier\(0\.2, 0, 0, 1\)'/.test(root),
    '...and the CSS mirror carries the SAME curve, so stylesheet and Motion cannot drift');
 ok(/--halo-move-ms/.test(root), '...and the same duration token, derived not retyped');
-ok(/transition=\{reduce \? \{ duration: 0/.test(root), '§171 OS reduced-motion wins over the in-app preference');
+// §171: the OS-level `prefers-reduced-motion` outranks the in-app liveliness preference. The
+// assertion used to require the literal text `transition={reduce ? { duration: 0`, which the
+// implementation stopped matching once the zero-duration branch was named STATIC_TRANSITION —
+// so a correct implementation reported FAIL. Assert the BEHAVIOUR: `reduce` (the OS query) must
+// select the zero-duration constant on the surface's transition prop.
+ok(/transition=\{reduce \? STATIC_TRANSITION :/.test(root),
+  '§171 OS reduced-motion wins over the in-app preference');
+ok(/const STATIC_TRANSITION = \{ duration: 0/.test(root),
+  '§171 ...via the zero-duration constant it selects');
 
 console.log('--- §101 NO setState AS THE FRAME CLOCK ---');
 ok(!/setInterval\([^)]*,\s*(1?[0-9]|[1-9][0-9])\s*\)/.test(root),

@@ -92,7 +92,7 @@ async function refreshCaptureList() {
   if (!data) {
     listEl.dataset.loaded = '1';
     listEl.innerHTML = '<div class="cap-msg cap-msg--err">'
-      + '<span>Could not reach DeskFlow.</span>'
+      + '<span>Could not reach RHEO.</span>'
       + '<button class="cap-retry" id="capRetry">Retry</button></div>';
     const btn = $('capRetry');
     if (btn) btn.addEventListener('click', () => { delete listEl.dataset.loaded; refreshCaptureList(); });
@@ -347,10 +347,10 @@ async function checkConnectivity() {
   gate.style.display = 'block';
   if (res && !res.permissions) {
     why.textContent = 'This browser has not granted the extension access to the '
-      + 'DeskFlow app on this computer. Without it the extension cannot send anything.';
+      + 'RHEO app on this computer. Without it the extension cannot send anything.';
   } else if (res && !res.reachable) {
-    why.textContent = 'Permission is granted, but the DeskFlow app is not answering '
-      + 'on port 54321. Start DeskFlow and try again.';
+    why.textContent = 'Permission is granted, but the RHEO app is not answering '
+      + 'on port 54321. Start RHEO and try again.';
   } else {
     why.textContent = 'Could not check the connection. Open the extension\u2019s developer '
       + 'console for details.';
@@ -371,7 +371,7 @@ if (connectBtn) {
     const stillFailing = gate && gate.style.display !== 'none';
     if (stillFailing) {
       connectBtn.disabled = false;
-      connectBtn.textContent = 'Connect to DeskFlow';
+      connectBtn.textContent = 'Connect to RHEO';
     }
   });
 }
@@ -393,7 +393,7 @@ async function refresh() {
 
     setStatus(serverHealthy && isTracking ? 'ok' : isTracking ? 'warn' : 'off',
       !serverHealthy ? 'offline' : isTracking ? 'recording' : 'paused');
-    $('serverVal').textContent = !serverHealthy ? 'DeskFlow not running'
+    $('serverVal').textContent = !serverHealthy ? 'RHEO not running'
       : isTracking ? 'connected' : 'connected · paused';
 
     // ── hero: identity first, then the page, then state ──
@@ -418,7 +418,7 @@ async function refresh() {
     const hint = $('siteHint');
     if (hint) {
       hint.textContent = !activeDomain ? 'Open a page to start tracking.'
-        : !serverHealthy ? 'DeskFlow is not running, so nothing is being saved.'
+        : !serverHealthy ? 'RHEO is not running, so nothing is being saved.'
         : !isTracking ? 'Tracking is paused — turn it back on above.'
         : activeDomain.includes('localhost') || activeDomain.startsWith('127.')
           ? 'Local pages are never tracked.'

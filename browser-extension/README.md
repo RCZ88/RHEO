@@ -1,6 +1,6 @@
-# DeskFlow Browser Extension
+# RHEO Browser Extension
 
-A Chrome Manifest V3 extension that tracks your active browsing activity and sends it to the DeskFlow Electron app.
+A Chrome Manifest V3 extension that tracks your active browsing activity and sends it to the RHEO Electron app.
 
 ## What It Tracks
 
@@ -17,7 +17,7 @@ A Chrome Manifest V3 extension that tracks your active browsing activity and sen
 - Screenshots or page content
 - Incognito/private browsing (by default)
 
-## Install in Zen / Firefox (the extension is named "DeskFlow Browser Bridge")
+## Install in Zen / Firefox (the extension is named "RHEO Browser Bridge")
 
 Zen is **Firefox-based** — there is no "Developer mode" and no "Load unpacked".
 Those are Chromium-only, and looking for them wastes your time.
@@ -39,16 +39,16 @@ panel** in the address bar. The panel is also **hidden on new-tab and `about:`
 pages**, so on a blank page it genuinely looks like nothing is installed.
 
 Open a **real web page** → click the settings icon in the address bar → find
-DeskFlow Browser Bridge → right-click → **Pin to Toolbar**.
+RHEO Browser Bridge → right-click → **Pin to Toolbar**.
 
-### Nothing is being sent to DeskFlow?
+### Nothing is being sent to RHEO?
 
 Firefox-family MV3 makes `host_permissions` **opt-in** (Chrome grants them
 silently). Without the grant every request to `localhost:54321` is blocked and
 the extension looks fine while sending nothing.
 
-Check: `about:addons` → **DeskFlow Browser Bridge** → confirm **localhost** access
-is ON. You can also click **Connect to DeskFlow** in the add-on's own popup —
+Check: `about:addons` → **RHEO Browser Bridge** → confirm **localhost** access
+is ON. You can also click **Connect to RHEO** in the add-on's own popup —
 the extension retries automatically, so this is only needed once.
 
 ### Debug it properly
@@ -74,18 +74,18 @@ This is where a broken add-on's actual error appears. Prefer it to guessing.
 
 4. **Load the Extension**
    - Click **"Load unpacked"** button
-   - Navigate to and select the `browser-extension/` folder from your DeskFlow project
+   - Navigate to and select the `browser-extension/` folder from your RHEO project
    - Example: `C:\Users\cleme\Downloads\App Tracker\browser-extension`
 
 5. **Verify Installation**
-   - You should see **"DeskFlow Browser Bridge"** in your extensions list
+   - You should see **"RHEO Browser Bridge"** in your extensions list
    - Under the extension, you should see: `Service Worker` (clickable link)
    - Click "Service Worker" to open DevTools and see console logs
 
-6. **Start DeskFlow App**
-   - Make sure the DeskFlow Electron app is running (`npm run dev`)
+6. **Start RHEO App**
+   - Make sure the RHEO Electron app is running (`npm run dev`)
    - The extension will automatically send data to `http://localhost:54321`
-   - If DeskFlow isn't running, the extension quietly retries — no errors shown
+   - If RHEO isn't running, the extension quietly retries — no errors shown
 
 ## How It Works
 
@@ -103,13 +103,13 @@ chrome.alarms fires every ~5 seconds (survives SW suspension)
 HTTP POST → localhost:54321/browser-data
   Payload: { url, domain, title, tab_id, active_duration_ms, ... }
        ↓
-DeskFlow Electron app receives data
+RHEO Electron app receives data
        ↓
 Merged with active-win data (only when browser is foreground)
        ↓
 Stored in SQLite with domain categorization
        ↓
-Displayed in DeskFlow /browser page
+Displayed in RHEO /browser page
 ```
 
 ## Architecture Details
@@ -151,7 +151,7 @@ This ensures that even if the service worker is killed and restarted, tracking r
 
 ### Change the Server Port
 
-If DeskFlow is running on a different port, edit `background.js` line 11:
+If RHEO is running on a different port, edit `background.js` line 11:
 
 ```javascript
 const DESKFLOW_SERVER = 'http://localhost:YOUR_PORT';
@@ -161,7 +161,7 @@ Then reload the extension (click the refresh icon on `chrome://extensions`).
 
 ### Disable Tracking Temporarily
 
-The extension respects the `isTrackingEnabled` flag. You can toggle it from the DeskFlow app settings, or manually in DevTools:
+The extension respects the `isTrackingEnabled` flag. You can toggle it from the RHEO app settings, or manually in DevTools:
 
 ```javascript
 // In service worker console:
@@ -172,7 +172,7 @@ chrome.storage.local.set({ deskflow_isTrackingEnabled: false });
 
 ### Extension not sending data
 
-1. **Check that DeskFlow app is running** — look for `Browser tracking server started on port 54321` in Electron console
+1. **Check that RHEO app is running** — look for `Browser tracking server started on port 54321` in Electron console
 2. **Open extension service worker console** → look for `✅ Synced:` messages
 3. **Test the server manually:**
    ```bash
@@ -183,10 +183,10 @@ chrome.storage.local.set({ deskflow_isTrackingEnabled: false });
    ```
 4. **Check the Network tab** in the service worker DevTools — look for POST requests and their status codes
 
-### No browser data in DeskFlow UI
+### No browser data in RHEO UI
 
-1. Make sure browser tracking is enabled in DeskFlow settings (Settings → General → Browser Tracking)
-2. Verify the port matches between extension and DeskFlow
+1. Make sure browser tracking is enabled in RHEO settings (Settings → General → Browser Tracking)
+2. Verify the port matches between extension and RHEO
 3. Check that you're **actually browsing** (not just having tabs open) — only active tabs are tracked
 4. Minimum session duration is 3 seconds — quick tab switches are ignored
 5. Check the service worker console for any `⚠️` or `💔` messages
@@ -195,7 +195,7 @@ chrome.storage.local.set({ deskflow_isTrackingEnabled: false });
 
 This is **normal MV3 behavior**. The extension uses `chrome.alarms` to wake up every ~5 seconds. If you notice gaps in tracking:
 
-1. Open `chrome://extensions` → find DeskFlow → check if there are error messages
+1. Open `chrome://extensions` → find RHEO → check if there are error messages
 2. Reload the extension (refresh icon)
 3. Check the console logs for "Server unreachable" — if the server is down, data is silently dropped
 
@@ -209,7 +209,7 @@ This is **normal MV3 behavior**. The extension uses `chrome.alarms` to wake up e
 
 1. Go to `chrome://extensions`
 2. Enable **Developer mode** (top-right)
-3. Find "DeskFlow Browser Tracker"
+3. Find "RHEO Browser Tracker"
 4. Click the **"Service Worker"** link under "Inspect views"
 5. This opens DevTools — use:
    - **Console tab** → see `console.log` output
@@ -232,7 +232,7 @@ This is **normal MV3 behavior**. The extension uses `chrome.alarms` to wake up e
          │ POST every ~5s (chrome.alarms)
          ▼
 ┌─────────────────┐
-│  localhost:54321│  ← DeskFlow Electron HTTP server
+│  localhost:54321│  ← RHEO Electron HTTP server
 │  /browser-data  │     Handles CORS, validates payload
 └────────┬────────┘
          │ Enriched with domain categorization
@@ -252,6 +252,6 @@ This is **normal MV3 behavior**. The extension uses `chrome.alarms` to wake up e
 ## Known Limitations
 
 1. **AI sidebar not tracked** — When the user interacts with Comet's AI assistant in the sidebar, the main tab is still counted as "active." There's no extension API to detect sidebar focus.
-2. **Data lost if server is down** — If the DeskFlow app isn't running, HTTP POSTs fail silently. No local queue/buffer is implemented (yet).
+2. **Data lost if server is down** — If the RHEO app isn't running, HTTP POSTs fail silently. No local queue/buffer is implemented (yet).
 3. **Minimum 3-second sessions** — Tab switches faster than 3 seconds are ignored to prevent noise.
 4. **Single browser instance** — If you have multiple Comet windows, only the focused window's active tab is tracked. This is by design.

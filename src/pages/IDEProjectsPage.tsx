@@ -175,15 +175,15 @@ const COMMON_LANGUAGES = [
 ];
 
 const AGENT_CONFIG: Record<string, { name: string; icon: string; color: string }> = {
-  'claude-code': { name: 'Claude Code', icon: 'claude', color: '#f97316' },
-  'cursor': { name: 'Cursor AI', icon: 'cursor', color: '#a855f7' },
-  'opencode': { name: 'OpenCode', icon: 'opencode', color: '#3b82f6' },
-  'gemini': { name: 'Gemini CLI', icon: 'gemini', color: '#22c55e' },
-  'codex': { name: 'Codex CLI', icon: 'codex', color: '#10b981' },
-  'qwen': { name: 'Qwen CLI', icon: 'qwen', color: '#f59e0b' },
-  'aider': { name: 'Aider', icon: 'aider', color: '#f59e0b' },
-  'kilocode': { name: 'KiloCode', icon: 'kilocode', color: '#22c55e' },
-  'hermes': { name: 'Hermes', icon: 'hermes', color: '#8b5cf6' },
+  'claude-code': { name: 'Claude Code', icon: 'claude', color: 'var(--color-orange-400)' },
+  'cursor': { name: 'Cursor AI', icon: 'cursor', color: 'var(--color-violet-400)' },
+  'opencode': { name: 'OpenCode', icon: 'opencode', color: 'var(--color-sky-400)' },
+  'gemini': { name: 'Gemini CLI', icon: 'gemini', color: 'var(--color-emerald-400)' },
+  'codex': { name: 'Codex CLI', icon: 'codex', color: 'var(--color-emerald-400)' },
+  'qwen': { name: 'Qwen CLI', icon: 'qwen', color: 'var(--color-amber-400)' },
+  'aider': { name: 'Aider', icon: 'aider', color: 'var(--color-amber-400)' },
+  'kilocode': { name: 'KiloCode', icon: 'kilocode', color: 'var(--color-emerald-400)' },
+  'hermes': { name: 'Hermes', icon: 'hermes', color: 'var(--color-violet-400)' },
 };
 
 const PROVIDER_MAP: Record<string, string> = {
@@ -198,7 +198,7 @@ const PROVIDER_MAP: Record<string, string> = {
   'hermes': 'Hermes',
 };
 
-const MODEL_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#14b8a6', '#8b5cf6'];
+const MODEL_COLORS = ['var(--color-sky-400)', 'var(--color-orange-400)', 'var(--color-emerald-400)', 'var(--color-violet-400)', 'var(--color-amber-400)', 'var(--color-red-500)', 'var(--color-sky-400)', 'var(--color-pink-400)', 'var(--color-teal-400)', 'var(--color-violet-400)'];
 
 function getAgentColor(agentId: string): string {
   try {
@@ -208,7 +208,7 @@ function getAgentColor(agentId: string): string {
       if (overrides[agentId]) return overrides[agentId];
     }
   } catch {}
-  return AGENT_CONFIG[agentId]?.color || '#6366f1';
+  return AGENT_CONFIG[agentId]?.color || 'var(--color-indigo-400)';
 }
 
 const AGENT_LIMITS: Record<string, number> = {
@@ -309,7 +309,7 @@ function FreeUsageStats({ agent, dailyUsage, formatTokens }: { agent: AIAgent; d
             <Sparkles className="w-4 h-4 text-emerald-400" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-white">Usage vs Daily Limit</h4>
+            <h4 className="text-sm font-semibold text-white light:text-[var(--text-primary)]">Usage vs Daily Limit</h4>
             <p className="text-[10px] text-zinc-500">Daily allowance: {formatTokens(limit)} tokens/day</p>
           </div>
         </div>
@@ -1413,7 +1413,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
     const byTool = wsByTool && Object.keys(wsByTool).length > 0 ? wsByTool : (ovByTool || {});
 
     for (const [agentId, data] of Object.entries(byTool)) {
-      const config = AGENT_CONFIG[agentId] || { name: agentId, icon: agentId, color: '#6366f1' };
+      const config = AGENT_CONFIG[agentId] || { name: agentId, icon: agentId, color: 'var(--color-indigo-400)' };
       agents.push({
         id: agentId,
         name: config.name,
@@ -1514,7 +1514,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
   return (
     <PageShell page="ide-projects" className="max-w-7xl mx-auto space-y-6 overflow-y-auto pt-6">
-      <CurrentCanvas accent="#06b6d4" render={renderMechanical} />
+      <CurrentCanvas accent="var(--color-sky-400)" render={renderMechanical} />
       <div className="relative z-10">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1608,7 +1608,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 {...enter()}
                 className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 flex items-start gap-3"
               >
-                <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-10)] flex items-center justify-center flex-shrink-0">
                   <stat.icon className="w-4 h-4 text-[var(--page-accent)]" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -1632,7 +1632,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           >
               <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-10)] flex items-center justify-center">
                     <Sparkles className="w-4 h-4 text-[var(--page-accent)]" />
                   </div>
                   <div>
@@ -1645,8 +1645,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     onClick={() => setLogScale(!logScale)}
                     aria-pressed={logScale}
                     title="Logarithmic y-axis — use when one spike flattens the rest"
-                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
-                      logScale ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
+                      logScale ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
                     }`}
                   >
                     Log scale
@@ -1655,8 +1655,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     onClick={() => setExcludeOutliers(!excludeOutliers)}
                     aria-pressed={excludeOutliers}
                     title="Hide outlier days so the trend is readable"
-                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
-                      excludeOutliers ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
+                      excludeOutliers ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
                     }`}
                   >
                     Hide outliers
@@ -1794,7 +1794,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             >
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-10)] flex items-center justify-center">
                     <Terminal className="w-4 h-4 text-[var(--page-accent)]" />
                   </div>
                   <div>
@@ -1804,7 +1804,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
                 <button
                   onClick={() => setActiveTab('projects')}
-                  className="text-xs text-[var(--page-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 rounded"
+                  className="text-xs text-[var(--page-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] rounded"
                 >
                   View all →
                 </button>
@@ -1823,7 +1823,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           setExpandedProjects(new Set([project.id]));
                           setActiveTab('projects');
                         }}
-                        className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-lg border border-[var(--color-border)] hover:border-[var(--page-accent)]/40 hover:bg-[var(--color-muted)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                        className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-lg border border-[var(--color-border)] hover:border-[var(--page-accent)]/40 hover:bg-[var(--color-muted-40)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                       >
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-[var(--color-card-foreground)] truncate">{project.name}</div>
@@ -2083,7 +2083,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
           {/* IDEs section */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] mb-3 flex items-center gap-2">
               <Monitor className="w-5 h-5 text-blue-400" />
               IDEs
             </h3>
@@ -2096,7 +2096,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         <Monitor className="w-5 h-5 text-blue-400" />
                       </div>
                       <div>
-                        <div className="text-white font-medium">{ide.name}</div>
+                        <div className="text-white light:text-[var(--text-primary)] font-medium">{ide.name}</div>
                         {ide.version && <div className="text-xs text-zinc-500">v{ide.version}</div>}
                       </div>
                     </div>
@@ -2111,7 +2111,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
           {/* Tools section (health-oriented) */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] mb-3 flex items-center gap-2">
               <Package className="w-5 h-5 text-emerald-400" />
               Dev Tools
             </h3>
@@ -2130,7 +2130,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       >
                         <div className="flex items-center gap-3">
                           <Icon className="w-5 h-5 text-zinc-400" />
-                          <span className="text-white font-medium">{label}</span>
+                          <span className="text-white light:text-[var(--text-primary)] font-medium">{label}</span>
                           <Badge variant="secondary" className="bg-zinc-800 light:bg-zinc-100 text-zinc-400 text-xs">{(tools as any[]).length}</Badge>
                         </div>
                         <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -2138,7 +2138,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       {isExpanded && (
                         <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                           {(tools as any[]).map((tool: any) => (
-                            <div key={tool.id} className="flex items-center justify-between p-2.5 bg-[var(--color-muted)]/50 rounded-lg">
+                            <div key={tool.id} className="flex items-center justify-between p-2.5 bg-[var(--color-muted-50)] rounded-lg">
                               <span className="text-sm text-zinc-300">{tool.name}</span>
                               {tool.version && <span className="text-xs text-zinc-500 font-mono">v{tool.version}</span>}
                             </div>
@@ -2195,7 +2195,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     }
                   }
                 }}
-                className="flex items-center gap-2 min-h-11 px-4 text-sm font-medium rounded-lg bg-[var(--page-accent)] text-zinc-950 transition-colors hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                className="flex items-center gap-2 min-h-11 px-4 text-sm font-medium rounded-lg border border-[var(--btn-border)] bg-[var(--btn-fill)] text-[var(--btn-on-fill)] transition-colors hover:bg-[var(--btn-fill-hover)] hover:border-[var(--btn-border-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                 aria-label="Add new project"
                 whileTap={{ scale: 0.98 }}
               >
@@ -2211,7 +2211,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     setExpandedProjects(all);
                   }
                 }}
-                className="flex items-center gap-1.5 min-h-11 px-4 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)] transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                className="flex items-center gap-1.5 min-h-11 px-4 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)] transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
               >
                 <ChevronDown className={`w-4 h-4 transition-transform ${expandedProjects.size === overview.projects.length ? 'rotate-180' : ''}`} />
                 {expandedProjects.size === overview.projects.length ? 'Collapse all' : 'Expand all'}
@@ -2219,9 +2219,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               <button
                 onClick={() => setShowLanguageStats(prev => !prev)}
                 aria-pressed={showLanguageStats}
-                className={`flex items-center gap-1.5 min-h-11 px-4 text-sm font-medium rounded-lg border transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${
+                className={`flex items-center gap-1.5 min-h-11 px-4 text-sm font-medium rounded-lg border transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
                   showLanguageStats
-                    ? 'border-[var(--page-accent)]/40 text-[var(--page-accent)] bg-[var(--page-accent)]/10'
+                    ? 'border-[var(--btn-selected-border)] text-[var(--btn-selected-on)] bg-[var(--btn-selected-fill)]'
                     : 'border-[var(--color-border)] text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)]'
                 }`}
               >
@@ -2235,7 +2235,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 value={projectSort}
                 onChange={(e) => setProjectSort(e.target.value as 'name' | 'health' | 'language')}
                 aria-label="Sort projects"
-                className="ml-auto min-h-11 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-card-foreground)] text-sm rounded-lg px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                className="ml-auto min-h-11 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-card-foreground)] text-sm rounded-lg px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
               >
                 <option value="name">Name</option>
                 <option value="health">Health score</option>
@@ -2274,7 +2274,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         <button
                           onClick={() => handleEditProjectClick(project)}
                           aria-label={`Edit ${project.name}`}
-                          className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-[var(--page-accent)] hover:bg-[var(--page-accent)]/10 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                          className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-[var(--page-accent)] hover:bg-[var(--page-accent-10)] rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -2282,14 +2282,14 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           onClick={() => toggleProjectExpand(project)}
                           aria-expanded={isExpanded}
                           aria-label={isExpanded ? `Collapse ${project.name}` : `Expand ${project.name}`}
-                          className={`p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)] rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 ${isExpanded ? 'rotate-180' : ''}`}
+                          className={`p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)] hover:bg-[var(--color-muted)] rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${isExpanded ? 'rotate-180' : ''}`}
                         >
                           <ChevronDown className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteClick(project)}
                           aria-label={`Delete ${project.name}`}
-                          className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                          className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -2395,7 +2395,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           <button
                             onClick={() => handleRunProject(project)}
                             disabled={runningProjectLoading === project.id}
-                            className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg bg-[var(--page-accent)] text-zinc-950 transition-colors hover:brightness-110 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                            className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-[var(--btn-border)] bg-[var(--btn-fill)] text-[var(--btn-on-fill)] transition-colors hover:bg-[var(--btn-fill-hover)] hover:border-[var(--btn-border-hover)] active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                           >
                             {runningProjectLoading === project.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -2414,7 +2414,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             handleEditProjectClick(project);
                           }
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:bg-[var(--color-muted)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                        className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:bg-[var(--color-muted)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                       >
                         <Monitor className="w-4 h-4" />
                         <span className="font-medium">{project.default_ide ? 'Open in IDE' : 'Set IDE'}</span>
@@ -2425,7 +2425,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           setWorkspaceProject(project);
                           setIsWorkspaceOpen(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:bg-[var(--color-muted)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                        className="flex-1 flex items-center justify-center gap-2 min-h-11 px-3 text-sm font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:bg-[var(--color-muted)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                       >
                         <Terminal className="w-4 h-4" />
                         <span className="font-medium">Open workspace</span>
@@ -2466,7 +2466,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           href={project.repository_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs text-[var(--page-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                          className="inline-flex items-center gap-1.5 text-xs text-[var(--page-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                           Open repository
@@ -2489,7 +2489,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="border-t border-[var(--color-border)] bg-[var(--color-muted)]/30"
+                        className="border-t border-[var(--color-border)] bg-[var(--color-muted-30)]"
                       >
                         <div className="p-5 space-y-5">
                           {isLoading ? (
@@ -2557,7 +2557,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     {details.presets.map((preset: any) => (
                                       <button
                                         key={preset.id}
-                                        className="px-2.5 py-1 text-[11px] rounded-full border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:border-[var(--page-accent)]/40 hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
+                                        className="px-2.5 py-1 text-[11px] rounded-full border border-[var(--color-border)] text-[var(--color-card-foreground)] transition-colors hover:border-[var(--page-accent)]/40 hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
                                       >
                                         {preset.name}
                                       </button>
@@ -2820,7 +2820,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         scales: {
                           x: {
                             ticks: {
-                              color: '#71717a',
+                              color: 'var(--text-muted)',
                               maxRotation: 0,
                               font: { size: 9 },
                               callback: (_, i) => (i % 7 === 0 || i === labels.length - 1) ? labels[i] : '',
@@ -2830,11 +2830,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           y: {
                             beginAtZero: true,
                             ticks: {
-                              color: '#71717a',
+                              color: 'var(--text-muted)',
                               font: { size: 9 },
                               stepSize: 1,
                             },
-                            grid: { color: 'rgba(113, 113, 122, 0.15)' },
+                            grid: { color: 'var(--ws-border)' },
                           }
                         }
                       }}
@@ -2863,7 +2863,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           {
                             label: 'Additions',
                             data: additionsData,
-                            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                            backgroundColor: 'rgba(var(--color-emerald-400-rgb), 0.6)',
                             borderColor: 'rgba(16, 185, 129, 0.9)',
                             borderWidth: 1,
                             borderRadius: 3,
@@ -2885,13 +2885,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           legend: {
                             position: 'top',
                             align: 'end',
-                            labels: { boxWidth: 10, padding: 8, font: { size: 9 }, color: '#a1a1aa' },
+                            labels: { boxWidth: 10, padding: 8, font: { size: 9 }, color: 'var(--text-muted)' },
                           }
                         },
                         scales: {
                           x: {
                             ticks: {
-                              color: '#71717a',
+                              color: 'var(--text-muted)',
                               maxRotation: 0,
                               font: { size: 9 },
                               callback: (_, i) => (i % 7 === 0 || i === labels.length - 1) ? labels[i] : '',
@@ -2900,8 +2900,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           },
                           y: {
                             beginAtZero: true,
-                            ticks: { color: '#71717a', font: { size: 9 } },
-                            grid: { color: 'rgba(113, 113, 122, 0.15)' },
+                            ticks: { color: 'var(--text-muted)', font: { size: 9 } },
+                            grid: { color: 'var(--ws-border)' },
                           }
                         }
                       }}
@@ -2915,9 +2915,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           {/* Commit Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { label: 'Total Commits', value: overview?.commits?.totalCommits || 0, icon: GitCommit, color: '#f59e0b', bg: 'bg-amber-500/10' },
-              { label: 'Lines Added', value: `+${overview?.commits?.totalAdditions || 0}`, icon: Plus, color: '#10b981', bg: 'bg-emerald-500/10' },
-              { label: 'Lines Removed', value: `-${overview?.commits?.totalDeletions || 0}`, icon: Trash2, color: '#ef4444', bg: 'bg-red-500/10' },
+              { label: 'Total Commits', value: overview?.commits?.totalCommits || 0, icon: GitCommit, color: 'var(--color-amber-400)', bg: 'bg-[var(--color-amber-400-10)]' },
+              { label: 'Lines Added', value: `+${overview?.commits?.totalAdditions || 0}`, icon: Plus, color: 'var(--color-emerald-400)', bg: 'bg-[var(--color-emerald-400-10)]' },
+              { label: 'Lines Removed', value: `-${overview?.commits?.totalDeletions || 0}`, icon: Trash2, color: 'var(--color-red-500)', bg: 'bg-[var(--color-red-500-10)]' },
             ].map((stat, idx) => (
               <motion.div
                 key={idx}
@@ -3177,7 +3177,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
           <div className="flex items-center gap-3 mb-2">
             <BarChart3 className="w-5 h-5 text-violet-400" />
             <div>
-              <h2 className="text-lg font-semibold text-white">Workspace Analytics</h2>
+              <h2 className="text-lg font-semibold text-white light:text-[var(--text-primary)]">Workspace Analytics</h2>
               <p className="text-sm text-zinc-500">AI usage, problems, and requests across all projects</p>
             </div>
           </div>
@@ -3247,9 +3247,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-5 border-b border-zinc-700 light:border-zinc-300 flex items-center justify-between sticky top-0 bg-[var(--color-card)] z-10">
-                <h2 className="text-xl font-semibold text-white flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-white light:text-[var(--text-primary)] flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                    <HelpCircle className="w-5 h-5 text-white" />
+                    <HelpCircle className="w-5 h-5 text-white light:text-[var(--text-primary)]" />
                   </div>
                   Project Tracking Setup Guide
                 </h2>
@@ -3300,7 +3300,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <span className="text-lg font-bold text-emerald-400">1</span>
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                      <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] mb-3 flex items-center gap-2">
                         Add Your First Project
                         {overview?.projects && overview.projects.length > 0 && (
                           <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-lg">Done</span>
@@ -3309,11 +3309,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <div className="space-y-2 text-sm text-zinc-400">
                         <p className="flex items-start gap-2">
                           <ChevronRight className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
-                          Click the <strong className="text-white">"Add Project"</strong> button
+                          Click the <strong className="text-white light:text-[var(--text-primary)]">"Add Project"</strong> button
                         </p>
                         <p className="flex items-start gap-2">
                           <ChevronRight className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
-                          Click <strong className="text-white">"Browse"</strong> and select your project <strong className="text-amber-400">FOLDER</strong> (not the .exe file)
+                          Click <strong className="text-white light:text-[var(--text-primary)]">"Browse"</strong> and select your project <strong className="text-amber-400">FOLDER</strong> (not the .exe file)
                         </p>
                         <p className="flex items-start gap-2">
                           <ChevronRight className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
@@ -3340,23 +3340,23 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <span className="text-lg font-bold text-violet-400">2</span>
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-white mb-3">Track AI Coding Assistant Usage</h3>
+                      <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] mb-3">Track AI Coding Assistant Usage</h3>
                       <p className="text-sm text-zinc-400 mb-4">We automatically detect these AI tools and import their usage data:</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {[
-                          { name: 'Claude Code', path: '~/.claude/projects/<project>/*.jsonl', color: '#f97316' },
-                          { name: 'Qwen CLI', path: '~/.qwen/projects/<project>/chats/*.jsonl', color: '#f59e0b' },
-                          { name: 'OpenCode', path: '~/.local/share/opencode/opencode.db', color: '#3b82f6' },
-                          { name: 'Gemini CLI', path: '~/.gemini/history/', color: '#06b6d4' },
-                          { name: 'Cursor AI', path: '%APPDATA%\\Cursor\\', color: '#a855f7' },
-                          { name: 'Codex CLI', path: '~/.codex/', color: '#10b981' },
+                          { name: 'Claude Code', path: '~/.claude/projects/<project>/*.jsonl', color: 'var(--color-orange-400)' },
+                          { name: 'Qwen CLI', path: '~/.qwen/projects/<project>/chats/*.jsonl', color: 'var(--color-amber-400)' },
+                          { name: 'OpenCode', path: '~/.local/share/opencode/opencode.db', color: 'var(--color-sky-400)' },
+                          { name: 'Gemini CLI', path: '~/.gemini/history/', color: 'var(--color-sky-400)' },
+                          { name: 'Cursor AI', path: '%APPDATA%\\Cursor\\', color: 'var(--color-violet-400)' },
+                          { name: 'Codex CLI', path: '~/.codex/', color: 'var(--color-emerald-400)' },
                         ].map((agent) => (
                           <div key={agent.name} className="flex items-center gap-3 p-3 bg-[var(--color-card)] rounded-lg">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: agent.color + '22' }}>
                               <Sparkles className="w-4 h-4" style={{ color: agent.color }} />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-white">{agent.name}</div>
+                              <div className="text-sm font-medium text-white light:text-[var(--text-primary)]">{agent.name}</div>
                               <div className="text-xs text-zinc-500 font-mono truncate max-w-[180px]">{agent.path}</div>
                             </div>
                             {agentDebugInfo?.agents?.[agent.name.toLowerCase().replace(' ', '-')]?.detected ? (
@@ -3381,17 +3381,17 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <span className="text-lg font-bold text-amber-400">3</span>
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-white mb-3">Track Git Commits & Metrics</h3>
+                      <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] mb-3">Track Git Commits & Metrics</h3>
                       <div className="space-y-4">
                         <div className="p-4 bg-[var(--color-card)] rounded-lg">
-                          <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+                          <h4 className="text-sm font-medium text-white light:text-[var(--text-primary)] mb-2 flex items-center gap-2">
                             <GitBranch className="w-4 h-4 text-zinc-400" />
                             Local Repositories
                           </h4>
                           <p className="text-sm text-zinc-400">Add your project (must contain .git folder), then click "Sync Commits" to import commit history, additions, and deletions.</p>
                         </div>
                         <div className="p-4 bg-[var(--color-card)] rounded-lg">
-                          <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+                          <h4 className="text-sm font-medium text-white light:text-[var(--text-primary)] mb-2 flex items-center gap-2">
                             <ExternalLink className="w-4 h-4 text-zinc-400" />
                             GitHub Repositories
                           </h4>
@@ -3409,7 +3409,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <span className="text-lg font-bold text-blue-400">4</span>
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-white mb-3">Detect Your Development Environment</h3>
+                      <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] mb-3">Detect Your Development Environment</h3>
                       <p className="text-sm text-zinc-400 mb-4">Click "Scan Environment" to automatically detect:</p>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {[
@@ -3440,7 +3440,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
                 {/* Quick Start Checklist */}
                 <GlassCard className="bg-gradient-to-br from-zinc-900 to-zinc-800/50">
-                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] mb-4 flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                     Quick Start Checklist
                   </h3>
@@ -3455,7 +3455,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                           item.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 light:border-zinc-300'
                         }`}>
-                          {item.done && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          {item.done && <CheckCircle2 className="w-3 h-3 text-white light:text-[var(--text-primary)]" />}
                         </div>
                         <span className={`text-sm ${item.done ? 'text-zinc-400 line-through' : 'text-white'}`}>{item.label}</span>
                       </label>
@@ -3490,7 +3490,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
                   <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Scanning Environment</h3>
+                <h3 className="text-xl font-semibold text-white light:text-[var(--text-primary)] mb-2">Scanning Environment</h3>
                 <p className="text-zinc-400 text-sm mb-4">Detecting IDEs and development tools...</p>
                 <div className="w-full bg-zinc-800 light:bg-zinc-100 rounded-full h-2 overflow-hidden">
                   <motion.div
@@ -3530,7 +3530,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <Sparkles className="w-5 h-5" style={{ color: selectedAgentDetail.color }} />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white">{selectedAgentDetail.name}</h3>
+                    <h3 className="text-xl font-bold text-white light:text-[var(--text-primary)]">{selectedAgentDetail.name}</h3>
                     <p className="text-sm text-zinc-500">{selectedAgentDetail.status === 'active' ? 'Active' : 'Idle'}</p>
                   </div>
                 </div>
@@ -3648,7 +3648,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-2">
                       <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">Total Tokens</div>
-                        <div className="text-base font-semibold text-white"><TokenValue value={periodTokens} /></div>
+                        <div className="text-base font-semibold text-white light:text-[var(--text-primary)]"><TokenValue value={periodTokens} /></div>
                       </div>
                       <div className="bg-[var(--color-card)] rounded-lg p-3 text-center">
                         <div className="text-xs text-zinc-500 mb-1">Input (You)</div>
@@ -3789,8 +3789,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           ? [{
                               label: 'Output (AI)',
                               data: outData,
-                              backgroundColor: 'rgba(16, 185, 129, 0.6)',
-                              borderColor: '#10b981',
+                              backgroundColor: 'rgba(var(--color-emerald-400-rgb), 0.6)',
+                              borderColor: 'var(--color-emerald-400)',
                               borderWidth: 1,
                               borderRadius: 2,
                             }]
@@ -3798,8 +3798,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                           ? [{
                               label: 'Input (You)',
                               data: inData,
-                              backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                              borderColor: '#3b82f6',
+                              backgroundColor: 'rgba(var(--color-sky-400-rgb), 0.6)',
+                              borderColor: 'var(--color-sky-400)',
                               borderWidth: 1,
                               borderRadius: 2,
                             }]
@@ -3807,16 +3807,16 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               {
                                 label: 'Input (You)',
                                 data: inData,
-                                backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(var(--color-sky-400-rgb), 0.6)',
+                                borderColor: 'var(--color-sky-400)',
                                 borderWidth: 1,
                                 borderRadius: 2,
                               },
                               {
                                 label: 'Output (AI)',
                                 data: outData,
-                                backgroundColor: 'rgba(16, 185, 129, 0.6)',
-                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(var(--color-emerald-400-rgb), 0.6)',
+                                borderColor: 'var(--color-emerald-400)',
                                 borderWidth: 1,
                                 borderRadius: 2,
                               }
@@ -3832,13 +3832,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                 legend: {
                                   display: tokenIsStacked,
                                   position: 'top',
-                                  labels: { color: '#71717a', font: { size: 9 }, boxWidth: 8, padding: 8, usePointStyle: true }
+                                  labels: { color: 'var(--text-muted)', font: { size: 9 }, boxWidth: 8, padding: 8, usePointStyle: true }
                                 },
                                 tooltip: {
                                   backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                                  titleColor: '#fff',
-                                  bodyColor: '#a1a1aa',
-                                  borderColor: '#3f3f46',
+                                  titleColor: 'var(--text-primary)',
+                                  bodyColor: 'var(--text-muted)',
+                                  borderColor: 'var(--ws-border)',
                                   borderWidth: 1,
                                   callbacks: {
                                     label: (ctx) => {
@@ -3859,17 +3859,17 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               scales: {
                                 x: {
                                   stacked: tokenIsStacked,
-                                  ticks: { color: '#71717a', maxTicksLimit: numDays <= 7 ? 7 : 8, font: { size: 10 } },
+                                  ticks: { color: 'var(--text-muted)', maxTicksLimit: numDays <= 7 ? 7 : 8, font: { size: 10 } },
                                   grid: { display: false }
                                 },
                                 y: {
                                   stacked: tokenIsStacked,
                                   ticks: {
-                                    color: '#71717a',
+                                    color: 'var(--text-muted)',
                                     font: { size: 10 },
                                     callback: (v) => formatTokens(v as number)
                                   },
-                                  grid: { color: '#27272a' },
+                                  grid: { color: 'var(--ws-border)' },
                                   beginAtZero: true,
                                 }
                               }
@@ -3900,9 +3900,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               legend: { display: false },
                               tooltip: {
                                 backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                                titleColor: '#fff',
-                                bodyColor: '#a1a1aa',
-                                borderColor: '#3f3f46',
+                                titleColor: 'var(--text-primary)',
+                                bodyColor: 'var(--text-muted)',
+                                borderColor: 'var(--ws-border)',
                                 borderWidth: 1,
                                 callbacks: {
                                   label: (ctx) => {
@@ -3915,17 +3915,17 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               }
                             },
                             scales: {
-                              x: { ticks: { color: '#71717a', maxTicksLimit: numDays <= 7 ? 7 : 8, font: { size: 10 } }, grid: { display: false } },
+                              x: { ticks: { color: 'var(--text-muted)', maxTicksLimit: numDays <= 7 ? 7 : 8, font: { size: 10 } }, grid: { display: false } },
                               y: {
                                 ticks: {
-                                  color: '#71717a',
+                                  color: 'var(--text-muted)',
                                   font: { size: 10 },
                                   callback: (v) => {
                                     if (aiChartMode === 'cost') return `$${(v as number).toFixed(2)}`;
                                     return String(v);
                                   }
                                 },
-                                grid: { color: '#27272a' },
+                                grid: { color: 'var(--ws-border)' },
                                 beginAtZero: true,
                               }
                             }
@@ -3953,7 +3953,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     } else { numDays = 60; }
                   }
                   const periodDays = eachDayOfInterval({ start: subDays(new Date(), numDays - 1), end: new Date() });
-                  const modelColors = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
+                  const modelColors = ['var(--color-sky-400)', 'var(--color-orange-400)', 'var(--color-emerald-400)', 'var(--color-violet-400)', 'var(--color-amber-400)', 'var(--color-red-500)', 'var(--color-sky-400)', 'var(--color-pink-400)'];
 
                   const metricField = aiChartMode === 'tokens' ? 'tokens'
                     : aiChartMode === 'messages' ? 'messageCount'
@@ -3995,13 +3995,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                               legend: {
                                 display: true,
                                 position: 'top',
-                                labels: { color: '#71717a', font: { size: 9 }, boxWidth: 8, padding: 8 }
+                                labels: { color: 'var(--text-muted)', font: { size: 9 }, boxWidth: 8, padding: 8 }
                               },
                               tooltip: {
                                 backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                                titleColor: '#fff',
-                                bodyColor: '#a1a1aa',
-                                borderColor: '#3f3f46',
+                                titleColor: 'var(--text-primary)',
+                                bodyColor: 'var(--text-muted)',
+                                borderColor: 'var(--ws-border)',
                                 borderWidth: 1,
                                 callbacks: {
                                   label: (ctx) => {
@@ -4017,13 +4017,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                             scales: {
                               x: {
                                 stacked: true,
-                                ticks: { color: '#71717a', maxTicksLimit: numDays <= 7 ? 7 : 8, font: { size: 10 } },
+                                ticks: { color: 'var(--text-muted)', maxTicksLimit: numDays <= 7 ? 7 : 8, font: { size: 10 } },
                                 grid: { display: false }
                               },
                               y: {
                                 stacked: true,
                                 ticks: {
-                                  color: '#71717a',
+                                  color: 'var(--text-muted)',
                                   font: { size: 10 },
                                   callback: (v) => {
                                     if (aiChartMode === 'tokens') return formatTokens(v as number);
@@ -4031,7 +4031,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     return String(v);
                                   }
                                 },
-                                grid: { color: '#27272a' },
+                                grid: { color: 'var(--ws-border)' },
                                 beginAtZero: true,
                               }
                             }
@@ -4175,7 +4175,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                <h3 className="text-xl font-bold text-white light:text-[var(--text-primary)] flex items-center gap-3">
                   <Sparkles className="w-5 h-5 text-purple-400" />
                   Features & Capabilities
                 </h3>
@@ -4254,7 +4254,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] flex items-center gap-2">
                   <Plus className="w-5 h-5 text-indigo-400" />
                   Add New Project
                 </h3>
@@ -4539,7 +4539,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)] flex items-center gap-2">
                   <Pencil className="w-5 h-5 text-violet-400" />
                   Edit Project
                 </h3>
@@ -4724,13 +4724,13 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   <AlertTriangle className="w-8 h-8 text-red-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Delete Project?</h3>
+                  <h3 className="text-lg font-semibold text-white light:text-[var(--text-primary)]">Delete Project?</h3>
                   <p className="text-sm text-zinc-400">This action can be undone later</p>
                 </div>
               </div>
 
               <p className="text-zinc-300 mb-6">
-                Are you sure you want to delete <span className="text-white font-medium">"{deletingProjectName}"</span>? 
+                Are you sure you want to delete <span className="text-white light:text-[var(--text-primary)] font-medium">"{deletingProjectName}"</span>? 
                 The project will be moved to trash and can be restored at any time.
               </p>
 
@@ -4772,7 +4772,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Configure Run Commands</h2>
+                  <h2 className="text-xl font-semibold text-white light:text-[var(--text-primary)]">Configure Run Commands</h2>
                   <p className="text-sm text-zinc-500 mt-1">{runConfigProject.name}</p>
                 </div>
                 <button onClick={() => setShowRunConfig(false)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 light:bg-zinc-100 rounded-lg transition">
@@ -4783,7 +4783,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
               {detectedScripts?.framework && (
                 <div className="mb-4 px-3 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
                   <span className="text-xs text-indigo-400">Detected framework:</span>
-                  <span className="text-sm text-white ml-2 font-medium">{detectedScripts.framework}</span>
+                  <span className="text-sm text-white light:text-[var(--text-primary)] ml-2 font-medium">{detectedScripts.framework}</span>
                 </div>
               )}
 

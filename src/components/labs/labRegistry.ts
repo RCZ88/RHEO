@@ -103,7 +103,7 @@ export interface Lab {
    * unmapped icon is a TYPE ERROR instead of an undefined component that renders
    * a blank hole in the plate.
    */
-  icon: 'clapperboard' | 'file-text' | 'presentation' | 'gauge';
+  icon: 'clapperboard' | 'file-text' | 'presentation' | 'gauge' | 'timer';
   aiPath: LabAiPath;
   /** Rendered next to the specimen ID in the plate header. */
   aiPathLabel: string;
@@ -270,6 +270,28 @@ export const LABS: readonly Lab[] = [
       'Every route ranked by share of wall-clock blocked',
       'Main-thread blocks over 50ms attributed to the active route',
       'Off by default — arms on demand, so it never taxes what it measures',
+    ],
+  },
+  {
+    id: 'LB-06',
+    name: 'Time Tools',
+    brand: 'Stopwatch · Timer · Alarms',
+    makes: 'Unified time controls across the app',
+    route: '/time-tools',
+    icon: 'timer',
+    aiPath: 'in-app',
+    aiPathLabel: 'Runs inside the app',
+    roundTrip: {
+      input: 'A click on the top-bar clock',
+      forge: 'Stopwatches + timers + alarms, shared state',
+      output: 'Live on AI canvas, Life page, and Labs',
+    },
+    backing: 'React state · localStorage',
+    entry: { style: 'solid', label: 'Open Time Tools', accent: '#06b6d4' },
+    facts: [
+      '3 tabs: stopwatch, timer, alarms',
+      'Shared store syncs to AI deck card and Life page',
+      'Persists across restarts via localStorage',
     ],
   },
 ];

@@ -317,7 +317,7 @@ export function ConductorWorkspaceTab({ activeTab, projectId, repoPath, userBran
           ) : (
             <motion.div className="flex flex-col gap-1" variants={listContainer} initial="hidden" animate="show">
               {trace.map((t: any, i: number) => (
-                <motion.div key={i} variants={riseItem} className="flex items-start gap-2.5 py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50 hover:bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] transition-colors duration-150">
+                <motion.div key={i} variants={riseItem} className="flex items-start gap-2.5 py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)] hover:bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] transition-colors duration-150">
                   <Clock className="w-3 h-3 mt-0.5 shrink-0 text-zinc-600" />
                   <div className="flex-1 min-w-0">
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${TRACE_TYPE[t.type] || 'bg-zinc-800/60 text-zinc-400'}`}>

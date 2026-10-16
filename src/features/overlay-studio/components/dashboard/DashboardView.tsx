@@ -80,7 +80,7 @@ export function DashboardView() {
         </BlurFade>
       ) : (
         <BlurFade delay={0.1}>
-          <div className="rounded-xl border border-dashed border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface)]/30 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface-30)] p-8 text-center">
             <Film size={28} className="mx-auto mb-3 text-zinc-600" />
             <p className="text-[13px] font-medium text-zinc-400">No active overlay session</p>
             <p className="text-[11px] text-zinc-500 mt-1 mb-4">Overlay sessions always belong to an episode. Select one from the sidebar or import a video.</p>

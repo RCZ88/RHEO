@@ -191,7 +191,7 @@ export function ColorPicker({ colors, onChange }: ColorPickerProps) {
 
       {/* Presets Panel */}
       {showPresets && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800/40 rounded-lg">
           {COLOR_SCHEMES.map(scheme => (
             <button
               key={scheme.name}
@@ -213,7 +213,7 @@ export function ColorPicker({ colors, onChange }: ColorPickerProps) {
 
       {/* Import Panel */}
       {showImport && (
-        <div className="p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg space-y-2">
+        <div className="p-3 bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800/40 rounded-lg space-y-2">
           <div className="text-[9px] text-zinc-500">
             Paste a JSON color scheme. Formats: <code className="text-zinc-400">[{'{'}"role":"primary","color":"#..."{'}'}]</code> or <code className="text-zinc-400">{'{'}"primary":"#..."{'}'}</code>
           </div>

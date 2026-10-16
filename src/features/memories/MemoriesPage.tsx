@@ -62,17 +62,17 @@ export default function MemoriesPage({ embedded = false }: MemoriesPageProps = {
       <div className="flex items-center justify-between">
         {embedded ? (
           <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1">
-            <Heart className="w-3 h-3 text-[#e8866b]" /> The people and moments outside the work
+            <Heart className="w-3 h-3 text-[var(--color-clay-400)]" /> The people and moments outside the work
           </p>
         ) : (
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[var(--color-mem-400)]/15 flex items-center justify-center text-[var(--color-mem-400)]">
+            <div className="w-9 h-9 rounded-lg bg-[var(--color-mem-400-15)] flex items-center justify-center text-[var(--color-mem-400)]">
               <Images className="w-4.5 h-4.5" />
             </div>
             <div>
               <h1 className="text-lg font-semibold text-[var(--text-primary)]">Memories</h1>
               <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1">
-                <Heart className="w-3 h-3 text-[#e8866b]" /> The people and moments outside the work
+                <Heart className="w-3 h-3 text-[var(--color-clay-400)]" /> The people and moments outside the work
               </p>
             </div>
           </div>

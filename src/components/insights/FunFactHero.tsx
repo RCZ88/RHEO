@@ -90,7 +90,7 @@ export function FunFactHero() {
         initial={{ opacity: 0, y: -8, height: 0 }}
         animate={{ opacity: 1, y: 0, height: 'auto' }}
         exit={{ opacity: 0, y: -8, height: 0 }}
-        className={`w-full rounded-xl border border-zinc-700/40 bg-gradient-to-br ${gradient} light:bg-[var(--color-card)]/85 p-4 relative overflow-hidden mb-4 light:border-[var(--ws-border)]`}
+        className={`w-full rounded-xl border border-zinc-700/40 bg-gradient-to-br ${gradient} light:bg-[var(--color-card-85)] p-4 relative overflow-hidden mb-4 light:border-[var(--ws-border)]`}
         style={{ boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.05)', lightBoxShadow: 'inset 0 1px 0 0 rgba(0,0,0,0.06)' }}
       >
         <div className="flex items-center justify-between">

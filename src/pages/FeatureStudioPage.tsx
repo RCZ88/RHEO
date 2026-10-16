@@ -399,7 +399,7 @@ export function FeatureStudioPage() {
               <AnimatePresence mode="wait">
                 {bridgeStep === 'prompt' && (
                   <motion.div key="p" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 overflow-auto">
+                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface-60)] p-3 overflow-auto">
                       <pre className="text-[9px] text-zinc-500 leading-relaxed whitespace-pre-wrap font-mono">{activePrompt.slice(0, 2000)}{activePrompt.length > 2000 ? '\n\n...' : ''}</pre>
                     </div>
                     <div className="flex items-center justify-between mt-2 shrink-0">
@@ -417,7 +417,7 @@ export function FeatureStudioPage() {
                 {bridgeStep === 'paste' && (
                   <motion.div key="pa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
                     <textarea value={pastedResponse} onChange={e => setPastedResponse(e.target.value)} placeholder="Paste the AI's JSON response here..."
-                      className="flex-1 min-h-0 w-full resize-none rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 font-mono text-[10px] leading-relaxed text-zinc-300 placeholder-zinc-600 outline-none transition-all duration-150 focus:border-[#ec4899]/60 focus:ring-2 focus:ring-[#ec4899]/20" />
+                      className="flex-1 min-h-0 w-full resize-none rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface-60)] p-3 font-mono text-[10px] leading-relaxed text-zinc-300 placeholder-zinc-600 outline-none transition-all duration-150 focus:border-[#ec4899]/60 focus:ring-2 focus:ring-[#ec4899]/20" />
                     {bridgeError && <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/[0.08] p-2.5 text-[10px] text-red-300" role="alert"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> {bridgeError}</div>}
                     <div className="flex gap-2 mt-2 shrink-0">
                       <motion.button whileTap={{ scale: 0.95 }} onClick={validateResponse} disabled={!pastedResponse.trim()}
@@ -428,7 +428,7 @@ export function FeatureStudioPage() {
                 )}
                 {bridgeStep === 'validate' && (
                   <motion.div key="v" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 overflow-auto">
+                    <div className="flex-1 min-h-0 rounded-lg border border-zinc-700/30 bg-zinc-950 light:bg-[var(--ws-surface-60)] p-3 overflow-auto">
                       <ValidationChecklist checks={bridgeChecks} />
                     </div>
                     {allPassed(bridgeChecks) ? (
@@ -447,7 +447,7 @@ export function FeatureStudioPage() {
             <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5 flex flex-col min-h-0 overflow-auto">
               <h2 className="text-sm font-medium mb-3">Result Preview</h2>
               {!cutPlan && !sceneDsl ? (
-                <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-950 light:bg-[var(--ws-surface)]/30 text-center">
+                <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-950 light:bg-[var(--ws-surface-30)] text-center">
                   <FileJson size={28} className="mb-3 text-zinc-600" />
                   <p className="text-sm text-zinc-400">No result yet</p>
                   <p className="mt-1 text-[10px] text-zinc-500">Complete the bridge steps to see results here.</p>

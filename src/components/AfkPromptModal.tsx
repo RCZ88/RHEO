@@ -639,7 +639,10 @@ export default function AfkPromptModal({
       case 'Enter':
       case ' ':
         e.preventDefault();
-        if (pickingId !== null) chooseByIndex(0); else openPicker();
+        // `chooseByIndex(0)` looked up `filteredActivities[-1]`, which is always
+        // undefined, so Enter/space was silently dead even when the list was
+        // open. 1 = first result, matching the "1–9 to pick" promise.
+        if (pickingId !== null) chooseByIndex(1); else openPicker();
         return;
       case ',':
       case '.': {
@@ -791,18 +794,41 @@ export default function AfkPromptModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
     >
-      <motion.div
-        initial={{ scale: 0.92, opacity: 0, y: 10 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.92, opacity: 0, y: 10 }}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-white/[0.10] rounded-xl w-full max-w-3xl max-h-[min(760px,88vh)] overflow-y-auto shadow-2xl shadow-black/50"
-        onClick={e => e.stopPropagation()}
-        onKeyDown={onKeyDown}
-      >
-        {/* Decorative gradient bar removed — single signal hue only */}
+      <div className="relative w-full max-w-3xl">
+        {/* Stacked cards behind the active one. `pointer-events-none` so only
+            the front card can be interacted with; while the front animates out
+            (spring toward the user) the next card lifts from behind into place
+            on a slight delay, so the hand-off reads as a page turn. */}
+        {queueRemaining > 0 && Array.from({ length: Math.min(queueRemaining, 2) }).map((_, i) => (
+          <motion.div
+            key={`behind-${i}`}
+            aria-hidden="true"
+            initial={{ opacity: 0, y: 18, scale: 0.96 }}
+            animate={{ opacity: 0.38 - i * 0.12, y: (i + 1) * 14, scale: 1 - (i + 1) * 0.035 }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1], delay: i * 0.04 }}
+            className="absolute inset-0 rounded-xl border border-white/[0.06] bg-zinc-900/70 shadow-xl shadow-black/40 pointer-events-none"
+          />
+        ))}
+
+        <motion.div
+          initial={{ scale: 0.92, opacity: 0, y: 10 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.86, opacity: 0, y: -12 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className="relative bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-white/[0.10] rounded-xl w-full max-h-[min(760px,88vh)] overflow-y-auto shadow-2xl shadow-black/50"
+          onClick={e => e.stopPropagation()}
+          onKeyDown={onKeyDown}
+        >
+          {queueRemaining > 0 && (
+            <div className="pointer-events-none absolute -top-3 -right-2 z-10 flex items-center gap-1 rounded-full bg-zinc-800/90 ring-1 ring-white/10 px-2 py-0.5 text-[10px] font-medium text-zinc-300 tabular-nums">
+              <span className="tabular-nums">{queueRemaining}</span>
+              <span className="text-zinc-500">more</span>
+            </div>
+          )}
+          {/* Decorative gradient bar removed — single signal hue only */}
 
         <div className="p-5">
           {/* ── Header ── */}
@@ -1068,6 +1094,32 @@ export default function AfkPromptModal({
                                     autoFocus
                                     value={pickerQuery}
                                     onChange={e => setPickerQuery(e.target.value)}
+                                    onKeyDown={e => {
+                                      // DIGITS PICK — THEY NEVER FILTER.
+                                      // The placeholder promises "1–9 to pick", but the
+                                      // modal-level handler bails on `typingInField`, and
+                                      // this input autoFocuses, so every digit was typed
+                                      // into the query instead: after searching "gym",
+                                      // pressing 2 built the query "gym2", which matches
+                                      // nothing — the numbered result the user pointed at
+                                      // vanished rather than being selected. Intercepting
+                                      // here (before the value changes) is what makes the
+                                      // digits exclusively a picker shortcut.
+                                      if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        chooseByIndex(Number(e.key));
+                                        return;
+                                      }
+                                      // Enter picks the first result, matching the
+                                      // "1–9 to pick" promise; without this it was a
+                                      // dead key inside the field.
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        chooseByIndex(1);
+                                      }
+                                    }}
                                     placeholder="Type to filter…  1–9 to pick"
                                     aria-label="Filter activities"
                                     className="w-full rounded-lg border border-white/[0.10] bg-zinc-900/60 py-1.5 pl-8 pr-2.5 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-amber-500/40"
@@ -1407,6 +1459,8 @@ export default function AfkPromptModal({
         </div>
 
       </motion.div>
+
+      </div>
 
     </motion.div>
 

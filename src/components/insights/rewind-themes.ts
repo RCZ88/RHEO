@@ -81,7 +81,7 @@ const LIGHT_OVERRIDES: Record<string, RewindThemeLight> = {
     label: 'text-[#6d28d9]/75', value: 'text-[var(--text-primary)]',
     muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
     pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
-    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+    headerBg: 'bg-[var(--ws-surface-95)]', navBg: 'bg-[var(--ws-surface-95)]',
   },
   ember: {
     bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
@@ -91,7 +91,7 @@ const LIGHT_OVERRIDES: Record<string, RewindThemeLight> = {
     label: 'text-[#93331d]/75', value: 'text-[var(--text-primary)]',
     muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
     pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
-    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+    headerBg: 'bg-[var(--ws-surface-95)]', navBg: 'bg-[var(--ws-surface-95)]',
   },
   frost: {
     bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
@@ -101,7 +101,7 @@ const LIGHT_OVERRIDES: Record<string, RewindThemeLight> = {
     label: 'text-[#0e7490]/75', value: 'text-[var(--text-primary)]',
     muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
     pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
-    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+    headerBg: 'bg-[var(--ws-surface-95)]', navBg: 'bg-[var(--ws-surface-95)]',
   },
   neon: {
     bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
@@ -111,7 +111,7 @@ const LIGHT_OVERRIDES: Record<string, RewindThemeLight> = {
     label: 'text-[#86198f]/75', value: 'text-[var(--text-primary)]',
     muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
     pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
-    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+    headerBg: 'bg-[var(--ws-surface-95)]', navBg: 'bg-[var(--ws-surface-95)]',
   },
   sunset: {
     bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
@@ -121,7 +121,7 @@ const LIGHT_OVERRIDES: Record<string, RewindThemeLight> = {
     label: 'text-[#92400e]/75', value: 'text-[var(--text-primary)]',
     muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
     pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
-    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+    headerBg: 'bg-[var(--ws-surface-95)]', navBg: 'bg-[var(--ws-surface-95)]',
   },
   terminal: {
     bg: 'bg-[var(--ws-surface-raised)]', bgHex: '#fcfbf8',
@@ -131,7 +131,7 @@ const LIGHT_OVERRIDES: Record<string, RewindThemeLight> = {
     label: 'text-[#166534]/75', value: 'text-[var(--text-primary)]',
     muted: 'text-[var(--text-muted)]', divider: 'border-[var(--ws-border)]',
     pillText: 'text-[var(--text-secondary)]', progressBg: 'bg-[var(--ws-surface-sunken)]',
-    headerBg: 'bg-[var(--ws-surface)]/95', navBg: 'bg-[var(--ws-surface)]/95',
+    headerBg: 'bg-[var(--ws-surface-95)]', navBg: 'bg-[var(--ws-surface-95)]',
   },
 };
 
@@ -210,14 +210,14 @@ export const REWIND_THEMES: RewindTheme[] = [
     bg: 'bg-[#120e0a]',
     bgHex: '#120e0a',
     glow: 'bg-[radial-gradient(ellipse_at_50%_0%,rgba(232,134,107,0.12)_0%,transparent_65%)]',
-    border: 'border-[#e8866b]/15',
+    border: 'border-[var(--color-clay-500)]/15',
     borderHex: 'rgba(232,134,107,0.15)',
-    accent: 'text-[#e8866b]',
+    accent: 'text-[var(--color-clay-400)]',
     accentHex: '#e8866b',
-    accentBg: 'bg-[#e8866b]/10',
+    accentBg: 'bg-[var(--color-clay-500-10)]',
     headline: 'text-[#f0e6dc]',
     subtext: 'text-[#b8a89a]',
-    label: 'text-[#e8866b]/70',
+    label: 'text-[var(--color-clay-400)]/70',
     value: 'text-[#f5ece4]',
     muted: 'text-[#8a7c70]',
     divider: 'border-[#2a221c]/60',
@@ -228,7 +228,7 @@ export const REWIND_THEMES: RewindTheme[] = [
     progressFill: 'bg-gradient-to-r from-[#d96846] to-[#e8866b]',
     headerBg: 'bg-[#0e0b08]/95',
     navBg: 'bg-[#0e0b08]/95',
-    spinner: 'border-[#e8866b]/30 border-t-[#e8866b]',
+    spinner: 'border-[var(--color-clay-500)]/30 border-t-[#e8866b]',
   },
 
   // ── 3. Nordic Frost ────────────────────────────────────

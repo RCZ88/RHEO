@@ -1013,7 +1013,7 @@ function CombinedChecklist({
                   return (
                     <div
                       key={check.checkId}
-                      className="rounded border border-zinc-800/30 bg-zinc-950 light:bg-[var(--ws-surface)]/40"
+                      className="rounded border border-zinc-800/30 bg-zinc-950 light:bg-[var(--ws-surface-40)]"
                     >
                       <div
                         className="flex items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-zinc-800/20 transition-colors"

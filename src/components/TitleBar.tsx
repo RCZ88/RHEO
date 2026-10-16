@@ -264,11 +264,14 @@ export default function TitleBar({
       {/* Thin shelf strip that stays visible to catch hover */}
       <div
         className="h-[3px] shrink-0 flex items-center justify-end pr-2 cursor-default transition motion-reduce:transition-none"
-        style={{ background: isFocused ? '#1a1a1a' : '#111111', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        style={{
+          background: isFocused ? 'var(--titlebar-bg)' : 'var(--titlebar-bg-unfocused)',
+          borderBottom: '1px solid var(--titlebar-border)',
+        }}
         onMouseEnter={onShelfEnter}
       >
         {hidden && (
-          <MousePointer2 size={8} style={{ color: '#52525b', opacity: 0.4 }} />
+          <MousePointer2 size={8} style={{ color: 'var(--text-faint)', opacity: 0.6 }} />
         )}
       </div>
       {/* Title bar — slides up/down AND releases its layout slot when hidden, so the

@@ -3,6 +3,7 @@ import { Boxes, Copy, GitBranch, Maximize2, Minus, Pin, Plus, Search, SplitSquar
 import type { Store } from "../hooks/useConsoleStore";
 import { TabIcon } from "./TabIcon";
 import { cx } from "../lib/utils";
+import { ClockDropdown } from "../../components/ClockDropdown";
 
 export function TabStrip({ store, onNewTab }: { store: Store; onNewTab: () => void }) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -115,6 +116,11 @@ export function TabStrip({ store, onNewTab }: { store: Store; onNewTab: () => vo
       {(store.groupFilter !== "all" || store.tabSearch) && (
         <button onClick={() => { store.setGroupFilter("all"); store.setTabSearch(""); }} className="h-8 px-3 rounded-lg text-[11.5px] font-medium shrink-0 border" style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}>Clear filter ×</button>
       )}
+      <div className="ml-auto shrink-0 pl-2 flex items-center">
+        <ClockDropdown label="Timers, stopwatch and alarms">
+          <span className="text-xs mono text-zinc-400">Timers</span>
+        </ClockDropdown>
+      </div>
     </div>
   );
 }
@@ -267,7 +273,7 @@ export function LeftSidebar({ store, onPresets, onWorkspaces, onNewTab }: { stor
                       <span className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/nav:opacity-100 focus-within:opacity-100 transition-opacity">
                         <button title={t.pinned ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); store.togglePin(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-[var(--t-fg)]/[0.07]" aria-label={`Pin ${t.label}`}><Pin size={11} /></button>
                         <button title="Duplicate" onClick={(e) => { e.stopPropagation(); store.duplicateTab(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-[var(--t-fg)]/[0.07]" aria-label={`Duplicate ${t.label}`}><Copy size={11} /></button>
-                        <button title="Close" onClick={(e) => { e.stopPropagation(); store.closeTab(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-[var(--pc-danger)]/15 hover:text-[var(--pc-danger)]" aria-label={`Close ${t.label}`}><X size={12} /></button>
+                        <button title="Close" onClick={(e) => { e.stopPropagation(); store.closeTab(t.id); }} className="w-6 h-6 rounded-md grid place-items-center hover:bg-[var(--pc-danger-15)] hover:text-[var(--pc-danger)]" aria-label={`Close ${t.label}`}><X size={12} /></button>
                       </span>
                       {/* pane detail: ONE quiet meta line, not a nested list */}
                       {Object.values(t.panes).length > 0 && (

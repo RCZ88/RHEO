@@ -15,9 +15,9 @@ export function VaultSeal({ size = 120, animate = true, status = 'locked' }: Vau
   ];
 
   const statusColors = {
-    locked: { ring: 'rgb(16,185,129)', core: 'rgb(16,185,129)', glow: 'rgba(16,185,129,0.3)' },
-    unlocking: { ring: 'rgb(251,191,36)', core: 'rgb(251,191,36)', glow: 'rgba(251,191,36,0.3)' },
-    unlocked: { ring: 'rgb(52,211,153)', core: 'rgb(52,211,153)', glow: 'rgba(52,211,153,0.4)' },
+    locked: { ring: 'var(--color-sage-400)', core: 'var(--color-sage-400)', glow: 'color-mix(in srgb, var(--color-sage-400) 30%, transparent)' },
+    unlocking: { ring: 'var(--color-amber-400)', core: 'var(--color-amber-400)', glow: 'color-mix(in srgb, var(--color-amber-400) 30%, transparent)' },
+    unlocked: { ring: 'var(--color-sage-400)', core: 'var(--color-sage-400)', glow: 'color-mix(in srgb, var(--color-sage-400) 40%, transparent)' },
   };
 
   const colors = statusColors[status];

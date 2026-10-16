@@ -203,7 +203,13 @@ discover() {
       slug="$(basename "$(dirname "$p")")"
       n=$((n + 1))
       printf '%d\t%s\t%s\n' "$n" "$slug" "${p#$REPO/}"
-    done < <(find "$root" -mindepth 2 -maxdepth 2 -iname 'prompt*.md' 2>/dev/null | sort)
+      # 'PROMPT*.md' matches PROMPT.md and prompt.md but NOT INITIAL_PROMPT.md,
+    # which is the filename the back-and-forth skill's own Output Artifacts
+    # section mandates. So a live collaboration folder discovered fine and then
+    # bundled NOTHING on copy: the artifact existed and was unreachable. Hence
+    # the second pattern for a *_PROMPT.md suffix.
+  done < <(find "$root" -mindepth 2 -maxdepth 2 \
+             \( -iname 'prompt*.md' -o -iname '*_prompt.md' \) 2>/dev/null | sort)
   done
 }
 
@@ -211,8 +217,11 @@ discover() {
 # folder has one. The receiving AI needs both or the bundle is useless.
 files_for() {
   local dir="$1" p
-  # case-insensitive prompt match, same reason as discover()
-  for p in "$dir"/[Pp][Rr][Oo][Mm][Pp][Tt]*.md; do
+  # case-insensitive prompt match, same reason as discover(). The *_PROMPT.md
+  # branch is the back-and-forth skill's INITIAL_PROMPT.md; without it the
+  # listing above resolves the slug and the copy below then finds no file,
+  # which is the "it listed but copying it does nothing" failure.
+  for p in "$dir"/[Pp][Rr][Oo][Mm][Pp][Tt]*.md "$dir"/*_[Pp][Rr][Oo][Mm][Pp][Tt]*.md; do
     [[ -f "$p" ]] && printf '%s\n' "$p"
   done
   for p in "$dir"/[Cc][Oo][Nn][Tt][Ee][Xx][Tt]_[Bb][Uu][Nn][Dd][Ll][Ee].md; do

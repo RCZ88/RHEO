@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Clock, Play, Pause, RotateCcw, Flag, Plus, Trash2, Bell, BellOff, Timer as TimerIcon, Zap } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Clock, Play, Pause, RotateCcw, Flag, Plus, Trash2, Bell, BellOff, Timer as TimerIcon, Zap, ChevronDown } from 'lucide-react';
 import {
   useTimeStore, useNow, formatHms, formatAlarmAt,
   swStart, swPause, swReset, swLap, swAdd, swRemove,
@@ -10,7 +11,7 @@ import {
 
 type Tab = 'stopwatch' | 'timer' | 'alarms';
 
-export function ClockDropdown() {
+export function ClockDropdown({ label, children }: { label?: string; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('stopwatch');
   const ref = useRef<HTMLDivElement>(null);
@@ -33,22 +34,51 @@ export function ClockDropdown() {
   const runningCount = store.stopwatches.filter(s => s.runningSinceMs != null).length
     + store.timers.filter(t => t.runningSinceMs != null).length;
 
+  // The TRIGGER is the existing top-bar clock chip itself. A bare icon next to an
+  // identical icon was invisible in the running app — affordance, not presence.
+  const nextUp = store.timers
+    .map(t => ({ t, remaining: timerRemainingMs(t, now) }))
+    .filter(x => !x.t.finished)
+    .sort((a, b) => a.remaining - b.remaining)[0];
+
+  const nextAlarm = store.alarms
+    .filter(a => a.enabled)
+    .sort((a, b) => a.atMinute - b.atMinute)[0];
+
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 text-sm font-mono font-semibold text-white tabular-nums hover:text-white/80 light:text-zinc-800 transition"
+        aria-expanded={open}
+        aria-haspopup="dialog"
         title="Timers, stopwatches & alarms"
         data-section="topbar.clock"
+        className="flex items-center gap-1.5 text-sm font-mono font-semibold text-white tabular-nums px-1.5 py-0.5 rounded-md hover:bg-zinc-800 light:hover:bg-zinc-100 light:text-zinc-800 transition"
       >
         <Clock className="w-4 h-4 text-zinc-500" />
+        {children}
         {runningCount > 0 && (
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-label={`${runningCount} running`} />
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" aria-label={`${runningCount} running`} />
         )}
+        {runningCount === 0 && nextUp && (
+          <span className="text-[10px] font-sans text-zinc-500 tabular-nums">{formatHms(nextUp.remaining)}</span>
+        )}
+        {runningCount === 0 && !nextUp && nextAlarm && (
+          <span className="text-[10px] font-sans text-zinc-500 tabular-nums">{formatAlarmAt(nextAlarm.atMinute)}</span>
+        )}
+        <ChevronDown className={`w-3 h-3 text-zinc-600 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
+      {label && <span className="sr-only">{label}</span>}
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[340px] rounded-xl border border-zinc-800 bg-zinc-900/95 shadow-2xl z-50 light:bg-white light:border-zinc-200">
+        <div className="w-[360px] absolute right-0 top-full mt-2 rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl z-[100] light:bg-[var(--ws-surface-raised)] light:border-zinc-200" role="dialog" aria-label="Timers, stopwatch and alarms">
+          <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-zinc-800 light:border-zinc-200">
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500">Time</span>
+            <span className="ml-auto text-[10px] text-zinc-600 font-mono">
+              {runningCount > 0 ? `${runningCount} running` : 'idle'}
+            </span>
+          </div>
+
           <div className="flex items-center gap-1 p-2 border-b border-zinc-800 light:border-zinc-200">
             {([
               ['stopwatch', 'Stopwatch', Zap],
@@ -58,15 +88,15 @@ export function ClockDropdown() {
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition ${tab === id ? 'bg-zinc-800 text-white light:bg-zinc-100 light:text-zinc-900' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`flex-1 flex items-center justify-center gap-2 h-9 px-3 rounded-lg text-[13px] transition ${tab === id ? 'bg-zinc-800 text-white light:bg-zinc-100 light:text-zinc-900' : 'text-zinc-400 hover:text-zinc-200'}`}
               >
-                <Icon className="w-3 h-3" />
+                <Icon className="w-4 h-4 shrink-0" />
                 {label}
               </button>
             ))}
           </div>
 
-          <div className="p-3 max-h-[320px] overflow-y-auto">
+          <div className="p-3 max-h-[380px] overflow-y-auto">
             {tab === 'stopwatch' && <StopwatchTab now={now} />}
             {tab === 'timer' && <TimerTab now={now} />}
             {tab === 'alarms' && <AlarmsTab />}

@@ -410,7 +410,7 @@ export default function ResumeBuilderPage() {
                               onClick={() => handleHistoryClick(globalIdx)}
                               className={`w-full p-3 rounded-lg hover:bg-zinc-800/30 cursor-pointer transition-colors duration-150 text-left ${
                                 isCurrent
-                                  ? 'ring-1 ring-[var(--page-accent)]/30 bg-[var(--page-accent)]/5'
+                                  ? 'ring-1 ring-[var(--page-accent)]/30 bg-[var(--page-accent-5)]'
                                   : ''
                               }`}
                             >
@@ -570,7 +570,7 @@ export default function ResumeBuilderPage() {
                               state === 'complete'
                                 ? 'bg-emerald-500/15 ring-1 ring-emerald-500/20'
                                 : state === 'in_progress'
-                                ? 'bg-[var(--page-accent)]/15 ring-1 ring-[var(--page-accent)]/20'
+                                ? 'bg-[var(--page-accent-15)] ring-1 ring-[var(--page-accent)]/20'
                                 : 'bg-zinc-800/60'
                             }`}>
                               {state === 'complete' ? (
@@ -657,7 +657,7 @@ export default function ResumeBuilderPage() {
             onClick={() => setPreviewMode('styled')}
             className={`text-[10px] px-2.5 py-1 rounded-lg transition-all duration-150 ${
               previewMode === 'styled'
-                ? 'text-white bg-[var(--page-accent)]/15 ring-1 ring-[var(--page-accent)]/20'
+                ? 'text-white bg-[var(--page-accent-15)] ring-1 ring-[var(--page-accent)]/20'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
             }`}
           >
@@ -667,7 +667,7 @@ export default function ResumeBuilderPage() {
             onClick={() => setPreviewMode('ats_raw')}
             className={`text-[10px] px-2.5 py-1 rounded-lg transition-all duration-150 ${
               previewMode === 'ats_raw'
-                ? 'text-white bg-[var(--page-accent)]/15 ring-1 ring-[var(--page-accent)]/20'
+                ? 'text-white bg-[var(--page-accent-15)] ring-1 ring-[var(--page-accent)]/20'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
             }`}
           >
@@ -686,7 +686,7 @@ export default function ResumeBuilderPage() {
         }}
       >
         {!resumeContent || (!resumeContent.summary && (!resumeContent.experience || resumeContent.experience.length === 0)) ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-zinc-950 light:bg-[var(--ws-surface)]/40">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-zinc-950 light:bg-[var(--ws-surface-40)]">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -721,7 +721,7 @@ export default function ResumeBuilderPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--page-accent)]/10 ring-1 ring-[var(--page-accent)]/20">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--page-accent-10)] ring-1 ring-[var(--page-accent)]/20">
             <span className="text-xs text-[var(--page-accent)] font-bold tabular-nums">{score.current}</span>
           </div>
           <Button

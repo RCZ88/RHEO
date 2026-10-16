@@ -42,7 +42,7 @@ export function MemoryReel({ items, onOpen, onPlayRecap }: MemoryReelProps) {
         </div>
         <button
           onClick={onPlayRecap}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-mem-400)]/15 text-[var(--color-mem-400)] text-[11px] font-semibold hover:bg-[var(--color-mem-400)]/25 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-mem-400-15)] text-[var(--color-mem-400)] text-[11px] font-semibold hover:bg-[var(--color-mem-400-25)] transition-colors"
         >
           <Play className="w-3 h-3" /> Play recap
         </button>

@@ -112,7 +112,7 @@ function DensityHeatmap({ phase, context }: { phase: LifePhase; context: PhasePe
   }
 
   return (
-    <div className="flex h-10 items-end gap-px overflow-hidden rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-1.5" title="Activity density across this chapter">
+    <div className="flex h-10 items-end gap-px overflow-hidden rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-40)] p-1.5" title="Activity density across this chapter">
       {buckets.map((b, i) => (
         <div
           key={i}
@@ -132,7 +132,7 @@ function ContextToolbar({ mode, onModeChange, onEdit, onAddAttachment, phaseId }
 }) {
   return (
     <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-zinc-800/60 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl px-4 py-2.5">
-      <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-0.5">
+      <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-50)] p-0.5">
         {(['system', 'manual'] as const).map(m => (
           <button
             key={m}
@@ -174,7 +174,7 @@ function AppUsagePanel({ data }: { data: NonNullable<PhasePeriodContext['appUsag
       <header className="flex items-center justify-between mb-3"><h4 className="text-[11px] uppercase tracking-wider text-zinc-500">App Usage</h4><BarChart3 className="h-4 w-4 text-sky-400/70" /></header>
       <div className="font-mono text-2xl text-zinc-100">{formatMs(data.totalMs)}</div>
       <div className="text-[12px] text-zinc-500">tracked across this chapter</div>
-      <div className="mt-4"><CategoryBar segments={[{ label: 'Productive', value: data.productiveMs, className: 'bg-[var(--tier-productive)]/70' }, { label: 'Neutral', value: data.neutralMs, className: 'bg-[var(--tier-neutral)]/70' }, { label: 'Distracting', value: data.distractingMs, className: 'bg-[var(--tier-distracting)]/70' }]} /></div>
+      <div className="mt-4"><CategoryBar segments={[{ label: 'Productive', value: data.productiveMs, className: 'bg-[var(--tier-productive-70)]' }, { label: 'Neutral', value: data.neutralMs, className: 'bg-[var(--tier-neutral-70)]' }, { label: 'Distracting', value: data.distractingMs, className: 'bg-[var(--tier-distracting-70)]' }]} /></div>
       {shown.length > 0 && <ul className="mt-4 space-y-2">{shown.map(app => <li key={app.name} className="flex items-center justify-between gap-3"><span className="truncate text-[12px] text-zinc-300">{app.name}</span><span className="font-mono text-[11px] text-zinc-500">{formatMs(app.totalMs)}</span></li>)}</ul>}
       {data.topApps.length > 3 && <button onClick={() => setShowAll(!showAll)} className="mt-2 text-[11px] text-zinc-500 hover:text-zinc-300">{showAll ? 'Show less' : `Show more (${data.topApps.length - 3})`}</button>}
     </section>
@@ -419,7 +419,7 @@ function CovenantQuickCreate({ phaseId, onClose, onSave }: {
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="I will..."
-              className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-rose-500/40"
+              className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-60)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-rose-500/40"
             />
           </div>
           <div>

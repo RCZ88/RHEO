@@ -87,7 +87,7 @@ export function TakeawayCard({ takeaway, onConfirm, onReject, onUseInResume }: T
 
       {takeaway.status === 'confirmed' && (
         <div className="pt-3 border-t border-zinc-800/40">
-          <Button variant="ghost" size="sm" onClick={() => onUseInResume(takeaway.id)} className="w-full text-[var(--page-accent)] hover:text-[var(--page-accent)]/80 hover:bg-[var(--page-accent)]/10">
+          <Button variant="ghost" size="sm" onClick={() => onUseInResume(takeaway.id)} className="w-full text-[var(--page-accent)] hover:text-[var(--page-accent)]/80 hover:bg-[var(--page-accent-10)]">
             <Tag className="w-3.5 h-3.5 mr-1" /> Use in Resume
           </Button>
         </div>

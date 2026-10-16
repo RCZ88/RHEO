@@ -101,7 +101,7 @@ export function EasingCurveBrowser({ selectedEasing, onSelectEasing }: EasingCur
                   : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border-zinc-800/60 hover:border-zinc-700/80'}
               `}
             >
-              <svg viewBox="0 0 220 220" className="w-full h-24 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50">
+              <svg viewBox="0 0 220 220" className="w-full h-24 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)]">
                 <line x1="20" y1="200" x2="200" y2="200" stroke="#3f3f46" strokeWidth="1" />
                 <line x1="20" y1="20" x2="20" y2="200" stroke="#3f3f46" strokeWidth="1" />
                 <motion.path

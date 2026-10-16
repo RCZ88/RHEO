@@ -464,7 +464,7 @@ export function PhaseFormDialog({ open, onOpenChange, initial, allPhases = [], o
               className={cn(
                 'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
                 on
-                  ? 'border-[var(--page-accent)]/50 bg-[var(--page-accent)]/10'
+                  ? 'border-[var(--page-accent)]/50 bg-[var(--page-accent-10)]'
                   : 'border-zinc-800 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
               )}
             >

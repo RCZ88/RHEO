@@ -62,10 +62,10 @@ export function VoiceMicButton({
           focus-visible:ring-2 focus-visible:ring-[#e8866b]/60 focus-visible:outline-none
           disabled:opacity-40 disabled:cursor-not-allowed
           ${isListening
-            ? 'bg-[#d96846]/15 text-[#e8866b] ring-1 ring-[#d96846]/30'
+            ? 'bg-[#d96846]/15 text-[var(--color-clay-400)] ring-1 ring-[#d96846]/30'
             : isError
               ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/40'
-              : 'text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-[#e8866b] hover:ring-[#d96846]/30'
+              : 'text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-[var(--color-clay-400)] hover:ring-[#d96846]/30'
           }
         `}
         title={label}
@@ -108,7 +108,7 @@ export function VoiceMicButton({
             {[0, 0.15, 0.3].map((delay, i) => (
               <span
                 key={i}
-                className="w-[2px] rounded-full bg-[#e8866b]/70 animate-voice-bar"
+                className="w-[2px] rounded-full bg-[var(--color-clay-500-70)] animate-voice-bar"
                 style={{ animationDelay: `${delay}s` }}
               />
             ))}
@@ -147,7 +147,7 @@ export function VoiceMicButton({
                     className={`
                       w-full text-left px-3 py-1.5 text-xs transition-colors
                       ${lang === code
-                        ? 'text-[#e8866b] bg-[#d96846]/10'
+                        ? 'text-[var(--color-clay-400)] bg-[#d96846]/10'
                         : 'text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100'
                       }
                     `}

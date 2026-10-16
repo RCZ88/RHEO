@@ -63,7 +63,7 @@ let cfg: RouterConfig | null = null;
 
 /** Defaults match this machine's checkout; overridable via userPreferences. */
 export function defaultRouterConfig(baseUrl?: string): RouterConfig {
-  const dir = '/home/clementzhao/Documents/COMPUTAH SAYENCE/ai-router';
+  const dir = '/home/clementzhao/dev/ai-router';
   return {
     dir,
     configFile: path.join(dir, 'config', 'providers.yaml'),

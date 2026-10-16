@@ -1,8 +1,16 @@
-import { useState, useMemo, useEffect, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Plus, X, Flame, Clock, Trash2, CalendarDays, Link2, Pin, PinOff } from 'lucide-react';
+import { CheckCircle2, Plus, X, Flame, Clock, Trash2, CalendarDays, Link2, Pin, PinOff, FolderOpen, Folder, Edit2, Trash, GripVertical, ChevronDown, ChevronRight, MoreHorizontal } from 'lucide-react';
 import { LinkPicker, type LinkValue } from './LinkPicker';
 import { EntityChip } from './EntityChip';
+
+interface TodoGroup {
+  id: string;
+  name: string;
+  color?: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
 
 interface Todo {
   id: string;
@@ -18,6 +26,7 @@ interface Todo {
   deadlineText?: string | null;
   reminder?: 'none' | '5min' | '15min' | '1hour' | '1day';
   sortOrder?: number;
+  groupId?: string | null;
 }
 
 interface GoalOption {
@@ -58,12 +67,19 @@ interface TodoListProps {
 
 export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptions = [], onChanged, bare = false }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [groups, setGroups] = useState<TodoGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [groupsLoading, setGroupsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newText, setNewText] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [showGroupForm, setShowGroupForm] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<TodoGroup | null>(null);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupColor, setNewGroupColor] = useState('#6366f1');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   
   // Form state for linking
   const [linkedGoalId, setLinkedGoalId] = useState<string>('');
@@ -72,6 +88,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
   const [linkedParentTodoId, setLinkedParentTodoId] = useState<string>('');
   const [dueDate, setDueDate] = useState('');
   const [link, setLink] = useState<LinkValue>({ type: 'none' });
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   // Pinned popup window state (always-on-top mini todolist)
   const [popupOpen, setPopupOpen] = useState(false);
 
@@ -81,17 +98,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
   useEffect(() => {
     console.log('%c[TodoList] v2.0 loaded', 'color: #fbbf24; font-weight: bold');
     loadTodos();
-  }, [api]);
-
-  // Sync pinned-popup open state
-  useEffect(() => {
-    api?.todoPopupGetState?.().then((s: any) => {
-      if (typeof s?.open === 'boolean') setPopupOpen(s.open);
-    }).catch(() => {});
-    const off = api?.onTodoPopupState?.((s: any) => {
-      if (typeof s?.open === 'boolean') setPopupOpen(s.open);
-    });
-    return () => { if (typeof off === 'function') off(); };
+    loadGroups();
   }, [api]);
 
   const loadTodos = async () => {
@@ -117,9 +124,65 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
     }
   };
 
+  const loadGroups = async () => {
+    setGroupsLoading(true);
+    try {
+      if (!api?.todoGroupList) {
+        setGroups([]);
+        return;
+      }
+      const res = await api.todoGroupList();
+      if (res?.success) {
+        const loadedGroups = res.groups || [];
+        setGroups(loadedGroups);
+        // Initialize expanded state for new groups
+        setExpandedGroups(prev => {
+          const next = { ...prev };
+          loadedGroups.forEach(g => { if (next[g.id] === undefined) next[g.id] = true; });
+          return next;
+        });
+      } else {
+        setGroups([]);
+      }
+    } catch (e: any) {
+      console.error('Failed to load groups:', e);
+      setGroups([]);
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
+  // Sync pinned-popup open state
+  useEffect(() => {
+    api?.todoPopupGetState?.().then((s: any) => {
+      if (typeof s?.open === 'boolean') setPopupOpen(s.open);
+    }).catch(() => {});
+    const off = api?.onTodoPopupState?.((s: any) => {
+      if (typeof s?.open === 'boolean') setPopupOpen(s.open);
+    });
+    return () => { if (typeof off === 'function') off(); };
+  }, [api]);
+
   const pending = useMemo(() => todos.filter(t => !t.done), [todos]);
   const done = useMemo(() => todos.filter(t => t.done), [todos]);
   const displayTodos = showAll ? todos : pending;
+
+  // Group todos by groupId
+  const groupedTodos = useMemo(() => {
+    const groupsMap: Record<string, Todo[]> = {};
+    const ungrouped: Todo[] = [];
+    
+    displayTodos.forEach(todo => {
+      if (todo.groupId) {
+        if (!groupsMap[todo.groupId]) groupsMap[todo.groupId] = [];
+        groupsMap[todo.groupId].push(todo);
+      } else {
+        ungrouped.push(todo);
+      }
+    });
+    
+    return { groupsMap, ungrouped };
+  }, [displayTodos, groups]);
 
   const handleAdd = async () => {
     if (!newText.trim()) return;
@@ -131,6 +194,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
         scheduleId: link.type === 'schedule' ? link.id : null,
         parentTodoId: link.type === 'todo' ? link.id : null,
         dueDate: dueDate || null,
+        groupId: selectedGroupId || null,
       });
       if (res?.success) {
         const newTodo: Todo = {
@@ -143,6 +207,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
           scheduleId: link.type === 'schedule' ? link.id : null,
           parentTodoId: link.type === 'todo' ? link.id : null,
           dueDate: dueDate || null,
+          groupId: selectedGroupId || null,
         };
         setTodos(prev => [...prev, newTodo]);
         setNewText('');
@@ -152,11 +217,67 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
         setLinkedParentTodoId('');
         setDueDate('');
         setLink({ type: 'none' });
+        setSelectedGroupId('');
         onChanged?.();
       }
     } catch (e) {
       console.error('Failed to create todo:', e);
     }
+  };
+
+  const handleGroupCreate = async () => {
+    if (!newGroupName.trim()) return;
+    try {
+      const res = await api.todoGroupCreate({
+        name: newGroupName.trim(),
+        color: newGroupColor,
+      });
+      if (res?.success) {
+        const newGroup: TodoGroup = {
+          id: res.id,
+          name: newGroupName.trim(),
+          color: newGroupColor,
+          sortOrder: groups.length,
+          createdAt: new Date().toISOString(),
+        };
+        setGroups(prev => [...prev, newGroup]);
+        setExpandedGroups(prev => ({ ...prev, [res.id]: true }));
+        setNewGroupName('');
+        setNewGroupColor('#6366f1');
+        setShowGroupForm(false);
+      }
+    } catch (e) {
+      console.error('Failed to create group:', e);
+    }
+  };
+
+  const handleGroupUpdate = async (id: string, patch: { name?: string; color?: string; sortOrder?: number }) => {
+    try {
+      const res = await api.todoGroupUpdate(id, patch);
+      if (res?.success) {
+        setGroups(prev => prev.map(g => g.id === id ? { ...g, ...patch } : g));
+      }
+    } catch (e) {
+      console.error('Failed to update group:', e);
+    }
+  };
+
+  const handleGroupDelete = async (id: string) => {
+    try {
+      const res = await api.todoGroupDelete(id);
+      if (res?.success) {
+        setGroups(prev => prev.filter(g => g.id !== id));
+        // Also clear group_id from todos in this group
+        setTodos(prev => prev.map(t => t.groupId === id ? { ...t, groupId: null } : t));
+        setExpandedGroups(prev => { const next = { ...prev }; delete next[id]; return next; });
+      }
+    } catch (e) {
+      console.error('Failed to delete group:', e);
+    }
+  };
+
+  const toggleGroupExpanded = (id: string) => {
+    setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleToggle = async (id: string) => {
@@ -207,7 +328,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
      boxes. Non-bare keeps the original chrome exactly, for callers that render
      TodoList on its own. */
   const shell = (inner: ReactNode) => (
-    <div className={bare ? '' : 'bg-[var(--color-muted)]/35 border border-[var(--color-border)] rounded-xl p-4'}>
+    <div className={bare ? '' : 'bg-[var(--color-muted-35)] border border-[var(--color-border)] rounded-xl p-4'}>
       {inner}
     </div>
   );
@@ -238,7 +359,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
   }
 
   return (
-    <div className={bare ? '' : 'bg-[var(--color-muted)]/35 border border-[var(--color-border)] rounded-xl p-4'}>
+    <div className={bare ? '' : 'bg-[var(--color-muted-35)] border border-[var(--color-border)] rounded-xl p-4'}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <CheckCircle2 size={14} className="text-cyan-400" />
@@ -270,7 +391,7 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
 
       {/* Add/Edit Form */}
       {showForm && (
-        <div className="mb-3 p-3 border border-zinc-800/50 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/30">
+        <div className="mb-3 p-3 border border-zinc-800/50 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface-30)]">
           <input
             value={newText}
             onChange={e => setNewText(e.target.value)}
@@ -320,57 +441,301 @@ export function TodoList({ goalOptions = [], deadlineOptions = [], scheduleOptio
         </p>
       ) : (
         <div className="space-y-1">
-          <AnimatePresence>
-            {displayTodos.map(todo => (
-              <motion.div
-                key={todo.id}
-                layout
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 8 }}
-                className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30 hover:border-zinc-700/40"
-              >
+          {/* Group selector dropdown for the todo form */}
+          {!showForm && groups.length > 0 && (
+            <div className="mb-3 p-3 border border-zinc-800/50 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/30">
+              <div className="flex items-center gap-2 mb-2">
+                <FolderOpen size={14} className="text-amber-400" />
+                <span className="text-[11px] font-medium text-zinc-300">Groups</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
                 <button
-                  onClick={() => handleToggle(todo.id)}
-                  className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                    todo.done
-                      ? 'bg-emerald-500 border-emerald-500'
-                      : 'border-zinc-600 hover:border-cyan-400/60'
+                  type="button"
+                  onClick={() => setSelectedGroupId('')}
+                  className={`px-2 py-1 rounded-md text-[10px] transition-colors ${
+                    !selectedGroupId
+                      ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/25'
+                      : 'bg-zinc-900/60 text-zinc-500 hover:text-zinc-300 border border-zinc-700/50'
                   }`}
                 >
-                  {todo.done && <CheckCircle2 size={10} className="text-white" />}
+                  No Group
                 </button>
-                
-                <span className={`flex-1 truncate text-[12px] ${
-                  todo.done ? 'text-zinc-500 line-through' : 'text-zinc-300'
-                }`}>
-                  {todo.text}
-                </span>
-                
-                {/* Link badges */}
-                {todo.goalId && <EntityChip kind="goal" label={goalOptions.find(g => g.id === todo.goalId)?.title || 'Unlinked goal'} />}
-                
-                {todo.deadlineId && <EntityChip kind="deadline" label={deadlineOptions.find(d => d.id === todo.deadlineId)?.title || 'Unlinked deadline'} />}
-                
-                {todo.scheduleId && <EntityChip kind="schedule" label={scheduleOptions.find(s => s.id === todo.scheduleId)?.title || 'Unlinked schedule'} />}
-                
-                {todo.dueDate && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20" title={todo.dueDate}>
-                    <CalendarDays size={8} />
-                  </span>
-                )}
-                {!todo.goalId && !todo.scheduleId && !todo.parentTodoId && <EntityChip kind="todo" label="Unlinked" />}
-                
+                {groups.map(group => (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => setSelectedGroupId(group.id)}
+                    className={`px-2 py-1 rounded-md text-[10px] transition-colors border ${
+                      selectedGroupId === group.id
+                        ? 'text-white border-current'
+                        : 'text-zinc-500 hover:text-zinc-300 border-zinc-700/50'
+                    }`}
+                    style={{
+                      backgroundColor: selectedGroupId === group.id
+                        ? group.color || '#6366f1'
+                        : 'transparent',
+                    }}
+                  >
+                    {group.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Group management */}
+          {!showForm && groups.length > 0 && (
+            <div className="mb-3 p-3 border border-zinc-800/50 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-medium text-zinc-300">Manage Groups</span>
                 <button
-                  onClick={() => handleDelete(todo.id)}
-                  className="p-1 text-zinc-600 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+                  type="button"
+                  onClick={() => { setShowGroupForm(true); setEditingGroup(null); setNewGroupName(''); setNewGroupColor('#6366f1'); }}
+                  className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/10"
                 >
-                  <Trash2 size={10} />
+                  <Plus size={12} />
                 </button>
+              </div>
+              <div className="space-y-1">
+                {groups.map(group => (
+                  <div
+                    key={group.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30"
+                  >
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: group.color || '#6366f1' }}
+                    />
+                    <span className="flex-1 text-[11px] text-zinc-300 truncate">{group.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingGroup(group); setNewGroupName(group.name); setNewGroupColor(group.color || '#6366f1'); setShowGroupForm(true); }}
+                      className="p-1 text-zinc-500 hover:text-zinc-200"
+                    >
+                      <Edit2 size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleGroupDelete(group.id)}
+                      className="p-1 text-zinc-600 hover:text-red-400"
+                    >
+                      <Trash size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Create/Edit Group Form */}
+          {showGroupForm && (
+            <div className="mb-3 p-3 border border-zinc-800/50 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-medium text-zinc-300">
+                  {editingGroup ? 'Edit Group' : 'New Group'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setShowGroupForm(false); setEditingGroup(null); setNewGroupName(''); setNewGroupColor('#6366f1'); }}
+                  className="p-1 text-zinc-500 hover:text-zinc-200"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <input
+                value={newGroupName}
+                onChange={e => setNewGroupName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleGroupCreate()}
+                placeholder="Group name..."
+                autoFocus
+                className="w-full px-3 py-2 rounded-lg bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 text-[12px] text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/50 mb-2"
+              />
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] text-zinc-500">Color:</span>
+                <input
+                  type="color"
+                  value={newGroupColor}
+                  onChange={e => setNewGroupColor(e.target.value)}
+                  className="w-8 h-8 rounded border border-zinc-700 cursor-pointer"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => { setShowGroupForm(false); setEditingGroup(null); setNewGroupName(''); setNewGroupColor('#6366f1'); }}
+                  className="px-2 py-1 text-[10px] text-zinc-500 hover:text-zinc-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (editingGroup) {
+                      handleGroupUpdate(editingGroup.id, { name: newGroupName.trim(), color: newGroupColor });
+                    } else {
+                      handleGroupCreate();
+                    }
+                    setShowGroupForm(false);
+                    setEditingGroup(null);
+                    setNewGroupName('');
+                    setNewGroupColor('#6366f1');
+                  }}
+                  disabled={!newGroupName.trim()}
+                  className="px-3 py-1 text-[11px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 rounded hover:bg-cyan-500/25 disabled:opacity-30"
+                >
+                  {editingGroup ? 'Save' : 'Create'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Render grouped todos */}
+          <div className="space-y-2">
+            {/* Render each group */}
+            {groups.map(group => {
+              const groupTodos = groupedTodos.groupsMap[group.id] || [];
+              const isExpanded = expandedGroups[group.id] !== false;
+              if (groupTodos.length === 0 && !isExpanded) return null;
+              return (
+                <motion.div key={group.id} layout className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupExpanded(group.id)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/40 text-left hover:bg-zinc-900/60"
+                  >
+                    <ChevronDown
+                      size={12}
+                      className={`text-zinc-500 transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                    />
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: group.color || '#6366f1' }}
+                    />
+                    <span className="flex-1 text-[11px] font-medium text-zinc-200 truncate">{group.name}</span>
+                    <span className="text-[10px] text-zinc-500 tabular-nums">{groupTodos.length} {groupTodos.length === 1 ? 'item' : 'items'}</span>
+                  </button>
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="pl-8 space-y-1"
+                      >
+                        {groupTodos.map(todo => (
+                          <motion.div
+                            key={todo.id}
+                            layout
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 8 }}
+                            className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30 hover:border-zinc-700/40"
+                          >
+                            <button
+                              onClick={() => handleToggle(todo.id)}
+                              className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                todo.done
+                                  ? 'bg-emerald-500 border-emerald-500'
+                                  : 'border-zinc-600 hover:border-cyan-400/60'
+                              }`}
+                            >
+                              {todo.done && <CheckCircle2 size={10} className="text-white" />}
+                            </button>
+                            
+                            <span className={`flex-1 truncate text-[12px] ${
+                              todo.done ? 'text-zinc-500 line-through' : 'text-zinc-300'
+                            }`}>
+                              {todo.text}
+                            </span>
+                            
+                            {/* Link badges */}
+                            {todo.goalId && <EntityChip kind="goal" label={goalOptions.find(g => g.id === todo.goalId)?.title || 'Unlinked goal'} />}
+                            
+                            {todo.deadlineId && <EntityChip kind="deadline" label={deadlineOptions.find(d => d.id === todo.deadlineId)?.title || 'Unlinked deadline'} />}
+                            
+                            {todo.scheduleId && <EntityChip kind="schedule" label={scheduleOptions.find(s => s.id === todo.scheduleId)?.title || 'Unlinked schedule'} />}
+                            
+                            {todo.dueDate && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20" title={todo.dueDate}>
+                                <CalendarDays size={8} />
+                              </span>
+                            )}
+                            {!todo.goalId && !todo.scheduleId && !todo.parentTodoId && <EntityChip kind="todo" label="Unlinked" />}
+                            
+                            <button
+                              onClick={() => handleDelete(todo.id)}
+                              className="p-1 text-zinc-600 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+
+            {/* Ungrouped todos */}
+            {groupedTodos.ungrouped.length > 0 && (
+              <motion.div layout className="space-y-1">
+                <div className="px-3 py-1.5 text-[10px] text-zinc-500 uppercase tracking-wider">
+                  Ungrouped
+                </div>
+                <AnimatePresence>
+                  {groupedTodos.ungrouped.map(todo => (
+                    <motion.div
+                      key={todo.id}
+                      layout
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 8 }}
+                      className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border border-zinc-800/30 hover:border-zinc-700/40"
+                    >
+                      <button
+                        onClick={() => handleToggle(todo.id)}
+                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                          todo.done
+                            ? 'bg-emerald-500 border-emerald-500'
+                            : 'border-zinc-600 hover:border-cyan-400/60'
+                        }`}
+                      >
+                        {todo.done && <CheckCircle2 size={10} className="text-white" />}
+                      </button>
+                      
+                      <span className={`flex-1 truncate text-[12px] ${
+                        todo.done ? 'text-zinc-500 line-through' : 'text-zinc-300'
+                      }`}>
+                        {todo.text}
+                      </span>
+                      
+                      {/* Link badges */}
+                      {todo.goalId && <EntityChip kind="goal" label={goalOptions.find(g => g.id === todo.goalId)?.title || 'Unlinked goal'} />}
+                      
+                      {todo.deadlineId && <EntityChip kind="deadline" label={deadlineOptions.find(d => d.id === todo.deadlineId)?.title || 'Unlinked deadline'} />}
+                      
+                      {todo.scheduleId && <EntityChip kind="schedule" label={scheduleOptions.find(s => s.id === todo.scheduleId)?.title || 'Unlinked schedule'} />}
+                      
+                      {todo.dueDate && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20" title={todo.dueDate}>
+                          <CalendarDays size={8} />
+                        </span>
+                      )}
+                      {!todo.goalId && !todo.scheduleId && !todo.parentTodoId && <EntityChip kind="todo" label="Unlinked" />}
+                      
+                      <button
+                        onClick={() => handleDelete(todo.id)}
+                        className="p-1 text-zinc-600 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </motion.div>
-            ))}</AnimatePresence>
+            )}
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }

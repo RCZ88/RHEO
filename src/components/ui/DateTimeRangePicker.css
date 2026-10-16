@@ -1,0 +1,107 @@
+
+.dt-picker {
+  /* Re-pointed at the app's semantic tokens. The source shipped hardcoded
+     light-mode values (var(--color-card) ground, near-black ink), which is unreadable in
+     dark mode; deriving them here means the picker follows the theme instead
+     of needing a second dark stylesheet that would drift from the first. */
+  --dt-ink: var(--color-foreground);
+  --dt-muted: var(--color-muted-foreground);
+  --dt-line: var(--color-border);
+  --dt-soft: var(--color-muted);
+  --dt-accent: var(--page-accent);
+  width: min(100%, 390px);
+  color: var(--dt-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.dt-picker * { box-sizing: border-box; }
+.dt-date-section { position: relative; }
+.dt-field-label { display: block; margin: 0 0 7px; font-size: 13px; font-weight: 600; }
+.dt-range-input {
+  width: 100%; height: 41px; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 0 12px 0 14px; border: 1px solid var(--color-border); border-radius: 7px;
+  background: var(--color-card); color: var(--dt-ink); text-align: left; font: 500 12px var(--font-mono);
+  cursor: pointer; transition: border-color .18s, box-shadow .18s;
+}
+.dt-range-input:hover, .dt-range-input:focus-visible { border-color: color-mix(in oklab, var(--color-foreground) 39%, var(--color-card)); outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-foreground) 90%, transparent); }
+.dt-range-input svg { width: 17px; height: 17px; flex: 0 0 auto; color: color-mix(in oklab, var(--color-foreground) 66%, var(--color-card)); }
+.dt-range-dash { color: color-mix(in oklab, var(--color-foreground) 36%, var(--color-card)); padding: 0 3px; }
+
+.dt-calendar-popover {
+  position: absolute; z-index: 20; top: 72px; left: 0; width: 278px; padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--color-foreground) 10%, var(--color-card)); border-radius: 9px; background: var(--color-card);
+  box-shadow: 0 10px 28px color-mix(in oklab, var(--color-foreground) 92%, transparent), 0 2px 5px color-mix(in oklab, var(--color-foreground) 92%, transparent);
+  animation: dt-enter .16s ease-out;
+}
+@keyframes dt-enter { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.dt-calendar-header { height: 30px; display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; margin-bottom: 12px; }
+.dt-month-title { text-align: center; font-size: 13px; font-weight: 700; letter-spacing: -.2px; }
+.dt-month-nav { width: 29px; height: 29px; display: grid; place-items: center; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 7px; background: var(--color-card); color: color-mix(in oklab, var(--color-foreground) 52%, var(--color-card)); cursor: pointer; }
+.dt-month-nav:hover { background: color-mix(in oklab, var(--color-foreground) 4%, var(--color-card)); color: color-mix(in oklab, var(--color-foreground) 91%, var(--color-card)); }
+.dt-month-nav svg { width: 14px; height: 14px; }
+.dt-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.dt-weekdays { height: 26px; align-items: center; color: color-mix(in oklab, var(--color-foreground) 47%, var(--color-card)); font-size: 11px; text-align: center; }
+.dt-calendar-days { row-gap: 3px; }
+.dt-day {
+  position: relative; z-index: 0; height: 35px; min-width: 0; padding: 0; border: 0; border-radius: 5px;
+  background: transparent; color: color-mix(in oklab, var(--color-foreground) 89%, var(--color-card)); font: 500 12px "Manrope", sans-serif; cursor: pointer;
+}
+.dt-day:hover:not(.is-start):not(.is-end) { background: color-mix(in oklab, var(--color-foreground) 6%, var(--color-card)); }
+.dt-day.is-outside { color: color-mix(in oklab, var(--color-foreground) 27%, var(--color-card)); }
+.dt-day.is-in-range { border-radius: 0; background: color-mix(in oklab, var(--color-foreground) 5%, var(--color-card)); }
+.dt-day.is-start, .dt-day.is-end { z-index: 1; border-radius: 6px; background: color-mix(in oklab, var(--color-foreground) 90%, var(--color-card)); color: white; box-shadow: 0 2px 4px color-mix(in oklab, var(--color-foreground) 100%, transparent); }
+.dt-day.is-today:not(.is-start):not(.is-end) { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-foreground) 27%, var(--color-card)); }
+.dt-calendar-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid color-mix(in oklab, var(--color-foreground) 6%, var(--color-card)); color: color-mix(in oklab, var(--color-foreground) 47%, var(--color-card)); font-size: 10px; }
+.dt-calendar-footer button { padding: 5px 10px; border: 0; border-radius: 5px; background: color-mix(in oklab, var(--color-foreground) 90%, var(--color-card)); color: white; font: 600 11px "Manrope", sans-serif; cursor: pointer; }
+.dt-field-note { margin: 7px 0 0; color: color-mix(in oklab, var(--color-foreground) 42%, var(--color-card)); font-size: 10px; }
+
+.dt-time-section { margin-top: 25px; padding: 17px; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 11px; background: linear-gradient(145deg, var(--color-card) 30%, color-mix(in oklab, var(--color-foreground) 2%, var(--color-card)) 100%); }
+.dt-section-title-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.dt-eyebrow { display: block; color: color-mix(in oklab, var(--color-foreground) 44%, var(--color-card)); font: 500 9px var(--font-mono); letter-spacing: 1.25px; }
+.dt-section-title-row h3 { margin: 4px 0 0; font-size: 16px; font-weight: 700; letter-spacing: -.55px; }
+.dt-duration-chip { padding: 7px 9px; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 6px; background: var(--color-card); font: 500 10px var(--font-mono); white-space: nowrap; }
+.dt-duration-chip span { padding: 0 4px; color: color-mix(in oklab, var(--color-foreground) 39%, var(--color-card)); }
+
+.dt-time-tabs { display: flex; align-items: center; margin: 17px 0 18px; }
+.dt-time-tabs > button { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 10px 11px; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 8px; background: var(--color-card); text-align: left; cursor: pointer; }
+.dt-time-tabs > button.is-active { border-color: color-mix(in oklab, var(--color-foreground) 85%, var(--color-card)); box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-foreground) 85%, var(--color-card)); }
+.dt-time-tabs > button > span:last-child { display: grid; gap: 3px; }
+.dt-time-tabs small { color: color-mix(in oklab, var(--color-foreground) 42%, var(--color-card)); font: 500 8px var(--font-mono); letter-spacing: .8px; }
+.dt-time-tabs strong { font: 500 13px var(--font-mono); }
+.dt-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.dt-tab-dot-start { background: color-mix(in oklab, var(--color-foreground) 90%, var(--color-card)); }
+.dt-tab-dot-end { background: color-mix(in oklab, var(--color-foreground) 28%, var(--color-card)); }
+.dt-time-tab-connector { width: 13px; height: 1px; flex: 0 0 auto; background: color-mix(in oklab, var(--color-foreground) 15%, var(--color-card)); }
+
+.dt-time-editor { padding: 13px; border: 1px solid color-mix(in oklab, var(--color-foreground) 7%, var(--color-card)); border-radius: 9px; background: var(--color-card); }
+.dt-time-editor-heading { display: flex; align-items: center; justify-content: space-between; }
+.dt-time-zone { color: color-mix(in oklab, var(--color-foreground) 31%, var(--color-card)); font: 500 8px var(--font-mono); letter-spacing: .8px; }
+.dt-time-readout { display: flex; align-items: center; gap: 3px; margin: 6px 0 12px; }
+.dt-time-digit { min-width: 61px; padding: 2px 5px 4px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: color-mix(in oklab, var(--color-foreground) 87%, var(--color-card)); font: 500 36px var(--font-mono); letter-spacing: -2px; cursor: pointer; }
+.dt-time-digit.is-active { border-color: color-mix(in oklab, var(--color-foreground) 10%, var(--color-card)); background: color-mix(in oklab, var(--color-foreground) 4%, var(--color-card)); }
+.dt-time-colon { align-self: flex-start; margin-top: 3px; color: color-mix(in oklab, var(--color-foreground) 36%, var(--color-card)); font: 400 30px var(--font-mono); }
+.dt-period-toggle { display: grid; gap: 3px; margin-left: 7px; }
+.dt-period-toggle button { padding: 4px 6px; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 4px; background: white; color: color-mix(in oklab, var(--color-foreground) 45%, var(--color-card)); font: 500 8px var(--font-mono); cursor: pointer; }
+.dt-period-toggle button.is-active { border-color: color-mix(in oklab, var(--color-foreground) 85%, var(--color-card)); background: color-mix(in oklab, var(--color-foreground) 85%, var(--color-card)); color: white; }
+.dt-time-selector { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 12px; }
+.dt-time-selector-divider { background: color-mix(in oklab, var(--color-foreground) 7%, var(--color-card)); }
+.dt-time-column-label { display: block; margin-bottom: 5px; color: color-mix(in oklab, var(--color-foreground) 37%, var(--color-card)); font: 500 8px var(--font-mono); letter-spacing: 1px; }
+.dt-time-wheel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.dt-time-option { height: 29px; border: 1px solid transparent; border-radius: 5px; background: color-mix(in oklab, var(--color-foreground) 3%, var(--color-card)); color: color-mix(in oklab, var(--color-foreground) 66%, var(--color-card)); font: 500 11px var(--font-mono); cursor: pointer; }
+.dt-time-option:hover { background: color-mix(in oklab, var(--color-foreground) 7%, var(--color-card)); }
+.dt-time-option.is-selected { border-color: color-mix(in oklab, var(--color-foreground) 87%, var(--color-card)); background: color-mix(in oklab, var(--color-foreground) 87%, var(--color-card)); color: var(--color-card); }
+.dt-time-hint { margin: 10px 0 0; color: color-mix(in oklab, var(--color-foreground) 39%, var(--color-card)); font-size: 9px; line-height: 1.5; }
+
+.dt-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; }
+.dt-selection-summary { color: color-mix(in oklab, var(--color-foreground) 50%, var(--color-card)); font: 500 10px var(--font-mono); }
+.dt-apply-button { display: flex; align-items: center; gap: 12px; padding: 10px 13px; border: 0; border-radius: 6px; background: color-mix(in oklab, var(--color-foreground) 90%, var(--color-card)); color: var(--color-card); font: 600 11px "Manrope", sans-serif; cursor: pointer; transition: background .15s, transform .15s; }
+.dt-apply-button:hover { background: color-mix(in oklab, var(--color-foreground) 78%, var(--color-card)); transform: translateY(-1px); }
+.dt-apply-button span { color: color-mix(in oklab, var(--color-foreground) 21%, var(--color-card)); font-size: 14px; }
+
+@media (max-width: 420px) {
+  .dt-picker { width: 100%; }
+  .dt-calendar-popover { width: min(278px, 100%); }
+  .dt-time-section { padding: 12px; }
+  .dt-duration-chip { font-size: 9px; }
+}

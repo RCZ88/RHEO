@@ -1,0 +1,151 @@
+- generic [active] [ref=f15e1]:
+  - status
+  - generic [ref=f15e2]:
+    - link "Skip to main content" [ref=f15e3] [cursor=pointer]:
+      - /url: "#maincontent"
+    - navigation "Site navigation" [ref=f15e4]:
+      - link [ref=f15e5] [cursor=pointer]:
+        - /url: https://cx.apps.binus.ac.id
+        - img "Class eXtension" [ref=f15e6]
+      - navigation [ref=f15e8]:
+        - menubar [ref=f15e9]:
+          - menuitem "Home" [ref=f15e10] [cursor=pointer]
+          - menuitem "Dashboard" [ref=f15e11] [cursor=pointer]
+          - menuitem "My courses" [ref=f15e12] [cursor=pointer]
+          - text: 
+      - list
+      - generic [ref=f15e13]:
+        - searchbox "Search course" [ref=f15e14]
+        - button "Search" [ref=f15e15] [cursor=pointer]
+      - generic [ref=f15e16]:
+        - button "Show notification window with no new notifications" [ref=f15e18] [cursor=pointer]:
+          - img "Toggle notifications menu" [ref=f15e19]: 
+        - button [ref=f15e21] [cursor=pointer]:
+          - img "Toggle messaging drawer" [ref=f15e22]: 
+        - button "User menu" [ref=f15e27] [cursor=pointer]:
+          - img "RAPHAEL CLEMENTIUS ZHAO" [ref=f15e31]: RC
+          - text: 
+    - generic [ref=f15e32]:
+      - generic [ref=f15e33]:
+        - generic:
+          - button "Open course index" [ref=f15e35] [cursor=pointer]:
+            - generic [aria-hidden] [ref=f15e37]: 
+          - button "Open block drawer" [ref=f15e39] [cursor=pointer]:
+            - generic [aria-hidden] [ref=f15e42]: 
+            - text: 
+        - banner [ref=f15e43]:
+          - generic [ref=f15e44]:
+            - navigation "Navigation bar" [ref=f15e47]:
+              - list [ref=f15e48]:
+                - listitem [ref=f15e49]:
+                  - link "BGAFBSA_70926_ALL" [ref=f15e50] [cursor=pointer]:
+                    - /url: https://cx.apps.binus.ac.id/course/view.php?id=4623
+                - listitem [ref=f15e51]:
+                  - text: /
+                  - link "Social Awareness" [ref=f15e52] [cursor=pointer]:
+                    - /url: https://cx.apps.binus.ac.id/course/section.php?id=11610
+                - listitem [ref=f15e53]: / Assignment BGA Foundation - Social Awareness Quiz
+            - heading "Assignment BGA Foundation - Social Awareness Quiz" [level=1] [ref=f15e61]
+        - region "Content" [ref=f15e64]:
+          - main [ref=f15e66]:
+            - link "Back" [ref=f15e70] [cursor=pointer]:
+              - /url: https://cx.apps.binus.ac.id/mod/quiz/view.php?id=34111
+            - generic [ref=f15e72]:
+              - generic [ref=f15e73]:
+                - generic [ref=f15e74]:
+                  - heading "Question 10" [level=3] [ref=f15e75]
+                  - generic [ref=f15e76]: Not yet answered
+                  - generic [ref=f15e77]: Marked out of 10.00
+                  - button "Flagged" [ref=f15e79] [cursor=pointer]: Flag question
+                - generic [ref=f15e81]:
+                  - heading "Question text" [level=4] [ref=f15e82]
+                  - paragraph [ref=f15e84]:
+                    - text: Berikut adalah pemahaman terkait dengan
+                    - strong [ref=f15e85]: "\"mengambil tindakan\""
+                    - text: dalam proses menyelesaikan permasalahan sosial?/
+                    - emphasis [ref=f15e86]: Which one of these statements is related to
+                    - strong [ref=f15e87]:
+                      - emphasis [ref=f15e88]: "\"taking action\""
+                    - emphasis [ref=f15e89]: in social problem solving process?
+                  - group "Question 10 Answer" [ref=f15e90]:
+                    - generic [ref=f15e91]:
+                      - generic [ref=f15e92]: Question 10
+                      - text: Answer
+                    - generic [ref=f15e93]:
+                      - generic [ref=f15e94]:
+                        - radio "a. Mempertimbangkan kelebihan dan kekurangan dari sebuah solusi yang telah dihasilkan/ Consider the advantages and disadvantages of a solution that has been produced" [ref=f15e95]
+                        - generic [ref=f15e96]:
+                          - generic [ref=f15e97]: a.
+                          - paragraph [ref=f15e99]:
+                            - text: Mempertimbangkan kelebihan dan kekurangan dari sebuah solusi yang telah dihasilkan/
+                            - emphasis [ref=f15e100]: Consider the advantages and disadvantages of a solution that has been produced
+                            - emphasis
+                      - generic [ref=f15e101]:
+                        - radio "b. Fokus untuk menggambarkan masalah seobjektif mungkin terhadap permasalahan sosial yang terjadi sehingga dapat membantu dalam memahami masalah yang terjadi/ Focus on describing the problem as objectively as possible to the social problems that occur so that it can help in understanding the problems that occur" [ref=f15e102]
+                        - generic [ref=f15e103]:
+                          - generic [ref=f15e104]: b.
+                          - paragraph [ref=f15e106]:
+                            - text: Fokus untuk menggambarkan masalah seobjektif mungkin terhadap permasalahan sosial yang terjadi sehingga dapat membantu dalam memahami masalah yang terjadi/ F
+                            - emphasis [ref=f15e107]: ocus on describing the problem as objectively as possible to the social problems that occur so that it can help in understanding the problems that occur
+                            - emphasis
+                      - generic [ref=f15e108]:
+                        - radio "c. Memilih solusi yang paling banyak kelebihannya untuk diimplemtasikan dan mengevaluasi dari tindakan tersebut untuk kemudian menentukan langkah berikutnya/ Choose the solution with the most advantages to implement and evaluate the actions to determine the next steps" [ref=f15e109]
+                        - generic [ref=f15e110]:
+                          - generic [ref=f15e111]: c.
+                          - paragraph [ref=f15e113]:
+                            - text: Memilih solusi yang paling banyak kelebihannya untuk diimplemtasikan dan mengevaluasi dari tindakan tersebut untuk kemudian menentukan langkah berikutnya/
+                            - emphasis [ref=f15e114]: Choose the solution with the most advantages to implement and evaluate the actions to determine the next steps
+                      - generic [ref=f15e115]:
+                        - radio "d. Melakukan brainstorming untuk menghasilkan kemungkinan solusi untuk menyelesaikan masalah/ Doing brainstorming to come up with possible solutions to solve the problem" [ref=f15e116]
+                        - generic [ref=f15e117]:
+                          - generic [ref=f15e118]: d.
+                          - paragraph [ref=f15e120]:
+                            - text: Melakukan
+                            - emphasis [ref=f15e121]: brainstorming
+                            - text: untuk menghasilkan kemungkinan solusi untuk menyelesaikan masalah/
+                            - emphasis [ref=f15e122]: Doing brainstorming to come up with possible solutions to solve the problem
+                    - generic [aria-hidden] [ref=f15e123]:
+                      - radio [checked] [aria-hidden] [ref=f15e124]
+                      - button [ref=f15e126] [cursor=pointer]: Clear my choice
+              - generic [ref=f15e127]:
+                - button "Previous page" [ref=f15e128] [cursor=pointer]
+                - button "Finish attempt ..." [ref=f15e129] [cursor=pointer]
+      - link "Send feedback" [ref=f15e131] [cursor=pointer]:
+        - /url: https://forms.office.com/Pages/ResponsePage.aspx?id=Y7mFNLqCb0qBD7XMIm_4mB0qVKUyctBFrmPcpI9b-9BUQ01VQVpROTZROTVEQjBBT1NCVlBEWENFRy4u&r607a61f295574a459e9331931a003876=%22Class%20Extension%20(cx.apps.binus.ac.id)%22
+      - contentinfo [ref=f15e132]:
+        - generic [ref=f15e134]:
+          - generic [ref=f15e136]:
+            - generic [ref=f15e137]:
+              - paragraph [ref=f15e138]:
+                - link "COURSES" [ref=f15e139] [cursor=pointer]:
+                  - /url: /course/
+              - paragraph [ref=f15e140]:
+                - link "KATALOG (CATALOGUE)" [ref=f15e141] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=katalog
+              - paragraph [ref=f15e142]:
+                - link "LABS" [ref=f15e143] [cursor=pointer]:
+                  - /url: http://labs.tamanbelajar.com
+              - paragraph [ref=f15e144]:
+                - link "VERIFY CERTIFICATE" [ref=f15e145] [cursor=pointer]:
+                  - /url: /verify_certificate/
+            - generic [ref=f15e146]:
+              - paragraph [ref=f15e147]:
+                - link "DAFTAR PELANGGARAN (VIOLATION LIST)" [ref=f15e148] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=daftar-pelanggaran
+              - paragraph [ref=f15e149]:
+                - link "LAPORAN (REPORT)" [ref=f15e150] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=laporan
+            - generic [ref=f15e151]:
+              - paragraph [ref=f15e152]:
+                - link "PANDUAN (GUIDELINES)" [ref=f15e153] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=panduan
+              - paragraph [ref=f15e154]:
+                - link "ATURAN (RULES)" [ref=f15e155] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=aturan
+              - paragraph [ref=f15e156]:
+                - link "TENTANG KAMI (ABOUT US)" [ref=f15e157] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=tentang-kami
+              - paragraph [ref=f15e158]:
+                - link "HUBUNGI KAMI (CONTACT US)" [ref=f15e159] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=hubungi-kami
+          - text: 

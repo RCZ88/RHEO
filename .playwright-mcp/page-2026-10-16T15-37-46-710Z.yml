@@ -1,0 +1,142 @@
+- generic [active] [ref=f25e1]:
+  - status
+  - generic [ref=f25e2]:
+    - link "Skip to main content" [ref=f25e3] [cursor=pointer]:
+      - /url: "#maincontent"
+    - navigation "Site navigation" [ref=f25e4]:
+      - link [ref=f25e5] [cursor=pointer]:
+        - /url: https://cx.apps.binus.ac.id
+        - img "Class eXtension" [ref=f25e6]
+      - navigation [ref=f25e8]:
+        - menubar [ref=f25e9]:
+          - menuitem "Home" [ref=f25e10] [cursor=pointer]
+          - menuitem "Dashboard" [ref=f25e11] [cursor=pointer]
+          - menuitem "My courses" [ref=f25e12] [cursor=pointer]
+          - text: 
+      - list
+      - generic [ref=f25e13]:
+        - searchbox "Search course" [ref=f25e14]
+        - button "Search" [ref=f25e15] [cursor=pointer]
+      - generic [ref=f25e16]:
+        - button "Show notification window with no new notifications" [ref=f25e18] [cursor=pointer]:
+          - img "Toggle notifications menu" [ref=f25e19]: 
+        - button [ref=f25e21] [cursor=pointer]:
+          - img "Toggle messaging drawer" [ref=f25e22]: 
+        - button "User menu" [ref=f25e27] [cursor=pointer]:
+          - img "RAPHAEL CLEMENTIUS ZHAO" [ref=f25e31]: RC
+          - text: 
+    - generic [ref=f25e32]:
+      - generic [ref=f25e33]:
+        - generic:
+          - button "Open course index" [ref=f25e35] [cursor=pointer]:
+            - generic [aria-hidden] [ref=f25e37]: 
+          - button "Open block drawer" [ref=f25e39] [cursor=pointer]:
+            - generic [aria-hidden] [ref=f25e42]: 
+            - text: 
+        - banner [ref=f25e43]:
+          - generic [ref=f25e44]:
+            - navigation "Navigation bar" [ref=f25e47]:
+              - list [ref=f25e48]:
+                - listitem [ref=f25e49]:
+                  - link "BGAFBSA_70926_ALL" [ref=f25e50] [cursor=pointer]:
+                    - /url: https://cx.apps.binus.ac.id/course/view.php?id=4623
+                - listitem [ref=f25e51]:
+                  - text: /
+                  - link "Social Awareness" [ref=f25e52] [cursor=pointer]:
+                    - /url: https://cx.apps.binus.ac.id/course/section.php?id=11610
+                - listitem [ref=f25e53]: / Assignment BGA Foundation - Social Awareness Quiz
+            - heading "Assignment BGA Foundation - Social Awareness Quiz" [level=1] [ref=f25e61]
+        - region "Content" [ref=f25e64]:
+          - main [ref=f25e66]:
+            - link "Back" [ref=f25e70] [cursor=pointer]:
+              - /url: https://cx.apps.binus.ac.id/mod/quiz/view.php?id=34111
+            - generic [ref=f25e72]:
+              - generic [ref=f25e73]:
+                - generic [ref=f25e74]:
+                  - heading "Question 1" [level=3] [ref=f25e75]
+                  - generic [ref=f25e76]: Answer saved
+                  - generic [ref=f25e77]: Marked out of 10.00
+                  - button "Flagged" [ref=f25e79] [cursor=pointer]: Flag question
+                - generic [ref=f25e81]:
+                  - heading "Question text" [level=4] [ref=f25e82]
+                  - generic [ref=f25e83]:
+                    - paragraph
+                    - generic [ref=f25e84]:
+                      - text: Apa yang menjadi hal dasar dalam menumbuhkan kesadaran sosial?/
+                      - emphasis [ref=f25e85]
+                    - emphasis [ref=f25e87]: What is the basic thing in fostering social awareness?
+                    - paragraph
+                  - group "Question 1 Answer" [ref=f25e89]:
+                    - generic [ref=f25e90]:
+                      - generic [ref=f25e91]: Question 1
+                      - text: Answer
+                    - generic [ref=f25e92]:
+                      - generic [ref=f25e93]:
+                        - radio "a. Intelligence Quotient" [checked] [ref=f25e94]
+                        - generic [ref=f25e95]:
+                          - generic [ref=f25e96]: a.
+                          - paragraph [ref=f25e98]: Intelligence Quotient
+                      - generic [ref=f25e99]:
+                        - radio "b. Simpati/Sympathy" [ref=f25e100]
+                        - generic [ref=f25e101]:
+                          - generic [ref=f25e102]: b.
+                          - paragraph [ref=f25e104]:
+                            - text: Simpati/
+                            - emphasis [ref=f25e105]: Sympathy
+                      - generic [ref=f25e106]:
+                        - radio "c. Empati/Empathy" [ref=f25e107]
+                        - generic [ref=f25e108]:
+                          - generic [ref=f25e109]: c.
+                          - paragraph [ref=f25e111]:
+                            - text: Empati/
+                            - emphasis [ref=f25e112]: Empathy
+                      - generic [ref=f25e113]:
+                        - radio "d. Kesadaran Diri/Self Awareness" [ref=f25e114]
+                        - generic [ref=f25e115]:
+                          - generic [ref=f25e116]: d.
+                          - paragraph [ref=f25e118]:
+                            - text: Kesadaran Diri/
+                            - emphasis [ref=f25e119]: Self Awareness
+                    - generic [ref=f25e120]:
+                      - radio [aria-hidden] [ref=f25e121]
+                      - button "Clear my choice" [ref=f25e123] [cursor=pointer]
+              - button "Next page" [ref=f25e125] [cursor=pointer]
+      - link "Send feedback" [ref=f25e127] [cursor=pointer]:
+        - /url: https://forms.office.com/Pages/ResponsePage.aspx?id=Y7mFNLqCb0qBD7XMIm_4mB0qVKUyctBFrmPcpI9b-9BUQ01VQVpROTZROTVEQjBBT1NCVlBEWENFRy4u&r607a61f295574a459e9331931a003876=%22Class%20Extension%20(cx.apps.binus.ac.id)%22
+      - contentinfo [ref=f25e128]:
+        - generic [ref=f25e130]:
+          - generic [ref=f25e132]:
+            - generic [ref=f25e133]:
+              - paragraph [ref=f25e134]:
+                - link "COURSES" [ref=f25e135] [cursor=pointer]:
+                  - /url: /course/
+              - paragraph [ref=f25e136]:
+                - link "KATALOG (CATALOGUE)" [ref=f25e137] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=katalog
+              - paragraph [ref=f25e138]:
+                - link "LABS" [ref=f25e139] [cursor=pointer]:
+                  - /url: http://labs.tamanbelajar.com
+              - paragraph [ref=f25e140]:
+                - link "VERIFY CERTIFICATE" [ref=f25e141] [cursor=pointer]:
+                  - /url: /verify_certificate/
+            - generic [ref=f25e142]:
+              - paragraph [ref=f25e143]:
+                - link "DAFTAR PELANGGARAN (VIOLATION LIST)" [ref=f25e144] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=daftar-pelanggaran
+              - paragraph [ref=f25e145]:
+                - link "LAPORAN (REPORT)" [ref=f25e146] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=laporan
+            - generic [ref=f25e147]:
+              - paragraph [ref=f25e148]:
+                - link "PANDUAN (GUIDELINES)" [ref=f25e149] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=panduan
+              - paragraph [ref=f25e150]:
+                - link "ATURAN (RULES)" [ref=f25e151] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=aturan
+              - paragraph [ref=f25e152]:
+                - link "TENTANG KAMI (ABOUT US)" [ref=f25e153] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=tentang-kami
+              - paragraph [ref=f25e154]:
+                - link "HUBUNGI KAMI (CONTACT US)" [ref=f25e155] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=hubungi-kami
+          - text: 

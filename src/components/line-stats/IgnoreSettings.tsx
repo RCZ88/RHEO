@@ -103,7 +103,7 @@ export default function IgnoreSettings({ settings, ready, onChange, onReset, acc
   }
 
   return (
-    <div className="space-y-2.5 rounded-xl bg-zinc-950/40 light:bg-[var(--ws-surface)]/40 border border-zinc-800/70 p-2.5">
+    <div className="space-y-2.5 rounded-xl bg-zinc-950/40 light:bg-[var(--ws-surface-40)] border border-zinc-800/70 p-2.5">
       {/* rule toggles */}
       <div className="flex items-center gap-3 flex-wrap">
         <label className="flex items-center gap-1.5 cursor-pointer">

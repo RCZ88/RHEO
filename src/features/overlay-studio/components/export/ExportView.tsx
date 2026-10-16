@@ -89,7 +89,7 @@ export function ExportView() {
 
       {!hasOverlays ? (
         <BlurFade delay={0.1}>
-          <div className="rounded-xl border border-dashed border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface)]/30 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface-30)] p-8 text-center">
             <FileJson size={28} className="mx-auto mb-3 text-zinc-600" />
             <p className="text-[13px] font-medium text-zinc-400">Nothing to export yet</p>
             <p className="text-[11px] text-zinc-500 mt-1">Generate an overlay plan first.</p>
@@ -118,7 +118,7 @@ export function ExportView() {
           </BlurFade>
 
           <BlurFade delay={0.15}>
-            <div className="rounded-xl border border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3 max-h-[60vh] overflow-auto">
+            <div className="rounded-xl border border-white/[0.08] bg-zinc-950 light:bg-[var(--ws-surface-60)] p-3 max-h-[60vh] overflow-auto">
               <pre className="text-[11px] text-zinc-400 leading-relaxed whitespace-pre-wrap font-mono">{exportContent}</pre>
             </div>
           </BlurFade>

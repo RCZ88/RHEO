@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import type { CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Globe, BarChart3, Clock, TrendingUp, AlertCircle, RefreshCw, X, ChevronLeft, ChevronRight, ChevronDown, Activity, Terminal, Save, Play, Pause, TrendingUp as TrendingUpIcon, Layers, Search, Filter, Monitor, Tags, ListOrdered, AppWindow, Zap, Award, Timer, LayoutGrid, Pencil, Trash2, Check, X as XIcon, Plus, Link } from 'lucide-react';
 import ExtensionSetupPanel from '../components/ExtensionSetupPanel';
@@ -33,7 +34,8 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { glassBackdrop, centerText, makeGradient, sharedTooltipStyle, sharedScales, formatAxisTick, barAnimation, pieAnimation } from '../lib/chart-plugins';
+import { glassBackdrop, centerText, makeGradient, sharedTooltipStyle, sharedScales, formatAxisTick, barAnimation, pieAnimation, cssColor } from '../lib/chart-plugins';
+import { useIsLight } from '../lib/theme';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend, Filler, glassBackdrop, centerText);
 
@@ -133,8 +135,10 @@ function browserBrandColor(name?: string | null): string {
 }
 
 export default function BrowserActivityPage({ embedded, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments: tierAssignmentsProp, allLogs, platformFilter = 'all', compareMode = false, availablePlatforms = [] }: BrowserActivityPageProps) {
+  const isLight = useIsLight();
   const [domainStats, setDomainStats] = useState<any[]>([]);
   const [categoryStats, setCategoryStats] = useState<any[]>([]);
+  const [browserLogs, setBrowserLogs] = useState<any[]>([]);
   // The install hint is dismissible and the choice survives a reload — there was
   // previously no way to hide it at all.
   const [showBridgeHint, setShowBridgeHint] = useState<boolean>(() => {
@@ -370,22 +374,26 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
     return browserLogs.filter((l: any) => l.platform === platformFilter);
   }, [browserLogs, platformFilter]);
 
-  // Aggregate browser logs by domain
+  // Aggregate browser logs by browser + domain (split by browser)
   const aggregatedLogs = useMemo(() => {
-    const grouped: Record<string, { sessions: any[]; totalDuration: number }> = {};
+    const grouped: Record<string, { sessions: any[]; totalDuration: number; browser: string }> = {};
     
     platformBrowserLogs.forEach(log => {
+      const browser = log.browser_name || 'Unknown';
       const domain = log.domain;
-      if (!grouped[domain]) {
-        grouped[domain] = { sessions: [], totalDuration: 0 };
+      const key = browser + '|' + domain;
+      if (!grouped[key]) {
+        grouped[key] = { sessions: [], totalDuration: 0, browser };
       }
-      grouped[domain].sessions.push(log);
-      grouped[domain].totalDuration += log.duration_ms || 0;
+      grouped[key].sessions.push(log);
+      grouped[key].totalDuration += log.duration_ms || 0;
     });
     
     return Object.entries(grouped)
-      .map(([domain, data]) => ({
-        domain,
+      .map(([key, data]) => ({
+        key,
+        domain: data.sessions[0].domain,
+        browser: data.browser,
         sessions: data.sessions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
         totalDuration: data.totalDuration,
         category: data.sessions[0]?.category || 'Other'
@@ -623,11 +631,16 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
       datasets: [{
         data: categoryStats.map(c => Math.round(c.total_ms / 1000)),
         backgroundColor: categoryStats.map(c => CATEGORY_COLORS[c.category] || CATEGORY_COLORS['Other']),
-        borderColor: '#18181b',
+        // This border exists to cut a GAP between segments, so it must be the surface
+        // BEHIND the donut. A CSS `var()` was worse than the `#18181b` it replaced:
+        // canvas cannot parse `var()`, so the assignment is SILENTLY IGNORED and the
+        // stroke stays at canvas's default `#000` — that is the black outline. The
+        // token must be resolved, not referenced (see cssColor).
+        borderColor: isLight ? cssColor('--color-card', '#fcfbf8') : '#0a0a0a',
         borderWidth: 2
       }]
     };
-  }, [categoryStats]);
+  }, [categoryStats, isLight]);
 
   const domainBarOptions = {
     responsive: true,
@@ -654,7 +667,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
       legend: {
         position: 'right' as const,
         labels: {
-          color: '#a1a1aa',
+          color: isLight ? cssColor('--text-muted', '#57534e') : '#a1a1aa',
           padding: 15,
           font: { size: 12, family: '"JetBrains Mono", monospace' },
           generateLabels: (chart: any) => {
@@ -669,7 +682,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                   lineWidth: 2,
                   hidden: false,
                   index: i,
-                  fontColor: '#a1a1aa',
+                  fontColor: isLight ? cssColor('--text-muted', '#57534e') : '#a1a1aa',
                 };
               });
             }
@@ -908,8 +921,8 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
     return wrapPage(
       <GlassCard>
         <div className="text-center py-8">
-          <AlertCircle className="mx-auto w-12 h-12 mb-4 text-red-500" />
-          <div className="text-red-400 font-medium">Error loading browser data</div>
+          <AlertCircle className="mx-auto w-12 h-12 mb-4 text-[var(--color-red-ink)]" />
+          <div className="text-[var(--color-red-ink)] font-medium">Error loading browser data</div>
           <div className="text-sm text-zinc-500 mt-2">{error}</div>
             <button onClick={fetchData} className="mt-4 px-4 py-2 bg-zinc-800 rounded-lg hover:bg-zinc-700 text-sm transition">Retry</button>
           </div>
@@ -924,8 +937,11 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
         <div className="sticky top-0 z-30 -mx-5 px-5 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] backdrop-blur-md border-b border-zinc-800/50 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl grid place-items-center bg-[rgba(59,130,246,0.14)]">
-                <Layers className="w-5 h-5 text-[#3b82f6]" />
+              {/* `.hue-tile` instead of `bg-[rgba(59,130,246,0.14)]` + `text-[#3b82f6]`:
+                  a raw -500 step is a FILL value, and as a mark on paper it measured
+                  3.29:1. The class resolves the hue per theme — 7.18:1 here. */}
+              <div className="hue-tile h-9 w-9 rounded-xl grid place-items-center" style={{ '--hue': '#3b82f6' } as CSSProperties}>
+                <Layers className="w-5 h-5" />
               </div>
               <div>
                 <div className="text-lg font-semibold">Browser Activity</div>
@@ -978,10 +994,10 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
           action={
             <div data-tutorial="browser.toggle" className="flex items-center gap-1 bg-zinc-800/50 p-1 rounded-lg">
               <Toggle pressed={hourlyChartMode === 'bar'} onPressedChange={() => setHourlyChartMode('bar')}
-                className={`${hourlyChartMode === 'bar' ? 'bg-emerald-500/20 text-emerald-400' : ''}`}
+                className={`${hourlyChartMode === 'bar' ? 'bg-emerald-500/20 text-[var(--color-emerald-ink)]' : ''}`}
                 aria-label="Bar Chart"><BarChart3 className="w-4 h-4" /></Toggle>
               <Toggle pressed={hourlyChartMode === 'line'} onPressedChange={() => setHourlyChartMode('line')}
-                className={`${hourlyChartMode === 'line' ? 'bg-indigo-500/20 text-indigo-400' : ''}`}
+                className={`${hourlyChartMode === 'line' ? 'bg-indigo-500/20 text-[var(--color-indigo-ink)]' : ''}`}
                 aria-label="Line Chart"><TrendingUpIcon className="w-4 h-4" /></Toggle>
             </div>
           } />
@@ -1000,9 +1016,9 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: 'Total Browsing Time', value: totalBrowserTime, display: formatDuration(totalBrowserTime), numeric: false, sub: 'Across all sessions', icon: Clock, chipBg: 'rgba(59,130,246,0.14)', iconColor: '#3b82f6', gradientFrom: '#3b82f6', gradientTo: '#6366f1' },
-          { label: 'Unique Domains', value: filteredDomainStats.length, display: String(filteredDomainStats.length), numeric: true, sub: 'Different websites visited', icon: Globe, chipBg: 'rgba(16,185,129,0.14)', iconColor: '#10b981', gradientFrom: '#10b981', gradientTo: '#34d399' },
-          { label: 'Browsing Sessions', value: totalSessions, display: String(totalSessions), numeric: true, sub: null, icon: Activity, chipBg: 'rgba(139,92,246,0.14)', iconColor: '#8b5cf6', gradientFrom: '#8b5cf6', gradientTo: '#a78bfa' },
+          { label: 'Total Browsing Time', value: totalBrowserTime, display: formatDuration(totalBrowserTime), numeric: false, sub: 'Across all sessions', icon: Clock, chipBg: 'color-mix(in srgb, var(--color-sky-400) 14%, transparent)', iconColor: 'var(--color-sky-400)', gradientFrom: '#3b82f6', gradientTo: '#6366f1' },
+          { label: 'Unique Domains', value: filteredDomainStats.length, display: String(filteredDomainStats.length), numeric: true, sub: 'Different websites visited', icon: Globe, chipBg: 'color-mix(in srgb, var(--color-emerald-400) 14%, transparent)', iconColor: 'var(--color-emerald-400)', gradientFrom: '#10b981', gradientTo: '#34d399' },
+          { label: 'Browsing Sessions', value: totalSessions, display: String(totalSessions), numeric: true, sub: null, icon: Activity, chipBg: 'color-mix(in srgb, var(--color-violet-400) 14%, transparent)', iconColor: 'var(--color-violet-400)', gradientFrom: '#8b5cf6', gradientTo: '#a78bfa' },
         ].map((stat, idx) => (
           <motion.div
             key={idx}
@@ -1030,9 +1046,9 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
 
       {/* Browser Profiles Section (between stats and charts) */}
       <GlassCard>
-        <SectionHeader title="Browser Profiles" icon={<Monitor className="w-5 h-5 text-emerald-400" />}
+        <SectionHeader title="Browser Profiles" icon={<Monitor className="w-5 h-5 text-[var(--color-emerald-ink)]" />}
           action={<div className="flex items-center gap-2">
-            <button onClick={() => setShowAddProfile(true)} className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition">
+            <button onClick={() => setShowAddProfile(true)} className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-emerald-500/10 text-[var(--color-emerald-ink)] hover:bg-emerald-500/20 transition">
               <Plus className="w-3 h-3" /> Add Profile
             </button>
             {browserProfiles.length > 0 && <span className="text-xs text-zinc-500">{browserProfiles.filter(p => p.is_active).length} active / {browserProfiles.length} total</span>}
@@ -1074,22 +1090,29 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                 variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } }}
                 className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
                   profile.is_active
-                    ? 'bg-[rgba(24,24,27,0.60)] border-zinc-700/60 hover:border-zinc-600'
-                    : 'bg-[rgba(24,24,27,0.30)] border-zinc-800/40 opacity-60'
+                    ? 'bg-[rgba(24,24,27,0.60)] light:bg-[var(--ws-surface-raised)] border-zinc-700/60 light:border-[var(--ws-border)] hover:border-zinc-600 light:hover:border-[var(--ws-border-strong)]'
+                    /* A paused row dims with `opacity-60` on the dark field, but on
+                       paper that blends every ink TOWARD the background instead of
+                       away from it: measured, the name fell to 4.42:1, the browser
+                       line to 3.19:1 and "N tracked" to 2.37:1, against 15.65 / 6.83
+                       / 5.03:1 at full opacity. Light mode therefore expresses
+                       "paused" through the SURFACE — one step down the warm ladder
+                       instead of one step up — and keeps every label at full ink. */
+                    : 'bg-[rgba(24,24,27,0.30)] light:bg-[var(--ws-surface-sunken)] border-zinc-800/40 light:border-[var(--ws-border)] opacity-60 light:opacity-100'
                 }`}
               >
                 {/* Color indicator */}
                 <div className="relative group">
                   <div
-                    className="w-3 h-3 rounded-full cursor-pointer ring-2 ring-white/10"
-                    style={{ backgroundColor: profile.color_tag }}
+                    className="hue-dot w-3 h-3 rounded-full cursor-pointer ring-2 ring-white/10 light:ring-black/15"
+                    style={{ '--hue': profile.color_tag } as CSSProperties}
                   />
-                  <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-lg p-1.5 z-10 shadow-xl">
+                  <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-white/10 light:border-[var(--ws-border)] rounded-lg p-1.5 z-10 shadow-xl">
                     {PROFILE_COLORS.map(c => (
                       <button
                         key={c}
-                        className="w-4 h-4 rounded-full ring-1 ring-white/20 hover:ring-white/40 transition"
-                        style={{ backgroundColor: c }}
+                        className="hue-dot w-4 h-4 rounded-full ring-1 ring-white/20 hover:ring-white/40 light:ring-black/20 light:hover:ring-black/40 transition"
+                        style={{ '--hue': c } as CSSProperties}
                         onClick={() => handleProfileColorChange(profile, c)}
                       />
                     ))}
@@ -1098,8 +1121,8 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
 
                 {/* Browser icon letter */}
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ backgroundColor: profile.color_tag + '22', color: profile.color_tag }}
+                  className="hue-tile w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ '--hue': profile.color_tag } as CSSProperties}
                 >
                   {profile.browser_name[0]?.toUpperCase()}
                 </div>
@@ -1116,10 +1139,10 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                           if (e.key === 'Enter') handleProfileRename(profile);
                           if (e.key === 'Escape') setEditingProfileId(null);
                         }}
-                        className="flex-1 bg-zinc-800 border border-white/10 rounded-md px-2 py-0.5 text-sm text-white outline-none focus:border-sky-500/50"
+                        className="flex-1 bg-zinc-800 border border-white/10 light:border-[var(--ws-border)] rounded-md px-2 py-0.5 text-sm text-white light:text-[var(--text-primary)] outline-none focus:border-sky-500/50"
                         autoFocus
                       />
-                      <button onClick={() => handleProfileRename(profile)} className="text-emerald-400 hover:text-emerald-300"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleProfileRename(profile)} className="text-[var(--color-emerald-ink)]"><Check className="w-3.5 h-3.5" /></button>
                       <button onClick={() => setEditingProfileId(null)} className="text-zinc-500 hover:text-zinc-300"><XIcon className="w-3.5 h-3.5" /></button>
                     </div>
                   ) : (
@@ -1138,7 +1161,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                     {profile.known_app_name && (
                       <>
                         <span className="text-[10px] text-zinc-600">•</span>
-                        <span className="text-xs text-emerald-500 font-medium">→ {profile.known_app_name}</span>
+                        <span className="text-xs text-[var(--color-emerald-ink)] font-medium">→ {profile.known_app_name}</span>
                       </>
                     )}
                   </div>
@@ -1147,7 +1170,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                 {/* Connection + duration */}
                 <div className="text-right flex-shrink-0">
                   <div className="flex items-center gap-1.5 justify-end">
-                    <span className={`w-1.5 h-1.5 rounded-full ${profile.is_connected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${profile.is_connected ? 'bg-emerald-400 light:bg-[var(--color-emerald-ink)]' : 'bg-zinc-600'}`} />
                     <span className="text-xs text-zinc-500">
                       {profile.is_connected ? 'connected' : `last ${relativeTime(profile.last_seen_at)}`}
                     </span>
@@ -1165,7 +1188,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                           if (e.target.value) handleSetProfileApp(profile, e.target.value);
                         }}
                         onBlur={() => setLinkingProfileId(null)}
-                        className="bg-zinc-800 border border-white/10 rounded-md px-1.5 py-1 text-xs text-white outline-none focus:border-sky-500/50 max-w-[120px]"
+                        className="bg-zinc-800 border border-white/10 light:border-[var(--ws-border)] rounded-md px-1.5 py-1 text-xs text-white light:text-[var(--text-primary)] outline-none focus:border-sky-500/50 max-w-[120px]"
                         autoFocus
                       >
                         <option value="">Link to app...</option>
@@ -1191,8 +1214,8 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                     onClick={() => handleProfileToggle(profile)}
                     className={`px-2 py-1 rounded-md text-xs font-medium transition ${
                       profile.is_active
-                        ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                        : 'bg-zinc-700/50 text-zinc-500 hover:bg-zinc-700'
+                        ? 'bg-emerald-500/10 text-[var(--color-emerald-ink)] hover:bg-emerald-500/20'
+                        : 'bg-zinc-700/50 light:bg-[var(--ws-surface-sunken)] text-zinc-500 light:text-[var(--text-muted)] hover:bg-zinc-700 light:hover:bg-[var(--ws-surface-hover)]'
                     }`}
                   >
                     {profile.is_active ? 'Active' : 'Paused'}
@@ -1242,7 +1265,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                     >
                       {browser.charAt(0).toUpperCase() + browser.slice(1)}
                       {extensionBrowser && browser.toLowerCase() === extensionBrowser.toLowerCase() ? (
-                        <span className="ml-2 text-[10px] text-emerald-400">★ extension active</span>
+                        <span className="ml-2 text-[10px] text-[var(--color-emerald-ink)]">★ extension active</span>
                       ) : null}
                     </button>
                   ))
@@ -1270,7 +1293,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
       {/* Recent Activity - Aggregated by domain with dropdown */}
       <GlassCard>
         <SectionHeader title="Recent Activity"
-          icon={<Globe className="w-5 h-5 text-blue-400" />}
+          icon={<Globe className="w-5 h-5 text-[var(--color-blue-ink)]" />}
           action={aggregatedLogs.length > 0 && <span className="text-xs text-zinc-500">{aggregatedLogs.length} sites</span>} />
         {aggregatedLogs.length === 0 ? (
           <SectionState kind="empty" message="No recent browsing activity" hint="Visit websites to see them here" />
@@ -1280,7 +1303,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
               const isExpanded = expandedDomains.has(item.domain);
               return (
                 <motion.div
-                  key={item.domain}
+                  key={item.key}
                   variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } }}
                   className="group relative"
                 >
@@ -1291,11 +1314,11 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: CATEGORY_COLORS[item.category] || CATEGORY_COLORS['Other'] }}
+                        className="hue-dot w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ '--hue': CATEGORY_COLORS[item.category] || CATEGORY_COLORS['Other'] } as CSSProperties}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-white truncate">{item.domain}</div>
+                        <div className="font-medium text-white truncate">{item.browser}: {item.domain}</div>
                         {item.sessions.length > 1 && (
                           <div className="text-xs text-zinc-500">{item.sessions.length} sessions</div>
                         )}
@@ -1319,7 +1342,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                         {item.sessions.slice(0, 5).map((session, sidx) => (
                           <div key={sidx} className="flex items-center justify-between text-xs">
                             <div className="text-zinc-400 truncate max-w-[200px]">
-                              {session.title || session.url || session.domain}
+                              {session.title || session.url || item.browser + ": " + session.domain}
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-zinc-300">{formatDuration(session.duration_ms)}</span>
@@ -1349,8 +1372,9 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
       <GlassCard data-tutorial="browser.domains">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-[rgba(99,102,241,0.14)] grid place-items-center">
-              <Globe className="w-4 h-4 text-[#6366f1]" />
+            {/* Same fix as the header tile — `text-[#6366f1]` was 4.00:1 on paper. */}
+            <div className="hue-tile h-8 w-8 rounded-lg grid place-items-center" style={{ '--hue': '#6366f1' } as CSSProperties}>
+              <Globe className="w-4 h-4" />
             </div>
             <div>
               <div className="text-xl font-semibold">Domain Breakdown</div>
@@ -1382,7 +1406,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                         : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: profileColor }} />
+                    <span className="hue-dot w-1.5 h-1.5 rounded-full" style={{ '--hue': profileColor } as CSSProperties} />
                     {p.known_app_name || p.profile_name}
                   </button>
                 );
@@ -1408,28 +1432,24 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <div
-                      className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: (CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other']) + '22' }}
+                      className="hue-tile w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+                      style={{ '--hue': CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other'] } as CSSProperties}
                     >
-                      <Globe className="w-3.5 h-3.5" style={{ color: CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other'] }} />
+                      <Globe className="w-3.5 h-3.5" />
                     </div>
                     <div className="font-medium text-sm text-white truncate">{d.domain}</div>
                     {d.browser_name && (
                       <div
-                        className="w-2 h-2 rounded-full shrink-0"
+                        className="hue-dot w-2 h-2 rounded-full shrink-0"
                         title={d.browser_name}
-                        style={{ backgroundColor: browserBrandColor(d.browser_name) }}
+                        style={{ '--hue': browserBrandColor(d.browser_name) } as CSSProperties}
                       />
                     )}
                   </div>
                   <Badge
                     variant="default"
-                    className="shrink-0 text-[10px]"
-                    style={{
-                      backgroundColor: `${CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other']}20`,
-                      color: CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other'],
-                      borderColor: `${CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other']}40`,
-                    }}
+                    className="hue-chip shrink-0 text-[10px]"
+                    style={{ '--hue': CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other'] } as CSSProperties}
                   >
                     {d.category}
                   </Badge>
@@ -1441,7 +1461,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Sessions</span>
-                    <span className="font-mono tabular-nums" style={{ color: CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other'] }}>{d.sessions}</span>
+                    <span className="hue-mark font-mono tabular-nums" style={{ '--hue': CATEGORY_COLORS[d.category] || CATEGORY_COLORS['Other'] } as CSSProperties}>{d.sessions}</span>
                   </div>
                 </div>
               </GlassCard>
@@ -1467,7 +1487,7 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                   <>
                     <button onClick={() => setIsLiveMode(!isLiveMode)}
                       className={`px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors ${
-                        isLiveMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        isLiveMode ? 'bg-emerald-500/20 text-[var(--color-emerald-ink)]' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
                       {isLiveMode ? <Pause size={12} /> : <Play size={12} />}
@@ -1533,13 +1553,13 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
                           {dateFormat(new Date(log.timestamp), 'HH:mm:ss.SSS')}
                         </span>
                         <span className={`shrink-0 px-1.5 py-0.5 rounded ${
-                          log.level === 'error' ? 'bg-red-500/20 text-red-400' :
+                          log.level === 'error' ? 'bg-red-500/20 text-[var(--color-red-ink)]' :
                           log.level === 'warning' ? 'bg-amber-500/20 text-amber-400' :
-                          'bg-emerald-500/20 text-emerald-400'
+                          'bg-emerald-500/20 text-[var(--color-emerald-ink)]'
                         }`}>
                           {(log.level || 'INFO').toUpperCase()}
                         </span>
-                        <span className="text-blue-400">{log.domain}</span>
+                        <span className="text-[var(--color-blue-ink)]">{log.domain}</span>
                         {log.title && <span className="text-zinc-500 truncate">{log.title}</span>}
                       </div>
                     ))}
@@ -1576,23 +1596,17 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
               <div className="flex items-start justify-between mb-8">
                 <div className="flex items-center gap-4">
                   <div
-                    className="w-14 h-14 rounded-xl flex items-center justify-center"
-                    style={{ backgroundColor: (CATEGORY_COLORS[selectedDomainDetail.category] || CATEGORY_COLORS['Other']) + '22' }}
+                    className="hue-tile w-14 h-14 rounded-xl flex items-center justify-center"
+                    style={{ '--hue': CATEGORY_COLORS[selectedDomainDetail.category] || CATEGORY_COLORS['Other'] } as CSSProperties}
                   >
-                    <Globe
-                      className="w-7 h-7"
-                      style={{ color: CATEGORY_COLORS[selectedDomainDetail.category] || CATEGORY_COLORS['Other'] }}
-                    />
+                    <Globe className="w-7 h-7" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-semibold">{selectedDomainDetail.domain}</h2>
                     <Badge
                       variant="default"
-                      style={{
-                        backgroundColor: `${CATEGORY_COLORS[selectedDomainDetail.category] || CATEGORY_COLORS['Other']}20`,
-                        color: CATEGORY_COLORS[selectedDomainDetail.category] || CATEGORY_COLORS['Other'],
-                        borderColor: `${CATEGORY_COLORS[selectedDomainDetail.category] || CATEGORY_COLORS['Other']}40`,
-                      }}
+                      className="hue-chip"
+                      style={{ '--hue': CATEGORY_COLORS[selectedDomainDetail.category] || CATEGORY_COLORS['Other'] } as CSSProperties}
                     >
                       {selectedDomainDetail.category}
                     </Badge>
@@ -1606,10 +1620,10 @@ export default function BrowserActivityPage({ embedded, selectedPeriod = 'week',
               {/* Key Metrics Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
-                  { label: 'Total Time', value: formatDuration(selectedDomainDetail.total_ms), icon: Clock, chipBg: 'rgba(16,185,129,0.14)', iconColor: '#10b981' },
-                  { label: 'Sessions', value: selectedDomainDetail.sessions, icon: Activity, chipBg: 'rgba(99,102,241,0.14)', iconColor: '#6366f1' },
-                  { label: 'Avg Session', value: formatDuration(selectedDomainDetail.total_ms / selectedDomainDetail.sessions), icon: Timer, chipBg: 'rgba(245,158,11,0.14)', iconColor: '#f59e0b' },
-                  { label: 'First Seen', value: selectedDomainDetail.first_seen ? format(new Date(selectedDomainDetail.first_seen), 'MMM dd') : 'N/A', icon: Award, chipBg: 'rgba(139,92,246,0.14)', iconColor: '#8b5cf6' },
+                  { label: 'Total Time', value: formatDuration(selectedDomainDetail.total_ms), icon: Clock, chipBg: 'color-mix(in srgb, var(--color-emerald-400) 14%, transparent)', iconColor: 'var(--color-emerald-400)' },
+                  { label: 'Sessions', value: selectedDomainDetail.sessions, icon: Activity, chipBg: 'color-mix(in srgb, var(--color-indigo-400) 14%, transparent)', iconColor: 'var(--color-indigo-400)' },
+                  { label: 'Avg Session', value: formatDuration(selectedDomainDetail.total_ms / selectedDomainDetail.sessions), icon: Timer, chipBg: 'color-mix(in srgb, var(--color-amber-400) 14%, transparent)', iconColor: 'var(--color-amber-400)' },
+                  { label: 'First Seen', value: selectedDomainDetail.first_seen ? format(new Date(selectedDomainDetail.first_seen), 'MMM dd') : 'N/A', icon: Award, chipBg: 'color-mix(in srgb, var(--color-violet-400) 14%, transparent)', iconColor: 'var(--color-violet-400)' },
                 ].map((metric, idx) => (
                   <GlassCard key={idx} className="space-y-0">
                     <div className="h-8 w-8 rounded-lg grid place-items-center mb-2.5" style={{ background: metric.chipBg }}>

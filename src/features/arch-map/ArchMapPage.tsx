@@ -252,7 +252,7 @@ export default function ArchMapPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search pages, components, features..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/50"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-60)] text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/50"
           />
         </div>
         <div className="flex items-center gap-1">

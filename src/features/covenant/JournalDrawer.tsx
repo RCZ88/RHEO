@@ -52,7 +52,7 @@ export function JournalDrawer({ commitmentId, date, initialText, onSave }: Journ
                   if (playing) { audioRef.current?.pause(); setPlaying(false); }
                   else { audioRef.current?.play(); setPlaying(true); }
                 }}
-                className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--color-mem-400)]/15 text-[var(--color-mem-400)] text-[10px]"
+                className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--color-mem-400-15)] text-[var(--color-mem-400)] text-[10px]"
               >
                 {playing ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                 {voiceDurationSec ? `${Math.round(voiceDurationSec)}s` : 'voice note'}

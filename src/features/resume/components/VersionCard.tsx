@@ -38,9 +38,9 @@ export function VersionCard({ version, isActive, onSelect, onDelete, onExport }:
           size={56}
           strokeWidth={5}
           gaugePrimaryColor={version.score >= 75 ? '#16a34a' : version.score >= 50 ? '#ca8a04' : '#dc2626'}
-          gaugeSecondaryColor="rgba(255,255,255,0.06)"
+          gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
         >
-          <NumberTicker value={version.score} className="text-xs font-bold text-white tabular-nums" />
+          <NumberTicker value={version.score} className="text-xs font-bold text-[var(--color-foreground)] tabular-nums" />
         </AnimatedCircularProgressBar>
 
         <div className="flex-1 min-w-0">
@@ -62,7 +62,7 @@ export function VersionCard({ version, isActive, onSelect, onDelete, onExport }:
       </div>
 
       <div className="flex gap-2 mt-4 pt-3 border-t border-zinc-800/40">
-        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onExport(version.id, 'pdf'); }} className="flex-1 text-[var(--page-accent)] hover:text-[var(--page-accent)]/80 hover:bg-[var(--page-accent)]/10">
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onExport(version.id, 'pdf'); }} className="flex-1 text-[var(--page-accent)] hover:text-[var(--page-accent)]/80 hover:bg-[var(--page-accent-10)]">
           <Download className="w-3.5 h-3.5 mr-1" /> PDF
         </Button>
         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onExport(version.id, 'markdown'); }} className="flex-1 text-zinc-400 hover:text-white hover:bg-zinc-800/50">

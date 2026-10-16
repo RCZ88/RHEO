@@ -7,6 +7,7 @@ import {
 import { DotPattern } from '../../ui/dot-pattern'
 import { CanvasGrid } from './CanvasGrid'
 import { CanvasInput } from './CanvasInput'
+import { MessageBubble } from '../chat/MessageBubble'
 import { SaveIndicator } from './SaveIndicator'
 import { CanvasMinimap } from './CanvasMinimap'
 import { FindCardsArrow } from './FindCardsArrow'
@@ -59,6 +60,12 @@ interface CanvasContainerProps {
   streaming: boolean
   thinking?: boolean
   connecting?: boolean
+  /** Conversation transcript. Canvas mode has no ChatPanel — without this the
+   *  container could show "Thinking…" but had nowhere to render the reply, so
+   *  every response was written to state that nothing drew. */
+  messages?: Array<{ id: string; role: string; content: string; parsed?: any; timestamp?: number }>
+  onCardAction?: (a: any) => void
+  actionResults?: Record<string, "running" | "done" | "error">
   focusedCardId?: string | null
   autoFocus?: boolean
   onToggleAutoFocus?: () => void
@@ -82,7 +89,7 @@ interface CanvasContainerProps {
 export function CanvasContainer({
   cards, onMoveCard, onDismissCard, onArrangeCards, onPinCard, onResizeCard, onCardClick, onUpdateCard,
   groups, onUpdateGroup, onUngroup, onRemoveFromGroup,
-  saveStatus, onSaveCanvas, onSend, onStop, streaming, thinking, connecting, focusedCardId, autoFocus, onToggleAutoFocus,
+  saveStatus, onSaveCanvas, onSend, onStop, streaming, thinking, connecting, messages, onCardAction, actionResults, focusedCardId, autoFocus, onToggleAutoFocus,
   onOpenPalette, onGroupCards,   canvasList, activeCanvasId, onLoadCanvas, onRenameCanvas, onDeleteCanvas, onSaveAs,
   onSetPanZoom, onNewCanvas, onAddCard, onUndo, onRedo, canUndo, canRedo,
 }: CanvasContainerProps) {
@@ -526,6 +533,33 @@ export function CanvasContainer({
             viewportSize={viewportSize}
             onPanChange={handleMinimapPan}
           />
+        </div>
+      )}
+
+      {/* Transcript — floats above the composer, mirroring the input pill.
+          This is the only place canvas mode ever rendered a reply; before it,
+          canvas mode had a composer but no message list at all. */}
+      {messages && messages.length > 0 && (
+        <div
+          data-tutorial="ai.messages"
+          className="dk-canvas-transcript"
+          role="log"
+          aria-live="polite"
+          aria-label="Conversation"
+        >
+          <div className="dk-canvas-transcript-scroll">
+            {messages.map((m) => (
+              <MessageBubble
+                key={m.id}
+                role={(m.role === 'user' || m.role === 'assistant' ? m.role : 'system') as any}
+                content={m.content}
+                parsed={m.parsed}
+                streaming={streaming && m.role === 'assistant'}
+                onAction={onCardAction as any}
+                actionResults={actionResults as any}
+              />
+            ))}
+          </div>
         </div>
       )}
 

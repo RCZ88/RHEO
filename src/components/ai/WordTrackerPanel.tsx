@@ -615,7 +615,7 @@ export function WordTrackerPanel({ overview }: { overview: any }) {
                             exit={{ opacity: 0, height: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className="ml-8 mr-2 mb-1 p-2 bg-zinc-950 light:bg-[var(--ws-surface)]/60 light:bg-white rounded-lg ring-1 ring-zinc-800/40">
+                            <div className="ml-8 mr-2 mb-1 p-2 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-lg ring-1 ring-zinc-800/40">
                               {projectCounts.length === 0 ? (
                                 <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] py-1">No project data yet</div>
                               ) : (

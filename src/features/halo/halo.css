@@ -81,8 +81,9 @@
 	/* LAMINAR §2: amber is the signal hue for time-domain surfaces. The stopwatch
 	   is one, so it gets amber — not the brand pink, which is reserved for
 	   Focus/Deep Focus. */
-	--halo-signal: var(--color-amber-400);
-	--halo-focus: var(--color-clay-400);
+	/* The one non-accent semantic: a WARNING (an overdue deadline). Self-contained hex because the
+	 * island window must not depend on the app palette to render a critical state. */
+	--halo-signal: #d97706;
 	--halo-track: var(--ws-surface-raised);
 	--halo-hairline: var(--ws-border);
 
@@ -147,6 +148,11 @@ html.light .halo-root {
 	--halo-muted: #57534e;
 	--halo-dim: #6f665e;        /* section 11 text-faint, 4.67:1 on sunken */
 	--halo-accent: #0e7490;     /* section 11 the one light signal hue (a FILL token) */
+	/* The warning hue must be declared per theme, not inherited. `--halo-signal` carries an
+	 * overdue deadline and is drawn as TEXT on the light surface, so the dark-theme amber
+	 * (#d97706) sits at only ~2.9:1 on #fcfbf8 — unreadable. #a8500a is the same hue darkened
+	 * for light surfaces and holds 4.6:1. */
+	--halo-signal: #a8500a;
 	--halo-accent-dim: color-mix(in srgb, #0e7490 55%, #edeae2);
 	--halo-on-accent: #ffffff;  /* white on teal = 5.36:1; near-black here would be 3.71:1 */
 	/* Section 11: "Depth comes from hairlines, never shadow... a drop shadow is a lie." The
@@ -451,10 +457,18 @@ html.light .halo-root {
 	--halo-t-eyebrow: max(11px, calc(11px * var(--halo-scale))); /* FILE: JetBrains Mono 400/11, #71717a */
 	--halo-t-label: max(11px, calc(12px * var(--halo-scale)));   /* FILE: Inter 400/12 (tab label), 500/16 for app names */
 	--halo-t-value: max(11px, calc(14px * var(--halo-scale)));   /* FILE: JetBrains Mono 500/14 */
-	/* FILE: the expanded hero numeral is JetBrains Mono 500/36 at Medium, "00:" at #71717a
-	 * and "42:18" at #fafafa (board 1: 40x29 + 66x29 inside a 106x29 time block). */
-	--halo-t-hero: max(22px, calc(36px * var(--halo-scale)));
-	--halo-t-display: max(11px, calc(28px * var(--halo-scale))); /* the hero numeral. ONE per surface. */
+	/* FILE: the expanded hero numeral is JetBrains Mono 500/26 at Medium, the dim `00:` prefix
+	 * and the bright `42:18` inside ONE time block (HALO_STATES.html board 2, `.time`).
+	 *
+	 * WAS 36px. That number came from a Figma export read at a different scale, not from the
+	 * states file: `--time` is 22 (S) / 26 (M) / 31 (L), so the ceiling at Large is 31px. A 36px
+	 * numeral does not fit the 134px Medium panel — line-height alone put the hero row taller
+	 * than `--ct`, and the user saw the panel cropped with its bottom cut off.
+	 *
+	 * The ceiling is now the SPEC's, not a guess: `max()` keeps the 22px floor that §174 requires
+	 * for legibility while the design ceiling is `--time` at Large. */
+	--halo-t-hero: max(22px, calc(26px * var(--halo-scale)));
+	--halo-t-display: max(11px, calc(22px * var(--halo-scale))); /* the hero numeral. ONE per surface. */
 
 	/* ── Rhythm. A 4px base; only these six steps are legal. ───────────────── */
 	/*

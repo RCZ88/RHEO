@@ -11,14 +11,10 @@ import { MemoryCard } from '../../features/memories/MemoryCard'
 import { NewCommitmentModal } from '../../features/covenant/NewCommitmentModal'
 import { CriteriaBuilder } from '../../components/goals/CriteriaBuilder'
 import type { CriteriaForm } from '../../components/goals/CriteriaBuilder'
-import {
-  CAT_META,
-  PRIORITY_OPTIONS,
-  criteriaToGoal,
-  defaultCriteria,
-  emptyLTGForm,
-  type LTGForm,
-} from '../../features/warmth/gold/GoldPage'
+import { isWeeklyish } from '@/components/goals/goalPredicates';
+import { todayStr, addDaysStr } from '@/lib/week';
+import { PRIORITY_OPTIONS, criteriaToGoal, defaultCriteria, emptyLTGForm, type LTGForm } from '../../features/warmth/gold/GoldPage';
+import { CATEGORY_DOTS } from '@/lib/CategoryColors';
 import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progress-bar'
 import type { Goal, LongTermGoal } from '@/components/dashboard/types'
 import type { WarmColorKey } from '../../features/covenant/types'
@@ -26,28 +22,6 @@ import { cn } from '@/lib/utils'
 import { Check, Flame, Images, Plus, Target, Upload } from 'lucide-react'
 
 import { MemoryLightbox } from './memory-lightbox'
-
-const toStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const todayStr = () => toStr(new Date())
-
-function addDaysStr(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + n)
-  return toStr(d)
-}
-
-function covenantStreak(completions: { date: string }[]): number {
-  const set = new Set([...new Set(completions.map(c => c.date))])
-  if (set.size === 0) return 0
-  let cursor = todayStr()
-  if (!set.has(cursor)) cursor = addDaysStr(cursor, -1)
-  let streak = 0
-  while (set.has(cursor)) { streak += 1; cursor = addDaysStr(cursor, -1) }
-  return streak
-}
-
-const isWeeklyish = (g: Goal) => !!g.isHabit || g.cadence === 'weekly' || g.period === 'weekly'
 
 const WARM_DOT: Record<WarmColorKey, string> = {
   clay: '#e8866b',
@@ -64,7 +38,7 @@ function Ring({ pct, size = 48 }: { pct: number; size?: number }) {
         size={size}
         strokeWidth={4}
         gaugePrimaryColor="#fbbf24"
-        gaugeSecondaryColor="rgba(63,63,70,0.5)"
+        gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
       />
       <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-zinc-300 tabular-nums">
         {Math.round(pct)}
@@ -122,7 +96,17 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
     [covenant.completions, today]
   )
 
-  const dailies = useMemo(() => goals.filter(g => !isWeeklyish(g) && g.status !== 'suggested'), [goals])
+function covenantStreak(completions: { date: string }[]): number {
+  const set = new Set([...new Set(completions.map(c => c.date))])
+  if (set.size === 0) return 0
+  let cursor = todayStr()
+  if (!set.has(cursor)) cursor = addDaysStr(cursor, -1)
+  let streak = 0
+  while (set.has(cursor)) { streak += 1; cursor = addDaysStr(cursor, -1) }
+  return streak
+}
+
+  const dailies = useMemo(() => goals.filter(g => !isWeeklyish(g) && g.status !== 'suggested' as any), [goals])
   const doneDailies = dailies.filter(g => g.status === 'done').length
   const streak = useMemo(() => covenantStreak(covenant.completions), [covenant.completions])
 
@@ -372,8 +356,8 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
                       onChange={e => setLtgForm(f => ({ ...f, category: e.target.value as LTGForm['category'] }))}
                       className="flex-1 min-w-0 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700/50 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-amber-500/40 transition-colors"
                     >
-                      {Object.keys(CAT_META).map(k => (
-                        <option key={k} value={k}>{CAT_META[k].label}</option>
+                      {Object.keys(CATEGORY_DOTS).map(k => (
+                        <option key={k} value={k}>{CATEGORY_DOTS[k].label}</option>
                       ))}
                     </select>
                     <select
@@ -421,12 +405,11 @@ export function TodayTributary({ covenant, memories, goals, longTermGoals, onTog
             {vault.length > 0 && (
               <div className="space-y-2">
                 {vault.map(ltg => {
-                  const cat = CAT_META[ltg.category as keyof typeof CAT_META] || CAT_META.life
                   return (
                     <div
                       key={ltg.id}
                       className="flex items-center gap-3 rounded-lg px-3 py-2.5 border-l-4 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]"
-                      style={{ borderColor: cat.color, backgroundColor: `${cat.color}08` }}
+                      style={{ borderColor: CATEGORY_DOTS[ltg.category]?.dot, backgroundColor: `${CATEGORY_DOTS[ltg.category]?.dot}08` }}
                     >
                       <Ring pct={ltg.progress ?? 0} />
                       <div className="min-w-0 flex-1">

@@ -264,7 +264,7 @@ export function WidgetHost({ block }: Props) {
               ref={iframeRef}
               sandbox="allow-scripts"
               title={`Widget: ${widgetDef?.label || block.template || 'custom'}`}
-              className={`w-full ${expanded ? 'h-full' : 'h-64'} border-0 bg-zinc-950 light:bg-[var(--ws-surface)]/50 ${loaded ? '' : 'hidden'}`}
+              className={`w-full ${expanded ? 'h-full' : 'h-64'} border-0 bg-zinc-950 light:bg-[var(--ws-surface-50)] ${loaded ? '' : 'hidden'}`}
               onError={() => setError('Failed to load widget')}
             />
             {error && (

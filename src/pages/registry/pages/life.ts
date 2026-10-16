@@ -26,13 +26,20 @@ const life: PageManifest = {
   icon: 'Heart',
   group: 'Navigation',
   keywords: ['life', 'warmth', 'phases', 'river', 'gold', 'memories', 'notes', 'habits', 'covenant', 'self'],
-  hint: 'Phases, covenant, memories, gold, notes, schedule, habits, self',
+  hint: 'Goals, covenant, memories, notes, schedule, training, self',
 
   tabs: {
     variable: 'pageTab',
     stateKey: 'tab',
     storageKey: '/life-activeTab',
     hashParam: 'tab',
+    /* The `habits` tab was deleted in the Life consolidation, but the id is a
+       plain string and every emitter of it kept compiling: the dashboard's
+       WIDGET_NAV, shared `?tab=habits` links, and — worst — the persisted
+       `/life-activeTab` value written by an older build. Without this, all three
+       are rejected against `validIds` and the page silently falls back to its
+       default tab. See `usePageSurface.resolveTabId`. */
+    tabAliases: { habits: 'gold' },
     default: 'covenant',
     items: [
       {
@@ -51,10 +58,67 @@ const life: PageManifest = {
       },
       {
         id: 'gold',
-        label: 'Gold',
+        /* §1.2 the KEY stays 'gold' — it is technical identity, bookmarked,
+           persisted in `/life-activeTab` and passed as `?tab=gold`. Only the
+           LABEL changes, because the tab now holds goals, habits and routines,
+           not gold. */
+        label: 'Goals',
         icon: 'Coins',
         section: 'life.gold',
-        keywords: ['gold', 'treasure', 'goals', 'vault', 'wealth'],
+        /* THE KEYWORDS CARRY THE DEEP-LINK. With the Habits tab gone, this array
+           is the only thing that makes ⌘K → "habits" still find something.
+           Removing it would silently break every habits deep-nav. */
+        keywords: ['goals', 'goal', 'gold', 'habits', 'habit', 'routine', 'streak', 'weekly', 'vault', 'long-term', 'target'],
+        /* §5.3 edit 7: the Goals tab now carries FIVE panes, so each needs a
+           search segment.
+           These are `find.segments`, NOT page-level `sections`, and the
+           distinction is load-bearing: a page-level section becomes a ⌘K row
+           that navigates to /life, defaults the tab to Covenant, and then
+           scrolls to an anchor that is not mounted — the exact rot §5d exists to
+           prevent. A segment is scoped to the tab's own subtree, so it cannot
+           escape to a tab that is not open. */
+        find: {
+          /* Consumed: it is what scopes a Ctrl+F hit to this tab's subtree, so a
+             match in another tab's unmounted DOM cannot be attributed to it. */
+          root: '[data-section="life.gold"]',
+          segments: [
+            {
+              id: 'life.gold.today',
+              title: 'Today',
+              text: 'Daily goals for the selected day. The shortest horizon: one thing that matters today.',
+              section: 'life.gold.today',
+              rank: 2,
+            },
+            {
+              id: 'life.gold.habits',
+              title: 'Habits',
+              text: 'Habits are goals that repeat. Each one keeps a streak, so the tracker shows the week at a glance.',
+              section: 'life.gold.habits',
+              rank: 2,
+            },
+            {
+              id: 'life.gold.routines',
+              title: 'Routines',
+              text: 'Weekly recurring targets — the thing you repeat on a cadence, as distinct from a habit streak.',
+              section: 'life.gold.routines',
+              rank: 2,
+            },
+            {
+              id: 'life.gold.vault',
+              title: 'The Vault',
+              text: 'Long-term destinations. The only place a long-term goal appears — it is never a routine.',
+              section: 'life.gold.vault',
+              rank: 2,
+            },
+            {
+              id: 'life.gold.weekly',
+              title: 'Weekly recap',
+              text: 'Monday to Sunday at a glance: productive time, routines sealed, habits kept, and the one change worth making.',
+              section: 'life.gold.weekly',
+              rank: 1,
+            },
+          ],
+        },
       },
       {
         id: 'notes',
@@ -72,13 +136,6 @@ const life: PageManifest = {
         icon: 'Calendar',
         section: 'life.schedule',
         keywords: ['schedule', 'calendar', 'planner', 'events', 'agenda'],
-      },
-      {
-        id: 'habits',
-        label: 'Habits',
-        icon: 'Target',
-        section: 'life.habits',
-        keywords: ['habits', 'streak', 'daily', 'routine', 'checklist', 'tracker'],
       },
       {
         id: 'training',
@@ -179,8 +236,11 @@ const life: PageManifest = {
       },
       {
         target: '[data-tutorial="life.tabs"]',
+        /* The count was right by accident before and is right now: the list
+           said seven but named six tabs, omitting Training and naming the
+           deleted Habits tab. Now it names the seven that actually exist. */
         title: 'Seven tabs',
-        instruction: '• Covenant, Memories, Gold, **Notes**, Schedule, Habits, Self\n• Every tab is one keystroke away from ⌘K',
+        instruction: '• Covenant, Memories, **Goals**, Notes, Schedule, **Training**, Self\n• Habits and routines live in Goals\n• Every tab is one keystroke away from ⌘K',
         position: 'bottom',
         type: 'action',
       },

@@ -42,7 +42,7 @@ export function DeadlinesCard({ deadlines }: DeadlinesCardProps) {
         {deadlines.map((dl, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 h-12 rounded-lg border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-3"
+            className="flex items-center gap-3 h-12 rounded-lg border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface-40)] px-3"
           >
             {/* Day-count chip */}
             <div

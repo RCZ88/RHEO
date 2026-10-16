@@ -560,6 +560,33 @@ node $COORD claim  --agent "$AGENT_ID" --paths <every file you will edit> # 3. c
 
 Full detail: `agent/skills/multi-agent-coordination/SKILL.md`.
 
+## 0.7. GIT SAFETY — NEVER DESTROY UNCOMMITTED WORK
+
+**Why:** on 2026-10-10 a `git stash` hid ~two weeks of uncommitted work. Nothing was
+deleted — it just looked like total loss. **Uncommitted work is the only work git cannot
+protect.** Nothing else in this file matters if you destroy it.
+
+1. **NEVER run:** `git stash` (except `list`/`show`/`create`), `git reset --hard`,
+   `git checkout -- <path>` / `git checkout .`, `git restore` (except `--staged`),
+   `git clean -f`, `git push --force`, `git branch -D`.
+2. **If a command is BLOCKED (exit 126), that is the system working.** Do not retry, do not
+   call `/usr/bin/git`, do not set `RHEO_GIT_UNLOCK=1`. Report it and ask CZ.
+3. **To clean the tree or switch tasks, COMMIT to a wip branch — never stash.** Stage the
+   paths you claimed (§0a gate); never stage the whole tree.
+4. **At the START of a task:** `scripts/safety/rheo-safety.sh status`. Over 50 uncommitted
+   files → commit before touching anything. **At the END of a task:** commit `wip:` even if
+   it is broken. A commit is a save point, not a release.
+5. **If files look reverted or lost: STOP. Load the `git-trauma` skill. Do not self-repair.**
+
+**Boundary.** Agents MAY run `rheo-safety.sh status` and `rheo-safety.sh list` (read only).
+Agents may NOT run `autosave`, `backup`, `restore` or `install`, and may NOT edit, move,
+disable or delete any safety file, timer, backup or the git guard — unless CZ asks in that
+same message.
+
+Full detail, restore steps, and how this fits the other backup systems:
+**`agent/docs/GIT_SAFETY.md`**. Never touch `scripts/safety/*`,
+`~/.config/systemd/user/rheo-*`, `~/backups/rheo` or `~/.local/bin/git`.
+
 ## 1. STARTUP RITUAL (do this before responding to ANYTHING)
 0. **Run the §0a COORDINATION GATE above. Before reading anything else.**
 1. Read `MEMORY.md` (durable lessons — see Section 4). This is the **compiled** version (max 10 newest entries). For the full archive, see `MEMORY_FULL.md`.
@@ -986,6 +1013,41 @@ palette rows; a page with tabs but no way to receive a deep-link hint
 
 Run it before you claim a navigation feature works. Exit code 0 with no output is
 NOT a pass — confirm it printed the "✓ every route has a manifest" line.
+
+## 5e. PROMPT GENERATION + CLIPBOARD — `prompt-copy`
+
+Any time a spec/prompt has to reach an external AI, it goes on the clipboard with
+**one command**. Do NOT hand-write a copy helper, do NOT pipe into `wl-copy`, and
+do NOT ask CZ to open and paste files by hand.
+
+```bash
+prompt-copy list [filter]   # numbered list of every prompt; filter is a substring
+prompt-copy get <ID|slug>   # copy by number or exact folder name
+prompt-copy <prefix>        # copy by unique prefix (ambiguous ones list candidates)
+prompt-copy pick            # interactive: shows the list, type a number
+prompt-copy path/to/folder  # any folder or file, registered or not
+```
+
+**One command, one canonical name.** `prompt-copy` is the only one. The old
+`scripts/spec-copy` and its `~/.local/bin` symlink were deleted on 2026-10-14 —
+do not recreate it. Targets are auto-discovered from
+`agent/docs/generate-prompt-docs/*/`, so **writing a prompt folder is sufficient
+to make it copyable**; nothing needs registering.
+
+**Each copy bundles the prompt AND its `CONTEXT_BUNDLE.md`.** The two must arrive
+together or the external AI reads the brief without the code excerpts it needs.
+`RESULT.md` is deliberately excluded — it is a previous run's *reply*.
+
+**THE CLIPBOARD IS GLOBAL AND CONTENDED.** Many agents share it. Therefore:
+
+- **Do not run `prompt-copy` speculatively** — a copy you do not paste is a
+  prompt another agent loses. Give CZ the command and let CZ run it.
+- Copy and paste promptly. A long gap between the two is a race.
+- NEVER verify by exit status alone. The script's own byte count proved a broken
+  clipboard once already. To verify, paste it back:
+  `wl-paste --no-newline | wc -c` and compare to the reported bytes.
+- `wl-copy` needs a **file**, not a directory, and `~/` does **not** expand inside
+  quotes. For a folder, use `prompt-copy` — that is what it is for.
 
 ## 6. ZERO OMISSION RULE — "IMPLEMENT EVERYTHING" MEANS IMPLEMENT EVERYTHING
 

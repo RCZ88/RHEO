@@ -91,7 +91,7 @@ export function CodeBlock({ block, onAsk }: Props) {
       </pre>
       {/* Output */}
       {output && (
-        <div className="border-t border-zinc-700/40 bg-zinc-950 light:bg-[var(--ws-surface)]/60">
+        <div className="border-t border-zinc-700/40 bg-zinc-950 light:bg-[var(--ws-surface-60)]">
           <div className="flex items-center justify-between px-4 py-1.5 border-b border-zinc-800/60">
             <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
               <TerminalSquare className="w-3 h-3" /> Output

@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Target, Plus, Flame, Sparkles, ArrowLeft, ChevronDown, ChevronUp,
-  HeartHandshake, BookOpen, CheckCircle2, RefreshCw, TrendingUp, Zap
+  HeartHandshake, BookOpen, CheckCircle2, RefreshCw, TrendingUp, Zap,
+  Flag,
 } from 'lucide-react';
 import { PageShell } from '../components/PageShell';
 import { CalendarStrip } from '../components/goals/CalendarStrip';
 import { GoalCard, GoalCardSkeleton, GoalEmptyState, GoalErrorState } from '../components/goals/GoalCard';
+import { GoalDetailModal } from '../components/goals/GoalDetailModal';
 import { CriteriaBuilder, type CriteriaForm } from '../components/goals/CriteriaBuilder';
 import { MissedGoalRecoveryBanner } from '../components/goals/MissedGoalRecoveryBanner';
 import { getMissedGoals } from '../components/goals/GoalCompletionEngine';
@@ -39,11 +41,24 @@ const defaultCriteria: CriteriaForm = {
   crossFeatureLink: null,
 };
 
-export default function GoalsPage() {
+/**
+ * `embedded` drops the page shell, the back arrow and the page-level heading.
+ *
+ * GoldPage now renders this component, so without it the Gold tab would contain
+ * a whole second page inside it: its own scroll container, its own background,
+ * and a second `<h1>Goals</h1>` directly under Gold's heading. Two page shells
+ * nested in one tab is the same duplicate-surface problem the calendar had, and
+ * it is invisible in a code review and obvious on screen. This matches the
+ * convention `SchedulePage embedded` and `GoldPage embedded` already use.
+ */
+export default function GoalsPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [goals, setGoals] = useState<Goal[]>([]);
   const [longTermGoals, setLongTermGoals] = useState<LongTermGoal[]>([]);
+  /* Goals whose `period` is 'longterm' — surfaced separately from day/weekly routines,
+     and loaded across the whole range rather than for the selected date. */
+  const [longtermPeriodGoals, setLongtermPeriodGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -52,16 +67,41 @@ export default function GoalsPage() {
   const [newCriteria, setNewCriteria] = useState<CriteriaForm>(defaultCriteria);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showCovenant, setShowCovenant] = useState(false);
+  const [detailGoal, setDetailGoal] = useState<Goal | null>(null);
 
   const api = window.deskflowAPI;
 
+  /* THIS IS WHY A LONG-TERM GOAL "DOESN'T WORK".
+     This used to call `getGoals(date)` — ONE day. The selected date is a
+     filter, so a goal whose period is 'longterm' was saved against the day it
+     was created on and then only ever reappeared on THAT day. Pick it a week
+     later and it was simply gone, which reads as "long term goals don't work"
+     rather than "this query is date-scoped".
+     GoldPage already had the fix and says so in a comment: load the WHOLE goal
+     set across a wide range, de-duped by id, and let the selected date affect
+     only the strip highlight. Same rule here, plus the split below. */
   const loadGoals = useCallback(async (date: string) => {
     if (!api) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
-      const result = await api.getGoals(date);
-      setGoals(result.goals || []);
+      const api2 = api as any;
+      if (api2.getGoalsBatch) {
+        const end = new Date(date + 'T00:00:00');
+        end.setFullYear(end.getFullYear() + 5);
+        const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+        const res = await api2.getGoalsBatch('2000-01-01', endStr);
+        const map = new Map<string, any>();
+        for (const d of (res?.days || []) as any[]) {
+          for (const g of (d.goals || []) as any[]) if (g?.id) map.set(g.id, g);
+        }
+        const all = [...map.values()];
+        setGoals(all.filter((g: any) => g.period !== 'longterm'));
+        setLongtermPeriodGoals(all.filter((g: any) => g.period === 'longterm'));
+      } else {
+        const result = await api.getGoals(date);
+        setGoals(result.goals || []);
+      }
     } catch (e: any) {
       setError(e.message || 'Failed to load goals');
     }
@@ -178,10 +218,7 @@ export default function GoalsPage() {
     } catch { /* ignore */ }
   };
 
-  return (
-    <PageShell page="goals">
-      <div className="max-w-5xl mx-auto space-y-4">
-        {/* Header */}
+  const header = (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -207,7 +244,11 @@ export default function GoalsPage() {
             Covenant Streaks
           </button>
         </div>
+  );
 
+  /* Embedded: the heading belongs to Gold, so only the icon + line remain.
+     Standalone: PageShell supplies the scroll container and background. */
+  const body = (<>
         {/* Streak Overview */}
         {activeGoals.length > 0 && (
           <motion.div
@@ -380,6 +421,43 @@ export default function GoalsPage() {
               onDismiss={() => {}}
             />
 
+            {/* LONG-TERM GOALS. A goal whose period is 'longterm' has no single
+                day attached to it, so it is listed here instead of being mixed
+                into the day-scoped routine list below. Before this existed these
+                were created, saved, and then only visible on the exact date they
+                were made on — the thing that reads as "long-term goals are
+                broken". Timespan is still chosen in the same Add form. */}
+            {!loading && !error && longtermPeriodGoals.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-1 pt-1" data-section="goals.longterm">
+                  <Flag size={13} className="text-amber-400" aria-hidden />
+                  <h3 className="text-[12px] font-semibold uppercase tracking-wider text-zinc-400">
+                    Long-term goals
+                  </h3>
+                  <span className="text-[11px] text-zinc-500">{longtermPeriodGoals.filter(g => g.status !== 'done').length} active</span>
+                </div>
+                {longtermPeriodGoals.map(g => (
+                  <GoalCard
+                    key={g.id}
+                    goal={g}
+                    longTermGoals={longTermGoals}
+                    onToggle={async () => {
+                      if (!api) return;
+                      const next = g.status === 'done' ? 'active' : 'done';
+                      await api.saveGoal(g.date, { ...g, status: next as any });
+                      loadGoals(selectedDate);
+                    }}
+                    onDelete={async () => {
+                      if (!api) return;
+                      await api.deleteGoal?.(g.id);
+                      loadGoals(selectedDate);
+                    }}
+                    onEdit={() => { setEditingId(g.id); setEditForm(g); }}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Goal List */}
             {loading ? (
               <GoalCardSkeleton />
@@ -434,6 +512,7 @@ export default function GoalsPage() {
                           onToggle={handleToggle}
                           onDelete={handleDelete}
                           onEdit={(g) => { setEditingId(g.id); setEditForm({ ...g }); }}
+                          onView={() => setDetailGoal(goal)}
                           longTermGoals={longTermGoals}
                         />
                       )}
@@ -477,7 +556,51 @@ export default function GoalsPage() {
             )}
           </div>
         </div>
+  </>);
+
+  if (embedded) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center">
+            <Target size={16} className="text-violet-400" />
+          </div>
+          <div>
+            <h2 className="text-[15px] font-semibold text-zinc-100">Goals</h2>
+            <p className="text-[11px] text-zinc-500">Create, track, and manage your goals</p>
+          </div>
+        </div>
+        {body}
       </div>
+    );
+  }
+
+  return (
+    <PageShell page="goals">
+      <div className="max-w-5xl mx-auto space-y-4">
+        {header}
+        {body}
+      </div>
+    {/* Goal detail — description, links, location. Reachable from every GoalCard
+        via the eye button. Without this the whole modal is dead code. */}
+    {detailGoal && (
+      <GoalDetailModal
+        goal={detailGoal}
+        onClose={() => setDetailGoal(null)}
+        onSave={async (_id, patch) => {
+          if (!api) return;
+          await api.saveGoal(selectedDate, patch);
+          loadGoals(selectedDate);
+        }}
+        onDelete={async id => {
+          if (!api) return;
+          await api.deleteGoal?.(id);
+          loadGoals(selectedDate);
+        }}
+        longTermGoals={longTermGoals.filter(g => g.status !== 'done')}
+      />
+    )}
+
     </PageShell>
   );
 }

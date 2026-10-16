@@ -155,7 +155,7 @@ export default function ActivityPage(props: ActivityPageProps) {
 
       <div className="sticky top-0 z-30 -mx-5 px-5 bg-[var(--color-background)] border-b border-[var(--color-border)]">
         <div className="flex items-center gap-1 py-2">
-          <div className="h-9 w-9 rounded-lg grid place-items-center mr-2 bg-[var(--page-accent)]/12 border border-[var(--page-accent)]/25">
+          <div className="h-9 w-9 rounded-lg grid place-items-center mr-2 bg-[var(--page-accent-12)] border border-[var(--page-accent)]/25">
             <activeConfig.icon className="w-4.5 h-4.5 text-[var(--page-accent)]" />
           </div>
           
@@ -166,7 +166,7 @@ export default function ActivityPage(props: ActivityPageProps) {
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   aria-current={activeTab === tab.key ? 'page' : undefined}
-                  className={`relative px-3 py-1.5 text-xs rounded-md transition-colors duration-150 min-h-[36px] flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-background)] ${
+                  className={`relative px-3 py-1.5 text-xs rounded-md transition-colors duration-150 min-h-[36px] flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-background)] ${
                     activeTab === tab.key
                       ? 'text-[var(--text-primary)]'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -175,7 +175,7 @@ export default function ActivityPage(props: ActivityPageProps) {
                   {activeTab === tab.key && (
                     <motion.div
                       layoutId="activity-tab-pill"
-                      className="absolute inset-0 rounded-md bg-[var(--page-accent)]/14 border border-[var(--page-accent)]/35"
+                      className="absolute inset-0 rounded-md bg-[var(--page-accent-14)] border border-[var(--page-accent)]/35"
                       transition={pillTransition}
                     />
                   )}
@@ -195,9 +195,9 @@ export default function ActivityPage(props: ActivityPageProps) {
             <button
               onClick={() => props.onPlatformFilterChange?.('all')}
               disabled={!props.onPlatformFilterChange}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${props.onPlatformFilterChange
+              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${props.onPlatformFilterChange
                 ? props.platformFilter === 'all'
-                  ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  ? 'border-[var(--btn-selected-border)] bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)]'
                   : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)]'
                 : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
               }`}
@@ -209,9 +209,9 @@ export default function ActivityPage(props: ActivityPageProps) {
                 key={p}
                 onClick={() => props.onPlatformFilterChange?.(p)}
                 disabled={!props.onPlatformFilterChange}
-                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${props.onPlatformFilterChange
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${props.onPlatformFilterChange
                   ? props.platformFilter === p
-                    ? 'border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                    ? 'border-[var(--btn-selected-border)] bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)]'
                     : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)]'
                   : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
                 }`}
@@ -226,9 +226,9 @@ export default function ActivityPage(props: ActivityPageProps) {
           {((props.availablePlatforms || []).length > 1) && (
             <button
               onClick={() => setCompareMode(!compareMode)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
                 compareMode
-                  ? 'border border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  ? 'border border-[var(--btn-selected-border)] bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)]'
               }`}
             >
@@ -244,7 +244,7 @@ export default function ActivityPage(props: ActivityPageProps) {
               setShowManualAssign(true);
             }}
             title="Assign manual time into empty spans (random or custom)"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
           >
             <Clock className="h-3.5 w-3.5" />
             Manual time
@@ -253,7 +253,7 @@ export default function ActivityPage(props: ActivityPageProps) {
           <button
             onClick={() => setShowManualFill(true)}
             title="Describe a period and the app generates the usage from your specification"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
           >
             <Sparkles className="h-3.5 w-3.5" />
             Fill a range
@@ -270,7 +270,7 @@ export default function ActivityPage(props: ActivityPageProps) {
         <div className="px-5 pt-5">
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/10 border border-[var(--page-accent)]/20 grid place-items-center">
+              <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-10)] border border-[var(--page-accent)]/20 grid place-items-center">
                 <Monitor className="w-4.5 h-4.5 text-[var(--page-accent)]" />
               </div>
               <div className="min-w-0">

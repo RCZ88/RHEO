@@ -96,7 +96,7 @@ export function GoalDetailModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+        className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 p-4 overflow-y-auto overscroll-contain"
         onClick={onClose}
         role="dialog"
         aria-modal="true"
@@ -106,7 +106,7 @@ export function GoalDetailModal({
           initial={{ opacity: 0, scale: 0.95, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 8 }}
-          className="w-full max-w-2xl rounded-2xl border border-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] light:border-zinc-300 shadow-2xl overflow-hidden"
+          className="w-full max-w-2xl my-auto rounded-2xl border border-zinc-700 bg-zinc-900 light:bg-[var(--ws-surface-raised)] light:border-zinc-300 shadow-2xl overflow-hidden"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -124,7 +124,7 @@ export function GoalDetailModal({
           </div>
 
           {/* Content */}
-          <div className="p-4 space-y-4 max-h-[80vh] overflow-y-auto">
+          <div className="p-4 space-y-4 overflow-y-auto overscroll-contain">
             {/* Title */}
             <div>
               <Label className="text-xs font-medium text-zinc-400">Title</Label>

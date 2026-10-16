@@ -98,7 +98,7 @@ export function SelectionAggregatePanel(props: Props) {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
               <BreakdownList title="By category" slices={data.byCategory} currency={currency} kind="category" showNumbers={showNumbers} maskMode={maskMode} maskFixedValue={maskFixedValue} />
               <BreakdownList title="By wallet" slices={data.byWallet} currency={currency} kind="wallet" showNumbers={showNumbers} maskMode={maskMode} maskFixedValue={maskFixedValue} />
-              <div className="rounded-xl border border-white/5 bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3">
+              <div className="rounded-xl border border-white/5 bg-zinc-950 light:bg-[var(--ws-surface-40)] p-3">
                 <p className="text-[11px] uppercase tracking-[0.08em] text-zinc-500 mb-2">Daily net</p>
                 {data.daily.length > 0 ? (
                   <Sparkline data={data.daily.map((d) => d.net)} className="h-12 w-full" color="#6ee7b7" width={300} height={48} />
@@ -144,7 +144,7 @@ function StatCard({
   const toneClass =
     tone === 'positive' ? 'text-emerald-400' : tone === 'negative' ? 'text-red-400' : 'text-zinc-100'
   return (
-    <div className="rounded-xl border border-white/5 bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3">
+    <div className="rounded-xl border border-white/5 bg-zinc-950 light:bg-[var(--ws-surface-40)] p-3">
       <p className="text-[11px] uppercase tracking-[0.08em] text-zinc-500 mb-1">{label}</p>
       <p className={`text-lg font-semibold tabular-nums ${toneClass}`}>{children}</p>
     </div>
@@ -170,7 +170,7 @@ function BreakdownList({
 }) {
   const top = slices.slice(0, 5)
   return (
-    <div className="rounded-xl border border-white/5 bg-zinc-950 light:bg-[var(--ws-surface)]/40 p-3">
+    <div className="rounded-xl border border-white/5 bg-zinc-950 light:bg-[var(--ws-surface-40)] p-3">
       <p className="text-[11px] uppercase tracking-[0.08em] text-zinc-500 mb-2">{title}</p>
       {top.length === 0 ? (
         <p className="text-[12px] text-zinc-600">No expenses in selection.</p>

@@ -1,4 +1,5 @@
 import {
+  AFK_THRESHOLD_MS,
   KEEPALIVE_EXTEND_MS,
   KEEPALIVE_NULL_POLLS,
   MAX_LOGGED_SESSION_MS,
@@ -22,6 +23,33 @@ import { commitLog } from './db';
  * preferences the daemon deliberately does not duplicate.
  */
 
+/**
+ * Normalize and filter app names. Returns null for shell/desktop apps that
+ * should not be tracked as user activity.
+ */
+export function normalizeApp(raw: string): string | null {
+  const lower = (raw || '').trim().toLowerCase();
+  if (!lower) return null;
+
+  // Desktop shell / window manager processes — not user activity
+  const SHELL_APPS = new Set([
+    'plasmashell', 'plasmashell_x11', 'krunner', 'ksmserver',
+    'kwin_wayland', 'kwin_x11', 'gnome-shell', 'xfce4-panel',
+    'lxqt-panel', 'tint2', 'dwm', 'sway', 'swaylock',
+    'xwayland', 'xdg-desktop-portal', 'xdg-desktop-portal-kde',
+    'polkit-kde-authentication-agent', 'kded5', 'kded6',
+    'kglobalaccel', 'kactivitymanagerd', 'tracker-miner-fs',
+    'tracker-extract', 'baloo_file', 'baloorunner',
+  ]);
+
+  // The app and daemon themselves must never be logged as usage
+  const SELF_APPS = new Set(['electron', 'rheo', 'deskflow', 'rheo-tracker', 'node']);
+
+  if (SHELL_APPS.has(lower)) return null;
+  if (SELF_APPS.has(lower)) return null;
+  return lower;
+}
+
 export interface Observation {
   app: string;
   title: string | null;
@@ -35,52 +63,47 @@ export interface Stats {
   lastSuccessfulPollAt: string | null;
 }
 
+export interface AfkEvent {
+  type: 'afk_start' | 'afk_end';
+  timestamp: string;
+  afkStartMs: number;
+  afkEndMs?: number;
+  durationMs?: number;
+}
+
 const stats: Stats = { polls: 0, rowsWritten: 0, lastRow: null, lastSuccessfulPollAt: null };
 
+// ── AFK detection state ───────────────────────────────────────────────────────
+type AfkState = 'active' | 'afk';
+
+let afkState: AfkState = 'active';
+let afkStartMs = 0;
+let afkEventCallback: ((event: AfkEvent) => void) | null = null;
+
 /**
- * Windows that are the desktop itself, not user activity. main.ts has a
- * Windows-only TRANSIENT_APPS list; this is the Linux equivalent, which did not
- * exist. Without it the daemon logs "plasmashell" and "krunner" as real usage.
+ * Subscribe to AFK events. The daemon will call this when AFK starts/ends.
+ * The app can use this to show the gap-fill prompt.
  */
-const SHELL_APPS = new Set([
-  'plasmashell',
-  'plasmashell_x11',
-  'krunner',
-  'ksmserver',
-  'kwin_wayland',
-  'kwin_x11',
-  'gnome-shell',
-  'xfce4-panel',
-  'lxqt-panel',
-  'tint2',
-  'dwm',
-  'sway',
-  'swaylock',
-  'xwayland',
-  'xdg-desktop-portal',
-  'xdg-desktop-portal-kde',
-  'polkit-kde-authentication-agent',
-  'kded5',
-  'kded6',
-  'kglobalaccel',
-  'kactivitymanagerd',
-  'tracker-miner-fs',
-  'tracker-extract',
-  'baloo_file',
-  'baloorunner',
-]);
+export function onAfkEvent(callback: (event: AfkEvent) => void): void {
+  afkEventCallback = callback;
+}
 
-/** The app and the daemon's own surface must never be logged as usage. */
-const SELF_APPS = new Set(['electron', 'rheo', 'deskflow', 'rheo-tracker', 'node']);
+function emitAfkEvent(event: AfkEvent): void {
+  if (afkEventCallback) {
+    try {
+      afkEventCallback(event);
+    } catch (err) {
+      warn('AFK event callback failed:', (err as Error).message);
+    }
+  }
+}
 
-export function normalizeApp(raw: string): string | null {
-  const lower = (raw || '').trim().toLowerCase();
-  if (!lower) return null;
-  // kdotool on KDE reports the machine hostname as WM_CLASS when a window has no
-  // real class set — linuxForeground.ts already refines those, but guard anyway.
-  if (SHELL_APPS.has(lower)) return null;
-  if (SELF_APPS.has(lower)) return null;
-  return lower;
+export function current(): { app: string | null; category: string | null; title: string | null } {
+  return {
+    app: open?.app ?? null,
+    category: open?.category ?? null,
+    title: open?.title ?? null,
+  };
 }
 
 interface OpenSession {
@@ -94,16 +117,7 @@ let open: OpenSession | null = null;
 let lastPollMs = 0;
 let lastFlushMs = 0;
 let nullPolls = 0;
-/** Linux has no working getSystemIdleTime(), so idle is derived from foreground change. */
 let lastForegroundChangeMs = Date.now();
-
-export function current(): { app: string | null; category: string | null; title: string | null } {
-  return {
-    app: open?.app ?? null,
-    category: open?.category ?? null,
-    title: open?.title ?? null,
-  };
-}
 
 export function getStats(): Stats {
   return { ...stats };
@@ -163,6 +177,29 @@ export function feed(observed: { app: string; title: string | null } | null): vo
     warn(`detected a ${Math.round(wallGap / 60_000)} min gap — flushed without backfill`);
     open = null;
     nullPolls = 0;
+    // Sleep gap resets AFK state too
+    if (afkState === 'afk') {
+      afkState = 'active';
+    }
+  }
+
+  // AFK detection: if no foreground change for AFK_THRESHOLD_MS, enter AFK.
+  // This runs regardless of whether we have an observation, because AFK is about
+  // user absence, not window presence.
+  const timeSinceForegroundChange = now - lastForegroundChangeMs;
+  if (afkState === 'active' && timeSinceForegroundChange >= AFK_THRESHOLD_MS) {
+    // Enter AFK state
+    afkState = 'afk';
+    afkStartMs = lastForegroundChangeMs; // AFK started when foreground last changed
+    if (open) {
+      flush(`AFK detected after ${Math.round(timeSinceForegroundChange / 60_000)} min idle`);
+    }
+    emitAfkEvent({
+      type: 'afk_start',
+      timestamp: new Date(afkStartMs).toISOString(),
+      afkStartMs,
+    });
+    log(`AFK started at ${new Date(afkStartMs).toISOString()}`);
   }
 
   if (!observed) {
@@ -178,6 +215,22 @@ export function feed(observed: { app: string; title: string | null } | null): vo
 
   const appChanged = !open || open.app !== observed.app;
   if (appChanged) {
+    // If we were in AFK and now have a foreground change, AFK ended
+    if (afkState === 'afk') {
+      const afkEndMs = now;
+      const durationMs = afkEndMs - afkStartMs;
+      emitAfkEvent({
+        type: 'afk_end',
+        timestamp: new Date(afkEndMs).toISOString(),
+        afkStartMs,
+        afkEndMs,
+        durationMs,
+      });
+      log(`AFK ended after ${Math.round(durationMs / 60_000)} min, resuming tracking`);
+      afkState = 'active';
+      afkStartMs = 0;
+    }
+
     flush('app changed');
     lastForegroundChangeMs = now;
     nullPolls = 0;
@@ -232,4 +285,8 @@ export function reset(): void {
   lastPollMs = 0;
   lastFlushMs = 0;
   lastForegroundChangeMs = Date.now();
+  if (afkState === 'afk') {
+    afkState = 'active';
+    afkStartMs = 0;
+  }
 }

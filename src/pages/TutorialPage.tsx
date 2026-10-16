@@ -518,7 +518,7 @@ export default function TutorialPage({ noShell }: { noShell?: boolean }) {
 
   const content = (
     <>
-      <div className="flex-shrink-0 border-b border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/80 backdrop-blur-xl">
+      <div className="flex-shrink-0 border-b border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-80)] backdrop-blur-xl">
         <div className="px-5 py-4 flex items-center gap-4">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
             <BookOpen className="w-5 h-5 text-emerald-400" />

@@ -58,7 +58,7 @@ export function FocusSessionCard() {
             size={112}
             strokeWidth={8}
             gaugePrimaryColor={active ? '#ec4899' : 'rgba(236,72,153,0.35)'}
-            gaugeSecondaryColor="rgba(255,255,255,0.06)"
+            gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
             linear={active}
             linearDurationMs={1000}
           >

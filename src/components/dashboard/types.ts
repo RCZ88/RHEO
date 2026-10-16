@@ -20,6 +20,9 @@ export interface Deadline {
   id: string;
   title: string;
   due_date: string;
+  /** Time of day 'HH:mm', separate from due_date so the date-keyed calendar grid
+   *  keeps working. Null = all-day deadline. */
+  due_time?: string | null;
   status: DeadlineStatus;
   course?: string;
   priority: Priority;

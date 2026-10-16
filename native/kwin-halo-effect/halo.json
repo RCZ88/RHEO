@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Authors": [{ "Name": "RHEO" }],
+        "Id": "halo",
+        "Name": "Halo Island",
+        "Description": "Paints the Halo island from an offscreen Electron renderer into the KWin render chain.",
+        "License": "MIT",
+        "Version": "0.1.0"
+    },
+    "X-KDE-ServiceTypes": ["KWin/Effect"],
+    "X-KDE-PluginInfo": {
+        "Name": "halo",
+        "Description": "Halo Island — offscreen painted, no app-owned surface.",
+        "Version": "0.1.0"
+    }
+}

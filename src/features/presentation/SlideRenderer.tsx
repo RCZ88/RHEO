@@ -45,7 +45,7 @@ function CodeBlock({ data }: { data: VisualDataMap['code-block'] }) {
   return (
     <pre className="rounded-xl border p-5 text-sm overflow-x-auto" style={{ background: 'rgba(0,0,0,0.4)', borderColor: 'var(--border)', fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>
       <code>{lines.map((line: string, i: number) => (
-        <div key={i} className={cn(highlights.size > 0 && highlights.has(i + 1) && 'bg-[var(--accent)]/10 -mx-5 px-5')}>{line || ' '}</div>
+        <div key={i} className={cn(highlights.size > 0 && highlights.has(i + 1) && 'bg-[var(--accent-10)] -mx-5 px-5')}>{line || ' '}</div>
       ))}</code>
       {data?.language && <div className="text-[10px] mt-2 opacity-50">{data.language}</div>}
     </pre>

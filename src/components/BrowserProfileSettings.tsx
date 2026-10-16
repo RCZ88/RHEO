@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 
 interface BrowserProfile {
   id: number;
@@ -145,10 +146,10 @@ export default function BrowserProfileSettings() {
   if (loading) {
     return (
       <div className="p-6 space-y-4">
-        <div className="h-6 w-48 bg-white/5 rounded-lg animate-pulse" />
+        <div className="h-6 w-48 bg-white/5 light:bg-[var(--ws-surface-sunken)] rounded-lg animate-pulse" />
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-white/5 rounded-xl animate-pulse" />
+            <div key={i} className="h-16 bg-white/5 light:bg-[var(--ws-surface-sunken)] rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -172,7 +173,7 @@ export default function BrowserProfileSettings() {
   return (
     <div className="p-6 space-y-3">
       {detectedBrowsers.length > 0 && (
-        <div className="p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] mb-4">
+        <div className="p-3 rounded-xl border border-white/[0.06] light:border-[var(--ws-border)] bg-white/[0.02] light:bg-[var(--ws-surface-raised)] mb-4">
           <div className="text-sm font-medium text-zinc-300 mb-0.5">Track Websites For</div>
           <p className="text-xs text-zinc-500 mb-2.5">
             When one of these browsers is the active window, DeskFlow shows the website
@@ -188,8 +189,8 @@ export default function BrowserProfileSettings() {
                   aria-pressed={on}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition border ${
                     on
-                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
-                      : 'bg-white/[0.02] border-white/[0.06] text-zinc-500 hover:text-zinc-300'
+                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-300 light:text-[var(--color-sky-ink)]'
+                      : 'bg-white/[0.02] light:bg-[var(--ws-surface)] border-white/[0.06] light:border-[var(--ws-border)] text-zinc-500 hover:text-zinc-300 light:hover:bg-[var(--ws-surface-hover)]'
                   }`}
                 >
                   {on ? '\u2713 ' : ''}{name}
@@ -204,23 +205,27 @@ export default function BrowserProfileSettings() {
           key={profile.id}
           className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
             profile.is_active
-              ? 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]'
-              : 'bg-white/[0.01] border-white/[0.03] opacity-60'
+              ? 'bg-white/[0.03] light:bg-[var(--ws-surface-raised)] border-white/[0.06] light:border-[var(--ws-border)] hover:bg-white/[0.05] light:hover:bg-[var(--ws-surface-hover)]'
+              /* Paused rows: `opacity-60` is the dark-field dimming idiom, and on
+                 paper it blends the ink toward the background — the row's labels
+                 measured 2.37–4.42:1. Light keeps full ink and reads "paused"
+                 from the surface instead (one step down, not up). */
+              : 'bg-white/[0.01] light:bg-[var(--ws-surface-sunken)] border-white/[0.03] light:border-[var(--ws-border)] opacity-60 light:opacity-100'
           }`}
         >
           {/* Color indicator */}
           <div className="relative group">
             <div
-              className="w-3 h-3 rounded-full cursor-pointer ring-2 ring-white/10"
-              style={{ backgroundColor: profile.color_tag }}
+              className="hue-dot w-3 h-3 rounded-full cursor-pointer ring-2 ring-white/10 light:ring-black/15"
+              style={{ '--hue': profile.color_tag } as CSSProperties}
               title="Click to change color"
             />
-            <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-white/10 rounded-lg p-1.5 z-10 shadow-xl">
+            <div className="absolute top-full left-0 mt-1 hidden group-hover:flex gap-1 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border border-white/10 light:border-[var(--ws-border)] rounded-lg p-1.5 z-10 shadow-xl">
               {PROFILE_COLORS.map(c => (
                 <button
                   key={c}
-                  className="w-4 h-4 rounded-full ring-1 ring-white/20 hover:ring-white/40 transition"
-                  style={{ backgroundColor: c }}
+                  className="hue-dot w-4 h-4 rounded-full ring-1 ring-white/20 hover:ring-white/40 light:ring-black/20 light:hover:ring-black/40 transition"
+                  style={{ '--hue': c } as CSSProperties}
                   onClick={() => handleColorChange(profile, c)}
                 />
               ))}
@@ -229,8 +234,8 @@ export default function BrowserProfileSettings() {
 
           {/* Browser icon */}
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-            style={{ backgroundColor: profile.color_tag + '22', color: profile.color_tag }}
+            className="hue-tile w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+            style={{ '--hue': profile.color_tag } as CSSProperties}
           >
             {profile.browser_name[0]?.toUpperCase()}
           </div>
@@ -247,12 +252,12 @@ export default function BrowserProfileSettings() {
                     if (e.key === 'Enter') handleRename(profile);
                     if (e.key === 'Escape') setEditingId(null);
                   }}
-                  className="flex-1 bg-zinc-800 border border-white/10 rounded-md px-2 py-1 text-sm text-white outline-none focus:border-sky-500/50"
+                  className="flex-1 bg-zinc-800 border border-white/10 light:border-[var(--ws-border)] rounded-md px-2 py-1 text-sm text-white light:text-[var(--text-primary)] outline-none focus:border-sky-500/50"
                   autoFocus
                 />
                 <button
                   onClick={() => handleRename(profile)}
-                  className="text-xs text-sky-400 hover:text-sky-300"
+                  className="text-xs text-sky-400 light:hover:text-[var(--color-sky-ink)]"
                 >
                   Save
                 </button>
@@ -285,9 +290,9 @@ export default function BrowserProfileSettings() {
           <div className="text-right flex-shrink-0">
             <div className="flex items-center gap-1.5 justify-end">
               <span className="relative flex w-1.5 h-1.5">
-                <span className={`absolute inset-0 rounded-full ${profile.is_connected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                <span className={`absolute inset-0 rounded-full ${profile.is_connected ? 'bg-emerald-400 light:bg-[var(--color-emerald-ink)]' : 'bg-zinc-600 light:bg-[var(--ws-border-strong)]'}`} />
                 {profile.is_connected && (
-                  <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60 motion-reduce:hidden" />
+                  <span className="absolute inset-0 rounded-full bg-emerald-400 light:bg-[var(--color-emerald-ink)] animate-ping opacity-60 motion-reduce:hidden" />
                 )}
               </span>
               <span className="text-xs text-zinc-500">
@@ -305,8 +310,8 @@ export default function BrowserProfileSettings() {
               onClick={() => handleToggle(profile)}
               className={`px-2 py-1 rounded-md text-xs font-medium transition ${
                 profile.is_active
-                  ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                  : 'bg-zinc-700/50 text-zinc-500 hover:bg-zinc-700'
+                  ? 'bg-emerald-500/10 text-[var(--color-emerald-ink)] hover:bg-emerald-500/20'
+                  : 'bg-zinc-700/50 light:bg-[var(--ws-surface-sunken)] text-zinc-500 light:text-[var(--text-muted)] hover:bg-zinc-700 light:hover:bg-[var(--ws-surface-hover)]'
               }`}
             >
               {profile.is_active ? 'Active' : 'Paused'}
@@ -326,18 +331,18 @@ export default function BrowserProfileSettings() {
       {pausedCount > 0 && (
         showPaused ? (
           <button onClick={() => setShowPaused(false)}
-            className="w-full text-xs text-zinc-500 hover:text-zinc-300 py-1.5 rounded-lg hover:bg-white/[0.03] transition">
+            className="w-full text-xs text-zinc-500 hover:text-zinc-300 py-1.5 rounded-lg hover:bg-white/[0.03] light:hover:bg-[var(--ws-surface-hover)] transition">
             Hide {pausedCount} paused
           </button>
         ) : (
           <button onClick={() => setShowPaused(true)}
-            className="w-full text-xs text-zinc-500 hover:text-zinc-300 py-1.5 rounded-lg hover:bg-white/[0.03] transition">
+            className="w-full text-xs text-zinc-500 hover:text-zinc-300 py-1.5 rounded-lg hover:bg-white/[0.03] light:hover:bg-[var(--ws-surface-hover)] transition">
             + {pausedCount} paused profile{pausedCount === 1 ? '' : 's'}
           </button>
         )
       )}
 
-      <p className="text-[11px] text-zinc-600 mt-3 pt-3 border-t border-white/[0.04]">
+      <p className="text-[11px] text-zinc-600 mt-3 pt-3 border-t border-white/[0.04] light:border-[var(--ws-border)]">
         Profiles are auto-detected by the DeskFlow Browser Tracker extension. Install it in each browser to track multiple profiles independently.
       </p>
     </div>

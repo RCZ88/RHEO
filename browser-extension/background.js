@@ -1,5 +1,5 @@
-// DeskFlow Browser Extension - Background Service Worker (MV3)
-// Tracks only the actively viewed tab and sends data to DeskFlow Electron app
+// RHEO Browser Extension - Background Service Worker (MV3)
+// Tracks only the actively viewed tab and sends data to RHEO Electron app
 //
 // Key design decisions (based on Chromium MV3 best practices):
 // - Uses chrome.alarms instead of setInterval (SW gets killed when idle)
@@ -38,7 +38,8 @@ let state = {
   isTrackingEnabled: true,
   serverHealthy: false,
   isBrowserFocused: true,        // Track if browser window has focus
-  profileId: ''                  // Unique per-installation profile identifier
+  profileId: '',                 // Unique per-installation profile identifier
+  browserNameOverride: ''        // Pinned browser identity when the UA is ambiguous
 };
 
 // --- Persistence helpers ---
@@ -53,10 +54,11 @@ async function saveState() {
       deskflow_lastPeriodicSync: state.lastPeriodicSync,
       deskflow_isTrackingEnabled: state.isTrackingEnabled,
       deskflow_isBrowserFocused: state.isBrowserFocused,
-      deskflow_profileId: state.profileId
+      deskflow_profileId: state.profileId,
+      deskflow_browserName: state.browserNameOverride
     });
   } catch (err) {
-    console.debug('[DeskFlow] Failed to save state:', err.message);
+    console.debug('[RHEO] Failed to save state:', err.message);
   }
 }
 
@@ -71,7 +73,8 @@ async function loadState() {
       'deskflow_lastPeriodicSync',
       'deskflow_isTrackingEnabled',
       'deskflow_isBrowserFocused',
-      'deskflow_profileId'
+      'deskflow_profileId',
+      'deskflow_browserName'
     ]);
 
     if (data.deskflow_activeTabId !== undefined) state.activeTabId = data.deskflow_activeTabId;
@@ -85,95 +88,165 @@ async function loadState() {
     if (data.deskflow_isTrackingEnabled !== undefined) state.isTrackingEnabled = data.deskflow_isTrackingEnabled;
     if (data.deskflow_isBrowserFocused !== undefined) state.isBrowserFocused = data.deskflow_isBrowserFocused;
     if (data.deskflow_profileId) state.profileId = data.deskflow_profileId;
+    if (data.deskflow_browserName) state.browserNameOverride = data.deskflow_browserName;
+
+    // Identity may now differ from the value computed at module load.
+    refreshBrowserIdentity();
 
     // Generate a stable profile ID on first run (one per extension installation)
     if (!state.profileId) {
       state.profileId = crypto.randomUUID ? crypto.randomUUID() :
         'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
       await saveState();
-      console.log('[DeskFlow] 🆔 Generated new profile ID:', state.profileId);
+      console.log('[RHEO] 🆔 Generated new profile ID:', state.profileId);
     }
 
-    console.log('[DeskFlow] 📦 State loaded from storage');
+    console.log('[RHEO] 📦 State loaded from storage');
   } catch (err) {
-    console.warn('[DeskFlow] Failed to load state, using defaults:', err.message);
+    console.warn('[RHEO] Failed to load state, using defaults:', err.message);
     // Initialize lastPeriodicSync on error
     state.lastPeriodicSync = Date.now();
   }
 }
 
 // --- Helper: Detect which browser the extension is running in ---
-function detectBrowserName() {
+// ── BROWSER IDENTITY ────────────────────────────────────────────────────────
+// Returns { name, exact }. `exact` means a fork-specific token was positively
+// found in the UA. `exact === false` means we know the ENGINE (firefox) but
+// NOT which fork — a genuinely ambiguous state, because Zen ships a stock
+// Firefox UA in some builds and is then indistinguishable from Firefox by UA
+// alone. That distinction decides whether this instance may claim another
+// fork's process name; see getBrowserProcessNames.
+function detectBrowser() {
   const ua = navigator.userAgent;
-  // Comet - check for Comet-specific patterns (based on user's Comet browser)
-  if (ua.includes('Comet') || ua.includes('comet')) return 'Comet';
-  // Arc browser
-  if (ua.includes('Arc')) return 'Arc';
-  // Microsoft Edge (must check before Chrome since Edge includes Chrome in UA)
-  if (ua.includes('Edg/')) return 'Edge';
-  // Opera (must check before Chrome since Opera includes Chrome in UA)
-  if (ua.includes('OPR/') || ua.includes('Opera')) return 'Opera';
-  // Brave (must check before Chrome since Brave includes Chrome in UA)
-  if (ua.includes('Brave')) return 'Brave';
-  // Vivaldi
-  if (ua.includes('Vivaldi')) return 'Vivaldi';
-  // ── FIREFOX FAMILY (checked BEFORE the plain-Firefox test) ────────────────
-  // ORDER IS LOAD-BEARING. Zen is Firefox-based, so `ua.includes('Firefox')`
-  // is TRUE on Zen and would return first, making us report "Firefox" while
-  // the OS foreground process is called "zen". That mismatch is what stopped
-  // all capture: our own focus poll compared "zen" against Firefox aliases
-  // ["firefox"], never matched, sent is_browser_focused:false, and the desktop
-  // app rejected every payload — so the stopwatch never moved.
+
+  // Chromium-family forks. Every one of these MUST be tested BEFORE the
+  // generic Chrome test, because every Chromium UA ends with "Chrome/xxx".
+  const CHROMIUM_FORKS = [
+    [/Comet/i,             'Comet'],
+    [/\bArc\b/i,           'Arc'],
+    [/Edg\//,              'Edge'],
+    [/OPR\/|Opera/i,       'Opera'],
+    [/Brave/i,             'Brave'],
+    [/Vivaldi/i,           'Vivaldi'],
+  ];
+  for (const [re, name] of CHROMIUM_FORKS) {
+    if (re.test(ua)) return { name, exact: true };
+  }
+  if (ua.includes('Chrome') || ua.includes('Chromium')) return { name: 'Chrome', exact: true };
+
+  // Firefox-family forks. A fork's UA normally STILL CONTAINS "Firefox", so
+  // these MUST be tested BEFORE the generic Firefox test.
   //
-  // The old Zen check used navigator.userAgentData, which is a CHROMIUM-only
-  // API and therefore always undefined here. These signals are Firefox-safe.
-  if (/\bZen\b/i.test(ua)) return 'Zen';
-
-  // Firefox
-  if (ua.includes('Firefox')) return 'Firefox';
-
-  // Firefox-family derivatives that ship a stock or near-stock Firefox UA.
-  // If the UA names one of these it wins over the generic Firefox answer.
-  const FIREFOX_DERIVATIVES = ['Floorp', 'LibreWolf', 'Waterfox', 'Mullvad',
-    'Ghost', 'Basilisk', 'Netscape', 'Pale Moon', 'Zen'];
-  for (const d of FIREFOX_DERIVATIVES) {
-    if (ua.includes(d)) return d;
+  // The previous code did the opposite: `if (ua.includes('Firefox')) return
+  // 'Firefox';` came first and the fork loop sat AFTER it, making that loop
+  // UNREACHABLE — every fork UA contains "Firefox", so it always returned
+  // early. The loop's own comment claimed "If the UA names one of these it
+  // wins over the generic Firefox answer", which was simply false.
+  const FIREFOX_FORKS = [
+    [/\bZen\b|ZenBrowser/i, 'Zen'],
+    [/LibreWolf/i,         'LibreWolf'],
+    [/Waterfox/i,          'Waterfox'],
+    [/Floorp/i,            'Floorp'],
+    [/Mullvad/i,           'Mullvad'],
+    [/Ghost/i,             'Ghost'],
+    [/Basilisk/i,          'Basilisk'],
+    [/Pale ?Moon|Netscape/i, 'Pale Moon'],
+  ];
+  for (const [re, name] of FIREFOX_FORKS) {
+    if (re.test(ua)) return { name, exact: true };
   }
 
-  // Chrome (generic - keep last since many browsers include Chrome)
-  if (ua.includes('Chrome')) return 'Chrome';
-  // Safari (keep last since some Chrome-based browsers may include Safari)
-  if (ua.includes('Safari')) return 'Safari';
-  return 'Unknown';
+  // Generic Firefox: engine known, fork UNKNOWN. Deliberately NOT claiming
+  // any fork's process name — see getBrowserProcessNames for why.
+  if (ua.includes('Firefox')) return { name: 'Firefox', exact: false };
+
+  if (ua.includes('Safari')) return { name: 'Safari', exact: true };
+  return { name: 'Unknown', exact: false };
 }
 
-let BROWSER_NAME = detectBrowserName();
-
-// Map browser brand names to OS process names (what active-win returns)
-// Key = BROWSER_NAME return value, values = possible process names (without .exe)
-// This handles cases where the UA brand name differs from the executable name
+// ── PROCESS-NAME ALIASES ───────────────────────────────────────────────────
+// One entry per browser, containing ONLY that browser's own OS process names.
+//
+// The previous 'firefox' entry also listed every Firefox fork (zen, librewolf,
+// waterfox, floorp, ...). That is the multi-browser bug this table exists to
+// prevent: with Zen AND Firefox both running, the copy of the extension inside
+// FIREFOX would match a foreground process named "zen" and report itself
+// focused, inventing website entries for a browser sitting in the background.
+// Under-claiming (no match, no data) is the safer failure than over-claiming
+// (another browser's data attributed to this one), so a browser that could not
+// positively identify itself claims ONLY its own engine and is expected to be
+// pinned via deskflow_browserName.
 const BROWSER_PROCESS_NAMES = {
-  'comet': ['chrome', 'comet', 'chromium'],
-  'chrome': ['chrome', 'chromium'],
-  'brave': ['brave', 'chrome'],
-  'edge': ['msedge', 'edge'],
-  'opera': ['opera'],
-  'vivaldi': ['vivaldi'],
-  // Include the Firefox-derivative processes: we run inside Firefox, but the OS
-  // calls our process by the fork's name (e.g. "zen"), so a bare ["firefox"]
-  // list can never match the foreground app.
-  'firefox': ['firefox', 'firefox-esr', 'zen', 'zen-browser', 'zenbrowser', 'floorp', 'librewolf', 'waterfox', 'mullvad', 'basilisk', 'ghost-browser'],
-  'zen': ['zen', 'zen-browser', 'zenbrowser'],
-  'arc': ['arc'],
-  'safari': ['safari'],
+  'comet':     ['comet', 'comet.exe'],
+  'chrome':    ['chrome', 'chromium'],
+  'brave':     ['brave', 'brave.exe'],
+  'edge':      ['msedge', 'edge'],
+  'opera':     ['opera'],
+  'vivaldi':   ['vivaldi'],
+  'firefox':   ['firefox', 'firefox-esr', 'firefox-bin'],
+  'zen':       ['zen', 'zen-browser', 'zenbrowser'],
+  'librewolf': ['librewolf'],
+  'waterfox':  ['waterfox'],
+  'floorp':    ['floorp'],
+  'mullvad':   ['mullvad'],
+  'ghost':     ['ghost-browser', 'ghost'],
+  'basilisk':  ['basilisk'],
+  'pale moon': ['pale moon', 'palemoon'],
+  'arc':       ['arc'],
+  'safari':    ['safari'],
 };
 
-function getBrowserProcessNames(browserName) {
-  const key = browserName.toLowerCase();
-  return BROWSER_PROCESS_NAMES[key] || [key];
+// ── PINNED IDENTITY OVERRIDE ────────────────────────────────────────────────
+// A misdetected identity is not recoverable from the UA, so it is pinned
+// explicitly. Stored in extension storage alongside profileId, so it survives
+// restarts and upgrades. One value per browser installation.
+function getActiveBrowser() {
+  if (state.browserNameOverride) {
+    return { name: state.browserNameOverride, exact: true, overridden: true };
+  }
+  return detectBrowser();
 }
 
-// --- Send browser identification to DeskFlow ---
+function getBrowserProcessNames(browserName, exact) {
+  const key = String(browserName).toLowerCase();
+  const own = BROWSER_PROCESS_NAMES[key];
+  if (own) return own;
+  return [key];
+}
+
+// Resolved identity. Re-resolved by refreshBrowserIdentity() once storage has
+// loaded, because a pinned override is stored there and is not known at load.
+let BROWSER_IDENTITY = detectBrowser();
+let BROWSER_NAME = BROWSER_IDENTITY.name;
+
+function refreshBrowserIdentity() {
+  BROWSER_IDENTITY = getActiveBrowser();
+  BROWSER_NAME = BROWSER_IDENTITY.name;
+  if (!BROWSER_IDENTITY.exact && BROWSER_IDENTITY.name === 'Firefox') {
+    console.warn(
+      '[RHEO] ⚠️  Firefox-family browser with no fork token in its UA, so it can only' +
+      ' claim the "firefox" process name. If this is actually Zen/LibreWolf/etc, pin it once:' +
+      ' rheoSetBrowserName("Zen")  — see rheoIdentity() for what was detected.'
+    );
+  }
+  return BROWSER_NAME;
+}
+
+// Diagnostics, callable from the extension console (works in both the Firefox
+// event page and the Chrome MV3 service worker).
+globalThis.rheoIdentity = () => ({
+  name: BROWSER_NAME, exact: BROWSER_IDENTITY.exact, overridden: !!BROWSER_IDENTITY.overridden,
+  processNames: getBrowserProcessNames(BROWSER_NAME, BROWSER_IDENTITY.exact),
+  userAgent: navigator.userAgent, profileId: state.profileId,
+});
+globalThis.rheoSetBrowserName = async (name) => {
+  state.browserNameOverride = String(name || '').trim();
+  await saveState();
+  return refreshBrowserIdentity();
+};
+
+// --- Send browser identification to RHEO ---
 async function identifyBrowser() {
   try {
     // Send the union of ALL known alias process names (not just the detected
@@ -181,11 +254,11 @@ async function identifyBrowser() {
     // when UA-based brand detection misidentifies (e.g. Comet reporting as
     // "Chrome" because its UA contains "Chrome"). This prevents the server from
     // clobbering its comet/edge entries in browserProcessNames.
-    const allProcessNames = new Set(getBrowserProcessNames(BROWSER_NAME));
-    for (const names of Object.values(BROWSER_PROCESS_NAMES)) {
-      for (const n of names) allProcessNames.add(n);
-    }
-    const processNames = [...allProcessNames];
+    // ONLY this browser's own process names. Posting the union of every
+    // browser's aliases made two installed profiles both claim the same
+    // foreground process (e.g. Firefox and Zen both claiming "zen"), so the
+    // desktop app could not tell which profile was actually in front.
+    const processNames = getBrowserProcessNames(BROWSER_NAME, BROWSER_IDENTITY.exact);
     // A human-friendly label so the app can show "Chrome — Personal" instead of a
     // bare browser name when a user runs two profiles of the same browser.
     let profileName = BROWSER_NAME;
@@ -212,14 +285,14 @@ async function identifyBrowser() {
       }),
       signal: AbortSignal.timeout(2000)
     });
-    console.log('[DeskFlow] 🏷️ Identified as:', BROWSER_NAME, 'profileId:', state.profileId);
+    console.log('[RHEO] 🏷️ Identified as:', BROWSER_NAME, 'profileId:', state.profileId);
   } catch (err) {
     // Not a debug message any more: this is the exact reason the desktop app
     // shows nothing, so it must be loud enough to find in the console.
-    console.warn('[DeskFlow] ❌ Could not reach DeskFlow at ' + DESKFLOW_SERVER
+    console.warn('[RHEO] ❌ Could not reach RHEO at ' + DESKFLOW_SERVER
       + ' —', err && err.message);
-    console.warn('[DeskFlow]    If this says ERR_BLOCKED_BY_CLIENT / permission,'
-      + ' grant access in about:addons → DeskFlow Browser Bridge → Permissions.');
+    console.warn('[RHEO]    If this says ERR_BLOCKED_BY_CLIENT / permission,'
+      + ' grant access in about:addons → RHEO Browser Bridge → Permissions.');
   }
 }
 
@@ -263,7 +336,7 @@ function shouldExclude(url, domain) {
   );
 }
 
-// --- Send data to DeskFlow ---
+// --- Send data to RHEO ---
 async function sendToDeskFlow(data) {
   if (!state.isTrackingEnabled) return;
 
@@ -277,17 +350,17 @@ async function sendToDeskFlow(data) {
 
     if (response.ok) {
       state.serverHealthy = true;
-      console.log('[DeskFlow] ✅ Synced:', data.domain, `(${Math.round(data.active_duration_ms / 1000)}s)`);
+      console.log('[RHEO] ✅ Synced:', data.domain, `(${Math.round(data.active_duration_ms / 1000)}s)`);
     } else {
       state.serverHealthy = false;
-      console.warn('[DeskFlow] ⚠️ Server returned', response.status, response.statusText);
+      console.warn('[RHEO] ⚠️ Server returned', response.status, response.statusText);
     }
   } catch (err) {
     state.serverHealthy = false;
     if (err.name === 'AbortError') {
-      console.debug('[DeskFlow] ⏱️ Request timed out — server may not be running');
+      console.debug('[RHEO] ⏱️ Request timed out — server may not be running');
     } else {
-      console.debug('[DeskFlow] ⚠️ Server unreachable:', err.message);
+      console.debug('[RHEO] ⚠️ Server unreachable:', err.message);
     }
   }
 }
@@ -300,11 +373,11 @@ async function healthCheck() {
     });
     if (response.ok) {
       const data = await response.json();
-      console.log('[DeskFlow] 💚 Server healthy:', data);
+      console.log('[RHEO] 💚 Server healthy:', data);
       state.serverHealthy = true;
     }
   } catch (err) {
-    console.warn('[DeskFlow] 💔 Server health check failed — tracking data will queue until server starts');
+    console.warn('[RHEO] 💔 Server health check failed — tracking data will queue until server starts');
     state.serverHealthy = false;
   }
 }
@@ -322,7 +395,7 @@ async function checkBrowserFocus() {
       const data = await response.json();
       const appName = (data.app || '').toLowerCase();
       const browserName = BROWSER_NAME.toLowerCase();
-      const processNames = getBrowserProcessNames(BROWSER_NAME);
+      const processNames = getBrowserProcessNames(BROWSER_NAME, BROWSER_IDENTITY.exact);
 
       // Match against THIS extension's own brand name + its process-name aliases ONLY.
       // The union-of-all-browsers approach made this extension consider itself focused
@@ -342,13 +415,13 @@ async function checkBrowserFocus() {
         [...thisBrowserAliases].some(p => appName.includes(p))
       );
       
-      console.log('[DeskFlow] 🔍 Foreground app:', data.app, `(extension host: ${BROWSER_NAME})`, '-> Browser focused:', isBrowserActive);
+      console.log('[RHEO] 🔍 Foreground app:', data.app, `(extension host: ${BROWSER_NAME})`, '-> Browser focused:', isBrowserActive);
       state.isBrowserFocused = isBrowserActive;
       await saveState();
       return isBrowserActive;
     }
   } catch (err) {
-    console.debug('[DeskFlow] Could not check foreground app:', err.message);
+    console.debug('[RHEO] Could not check foreground app:', err.message);
   }
   // On error (server unreachable, timeout), assume browser is NOT focused
   // Prevents phantom tracking when the desktop app isn't responding
@@ -362,7 +435,7 @@ let focusCheckInterval = null;
 function startFocusCheckPolling() {
   if (focusCheckInterval) clearInterval(focusCheckInterval);
   focusCheckInterval = setInterval(checkBrowserFocus, 2000); // Check every 2 seconds
-  console.log('[DeskFlow] 🔄 Started focus check polling');
+  console.log('[RHEO] 🔄 Started focus check polling');
 }
 
 // --- Update active tab tracking ---
@@ -372,7 +445,7 @@ async function updateActiveTab(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
     if (!tab || !tab.url) {
-      console.debug('[DeskFlow] Tab', tabId, 'has no URL, skipping');
+      console.debug('[RHEO] Tab', tabId, 'has no URL, skipping');
       return;
     }
 
@@ -380,7 +453,7 @@ async function updateActiveTab(tabId) {
 
     // Skip excluded domains/URLs
     if (shouldExclude(tab.url, domain)) {
-      console.debug('[DeskFlow] Excluded URL:', tab.url.substring(0, 60));
+      console.debug('[RHEO] Excluded URL:', tab.url.substring(0, 60));
       return;
     }
 
@@ -399,14 +472,14 @@ async function updateActiveTab(tabId) {
     state.lastPeriodicSync = Date.now();
 
     await saveState();
-    console.log('[DeskFlow] 🔄 Tab activated:', domain);
+    console.log('[RHEO] 🔄 Tab activated:', domain);
 
   } catch (err) {
     // Defensive: tabs.get throws "No tab with id" when tab is gone
     if (err.message && err.message.includes('No tab with id')) {
-      console.debug('[DeskFlow] Tab', tabId, 'no longer exists, skipping');
+      console.debug('[RHEO] Tab', tabId, 'no longer exists, skipping');
     } else {
-      console.debug('[DeskFlow] Tab update failed:', err.message);
+      console.debug('[RHEO] Tab update failed:', err.message);
     }
   }
 }
@@ -416,7 +489,7 @@ async function logPreviousSession(force = false) {
   if (!state.activeTabId || !state.activeTabUrl) return;
 
   // NOTE: No focus gate here. We ALWAYS send the session and flag
-  // is_browser_focused; the DeskFlow desktop app is the authority and decides
+  // is_browser_focused; the RHEO desktop app is the authority and decides
   // (it enforces a fresh foreground check unless forceBrowserTracking is on).
   // Gating here caused 24/7 data loss when the flag got stuck false (e.g. UA
   // misdetect on Comet), which is worse than the phantom-entry risk it guarded
@@ -426,7 +499,7 @@ async function logPreviousSession(force = false) {
 
   // Only log if session was long enough to matter
   if (duration < MIN_SESSION_MS) {
-    console.debug('[DeskFlow] Session too short, skipping:', Math.round(duration / 1000) + 's');
+    console.debug('[RHEO] Session too short, skipping:', Math.round(duration / 1000) + 's');
     return;
   }
 
@@ -505,7 +578,7 @@ async function periodicSync() {
 
 // 1. Tab activated (user clicked on a different tab)
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  console.log('[DeskFlow] 📑 Tab activated:', activeInfo.tabId, 'in window', activeInfo.windowId);
+  console.log('[RHEO] 📑 Tab activated:', activeInfo.tabId, 'in window', activeInfo.windowId);
   await updateActiveTab(activeInfo.tabId);
   // Deep Focus: check if this tab should show overlay
   try {
@@ -525,13 +598,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const domain = extractDomain(url);
 
     if (shouldExclude(url, domain)) {
-      console.debug('[DeskFlow] Tab update to excluded URL, skipping');
+      console.debug('[RHEO] Tab update to excluded URL, skipping');
       return;
     }
 
     // Log previous URL session before updating (navigation within same tab)
     if (state.activeTabUrl && sanitizeUrl(url) !== state.activeTabUrl) {
-      console.log('[DeskFlow] 🔗 Navigation detected:', state.activeTabDomain, '→', domain);
+      console.log('[RHEO] 🔗 Navigation detected:', state.activeTabDomain, '→', domain);
       await logPreviousSession();
     }
 
@@ -560,7 +633,7 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
 
     // Log previous page session before updating
     if (state.activeTabUrl && sanitizeUrl(tab.url) !== state.activeTabUrl) {
-      console.log('[DeskFlow] 📄 Page navigation completed:', details.tabId);
+      console.log('[RHEO] 📄 Page navigation completed:', details.tabId);
       await logPreviousSession();
     }
 
@@ -576,7 +649,7 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
     // Deep Focus: check if navigated page should show overlay
     checkTabFocus(details.tabId, extractDomain(tab.url));
   } catch (err) {
-    console.debug('[DeskFlow] webNavigation handler failed:', err.message);
+    console.debug('[RHEO] webNavigation handler failed:', err.message);
   }
 });
 
@@ -584,14 +657,14 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
     // Lost focus — user left the browser (Alt+Tab, clicked another app)
-    console.log('[DeskFlow] 🪟 Browser lost focus - pausing tracking');
+    console.log('[RHEO] 🪟 Browser lost focus - pausing tracking');
     state.isBrowserFocused = false;
     await saveState();
     await logPreviousSession(true); // Force flush: capture time spent up to focus loss
   } else {
     // Regained focus — refresh active tab for the SPECIFIC window that gained focus
     // FIX: Use windowId from the event, NOT currentWindow:true (which queries extension's popup window)
-    console.log('[DeskFlow] 🪟 Browser regained focus, window:', windowId);
+    console.log('[RHEO] 🪟 Browser regained focus, window:', windowId);
     state.isBrowserFocused = true;
     state.lastPeriodicSync = Date.now(); // Reset sync time when regaining focus
     await saveState();
@@ -602,7 +675,7 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
         await updateActiveTab(tabs[0].id);
       }
     } catch (err) {
-      console.debug('[DeskFlow] Focus change handler failed:', err.message);
+      console.debug('[RHEO] Focus change handler failed:', err.message);
     }
   }
 });
@@ -610,7 +683,7 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 // 5. Tab removed (closed or crashed) — ADDED based on Perplexity feedback
 chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
   if (tabId === state.activeTabId) {
-    console.log('[DeskFlow] ❌ Active tab removed:', tabId);
+    console.log('[RHEO] ❌ Active tab removed:', tabId);
     await logPreviousSession();
 
     // Reset state
@@ -672,8 +745,8 @@ let permissionRetryTimer = null;
  */
 function schedulePermissionRetry(attempt = 0) {
   if (attempt >= 6) {
-    console.warn('[DeskFlow] 🔒 Still no host permission after retries. Finish it in '
-      + 'about:addons → DeskFlow Browser Bridge → Permissions → allow localhost.');
+    console.warn('[RHEO] 🔒 Still no host permission after retries. Finish it in '
+      + 'about:addons → RHEO Browser Bridge → Permissions → allow localhost.');
     return;
   }
   if (permissionRetryTimer) clearTimeout(permissionRetryTimer);
@@ -697,17 +770,17 @@ async function ensureHostPermissions(interactive = false) {
     const requested = await api.permissions.request({ origins: DESKFLOW_ORIGINS })
       .catch(() => false);
     if (requested) {
-      console.log('[DeskFlow] 🔓 Host permissions granted — can reach DeskFlow now.');
+      console.log('[RHEO] 🔓 Host permissions granted — can reach RHEO now.');
       if (permissionRetryTimer) { clearTimeout(permissionRetryTimer); permissionRetryTimer = null; }
       return true;
     }
     if (!interactive) {
-      console.log('[DeskFlow] 🔒 Host permissions not granted (Firefox MV3 opt-in).');
+      console.log('[RHEO] 🔒 Host permissions not granted (Firefox MV3 opt-in).');
       return false;
     }
     return false;
   } catch (err) {
-    console.warn('[DeskFlow] permissions API unavailable:', err && err.message);
+    console.warn('[RHEO] permissions API unavailable:', err && err.message);
     return false;
   }
 }
@@ -729,9 +802,9 @@ async function ensureRuntime(reason) {
     await identifyBrowser();
 
     runtimeReady = true;
-    console.log(`[DeskFlow] ♻️ Runtime ready (${reason}) · tab=${state.activeTabId ?? 'none'} focused=${state.isBrowserFocused}`);
+    console.log(`[RHEO] ♻️ Runtime ready (${reason}) · tab=${state.activeTabId ?? 'none'} focused=${state.isBrowserFocused}`);
   } catch (err) {
-    console.warn('[DeskFlow] ensureRuntime failed:', err && err.message);
+    console.warn('[RHEO] ensureRuntime failed:', err && err.message);
   }
 }
 
@@ -752,12 +825,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // ========================================
 
 async function onStartup() {
-  console.log('[DeskFlow] 🚀 Browser tracker extension started (MV3)');
+  console.log('[RHEO] 🚀 Browser tracker extension started (MV3)');
 
   // 1. Load persisted state
   await loadState();
 
-  // 2. Health check — verify DeskFlow server is running
+  // 2. Health check — verify RHEO server is running
   await healthCheck();
 
   // 3. Identify which browser this extension is running in
@@ -774,16 +847,16 @@ async function onStartup() {
   chrome.alarms.clear(ALARM_NAME);
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: SYNC_PERIOD_MINUTES });
   runtimeReady = true;
-  console.log(`[DeskFlow] ⏰ Periodic sync alarm set (every ${SYNC_PERIOD_MINUTES * 60}s)`);
+  console.log(`[RHEO] ⏰ Periodic sync alarm set (every ${SYNC_PERIOD_MINUTES * 60}s)`);
 
   // 6. If we had an active tab from before SW restart, verify it still exists
   if (state.activeTabId) {
     try {
       const tab = await chrome.tabs.get(state.activeTabId);
       if (tab && tab.url) {
-        console.log('[DeskFlow] 📋 Restored active tab:', state.activeTabDomain);
+        console.log('[RHEO] 📋 Restored active tab:', state.activeTabDomain);
       } else {
-        console.log('[DeskFlow] 📋 Previously active tab no longer exists, resetting');
+        console.log('[RHEO] 📋 Previously active tab no longer exists, resetting');
         state.activeTabId = null;
         state.activeTabUrl = '';
         state.activeTabDomain = '';
@@ -801,10 +874,10 @@ async function onStartup() {
     const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (tabs.length > 0 && tabs[0].url) {
       await updateActiveTab(tabs[0].id);
-      console.log('[DeskFlow] 📋 Initialized with current tab:', state.activeTabDomain);
+      console.log('[RHEO] 📋 Initialized with current tab:', state.activeTabDomain);
     }
   } catch (err) {
-    console.debug('[DeskFlow] Could not query active tab on startup:', err.message);
+    console.debug('[RHEO] Could not query active tab on startup:', err.message);
   }
 }
 
@@ -831,7 +904,7 @@ async function focusPost(path, body) {
   try {
     const r = await fetch(DESKFLOW_SERVER + path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-DeskFlow-Token': FOCUS_TOKEN },
+      headers: { 'Content-Type': 'application/json', 'X-RHEO-Token': FOCUS_TOKEN },
       body: JSON.stringify(body)
     });
     return r.ok ? r.json() : null;
@@ -993,8 +1066,37 @@ setInterval(async () => {
           expectedKeys: cmd.expectedKeys ?? [],
         });
 
+        /**
+         * Resolve which tab receives the prompt.
+         *
+         * Previously this was ALWAYS the active tab, so injection only worked if
+         * you already had that provider open AND focused. When the desktop app
+         * launches a provider for you the tab arrives asynchronously, so wait
+         * briefly for one matching cmd.urlPatterns, fall back to the active tab,
+         * and finally create one — so a prompt is never silently dropped.
+         */
+        const resolveTargetTab = async (cmd) => {
+          const patterns = Array.isArray(cmd.urlPatterns) ? cmd.urlPatterns : [];
+          if (patterns.length) {
+            const deadline = Date.now() + (cmd.waitForTabMs || 20000);
+            while (Date.now() < deadline) {
+              const found = await chrome.tabs.query({ url: patterns });
+              if (found && found.length) {
+                const tab = found[found.length - 1];
+                try { await chrome.tabs.update(tab.id, { active: true }); } catch (_e) {}
+                return tab;
+              }
+              await new Promise(r => setTimeout(r, 700));
+            }
+          }
+          const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (active) return active;
+          if (cmd.url) return await chrome.tabs.create({ url: cmd.url, active: true });
+          return null;
+        };
+
         if (cmd.type === 'CONTENT_ENGINE_INJECT') {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          const tab = await resolveTargetTab(cmd);
           if (tab) chrome.tabs.sendMessage(tab.id, toInjectMessage(cmd));
         }
         // All other category injections (learn / goals / finance / resume / general)
@@ -1008,7 +1110,7 @@ setInterval(async () => {
           cmd.type === 'RESUME_INJECT' ||
           cmd.type === 'GENERAL_INJECT'
         ) {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          const tab = await resolveTargetTab(cmd);
           if (tab) chrome.tabs.sendMessage(tab.id, toInjectMessage(cmd));
         }
         // Drain the persistent retry queue before processing new captures
@@ -1027,7 +1129,7 @@ chrome.runtime.onInstalled.addListener(() => { drainRetryQueue(); });
 // ========================================
 
 chrome.runtime.onSuspend.addListener(async () => {
-  console.log('[DeskFlow] 💤 Service worker suspending — flushing session');
+  console.log('[RHEO] 💤 Service worker suspending — flushing session');
   await logPreviousSession();
   // Persist any buffered captures to the retry queue before SW dies
   if (aiContextBuffer.length) await enqueueRetry(aiContextBuffer.splice(0));

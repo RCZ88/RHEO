@@ -21,7 +21,16 @@ export function AnimatedCircularProgressBar({
   size = 160,
   strokeWidth = 10,
   gaugePrimaryColor,
-  gaugeSecondaryColor = "rgba(255,255,255,0.08)",
+  /* THE TRACK (the unfilled ring) WAS THE BUG.
+   * Default was rgba(255,255,255,0.08) — a WHITE track, which is invisible
+   * on the cream light surface, while four call sites overrode it with
+   * rgba(63,63,70,0.5) — a hardcoded DARK track, which read as a thick
+   * black border on that same surface. Both were literals, so neither
+   * could follow the theme.
+   * --color-foreground is near-white in dark mode and near-black in light
+   * mode, so a color-mix off it produces a track that is legible in BOTH and
+   * needs no per-theme override. Callers may still pass their own colour. */
+  gaugeSecondaryColor = "color-mix(in srgb, var(--color-foreground) 14%, transparent)",
   linear = false,
   linearDurationMs = 1000,
   className,

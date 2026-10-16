@@ -84,12 +84,13 @@ export function LifeRiver({ className }: LifeRiverProps) {
             </p>
           </div>
           <Button
-            variant="default"
+            variant="outline"
             size="sm"
-            onClick={() => openForm(null)}
+            disabled
+            title="Create in Gold > Phases. River is read-only."
             data-lifephase="add-phase"
           >
-            <Plus size={13} /> Phase
+            <Plus size={13} /> Manage in Gold
           </Button>
         </div>
 
@@ -161,7 +162,7 @@ export function LifeRiver({ className }: LifeRiverProps) {
             Couldn't load your river: {error}
           </p>
         ) : phases.length === 0 ? (
-          <EmptyRiver onAdd={() => openForm(null)} />
+          <EmptyRiver onAdd={() => { /* read-only: create in Gold > Phases */ }} />
         ) : (
           <RiverCanvas
             phases={phases}

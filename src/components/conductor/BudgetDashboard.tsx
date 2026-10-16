@@ -79,7 +79,7 @@ export function BudgetDashboard({ missionId }: { missionId: string }) {
         <div className="flex flex-col gap-1.5">
           {metrics.length === 0 && <p className="text-[10px] text-zinc-500">No agent metrics yet</p>}
           {metrics.map((m) => (
-            <div key={m.nodeId} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50">
+            <div key={m.nodeId} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)]">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.role === 'director' ? '#8b5cf6' : m.role === 'worker' ? '#22d3ee' : '#71717a' }} />
                 <span className="text-[11px] text-zinc-300">{m.role}</span>

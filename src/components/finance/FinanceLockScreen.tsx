@@ -51,7 +51,7 @@ function hexToRgb(hex: string): number[] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function ParticlesBackground({ color = '#10b981', quantity = 60 }: { color?: string; quantity?: number }) {
+function ParticlesBackground({ colorVar = '--page-accent', quantity = 60 }: { colorVar?: string; quantity?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -59,7 +59,17 @@ function ParticlesBackground({ color = '#10b981', quantity = 60 }: { color?: str
   const mouse = useRef({ x: 0, y: 0 });
   const size = useRef({ w: 0, h: 0 });
   const raf = useRef<number | null>(null);
-  const rgb = hexToRgb(color);
+  const rgbRef = useRef<[number, number, number]>([16, 185, 129]);
+
+  const resolveColor = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    const style = getComputedStyle(container);
+    const val = style.getPropertyValue(colorVar).trim();
+    if (val && val.startsWith('#')) {
+      rgbRef.current = hexToRgb(val);
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -77,6 +87,7 @@ function ParticlesBackground({ color = '#10b981', quantity = 60 }: { color?: str
       canvas.style.width = `${size.current.w}px`;
       canvas.style.height = `${size.current.h}px`;
       ctxRef.current?.scale(dpr, dpr);
+      resolveColor();
       initParticles();
     };
 
@@ -102,6 +113,9 @@ function ParticlesBackground({ color = '#10b981', quantity = 60 }: { color?: str
       if (!ctx) return;
       ctx.clearRect(0, 0, size.current.w, size.current.h);
 
+      // Re-resolve color each frame to catch theme changes
+      resolveColor();
+
       circles.current.forEach((c, i) => {
         const edge = [
           c.x + c.translateX - c.size,
@@ -126,7 +140,7 @@ function ParticlesBackground({ color = '#10b981', quantity = 60 }: { color?: str
 
         ctx.beginPath();
         ctx.arc(c.x, c.y, c.size, 0, 2 * Math.PI);
-        ctx.fillStyle = `rgba(${rgb.join(',')}, ${c.alpha})`;
+        ctx.fillStyle = `rgba(${rgbRef.current.join(',')}, ${c.alpha})`;
         ctx.fill();
 
         if (c.x < -c.size || c.x > size.current.w + c.size || c.y < -c.size || c.y > size.current.h + c.size) {
@@ -164,7 +178,7 @@ function ParticlesBackground({ color = '#10b981', quantity = 60 }: { color?: str
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', onMouseMove);
     };
-  }, [color, quantity]);
+  }, [colorVar, quantity]);
 
   return (
     <div ref={containerRef} className="pointer-events-none absolute inset-0" aria-hidden="true">
@@ -182,7 +196,7 @@ function GridPattern({ width = 50, height = 50, maxOpacity = 0.08 }: { width?: n
     <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" style={{ opacity: maxOpacity }}>
       <defs>
         <pattern id="vault-grid" width={width} height={height} patternUnits="userSpaceOnUse">
-          <path d={`M ${width} 0 L 0 0 0 ${height}`} fill="none" stroke="currentColor" strokeWidth="0.5" className="text-emerald-500" />
+          <path d={`M ${width} 0 L 0 0 0 ${height}`} fill="none" stroke="currentColor" strokeWidth="0.5" className="text-[var(--page-accent)]" />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill="url(#vault-grid)" />
@@ -236,7 +250,7 @@ function BorderBeam({
 /*  MagicCard — mouse-following orb glow (adapted, no next-themes)    */
 /* ------------------------------------------------------------------ */
 
-function MagicCard({ children, className = '', glowFrom = '#10b981', glowTo = '#06b6d4', glowSize = 400, glowBlur = 60, glowOpacity = 0.8 }: {
+function MagicCard({ children, className = '', glowFrom = 'var(--page-accent)', glowTo = 'var(--page-accent-hover)', glowSize = 400, glowBlur = 60, glowOpacity = 0.8 }: {
   children: React.ReactNode; className?: string;
   glowFrom?: string; glowTo?: string; glowSize?: number; glowBlur?: number; glowOpacity?: number;
 }) {
@@ -265,7 +279,7 @@ function MagicCard({ children, className = '', glowFrom = '#10b981', glowTo = '#
         background: useMotionTemplate`linear-gradient(#09090b 0 0) padding-box, radial-gradient(${glowSize / 2}px circle at ${mouseX}px ${mouseY}px, ${glowFrom}, ${glowTo}, transparent 100%) border-box`,
       }}
     >
-      <div className="absolute inset-px z-20 rounded-[inherit] bg-zinc-950 light:bg-[var(--ws-surface)]/90" />
+      <div className="absolute inset-px z-20 rounded-[inherit] bg-zinc-950 light:bg-[var(--ws-surface-raised)]" />
       <motion.div
         className="pointer-events-none absolute z-30"
         style={{
@@ -311,7 +325,7 @@ function ScanLineInput({
         disabled={disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/40 rounded-xl px-4 py-3.5 pr-10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed font-mono tracking-wide"
+        className="w-full bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border border-zinc-700/40 light:border-[var(--ws-border)] rounded-xl px-4 py-3.5 pr-10 text-sm text-white light:text-[var(--text-primary)] placeholder-zinc-500 light:placeholder-[var(--text-muted)] focus:outline-none focus:border-emerald-500/50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed font-mono tracking-wide"
         style={{
           boxShadow: focused ? '0 0 20px rgba(16,185,129,0.08), inset 0 1px 0 rgba(255,255,255,0.05)' : 'inset 0 1px 0 rgba(255,255,255,0.03)',
         }}
@@ -338,7 +352,7 @@ function ScanLineInput({
           type="button"
           onClick={onIconClick}
           tabIndex={-1}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors p-1"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] transition-colors p-1"
         >
           <Icon className="w-4 h-4" />
         </button>
@@ -370,9 +384,9 @@ function AttemptIndicator({ attemptsLeft, maxAttempts = 3 }: { attemptsLeft: num
           className="w-8 h-1.5 rounded-full"
           style={{
             background: active
-              ? 'linear-gradient(90deg, #059669, #10b981)'
-              : 'linear-gradient(90deg, #7f1d1d, #991b1b)',
-            boxShadow: active ? '0 0 8px rgba(16,185,129,0.3)' : 'none',
+              ? 'linear-gradient(90deg, var(--color-sage-400), var(--color-amber-400))'
+              : 'linear-gradient(90deg, var(--color-red-500), var(--color-red-600))',
+            boxShadow: active ? 'rgba(var(--color-emerald-400-rgb), 0.3)' : 'none',
           }}
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
@@ -526,18 +540,18 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
       <GridPattern width={60} height={60} maxOpacity={0.06} />
 
       {/* Layer 3: Particles */}
-      <ParticlesBackground color="#10b981" quantity={50} />
+      <ParticlesBackground colorVar="--page-accent" quantity={50} />
 
       {/* Layer 4: Ambient gradient orbs */}
       <motion.div
         className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle at center, rgba(16,185,129,0.08), transparent 70%)' }}
+        style={{ background: 'radial-gradient(circle at center, color-mix(in srgb, var(--page-accent) 8%, transparent), transparent 70%)' }}
         animate={{ y: [0, -30, 0], x: [0, 20, 0], scale: [1, 1.1, 1] }}
         transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
         className="absolute -bottom-48 -left-40 w-[600px] h-[600px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle at center, rgba(6,182,212,0.06), transparent 70%)' }}
+        style={{ background: 'radial-gradient(circle at center, color-mix(in srgb, var(--page-accent-hover) 6%, transparent), transparent 70%)' }}
         animate={{ y: [0, 40, 0], x: [0, -20, 0], scale: [1, 1.08, 1] }}
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut', delay: 3 }}
       />
@@ -553,20 +567,20 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
         <motion.div variants={riseVariants}>
           <div className="relative rounded-xl p-px overflow-hidden"
             style={{
-              background: 'linear-gradient(180deg, rgba(16,185,129,0.2), rgba(6,182,212,0.1), rgba(16,185,129,0.05))',
+              background: 'linear-gradient(180deg, color-mix(in srgb, var(--page-accent) 20%, transparent), color-mix(in srgb, var(--page-accent-hover) 10%, transparent), color-mix(in srgb, var(--page-accent) 5%, transparent))',
             }}
           >
             <MagicCard
-              glowFrom="#10b981"
-              glowTo="#06b6d4"
+              glowFrom="var(--page-accent)"
+              glowTo="var(--page-accent-hover)"
               glowSize={350}
               glowBlur={50}
               glowOpacity={0.7}
               className="rounded-xl"
             >
               {/* Border beams */}
-              <BorderBeam duration={7} size={300} colorFrom="#10b981" colorTo="#34d399" borderWidth={2} />
-              <BorderBeam duration={9} size={300} colorFrom="#06b6d4" colorTo="#10b981" borderWidth={1} delay={3} reverse />
+<BorderBeam duration={7} size={300} colorFrom="var(--page-accent)" colorTo="var(--page-accent-hover)" borderWidth={2} />
+<BorderBeam duration={9} size={300} colorFrom="var(--page-accent-hover)" colorTo="var(--page-accent)" borderWidth={1} delay={3} reverse />
 
               {/* Card content */}
               <motion.div
@@ -574,13 +588,20 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                 transition={{ duration: 0.5 }}
                 className="relative rounded-xl p-8 flex flex-col items-center text-center"
                 style={{
-                  background: 'linear-gradient(180deg, rgba(24,24,27,0.85), rgba(9,9,11,0.95))',
+                  /* A recess, not an elevation: the card is a well the user is
+                     standing in front of, so every stop sits BELOW the page
+                     rather than ON it. The previous value was
+                     `linear-gradient(180deg, var(--ws-surface), var(--ws-surface-sunken))`,
+                     whose first stop was the page's own colour — the top of the
+                     card was literally invisible against the page — and whose
+                     second stop did not exist in dark mode at all. */
+                  background: 'linear-gradient(180deg, var(--ws-surface-recess), var(--ws-surface-recess-deep))',
                   backdropFilter: 'blur(40px)',
-                  border: '1px solid rgba(255,255,255,0.05)',
+                  border: '1px solid var(--ws-border)',
                 }}
               >
                 {/* Inner highlight lines */}
-                <div className="pointer-events-none absolute inset-0 rounded-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent_40%)]" />
+                <div className="pointer-events-none absolute inset-0 rounded-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent_40%)] light:bg-[linear-gradient(180deg,rgba(28,25,23,0.06),transparent_40%)]" />
                 <div className="absolute top-0 left-16 right-16 h-px bg-gradient-to-r from-transparent via-emerald-400/25 to-transparent" />
 
                 {/* Vault Seal */}
@@ -591,7 +612,7 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                 {/* Title */}
                 <motion.h2
                   variants={riseVariants}
-                  className="text-xl font-bold text-white mb-1 tracking-tight"
+                  className="text-xl font-bold text-white light:text-[var(--text-primary)] mb-1 tracking-tight"
                   style={{ fontFamily: "'JetBrains Mono', monospace" }}
                 >
                   {isFirstTime ? 'FINANCE VAULT' : 'VAULT LOCKED'}
@@ -620,23 +641,23 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                         disabled={biometricBusy}
                         className="relative flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden group"
                         style={{
-                          background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.1))',
-                          border: '1px solid rgba(16,185,129,0.25)',
-                          color: '#34d399',
+                          background: 'linear-gradient(135deg, color-mix(in srgb, var(--page-accent) 15%, transparent), color-mix(in srgb, var(--page-accent-hover) 10%, transparent))',
+                          border: '1px solid color-mix(in srgb, var(--page-accent) 25%, transparent)',
+                          color: 'var(--color-emerald-400)',
                         }}
                       >
-                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent_60%)] pointer-events-none" />
+                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent_60%)] light:bg-[linear-gradient(180deg,rgba(28,25,23,0.08),transparent_60%)] pointer-events-none" />
                         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.12),transparent_70%)] transition-opacity duration-300 pointer-events-none" />
                         {biometricBusy ? (
-                          <div className="w-4 h-4 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-[var(--color-emerald-400)]/30 border-t-[var(--color-emerald-400)] rounded-full animate-spin" />
                         ) : (
-                          <Fingerprint className="w-5 h-5" />
+                          <Fingerprint className="w-5 h-5 text-[var(--btn-on-fill)]" />
                         )}
                         <span className="relative">Set up with Windows Hello</span>
                       </motion.button>
                       <button
                         onClick={() => setShowPasswordForm(true)}
-                        className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors tracking-wider uppercase"
+                        className="text-[11px] text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] transition-colors tracking-wider uppercase"
                       >
                         Or set a password instead
                       </button>
@@ -704,17 +725,17 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                             <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2 text-xs text-red-400">
-                                  <Lock className="w-3.5 h-3.5" />
+                                  <Lock className="w-3.5 h-3.5 text-red-400" />
                                   <span>Rate limit active</span>
                                 </div>
                                 <span className="text-xs text-red-400 tabular-nums font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                                   {cooldownTime}s
                                 </span>
                               </div>
-                              <div className="w-full bg-zinc-800/60 rounded-full h-1.5 overflow-hidden">
+                              <div className="w-full bg-[var(--ws-surface-recess-deep)] rounded-full h-1.5 overflow-hidden">
                                 <motion.div
                                   className="h-full rounded-full"
-                                  style={{ background: 'linear-gradient(90deg, #ef4444, #dc2626)' }}
+                                  style={{ background: 'linear-gradient(90deg, var(--color-red-500), var(--color-red-600))' }}
                                   animate={{ width: `${(cooldownTime / cooldownDuration) * 100}%` }}
                                   transition={{ duration: 1, ease: 'linear' }}
                                 />
@@ -730,14 +751,19 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                         whileTap={{ scale: submitting ? 1 : 0.98 }}
                         onClick={handleSubmit}
                         disabled={submitting || !password || cooldownTime > 0}
-                        className="relative w-full py-3.5 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-950 overflow-hidden group"
+                        className="relative w-full py-3.5 rounded-xl text-[var(--btn-on-fill)] text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:ring-2 ring-[var(--btn-ring)] ring-offset-2 ring-offset-[var(--ws-surface)] overflow-hidden group"
                         style={{
-                          background: '#059669',
-                          boxShadow: '0 4px 20px rgba(16,185,129,0.15)',
+                          background: 'var(--btn-fill)',
+                          boxShadow: 'var(--btn-ring)',
                         }}
                       >
                         {submitting ? (
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          /* `border-white/30 border-t-white` measured 1.03:1 on this
+                             button's light fill (`--btn-fill` #fcfbf8) — the spinner
+                             was invisible exactly while it was the only feedback on
+                             screen. Track and arc now come from the same button
+                             tokens that colour the label. */
+                          <div className="w-4 h-4 border-2 border-[var(--btn-border)] border-t-[var(--btn-on-fill)] rounded-full animate-spin" />
                         ) : (
                           <>
                             <KeyRound className="w-4 h-4" />
@@ -749,7 +775,7 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                       {isFirstTime && biometricSupported && (
                         <button
                           onClick={() => setShowPasswordForm(false)}
-                          className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors tracking-wider uppercase"
+                          className="text-[11px] text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] transition-colors tracking-wider uppercase"
                         >
                           Use Windows Hello instead
                         </button>
@@ -762,10 +788,10 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                     <>
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-zinc-800/60" />
+                          <div className="w-full border-t border-[var(--ws-border)]" />
                         </div>
                         <div className="relative flex justify-center">
-                          <span className="bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] px-3 text-[10px] text-zinc-500 uppercase tracking-widest" style={{ fontFamily: "'JetBrains Mono', monospace" }}>or</span>
+                          <span className="bg-[var(--ws-surface)] px-3 text-[10px] text-[var(--text-muted)] uppercase tracking-widest" style={{ fontFamily: "'JetBrains Mono', monospace" }}>or</span>
                         </div>
                       </div>
                       <motion.button
@@ -773,14 +799,21 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                         whileTap={{ scale: 0.98 }}
                         onClick={handleBiometricClick}
                         disabled={biometricBusy}
-                        className="relative flex items-center justify-center gap-2.5 w-full py-3 rounded-xl text-zinc-300 hover:text-white text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-zinc-700/30 overflow-hidden group"
-                        style={{ background: 'rgba(39,39,42,0.4)' }}
+                        className="relative flex items-center justify-center gap-2.5 w-full py-3 rounded-xl text-[var(--btn-ghost-on)] hover:text-[var(--btn-ghost-on-hover)] text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-[var(--btn-border)] overflow-hidden group"
+                        style={{ background: 'var(--btn-ghost-hover)' }}
                       >
-                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_60%)] pointer-events-none" />
+                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_60%)] light:bg-[linear-gradient(180deg,rgba(28,25,23,0.05),transparent_60%)] pointer-events-none" />
                         {biometricBusy ? (
-                          <div className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-[var(--btn-border)] border-t-[var(--btn-ghost-on)] rounded-full animate-spin" />
                         ) : (
-                          <Fingerprint className="w-4 h-4" />
+                          /* `--btn-on-accent` is the on-ACCENT colour (in light
+                             mode #ffffff, for text sitting on a saturated accent
+                             fill). This button is a GHOST button — its surface is
+                             `--btn-ghost-hover`, i.e. ink 6% over paper — so a
+                             white glyph measured 1.26:1: the fingerprint was
+                             simply not there in light mode. A ghost control's
+                             contents take the ghost's own on-colour. */
+                          <Fingerprint className="w-4 h-4 text-[var(--btn-ghost-on)]" />
                         )}
                         <span className="relative">{biometricBusy ? 'Authenticating...' : 'Use Windows Hello'}</span>
                       </motion.button>
@@ -805,7 +838,7 @@ export function FinanceLockScreen({ onUnlock, onSetup, onBiometricUnlock, isFirs
                 </motion.div>
 
                 {/* Footer status */}
-                <motion.div variants={riseVariants} className="mt-6 flex items-center gap-2 text-[10px] text-zinc-600 uppercase tracking-widest">
+                <motion.div variants={riseVariants} className="mt-6 flex items-center gap-2 text-[10px] text-zinc-500 light:text-[var(--text-muted)] uppercase tracking-widest">
                   <motion.div
                     className="w-1.5 h-1.5 rounded-full bg-emerald-500"
                     animate={{ opacity: [1, 0.3, 1] }}

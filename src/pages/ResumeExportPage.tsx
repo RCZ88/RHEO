@@ -58,7 +58,7 @@ export default function ResumeExportPage() {
           <button onClick={() => navigate('/resume')} className="text-zinc-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/15 flex items-center justify-center ring-1 ring-[var(--page-accent)]/20">
+          <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-15)] flex items-center justify-center ring-1 ring-[var(--page-accent)]/20">
             <Download className="w-5 h-5 text-[var(--page-accent)]" />
           </div>
           <div>
@@ -145,9 +145,9 @@ export default function ResumeExportPage() {
                     size={80}
                     strokeWidth={8}
                     gaugePrimaryColor={score.current >= 75 ? '#16a34a' : score.current >= 50 ? '#ca8a04' : '#dc2626'}
-                    gaugeSecondaryColor="rgba(255,255,255,0.06)"
+                    gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
                   >
-                    <NumberTicker value={score.current} className="text-lg font-bold text-white tabular-nums" />
+                    <NumberTicker value={score.current} className="text-lg font-bold text-[var(--color-foreground)] tabular-nums" />
                   </AnimatedCircularProgressBar>
                 </div>
               </BlurFade>

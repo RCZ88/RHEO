@@ -6795,7 +6795,7 @@ externalSelect: 'Enter',
           </div>
 
           {/* ═══════════════════════════════════════════════════════════════════
-          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-faint)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
             Trigger
           </div>
               TRIGGER — the hitbox. FIRST because it is the control people reach for
@@ -6809,6 +6809,52 @@ externalSelect: 'Enter',
               buried in a code comment, because a user widening a hitbox on an
               always-on-top overlay is exactly the person who needs to know that.
               ═══════════════════════════════════════════════════════════════════ */}
+          {/* ═══ VISIBILITY — when the pill itself is on screen ═════════════════════════════
+              FIRST in the section, and it is a DIFFERENT question from "Opens when"
+              below. `trigger.mode` says what EXPANDS the island; `resident` says whether
+              the collapsed pill is there at all. There was no control for the second
+              question, which is why "always on" could not be expressed and the pill had
+              no way to stay up.
+
+              The wording is deliberately about the PILL, not the island: with
+              "Always visible" the pill is up and hovering still expands it. "Hidden until
+              hover" is the classic dynamic-island behaviour for anyone who wants the
+              desktop back. ══════════════════════════════════════════════════════════ */}
+          <div className="py-2 space-y-3" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
+            <div>
+              <div className="text-[12px] text-zinc-300 mb-0.5">Pill visibility</div>
+              <p className="text-[10px] text-zinc-600 leading-snug">
+                Whether the small pill stays on screen. This is separate from how it expands.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Halo Island pill visibility">
+              {([
+                ['always', 'Always visible', 'Sits on the desktop over any app'],
+                ['hover', 'Hidden until hover', 'Appears when the pointer reaches it'],
+                ['off', 'Off', 'No island at all'],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={haloPrefs.resident === value}
+                  disabled={!haloPrefs.enabled}
+                  onClick={() => void saveHaloPrefs({ resident: value })}
+                  className="text-left disabled:opacity-50"
+                  style={{
+                    padding: 8,
+                    borderRadius: 8,
+                    border: `1px solid ${haloPrefs.resident === value ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                    background: haloPrefs.resident === value ? 'var(--ws-surface-raised)' : 'transparent',
+                  }}
+                >
+                  <div className="text-[11px] text-zinc-300">{label}</div>
+                  <div className="text-[10px] text-zinc-500 leading-tight mt-0.5">{hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="py-2 space-y-3" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
             <div>
               <div className="text-[12px] text-zinc-300 mb-0.5">Opens when</div>
@@ -6965,7 +7011,7 @@ externalSelect: 'Enter',
             </p>
           </div>
 
-          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-faint)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
             Position
           </div>
           {/* ── SHAPE ────────────────────────────────────────────────────────────
@@ -6974,7 +7020,7 @@ externalSelect: 'Enter',
               session changed the silhouette and the user had no way to change it back.
               The island renders `shape: 'capsule'` as a full pill and otherwise honours
               `radius`, so these two controls are the whole surface treatment. */}
-          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-faint)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
             Shape
           </div>
           <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
@@ -7146,14 +7192,14 @@ externalSelect: 'Enter',
           {/* ── Custom corner radius ───────────────────────────────────────────── */}
 
 
-          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-faint)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
             Contents
           </div>
           {/* ── What the small pill shows ────────────────────────────────────────
               This is the setting the pill needed and did not have. Its contents used to
               depend on which producers were emitting at that instant, so the pill
               flickered and the user could not predict or control it. */}
-          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-disabled)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
+          <div className="halo-t-eyebrow pt-3 pb-1.5" style={{ color: "var(--text-faint)", borderBottom: "1px solid var(--ws-border)", marginBottom: 4 }}>
             Motion
           </div>
                     {/* ── MOTION ───────────────────────────────────────────────────────────

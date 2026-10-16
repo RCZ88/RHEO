@@ -558,7 +558,7 @@ export function LearnPage() {
   };
 
   return (
-    <div data-page="learn" className="h-full flex flex-col bg-[#0f0e0d] text-zinc-100 relative light:bg-[var(--ws-surface-sunken)]/95 light:text-[var(--text-primary)]">
+    <div data-page="learn" className="h-full flex flex-col bg-[#0f0e0d] text-zinc-100 relative light:bg-[var(--ws-surface-sunken-95)] light:text-[var(--text-primary)]">
       <LearnNavBar
         breadcrumb={breadcrumb}
         onNavigate={navigate}
@@ -607,7 +607,7 @@ export function LearnPage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-80 max-w-[90vw] shadow-lg light:bg-[var(--ws-surface-raised)]/95 light:border-[color-mix(in_srgb,var(--ws-border)_60%,transparent)] light:text-[var(--text-primary)]"
+              className="bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 rounded-xl p-5 w-80 max-w-[90vw] shadow-lg light:bg-[var(--ws-surface-raised-95)] light:border-[color-mix(in_srgb,var(--ws-border)_60%,transparent)] light:text-[var(--text-primary)]"
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-sm font-semibold text-zinc-100 mb-4 flex items-center gap-2 light:text-[var(--text-primary)]">

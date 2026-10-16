@@ -229,9 +229,9 @@ function buildDayTimelineItems(detail: { logs?: any[]; externalSessions?: any[] 
 // Canvas cannot resolve `var(--x)` in fillStyle, so the bars keep literals and
 // the legend is bound to the same literals instead of diverging from them.
 const PRODUCTIVITY_SERIES = {
-  productive: '#34d399',
-  other: '#fbbf24',
-  external: '#38bdf8',
+  productive: 'var(--color-emerald-400)',
+  other: 'var(--color-amber-400)',
+  external: 'var(--color-sky-400)',
 } as const;
 
 // Tier assignments for categorizing productivity
@@ -2688,7 +2688,7 @@ export default function DashboardPage({
 
 
   return (
-    <PageShell page="dashboard" variant="dashboard" className="text-white dash-root">
+    <PageShell page="dashboard" variant="dashboard" className="text-[var(--text-primary)] dash-root">
       {/* Canvas accent follows [data-page="dashboard"] --page-accent (#ec4899).
           It was hardcoded emerald #34d399, so the ambient canvas stream ran in
           a different hue from every accent-linked element on the page. */}
@@ -2716,7 +2716,7 @@ export default function DashboardPage({
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/15 border border-[var(--page-accent)]/20 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-15)] border border-[var(--page-accent)]/20 flex items-center justify-center">
                     <Grid3X3 className="w-4 h-4 text-[var(--page-accent)]" />
                   </div>
                   <div>
@@ -2774,14 +2774,14 @@ export default function DashboardPage({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setExpandedModal('heatmap')}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/[0.08] text-[12px] font-semibold text-[var(--page-accent)] hover:bg-[var(--page-accent)]/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 transition-colors duration-200"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--btn-border)] bg-[var(--btn-fill)] text-[12px] font-semibold text-[var(--btn-on-fill)] hover:bg-[var(--btn-fill-hover)] hover:border-[var(--btn-border-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] transition-colors duration-200"
           >
             <Clock size={14} />
             Review the week
           </button>
           <button
             onClick={() => setExpandedModal('solar')}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/[0.08] text-[12px] font-semibold text-[var(--page-accent)] hover:bg-[var(--page-accent)]/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60 transition-colors duration-200"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--btn-border)] bg-[var(--btn-fill)] text-[12px] font-semibold text-[var(--btn-on-fill)] hover:bg-[var(--btn-fill-hover)] hover:border-[var(--btn-border-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] transition-colors duration-200"
           >
             <Sun size={14} />
             App ecosystem
@@ -2890,6 +2890,7 @@ export default function DashboardPage({
                  websiteDomain={currentWebsite?.domain}
                  websiteUrl={currentWebsite?.url}
                  websiteCategory={currentWebsite?.category}
+                   websiteBrowser={currentWebsite?.browserName}
                  appCategory={currentApp?.category}
                />
 
@@ -3114,8 +3115,8 @@ label: 'External',
                          ProductivityChart* components were tokenised earlier and this one
                          lives on the page itself, so it was missed. A canvas tooltip is
                          painted from JS, so no CSS override can reach it. */
-                      ...chartTooltip(),yColor: '#a1a1aa', borderColor: '#3f3f46', borderWidth: 1, cornerRadius: 8, padding: 10 } },
-                     scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#71717a', font: { size: 11 } } }, y: { stacked: true, grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 11 } } } },
+                      ...chartTooltip(),yColor: 'var(--text-muted)', borderColor: 'var(--ws-border)', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+                     scales: { x: { stacked: true, grid: { display: false }, ticks: { color: 'var(--text-muted)', font: { size: 11 } } }, y: { stacked: true, grid: { color: 'var(--ws-border)' }, ticks: { color: 'var(--text-muted)', font: { size: 11 } } } },
                    }} />
                  )}
                </div>
@@ -3214,7 +3215,7 @@ label: 'External',
               className="w-full flex items-center gap-2 px-1 py-1.5 rounded-lg group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]/60"
             >
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--page-accent)]/80">Signals</h2>
-              <span className="h-px flex-1 bg-[var(--border-subtle)] group-hover:bg-[var(--page-accent)]/30 transition-colors" aria-hidden="true" />
+              <span className="h-px flex-1 bg-[var(--border-subtle)] group-hover:bg-[var(--page-accent-30)] transition-colors" aria-hidden="true" />
               <span className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)] group-hover:text-[var(--page-accent)] transition-colors">
                 {[
                   isVisible('ai-usage') && 'AI',

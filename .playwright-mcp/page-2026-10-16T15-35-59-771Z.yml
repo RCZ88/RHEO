@@ -1,0 +1,160 @@
+- generic [ref=f20e1]:
+  - status
+  - generic [ref=f20e2]:
+    - link "Skip to main content" [ref=f20e3] [cursor=pointer]:
+      - /url: "#maincontent"
+    - navigation "Site navigation" [ref=f20e4]:
+      - link [ref=f20e5] [cursor=pointer]:
+        - /url: https://cx.apps.binus.ac.id
+        - img "Class eXtension" [ref=f20e6]
+      - navigation [ref=f20e8]:
+        - menubar [ref=f20e9]:
+          - menuitem "Home" [ref=f20e10] [cursor=pointer]
+          - menuitem "Dashboard" [ref=f20e11] [cursor=pointer]
+          - menuitem "My courses" [ref=f20e12] [cursor=pointer]
+          - text: 
+      - list
+      - generic [ref=f20e13]:
+        - searchbox "Search course" [ref=f20e14]
+        - button "Search" [ref=f20e15] [cursor=pointer]
+      - generic [ref=f20e16]:
+        - button "Show notification window with no new notifications" [ref=f20e18] [cursor=pointer]:
+          - img "Toggle notifications menu" [ref=f20e19]: 
+        - button [ref=f20e21] [cursor=pointer]:
+          - img "Toggle messaging drawer" [ref=f20e22]: 
+        - button "User menu" [ref=f20e27] [cursor=pointer]:
+          - img "RAPHAEL CLEMENTIUS ZHAO" [ref=f20e31]: RC
+          - text: 
+    - generic [ref=f20e32]:
+      - generic [ref=f20e33]:
+        - button "Open course index" [ref=f20e35] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f20e37]: 
+        - banner [ref=f20e38]:
+          - generic [ref=f20e39]:
+            - navigation "Navigation bar" [ref=f20e42]:
+              - list [ref=f20e43]:
+                - listitem [ref=f20e44]:
+                  - link "BGAFBSA_70926_ALL" [ref=f20e45] [cursor=pointer]:
+                    - /url: https://cx.apps.binus.ac.id/course/view.php?id=4623
+                - listitem [ref=f20e46]:
+                  - text: /
+                  - link "Social Awareness" [ref=f20e47] [cursor=pointer]:
+                    - /url: https://cx.apps.binus.ac.id/course/section.php?id=11610
+                - listitem [ref=f20e48]: / Assignment BGA Foundation - Social Awareness Quiz
+            - heading "Assignment BGA Foundation - Social Awareness Quiz" [level=1] [ref=f20e56]
+        - region "Content" [ref=f20e59]:
+          - alert [ref=f20e61]:
+            - text: You are not allowed to review this quiz
+            - button "Dismiss this notification" [ref=f20e62] [cursor=pointer]: ×
+          - generic [ref=f20e65]:
+            - generic [ref=f20e66]: Completion requirements
+            - generic [ref=f20e67]:
+              - button "Assignment BGA Foundation - Social Awareness Quiz is marked as done. Press to undo." [ref=f20e69] [cursor=pointer]:
+                - generic [aria-hidden] [ref=f20e70]: 
+                - text: Done
+              - generic [ref=f20e72]:
+                - strong [ref=f20e73]: "Opened:"
+                - text: Monday, 7 September 2026, 1:15 PM
+            - generic [ref=f20e75]:
+              - paragraph [ref=f20e76]: Jawablah pertanyaan dibawah ini dengan memilih salah satu pilihan jawaban yang dianggap paling benar. Batas kelulusan quiz ini adalah 70. Kamu punya kesempatan untuk menjawab dengan benar untuk mencapai passing grade.
+              - paragraph [ref=f20e77]:
+                - emphasis [ref=f20e79]: Answer the questions below by choosing one of the answer choices that you consider most correct. Passing grade for this quiz is 70. You have a chance to answer them correctly in order to reach the passing grade.
+          - main [ref=f20e80]:
+            - button "Continue your attempt" [ref=f20e85] [cursor=pointer]
+            - generic [ref=f20e86]:
+              - paragraph [ref=f20e87]: "Grading method: Highest grade"
+              - paragraph [ref=f20e88]: "Grade to pass: 70.00 out of 100.00"
+            - heading "Your attempts" [level=3] [ref=f20e89]
+            - list [ref=f20e90]:
+              - listitem [ref=f20e91]:
+                - generic [ref=f20e92]:
+                  - heading "Attempt 3" [level=4] [ref=f20e94]
+                  - table [ref=f20e95]:
+                    - rowgroup [ref=f20e96]:
+                      - row [ref=f20e97]:
+                        - rowheader "Status" [ref=f20e98]
+                        - cell "In progress" [ref=f20e99]
+                      - row [ref=f20e100]:
+                        - rowheader "Started" [ref=f20e101]
+                        - cell "Friday, 16 October 2026, 10:35 PM" [ref=f20e102]
+              - listitem [ref=f20e104]:
+                - generic [ref=f20e105]:
+                  - heading "Attempt 2" [level=4] [ref=f20e107]
+                  - table [ref=f20e108]:
+                    - rowgroup [ref=f20e109]:
+                      - row [ref=f20e110]:
+                        - rowheader "Status" [ref=f20e111]
+                        - cell "Finished" [ref=f20e112]
+                      - row [ref=f20e113]:
+                        - rowheader "Started" [ref=f20e114]
+                        - cell "Friday, 16 October 2026, 9:56 PM" [ref=f20e115]
+                      - row [ref=f20e116]:
+                        - rowheader "Completed" [ref=f20e117]
+                        - cell "Friday, 16 October 2026, 10:34 PM" [ref=f20e118]
+                      - row [ref=f20e119]:
+                        - rowheader "Duration" [ref=f20e120]
+                        - cell "38 mins 16 secs" [ref=f20e121]
+                      - row [ref=f20e122]:
+                        - rowheader "Grade" [ref=f20e123]
+                        - cell "20.00 out of 100.00" [ref=f20e124]
+                  - generic [ref=f20e125]: Review not permitted
+              - listitem [ref=f20e127]:
+                - generic [ref=f20e128]:
+                  - heading "Attempt 1" [level=4] [ref=f20e130]
+                  - table [ref=f20e131]:
+                    - rowgroup [ref=f20e132]:
+                      - row [ref=f20e133]:
+                        - rowheader "Status" [ref=f20e134]
+                        - cell "Finished" [ref=f20e135]
+                      - row [ref=f20e136]:
+                        - rowheader "Started" [ref=f20e137]
+                        - cell "Friday, 16 October 2026, 9:06 PM" [ref=f20e138]
+                      - row [ref=f20e139]:
+                        - rowheader "Completed" [ref=f20e140]
+                        - cell "Friday, 16 October 2026, 9:56 PM" [ref=f20e141]
+                      - row [ref=f20e142]:
+                        - rowheader "Duration" [ref=f20e143]
+                        - cell "49 mins 15 secs" [ref=f20e144]
+                      - row [ref=f20e145]:
+                        - rowheader "Grade" [ref=f20e146]
+                        - cell "20.00 out of 100.00" [ref=f20e147]
+                  - generic [ref=f20e148]: Review not permitted
+      - link "Send feedback" [ref=f20e152] [cursor=pointer]:
+        - /url: https://forms.office.com/Pages/ResponsePage.aspx?id=Y7mFNLqCb0qBD7XMIm_4mB0qVKUyctBFrmPcpI9b-9BUQ01VQVpROTZROTVEQjBBT1NCVlBEWENFRy4u&r607a61f295574a459e9331931a003876=%22Class%20Extension%20(cx.apps.binus.ac.id)%22
+      - contentinfo [ref=f20e153]:
+        - generic [ref=f20e155]:
+          - generic [ref=f20e157]:
+            - generic [ref=f20e158]:
+              - paragraph [ref=f20e159]:
+                - link "COURSES" [ref=f20e160] [cursor=pointer]:
+                  - /url: /course/
+              - paragraph [ref=f20e161]:
+                - link "KATALOG (CATALOGUE)" [ref=f20e162] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=katalog
+              - paragraph [ref=f20e163]:
+                - link "LABS" [ref=f20e164] [cursor=pointer]:
+                  - /url: http://labs.tamanbelajar.com
+              - paragraph [ref=f20e165]:
+                - link "VERIFY CERTIFICATE" [ref=f20e166] [cursor=pointer]:
+                  - /url: /verify_certificate/
+            - generic [ref=f20e167]:
+              - paragraph [ref=f20e168]:
+                - link "DAFTAR PELANGGARAN (VIOLATION LIST)" [ref=f20e169] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=daftar-pelanggaran
+              - paragraph [ref=f20e170]:
+                - link "LAPORAN (REPORT)" [ref=f20e171] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=laporan
+            - generic [ref=f20e172]:
+              - paragraph [ref=f20e173]:
+                - link "PANDUAN (GUIDELINES)" [ref=f20e174] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=panduan
+              - paragraph [ref=f20e175]:
+                - link "ATURAN (RULES)" [ref=f20e176] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=aturan
+              - paragraph [ref=f20e177]:
+                - link "TENTANG KAMI (ABOUT US)" [ref=f20e178] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=tentang-kami
+              - paragraph [ref=f20e179]:
+                - link "HUBUNGI KAMI (CONTACT US)" [ref=f20e180] [cursor=pointer]:
+                  - /url: /local/staticpage/view.php?page=hubungi-kami
+          - text: 

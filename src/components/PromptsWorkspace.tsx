@@ -210,7 +210,7 @@ export default function PromptsWorkspace({ projectId, sessions }: PromptsWorkspa
             </div>
 
             {selectedPrompt.sessionTopic && (
-              <div className="flex items-center gap-2 text-[11px] text-zinc-400 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-[11px] text-zinc-400 bg-zinc-950 light:bg-[var(--ws-surface-60)] ring-1 ring-zinc-800/60 rounded-lg px-3 py-2">
                 <TerminalIcon className="w-3.5 h-3.5 text-[color:var(--page-accent)]" />
                 <span>Session: {selectedPrompt.sessionTopic}</span>
               </div>
@@ -218,7 +218,7 @@ export default function PromptsWorkspace({ projectId, sessions }: PromptsWorkspa
 
             <div>
               <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Content</label>
-              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 rounded-lg p-3 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto ws-scroll">{selectedPrompt.content}</div>
+              <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] ring-1 ring-zinc-800/60 rounded-lg p-3 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto ws-scroll">{selectedPrompt.content}</div>
             </div>
 
             {selectedPrompt.resultSummary && (

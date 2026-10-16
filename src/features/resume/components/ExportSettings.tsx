@@ -28,7 +28,7 @@ export function ExportSettings({ settings, onSettingsChange, onExport, isExporti
               onClick={() => onSettingsChange({ ...settings, format: f.value as any })}
               className={`p-3 rounded-xl ring-1 text-center transition-all duration-150 ${
                 settings.format === f.value
-                  ? 'ring-[var(--page-accent)]/40 bg-[var(--page-accent)]/10 text-[var(--page-accent)]'
+                  ? 'ring-[var(--page-accent)]/40 bg-[var(--page-accent-10)] text-[var(--page-accent)]'
                   : 'ring-zinc-700/50 text-zinc-400 hover:ring-zinc-600/50 hover:bg-zinc-800/30'
               }`}
             >

@@ -43,7 +43,7 @@ export function InlineMemoryForm({ phaseId, onClose }: Props) {
   return (
     <div className="space-y-4">
       <div onClick={() => fileInputRef.current?.click()}
-        className="aspect-video w-full rounded-lg border border-dashed border-zinc-700 hover:border-emerald-500/40 flex items-center justify-center cursor-pointer transition-colors bg-zinc-950 light:bg-[var(--ws-surface)]/30 overflow-hidden">
+        className="aspect-video w-full rounded-lg border border-dashed border-zinc-700 hover:border-emerald-500/40 flex items-center justify-center cursor-pointer transition-colors bg-zinc-950 light:bg-[var(--ws-surface-30)] overflow-hidden">
         {imagePreview ? (
           <img src={imagePreview} alt="" className="w-full h-full object-cover" />
         ) : (
@@ -58,7 +58,7 @@ export function InlineMemoryForm({ phaseId, onClose }: Props) {
         </label>
         <VoiceInputWrapper>
           <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="A moment to remember..." autoFocus
-            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-emerald-500/40 focus:outline-none" />
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-emerald-500/40 focus:outline-none" />
         </VoiceInputWrapper>
       </div>
       <div>
@@ -68,13 +68,13 @@ export function InlineMemoryForm({ phaseId, onClose }: Props) {
         </label>
         <VoiceInputWrapper>
           <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What happened? How did it feel?" rows={3}
-            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-emerald-500/40 focus:outline-none resize-none" />
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-emerald-500/40 focus:outline-none resize-none" />
         </VoiceInputWrapper>
       </div>
       <div>
         <label className="text-xs text-zinc-500 mb-1.5 block">Date</label>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500/40 focus:outline-none" />
+          className="w-full bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500/40 focus:outline-none" />
       </div>
       <div className="flex gap-2 pt-2">
         <button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-lg transition-colors">Cancel</button>

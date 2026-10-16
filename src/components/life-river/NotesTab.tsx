@@ -186,7 +186,7 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-zinc-950 light:bg-[var(--ws-surface)]/95 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-zinc-950 light:bg-[var(--ws-surface-95)] border border-zinc-800 rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 border-b border-zinc-800/60">
           <div className="flex items-center justify-between mb-4">
@@ -627,7 +627,7 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
               Related <ChevronDown size={11} className={cn("transition-transform", showLinkPicker && "rotate-180")} />
             </button>
             {showLinkPicker && (
-              <div className="rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface)]/50 p-3 space-y-2">
+              <div className="rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-50)] p-3 space-y-2">
                 {phases.length > 0 && (
                   <div>
                     <div className="text-[10px] text-zinc-500 mb-1">Phases</div>

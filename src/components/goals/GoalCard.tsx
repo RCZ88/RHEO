@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Check, Edit3, Trash2, RefreshCw, Flame, Clock, Target,
+  Check, Edit3, Trash2, RefreshCw, Flame, Clock, Target, Eye,
   Monitor, AlertCircle, Zap, ArrowRight, Calendar
 } from 'lucide-react';
 import { confetti } from '../ui/confetti';
@@ -29,6 +29,7 @@ interface GoalCardProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit: (goal: GoalType) => void;
+  onView?: (goal: GoalType) => void;
   longTermGoals?: { id: string; title: string }[];
   todoCount?: number;
   linkedSchedules?: { id: string; title: string }[];
@@ -238,6 +239,15 @@ export function GoalCard({ goal, onToggle, onDelete, onEdit, longTermGoals = [],
             title="Edit goal"
           >
             <Edit3 size={12} />
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onView?.(goal)}
+            className="w-7 h-7 rounded-md bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700/50 hover:text-white flex items-center justify-center transition-colors"
+            title="View details"
+          >
+            <Eye size={12} />
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.1 }}

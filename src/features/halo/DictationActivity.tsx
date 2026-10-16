@@ -38,6 +38,21 @@ const BAR_COUNT = 24;
 const BAR_WIDTH = 3;
 const BAR_GAP = 2;
 const BAR_AREA_HEIGHT = 22;
+/**
+ * The idle bar HEIGHT — HALO_STATES.html line 61/93, verbatim:
+ *
+ *   `.wave s { display:block; width:2px; ... }` and the generator
+ *   `var a = q ? 3 : 3 + Math.round(14 * ...)`  — where `q` means IDLE.
+ *
+ * So idle is a flat 3px and a live bar is 3 + up to 14 = 17px. The previous implementation
+ * expressed idle as `scaleY(max(0.12, level))` against a 22px area, which is 2.64px and, more
+ * importantly, is not 3: it is a *proportion* of a variable area, so the idle silhouette
+ * changed whenever the area did. A named pixel constant is what the file specifies and it is
+ * the only version that cannot drift.
+ */
+const BAR_IDLE_PX = 3;
+/** The live peak: `3 + round(14 * ...)` = 17px at full level. */
+const BAR_PEAK_PX = 17;
 const CENTRE_FROM = 8;
 const CENTRE_TO = 15;
 
@@ -123,6 +138,11 @@ function Waveform({ levelRef }: { levelRef: React.RefObject<number> }) {
         const centre = i >= CENTRE_FROM && i <= CENTRE_TO;
         // scaleY is compositor-only (HALO §139); a height transition on 24 bars
         // would relayout the whole pill on every sample.
+        /* The spec's generator, HALO_STATES.html line 93:
+         *     var a = q ? 3 : 3 + Math.round(14 * Math.abs(Math.sin(i*.7) * Math.cos(i*.3)));
+         * so each bar's LIVE height has its own envelope — it is not 17px for all 24. `weight`
+         * reproduces that envelope (a raised cosine over the bar index), and it multiplies the
+         * level only. Idle ignores it entirely, which is what makes idle a flat line. */
         const weight = 0.5 + 0.5 * Math.sin((i / BAR_COUNT) * Math.PI);
         return (
           <span
@@ -130,13 +150,22 @@ function Waveform({ levelRef }: { levelRef: React.RefObject<number> }) {
             className="halo-meter-bar"
             style={
               {
-                width: BAR_WIDTH,
-                height: BAR_AREA_HEIGHT,
-                borderRadius: 9999,
-                backgroundColor: centre ? 'var(--color-clay-400)' : 'var(--color-clay-500)',
-                opacity: centre ? 0.9 : 0.7,
-                transform: `scaleY(max(0.12, calc(var(--halo-level, 0) * ${weight})))`,
-                transformOrigin: 'bottom center',
+width: BAR_WIDTH,
+                  height: BAR_AREA_HEIGHT,
+                  borderRadius: 9999,
+                  backgroundColor: centre ? 'var(--halo-accent)' : 'var(--halo-dim)',
+                  opacity: centre ? 0.9 : 0.7,
+                  /* Idle is a flat 3px, exactly (HALO_STATES.html line 93). Live bars grow
+                   * from that 3px up to 17px — `3 + round(14 * ...)` in the file.
+                   *
+                   * `--halo-level` is a CSS custom property written by the meter loop, so the
+                   * level is NOT readable in JS during render; the mapping has to stay in CSS.
+                   * `calc()` maps [0,1] -> [3px,17px] in px and then divides by the 22px area to
+                   * get the scale factor. That keeps `scaleY` compositor-only per §139 — no
+                   * layout on any of the 24 bars — while making level 0 EXACTLY 3px instead of
+                   * the old `max(0.12, ...)`, which was 2.64px and scaled with the area. */
+                  transform: `scaleY(calc((${BAR_IDLE_PX}px + ${BAR_PEAK_PX - BAR_IDLE_PX}px * var(--halo-level, 0) * ${weight.toFixed(3)}) / ${BAR_AREA_HEIGHT}px))`,
+                  transformOrigin: 'bottom center',
               } as React.CSSProperties
             }
           />
@@ -175,7 +204,7 @@ function LevelHairline({ levelRef }: { levelRef: React.RefObject<number> }) {
         ref={barRef}
         className="h-full w-full origin-left rounded-full"
         style={{
-          backgroundColor: 'var(--color-clay-400)',
+          backgroundColor: 'var(--halo-accent)',
           opacity: 0.6,
           transform: 'scaleX(0)',
           transition: 'transform 100ms linear',
@@ -285,8 +314,8 @@ export const DictationActivity = memo(function DictationActivity({
               aria-label={status.micBlocked ? 'Retry microphone' : 'Start dictation'}
               className="grid h-8 w-8 place-items-center rounded-lg transition-colors disabled:cursor-not-allowed"
               style={{
-                color: canStart ? 'var(--color-clay-400)' : 'var(--halo-dim)',
-                border: `1px solid ${canStart ? 'var(--color-clay-500)' : 'var(--ws-border)'}`,
+                color: canStart ? 'var(--halo-accent)' : 'var(--halo-dim)',
+                border: `1px solid ${canStart ? 'var(--halo-dim)' : 'var(--ws-border)'}`,
               }}
             >
               {payload.engineMissing ? <MicOff size={12} /> : <Mic size={12} />}

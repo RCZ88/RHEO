@@ -26,7 +26,7 @@ export function TemplateGallery({ onSelect, onCreate }: { onSelect: (tpl: any) =
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search templates..."
-            className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/70 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-rose-500/40"
+            className="w-full bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800/70 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-rose-500/40"
           />
         </div>
         <button onClick={onCreate} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 text-rose-300 text-[11px] font-medium hover:bg-rose-500/25">

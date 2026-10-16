@@ -74,8 +74,7 @@ export function LearnHome(props: LearnHomeProps) {
                 {props.onBrowse && (
                   <button
                     onClick={props.onBrowse}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-clay-400/40 bg-clay-500/15 px-6 py-3 font-serif text-sm font-semibold text-glow transition-all hover:bg-clay-500/25 hover:shadow-[0_0_20px_rgba(194,85,58,0.25)] light:border-clay-400/20 light:bg-clay-500/5 light:text-clay-700 light:hover:bg-clay-500/15"
-                  >
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-clay-400/40 bg-clay-500/15 px-6 py-3 font-serif text-sm font-semibold text-glow transition-all hover:bg-clay-500/25 hover:shadow-[0_0_20px_rgba(194,85,58,0.25)] light:border-clay-400/30 light:bg-clay-500/15 light:text-clay-600 light:hover:bg-clay-500/25"                  >
                     <BookMarked className="h-4 w-4" />
                     Browse Library
                   </button>

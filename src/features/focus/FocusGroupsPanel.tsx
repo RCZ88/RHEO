@@ -48,7 +48,7 @@ function GroupRow({
       className={cn(
         'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition-colors',
         active
-          ? 'bg-[var(--page-accent)]/10 border border-[var(--page-accent)]/20'
+          ? 'bg-[var(--page-accent-10)] border border-[var(--page-accent)]/20'
           : 'border border-transparent hover:bg-zinc-800/40 hover:border-zinc-800/60'
       )}
       onClick={onSelect}

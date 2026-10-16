@@ -25,7 +25,6 @@ import MemoriesPage from '../../features/memories/MemoriesPage'
 import GoldPage from '../../features/warmth/gold/GoldPage'
 import { SchedulePage } from '../../features/warmth/schedule/SchedulePage'
 import { TrainingPage } from '../../features/warmth/training/TrainingPage'
-import { HabitsPage } from '../../features/warmth/habits/HabitsPage'
 import { ProfileTab } from '../../components/life/ProfileTab'
 import { BrainManagementView } from './context-brain/BrainManagementView'
 import { NeuralFlow } from './context-brain/NeuralFlow'
@@ -51,23 +50,24 @@ const toStr = (d: Date) =>
 const todayStr = () => toStr(new Date())
 
 type ViewMode = 'pages' | 'river'
-type PageTab = 'covenant' | 'memories' | 'gold' | 'notes' | 'schedule' | 'habits' | 'training' | 'self'
+type PageTab = 'covenant' | 'memories' | 'gold' | 'notes' | 'schedule' | 'training' | 'self'
 
 const PAGE_TABS: { key: PageTab; label: string; icon: typeof HeartHandshake; accent: string }[] = [
-  { key: 'covenant', label: 'Covenant', icon: HeartHandshake, accent: '#e8866b' },
+  { key: 'covenant', label: 'Covenant', icon: HeartHandshake, accent: 'var(--color-clay-400)' },
   { key: 'memories', label: 'Memories', icon: Images, accent: 'var(--color-mem-400)' },
-  { key: 'gold', label: 'Gold', icon: Layers, accent: '#fbbf24' },
-  { key: 'notes', label: 'Notes', icon: BookOpen, accent: '#a78bfa' },
-  { key: 'schedule', label: 'Schedule', icon: Calendar, accent: '#ec4899' },
-  // 'habits' had a content branch but no tab button, so deep-linking to it
-  // (the Deadlines dashboard widget) landed on invisible content.
-  { key: 'habits', label: 'Habits', icon: Target, accent: '#34d399' },
+  /* Label is 'Goals' to match `pages/registry/pages/life.ts` and RESULT.md §1.2.
+   * They disagreed: the palette said 'Goals', the rendered tab bar said 'Gold',
+   * so the same tab carried two names depending on how you reached it. The KEY
+   * stays 'gold' — that is the bookmarked/persisted identity. */
+  { key: 'gold', label: 'Goals', icon: Layers, accent: 'var(--color-amber-400)' },
+  { key: 'notes', label: 'Notes', icon: BookOpen, accent: 'var(--color-violet-400)' },
+  { key: 'schedule', label: 'Schedule', icon: Calendar, accent: 'var(--color-pink-400)' },
   // `var(--page-accent)` rather than a literal: the sibling tabs hardcode hex, but
   // Training IS the Life signal hue, and `html.light[data-page="life"]` deliberately
   // darkens it (#93331d) for contrast on cream. Following the token keeps the tab
   // icon legible in both themes without adding a 6th hue.
   { key: 'training', label: 'Training', icon: Activity, accent: 'var(--page-accent)' },
-  { key: 'self', label: 'Self', icon: User, accent: '#8b5cf6' },
+  { key: 'self', label: 'Self', icon: User, accent: 'var(--color-violet-400)' },
 ]
 
 const crossfade = {
@@ -100,25 +100,25 @@ function SelfStatStrip() {
   }, [])
 
   const items = [
-    { label: 'Episodes', sublabel: 'Brain', value: stats?.episodes ?? 0, icon: Brain, color: '#8b5cf6' },
-    { label: 'Entities', sublabel: 'Network', value: stats?.entities ?? 0, icon: Network, color: '#22c55e' },
-    { label: 'Current Facts', sublabel: 'Active', value: stats?.currentFacts ?? 0, icon: Sparkles, color: '#eab308' },
+    { label: 'Episodes', sublabel: 'Brain', value: stats?.episodes ?? 0, icon: Brain, color: 'var(--color-violet-400)' },
+    { label: 'Entities', sublabel: 'Network', value: stats?.entities ?? 0, icon: Network, color: 'var(--color-emerald-400)' },
+    { label: 'Current Facts', sublabel: 'Active', value: stats?.currentFacts ?? 0, icon: Sparkles, color: 'var(--color-amber-400)' },
   ]
 
   return (
     <div className="grid grid-cols-3 gap-3 min-h-[120px]">
       {items.map(it => (
         <div key={it.label} className={`${SELF_CARD_CLASS} relative overflow-hidden`}>
-          <DotPattern opacity={0.05} radius={0.8} gap={16} className="absolute inset-0 text-[#8b5cf6]" />
+          <DotPattern opacity={0.05} radius={0.8} gap={16} className="absolute inset-0 text-[var(--color-violet-400)]" />
           <div className="relative">
             <div className="flex items-center gap-2 mb-2">
               <it.icon className="w-4 h-4" style={{ color: it.color }} />
-              <span className="text-[11px] uppercase tracking-wider text-zinc-500">{it.sublabel}</span>
+              <span className="text-[11px] uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)]">{it.sublabel}</span>
             </div>
             <div className="text-2xl font-bold font-mono" style={{ color: it.color }}>
               {loading ? <Skeleton className="h-6 w-16" /> : <NumberTicker value={it.value} />}
             </div>
-            <div className="text-[12px] text-zinc-400 mt-1">{it.label}</div>
+            <div className="text-[12px] text-zinc-400 light:text-[var(--text-faint)] mt-1">{it.label}</div>
           </div>
         </div>
       ))}
@@ -243,7 +243,7 @@ export default function LifePage() {
   }, [])
 
   const handleOpenPage = useCallback((page: string) => {
-    const tabMap: Record<string, PageTab> = { memories: 'memories', gold: 'gold', covenant: 'covenant', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'habits' }
+    const tabMap: Record<string, PageTab> = { memories: 'memories', gold: 'gold', covenant: 'covenant', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'gold' }
     if (tabMap[page]) {
       setPageTab(tabMap[page])
       setMode('pages')
@@ -290,7 +290,7 @@ export default function LifePage() {
   }, [])
 
   const redirectToPage = useCallback((lens: LensId) => {
-    const tabMap: Record<string, PageTab> = { covenant: 'covenant', gold: 'gold', memories: 'memories', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'habits' }
+    const tabMap: Record<string, PageTab> = { covenant: 'covenant', gold: 'gold', memories: 'memories', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'gold' }
     const tab = tabMap[lens]
     if (tab) {
       setPageTab(tab)
@@ -398,7 +398,7 @@ export default function LifePage() {
       const newStatus = goal.status === 'done' ? 'active' : 'done'
       const completedAt = newStatus === 'done' ? new Date().toISOString() : undefined
       setGoals(prev => prev.map(g => (g.id === goal.id ? { ...g, status: newStatus as any, completedAt } : g)))
-      if (newStatus === 'done') confetti({ particleCount: 60, spread: 90, startVelocity: 40, colors: ['#8b5cf6', '#a78bfa', '#34d399', '#fbbf24'] })
+      if (newStatus === 'done') confetti({ particleCount: 60, spread: 90, startVelocity: 40, colors: ['var(--color-violet-400)', 'var(--color-violet-300)', 'var(--color-emerald-400)', 'var(--color-amber-400)'] })
       try {
         await (window as any).deskflowAPI.saveGoal(todayStr(), { ...goal, status: newStatus, completedAt })
       } catch {
@@ -413,7 +413,7 @@ export default function LifePage() {
       setGoals(prev => [...prev, goal])
       try {
         await (window as any).deskflowAPI.saveGoal(todayStr(), goal)
-        confetti({ particleCount: 50, spread: 80, startVelocity: 35, colors: ['#fbbf24', '#f59e0b', '#34d399', '#a78bfa'] })
+        confetti({ particleCount: 50, spread: 80, startVelocity: 35, colors: ['var(--color-amber-400)', 'var(--color-amber-300)', 'var(--color-emerald-400)', 'var(--color-violet-300)'] })
         await reloadGoals()
       } catch {
         setGoals(prev => prev.filter(g => g.id !== goal.id))
@@ -496,11 +496,11 @@ export default function LifePage() {
   if (error && phases.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 p-10 text-center" data-page="life">
-        <p className="text-[13px] text-zinc-400">Could not load the river.</p>
-        <p className="text-[12px] text-zinc-600">{error}</p>
+        <p className="text-[13px] text-zinc-400 light:text-[var(--text-muted)]">Could not load the river.</p>
+        <p className="text-[12px] text-zinc-500 light:text-[var(--text-primary)]">{error}</p>
         <button
           onClick={() => window.location.reload()}
-          className="rounded-lg border border-zinc-700/60 bg-zinc-800/40 px-3 py-1.5 text-[12px] text-zinc-300 hover:bg-zinc-800/70"
+          className="rounded-lg border border-[var(--ws-border)] bg-[var(--ws-surface-raised)] px-3 py-1.5 text-[12px] text-[var(--text-primary)] hover:bg-[var(--ws-surface-hover)]"
         >
           Reload
         </button>
@@ -510,10 +510,30 @@ export default function LifePage() {
 
   return (
     <div className="flex flex-col h-full" data-page="life">
-      <CurrentCanvas accent="#fbbf24" render={renderNetwork} />
-      <div className="relative z-10">
+      <CurrentCanvas accent="var(--color-amber-400)" render={renderNetwork} />
+      {/* THE HEIGHT CHAIN. This wrapper holds the sticky header AND the content
+          box, so it has to be the flex child that consumes the remaining height.
+
+          It was `relative z-10` alone — no `flex-1 min-h-0`. A flex item with
+          auto basis in a `flex-col h-full` parent sizes to its CONTENT, so the
+          content box's own `flex-1` had no definite height to divide, and every
+          descendant that relies on `height:100%` — ScheduleLayoutShell's grid,
+          which scrolls each panel internally — resolved against `auto`. The grid
+          then overflowed its box and the page grew a second scroller on top of
+          the shell, which is the "something is covering the schedule" report.
+
+          `flex-1` gives it the leftover height; `min-h-0` lets it actually shrink
+          below its content's intrinsic size instead of being floored by it.
+          `flex flex-col` makes the content box a real child that can flex. */}
+      <div className="relative z-10 flex-1 min-h-0 flex flex-col">
       {/* ── Mode Toggle ── */}
-      <div className="sticky top-0 z-40 -mx-5 px-5 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] backdrop-blur-md border-b border-zinc-800/50">
+      {/* `shrink-0` so the header cannot be squeezed out of existence now that this
+          column is a real flex child — previously it was floored at its content
+          height only because the parent was auto-sized. `relative` rather than
+          `sticky`: with the Schedule shell scrolling its own panels there is no
+          page scroller for sticky to track, and a z-40 sticky header sat over the
+          top of that scroller on every tab that does scroll. */}
+      <div className="relative shrink-0 -mx-5 px-5 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)] border-b border-zinc-800/50">
         <div className="flex items-center gap-2 py-2">
           <span className="text-[15px] font-semibold mr-2 text-[var(--text-primary)]">Life</span>
 
@@ -527,13 +547,13 @@ export default function LifePage() {
                 key={mode.key}
                 onClick={() => setMode(mode.key)}
                 className={`relative px-3 py-1.5 text-xs rounded-md transition-colors min-h-[36px] flex items-center gap-1.5 ${
-                  viewMode === mode.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  viewMode === mode.key ? 'text-white' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                 }`}
               >
                 {viewMode === mode.key && (
                   <motion.div
                     layoutId="life-mode-pill"
-                    className="absolute inset-0 rounded-md bg-zinc-700/80 border border-white/10"
+                    className="absolute inset-0 rounded-md bg-zinc-700/80 light:bg-[var(--ws-surface-sunken)] border border-white/10 light:border-[var(--ws-border)]"
                     transition={pillTransition}
                   />
                 )}
@@ -548,7 +568,7 @@ export default function LifePage() {
             <motion.div
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              className="flex gap-1 ml-2 bg-zinc-800/50 p-0.5 rounded-lg"
+              className="flex gap-1 ml-2 bg-zinc-800/50 light:bg-[var(--ws-surface-sunken)] p-0.5 rounded-lg"
               data-section="life.tabs"
               data-tutorial="life.tabs"
             >
@@ -557,7 +577,7 @@ export default function LifePage() {
                   key={tab.key}
                   onClick={() => setPageTab(tab.key)}
                   className={`relative px-3 py-1.5 text-xs rounded-md transition-colors min-h-[36px] flex items-center gap-1.5 ${
-                    pageTab === tab.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                    pageTab === tab.key ? 'text-white' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {pageTab === tab.key && (
@@ -580,7 +600,10 @@ export default function LifePage() {
       {/* ── Content ── */}
       {viewMode === 'pages' ? (
         /* ═══ OLD 3-TAB MODE ═══ */
-        <div className="flex-1 min-h-0 overflow-auto p-5">
+        /* Schedule is full-bleed: its shell owns the whole content box and
+           scrolls each panel internally. Every other tab keeps the page scroller
+           plus padding. */
+        <div className={`flex-1 min-h-0 ${pageTab === 'schedule' ? 'overflow-hidden' : 'overflow-auto p-5'}`}>
           <AnimatePresence mode="wait">
             {pageTab === 'covenant' && (
               <motion.div key="covenant" {...crossfade} className="w-full" data-section="life.covenant">
@@ -594,7 +617,12 @@ export default function LifePage() {
             )}
             {pageTab === 'gold' && (
               <motion.div key="gold" {...crossfade} className="w-full" data-section="life.gold">
-                <GoldPage />
+                {/* Phases live in River (RESULT.md §2.1), so Gold only navigates
+                    there. The handler is a prop because Gold also mounts standalone
+                    at `/gold`, where no River exists — and because a window event
+                    this page would have to listen for was the kind of channel that
+                    silently does nothing when one half is renamed. */}
+                <GoldPage onManagePhases={() => { setViewMode('river'); setLens('phases') }} />
               </motion.div>
             )}
             {pageTab === 'notes' && (
@@ -603,14 +631,19 @@ export default function LifePage() {
               </motion.div>
             )}
             {pageTab === 'schedule' && (
-              <motion.div key="schedule" {...crossfade} className="w-full h-full" data-section="life.schedule">
-                <SchedulePage embedded />
-              </motion.div>
-            )}
-            {pageTab === 'habits' && (
-              <motion.div key="habits" {...crossfade} className="w-full" data-section="life.habits">
-                <HabitsPage />
-              </motion.div>
+              /* The schedule shell owns exactly one screen: its grid is 100% of
+                 whatever box it is given and each panel scrolls INSIDE itself
+                 (§17). Wrapping it in the tab area's `p-5` + `overflow-auto`
+                 made the shell 100% of a padded, scrollable box — so the grid
+                 overflowed by the padding and the outer scroller scrolled a
+                 second time. That is the "something is covering the schedule
+                 page" report. Full bleed + overflow-hidden here, so the shell
+                 gets the whole content box and nothing clips. */
+              <div className="h-full min-h-0 overflow-hidden">
+                <motion.div key="schedule" {...crossfade} className="w-full h-full min-h-0" data-section="life.schedule">
+                  <SchedulePage embedded />
+                </motion.div>
+              </div>
             )}
             {/* Training carries NO inline --page-accent override, deliberately. The
                 `data-page="life"` key in src/index.css already defines that custom
@@ -625,13 +658,13 @@ export default function LifePage() {
               </motion.div>
             )}
             {pageTab === 'self' && (
-              <motion.div key="self" {...crossfade} className="w-full relative" data-section="life.self" style={{ ['--page-accent' as string]: '#8b5cf6' }}>
+              <motion.div key="self" {...crossfade} className="w-full relative" data-section="life.self" style={{ ['--page-accent' as string]: 'var(--color-violet-400)' }}>
                 <SelfOrchestrator />
               </motion.div>
             )}
             {pageTab === 'self' && (
-              <motion.div key="time" {...crossfade} className="w-full mt-4 rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-4 light:bg-white/60 light:border-zinc-200" data-section="life.time">
-                <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">Time — timers, stopwatches & alarms</div>
+              <motion.div key="time" {...crossfade} className="w-full mt-4 rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-4 light:bg-[var(--ws-surface-raised)] light:border-[var(--ws-border)]" data-section="life.time">
+                <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)] mb-2">Time — timers, stopwatches & alarms</div>
                 <TimePanel />
               </motion.div>
             )}
@@ -716,10 +749,10 @@ export default function LifePage() {
                   <div className="flex items-center gap-3">
                     <LensIcon className="h-4 w-4" />
                     <div>
-                      <p className="text-sm font-medium">
+                      <p className="text-sm font-medium text-zinc-200 light:text-[var(--text-primary)]">
                         {LENS_META[lens].label} lens active
                       </p>
-                      <p className="text-[12px] text-zinc-400">
+                      <p className="text-[12px] text-zinc-400 light:text-[var(--text-muted)]">
                         {LENS_META[lens].blurb}
                       </p>
                     </div>
@@ -737,7 +770,7 @@ export default function LifePage() {
                           className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] transition-colors ${
                             lens === key
                               ? Meta.activeClass
-                              : 'border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40 text-zinc-500 hover:text-zinc-300'
+                              : 'border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-40)] text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                           }`}
                         >
                           <Icon className="h-3.5 w-3.5" />
@@ -786,7 +819,7 @@ export default function LifePage() {
                       New Covenant
                     </span>
 
-                    <Plus className="h-4 w-4 text-zinc-500" />
+                    <Plus className="h-4 w-4 text-zinc-500 light:text-[var(--text-muted)]" />
                   </button>
 
                   <button
@@ -794,7 +827,7 @@ export default function LifePage() {
                     className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
                       lens === 'gold'
                         ? 'border-amber-400/40 bg-amber-500/10 text-amber-100'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 light:text-[var(--text-primary)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -802,7 +835,7 @@ export default function LifePage() {
                       New Goal
                     </span>
 
-                    <Plus className="h-4 w-4 text-zinc-500" />
+                    <Plus className="h-4 w-4 text-zinc-500 light:text-[var(--text-muted)]" />
                   </button>
 
                   <button
@@ -810,7 +843,7 @@ export default function LifePage() {
                     className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
                       lens === 'memories'
                         ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 light:text-[var(--text-primary)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -818,16 +851,16 @@ export default function LifePage() {
                       New Memory
                     </span>
 
-                    <Plus className="h-4 w-4 text-zinc-500" />
+                    <Plus className="h-4 w-4 text-zinc-500 light:text-[var(--text-muted)]" />
                   </button>
                 </div>
 
                 {/* Redirect mode toggle */}
                 <div className="flex items-center justify-end gap-1.5">
-                  <span className="text-[11px] text-zinc-500">Add mode:</span>
+                  <span className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">Add mode:</span>
                   <button
                     onClick={toggleRedirectMode}
-                    className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-2 text-[10px] text-zinc-400 hover:text-zinc-300 transition-colors"
+                    className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-40)] px-2 text-[10px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] transition-colors"
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${redirectMode === 'instant' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     {redirectMode === 'instant' ? 'Instant' : 'Confirm'}
@@ -858,7 +891,7 @@ export default function LifePage() {
                       {covenantCount}
                     </p>
 
-                    <p className="text-[12px] text-zinc-500">
+                    <p className="text-[12px] text-zinc-500 light:text-[var(--text-muted)]">
                       commitments · {covenantCompletionsToday} kept today
                     </p>
                   </button>
@@ -868,7 +901,7 @@ export default function LifePage() {
                     className={`rounded-xl border p-5 text-left transition-colors ${
                       lens === 'gold'
                         ? 'border-amber-400/40 bg-amber-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
                     }`}
                   >
                     <div className="flex items-center gap-2 text-amber-300">
@@ -878,11 +911,11 @@ export default function LifePage() {
                       </span>
                     </div>
 
-                    <p className="mt-3 text-2xl text-zinc-100">
+                    <p className="mt-3 text-2xl text-zinc-100 light:text-[var(--text-primary)]">
                       {goldCount}
                     </p>
 
-                    <p className="text-[12px] text-zinc-500">
+                    <p className="text-[12px] text-zinc-500 light:text-[var(--text-muted)]">
                       goals and long-term branches
                     </p>
                   </button>
@@ -892,7 +925,7 @@ export default function LifePage() {
                     className={`rounded-xl border p-5 text-left transition-colors ${
                       lens === 'memories'
                         ? 'border-emerald-400/40 bg-emerald-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
                     }`}
                   >
                     <div className="flex items-center gap-2 text-emerald-300">
@@ -902,11 +935,11 @@ export default function LifePage() {
                       </span>
                     </div>
 
-                    <p className="mt-3 text-2xl text-zinc-100">
+                    <p className="mt-3 text-2xl text-zinc-100 light:text-[var(--text-primary)]">
                       {memoryCount}
                     </p>
 
-                    <p className="text-[12px] text-zinc-500">
+                    <p className="text-[12px] text-zinc-500 light:text-[var(--text-muted)]">
                       amber pockets kept
                     </p>
                   </button>
@@ -921,19 +954,19 @@ export default function LifePage() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <FileClock className="h-4 w-4 text-amber-300" />
-                      <h3 className="text-sm font-medium text-zinc-100">
+                      <h3 className="text-sm font-medium text-zinc-100 light:text-[var(--text-primary)]">
                         Draft chapters
                       </h3>
                     </div>
 
-                    <span className="rounded-full bg-zinc-800 px-2 py-1 text-[11px] text-zinc-400">
+                    <span className="rounded-full bg-zinc-800 px-2 py-1 text-[11px] text-zinc-400 light:text-[var(--text-muted)]">
                       {drafts.length}
                     </span>
                   </div>
 
                   {drafts.length === 0 ? (
                     <div className="mt-4 rounded-lg border border-dashed border-zinc-800 p-4">
-                      <p className="text-[13px] text-zinc-500">
+                      <p className="text-[13px] text-zinc-500 light:text-[var(--text-muted)]">
                         No saved drafts yet. Start a chapter and choose
                         “Save as draft” — it will appear here so you can return to it.
                       </p>
@@ -943,13 +976,13 @@ export default function LifePage() {
                       {drafts.map((draft) => (
                         <div
                           key={draft.id}
-                          className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                          className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-50)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="min-w-0">
-                            <p className="truncate text-sm text-zinc-200">
+                            <p className="truncate text-sm text-zinc-200 light:text-[var(--text-primary)]">
                               {draft.title || 'Untitled draft'}
                             </p>
-                            <p className="mt-0.5 text-[11px] text-zinc-500">
+                            <p className="mt-0.5 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
                               {draft.category}
                               {draft.updatedAt
                                 ? ` · updated ${new Date(draft.updatedAt).toLocaleString()}`
@@ -974,7 +1007,7 @@ export default function LifePage() {
                                   updatedAt: new Date().toISOString(),
                                 })
                               }
-                              className="inline-flex h-8 items-center rounded-md border border-zinc-700 px-2.5 text-[11px] text-zinc-400 hover:text-zinc-200"
+                              className="inline-flex h-8 items-center rounded-md border border-zinc-700 light:border-[var(--ws-border)] px-2.5 text-[11px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-[var(--text-primary)]"
                             >
                               Mark complete
                             </button>
@@ -987,8 +1020,8 @@ export default function LifePage() {
               </section>
 
               {phases.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-zinc-800 py-10 text-center">
-                  <p className="text-[12.5px] text-zinc-600">
+                <div className="rounded-xl border border-dashed border-zinc-800 light:border-[var(--ws-border)] py-10 text-center">
+                  <p className="text-[12.5px] text-zinc-500 light:text-[var(--text-muted)]">
                     Add your first phase above and it will flow into the river.
                   </p>
                 </div>

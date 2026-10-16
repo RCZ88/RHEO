@@ -33,6 +33,10 @@ export interface WeeklyInput {
   habitMisses: Record<string, string[]>;
   /** Minutes of new-topic work per day, aligned to the week. */
   newMinutesByDay: number[];
+  /** False when `newMinutesByDay` is NOT a real new-vs-total measurement (e.g.
+   *  the caller only has productive time and passed it as a stand-in). Rules
+   *  that depend on the new/total ratio are skipped rather than fed a guess. */
+  hasNewMinuteSignal?: boolean;
   /** Total minutes per day, aligned to the week. */
   totalMinutesByDay: number[];
   /** Cards due during the week that were never reviewed. */
@@ -105,7 +109,10 @@ export function buildWeeklyReview(input: WeeklyInput): WeeklyReview {
     mostSkippedHabit: mostSkipped,
     proposal,
     allClear,
-    headline: buildHeadline({ planned, done, mostSkipped, allClear, proposal }),
+    headline: buildHeadline({
+      planned, done, mostSkipped, allClear, proposal,
+      mostSkippedTitle: mostSkipped ? (input.habitTitles ?? {})[mostSkipped.id] : undefined,
+    }),
   };
 }
 
@@ -132,9 +139,18 @@ function chooseProposal(
   if (input.acceptedProposal) return null;
 
   // 1. Phase drift.
+  //
+  // GUARDED BY `hasNewMinuteSignal`, not merely by `totalMin > 0`. A ratio over
+  // an array of all zeros has no evidence behind it: on Monday the week has one
+  // logged day, so `new=0, total=0` is the common case and `total > 0` alone
+  // still lets a single 30-minute "new" minute out of one 40-minute day trip
+  // "Split your week" off a single afternoon. The caller states whether the
+  // numbers it supplied are a real new-vs-total measurement or a stand-in, so a
+  // caller with no phase instrumentation cannot accidentally drive this rule.
   const newMin = input.newMinutesByDay.reduce((a, b) => a + b, 0);
   const totalMin = input.totalMinutesByDay.reduce((a, b) => a + b, 0);
-  if (totalMin > 0 && newMin / totalMin >= 0.7) {
+  const hasNewMinuteSignal = input.hasNewMinuteSignal ?? true;
+  if (hasNewMinuteSignal && totalMin > 0 && newMin / totalMin >= 0.7) {
     return {
       text: 'Split your week: learn for the first two days, burn down for the rest.',
       why: `${Math.round((newMin / totalMin) * 100)}% of your logged time went to new material. One phase does not do both well.`,
@@ -143,8 +159,15 @@ function chooseProposal(
 
   // 2. Neglected habit → make it smaller, not harder.
   if (mostSkipped && mostSkipped.missedDays >= 3) {
+    /* NAME IT. "Shrink that habit" names nothing: the reader has to guess which
+       of their habits is meant, and a review that cannot identify its own subject
+       is not actionable. Falls back to a generic phrase only when the id has no
+       title, which is better than printing a UUID. */
+    const name = (input.habitTitles ?? {})[mostSkipped.id]
     return {
-      text: 'Shrink that habit so it fits a bad day.',
+      text: name
+        ? `Shrink "${name}" so it fits a bad day.`
+        : 'Shrink the habit you skipped most so it fits a bad day.',
       why: `You skipped it on ${mostSkipped.missedDays} of 7 days. A smaller version you keep beats a larger version you abandon.`,
     };
   }
@@ -160,7 +183,12 @@ function chooseProposal(
   // 4. Missed the plan → propose fewer commitments, explicitly.
   if (planned > 0 && done < planned * 0.6) {
     return {
-      text: `Plan ${Math.max(1, Math.round(done / Math.max(0.6, done / planned)))} items next week instead of ${planned}.`,
+      /* This said "plan fewer commitments" and computed MORE of them: with 5 of
+         10 done, `5 / max(0.6, 0.5)` = `5 / 0.6` = 8.33 → "plan 8 items", i.e.
+         raise the bar for someone already over capacity. The honest number is
+         what they actually finished, capped at what they originally planned so
+         the suggestion can never inflate. */
+      text: `Plan ${Math.min(planned, Math.max(1, done))} items next week instead of ${planned}.`,
       why: `You finished ${done} of ${planned}. Planning what you can actually finish is not a lower bar, it is the same bar honestly set.`,
     };
   }
@@ -171,9 +199,15 @@ function chooseProposal(
 function buildHeadline(x: {
   planned: number; done: number; mostSkipped: WeeklyReview['mostSkippedHabit'];
   allClear: boolean; proposal: WeeklyReview['proposal'];
+  /** Resolved display name for `mostSkipped`, or undefined if unknown. */
+  mostSkippedTitle?: string;
 }): string {
   if (x.planned === 0) return 'Nothing was planned this week. Next week: plan one thing.';
   if (x.allClear) return `${x.done} of ${x.planned} done, and nothing to change. Keep it.`;
-  const missed = x.mostSkipped ? ` ${x.mostSkipped.id} came up most.` : '';
+  /* Never fall back to the raw id: a headline reading "a3f9c2b1... came up most"
+     is worse than one that omits the clause, because it looks like data. */
+  const missed = x.mostSkipped
+    ? ` ${x.mostSkippedTitle ? `${x.mostSkippedTitle} came up most` : 'one habit came up most'}.`
+    : '';
   return `${x.done} of ${x.planned} done.${missed}`;
 }

@@ -54,7 +54,7 @@ export function WarmCard({ children, className = '', ambient, interactive }: War
             // zinc-700 at 70% reads #393940 — the legibility fix.
             : 'border-zinc-700/70',
         ambient
-          ? 'bg-[var(--color-muted)]/35'
+          ? 'bg-[var(--color-muted-35)]'
           : 'bg-[var(--color-card)]',
         className,
       ].filter(Boolean).join(' ')}

@@ -25,7 +25,7 @@ export function ThemeConstructor({ custom, setCustom }: ConstructorProps) {
   const update = (key: string, value: any) => setCustom({ ...custom, [key]: value })
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-5 bg-zinc-950 light:bg-[var(--ws-surface)] text-white scrollbar-thin">
+    <div className="h-full overflow-y-auto p-4 space-y-5 bg-zinc-950 light:bg-[var(--ws-surface)] text-white light:text-[var(--text-primary)] scrollbar-thin">
       {/* ── Typography ── */}
       <section>
         <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-3">

@@ -153,7 +153,7 @@ export function VoiceFloatingPanel({
             {/* Volume meter bar */}
             <div className="mt-2 h-1 rounded-full bg-zinc-800 overflow-hidden">
               <motion.div
-                className="h-full rounded-full bg-[#e8866b]/60"
+                className="h-full rounded-full bg-[var(--color-clay-500-60)]"
                 animate={{ width: `${volume * 100}%` }}
                 transition={{ duration: 0.1 }}
               />

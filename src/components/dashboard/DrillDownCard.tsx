@@ -18,7 +18,7 @@ export function DrillDownCard({ kind = 'heatmap', title = '', subtitle = '', pre
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: isHeatmap ? 0.23 : 0.25 }}
-      className="rounded-xl p-5 border backdrop-blur-sm transition-colors bg-zinc-950 light:bg-[var(--ws-surface)]/80 border-zinc-500/20"
+      className="rounded-xl p-5 border backdrop-blur-sm transition-colors bg-zinc-950 light:bg-[var(--ws-surface-80)] border-zinc-500/20"
     >
       <div className="space-y-4">
         <div className="flex items-center justify-between">

@@ -61,7 +61,7 @@ export function CertificationCard({ scan, onConfirm, onAddToResume }: Certificat
           <Button variant="ghost" size="sm" onClick={() => onConfirm(scan.id)} className="flex-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
             <CheckCircle className="w-3.5 h-3.5 mr-1" /> Confirm
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => onAddToResume(scan.id)} className="flex-1 text-[var(--page-accent)] hover:text-[var(--page-accent)]/80 hover:bg-[var(--page-accent)]/10">
+          <Button variant="ghost" size="sm" onClick={() => onAddToResume(scan.id)} className="flex-1 text-[var(--page-accent)] hover:text-[var(--page-accent)]/80 hover:bg-[var(--page-accent-10)]">
             <Award className="w-3.5 h-3.5 mr-1" /> Add to Resume
           </Button>
         </div>

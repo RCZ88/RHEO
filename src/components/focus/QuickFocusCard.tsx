@@ -124,7 +124,7 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
                     whileTap={tapScale}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                       mode === 'timer'
-                        ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]'
+                        ? 'bg-[var(--page-accent-20)] text-[var(--page-accent)]'
                         : 'text-white/50 hover:text-white/60 light:text-[var(--text-muted)] hover:light:text-[var(--text-primary)]'
                     }`}
                     variant="ghost"
@@ -158,7 +158,7 @@ export function QuickFocusCard({ state, onStart, onEnd }: QuickFocusCardProps) {
                         whileTap={tapScale}
                         className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
                           mins === p.sec / 60
-                            ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]'
+                            ? 'bg-[var(--page-accent-20)] text-[var(--page-accent)]'
                             : 'bg-zinc-800/60 light:bg-[var(--ws-surface-raised)] text-white/60 light:text-[var(--text-secondary)] hover:bg-zinc-800 hover:light:bg-[color-mix(in_srgb,var(--ws-surface-sunken)_60%,transparent)]'
                         }`}
                         variant="ghost"

@@ -1,12 +1,11 @@
 // src/components/goals/CalendarSidebar.tsx
 // RHEO Gold page — sticky calendar sidebar (GOLD-LAYOUT, R-59…R-64).
-// Composition: header strip (label + side toggle) → 3D scene (MonthWall) → day strip (CalendarStrip).
+// Composition: header (label + side toggle) → flat month wall (MonthWall).
 // MonthWall is FROZEN (R-60): this file never edits it; the scene wrapper supplies perspective
 // and the entrance choreography. MonthWall's own container composes underneath.
 
 import { useState, useEffect, useRef } from 'react';
 import { MonthWall } from '../MonthWall/MonthWall';
-import { CalendarStrip } from './CalendarStrip';
 import { PanelLeft, PanelRight, CalendarDays } from 'lucide-react';
 
 // Session-scope one-shot flag: app relaunch replays the entrance; tab flips do not.
@@ -88,28 +87,38 @@ export function CalendarSidebar({
   // Pose angles mirror the side preference: the near edge always faces the content.
   const poseY = side === 'left' ? -7 : 7;
 
-  // All transform lives in CSS classes (inline style would win via specificity).
-  // CSS custom properties carry the dynamic values (pose-y side).
+  /* FLAT. No perspective, no preserve-3d, no rotate.
+     The tilt lived in this wrapper, not in MonthWall — MonthWall's grid was
+     already flattened, but as long as the WRAPPER still rotated the scene by
+     9deg/7deg the two failure modes that produced "the calendar doesn't take
+     clicks" were both still live: the surface was skewed, and it still sat
+     inside a preserve-3d context. Removing only the cells' translateZ fixed
+     sibling hit-testing and left the skew. Both had to go.
+
+     `contain: layout paint` stays — it is a perf win and has nothing to do
+     with 3D. */
   const sceneStyle: React.CSSProperties = {
-    perspective: '1100px',
-    perspectiveOrigin: '50% 40%',
-    transformStyle: 'preserve-3d',
     contain: 'layout paint',
-    '--pose-y': `${poseY}deg`,
   } as React.CSSProperties;
 
   return (
     <aside
-      /* Stage width is set here because this file's only consumer is the Schedule
-         tab, and the depth cue is geometric: MonthWall's day tiles are `h-11`
-         (44px) tall, so a tile only reads as a raised slab when it is roughly
-         square. At the previous 380px the grid left each tile ~37x44 — narrower
-         than tall — which read as a squashed flat grid, not a relief.
-         560px -> (560 - 40 wall padding - 20 grid padding - 60 gaps) / 7 = 63px
-         tiles, i.e. square. That single change is what makes the 3D legible;
-         the rotateX/rotateY below only tilt a stage that is already proportioned
-         for it. */
-      className="lg:flex-1 min-w-[420px] max-w-[560px] lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto"
+      /* WIDTH IS A RANGE, NOT A FIXTURE — and the tiles are SQUARE so the range
+         cannot change the calendar's proportions.
+
+         The tiles used to be pinned at `h-11` (44px) while this column ranged
+         420–560px, so the same month rendered ~48x44 tiles at the narrow end
+         and ~63x44 at the wide end: a different-looking calendar at every
+         width, plus slack piled up underneath because six fixed-height rows
+         never filled the column. `aspect-square` on the tiles makes height a
+         function of width instead of a constant, so one rule holds at every
+         size and the grid ends exactly where the last row ends.
+
+         Both sides share this element — the toggle only flips its ORDER in the
+         parent's flex row — so square tiles are the same proportion on the left
+         and on the right by construction, not by two rules kept in sync. */
+
+      className="lg:flex-1 min-w-[420px] max-w-[560px] lg:h-full lg:overflow-y-auto"
       aria-label="Calendar"
     >
       {/* Header strip: label + side toggle. Flat chrome, never 3D. */}
@@ -131,7 +140,7 @@ export function CalendarSidebar({
         </div>
       </div>
 
-      {/* 3D scene. The sidebar's overflow-y-auto is the PARENT of this scene (never between
+      {/* Month wall. The sidebar's overflow-y-auto is the PARENT of this scene (never between
           scene and wall), so MonthWall's preserve-3d subtree is never flattened. The inset
           padding reserves room for projected overflow (break-out is visual, never a scrollbar). */}
       <div ref={sceneRef} style={sceneStyle} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave}
@@ -147,12 +156,32 @@ export function CalendarSidebar({
           background: 'radial-gradient(ellipse 100% 40% at 50% 100%, rgba(120,120,125,0.06), transparent 70%)',
           transition: 'opacity 520ms cubic-bezier(0.16,1,0.3,1) 80ms',
         }} />
-        {/* MonthWall: frozen, byte-identical props (R-60). */}
-        <MonthWall goals={goals} deadlines={deadlines} reminders={reminders} schedule={schedule} longTermGoals={longTermGoals} selectedDate={selectedDate} />
-        {/* Day strip below the wall — props byte-identical, wiring intact. */}
-        <div className="mt-3">
-          <CalendarStrip selectedDate={selectedDate} onDateChange={onDateChange} goalDates={goalDates} marks={marks} weekGoals={weekGoals} />
-        </div>
+        {/* THE ONE DATE CONTROL IN THIS SIDEBAR.
+
+            MonthWall takes `selectedDate` but was never given `onDateChange`,
+            so it could DISPLAY the selection and never REPORT one — clicking a
+            day moved nothing. That is the same class of bug as the 3D one: the
+            affordance looked live, and the handler simply was not connected.
+
+            So the wall is now both the reader and the writer of the selection,
+            and the selected day drives the week board on the page beside it.
+            One source of truth, one click, and the two views can never disagree
+            about which day "today" is.
+
+            CalendarStrip used to sit below this wall as well. Two date pickers
+            stacked in one column is a duplicate control, and worse, they were
+            kept in sync by hand. It is removed from HERE; GoalsPage still
+            mounts its own, because there the strip is the only date nav on the
+            page. */}
+        <MonthWall
+          goals={goals}
+          deadlines={deadlines}
+          reminders={reminders}
+          schedule={schedule}
+          longTermGoals={longTermGoals}
+          selectedDate={selectedDate}
+          onDateChange={onDateChange}
+        />
       </div>
 
       <style>{`
@@ -162,24 +191,21 @@ export function CalendarSidebar({
           80%  { opacity: 0.08; }
           100% { opacity: 0; transform: translateX(120%); }
         }
-        /* STATIC 3D. No \`transition\`, no \`will-change\`.
-           The transition is what made a transform change re-rasterise the whole
-           3D layer on every frame; \`will-change\` pinned that layer in memory
-           permanently. With both removed, this transform is computed once and
-           the compositor reuses the same texture. See the note on the pointer
-           handlers above before re-adding either. */
-        .calendar-scene {
-          transform: rotateX(9deg) rotateY(var(--pose-y, 7deg));
-        }
+        /* The entrance is opacity + a few pixels, never a 3D transform.
+           Scaling a scene under perspective is what made the entrance change the
+           hit geometry: a transform means the element's rendered position and
+           its layout box disagree while it animates, so the first click of an
+           entrance could land on the wrong cell. Opacity does not move anything,
+           so the two never diverge. */
         .calendar-scene.is-entrancing {
-          transform: rotateX(9deg) rotateY(var(--pose-y, 7deg)) scale(0.99);
-          transition: transform 520ms cubic-bezier(0.16,1,0.3,1) 80ms;
+          animation: df-cal-enter 320ms cubic-bezier(0.16,1,0.3,1) both;
+        }
+        @keyframes df-cal-enter {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .calendar-scene, .calendar-scene.is-entrancing {
-            transform: rotateX(9deg) rotateY(var(--pose-y, 7deg)) !important;
-            transition: none !important;
-          }
+          .calendar-scene.is-entrancing { animation: none !important; }
         }
       `}</style>
     </aside>

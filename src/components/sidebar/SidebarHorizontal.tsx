@@ -256,7 +256,7 @@ export function SidebarHorizontal({
             aria-pressed={editMode}
             className={cn(
               'p-1.5 rounded-md transition-colors',
-              editMode ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]' : 'text-zinc-500 hover:text-white hover:bg-zinc-800',
+              editMode ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]' : 'text-zinc-500 hover:text-white hover:bg-zinc-800',
             )}
             title="Arrange groups and sidebar side"
           >
@@ -414,7 +414,7 @@ export function SidebarHorizontal({
                   className={cn(
                     'flex-1 px-1 py-1 rounded text-[10px] transition-colors',
                     config.side === s
-                      ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]'
+                      ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
                       : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300',
                   )}
                 >

@@ -1,4 +1,4 @@
-// DeskFlow AI Context Capture — Content Script (MAIN world)
+// RHEO AI Context Capture — Content Script (MAIN world)
 (function() {
   'use strict';
   if (!chrome?.runtime?.id) return;
@@ -144,7 +144,7 @@
   let lastMessageCount = 0;
 
   // --- Correlation state (Bridge auto-capture) ---
-  // The DeskFlow app hands out a one-time correlationId + the exact keys it expects
+  // The RHEO app hands out a one-time correlationId + the exact keys it expects
   // back. When the AI replies, we check whether the reply's JSON contains any of
   // those keys; if so we echo the correlationId + matchedKeys so the app can
   // auto-fill the exact field/form — no guessing by a generic promptType.
@@ -369,5 +369,5 @@
     }
   });
 
-  console.log(`[DeskFlow] AI context capture active for ${detectProvider()}`);
+  console.log(`[RHEO] AI context capture active for ${detectProvider()}`);
 })();

@@ -206,7 +206,7 @@ function SystemToggleCard({ system, verifySignal, index }: { system: SystemInfo;
     <div className={`nsd-anim group relative border rounded-xl p-3 transition-all duration-200 ${isError ? 'border-red-500/40 bg-red-500/5' : system.enabled ? 'bg-zinc-800/40 border-zinc-600/40 shadow-[0_1px_4px_rgba(0,0,0,0.1)]' : 'bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] border-zinc-700/30 opacity-60 hover:opacity-80'}`} style={{ animationDelay: `${index * 45}ms` }}>
       <span className="group/tooltip absolute top-2 left-2 z-10">
         <span className={`block w-2 h-2 rounded-full transition-transform duration-300 ${scaleClass} ${dotClass}`} />
-        <span className="absolute left-0 top-3 hidden group-hover/tooltip:block whitespace-nowrap rounded-md bg-zinc-950 light:bg-[var(--ws-surface)]/95 border border-zinc-700/60 px-2 py-1 text-[10px] text-zinc-300 shadow-lg z-20">{tip}</span>
+        <span className="absolute left-0 top-3 hidden group-hover/tooltip:block whitespace-nowrap rounded-md bg-zinc-950 light:bg-[var(--ws-surface-95)] border border-zinc-700/60 px-2 py-1 text-[10px] text-zinc-300 shadow-lg z-20">{tip}</span>
       </span>
       <div className="pl-3">
         <div className="flex items-center justify-between mb-1.5">
@@ -411,7 +411,7 @@ function PromptPreview({ title, content, defaultContent, maxChars = 2000 }: { ti
   const truncated = base.length > maxChars;
   const shown = showFull || !truncated ? base : base.slice(0, maxChars) + '…';
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-3">
+    <div className="rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-60)] p-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] text-zinc-400 uppercase tracking-wider">{title}</span>
         {truncated && (
@@ -773,7 +773,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                         autoFocus value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder={defaultName || 'e.g. Fix the login bug'}
-                        className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20"
+                        className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface-60)] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20"
                       />
                     </div>
 
@@ -803,7 +803,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                       </div>
                       {terminalMode === 'select' && terminalTabs && Object.keys(terminalTabs).length > 0 ? (
                         <select value={selectedTerminal} onChange={(e) => setSelectedTerminal(e.target.value)}
-                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 py-1.5 text-xs text-zinc-100 outline-none transition-all duration-150 focus:border-cyan-400/50">
+                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface-60)] px-3 py-1.5 text-xs text-zinc-100 outline-none transition-all duration-150 focus:border-cyan-400/50">
                           {Object.entries(terminalTabs).map(([id, t]) => <option key={id} value={id}>{t.name} ({t.agent})</option>)}
                         </select>
                       ) : terminalMode === 'select' ? (
@@ -859,7 +859,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                               Use default
                             </label>
                             {includeDefaultInit && initFiles.length > 0 && (
-                              <select value={initializeFile} onChange={(e) => setInitializeFile(e.target.value)} className="rounded-lg border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-2 py-1 text-[11px] text-zinc-300 outline-none">
+                              <select value={initializeFile} onChange={(e) => setInitializeFile(e.target.value)} className="rounded-lg border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface-60)] px-2 py-1 text-[11px] text-zinc-300 outline-none">
                                 {initFiles.map((f) => <option key={f} value={f}>{f}</option>)}
                               </select>
                             )}
@@ -884,7 +884,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                           ))}
                         </div>
                       </div>
-                      <div className="relative rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 overflow-hidden">
+                      <div className="relative rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-60)] overflow-hidden">
                         {ctxState.loading ? (
                           <div className="h-44 flex items-center justify-center"><Skeleton className="h-3 w-1/3" /></div>
                         ) : ctxLoadFailed ? (
@@ -954,7 +954,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                       <VoiceInputWrapper>
                         <textarea value={sessionAdditions} onChange={(e) => setSessionAdditions(e.target.value)}
                           placeholder="Extra instructions for this session only…" rows={2}
-                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 resize-none" />
+                          className="w-full rounded-xl border border-zinc-700/60 bg-zinc-950 light:bg-[var(--ws-surface-60)] px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-150 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 resize-none" />
                       </VoiceInputWrapper>
                     </div>
 
@@ -967,7 +967,7 @@ export function NewSessionDialog({ open, mode = 'create', onClose, onCreate, pro
                         {showAgentsCtx && (
                           <div className="nsd-fadein mt-1.5 space-y-1">
                             {agentsCtx.map((f: any) => (
-                              <div key={f.id ?? f.name} className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-2 py-1">
+                              <div key={f.id ?? f.name} className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface-40)] px-2 py-1">
                                 <span className="text-[10px] text-zinc-400 truncate">{f.name}</span>
                                 <span className="shrink-0 text-[10px] text-zinc-600">{(f.size ?? 0).toLocaleString()} B</span>
                               </div>

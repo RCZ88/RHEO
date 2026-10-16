@@ -247,7 +247,7 @@ export function LessonDetailModal({ lesson, open, onClose, onDeleted, onUpdated,
                   <textarea
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
-                    className="flex-1 min-h-[40vh] w-full rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/80 p-4 font-mono text-[11px] leading-relaxed text-zinc-300 resize-y focus:outline-none focus:border-clay-500/40 transition-all"
+                    className="flex-1 min-h-[40vh] w-full rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface-80)] p-4 font-mono text-[11px] leading-relaxed text-zinc-300 resize-y focus:outline-none focus:border-clay-500/40 transition-all"
                     spellCheck={false}
                   />
                 )}
@@ -401,7 +401,7 @@ export function LessonDetailModal({ lesson, open, onClose, onDeleted, onUpdated,
                       <FileText className="w-3 h-3" />
                       Original Prompt
                     </label>
-                    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/80 p-4 font-mono text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap overflow-x-auto max-h-[30vh]">
+                    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface-80)] p-4 font-mono text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap overflow-x-auto max-h-[30vh]">
                       {originalPrompt}
                     </div>
                     <p className="text-[10px] text-zinc-600 mt-1">The prompt used to generate this lesson. Read-only.</p>

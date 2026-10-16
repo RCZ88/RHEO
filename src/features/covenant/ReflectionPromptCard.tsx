@@ -24,7 +24,7 @@ export function ReflectionPromptCard({ onReflect }: ReflectionPromptCardProps) {
     <WarmCard ambient className="relative">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
-          <Feather className="w-3.5 h-3.5 text-[#e8866b]" />
+          <Feather className="w-3.5 h-3.5 text-[var(--color-clay-400)]" />
           Today's reflection - {prompt.source}
         </div>
         {packs.length > 1 && (
@@ -51,7 +51,7 @@ export function ReflectionPromptCard({ onReflect }: ReflectionPromptCardProps) {
       </motion.p>
       <button
         onClick={() => onReflect(prompt.text)}
-        className="mt-3 text-[12px] text-[#e8866b] hover:text-[#f0a892] transition-colors"
+        className="mt-3 text-[12px] text-[var(--color-clay-400)] hover:text-[#f0a892] transition-colors"
       >
         Write about this &rarr;
       </button>

@@ -360,6 +360,117 @@ Prompt should feel like a high-level technical brief:
 - **The Mandate:** "Design a comprehensive solution for..."
 - **Requirement Checklist:** Data processing, visual specs, and UX flow.
 
+## MANDATORY: Copy The Artifact To The Clipboard
+
+**A prompt file CZ cannot paste is a prompt file CZ will not use.** The point of
+this skill is that CZ copies the artifact into an external AI chat. Do not stop
+at writing the file - put it on the clipboard in the same breath and say so.
+
+### Single source of truth
+
+The implementation lives at **`scripts/prompt-copy`** in the repo. Do NOT write
+a private helper, do NOT re-implement the logic, and do NOT copy it into a skill.
+
+```bash
+prompt-copy <name>            # by folder PREFIX, from any directory
+./scripts/prompt-copy <name>  # direct, if not on PATH
+prompt-copy list [filter]     # discover targets; filter is a substring match
+```
+
+**Targets are DISCOVERED from `agent/docs/generate-prompt-docs/*/`, not declared in
+the script.** Each folder contributes its prompt file and its `CONTEXT_BUNDLE.md`
+when present. `RESULT.md` is deliberately **excluded**: it is the *reply* from a
+previous run, and pasting it alongside the brief hands the AI finished work
+instead of the question.
+
+Discovery matches the prompt filename **case-insensitively** — most folders ship
+lowercase `prompt.md`, and a case-sensitive `find` hid roughly a third of the
+library (164 of 241 folders) without any error.
+
+```bash
+prompt-copy list            # every prompt, numbered
+prompt-copy list canvas     # filter by substring
+prompt-copy get <ID|slug>   # copy by number or exact folder name
+prompt-copy <prefix>        # copy by unique prefix; ambiguous prefixes list candidates
+prompt-copy pick            # interactive: shows the list, type a number
+prompt-copy path/to/folder  # any folder or file, registered or not
+```
+
+```bash
+prompt-copy life-habits   # -> life-habits-gold-dedup-13102026
+```
+
+An ambiguous prefix fails loudly and prints the candidates rather than guessing —
+a wrong paste into an external AI costs more than a retyped word.
+
+> This replaced an earlier `scripts/spec-copy` that carried five hard-coded target
+> arrays while the docs tree held ~250 prompts, so the command could reach almost
+> nothing and every new spec needed a code edit to become copyable. Discovery is
+> why that coupling is gone: **writing a prompt folder is sufficient to make it
+> copyable.** `scripts/spec-copy` and its `~/.local/bin` symlink were **deleted**
+> on 2026-10-14 — `prompt-copy` is the only command. Do not recreate it.
+
+### Rules for the helper (learned the hard way - do not simplify these away)
+
+1. **Never name the helper after a binary it calls.** Naming it `wl-copy`
+   shadowed `/usr/bin/wl-copy`, so `command -v wl-copy` resolved to the helper
+   itself: infinite self-recursion until bash hit its level limit, ~15k lines of
+   output. A helper that shares a name with its dependency is a trap.
+2. **Resolve symlinks before computing the repo root.** Invoked via
+   `~/.local/bin/`, `${BASH_SOURCE[0]}` is the symlink, so `dirname/..` yields
+   `$HOME` and every path reports MISSING. Use `readlink -f` first.
+3. **Never carry the payload through a pipeline.** `cmd | clip` reports the status
+   of `cmd`, not of the clipboard writer, so a failed copy reported success for
+   several minutes. Stage to a temp file, check status, *then* copy.
+4. **Absolute paths for the clipboard binary**, never `command -v`.
+5. **Run `wl-copy` in the FOREGROUND, with stdin attached, and WITHOUT
+   `--paste-once`.** This rule was previously backwards and shipped a silent
+   data-loss bug. `--paste-once` makes `wl-copy` exit before it takes ownership
+   of the Wayland selection, so **nothing is ever pasted** — and because the
+   script discards the tool's output and checks only the exit status, it
+   reported `copied N bytes` with an empty clipboard. Two related traps: `&` /
+   `disown` backgrounds the daemon whose offer is never served (same symptom),
+   and `</dev/null` feeds it an empty selection (same symptom). There was never
+   a hang to prevent: `wl-copy` daemonises by itself and the parent returns
+   immediately, which was verified rather than assumed.
+6. **Test the invocation CZ will actually use** - by bare name through the
+   symlink, from `$HOME`. Testing `./scripts/prompt-copy` from the repo root passes
+   while the real invocation fails. This is not hypothetical; it shipped broken.
+
+### Verify before reporting
+
+Run it with `timeout`, confirm it returns promptly and reports a **non-zero byte
+count**. That is necessary but **NOT sufficient** — it only proves the script
+read its files. Then **paste it back and compare real clipboard bytes**:
+
+```bash
+cd ~ && timeout 30 prompt-copy <name>    # must return promptly
+sleep 1
+GOT=$(timeout 10 /usr/bin/wl-paste --no-newline 2>/dev/null | wc -c)
+# GOT must be non-zero AND match the byte count the script reported
+**THE CLIPBOARD IS GLOBAL AND CONTENDED** — many agents share it. Do **not** run
+`prompt-copy` speculatively: a copy nobody pastes is a prompt another agent loses.
+Give CZ the command and let CZ run it, and copy/paste promptly — a long gap is a race.
+
+```
+
+**Never report success from the script's own exit status.** That is precisely how
+the empty-clipboard bug survived: it exited 0 and printed a plausible byte count
+while the clipboard held nothing, so CZ pasted nothing into the external AI.
+
+**Stale `wl-copy` daemons corrupt the measurement.** Each owns the selection and
+serves one paste, so a leftover daemon from an earlier run returns old content
+and a fresh copy looks broken. Inspect, then kill only the ones you started:
+
+```bash
+ps -eo pid,etimes,args | grep -E "[w]l-copy|[x]clip"
+kill <those pids>
+```
+
+If you cannot verify end to end, report `NOT VERIFIED` - never `PASS` because
+the script compiled.
+
+
 ## Example Flow
 
 1. **User:** "the charts on external page are bad."

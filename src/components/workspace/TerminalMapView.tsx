@@ -85,7 +85,7 @@ export function TerminalMapView({
       return (
         <div
           key={`split-${depth}`}
-          className={`flex gap-2 p-2 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface)]/30 ring-1 ring-inset ring-zinc-800/40 ${
+          className={`flex gap-2 p-2 rounded-xl bg-zinc-950 light:bg-[var(--ws-surface-30)] ring-1 ring-inset ring-zinc-800/40 ${
             node.direction === 'col' ? 'flex-col' : 'flex-row'
           }`}
         >

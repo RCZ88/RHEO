@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react"
 import { Command } from "lucide-react"
 
-interface SlashCommand {
+export interface SlashCommand {
   id: string
   name: string
   desc: string

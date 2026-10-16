@@ -88,7 +88,7 @@ export default function ResumePage() {
             whileHover={{ y: -2 }}
             className="md:col-span-2 relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/90 to-zinc-800/50 p-5 light:border-zinc-200/60 light:from-white/90 light:to-zinc-50/50"
           >
-            <div className="absolute top-0 right-0 w-[250px] h-[250px] bg-[var(--page-accent)]/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-[250px] h-[250px] bg-[var(--page-accent-5)] rounded-full blur-3xl pointer-events-none" />
             <div className="relative flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--page-accent)]/30 to-[var(--page-accent)]/5 flex items-center justify-center ring-2 ring-[var(--page-accent)]/20 shadow-[0_0_20px_rgba(99,102,241,0.15)]">
                 <span className="text-lg font-bold text-white">{(profile?.fullName || 'Y').charAt(0).toUpperCase()}</span>
@@ -229,7 +229,7 @@ export default function ResumePage() {
             animate={{ opacity: 1, scale: 1 }}
             className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-800/40 p-10 text-center light:border-zinc-200/60 light:from-white/80 light:to-zinc-50/40"
           >
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[var(--page-accent)]/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[var(--page-accent-5)] rounded-full blur-3xl pointer-events-none" />
             <div className="relative z-10">
               <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[var(--page-accent)]/20 to-[var(--page-accent)]/5 flex items-center justify-center mx-auto mb-3 ring-1 ring-[var(--page-accent)]/20">
                 <FileText className="w-7 h-7 text-[var(--page-accent)]" />

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Bold, Italic, Code2, Link2, List, ListOrdered, Quote, Heading1, Heading2,
   Paperclip, Sparkles, Eye, Pencil, Copy, Check, CheckSquare, X, FileText, MessageSquare,
@@ -74,6 +74,9 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
   const [copied, setCopied] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [todoOpen, setTodoOpen] = useState(false);
+  const [insertMenuOpen, setInsertMenuOpen] = useState(false);
+  const [insertMenuPos, setInsertMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [insertQuery, setInsertQuery] = useState('');
   const [todos, setTodos] = useState<{ id: string; text: string; done: number }[]>([]);
   const todoLinks = links.filter(l => l.url.startsWith('todo://'));
   const attachedTodoIds = new Set(todoLinks.map(l => l.url.slice('todo://'.length)));
@@ -218,6 +221,40 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
     });
   }, [value, onChange]);
 
+  const handleInsertToken = useCallback((token: string) => {
+    const start = taRef.current?.selectionStart ?? 0;
+    const end = taRef.current?.selectionEnd ?? 0;
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    onChange(before + token + after);
+    // Move cursor after the inserted token
+    setTimeout(() => {
+      if (taRef.current) {
+        taRef.current.focus();
+        taRef.current.setSelectionRange(start + token.length, start + token.length);
+      }
+    }, 0);
+    setInsertMenuOpen(false);
+  }, [value, onChange]);
+
+  const openInsertMenu = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
+    const target = e.currentTarget;
+    const rect = target.getBoundingClientRect();
+    setInsertMenuPos({ x: rect.left, y: rect.bottom + 4 });
+    setInsertMenuOpen(true);
+    setInsertQuery('');
+  }, []);
+
+  const closeInsertMenu = useCallback(() => {
+    setInsertMenuOpen(false);
+  }, []);
+
+  const filteredInsertItems = useMemo(() => {
+    if (!insertQuery.trim()) return INSERT_ITEMS;
+    const q = insertQuery.toLowerCase();
+    return INSERT_ITEMS.filter(item => item.label.toLowerCase().includes(q) || item.keywords.some(k => k.includes(q)));
+  }, [insertQuery]);
+
   const attachFile = async () => {
     const api = (window as any).deskflowAPI;
     if (!api?.showOpenDialog) return;
@@ -263,7 +300,7 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
   const otherLinks = links.filter(l => !l.url.startsWith('file://') && !l.url.startsWith('chat://'));
 
   return (
-    <div className="flex flex-col gap-2 min-h-0 flex-1">
+    <div className="relative flex flex-col gap-2 min-h-0 flex-1">
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-0.5 shrink-0">
         <ToolBtn label="Bold (Ctrl+B)" onClick={() => wrap('**', '**', 'bold')}><Bold size={13} /></ToolBtn>
@@ -294,20 +331,84 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
         </ToolBtn>
       </div>
 
+      {/* Insert menu dropdown */}
+      {insertMenuOpen && insertMenuPos && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          style={{ left: insertMenuPos.x, top: insertMenuPos.y }}
+          className="absolute z-50 w-56 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-1"
+          role="menu"
+        >
+          <input
+            type="text"
+            value={insertQuery}
+            onChange={e => setInsertQuery(e.target.value)}
+            placeholder="Search..."
+            className="w-full px-2 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded text-zinc-100 placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-[var(--page-accent)] mb-1"
+            onKeyDown={e => {
+              if (e.key === 'Escape') closeInsertMenu();
+            }}
+            autoFocus
+          />
+          <div className="max-h-60 overflow-y-auto">
+            {filteredInsertItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => handleInsertToken(item.token(''))}
+                className="w-full px-2 py-1.5 text-sm text-left text-zinc-200 hover:bg-zinc-800 rounded flex items-center gap-2"
+                onMouseDown={e => e.preventDefault()}
+              >
+                <span className="text-zinc-500 text-xs uppercase tracking-wider">{item.id}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+            {filteredInsertItems.length === 0 && (
+              <div className="px-2 py-2 text-sm text-zinc-500">No matches</div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* body */}
       {mode === 'write' ? (
         <textarea
           ref={taRef}
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => {
+            const next = e.target.value;
+            onChange(next);
+            /* `[[` is the trigger, and it is the SAME token the reader parses.
+               Typing it opens the menu anchored to the CARET — not to the
+               toolbar button — so the attachment lands in the sentence you are
+               writing rather than wherever the caret happened to be left. That
+               is the whole point of "inline, not on the sides". */
+            const el = e.target;
+            const upto = next.slice(0, el.selectionStart);
+            if (upto.endsWith('[[') && !el.value.slice(el.selectionStart).startsWith(']')) {
+              const r = el.getBoundingClientRect();
+              const line = upto.slice(0, upto.lastIndexOf('\n')).split('\n').length - 1;
+              const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 22;
+              setInsertMenuPos({
+                x: Math.min(r.left + 12, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 240),
+                y: r.top + (line + 1) * lineHeight + 4,
+              });
+              setInsertMenuOpen(true);
+              setInsertQuery('');
+            }
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Escape' && insertMenuOpen) { setInsertMenuOpen(false); return; }
+          }}
           placeholder="Write anything. Markdown works — **bold**, # headings, - lists, > quotes, `code`."
           rows={10}
           aria-label="Note body"
-          className="w-full flex-1 min-h-[140px] resize-none overflow-y-auto rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-3 py-2.5 text-[13px] leading-[1.7] text-zinc-200 placeholder:text-zinc-600 outline-none transition-colors focus-visible:border-zinc-600"
+          className="w-full flex-1 min-h-[140px] resize-none overflow-y-auto rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-40)] px-3 py-2.5 text-[13px] leading-[1.7] text-zinc-200 placeholder:text-zinc-600 outline-none transition-colors focus-visible:border-zinc-600"
         />
       ) : (
         <div
-          className="w-full flex-1 min-h-[140px] overflow-y-auto rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40 px-3 py-2.5 text-[13px] leading-[1.7]"
+          className="w-full flex-1 min-h-[140px] overflow-y-auto rounded-lg border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-40)] px-3 py-2.5 text-[13px] leading-[1.7]"
           aria-label="Note preview"
         >
           {/* The READER's renderer, not MarkdownPreview. If the editor preview

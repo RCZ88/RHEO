@@ -294,7 +294,7 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
   return (
     <div
       ref={wrapRef}
-      className={`relative overflow-hidden rounded-xl border border-[#e8866b]/20 light:border-[var(--ws-border-strong)] bg-gradient-to-b from-[#1a1512] to-[#0f0c0b] light:from-[var(--ws-surface-raised)] light:to-[var(--ws-surface-sunken)] ${className}`}
+      className={`relative overflow-hidden rounded-xl border border-[var(--color-clay-500)]/20 light:border-[var(--ws-border-strong)] bg-gradient-to-b from-[#1a1512] to-[#0f0c0b] light:from-[var(--ws-surface-raised)] light:to-[var(--ws-surface-sunken)] ${className}`}
       style={{ height }}
       onMouseMove={onMove}
       onMouseLeave={() => setHover(null)}
@@ -303,7 +303,7 @@ export function ConstellationHero({ dates, milestone, children, className = '', 
       <div className="relative z-10 h-full">{children}</div>
       {hover && (
         <div
-          className="pointer-events-none absolute z-20 px-2 py-1 rounded-md bg-zinc-950 light:bg-[var(--ws-surface)]/90 border border-zinc-700/60 text-[10px] text-zinc-200 whitespace-nowrap"
+          className="pointer-events-none absolute z-20 px-2 py-1 rounded-md bg-zinc-950 light:bg-[var(--ws-surface-90)] border border-zinc-700/60 text-[10px] text-zinc-200 whitespace-nowrap"
           style={{ left: Math.min(hover.x + 12, 240), top: Math.max(hover.y - 8, 4) }}
         >
           {fmtDate(hover.date)} · practiced

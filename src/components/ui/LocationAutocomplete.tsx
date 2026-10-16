@@ -45,13 +45,17 @@ export function LocationAutocomplete({
   }, [value]);
 
   const search = useCallback(async (q: string) => {
-    if (!fetchLocations || !q.trim()) {
-      setOptions([]);
-      return;
-    }
+    if (!q.trim()) { setOptions([]); return; }
     setLoading(true);
     try {
-      const results = await fetchLocations(q);
+      let results: LocationOption[];
+      if (fetchLocations) {
+        results = await fetchLocations(q);
+      } else {
+        const api = (window as any).deskflowAPI;
+        const res = await api?.getAllLocations?.();
+        results = (res?.locations ?? []).map((loc: string) => ({ id: loc, name: loc })).filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
+      }
       setOptions(results);
     } catch {
       setOptions([]);

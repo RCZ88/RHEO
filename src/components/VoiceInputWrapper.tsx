@@ -54,6 +54,24 @@ export function VoiceInputWrapper({ children, silenceMs = 8000 }: VoiceInputWrap
     panelWidth: number; panelAbove: boolean; fontSize: number; borderRadius: number;
   } | null>(null);
 
+  // Live height of the wrapped field, so the mic can size itself before the
+  // voice panel has ever opened. A ResizeObserver rather than a one-shot read
+  // because the composer resizes on drag, on preset change, and as you type.
+  const [liveHeight, setLiveHeight] = useState(0);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    // setState only when the value actually changes — an unconditional set on
+    // every callback re-renders forever, because the render re-observes.
+    setLiveHeight(h => (h === (el.offsetHeight || 0) ? h : (el.offsetHeight || 0)));
+    const ro = new ResizeObserver(() => {
+      const h = el.offsetHeight || 0;
+      setLiveHeight(prev => (prev === h ? prev : h));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const measure = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
@@ -100,8 +118,11 @@ export function VoiceInputWrapper({ children, silenceMs = 8000 }: VoiceInputWrap
     };
   }, [listening, measure]);
 
-  // Mic button size
-  const micSize = Math.max(28, Math.min((portalPos?.height || 32) - 4, 40));
+  // Mic button size. `liveHeight` tracks the real input height at ALL times,
+  // not only while the voice panel is open — `portalPos` is null until you
+  // start listening, which previously pinned the mic at a hardcoded 28px and
+  // left it stranded in the corner of a tall composer.
+  const micSize = Math.max(28, Math.min((liveHeight || 32) - 4, 40));
   const micIconSize = Math.max(12, Math.min(micSize - 12, 18));
   const btnRadius = Math.max(4, (portalPos?.borderRadius || 8) - 2);
   const fontSize = portalPos?.fontSize || 14;
@@ -481,7 +502,7 @@ export function VoiceInputWrapper({ children, silenceMs = 8000 }: VoiceInputWrap
 
           {/* Volume bar */}
           <div className="mt-1.5 rounded-full bg-zinc-800 overflow-hidden" style={{ height: 3 }}>
-            <div className="h-full rounded-full bg-[#e8866b]/60 transition-all duration-100" style={{ width: `${volume * 100}%` }} />
+            <div className="h-full rounded-full bg-[var(--color-clay-500-60)] transition-all duration-100" style={{ width: `${volume * 100}%` }} />
           </div>
         </div>
       </motion.div>
@@ -491,11 +512,20 @@ export function VoiceInputWrapper({ children, silenceMs = 8000 }: VoiceInputWrap
 
   return (
     <>
-      <div className="relative inline-block w-full">
+      {/* `flex-1 min-w-0` makes this a real flex item that fills the row, and
+          `flex` makes IT a flex container so the wrapped input's `flex: 1`
+          actually applies. It was `inline-block`, which is NOT a flex
+          container — so `flex: 1` on the child was inert and the input
+          collapsed to its intrinsic width (~170px) inside a pill that stayed
+          full width. Wide-looking box, tiny click target. */}
+      <div className="relative flex-1 min-w-0 flex w-full">
         {childWithRef}
 
-        {/* Mic Button — sized to match input height */}
-        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 z-10">
+        {/* Mic Button — bottom-anchored so it stays on the LAST line of text as the
+            composer grows. It used to be `top-1/2 -translate-y-1/2`, which is
+            correct only for a fixed-height single-line field; on a resizable
+            one it floats to the vertical middle and detaches from the text. */}
+        <div className="absolute right-1.5 bottom-1.5 z-10">
           <button
             type="button"
             onClick={toggle}
@@ -512,8 +542,8 @@ export function VoiceInputWrapper({ children, silenceMs = 8000 }: VoiceInputWrap
               ${error
                 ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/40'
                 : listening
-                  ? 'bg-[#d96846]/15 text-[#e8866b] ring-1 ring-[#d96846]/30'
-                  : 'text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-[#e8866b] hover:ring-[#d96846]/30'
+                  ? 'bg-[#d96846]/15 text-[var(--color-clay-400)] ring-1 ring-[#d96846]/30'
+                  : 'text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-[var(--color-clay-400)] hover:ring-[#d96846]/30'
               }
             `}
           >

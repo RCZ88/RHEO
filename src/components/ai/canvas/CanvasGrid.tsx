@@ -218,17 +218,46 @@ export function CanvasGrid({
     // "wasn't navigatable by trackpad".
     const isZoom = (e: WheelEvent) => e.ctrlKey || e.metaKey || e.altKey;
 
+    // Nearest ancestor of `target`, up to the viewport, that is a scroll
+    // island (has real overflow to scroll). A wheel over such a surface
+    // belongs to IT — the canvas must not pan or zoom underneath it.
+    //
+    // This replaced a check for the single class `.dk-canvas-card-body`. The
+    // canvas has many scrollers that are NOT that class (inner card lists like
+    // .card-focus-list / .dk-goal-list / .dk-deadline-list, the conversation
+    // transcript's .dk-canvas-transcript-scroll, chat threads), so scrolling
+    // on those still panned/zoomed the board — "I scroll on a card and the
+    // canvas moves instead". Walking ancestors catches every scroll surface,
+    // including ones added later, without naming each class.
+    const findScrollableAncestor = (target: HTMLElement | null): HTMLElement | null => {
+      let node: HTMLElement | null = target
+      while (node && node !== el) {
+        const style = getComputedStyle(node)
+        const scrolls = (v: string) => v === 'auto' || v === 'scroll' || v === 'overlay'
+        const vertical = scrolls(style.overflowY) && node.scrollHeight > node.clientHeight + 1
+        const horizontal = scrolls(style.overflowX) && node.scrollWidth > node.clientWidth + 1
+        if (vertical || horizontal) return node
+        node = node.parentElement
+      }
+      return null
+    }
+
     const handler = (e: WheelEvent) => {
-      // A wheel event inside a card's own scroller belongs to the card. It
-      // bubbles up to here, so without this the canvas panned whenever you
-      // scrolled any content inside a card.
       const target = e.target as HTMLElement | null
-      const inCardScroller = !!target?.closest?.('.dk-canvas-card-body')
 
       const zooming = isZoom(e)
       // Mouse users have no pinch: alt+wheel still zooms. A trackpad
       // two-finger swipe over a card scrolls that card and nothing else.
-      if (!zooming && inCardScroller) return
+      if (!zooming) {
+        // Pointer is over something scrollable -> that element owns the
+        // gesture. At its edge the browser contains it (`overscroll-behavior:
+        // contain` on card bodies), so the board never moves mid-scroll.
+        if (findScrollableAncestor(target)) return
+        // Pointer is over a card/transcript that has nothing to scroll:
+        // still card territory — the board does not move under the pointer.
+        // "Every mouse interaction goes to the card the mouse is on."
+        if (target?.closest?.('.dk-canvas-card, .group-card, .dk-canvas-transcript')) return
+      }
       e.preventDefault()
 
       const rect = el.getBoundingClientRect()

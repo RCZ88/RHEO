@@ -155,12 +155,6 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
   // template literals as static strings.
   const [tiltX, setTiltX] = useState(4);
   const [tiltY, setTiltY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [showFlat, setShowFlat] = useState(false);
-  const [showReset, setShowReset] = useState(false);
-  const dragStart = useRef<{ x: number; y: number } | null>(null);
-  const tiltRef = useRef({ x: 4, y: 0 });
-  const rafRef = useRef<number>(0);
 
   // reduced motion
   const reducedMotion = useRef(false);
@@ -272,59 +266,25 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
     return m ? `var(--color-${m[1]}-400)` : 'var(--color-muted-foreground)';
   }, []);
 
-  const applyTilt = useCallback((nx: number, ny: number) => {
-    tiltRef.current = { x: nx, y: ny };
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => {
-      const { x, y } = tiltRef.current;
-      if (containerRef.current) {
-        containerRef.current.style.transform = showFlat ? 'none' : `rotateX(${x}deg) rotateY(${y}deg)`;
-      }
-      setTiltX(x);
-      setTiltY(y);
-    });
-  }, [showFlat]);
+  /* ── NO 3D. There is no tilt state, no pointer-driven rotation and no
+       flat/perspective toggle any more, and that is the point rather than a
+       simplification.
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (showFlat) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX, y: e.clientY };
-  };
+       A rotated plane has no honest hit target. The eye aims at a skewed
+       surface and the pointer disagrees, so `elementFromPoint` over the real
+       geometry lands on a DIFFERENT day than the one under the cursor. That is
+       not a styling bug — it is the arithmetic of rotateX/rotateY, and it is
+       the whole reason "I can't click the calendar" survived several fixes that
+       each looked correct. (It was made worse by `transformStyle: preserve-3d`,
+       under which the browser sorts and hit-tests siblings in THREE dimensions,
+       so a cell on a nearer Z plane swallowed the events aimed at the cell
+       behind it.)
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging || !dragStart.current) return;
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
-    const ny = Math.max(-35, Math.min(35, tiltRef.current.y + dx * 0.1));
-    const nx = Math.max(0, Math.min(30, tiltRef.current.x - dy * 0.1));
-    applyTilt(nx, ny);
-    dragStart.current = { x: e.clientX, y: e.clientY };
-    setShowReset(Math.abs(nx) > 8 || Math.abs(ny) > 8);
-  }, [isDragging, applyTilt]);
-
-  const onPointerUp = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    dragStart.current = null;
-  };
-
-  const resetTilt = () => {
-    tiltRef.current = { x: 4, y: 0 };
-    applyTilt(4, 0);
-    setShowReset(false);
-    setShowFlat(false);
-  };
-
-  // Sync flat→perspective toggle and initial tilt to DOM on mount/toggle
-  useLayoutEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.style.transform = showFlat ? 'none' : `rotateX(${tiltRef.current.x}deg) rotateY(${tiltRef.current.y}deg)`;
-    }
-  }, [showFlat]);
-
-
-
+       Every affordance the tilt provided is now carried by the flat grid:
+       depth became static per-row opacity, and the dot row + overflow count
+       tell density at a glance. What is deliberately NOT carried over is the
+       drama. This is a scheduling surface — reference, not delight (LAMINAR
+       §6; apple-design §16 restraint). */
 
   const reactiveTransition = reducedMotion.current
     ? '0ms'
@@ -339,7 +299,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
       <motion.button
         whileTap={{ scale: 0.95 }}
         onClick={() => openDay(key)}
-        className="relative h-11 rounded-lg border flex flex-col items-center justify-center cursor-pointer"
+        className="relative aspect-square rounded-lg border flex flex-col items-center justify-center cursor-pointer"
         style={{ transition: reactiveTransition }}
         aria-label={day.toLocaleDateString()}
       >
@@ -417,7 +377,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
       {/* States */}
       {loading ? (
         <div className="space-y-1.5" data-monthwall-state="loading">
-          <div className="grid grid-cols-7 gap-[10px]">{Array.from({ length: 42 }).map((_, i) => <div key={i} className="h-11 rounded-lg bg-zinc-800/40" />)}</div>
+          <div className="grid grid-cols-7 gap-[10px]">{Array.from({ length: 42 }).map((_, i) => <div key={i} className="aspect-square rounded-lg bg-zinc-800/40" />)}</div>
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-10 text-center" data-monthwall-state="error">
@@ -426,16 +386,10 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
           <p className="text-[11px] text-zinc-600 mt-1 max-w-[240px]">{error}</p>
         </div>
       ) : (
-        <div ref={wallRef} className="relative" aria-label="Month calendar"
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerLeave={onPointerUp}
-        >
+        <div ref={wallRef} className="relative" aria-label="Month calendar">
           <div
             ref={containerRef}
             className="relative"
-            style={{ transformStyle: 'preserve-3d' }}
-            onPointerDown={onPointerDown}
           >
             {/* FLAT, deliberately. This grid was `transformStyle: 'preserve-3d'`
                 and every cell carried `translateZ(z)` + its own `zIndex`, under a
@@ -458,7 +412,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                 transformed descendants left to reorder. */}
             <div className="grid grid-cols-7 gap-[10px]" style={{ padding: 10 }}>
               {grid.map((day, idx) => {
-                if (!day) return <div key={`empty-${idx}`} className="h-11" />;
+                if (!day) return <div key={`empty-${idx}`} className="aspect-square" />;
                 const key = localDateKey(day);
                 const isToday = key === todayKey;
                 const isPast = key < todayKey;
@@ -478,6 +432,19 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                 const cellDots = list.slice(0, 2);
                 const cellOverflow = list.length - cellDots.length;
 
+                /* THE SELECTION WAS NEVER DRAWN. `selectedDate` was accepted as
+                   a prop, handed to the component, and then not read anywhere in
+                   the render — so clicking a day reported a new selection to the
+                   page while the month looked identical. A control that changes
+                   state in a place you cannot see is indistinguishable from a
+                   control that does nothing, which is a third, independent
+                   reason "clicking the calendar does nothing" kept coming back.
+
+                   This is also the hinge the two views share: the month shows
+                   which day is selected, and the week board beside it shows that
+                   day's week. One value, two renderings, never disagreeing. */
+                const isSelected = !!selectedDate && key === selectedDate;
+
                 return (
                   <Popover key={key} open={openDate === key} onOpenChange={(o) => (o ? openDay(key) : setOpenDate(null))}>
                     <PopoverTrigger asChild>
@@ -487,17 +454,20 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                           // the "nearer row reads stronger" cue that the 3D used to
                           // give, while leaving the cell in normal 2D flow so a
                           // pointer event lands on the cell you actually aimed at.
-                          opacity: showFlat ? 1 : 1 - Math.abs(rowOffset) * 0.055,
+                          opacity: 1 - Math.abs(rowOffset) * 0.055,
                           transition: reactiveTransition,
                         }}
-                        className={`h-11 rounded-lg border cursor-pointer
-                          ${isToday ? 'border-zinc-700/60' : isPast ? 'border-zinc-800/50' : 'border-zinc-800/40'}`}
+                        className={`aspect-square rounded-lg border cursor-pointer relative
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-background)]
+                          ${isSelected
+                            ? 'ring-2 ring-[var(--page-accent)] border-transparent z-10'
+                            : isToday ? 'border-zinc-700/60' : isPast ? 'border-zinc-800/50' : 'border-zinc-800/40'}`}
                       >
                         <div className="relative h-full rounded-lg flex flex-col items-center justify-center p-1"
                           style={{
                             background: isPast ? 'var(--color-card)' : 'var(--color-background)',
                           }}>
-                          <span className={`text-[11px] leading-none tabular-nums ${isToday ? 'font-bold text-zinc-100' : isPast ? 'text-zinc-500' : 'text-zinc-400'}`}>{day.getDate()}</span>
+                          <span className={`text-[11px] leading-none tabular-nums ${isSelected ? 'font-bold text-[var(--page-accent)]' : isToday ? 'font-bold text-zinc-100' : isPast ? 'text-zinc-500' : 'text-zinc-400'}`}>{day.getDate()}</span>
                           {list.length > 0 ? (
                             <div className="flex items-center gap-0.5 mt-0.5 flex-wrap justify-center">
                               {cellDots.map(d => (

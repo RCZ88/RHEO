@@ -26,6 +26,7 @@ requires:
   - impeccable
   - motion-alive
   - animation-stack
+  - apple-design
   - beautiful-charts
   - font-selection
   - prove-it
@@ -124,7 +125,7 @@ P2  CONCEPT    signature-design        (conditional)   -> ONE hero, or explicit 
 P3  SOURCE     frontend-external-infra · ui-and-charts -> real components pulled via MCP
 P4  TOKENS     frontend-design · impeccable · font-selection -> the actual class names
 P5  STATES     humancentred-UIUX · impeccable         -> empty/loading/error/populated/partial
-P6  MOTION     motion-alive · animation-stack         -> liveliness level + motion inventory
+P6  MOTION     apple-design · motion-alive · animation-stack -> liveliness level + feel inventory
 P7  AUDIT      impeccable · ui-and-charts · LAMINAR    -> pass/fail per gate
 ```
 
@@ -197,7 +198,35 @@ feedback; never a disabled button that looks enabled.
 **Never:** expose raw system tokens, enum codes, or stack traces to the user.
 **Must state:** which state each new element shows, and how the error state recovers.
 
-### P6 — MOTION · `motion-alive` → `animation-stack`
+### P6 — MOTION · `apple-design` → `motion-alive` → `animation-stack`
+
+**`apple-design` FIRST, and it is a filter, not a flourish.** It carries the
+*engineering* rules about how an interface feels — §1 respond on pointer-down,
+§2 direct manipulation, §3 interruptibility (animate from the PRESENTATION
+value, never the target), §7 spatial consistency (enter and exit along the same
+path), §16 the eight foundations. Those are about correctness and do not
+conflict with LAMINAR.
+
+**Its visual half is overridden and must not be applied to App UI:**
+
+| apple-design says | DeskFlow requires |
+|---|---|
+| §12 translucent chrome, `backdrop-filter` materials | **BANNED.** LAMINAR §7 — flat surfaces, hairline borders. |
+| §4 bounce / under-damped springs (`damping ~0.8`) | **BANNED.** `damping: 1.0` only, and never in a data area. |
+| §12 "materialize" blur+scale on surfaces | **BANNED.** Animate only where motion carries meaning. |
+
+**Load it when** the task involves a gesture, a sheet, a drag, anything that
+should feel grabbable, or a transition that must survive being reversed
+mid-flight. **Skip it** for a static layout, a table, or a colour change — then
+it contributes nothing and saying so is a valid answer.
+
+**The one rule that most often gets skipped, and shouldn't:** §7. If something
+disappears one way, it must emerge from where it came. A panel that exits right
+and re-enters from the left is not a style nit, it is a layout the user has to
+re-read. On a two-pane surface where selecting a day in the month re-renders the
+week beside it, that is exactly the seam to check.
+
+**`motion-alive` STEP 0 is then mandatory:** infer product type, propose a **Liveliness Level**
 **`motion-alive` STEP 0 is mandatory:** infer product type, propose a **Liveliness Level**
 with a one-line reason, confirm with the user, then lock and state it.
 L1 Composed (finance/admin/healthcare) · L2 Responsive (SaaS, dashboards, dev tools —

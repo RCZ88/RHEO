@@ -109,7 +109,7 @@ function TerminalRow({ id, stats }: { id: string; stats: TerminalResourceStats }
   const hasPss = typeof stats.pssMB === 'number';
 
   return (
-    <motion.div variants={riseItem} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/50 hover:bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] transition-colors duration-150">
+    <motion.div variants={riseItem} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-50)] hover:bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] transition-colors duration-150">
       <div className="flex items-center gap-2.5 min-w-0">
         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} title={stats.state || undefined} />
         <span className="text-[11px] font-medium text-zinc-300 truncate max-w-[140px]">{id}</span>

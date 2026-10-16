@@ -1,15 +1,37 @@
-import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronDown, Check, Cpu, Zap } from 'lucide-react';
+// AiProviderSelectModal — ONE dialog for everything about models.
+//
+// What this replaced: a routing picker (this file) whose "Add or manage
+// providers" link stacked a SECOND modal (AiProviderManager, z-100 over z-90).
+// The user's report: "why is there two separate windows panel popup to like
+// separate the model selection and like the selecting and configuring the
+// models and providers". Now there is one window with two in-place views:
+//
+//   Assign model       — which provider + model serves this feature
+//   Providers & models — add/edit/enable/remove providers, store their models
+//
+// The provider manager renders INLINE in the second view (no popup, no
+// z-index ladder). Model fields are type-then-select comboboxes, and each
+// provider's model list is stored as a real list — see ModelCombobox.
+//
+// House rules: radii {8px, 12px, pill}, ONE signal hue (var(--page-accent);
+// the per-feature gradient survives only as the header identity chip), no
+// glassmorphism, no spring motion, framer-motion entrance obeys
+// prefers-reduced-motion.
 
-interface ProviderOption {
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { X, ChevronDown, Check, Cpu, Zap } from 'lucide-react';
+import { AiProviderManager } from './ai/AiProviderManager';
+import { ModelSelect } from './ai/ModelCombobox';
+
+export interface ProviderOption {
   id: string;
   label: string;
   models: string[];
   enabled: boolean;
 }
 
-interface RoutingEntry {
+export interface RoutingEntry {
   providerId: string;
   model: string;
   smallModel?: string;
@@ -19,18 +41,12 @@ interface RoutingEntry {
 interface AiProviderSelectModalProps {
   open: boolean;
   onClose: () => void;
-  featureKey: 'researchDigest' | 'goalAssistant' | 'resumeBuilder';
+  featureKey: 'default' | 'researchDigest' | 'goalAssistant' | 'vision' | 'resumeBuilder';
   featureLabel: string;
   accentColor: string;
   providers: ProviderOption[];
   currentRouting: RoutingEntry | null | undefined;
   onSave: (entry: RoutingEntry | null) => void;
-}
-
-function getEffectiveLabel(providers: ProviderOption[], entry: RoutingEntry | null | undefined): string {
-  if (!entry) return 'Default';
-  const p = providers.find(x => x.id === entry.providerId);
-  return p ? p.label : 'Default';
 }
 
 function getEffectiveColor(providers: ProviderOption[], entry: RoutingEntry | null | undefined): string {
@@ -47,11 +63,27 @@ export function getProviderBadge(providers: ProviderOption[], entry: RoutingEntr
   return { label: entry.model ? `${p.label} · ${entry.model}` : p.label, color: getEffectiveColor(providers, entry) };
 }
 
+type View = 'assign' | 'providers';
+
+const softBtn = { border: '1px solid var(--ws-border)', color: 'var(--color-muted-foreground)' } as const;
+const accentBtn = {
+  background: 'var(--page-accent-14)',
+  border: '1px solid color-mix(in srgb, var(--page-accent) 32%, transparent)',
+  color: 'var(--page-accent)',
+} as const;
+const fieldStyle = {
+  background: 'var(--color-background)',
+  border: '1px solid var(--ws-border)',
+  color: 'var(--color-foreground)',
+} as const;
+
 export function AiProviderSelectModal({
-  open, onClose, featureKey, featureLabel, accentColor,
+  open, onClose, featureLabel, accentColor,
   providers, currentRouting, onSave,
 }: AiProviderSelectModalProps) {
+  const reducedMotion = useReducedMotion();
   const enabledProviders = providers.filter(p => p.enabled);
+  const [view, setView] = useState<View>('assign');
   const [viewMode, setViewMode] = useState<'provider' | 'model'>('provider');
   const [selectedId, setSelectedId] = useState<string | null>(currentRouting?.providerId || null);
   const [selectedModel, setSelectedModel] = useState(currentRouting?.model || '');
@@ -61,8 +93,14 @@ export function AiProviderSelectModal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Reset to a clean state on the OPEN EDGE only. Deliberately not on every
+  // currentRouting change: AiPage rebuilds that object after a providers save
+  // (`rheo:providers-changed`), and reacting to it would yank the user out of
+  // the Providers view they are still working in.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
+      setView('assign');
       setSelectedId(currentRouting?.providerId || null);
       setSelectedModel(currentRouting?.model || '');
       setSmallSelectedId(currentRouting?.smallProviderId || null);
@@ -70,9 +108,31 @@ export function AiProviderSelectModal({
       setLoadError(null);
       setSaveError(null);
     }
+    wasOpenRef.current = open;
   }, [open, currentRouting]);
 
-  const activeProvider = enabledProviders.find(p => p.id === selectedId);
+  // If the provider list changes while the dialog is open (e.g. saved in the
+  // Providers view), keep the assignment valid: a removed/disabled provider
+  // must not leave a stale selection behind. The length guard matters — the
+  // list is briefly empty while AiPage loads it.
+  useEffect(() => {
+    if (!open || providers.length === 0 || !selectedId) return;
+    const p = enabledProviders.find((x) => x.id === selectedId);
+    if (!p) {
+      setSelectedId(null);
+      setSelectedModel('');
+      return;
+    }
+    if (selectedModel && !p.models.includes(selectedModel)) {
+      setSelectedModel(p.models[0] || '');
+    }
+  }, [open, providers, enabledProviders, selectedId, selectedModel]);
+
+  const handleProvidersSaved = useCallback(() => {
+    // AiPage listens for this and re-reads getAiProviders — badges and the
+    // assign view refresh without a reload.
+    window.dispatchEvent(new CustomEvent('rheo:providers-changed'));
+  }, []);
 
   function handleSelect(id: string | null) {
     setSelectedId(id);
@@ -134,260 +194,309 @@ export function AiProviderSelectModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[90]"
+          className="fixed inset-0 z-[90] flex items-center justify-center"
+          style={{ background: 'color-mix(in srgb, black 70%, transparent)' }}
           onClick={onClose}
         >
           <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+            initial={reducedMotion ? false : { scale: 0.98, opacity: 0, y: 8 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            exit={reducedMotion ? undefined : { scale: 0.98, opacity: 0, y: 8 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="w-full max-w-md mx-4 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded-xl shadow-2xl shadow-black/50 overflow-hidden"
-            onClick={e => e.stopPropagation()}
+            className="mx-4 flex w-full max-w-2xl flex-col overflow-hidden"
+            style={{
+              maxHeight: 'min(86vh, 720px)',
+              background: 'var(--color-card)',
+              border: '1px solid var(--ws-border-strong)',
+              borderRadius: 12,
+            }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label={`${featureLabel} — provider & model`}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${accentColor} flex items-center justify-center`}>
-                  <Cpu className="w-3.5 h-3.5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-100">{featureLabel}</h2>
-                  <p className="text-[10px] text-zinc-500">Choose provider &amp; model</p>
-                </div>
+            {/* Header — feature identity chip + one subtitle per view */}
+            <div className="flex shrink-0 items-center gap-2.5 px-4 py-3" style={{ borderBottom: '1px solid var(--ws-border)' }}>
+              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${accentColor}`}>
+                <Cpu className="h-3.5 w-3.5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>{featureLabel}</h2>
+                <p className="truncate text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                  {view === 'assign' ? 'Choose the provider & model for this feature' : 'Add providers and store their models'}
+                </p>
               </div>
               <button
                 onClick={onClose}
-                className="w-7 h-7 rounded-md bg-zinc-800/60 hover:bg-zinc-700/60 flex items-center justify-center transition-colors"
+                aria-label="Close"
+                className="flex h-7 w-7 items-center justify-center rounded-lg"
+                style={{ background: 'color-mix(in srgb, var(--color-background) 60%, transparent)' }}
               >
-                <X className="w-3.5 h-3.5 text-zinc-400" />
+                <X className="h-3.5 w-3.5" style={{ color: 'var(--color-muted-foreground)' }} />
               </button>
             </div>
 
-            <div className="flex items-center gap-2 px-4 pt-3">
-              <div className="flex bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] rounded-lg p-0.5 flex-1">
-                {(['provider', 'model'] as const).map((mode) => (
+            {/* ONE window, two in-place views — the manager is NOT a second popup */}
+            <div className="flex shrink-0 items-center px-4 pt-3">
+              <div
+                className="flex flex-1 rounded-lg p-0.5"
+                style={{ background: 'color-mix(in srgb, var(--color-background) 55%, transparent)', border: '1px solid var(--ws-border)' }}
+              >
+                {(['assign', 'providers'] as const).map((v) => (
                   <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`flex-1 px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
-                      viewMode === mode
-                        ? 'bg-violet-500/15 text-violet-300 shadow-sm'
-                        : 'text-zinc-500 hover:text-zinc-300'
-                    }`}
+                    key={v}
+                    onClick={() => setView(v)}
+                    aria-pressed={view === v}
+                    className="flex-1 rounded-lg px-3 py-1.5 text-[11px] font-medium"
+                    style={view === v ? { background: 'var(--page-accent-12)', color: 'var(--page-accent)' } : { color: 'var(--color-muted-foreground)' }}
                   >
-                    {mode === 'provider' ? 'By Provider' : 'By Model'}
+                    {v === 'assign' ? 'Assign model' : 'Providers & models'}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
-              {(loadError || saveError) && (
-                <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300 ring-1 ring-red-500/20">
-                  <span className="flex-1">{loadError || saveError}</span>
-                  <button className="rounded bg-red-500/15 px-2 py-1 font-medium text-red-200 hover:bg-red-500/25" onClick={() => { setLoadError(null); setSaveError(null); }}>Dismiss</button>
-                </div>
-              )}
-              {enabledProviders.length === 0 && (
-                <div className="p-4 text-center">
-                  <p className="text-xs text-zinc-500">No providers enabled.</p>
-                  <p className="text-[10px] text-zinc-600 mt-1">Enable a provider in Settings → AI Providers first.</p>
-                </div>
-              )}
-
-              {viewMode === 'provider' && enabledProviders.map((p) => {
-                const isSelected = selectedId === p.id;
-                return (
-                  <motion.button
-                    key={p.id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => handleSelect(isSelected ? null : p.id)}
-                    className={`w-full text-left p-3 rounded-xl border transition-all duration-150 ${
-                      isSelected
-                        ? 'bg-violet-500/8 border-violet-500/30'
-                        : 'bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-zinc-800/40 hover:border-zinc-700/50 hover:bg-zinc-900/80 light:bg-[var(--ws-surface-raised)]'
-                    }`}
+            {/* ── View: assign ── */}
+            <div className="min-h-0 flex-1 flex-col" style={{ display: view === 'assign' ? 'flex' : 'none' }}>
+              <div className="flex shrink-0 items-center gap-1.5 px-4 pt-3 text-[10px]">
+                <span style={{ color: 'var(--color-muted-foreground)' }}>Browse</span>
+                {(['provider', 'model'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    aria-pressed={viewMode === mode}
+                    className="rounded-lg px-2 py-0.5 font-medium"
+                    style={viewMode === mode ? { background: 'var(--page-accent-12)', color: 'var(--page-accent)' } : { color: 'var(--color-muted-foreground)' }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        isSelected ? 'border-violet-400' : 'border-zinc-600'
-                      }`}>
-                        {isSelected && <div className="w-2 h-2 rounded-full bg-violet-400" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-medium ${isSelected ? 'text-violet-200' : 'text-zinc-300'}`}>
-                            {p.label}
-                          </span>
-                          {isSelected && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-500/15 text-violet-300 border border-violet-500/25">
-                              Active
+                    {mode === 'provider' ? 'by provider' : 'by model'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+                {(loadError || saveError) && (
+                  <div
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
+                    style={{
+                      background: 'color-mix(in srgb, var(--color-destructive) 10%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--color-destructive) 22%, transparent)',
+                      color: 'var(--color-destructive)',
+                    }}
+                  >
+                    <span className="flex-1">{loadError || saveError}</span>
+                    <button
+                      className="rounded-lg px-2 py-1 font-medium"
+                      style={{ background: 'color-mix(in srgb, var(--color-destructive) 14%, transparent)' }}
+                      onClick={() => { setLoadError(null); setSaveError(null); }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
+                {enabledProviders.length === 0 && (
+                  <div className="p-4 text-center">
+                    <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>No providers enabled.</p>
+                    <p className="mt-1 text-[10px]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
+                      A provider must exist and be enabled before it can serve this feature.
+                    </p>
+                    <button onClick={() => setView('providers')} className="mt-2 rounded-lg px-2.5 py-1 text-[10px]" style={accentBtn}>
+                      Set up providers
+                    </button>
+                  </div>
+                )}
+
+                {viewMode === 'provider' && (
+                  <div role="radiogroup" aria-label="Providers" className="space-y-2">
+                    {enabledProviders.map((p) => {
+                      const isSelected = selectedId === p.id;
+                      return (
+                        <div
+                          key={p.id}
+                          className="w-full rounded-xl border"
+                          style={isSelected
+                            ? { background: 'var(--page-accent-10)', borderColor: 'color-mix(in srgb, var(--page-accent) 30%, transparent)' }
+                            : { background: 'color-mix(in srgb, var(--color-background) 50%, transparent)', borderColor: 'var(--ws-border)' }}
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            onClick={() => handleSelect(isSelected ? null : p.id)}
+                            className="flex w-full items-center gap-3 p-3 text-left"
+                          >
+                            <span
+                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2"
+                              style={{ borderColor: isSelected ? 'var(--page-accent)' : 'var(--ws-border-strong)' }}
+                            >
+                              {isSelected && <span className="h-2 w-2 rounded-full" style={{ background: 'var(--page-accent)' }} />}
                             </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-2">
+                                <span className="text-xs font-medium" style={{ color: isSelected ? 'var(--color-foreground)' : 'var(--color-muted-foreground)' }}>
+                                  {p.label}
+                                </span>
+                                {isSelected && (
+                                  <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: 'var(--page-accent-14)', color: 'var(--page-accent)' }}>
+                                    Active
+                                  </span>
+                                )}
+                              </span>
+                              <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                                {p.models.length > 0 ? `${p.models.length} model${p.models.length === 1 ? '' : 's'} stored` : 'No models stored yet'}
+                              </span>
+                            </span>
+                            {isSelected && <Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--page-accent)' }} />}
+                          </button>
+
+                          {isSelected && (
+                            <div className="border-t px-3 pb-3 pt-3" style={{ borderColor: 'color-mix(in srgb, var(--page-accent) 18%, transparent)' }}>
+                              {p.models.length > 0 ? (
+                                <div>
+                                  <label className="mb-1.5 block text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                                    Model — type to filter, Enter selects
+                                  </label>
+                                  <ModelSelect value={selectedModel} options={p.models} onChange={setSelectedModel} placeholder="Select a model" />
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                                    No models stored for this provider yet.
+                                  </span>
+                                  <button onClick={() => setView('providers')} className="rounded-lg px-2 py-0.5 text-[10px]" style={accentBtn}>
+                                    Add models
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">
-                          {p.models.length > 0 ? p.models.join(', ') : 'No models configured'}
-                        </p>
-                      </div>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-violet-400 shrink-0" />}
-                    </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                    {isSelected && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mt-3 pt-3 border-t border-violet-500/15">
-                          <label className="text-[10px] text-zinc-500 block mb-1.5">Model</label>
-                          <div className="relative">
-                            <select
-                              value={selectedModel}
-                              onChange={(e) => setSelectedModel(e.target.value)}
-                              onPointerDown={(e) => e.stopPropagation()}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-full appearance-none bg-zinc-800 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-[11px] text-zinc-200 focus:outline-none focus:border-violet-500/40 cursor-pointer"
+                {viewMode === 'model' && modelEntries.map(([modelName, provs]) => {
+                  const isSelected = selectedId != null && selectedModel === modelName;
+                  return (
+                    <div
+                      key={modelName}
+                      className="rounded-xl border p-3"
+                      style={isSelected
+                        ? { background: 'var(--page-accent-10)', borderColor: 'color-mix(in srgb, var(--page-accent) 30%, transparent)' }
+                        : { background: 'color-mix(in srgb, var(--color-background) 50%, transparent)', borderColor: 'var(--ws-border)' }}
+                    >
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-foreground)', fontFamily: 'var(--font-mono)' }}>{modelName}</span>
+                        <span className="ml-auto text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                          {provs.length} provider{provs.length > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {provs.map((pr) => {
+                          const active = selectedId === pr.providerId && isSelected;
+                          return (
+                            <button
+                              key={pr.providerId}
+                              onClick={() => handleModelSelect(pr.providerId, modelName)}
+                              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                              style={active
+                                ? { background: 'var(--page-accent-14)', borderColor: 'color-mix(in srgb, var(--page-accent) 25%, transparent)', color: 'var(--page-accent)' }
+                                : { background: 'color-mix(in srgb, var(--color-background) 60%, transparent)', borderColor: 'var(--ws-border)', color: 'var(--color-muted-foreground)' }}
                             >
-                              {p.models.length === 0 && (
-                                <option value="">No models — add one in Settings</option>
-                              )}
-                              {p.models.map((m) => (
-                                <option key={m} value={m}>{m}</option>
-                              ))}
-                            </select>
-                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </motion.button>
-                );
-              })}
-
-              {viewMode === 'model' && modelEntries.map(([modelName, providers]) => {
-                const isSelected = selectedId != null && selectedModel === modelName;
-                return (
-                  <div key={modelName} className="p-3 rounded-xl border bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] border-zinc-800/40">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-medium text-zinc-300">{modelName}</span>
-                      <span className="text-[10px] text-zinc-500 ml-auto">{providers.length} provider{providers.length > 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {providers.map((pr) => {
-                        const active = selectedId === pr.providerId && isSelected;
-                        return (
-                          <button
-                            key={pr.providerId}
-                            onClick={() => handleModelSelect(pr.providerId, modelName)}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
-                              active
-                                ? 'bg-violet-500/15 text-violet-300 border-violet-500/25'
-                                : 'bg-zinc-800/60 text-zinc-400 border-zinc-700/40 hover:border-zinc-600/50 hover:text-zinc-300'
-                            }`}
-                          >
-                            {active && <Check className="w-2.5 h-2.5" />}
-                            {pr.providerLabel}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {currentRouting && (
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  onClick={() => handleSelect(null)}
-                  className="w-full text-left p-2.5 rounded-lg border border-dashed border-zinc-800/40 hover:border-zinc-700/50 transition-colors mt-2"
-                >
-                  <div className="flex items-center gap-2.5 justify-center">
-                    <span className="text-[11px] text-zinc-500">Reset to default fallback chain</span>
-                  </div>
-                </motion.button>
-              )}
-
-              {/* ── Small Model Section ── */}
-              {selectedId && selectedModel && (
-                <div className="mt-3 pt-3 border-t border-zinc-800/40">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Zap className="w-3 h-3 text-amber-400" />
-                    <span className="text-[11px] font-medium text-zinc-300">Small Model</span>
-                    <span className="text-[10px] text-zinc-500">for quick tasks (email checks, classifications)</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div>
-                      <label className="text-[10px] text-zinc-500 block mb-1">Provider</label>
-                      <div className="relative">
-                        <select
-                          value={smallSelectedId || ''}
-                          onChange={(e) => {
-                            const v = e.target.value || null;
-                            setSmallSelectedId(v);
-                            if (v) {
-                              const p = enabledProviders.find(x => x.id === v);
-                              setSmallSelectedModel(p?.models[0] || '');
-                            } else {
-                              setSmallSelectedModel('');
-                            }
-                          }}
-                          className="w-full appearance-none bg-zinc-800 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-[11px] text-zinc-200 focus:outline-none focus:border-amber-500/40 cursor-pointer"
-                        >
-                          <option value="">Same as main (default)</option>
-                          {enabledProviders.map((p) => (
-                            <option key={p.id} value={p.id}>{p.label}</option>
-                          ))}
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+                              {active && <Check className="h-2.5 w-2.5" />}
+                              {pr.providerLabel}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
-                    {smallSelectedId && (
+                  );
+                })}
+
+                {currentRouting && (
+                  <button
+                    onClick={() => handleSelect(null)}
+                    className="mt-2 w-full rounded-lg border border-dashed p-2.5"
+                    style={{ borderColor: 'var(--ws-border-strong)' }}
+                  >
+                    <span className="flex items-center justify-center gap-2.5 text-[11px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                      Reset to default fallback chain
+                    </span>
+                  </button>
+                )}
+
+                {/* ── Small Model Section ── */}
+                {selectedId && selectedModel && (
+                  <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--ws-border)' }}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <Zap className="h-3 w-3" style={{ color: 'var(--page-accent)' }} />
+                      <span className="text-[11px] font-medium" style={{ color: 'var(--color-foreground)' }}>Small model</span>
+                      <span className="text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>for quick tasks (email checks, classifications)</span>
+                    </div>
+                    <div className="space-y-2">
                       <div>
-                        <label className="text-[10px] text-zinc-500 block mb-1">Model</label>
+                        <label className="mb-1 block text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>Provider</label>
                         <div className="relative">
                           <select
-                            value={smallSelectedModel}
-                            onChange={(e) => setSmallSelectedModel(e.target.value)}
-                            className="w-full appearance-none bg-zinc-800 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-[11px] text-zinc-200 focus:outline-none focus:border-amber-500/40 cursor-pointer"
+                            value={smallSelectedId || ''}
+                            onChange={(e) => {
+                              const v = e.target.value || null;
+                              setSmallSelectedId(v);
+                              if (v) {
+                                const p = enabledProviders.find(x => x.id === v);
+                                setSmallSelectedModel(p?.models[0] || '');
+                              } else {
+                                setSmallSelectedModel('');
+                              }
+                            }}
+                            className="w-full appearance-none rounded-lg px-3 py-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+                            style={fieldStyle}
                           >
-                            {enabledProviders.find(p => p.id === smallSelectedId)?.models.map((m) => (
-                              <option key={m} value={m}>{m}</option>
-                            )) || <option value="">No models</option>}
+                            <option value="">Same as main (default)</option>
+                            {enabledProviders.map((p) => (
+                              <option key={p.id} value={p.id}>{p.label}</option>
+                            ))}
                           </select>
-                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+                          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2" style={{ color: 'var(--color-muted-foreground)' }} />
                         </div>
                       </div>
-                    )}
+                      {smallSelectedId && (
+                        <div>
+                          <label className="mb-1 block text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>Model</label>
+                          <ModelSelect
+                            value={smallSelectedModel}
+                            options={enabledProviders.find(p => p.id === smallSelectedId)?.models || []}
+                            onChange={setSmallSelectedModel}
+                            placeholder="Select a model"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--ws-border)' }}>
+                <button onClick={onClose} className="flex-1 rounded-lg px-3 py-2 text-xs font-medium" style={{ background: 'color-mix(in srgb, var(--color-background) 60%, transparent)', ...softBtn }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleSave()}
+                  disabled={saving || (!selectedId && !currentRouting)}
+                  className="flex-1 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-40"
+                  style={accentBtn}
+                >
+                  {saving ? 'Saving…' : 'Save assignment'}
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-3 border-t border-zinc-800/40 bg-zinc-900/20 light:bg-[var(--ws-surface-raised)]">
-              <button
-                onClick={onClose}
-                className="flex-1 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-800/60 text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 px-3 py-2 rounded-lg text-xs font-medium bg-violet-500/15 text-violet-300 border border-violet-500/25 hover:bg-violet-500/25 hover:text-violet-200 transition-colors disabled:opacity-40"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-            <div className="px-4 py-2 border-t border-zinc-800/30 bg-zinc-900/10 light:bg-[var(--ws-surface-raised)]">
-              <button
-                type="button"
-                onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new CustomEvent('navigate', { detail: '/settings' })), 100); }}
-                className="w-full text-center text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors"
-              >
-                + Add provider in Settings
-              </button>
+            {/* ── View: providers — the manager renders INLINE, same window ── */}
+            <div className="min-h-0 flex-1 flex-col" style={{ display: view === 'providers' ? 'flex' : 'none' }}>
+              {/* open={true}: this subtree only exists while the dialog is open,
+                  so the manager renders through the exit animation instead of
+                  blanking mid-fade; it reloads on the next mount. */}
+              <AiProviderManager open={true} inline onClose={() => setView('assign')} onSaved={handleProvidersSaved} />
             </div>
           </motion.div>
         </motion.div>

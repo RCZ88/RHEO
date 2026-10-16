@@ -93,7 +93,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled,
   const slashArgs = slashMatch ? slashMatch[2] : '';
 
   return (
-    <div className="border-t border-zinc-800/60 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/60">
+    <div className="border-t border-zinc-800/60 p-3 bg-zinc-950 light:bg-[var(--ws-surface-60)]">
       <div className="flex items-end gap-2">
         <div className="relative flex-1">
           <div

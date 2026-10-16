@@ -65,7 +65,7 @@ export function FormFillCard({
                 disabled={submitted}
                 value={String(values[f.name] ?? "")}
                 onChange={(e) => set(f.name, e.target.value)}
-                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-2.5 py-1.5 text-[13px] text-zinc-100 ring-1 ring-zinc-800/60"
+                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] px-2.5 py-1.5 text-[13px] text-zinc-100 ring-1 ring-zinc-800/60"
               >
                 {(f.options || []).map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -78,7 +78,7 @@ export function FormFillCard({
                 value={String(values[f.name] ?? "")}
                 placeholder={f.placeholder}
                 onChange={(e) => set(f.name, f.type === "number" ? Number(e.target.value) : e.target.value)}
-                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 px-2.5 py-1.5 text-[13px] text-zinc-100 ring-1 ring-zinc-800/60 placeholder:text-zinc-600"
+                className="w-full rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] px-2.5 py-1.5 text-[13px] text-zinc-100 ring-1 ring-zinc-800/60 placeholder:text-zinc-600"
               />
             )}
           </label>

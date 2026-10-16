@@ -1997,7 +1997,7 @@ const ArchGraph3D: React.FC<ArchGraph3DProps> = ({ nodes, edges, adjacency, sele
     // legible placeholder rather than crashing.
     if (!webglSupported()) {
         return (
-            <div className="h-full w-full flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60">
+            <div className="h-full w-full flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-60)]">
                 <p className="text-[11px] text-zinc-600 text-center px-6">
                     Architecture map needs WebGL, which this machine cannot provide.
                 </p>

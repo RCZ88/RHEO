@@ -266,7 +266,7 @@ export function MotionExplorer({ onAddMotionSnippet, onClose }: MotionExplorerPr
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/60 overflow-hidden">
+            <div className="rounded-xl border border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-60)] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
                 <div className="flex items-center gap-2">
                   <ChevronRight className="w-4 h-4 text-pink-400" />

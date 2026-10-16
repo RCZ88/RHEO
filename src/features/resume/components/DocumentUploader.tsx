@@ -54,7 +54,7 @@ export function DocumentUploader({ uploads, onUpload, onRemove }: DocumentUpload
         onClick={() => fileInputRef.current?.click()}
         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
           isDragging
-            ? 'border-[var(--page-accent)]/50 bg-[var(--page-accent)]/5 ring-1 ring-[var(--page-accent)]/20'
+            ? 'border-[var(--page-accent)]/50 bg-[var(--page-accent-5)] ring-1 ring-[var(--page-accent)]/20'
             : 'border-zinc-700/50 hover:border-zinc-600/50 hover:bg-zinc-800/20'
         }`}
       >

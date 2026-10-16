@@ -389,10 +389,10 @@ export default function CodeStatsTab({ projectId, projectPath }: Props) {
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
                   <input type="text" placeholder="Search files..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500/30" />
+                    className="w-full bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500/30" />
                 </div>
                 <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-                  className="bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-500/30">
+                  className="bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-500/30">
                   {fileTypes.map(t => <option key={t} value={t}>{t === 'all' ? 'All Types' : t}</option>)}
                 </select>
               </div>

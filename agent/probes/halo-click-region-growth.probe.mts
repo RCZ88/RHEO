@@ -70,5 +70,45 @@ ok(apply !== null, 'found applyClickRegion');
 ok(apply !== null && !/clickShield === 'canvas'\) return/.test(apply[0]),
    "'canvas' shield no longer returns before setShape (no giant hitbox)");
 
+/* ── COLLAPSED CLICK REGION = THE PILL, NOT THE WINDOW ─────────────────────────
+ * The regression that made the user "have to avoid the island to reach the app".
+ *
+ * `setShape([])` is documented by Electron as RESETTING the window to a RECTANGLE — it is not
+ * an empty input region. So the collapsed branch was re-shaping the whole native window back to
+ * its full size on every call, leaving ~91% of a 480x118 window clickable while the visible
+ * pill is only 182x28. Measured: 56,640px2 of clickable area for 5,096px2 of visible pill.
+ *
+ * Nothing caught it because every other assertion is about the EXPANDED region, which was
+ * already correct. This is the first check on the COLLAPSED one. */
+const island = readFileSync('src/main/halo/haloIsland.ts', 'utf8');
+const collapsedRaw = island.match(/if \(!h\.expanded\) \{[\s\S]*?\n  \}/)?.[0] ?? '';
+/* Strip block comments FIRST. The fix's own explanatory comment names `setShape([])` to say why
+ * it must never be called again, so a raw source grep matches the note about the bug and reports
+ * the bug still present — the same self-match trap that makes a probe unfixable. */
+const collapsed = collapsedRaw.replace(/\/\*[\s\S]*?\*\//g, '');
+
+ok(collapsed.length > 0, 'found the collapsed branch of applyClickRegion');
+ok(!/setShape\(\[\s*\]\)/.test(collapsed),
+  'the collapsed branch does NOT call setShape([]) — that resets the window to a full RECTANGLE');
+ok(/setShape\(\s*\[/.test(collapsed),
+  'the collapsed branch shapes the window to a computed rect');
+ok(/computeSurfaceRect/.test(collapsed),
+  'the collapsed rect comes from the SHARED computeSurfaceRect (cannot drift from the painted pill)');
+ok(/compactSize/.test(collapsed),
+  'the collapsed rect is built from compactSize, not expandedSize');
+ok(/setClickThrough\(win, true\)/.test(collapsed),
+  'pass-through is still set (it is what works on macOS/Windows; the shape is the Linux path)');
+
+/* And the arithmetic, so the invariant is stated rather than implied. */
+for (const [name, preset] of Object.entries(HALO_SIZE_PRESETS)) {
+  const windowArea = preset.expandedWidth * preset.expandedHeight;
+  const pillArea = preset.compactWidth * preset.compactHeight;
+  ok(
+    pillArea < windowArea / 4,
+    `${name}: the pill is a small fraction of the window, so shaping to the window is a real defect`,
+    { windowPx2: windowArea, pillPx2: pillArea, ratio: +(windowArea / pillArea).toFixed(1) },
+  );
+}
+
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

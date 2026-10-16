@@ -399,7 +399,7 @@ const ProblemDetailModal: React.FC<{
       {problem.user_notes && (
         <div className="mb-4">
           <div className="text-[11px] font-medium text-zinc-500 mb-1">Notes</div>
-          <div className="text-[13px] text-zinc-300 bg-zinc-950 light:bg-[var(--ws-surface)]/60 ring-1 ring-zinc-800/60 p-2.5 rounded-lg">{problem.user_notes}</div>
+          <div className="text-[13px] text-zinc-300 bg-zinc-950 light:bg-[var(--ws-surface-60)] ring-1 ring-zinc-800/60 p-2.5 rounded-lg">{problem.user_notes}</div>
         </div>
       )}
 

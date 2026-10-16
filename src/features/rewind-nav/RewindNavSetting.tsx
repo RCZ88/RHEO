@@ -143,7 +143,7 @@ function ModeCard({
           <span className="ml-auto text-[10px] uppercase tracking-wider text-amber-400">On</span>
         )}
       </span>
-      <span className="block rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-2" aria-hidden>{children}</span>
+      <span className="block rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-60)] p-2" aria-hidden>{children}</span>
       <span className="block text-[11px] leading-snug text-zinc-500">{blurb}</span>
     </button>
   )

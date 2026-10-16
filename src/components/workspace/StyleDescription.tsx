@@ -73,7 +73,7 @@ export function StyleDescription({ value, onChange }: StyleDescriptionProps) {
 
       {/* Guidance / Presets */}
       {showGuidance && (
-        <div className="space-y-3 p-3 bg-zinc-950 light:bg-[var(--ws-surface)]/50 border border-zinc-800/40 rounded-lg max-h-60 overflow-y-auto">
+        <div className="space-y-3 p-3 bg-zinc-950 light:bg-[var(--ws-surface-50)] border border-zinc-800/40 rounded-lg max-h-60 overflow-y-auto">
           <p className="text-[9px] text-zinc-500 leading-relaxed">
             Describe the visual style you want. Include: color palette, mood (professional, playful, minimal), typography feel, and specific UI patterns you like.
           </p>

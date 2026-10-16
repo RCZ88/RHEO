@@ -30,6 +30,7 @@ import ai from './pages/ai'
 import life from './pages/life'
 import { learn, lecture } from './pages/learn'
 import { studio, labs } from './pages/studio'
+import { goals, gold } from './pages/goals'
 import { finance, resume } from './pages/finance'
 import reports from './pages/reports'
 import database from './pages/database'
@@ -61,6 +62,8 @@ export const PAGE_MANIFESTS: PageManifest[] = [
   lecture,
   studio,
   labs,
+  goals,
+  gold,
   finance,
   resume,
   external,

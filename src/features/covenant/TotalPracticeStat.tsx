@@ -11,7 +11,7 @@ export function TotalPracticeStat({ stats }: TotalPracticeStatProps) {
     <div className="grid grid-cols-3 gap-2 mt-3">
       <div className="text-center py-2 rounded-lg bg-zinc-800/40">
         <div className="flex items-center justify-center gap-1 text-lg font-bold tabular-nums text-[var(--text-primary)]">
-          <Icon className="w-3.5 h-3.5 text-[#e8866b]" />
+          <Icon className="w-3.5 h-3.5 text-[var(--color-clay-400)]" />
           {stats.current}
         </div>
         <div className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">Current</div>

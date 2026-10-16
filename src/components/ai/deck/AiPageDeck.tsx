@@ -477,10 +477,10 @@ export function AiPageDeck(props: DeckProps) {
   })
 
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Glance metrics bar */}
       {(hasMetrics || hasConnectorStatus) && (
-        <div className="deck-metrics-bar">
+        <div className="deck-metrics-bar" style={{ flexShrink: 0 }}>
           {(props.glanceMetrics ?? []).map((m, i) => (
             <div key={i} className="deck-metrics-item">
               <span className="deck-metrics-label">{m.label}</span>
@@ -508,84 +508,89 @@ export function AiPageDeck(props: DeckProps) {
 
       {props.historySlot}
 
-      {/* Chat panel */}
-      <div className="deck-chat-container">
-        <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px] z-[2] bg-gradient-to-b from-pink-500 to-pink-700" />
-        <ChatPanel
-          messages={props.messages}
-          streaming={props.streaming}
-          thinking={props.thinking}
-          connecting={props.connecting}
-          provider={props.provider}
-          online={props.online}
-          input={props.input}
-          onInputChange={props.onInputChange}
-          onSend={props.onSend}
-          onStop={props.onStop}
-          onReset={props.onReset}
-          onCardAction={props.onCardAction}
-          suggestions={props.suggestions}
-          agentSteps={props.agentSteps}
-          agentStatus={props.agentStatus}
-          listening={props.listening}
-          onToggleVoice={props.onToggleVoice}
-          voiceSupported={props.voiceSupported}
-          actionResults={props.actionResults}
-          connectorSyncing={props.connectorSyncing}
-          contextWarnings={props.contextWarnings}
-          dismissError={props.dismissError}
-          onModelChange={props.onModelChange}
-          memoryChips={props.memoryChips}
-          onNewThread={props.onNewThread}
-          onOpenCommands={props.onOpenCommands}
-          connectorStatus={props.connectorStatus}
-          onExpandConnectors={props.onExpandConnectors}
-          autoApprove={props.autoApprove}
-          onToggleAutoApprove={props.onToggleAutoApprove}
-        />
-      </div>
+      {/* Main content area — chat takes the space, cards sit below */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {/* Chat panel — fills available space */}
+        <div className="deck-chat-container" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px] z-[2] bg-gradient-to-b from-pink-500 to-pink-700" />
+          <ChatPanel
+            messages={props.messages}
+            streaming={props.streaming}
+            thinking={props.thinking}
+            connecting={props.connecting}
+            provider={props.provider}
+            online={props.online}
+            input={props.input}
+            onInputChange={props.onInputChange}
+            onSend={props.onSend}
+            onStop={props.onStop}
+            onReset={props.onReset}
+            onCardAction={props.onCardAction}
+            suggestions={props.suggestions}
+            agentSteps={props.agentSteps}
+            agentStatus={props.agentStatus}
+            listening={props.listening}
+            onToggleVoice={props.onToggleVoice}
+            voiceSupported={props.voiceSupported}
+            actionResults={props.actionResults}
+            connectorSyncing={props.connectorSyncing}
+            contextWarnings={props.contextWarnings}
+            dismissError={props.dismissError}
+            onModelChange={props.onModelChange}
+            memoryChips={props.memoryChips}
+            onNewThread={props.onNewThread}
+            onOpenCommands={props.onOpenCommands}
+            connectorStatus={props.connectorStatus}
+            onExpandConnectors={props.onExpandConnectors}
+            autoApprove={props.autoApprove}
+            onToggleAutoApprove={props.onToggleAutoApprove}
+          />
+        </div>
 
-      {/* Card grid — ALL cards always visible */}
-      <motion.div
-        layout
-        className="deck-card-grid"
-        initial="hidden"
-        animate="visible"
-        variants={{
-          hidden: {},
-          visible: { transition: { staggerChildren: 0.05 } },
-        }}
-      >
-        {sortedCards.map((card) => {
-          const open = expandedCards.has(card.id)
-          return (
-            <motion.div
-              key={card.id}
-              className={open ? "col-span-full" : ""}
-              variants={{
-                hidden: { opacity: 0, y: 16, scale: 0.98 },
-                visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } },
-              }}
-            >
-              <ExpandableCard
-                id={card.id}
-                icon={card.icon}
-                title={card.title}
-                summary={card.summary}
-                accent={card.accent}
-                isExpanded={open}
-                onToggle={() => toggleCard(card.id)}
-                loading={card.loading}
-                empty={card.empty}
-                onAdd={card.onAdd}
-                addLabel={card.addLabel}
-              >
-                {card.slot}
-              </ExpandableCard>
-            </motion.div>
-          )
-        })}
-      </motion.div>
-    </>
+        {/* Card grid — below chat, scrolls independently if needed */}
+        <div style={{ flexShrink: 0, minHeight: 0 }}>
+          <motion.div
+            layout
+            className="deck-card-grid"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: {},
+              visible: { transition: { staggerChildren: 0.05 } },
+            }}
+          >
+            {sortedCards.map((card) => {
+              const open = expandedCards.has(card.id)
+              return (
+                <motion.div
+                  key={card.id}
+                  className={open ? "col-span-full" : ""}
+                  variants={{
+                    hidden: { opacity: 0, y: 16, scale: 0.98 },
+                    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } },
+                  }}
+                >
+                  <ExpandableCard
+                    id={card.id}
+                    icon={card.icon}
+                    title={card.title}
+                    summary={card.summary}
+                    accent={card.accent}
+                    isExpanded={open}
+                    onToggle={() => toggleCard(card.id)}
+                    loading={card.loading}
+                    empty={card.empty}
+                    onAdd={card.onAdd}
+                    addLabel={card.addLabel}
+                  >
+                    {card.slot}
+                  </ExpandableCard>
+                </motion.div>
+              )
+            })}
+          </motion.div>
+        </div>
+      </div>
+    </div>
   )
 }

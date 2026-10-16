@@ -2086,6 +2086,7 @@ ipcMain.handle('todo:list', async (_event, opts?: { goalId?: string; deadlineId?
       id: row.id, text: row.text, done: !!row.done, goalId: row.goal_id, scheduleId: row.schedule_id,
       parentTodoId: row.parent_todo_id, deadlineId: row.deadline_id, dueDate: row.due_date,
       reminder: row.reminder || 'none', sortOrder: row.sort_order || 0, createdAt: row.created_at, completedAt: row.completed_at,
+      groupId: row.group_id,
       goalTitle: row.goal_id ? (db!.prepare('SELECT title, is_habit FROM goals WHERE id = ?').get(row.goal_id) as any) : null,
       deadlineTitle: row.deadline_id ? (db!.prepare('SELECT title, due_date FROM deadlines WHERE id = ?').get(row.deadline_id) as any) : null,
       scheduleTitle: row.schedule_id ? (db!.prepare('SELECT title, start_time, end_time FROM schedule_entries WHERE id = ?').get(row.schedule_id) as any) : null,
@@ -2098,8 +2099,8 @@ ipcMain.handle('todo:create', async (_event, data: any) => {
     const parents = [data.goalId, data.scheduleId, data.parentTodoId].filter(Boolean);
     if (parents.length > 1) return { success: false, error: 'A todo can have only one hierarchy parent' };
     const id = 'todo_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-    db!.prepare(`INSERT INTO todos (id, text, goal_id, schedule_id, parent_todo_id, deadline_id, due_date, reminder, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, String(data.text || '').trim(), data.goalId || null, data.scheduleId || null, data.parentTodoId || null, data.deadlineId || null, data.dueDate || null, data.reminder || 'none', Number(data.sortOrder) || 0);
+    db!.prepare(`INSERT INTO todos (id, text, goal_id, schedule_id, parent_todo_id, deadline_id, due_date, reminder, sort_order, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, String(data.text || '').trim(), data.goalId || null, data.scheduleId || null, data.parentTodoId || null, data.deadlineId || null, data.dueDate || null, data.reminder || 'none', Number(data.sortOrder) || 0, data.groupId || null);
     return { success: true, id };
   } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
 });
@@ -2110,7 +2111,7 @@ ipcMain.handle('todo:update', async (_event, id: string, patch: any) => {
     if (!current) return { success: false, error: 'Todo not found' };
     const next = { ...current, ...patch };
     if ([next.goalId ?? next.goal_id, next.scheduleId ?? next.schedule_id, next.parentTodoId ?? next.parent_todo_id].filter(Boolean).length > 1) return { success: false, error: 'A todo can have only one hierarchy parent' };
-    const map: Record<string, string> = { text: 'text', done: 'done', goalId: 'goal_id', scheduleId: 'schedule_id', parentTodoId: 'parent_todo_id', deadlineId: 'deadline_id', dueDate: 'due_date', reminder: 'reminder', sortOrder: 'sort_order' };
+    const map: Record<string, string> = { text: 'text', done: 'done', goalId: 'goal_id', scheduleId: 'schedule_id', parentTodoId: 'parent_todo_id', deadlineId: 'deadline_id', dueDate: 'due_date', reminder: 'reminder', sortOrder: 'sort_order', groupId: 'group_id' };
     const fields = Object.keys(patch).filter(key => map[key]);
     if (!fields.length) return { success: true };
     const values = fields.map(key => patch[key] ?? null);
@@ -2137,6 +2138,365 @@ ipcMain.handle('todo:delete', async (_event, id: string) => {
     db!.prepare('DELETE FROM todos WHERE id = ?').run(id);
     return { success: true, orphaned: Number(orphaned) };
   } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+/* ── Todo Groups ────────────────────────────────────────────────────────────── */
+
+ipcMain.handle('todoGroup:list', async () => {
+  try {
+    const rows = db!.prepare('SELECT * FROM todo_groups ORDER BY sort_order ASC, created_at ASC').all() as any[];
+    return { success: true, groups: rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      color: row.color,
+      sortOrder: row.sort_order || 0,
+      createdAt: row.created_at,
+    })) };
+  } catch (err: any) { return { success: false, error: String(err?.message || err), groups: [] }; }
+});
+
+ipcMain.handle('todoGroup:create', async (_event, data: { name: string; color?: string; sortOrder?: number }) => {
+  try {
+    const id = 'tg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const maxSort = (db!.prepare('SELECT MAX(sort_order) AS m FROM todo_groups').get() as any)?.m || 0;
+    db!.prepare('INSERT INTO todo_groups (id, name, color, sort_order) VALUES (?, ?, ?, ?)')
+      .run(id, String(data.name || '').trim(), data.color || null, typeof data.sortOrder === 'number' ? data.sortOrder : maxSort + 1);
+    return { success: true, id };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('todoGroup:update', async (_event, id: string, patch: { name?: string; color?: string; sortOrder?: number }) => {
+  try {
+    const current = db!.prepare('SELECT * FROM todo_groups WHERE id = ?').get(id) as any;
+    if (!current) return { success: false, error: 'Group not found' };
+    const fields = [];
+    const values = [];
+    if (patch.name !== undefined) { fields.push('name = ?'); values.push(String(patch.name).trim()); }
+    if (patch.color !== undefined) { fields.push('color = ?'); values.push(patch.color || null); }
+    if (patch.sortOrder !== undefined) { fields.push('sort_order = ?'); values.push(Number(patch.sortOrder)); }
+    if (!fields.length) return { success: true };
+    values.push(id);
+    db!.prepare(`UPDATE todo_groups SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('todoGroup:delete', async (_event, id: string) => {
+  try {
+    // Clear group_id from todos in this group
+    db!.prepare('UPDATE todos SET group_id = NULL WHERE group_id = ?').run(id);
+    db!.prepare('DELETE FROM todo_groups WHERE id = ?').run(id);
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+/* ── Schedule Activity Series ──────────────────────────────────────────────── */
+
+ipcMain.handle('scheduleActivity:listSeries', async (_event, opts?: { range?: 'month' | 'semester' | 'all'; includeArchived?: boolean; category?: string; semesterStart?: string; semesterEnd?: string }) => {
+  try {
+    const { range = 'all', includeArchived = false, category, semesterStart, semesterEnd } = opts || {};
+    const where: string[] = [];
+    const args: any[] = [];
+
+    // Base query for series (distinct series_id)
+    if (!includeArchived) {
+      where.push('(archived IS NULL OR archived = 0)');
+    }
+    if (category) {
+      where.push('category = ?');
+      args.push(category);
+    }
+
+    let seriesQuery = `
+      SELECT series_id, MAX(id) as sample_id
+      FROM schedule_entries
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      AND series_id IS NOT NULL
+      GROUP BY series_id
+    `;
+
+    const seriesRows = db!.prepare(seriesQuery).all(...args) as any[];
+
+    // For each series, get all sessions
+    const series = [];
+    for (const s of seriesRows) {
+      const sessions = db!.prepare(`
+        SELECT * FROM schedule_entries
+        WHERE series_id = ?
+        ORDER BY day_of_week, start_time
+      `).all(s.series_id) as any[];
+
+      if (sessions.length === 0) continue;
+
+      const first = sessions[0];
+      const seriesData = {
+        seriesId: s.series_id,
+        title: first.title,
+        category: first.category,
+        sessions: sessions.map(row => ({
+          id: row.id,
+          dayOfWeek: row.day_of_week,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          exceptions: JSON.parse(row.exceptions || '[]'),
+          location: row.location,
+          instructor: row.instructor,
+        })),
+        startDate: first.start_date,
+        endDate: first.end_date,
+        location: first.location,
+        instructor: first.instructor,
+        linkedPhaseId: first.linked_phase_id,
+        linkedGoalIds: JSON.parse(first.linked_goal_ids || '[]'),
+        notes: '', // could be added later
+        archived: !!first.archived,
+        createdAt: first.created_at,
+        updatedAt: first.created_at, // no updated_at column yet
+      };
+
+      // Filter by range
+      let include = true;
+      if (range === 'month') {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const hasOccurrence = sessions.some(sess => {
+          const sessDate = new Date(sess.start_date || '2000-01-01');
+          return sessDate >= monthStart && sessDate <= monthEnd;
+        });
+        include = hasOccurrence;
+      } else if (range === 'semester' && semesterStart && semesterEnd) {
+        const semStart = new Date(semesterStart);
+        const semEnd = new Date(semesterEnd);
+        const hasOccurrence = sessions.some(sess => {
+          const sessDate = new Date(sess.start_date || '2000-01-01');
+          return sessDate >= semStart && sessDate <= semEnd;
+        });
+        include = hasOccurrence;
+      }
+
+      if (include) {
+        series.push(seriesData);
+      }
+    }
+
+    // Sort by title
+    series.sort((a, b) => a.title.localeCompare(b.title));
+
+    return { success: true, series };
+  } catch (err: any) { return { success: false, error: String(err?.message || err), series: [] }; }
+});
+
+ipcMain.handle('scheduleActivity:getSeries', async (_event, seriesId: string) => {
+  try {
+    const sessions = db!.prepare(`
+      SELECT * FROM schedule_entries
+      WHERE series_id = ?
+      ORDER BY day_of_week, start_time
+    `).all(seriesId) as any[];
+
+    if (sessions.length === 0) {
+      return { success: false, error: 'Series not found' };
+    }
+
+    const first = sessions[0];
+    return {
+      success: true,
+      series: {
+        seriesId,
+        title: first.title,
+        category: first.category,
+        sessions: sessions.map(row => ({
+          id: row.id,
+          dayOfWeek: row.day_of_week,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          exceptions: JSON.parse(row.exceptions || '[]'),
+          location: row.location,
+          instructor: row.instructor,
+        })),
+        startDate: first.start_date,
+        endDate: first.end_date,
+        location: first.location,
+        instructor: first.instructor,
+        linkedPhaseId: first.linked_phase_id,
+        linkedGoalIds: JSON.parse(first.linked_goal_ids || '[]'),
+        archived: !!first.archived,
+        createdAt: first.created_at,
+        updatedAt: first.created_at,
+      }
+    };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('scheduleActivity:createSeries', async (_event, data: any) => {
+  try {
+    const { title, category, sessions, startDate, endDate, location, instructor, linkedPhaseId, linkedGoalIds } = data;
+    if (!title?.trim() || !sessions?.length) {
+      return { success: false, error: 'Title and at least one session are required' };
+    }
+
+    const seriesId = 'ser_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const now = new Date().toISOString();
+
+    const insertStmt = db!.prepare(`
+      INSERT INTO schedule_entries (id, series_id, title, category, day_of_week, start_time, end_time, location, instructor, start_date, end_date, linked_phase_id, linked_goal_ids, exceptions, archived, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const tx = db!.transaction((sessions: any[]) => {
+      sessions.forEach(sess => {
+        const id = 'sch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        insertStmt.run(
+          id,
+          seriesId,
+          title.trim(),
+          category,
+          sess.dayOfWeek,
+          sess.startTime,
+          sess.endTime,
+          location || null,
+          instructor || null,
+          startDate,
+          endDate || null,
+          linkedPhaseId || null,
+          JSON.stringify(linkedGoalIds || []),
+          JSON.stringify([]), // exceptions
+          0, // archived
+          now
+        );
+      });
+    });
+
+    tx(sessions);
+
+    return { success: true, seriesId };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('scheduleActivity:updateSeries', async (_event, seriesId: string, patch: any) => {
+  try {
+    const current = db!.prepare('SELECT * FROM schedule_entries WHERE series_id = ?').all(seriesId) as any[];
+    if (!current.length) return { success: false, error: 'Series not found' };
+
+    const fields = [];
+    const values = [];
+
+    const allowed = {
+      title: 'title',
+      category: 'category',
+      startDate: 'start_date',
+      endDate: 'end_date',
+      location: 'location',
+      instructor: 'instructor',
+      linkedPhaseId: 'linked_phase_id',
+      linkedGoalIds: 'linked_goal_ids',
+    };
+
+    for (const [key, column] of Object.entries(allowed)) {
+      if (patch[key] !== undefined) {
+        fields.push(`${column} = ?`);
+        values.push(key === 'linkedGoalIds' ? JSON.stringify(patch[key]) : patch[key]);
+      }
+    }
+
+    // Handle session updates (days/times) - these are per-row, not series-wide
+    if (patch.sessions && Array.isArray(patch.sessions)) {
+      // For simplicity, delete and re-insert sessions (preserving exceptions)
+      const oldSessions = db!.prepare('SELECT id, exceptions FROM schedule_entries WHERE series_id = ?').all(seriesId) as any[];
+      const exceptionMap = new Map(oldSessions.map(s => [s.id, s.exceptions]));
+
+      db!.prepare('DELETE FROM schedule_entries WHERE series_id = ?').run(seriesId);
+
+      const insertStmt = db!.prepare(`
+        INSERT INTO schedule_entries (id, series_id, title, category, day_of_week, start_time, end_time, location, instructor, start_date, end_date, linked_phase_id, linked_goal_ids, exceptions, archived, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const now = new Date().toISOString();
+      const tx = db!.transaction((sessions: any[]) => {
+        sessions.forEach((sess, idx) => {
+          const id = 'sch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+          const oldId = oldSessions[idx]?.id;
+          insertStmt.run(
+            id,
+            seriesId,
+            patch.title?.trim() || current[0].title,
+            patch.category || current[0].category,
+            sess.dayOfWeek,
+            sess.startTime,
+            sess.endTime,
+            patch.location ?? current[0].location,
+            patch.instructor ?? current[0].instructor,
+            patch.startDate ?? current[0].start_date,
+            patch.endDate ?? current[0].end_date,
+            patch.linkedPhaseId ?? current[0].linked_phase_id,
+            JSON.stringify(patch.linkedGoalIds ?? JSON.parse(current[0].linked_goal_ids || '[]')),
+            exceptionMap.get(oldId) || '[]',
+            current[0].archived || 0,
+            current[0].created_at
+          );
+        });
+      });
+      tx(patch.sessions);
+    } else if (fields.length) {
+      // Series-wide update
+      db!.prepare(`UPDATE schedule_entries SET ${fields.join(', ')} WHERE series_id = ?`).run(...values, seriesId);
+    }
+
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('scheduleActivity:deleteSeries', async (_event, seriesId: string, hard = false) => {
+  try {
+    if (hard) {
+      db!.prepare('DELETE FROM schedule_entries WHERE series_id = ?').run(seriesId);
+    } else {
+      db!.prepare('UPDATE schedule_entries SET archived = 1 WHERE series_id = ?').run(seriesId);
+    }
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('scheduleActivity:skipOccurrence', async (_event, sessionId: string, date: string) => {
+  try {
+    const row = db!.prepare('SELECT exceptions FROM schedule_entries WHERE id = ?').get(sessionId) as any;
+    if (!row) return { success: false, error: 'Session not found' };
+
+    const exceptions = JSON.parse(row.exceptions || '[]');
+    if (!exceptions.includes(date)) {
+      exceptions.push(date);
+      exceptions.sort();
+      db!.prepare('UPDATE schedule_entries SET exceptions = ? WHERE id = ?').run(JSON.stringify(exceptions), sessionId);
+    }
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('scheduleActivity:endSeries', async (_event, seriesId: string, endDate: string) => {
+  try {
+    db!.prepare('UPDATE schedule_entries SET end_date = ?, archived = 1 WHERE series_id = ?').run(endDate, seriesId);
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('scheduleActivity:setSemester', async (_event, data: { name: string; startDate: string; endDate: string }) => {
+  try {
+    const api = (global as any).deskflowAPI || {};
+    // Use the same settings storage as schedule layout
+    await api?.compositionsSettingsSet?.('schedule:semester', JSON.stringify(data));
+    return { success: true };
+  } catch (err: any) { return { success: false, error: String(err?.message || err) }; }
+});
+
+ipcMain.handle('scheduleActivity:getSemester', async () => {
+  try {
+    const api = (global as any).deskflowAPI || {};
+    const res = await api?.compositionsSettingsGet?.('schedule:semester');
+    if (res) return { success: true, semester: JSON.parse(res) };
+    return { success: true, semester: null };
+  } catch (err: any) { return { success: false, error: String(err?.message || err), semester: null }; }
 });
 
 ipcMain.handle('todo:get-connections', async (_event, entityType: string, entityId: string) => {
@@ -2330,8 +2690,14 @@ ipcMain.handle('add-deadline', async (_event, dl: any) => {
     // and daysUntil() line up. Raw timestamps previously produced NaN + never landed.
     const normDue = dl.due_date ? dl.due_date.slice(0, 10) : null;
     const normRemind = dl.remind_at ? dl.remind_at.slice(0, 10) : null;
-    db!.prepare('INSERT INTO deadlines (id, title, course, due_date, priority, description, category, remind_at, goal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, dl.title, dl.course || null, normDue, dl.priority || 'medium', dl.description || null, dl.category || null, normRemind, dl.goal_id || null);
+    // due_time is validated to a real HH:mm rather than trusted: an out-of-range
+    // value here used to be reachable and would render as garbage in the picker.
+    const rawTime = String(dl.due_time || '').trim();
+    const normTime = /^([01]?\d|2[0-3]):[0-5]\d$/.test(rawTime)
+      ? rawTime.split(':').map((n: string) => n.padStart(2, '0')).join(':')
+      : null;
+    db!.prepare('INSERT INTO deadlines (id, title, course, due_date, due_time, priority, description, category, remind_at, goal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, dl.title, dl.course || null, normDue, normTime, dl.priority || 'medium', dl.description || null, dl.category || null, normRemind, dl.goal_id || null);
     return { success: true, id };
   } catch (err: any) { return { success: false, error: err.message }; }
 });
@@ -2360,7 +2726,7 @@ ipcMain.handle('delete-deadline', async (_event, id: string) => {
 
 ipcMain.handle('update-deadline', async (_event, id: string, patch: any) => {
   try {
-    const allowed = ['title', 'course', 'due_date', 'priority', 'description', 'category', 'recurrence', 'status', 'remind_at', 'goal_id'];
+    const allowed = ['title', 'course', 'due_date', 'priority', 'description', 'category', 'recurrence', 'status', 'remind_at', 'goal_id', 'due_time'];
     const fields = Object.keys(patch).filter(k => allowed.includes(k) && patch[k] !== undefined);
     if (fields.length === 0) return { success: true };
     const sets = fields.map(f => `${f} = ?`).join(', ');
@@ -2368,6 +2734,112 @@ ipcMain.handle('update-deadline', async (_event, id: string, patch: any) => {
     db!.prepare(`UPDATE deadlines SET ${sets} WHERE id = ?`).run(...vals, id);
     return { success: true };
   } catch (err: any) { return { success: false, error: err.message }; }
+});
+
+/* ── Deadline reminders (many per deadline, relative OR absolute) ───────────── */
+
+const REMINDER_COLS = 'id, deadline_id, mode, lead_min, remind_at, fired, created_at';
+
+ipcMain.handle('get-deadline-reminders', async (_event, deadlineId: string) => {
+  try {
+    const rows = db!.prepare(
+      `SELECT ${REMINDER_COLS} FROM deadline_reminders WHERE deadline_id = ?`,
+    ).all(deadlineId) as any[];
+    return { success: true, reminders: rows };
+  } catch (err: any) {
+    return { success: false, error: err.message, reminders: [] };
+  }
+});
+
+/* ALL reminders for all open deadlines in one call. The firing loop and the
+   list view both need the whole set, and calling per-deadline would mean one
+   IPC round trip per row to paint a screen. */
+ipcMain.handle('get-all-deadline-reminders', async () => {
+  try {
+    const rows = db!.prepare(
+      `SELECT r.* FROM deadline_reminders r
+       JOIN deadlines d ON d.id = r.deadline_id
+       WHERE d.status != 'done' AND r.fired = 0`,
+    ).all() as any[];
+    return { success: true, reminders: rows };
+  } catch (err: any) {
+    return { success: false, error: err.message, reminders: [] };
+  }
+});
+
+/* The validation that matters lives in `normalizeReminder` (shared, unit
+   tested): a reminder after the deadline, or already in the past, is rejected
+   with a reason the UI can show. This handler re-derives the deadline row and
+   clamps there too, so a caller cannot bypass the rule by posting directly. */
+ipcMain.handle('add-deadline-reminder', async (_event, deadlineId: string, input: {
+  mode?: string; lead_min?: number; remind_at?: string | null;
+}) => {
+  try {
+    const d = db!.prepare('SELECT id, due_date FROM deadlines WHERE id = ?').get(deadlineId) as any;
+    if (!d) return { success: false, error: 'That deadline no longer exists.' };
+
+    const mode = input.mode === 'absolute' ? 'absolute' : 'relative';
+    const now = new Date();
+
+    let leadMin = 0;
+    let remindAt: string | null = null;
+
+    if (mode === 'relative') {
+      leadMin = Math.max(0, Math.trunc(Number(input.lead_min) || 0));
+      const dueMs = new Date(String(d.due_date).length > 10 ? d.due_date : d.due_date + 'T09:00:00').getTime();
+      if (Number.isFinite(dueMs) && dueMs - leadMin * 60000 <= now.getTime()) {
+        return { success: false, error: 'That reminder time has already passed.' };
+      }
+    } else {
+      if (!input.remind_at) return { success: false, error: 'Pick when you want to be reminded.' };
+      const t = new Date(input.remind_at);
+      if (Number.isNaN(t.getTime())) return { success: false, error: 'That reminder time could not be read.' };
+      if (t.getTime() <= now.getTime()) return { success: false, error: 'That reminder time has already passed.' };
+      const dueMs = new Date(String(d.due_date).length > 10 ? d.due_date : d.due_date + 'T09:00:00').getTime();
+      if (Number.isFinite(dueMs) && t.getTime() > dueMs) {
+        return { success: false, error: 'A reminder cannot be after the deadline itself.' };
+      }
+      remindAt = t.toISOString();
+    }
+
+    const id = 'drem_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    db!.prepare(
+      `INSERT INTO deadline_reminders (id, deadline_id, mode, lead_min, remind_at) VALUES (?, ?, ?, ?, ?)`,
+    ).run(id, deadlineId, mode, leadMin, remindAt);
+    return { success: true, id };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-all-locations', async () => {
+  try {
+    const goalLocs = db!.prepare("SELECT DISTINCT location FROM goals WHERE location IS NOT NULL AND location != ''").all() as any[];
+    const reminderLocs = db!.prepare("SELECT DISTINCT location FROM deadline_reminders WHERE location IS NOT NULL AND location != ''").all() as any[];
+    const all = [...goalLocs.map((r: any) => r.location), ...reminderLocs.map((r: any) => r.location)];
+    const unique = [...new Set(all)].sort();
+    return { success: true, locations: unique };
+  } catch (err: any) {
+    return { success: false, error: err.message, locations: [] };
+  }
+});
+
+ipcMain.handle('delete-deadline-reminder', async (_event, id: string) => {
+  try {
+    db!.prepare('DELETE FROM deadline_reminders WHERE id = ?').run(id);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('mark-deadline-reminder-fired', async (_event, id: string) => {
+  try {
+    db!.prepare('UPDATE deadline_reminders SET fired = 1 WHERE id = ?').run(id);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('snooze-deadline', async (_event, id: string, minutes: number) => {
@@ -2659,118 +3131,27 @@ ipcMain.handle('connectors:test', async (_event, id: string) => {
     return { success: false, message: err.message };
   }
 });
-
 ipcMain.handle('connectors:sync', async (_event, id: string) => {
   try {
     const row = db!.prepare('SELECT * FROM connectors WHERE id = ?').get(id) as any;
     if (!row) return { success: false, error: 'Connector not found', itemsAdded: 0, itemsUpdated: 0 };
-    const config = JSON.parse(row.config);
     let itemsAdded = 0;
+    let itemsUpdated = 0;
     if (row.type === 'email' && row.provider === 'imap') {
-      const Imap = require('node-imap');
-      const { simpleParser } = require('mailparser');
-      const imapCfg = {
-        user: config.username, password: config.password,
-        host: config.host, port: config.port, tls: config.tls,
-        tlsOptions: { rejectUnauthorized: false },
-      };
-      const rawItems: any[] = await new Promise((resolve, reject) => {
-        const imap = new Imap(imapCfg);
-        const results: any[] = [];
-        imap.once('ready', () => {
-          imap.openBox(config.folder || 'INBOX', true, (err: any, box: any) => {
-            if (err) { imap.end(); reject(err); return; }
-            const fetch = imap.seq.fetch(`${Math.max(1, box.messages.total - 19)}:*`, { bodies: '', markSeen: false });
-            fetch.on('message', (msg: any, seqno: number) => {
-              let raw = '';
-              msg.on('body', (stream: any) => { stream.on('data', (chunk: any) => { raw += chunk.toString('utf8'); }); });
-              msg.on('attributes', (attrs: any) => { msg._attrs = attrs; });
-              msg.on('end', () => { results.push({ seqno, raw, attrs: msg._attrs }); });
-            });
-            fetch.once('error', (e: any) => { imap.end(); reject(e); });
-            fetch.once('end', () => { imap.end(); resolve(results); });
-          });
-        });
-        imap.once('error', reject);
-        imap.connect();
-      });
-      const ins = db!.prepare(`INSERT OR REPLACE INTO connector_items (id, connector_id, item_type, subject, summary, date, is_read, metadata) VALUES (?, ?, 'email', ?, ?, ?, ?, ?)`);
-      for (const item of rawItems) {
-        try {
-          const parsed = await simpleParser(item.raw);
-          const itemId = `ci_${id}_${item.seqno}`;
-          const dateStr = parsed.date ? parsed.date.toISOString() : new Date().toISOString();
-          const fromAddr = parsed.from?.text || '';
-          const subject = parsed.subject || '(no subject)';
-          const snippet = (parsed.text || '').slice(0, 200).replace(/\s+/g, ' ').trim();
-          const isRead = item.attrs?.flags?.includes('\\Seen') ? 1 : 0;
-          ins.run(itemId, id, subject, snippet, dateStr, isRead, JSON.stringify({ from: fromAddr, sequenceNumber: item.seqno }));
-          itemsAdded++;
-        } catch {}
-      }
+      const { syncImapConnector } = require('../../services/connectors/sync-imap');
+      const r = await (syncImapConnector as any)(db!, id, row);
+      itemsAdded = r.itemsAdded; itemsUpdated = r.itemsUpdated;
     } else if (row.type === 'calendar' && row.provider === 'caldav') {
-      const now = new Date();
-      const weekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const fmtDt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-      const calBody = `<?xml version="1.0" encoding="utf-8"?><C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><D:getetag/><C:calendar-data/></D:prop><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="${fmtDt(now)}" end="${fmtDt(weekLater)}"/></C:comp-filter></C:comp-filter></C:filter></C:calendar-query>`;
-      // Same helper as test/create/update: http:// supported, redirects followed.
-      const report = await calDavRequest(normalizeCalDavUrl(config.url, config.username), {
-        method: 'REPORT',
-        username: config.username,
-        password: config.password,
-        headers: { 'Content-Type': 'application/xml; charset=utf-8', Depth: '1' },
-        body: calBody,
-        timeoutMs: 15000,
-      });
-      if (report.status < 200 || report.status >= 300) {
-        const detail = report.body.length < 200 ? report.body.replace(/<[^>]+>/g, '').trim().slice(0, 150) : '';
-        throw new Error(`Calendar sync failed (HTTP ${report.status})${detail ? ' — ' + detail : ''}`);
-      }
-      const body = report.body;
-      // iCalendar folds long lines and escapes text; unfold (CRLF + space/tab)
-      // before matching, otherwise SUMMARY/DESCRIPTION spanning a fold boundary
-      // is silently truncated and the event shows half a title.
-      const unfolded = body.replace(/\r?\n[ \t]/g, '');
-      const icalUnescape = (s: string) => s.replace(/\\([\\;,nN])/g, (_m, c) => (c === 'n' || c === 'N' ? '\n' : c));
-      const veventRegex = /BEGIN:VEVENT[\s\S]*?END:VEVENT/g;
-      const matches = unfolded.match(veventRegex) || [];
-      const ins = db!.prepare(`INSERT OR REPLACE INTO connector_items (id, connector_id, item_type, subject, summary, date, is_read, metadata) VALUES (?, ?, 'event', ?, ?, ?, 1, ?)`);
-      for (const ve of matches) {
-        const uidMatch = ve.match(/UID:(.*)/);
-        const summaryMatch = ve.match(/SUMMARY[^:]*:(.*)/);
-        const dtStartMatch = ve.match(/DTSTART[^:]*:(.*)/);
-        const dtEndMatch = ve.match(/DTEND[^:]*:(.*)/);
-        if (summaryMatch && dtStartMatch) {
-          const summary = icalUnescape(summaryMatch[1].trim());
-          ins.run(`ci_${id}_${uidMatch?.[1]?.trim() || Date.now()}`, id, summary, summary, dtStartMatch[1].trim(), JSON.stringify({ startTime: dtStartMatch[1]?.trim(), endTime: dtEndMatch?.[1]?.trim() }));
-          itemsAdded++;
-        }
-      }
+      const { syncCalDavConnector } = require('../../services/connectors/sync-caldav');
+      const r = await (syncCalDavConnector as any)(db!, id, row);
+      itemsAdded = r.itemsAdded; itemsUpdated = r.itemsUpdated;
+    } else {
+      return { success: false, error: `Unsupported connector: ${row.type}/${row.provider}`, itemsAdded: 0, itemsUpdated: 0 };
     }
-    db!.prepare("UPDATE connectors SET last_sync = datetime('now'), updated_at = datetime('now') WHERE id = ?").run(id);
-    // Capture connector sync episode into context brain
-    try {
-      episodeWriters.writeConnectorEpisode(row, Array.from({ length: Math.min(itemsAdded, 5) }), itemsAdded > 0 ? 'synced' : 'new_items');
-    } catch {}
-    // Detect new unread emails and notify renderer
-    if (row.type === 'email' && itemsAdded > 0) {
-      const unreadCount = db!.prepare('SELECT COUNT(*) as cnt FROM connector_items WHERE connector_id = ? AND item_type = ? AND is_read = 0').get(id, 'email') as any;
-      if (unreadCount?.cnt > 0) {
-        const latestItems = db!.prepare('SELECT id, subject, summary, date, metadata FROM connector_items WHERE connector_id = ? AND item_type = ? AND is_read = 0 ORDER BY date DESC LIMIT 5').all(id, 'email');
-        const { BrowserWindow } = require('electron');
-        BrowserWindow.getAllWindows().forEach((win: any) => {
-          win.webContents.send('connectors:new-emails', {
-            connectorId: id,
-            connectorName: row.display_name,
-            unreadCount: unreadCount.cnt,
-            newItems: latestItems,
-          });
-        });
-      }
-    }
-    return { success: true, itemsAdded, itemsUpdated: 0 };
+    return { success: true, itemsAdded, itemsUpdated };
   } catch (err: any) {
-    return { success: false, error: err.message, itemsAdded: 0, itemsUpdated: 0 };
+    db!.prepare("UPDATE connectors SET status='error', error_message=? WHERE id = ?").run(err?.message || String(err), id);
+    return { success: false, error: err?.message || String(err), itemsAdded: 0, itemsUpdated: 0 };
   }
 });
 

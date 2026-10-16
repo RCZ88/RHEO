@@ -116,7 +116,7 @@ export default function ResumeImportPage() {
           <button onClick={() => navigate('/resume')} className="text-zinc-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="w-9 h-9 rounded-lg bg-[var(--page-accent)]/15 flex items-center justify-center ring-1 ring-[var(--page-accent)]/20">
+          <div className="w-9 h-9 rounded-lg bg-[var(--page-accent-15)] flex items-center justify-center ring-1 ring-[var(--page-accent)]/20">
             <Upload className="w-5 h-5 text-[var(--page-accent)]" />
           </div>
           <div>
@@ -294,7 +294,7 @@ export default function ResumeImportPage() {
                   onClick={() => setTakeawayFilter(f)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-150 ring-1 ${
                     takeawayFilter === f
-                      ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)] ring-[var(--page-accent)]/25'
+                      ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)] ring-[var(--page-accent)]/25'
                       : 'bg-zinc-800/60 text-zinc-400 ring-zinc-700/30 hover:bg-zinc-700/50'
                   }`}
                 >

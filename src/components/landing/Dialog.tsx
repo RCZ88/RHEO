@@ -35,7 +35,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
         aria-modal="true"
         className={cn(
           "relative z-10 w-full max-w-[calc(100%-2rem)] rounded-[var(--radius-card)] border border-[var(--hairline-strong)]",
-          "bg-[var(--bg-0)]/95 p-5 text-[var(--text-hi)] backdrop-blur-xl sm:max-w-sm",
+          "bg-[var(--bg-0-95)] p-5 text-[var(--text-hi)] backdrop-blur-xl sm:max-w-sm",
           "duration-[var(--dur-normal)] ease-[var(--ease-out-expo)]"
         )}
       >

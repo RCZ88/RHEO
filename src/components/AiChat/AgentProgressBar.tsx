@@ -35,7 +35,7 @@ export const AgentProgressBar: FC<AgentProgressBarProps> = ({ round, totalRounds
   const isError = status === 'error';
 
   return (
-    <div className="px-4 py-2 border-t border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/40">
+    <div className="px-4 py-2 border-t border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-40)]">
       <div className="flex items-center gap-2 text-[11px] text-zinc-400">
         {isError ? (
           <AlertCircle className="h-3 w-3 text-red-400 shrink-0" />

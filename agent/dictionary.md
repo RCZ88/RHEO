@@ -521,3 +521,45 @@
 - MEANS: the 7 knowledge systems (LLM Wiki, Obsidian Skills, Graphify, PARA, QMD, Automations, Design Skills) tracked by `window.deskflowAPI.getContextSystems()`.
 - IPC: `get-context-systems` returns per-system: id, name, itemCount, itemLabel, available, lastBuilt, error.
 - UI: **Context → Maintenance** subtab + **New Agent dialog → Advanced Configuration**.
+
+### External AI launcher (2026-09-30) — "open it in MY browser"
+- **MEANS:** the app-side surface answering *which AIs exist · which am I signed in to ·
+  open it in my browser · copy the link · copy the prompt*.
+- **Catalog:** `src/services/externalAiProviders.ts` — SINGLE SOURCE for provider ids/URLs/
+  match patterns. Ids deliberately match `services/ai-gateway/providers.ts` adapter ids so the
+  sign-in badge and the vault key are the same string. All 8 gateway adapters have a tile.
+- **UI:** `src/components/ai-bridge/ExternalAiLauncher.tsx`, the **External AI** button in the
+  AiPage nav rail (NOT the old topbar — that became a nav rail in a later redesign).
+- **Opening a real browser:** `open-external-url` IPC -> `shell.openExternal`. ⚠ `window.open`
+  from the renderer opens an ELECTRON window, not the user's browser — that was the bug that
+  made "open in browser" useless. The handler rejects anything that is not http(s).
+- **Credentials:** NOT stored by the launcher. Per-provider sessions live in an AES-256-GCM
+  vault (`services/ai-gateway/CredentialVault.ts`, keyed by the same provider id). The launcher
+  only DISPLAYS `aigatewayAllStatuses()` and routes sign-in to Workspace -> AI Gateway ->
+  Providers. Automating the login is deliberately NOT done — every adapter sets
+  `antiBot.cloudflare: true`.
+- **Extension tab targeting:** `browser-extension/background.js` `resolveTargetTab()` — the
+  injection path used to target ONLY the active tab, so it silently did nothing unless you
+  already had that provider open and focused. It now waits (default 20s) for a tab matching
+  `cmd.urlPatterns`, then falls back to active, then creates one. 5/5 logic probe.
+
+### Provider management UI (2026-09-30) — add a provider / API key from inside the app
+- **Gap it closed:** `AiProviderSelectModal` ended with a link reading "+ Add provider in
+  Settings" that navigated away to Settings, where providers are only editable as a raw JSON
+  list. Adding the AI Router required knowing a magic JSON blob, and there was nowhere to type
+  an API key next to the base URL it belongs to.
+- **UI:** `src/components/ai/AiProviderManager.tsx`, reachable from that same modal
+  ("Add or manage providers"). Add / edit / delete, per-provider enabled dot, and
+  "Save all" which calls `saveAiProviders({ providers, routing })`.
+- **API key UI:** password field with a show/hide toggle, gated on the template needing a key,
+  and blank-on-edit means "keep the saved key".
+- **AI Router is a first-class preset**, not an afterthought: it is the FIRST template in the
+  picker, auto-fills `http://127.0.0.1:4000/v1/chat/completions`, needs NO API key (the router
+  holds the user's keys), prefills the quality-group models (`auto, fast, reasoning, coding,
+  vision, local`), and probes `airouter.status()` to show "router up" / "router idle".
+- **Refresh:** saving fires `window` event `rheo:providers-changed`; `AiPage` listens and
+  re-reads `getAiProviders()` so badges update without a reload.
+- ⚠ **KNOWN GAP (not fixed):** `main.ts` `ai-chat:send` still selects exactly ONE provider
+  (`pState.providers.find(...)`) and swallows errors in `catch {}` — NO automatic switching,
+  even though `runWithFallback` exists and IS used by Goals and Content Engine. Pointing that
+  handler at the AI Router is the one-line fix that makes failover real for the main chat.

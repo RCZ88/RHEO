@@ -36,7 +36,13 @@ export const WIDGET_NAV: Record<WidgetId, WidgetNavTarget> = {
   // ── Row 4 ──────────────────────────────────────────────────────────
   goals:               { route: '/life',    tab: 'gold',                       label: 'Goals' },
   'quick-focus':       { route: '/activity', tab: 'focus', section: 'activity.focus',         label: 'Focus sessions',  short: 'Focus' },
-  deadlines:           { route: '/life',    tab: 'habits',                     label: 'Habits & streaks' },
+  // `tab: 'habits'` pointed at a tab deleted in the Life consolidation.
+  // The failure was SILENT and is the exact class AGENTS.md §5d warns about:
+  // deepNav wrote `/life-activeTab = 'habits'` AND `location.state.tab`, then
+  // usePageSurface rejected it against `validIds` and Life fell back to
+  // Covenant — so clicking 'Habits & streaks' on the dashboard opened the
+  // promises tab, and permanently poisoned the persisted tab key.
+  deadlines:           { route: '/life',    tab: 'gold',                       label: 'Habits & streaks' },
   'longest-focus':     { route: '/rankings',                                  label: 'Rankings' },
   // ── Row 5 ──────────────────────────────────────────────────────────
   schedule:            { route: '/life',    tab: 'schedule',                   label: 'Schedule' },

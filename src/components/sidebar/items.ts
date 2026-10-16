@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Activity, Brain, GraduationCap, Target,
+  LayoutDashboard, Activity, Brain, GraduationCap,
   Code2, Wallet, HeartHandshake, Settings, BookOpen,
   Shield as ShieldIcon, Terminal, FlaskConical,
 } from 'lucide-react';
@@ -38,7 +38,6 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // The registry behind that hub is src/components/labs/labRegistry.ts.
   { icon: FlaskConical, label: 'Labs', path: '/labs', group: 'CREATE' },
   { icon: HeartHandshake, label: 'Life', path: '/life', group: 'LIFE' },
-  { icon: Target, label: 'Goals', path: '/gold', group: 'LIFE' },
 { icon: Wallet, label: 'Finance', path: '/finance', group: 'LIFE' },
     { icon: BookOpen, label: 'Guide', path: '/guide', group: 'SYSTEM' },
   { icon: Settings, label: 'Settings', path: '/settings', group: 'SYSTEM' },

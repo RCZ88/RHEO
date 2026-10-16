@@ -258,6 +258,9 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     ipcRenderer.on('update-downloaded', listener);
     return () => ipcRenderer.removeListener('update-downloaded', listener);
   },
+  // AFK event queue (daemon → app)
+  readAfkEvents: () => ipcRenderer.invoke('tracking:read-afk-events'),
+  clearAfkEvents: () => ipcRenderer.invoke('tracking:clear-afk-events'),
   // Platform + tracking mode (Linux Wayland resilience)
   getPlatformInfo: () => ipcRenderer.invoke('get-platform-info'),
   getTrackingMode: () => ipcRenderer.invoke('get-tracking-mode'),
@@ -450,6 +453,23 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
     return () => ipcRenderer.removeListener('title-bar-mode-changed', handler);
   },
   notifyClick: () => ipcRenderer.invoke('notification-click'),
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  // ONE door for every notification in the app. Before this existed the
+  // renderer called `new Notification()` directly, which on Linux does nothing
+  // unless the renderer owns a DBus connection (it does not) — so timer and
+  // alarm fires were silent. These route through the main process instead,
+  // which also means they work with the window unfocused and play a sound.
+  notifications: {
+    send: (n: { id?: string; kind?: string; title: string; body?: string; tier?: 'info' | 'warn' | 'success' | 'error'; data?: Record<string, any> }) =>
+      ipcRenderer.invoke('notification:send', n),
+    list: (limit?: number) => ipcRenderer.invoke('notification:get-all', limit),
+    markRead: (id: string) => ipcRenderer.invoke('notification:clear', id),
+    dismiss: (id: string) => ipcRenderer.invoke('notification:dismiss', id),
+    unreadCount: () => ipcRenderer.invoke('notification:unread-count'),
+    setSound: (muted: boolean) => ipcRenderer.invoke('notification:sound', muted),
+    testSound: (tier?: string) => ipcRenderer.invoke('notification:test-sound', tier),
+  },
   getAutoStartStatus: () => ipcRenderer.invoke('get-auto-start-status'),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('set-auto-start', enabled),
 
@@ -1668,6 +1688,14 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   deleteDeadline: (id: string) => ipcRenderer.invoke('delete-deadline', id),
   updateDeadline: (id: string, patch: any) => ipcRenderer.invoke('update-deadline', id, patch),
   snoozeDeadline: (id: string, minutes: number) => ipcRenderer.invoke('snooze-deadline', id, minutes),
+  // ── Deadline reminders: several per deadline, relative or absolute ──
+  getDeadlineReminders: (deadlineId: string) => ipcRenderer.invoke('get-deadline-reminders', deadlineId),
+  getAllDeadlineReminders: () => ipcRenderer.invoke('get-all-deadline-reminders'),
+  addDeadlineReminder: (deadlineId: string, data: { mode?: string; lead_min?: number; remind_at?: string | null }) =>
+    ipcRenderer.invoke('add-deadline-reminder', deadlineId, data),
+  deleteDeadlineReminder: (id: string) => ipcRenderer.invoke('delete-deadline-reminder', id),
+  markDeadlineReminderFired: (id: string) => ipcRenderer.invoke('mark-deadline-reminder-fired', id),
+  getAllLocations: () => ipcRenderer.invoke('get-all-locations'),
   // ========== Pinned todo popup (always-on-top mini window) ==========
   todoPopupToggle: () => ipcRenderer.invoke('todo-popup:toggle'),
   todoPopupClose: () => ipcRenderer.invoke('todo-popup:close'),
@@ -1682,12 +1710,27 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   },
 
   // ========== Todos (persistent, linkable) ========
-  todoList: (opts?: { goalId?: string; deadlineId?: string; scheduleId?: string; limit?: number }) => ipcRenderer.invoke('todo:list', opts),
-  todoCreate: (data: { text: string; goalId?: string; deadlineId?: string; scheduleId?: string; dueDate?: string; reminder?: string; parentTodoId?: string; sortOrder?: number }) => ipcRenderer.invoke('todo:create', data),
+  todoList: (opts?: { goalId?: string; deadlineId?: string; scheduleId?: string; parentTodoId?: string; limit?: number }) => ipcRenderer.invoke('todo:list', opts),
+  todoCreate: (data: { text: string; goalId?: string; deadlineId?: string; scheduleId?: string; dueDate?: string; reminder?: string; parentTodoId?: string; sortOrder?: number; groupId?: string }) => ipcRenderer.invoke('todo:create', data),
   todoUpdate: (id: string, patch: any) => ipcRenderer.invoke('todo:update', id, patch),
   todoToggle: (id: string, done?: boolean) => ipcRenderer.invoke('todo:toggle', id, done),
   todoDelete: (id: string) => ipcRenderer.invoke('todo:delete', id),
+  // Todo Groups
+  todoGroupList: () => ipcRenderer.invoke('todoGroup:list'),
+  todoGroupCreate: (data: { name: string; color?: string; sortOrder?: number }) => ipcRenderer.invoke('todoGroup:create', data),
+  todoGroupUpdate: (id: string, patch: { name?: string; color?: string; sortOrder?: number }) => ipcRenderer.invoke('todoGroup:update', id, patch),
+  todoGroupDelete: (id: string) => ipcRenderer.invoke('todoGroup:delete', id),
   todoGetConnections: (entityType: string, entityId: string) => ipcRenderer.invoke('todo:get-connections', entityType, entityId),
+  // Schedule Activity Series
+  scheduleActivityListSeries: (opts?: { range?: 'month' | 'semester' | 'all'; includeArchived?: boolean; category?: string; semesterStart?: string; semesterEnd?: string }) => ipcRenderer.invoke('scheduleActivity:listSeries', opts),
+  scheduleActivityGetSeries: (seriesId: string) => ipcRenderer.invoke('scheduleActivity:getSeries', seriesId),
+  scheduleActivityCreateSeries: (data: any) => ipcRenderer.invoke('scheduleActivity:createSeries', data),
+  scheduleActivityUpdateSeries: (seriesId: string, patch: any) => ipcRenderer.invoke('scheduleActivity:updateSeries', seriesId, patch),
+  scheduleActivityDeleteSeries: (seriesId: string, hard?: boolean) => ipcRenderer.invoke('scheduleActivity:deleteSeries', seriesId, hard),
+  scheduleActivitySkipOccurrence: (sessionId: string, date: string) => ipcRenderer.invoke('scheduleActivity:skipOccurrence', sessionId, date),
+  scheduleActivityEndSeries: (seriesId: string, endDate: string) => ipcRenderer.invoke('scheduleActivity:endSeries', seriesId, endDate),
+  scheduleActivitySetSemester: (data: { name: string; startDate: string; endDate: string }) => ipcRenderer.invoke('scheduleActivity:setSemester', data),
+  scheduleActivityGetSemester: () => ipcRenderer.invoke('scheduleActivity:getSemester'),
   goalGetConnections: (goalId: string) => ipcRenderer.invoke('goal:get-connections', goalId),
   goalGetConnectionsBulk: (goalIds: string[]) => ipcRenderer.invoke('goal:connections-bulk', goalIds),
   /* Generic entity↔goal linking. `feature` matches CrossFeatureLink['feature']:
@@ -2349,6 +2392,34 @@ contextBridge.exposeInMainWorld('haloBridge', {
     const handler = (_event: unknown, prefs: unknown) => cb(prefs);
     ipcRenderer.on('halo:prefs', handler);
     return () => ipcRenderer.removeListener('halo:prefs', handler);
+  },
+  /* THE FITTED GEOMETRY — the size main actually gave the window.
+   *
+   * Without this the renderer cannot know the window is smaller than its preset. `fitToCanvas`
+   * shrinks the surface on a narrow display (Large 680x154 -> 380x86 at 380px of available
+   * width) but the renderer was computing its own layout from `prefs.scale` alone, so the
+   * CONTENT stayed at full size inside a shrunken box and overflowed — measured 62px of
+   * overflow at a 380px display. Main and renderer were each correct about their own half of
+   * the problem and neither could see the other's.
+   *
+   * This carries the numbers main already computed, so there is still exactly one source. */
+  onGeometry: (cb: (g: { expanded: { width: number; height: number }; compact: { width: number; height: number }; fitFactor: number }) => void) => {
+    const handler = (_event: unknown, g: any) => {
+      const num = (v: unknown, fb: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fb);
+      cb({
+        expanded: {
+          width: num(g?.expanded?.width, 560),
+          height: num(g?.expanded?.height, 134),
+        },
+        compact: {
+          width: num(g?.compact?.width, 198),
+          height: num(g?.compact?.height, 32),
+        },
+        fitFactor: num(g?.fitFactor, 1),
+      });
+    };
+    ipcRenderer.on('halo:geometry', handler);
+    return () => ipcRenderer.removeListener('halo:geometry', handler);
   },
   onCommand: (cb: (cmd: { command: string }) => void) => {
     const handler = (_event: unknown, cmd: { command?: string }) =>

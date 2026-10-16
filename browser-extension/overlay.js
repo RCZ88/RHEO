@@ -1,4 +1,4 @@
-// DeskFlow Overlay — Full inline controls ON the AI chat website
+// RHEO Overlay — Full inline controls ON the AI chat website
 // Sidebar panel + floating toolbar + per-message copy buttons + prompt library
 (() => {
   if (!chrome?.runtime?.id) return;
@@ -423,17 +423,17 @@
     try {
       const r = await fetch(SERVER+'/health', {signal:AbortSignal.timeout(3000)});
       serverUp = r.ok;
-      if (!serverUp) console.log('[DeskFlow] Health check failed:', r.status);
+      if (!serverUp) console.log('[RHEO] Health check failed:', r.status);
     } catch (e) {
       serverUp = false;
-      console.log('[DeskFlow] Health check error:', e.message);
+      console.log('[RHEO] Health check error:', e.message);
     }
     const d = document.querySelector('#df-fab .df-fab-dot');
     if (d) d.className = 'df-fab-dot' + (serverUp ? '' : ' off');
     // Update status text in panel if open
     const statusEl = document.querySelector('.df-sr-text');
     if (statusEl && panelOpen) {
-      statusEl.innerHTML = serverUp ? '<b>Connected</b> to DeskFlow' : 'Offline — start DeskFlow app';
+      statusEl.innerHTML = serverUp ? '<b>Connected</b> to RHEO' : 'Offline — start RHEO app';
     }
   }
 
@@ -447,10 +447,10 @@
         lastCapture = d.newest||null;
         renderPanel();
       } else {
-        console.log('[DeskFlow] Stats endpoint returned:', r.status);
+        console.log('[RHEO] Stats endpoint returned:', r.status);
       }
     } catch (e) {
-      console.log('[DeskFlow] Stats fetch error:', e.message);
+      console.log('[RHEO] Stats fetch error:', e.message);
     }
   }
 
@@ -462,11 +462,11 @@
         const d = await r.json();
         renderHist(d.captures||[]);
       } else {
-        console.log('[DeskFlow] History endpoint returned:', r.status);
+        console.log('[RHEO] History endpoint returned:', r.status);
         renderHist([]);
       }
     } catch (e) {
-      console.log('[DeskFlow] History fetch error:', e.message);
+      console.log('[RHEO] History fetch error:', e.message);
       renderHist([]);
     }
   }
@@ -566,7 +566,7 @@
         if (btn) { btn.textContent = ' Captured'; btn.classList.add('ok'); }
         setTimeout(rstCap, 2000); stats();
       } else { toast('Error','err'); rstCap(); }
-    } catch { toast('DeskFlow offline','err'); rstCap(); }
+    } catch { toast('RHEO offline','err'); rstCap(); }
   }
   function rstCap() { const b=$('df-cap-btn'); if(b){b.textContent='Capture This Chat';b.disabled=false;b.classList.remove('ok');} }
 
@@ -624,14 +624,14 @@
         <div class="df-gc">
           <div class="df-empty">
             <div class="df-empty-i">!</div>
-            <div class="df-empty-t">DeskFlow app is not running.<br>Start the app to use AI features.</div>
+            <div class="df-empty-t">RHEO app is not running.<br>Start the app to use AI features.</div>
           </div>
         </div>
       `;
     }
     return `
       <div class="df-gc">
-        <div class="df-sr"><div class="df-dot on"></div><div class="df-sr-text"><b>Connected</b> to DeskFlow</div></div>
+        <div class="df-sr"><div class="df-dot on"></div><div class="df-sr-text"><b>Connected</b> to RHEO</div></div>
         <div class="df-stats">
           <div class="df-stat"><div class="df-stat-v" style="color:#fafafa">${captureCount}</div><div class="df-stat-l">Captures</div></div>
           <div class="df-stat"><div class="df-stat-v" style="color:#a1a1aa">${lastCapture?timeAgo(lastCapture):'—'}</div><div class="df-stat-l">Last sync</div></div>
@@ -715,10 +715,10 @@
     $('a-inj-recent')?.addEventListener('click', () => injectIntoChat('recent'));
     $('a-inj-problems')?.addEventListener('click', () => injectIntoChat('problems'));
     $('a-inj-custom')?.addEventListener('click', () => injectIntoChat('custom'));
-    $('a-lesson')?.addEventListener('click', () => toast('Open Learn in DeskFlow',''));
-    $('a-les2')?.addEventListener('click', () => toast('Open Learn in DeskFlow',''));
-    $('a-quiz')?.addEventListener('click', () => toast('Open Learn in DeskFlow',''));
-    $('a-flash')?.addEventListener('click', () => toast('Open Learn in DeskFlow',''));
+    $('a-lesson')?.addEventListener('click', () => toast('Open Learn in RHEO',''));
+    $('a-les2')?.addEventListener('click', () => toast('Open Learn in RHEO',''));
+    $('a-quiz')?.addEventListener('click', () => toast('Open Learn in RHEO',''));
+    $('a-flash')?.addEventListener('click', () => toast('Open Learn in RHEO',''));
     $('a-sum')?.addEventListener('click', sendBrain);
     $('a-ext')?.addEventListener('click', sendBrain);
     $('a-exp')?.addEventListener('click', () => {
@@ -729,7 +729,7 @@
       const a = document.createElement('a'); a.href=u; a.download=`chat-${Date.now()}.md`; a.click();
       URL.revokeObjectURL(u); toast('Exported ','ok');
     });
-    document.querySelectorAll('.df-hi').forEach(el => el.addEventListener('click', () => toast(`View #${el.dataset.id} in DeskFlow`,'')));
+    document.querySelectorAll('.df-hi').forEach(el => el.addEventListener('click', () => toast(`View #${el.dataset.id} in RHEO`,'')));
   }
 
   // ─── Build everything ───────────────────────────────────
@@ -740,7 +740,7 @@
     // FAB
     const fab = document.createElement('button'); fab.id = 'df-fab';
     fab.innerHTML = `${P.letter}<div class="df-fab-dot off"></div>`;
-    fab.title = `DeskFlow — ${P.name}`;
+    fab.title = `RHEO — ${P.name}`;
     document.documentElement.appendChild(fab);
 
     // Floating toolbar — toggle on FAB click, not hover
@@ -958,7 +958,7 @@
     panel.innerHTML = `
       <div class="df-hd">
         <div class="df-hd-icon">${P.letter}</div>
-        <div><div class="df-hd-title">DeskFlow × ${P.name}</div><div class="df-hd-sub">AI Context Bridge</div></div>
+        <div><div class="df-hd-title">RHEO × ${P.name}</div><div class="df-hd-sub">AI Context Bridge</div></div>
         <button class="df-hd-x" id="df-px">✕</button>
       </div>
       <div class="df-tabs">
@@ -968,7 +968,7 @@
         <button class="df-tab" data-t="settings">Settings</button>
       </div>
       <div class="df-bd"></div>
-      <div class="df-ft">DeskFlow Bridge v1.3.0</div>
+      <div class="df-ft">RHEO Bridge v1.3.0</div>
     `;
     document.documentElement.appendChild(panel);
 
@@ -996,5 +996,5 @@
 
   // ─── Init ───────────────────────────────────────────────
   build(); ping(); setInterval(ping, 15000);
-  console.log(`[DeskFlow] Full overlay active: ${P.name}`);
+  console.log(`[RHEO] Full overlay active: ${P.name}`);
 })();

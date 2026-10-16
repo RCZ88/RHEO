@@ -446,7 +446,7 @@ export function ReaderView({ lesson, selectedNode, onSelectNode, currentNode, cu
                         </button>
                       </div>
                     ) : (
-                      <pre className="p-4 rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 text-[11px] font-mono leading-relaxed text-zinc-400 whitespace-pre overflow-x-auto max-h-[70vh] overflow-y-auto">
+                      <pre className="p-4 rounded-xl border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-60)] text-[11px] font-mono leading-relaxed text-zinc-400 whitespace-pre overflow-x-auto max-h-[70vh] overflow-y-auto">
                         {sourceText}
                       </pre>
                     )}

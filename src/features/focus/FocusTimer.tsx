@@ -138,10 +138,10 @@ export function FocusTimer({
         {/* Header: title + status + active group chip */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[var(--page-accent)]/10 border border-[var(--page-accent)]/20 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-[var(--page-accent-10)] border border-[var(--page-accent)]/20 flex items-center justify-center">
               <Clock className="w-3.5 h-3.5 text-[var(--page-accent)]" />
             </div>
-            <span className="text-[14px] font-semibold text-zinc-200">Session control</span>
+            <span className="text-[14px] font-semibold text-[var(--text-primary)]">Session control</span>
           </div>
           <Badge variant={statusVariant as 'default' | 'secondary'} className="font-mono text-[10px]">
             {statusLabel}
@@ -157,7 +157,7 @@ export function FocusTimer({
             size={172}
             strokeWidth={10}
             gaugePrimaryColor={ringPrimary}
-            gaugeSecondaryColor="rgba(255,255,255,0.05)"
+            gaugeSecondaryColor="color-mix(in srgb, var(--color-foreground) 14%, transparent)"
             linear={active}
             linearDurationMs={1000}
             className="drop-shadow-lg"
@@ -167,7 +167,7 @@ export function FocusTimer({
                 value={mode === 'stopwatch' ? stopwatchSec : remainingSec}
                 duration={active ? 600 : 200}
                 formatter={clockFormatter}
-                className="text-[3rem] font-bold tabular-nums font-mono text-white leading-none"
+                className="text-[3rem] font-bold tabular-nums font-mono text-[var(--text-primary)] leading-none"
               />
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1.5">
                 {active
@@ -186,7 +186,7 @@ export function FocusTimer({
             className={cn(
               'flex-1 max-w-[120px] flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-colors',
               mode === 'timer'
-                ? 'bg-clay-500/15 text-clay-300 border border-clay-500/30'
+                ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]'
                 : 'bg-zinc-800/60 text-zinc-400 border border-zinc-800/40 hover:bg-zinc-800'
             )}
           >
@@ -302,8 +302,8 @@ export function FocusTimer({
                       className={cn(
                         'flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-[11px] font-semibold transition-colors',
                         mins === p.sec / 60
-                          ? 'bg-clay-500/15 text-clay-300 border border-clay-500/30'
-                          : 'bg-zinc-800/60 text-zinc-400 border border-zinc-800/40 hover:bg-zinc-800 hover:text-zinc-300'
+                          ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]'
+                          : 'bg-[var(--btn-fill)] text-[var(--btn-on-fill)] border border-[var(--btn-border)] hover:bg-[var(--btn-fill-hover)] hover:border-[var(--btn-border-hover)]'
                       )}
                     >
                       <Target className="w-3 h-3 opacity-60" />
@@ -316,13 +316,13 @@ export function FocusTimer({
               {/* Strictness toggle */}
               <button
                 onClick={() => onStrictChange(strict === 'non_allowed' ? 'distracting' : 'non_allowed')}
-                className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-800/40 text-left"
+                className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--btn-fill)] border border-[var(--btn-border)] hover:bg-[var(--btn-fill-hover)] text-left"
               >
-                <span className="flex items-center gap-2 text-[12px] text-zinc-300">
+                <span className="flex items-center gap-2 text-[12px] text-[var(--btn-on-fill)]">
                   {strict === 'non_allowed' ? (
-                    <Eye className="w-3.5 h-3.5 text-amber-400" />
+                    <Eye className="w-3.5 h-3.5 text-[var(--color-amber-400)]" />
                   ) : (
-                    <EyeOff className="w-3.5 h-3.5 text-zinc-500" />
+                    <EyeOff className="w-3.5 h-3.5 text-[var(--btn-on-fill)]" />
                   )}
                   Strict mode
                 </span>

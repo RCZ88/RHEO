@@ -81,7 +81,7 @@ function ComponentTreeSection({ content }: { content: string }) {
   const treeLines = lines.filter(l => !l.startsWith('```'));
 
   return (
-    <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 rounded-lg p-3 font-mono text-[11px] leading-relaxed overflow-x-auto border border-zinc-800/40">
+    <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] rounded-lg p-3 font-mono text-[11px] leading-relaxed overflow-x-auto border border-zinc-800/40">
       {treeLines.map((line, i) => {
         const indent = line.search(/\S/);
         const depth = Math.floor(indent / 2);

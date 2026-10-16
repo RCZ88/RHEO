@@ -350,6 +350,18 @@ export interface HaloBridge {
   onCommand?: (cb: (cmd: { command: string }) => void) => () => void
   onHover?: (cb: (intent: HaloIntent) => void) => () => void
   onSnapshot?: (cb: (snapshot: HaloSnapshotPayload) => void) => () => void
+  /** The size main actually gave the window, after `fitToCanvas` clamped the preset to the
+   *  available space. `squeeze` is how far it was clamped (1 = untouched) and `tight` marks a
+   *  box too small for the full layout. The renderer needs these because it lays itself out
+   *  from the preset alone — without them it overflows a window main already shrank. */
+  onGeometry?: (
+    cb: (g: {
+      expanded: { width: number; height: number }
+      compact: { width: number; height: number }
+      squeeze: number
+      tight: boolean
+    }) => void,
+  ) => () => void
   /** Halo widget producers. `null` fields mean UNKNOWN, never zero — see halo-slot.probe. */
   /** Report the renderer-owned streams (stopwatch, dictation) up to main, which cannot
    *  compute them, and republishes them to the island. Collapses the island's private

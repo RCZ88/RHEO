@@ -389,7 +389,7 @@ export function ScheduleCard({
              const minsUntil = getMinutesUntil(entry.start_time);
              const dayIsPast = isEntryDayPast(entry.day_of_week);
              return (
-               <div key={entry.id} className={`group p-3 rounded-lg border transition-colors ${dayIsPast ? 'border-[var(--border-subtle)] bg-[var(--border-subtle)]/10 opacity-60' : 'border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20'}`}>
+               <div key={entry.id} className={`group p-3 rounded-lg border transition-colors ${dayIsPast ? 'border-[var(--border-subtle)] bg-[var(--border-subtle-10)] opacity-60' : 'border-[var(--border-subtle)] hover:bg-[var(--border-subtle-20)]'}`}>
                  <div className="flex items-start justify-between gap-3">
                    <div className="flex-1 min-w-0">
                      <div className="flex items-center gap-2">

@@ -595,7 +595,7 @@ export function ManualAssignModal({
                   <div key={i} className="flex-1 text-left pl-0.5">{i}:00</div>
                 ))}
               </div>
-              <div className="relative mb-4 h-12 overflow-hidden rounded-xl border border-white/10 bg-zinc-950 light:bg-[var(--ws-surface)]/40">
+              <div className="relative mb-4 h-12 overflow-hidden rounded-xl border border-white/10 bg-zinc-950 light:bg-[var(--ws-surface-40)]">
                 {/* hour ticks */}
                 {Array.from({ length: 24 }, (_, i) => (
                   <div

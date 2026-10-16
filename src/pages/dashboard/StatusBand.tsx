@@ -38,6 +38,7 @@ interface StatusBandProps {
    *  whereas the domain is what the user recognises as "the website". */
   websiteDomain?: string;
   websiteUrl?: string;
+  websiteBrowser?: string;
   /** Daily focus goal in minutes. */
   dailyFocusTarget?: number;
   websiteCategory?: string;
@@ -71,6 +72,10 @@ export function StatusBand({
   websiteTitle,
   websiteDomain,
   websiteUrl,
+  // Declared in the interface AND destructured here. Adding the type without
+  // adding the binding is what produced a live ReferenceError — an undefined
+  // identifier is just a global reference as far as esbuild is concerned.
+  websiteBrowser,
   dailyFocusTarget: dailyFocusTargetProp,
   websiteCategory,
   appCategory,
@@ -162,7 +167,7 @@ export function StatusBand({
   // Domain first, then title, then app name. This used to lead with the page
   // TITLE, which is long, truncates in a narrow chip, and often reads
   // "How to fix X - YouTube" instead of the site the user is actually on.
-  const trackedName = isInBrowser ? (websiteDomain || websiteTitle || appName) : appName;
+  const trackedName = isInBrowser ? (websiteBrowser ? websiteBrowser + ": " + (websiteDomain || websiteTitle) : websiteDomain || websiteTitle) : appName;
   // Never render an empty chip. When nothing is tracked, say so plainly rather
   // than leaving a blank pill beside the timer.
   const displayName = trackedName || (isInBrowser ? 'No site tracked' : 'No app detected');
@@ -323,7 +328,7 @@ export function StatusBand({
           {onStartFocus && !isPaused && (
             <button
               onClick={onStartFocus}
-              className="mt-3 shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 text-[var(--page-accent)] hover:bg-[var(--page-accent)]/20 hover:border-[var(--page-accent)]/50 transition-all duration-200 text-[12px] font-medium font-sans focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] cursor-pointer"
+              className="mt-3 shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--page-accent)]/30 bg-[var(--page-accent-10)] text-[var(--page-accent)] hover:bg-[var(--page-accent-20)] hover:border-[var(--page-accent)]/50 transition-all duration-200 text-[12px] font-medium font-sans focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] cursor-pointer"
             >
               <Activity size={12} />
               Focus

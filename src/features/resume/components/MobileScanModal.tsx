@@ -94,7 +94,7 @@ export function MobileScanModal({ open, onClose, onScan }: MobileScanModalProps)
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => onScan(item.type)}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg bg-gradient-to-br from-zinc-900/60 to-zinc-800/30 ring-1 ring-zinc-700/20 hover:ring-[var(--page-accent)]/30 hover:bg-[var(--page-accent)]/5 transition-all duration-150 text-left"
+                    className="w-full flex items-center gap-3 p-3 rounded-lg bg-gradient-to-br from-zinc-900/60 to-zinc-800/30 ring-1 ring-zinc-700/20 hover:ring-[var(--page-accent)]/30 hover:bg-[var(--page-accent-5)] transition-all duration-150 text-left"
                   >
                     <div className={`w-8 h-8 rounded-lg bg-${item.color}-500/15 flex items-center justify-center ring-1 ring-${item.color}-500/20`}>
                       <span className="text-sm font-bold text-white">{item.label[0]}</span>

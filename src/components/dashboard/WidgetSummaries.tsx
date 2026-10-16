@@ -199,7 +199,7 @@ export function GoalsSummary() {
         <div className="space-y-1.5">
           {ctx.goals.slice(0, 3).map((goal) => (
             <div key={goal.id} className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full flex items-center justify-center ${goal.status === 'done' ? 'bg-[var(--success)]' : 'bg-[var(--text-muted)]/30'}`}>
+              <div className={`w-3 h-3 rounded-full flex items-center justify-center ${goal.status === 'done' ? 'bg-[var(--success)]' : 'bg-[var(--text-muted-30)]'}`}>
                 {goal.status === 'done' && <Check size={8} className="text-white" />}
               </div>
               <span className={`text-[12px] flex-1 truncate ${goal.status === 'done' ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-secondary)]'}`}>
@@ -229,7 +229,7 @@ export function DeadlinesSummary() {
       <div className="flex items-center justify-between">
         <StatValue value={upcoming.length} label="upcoming" icon={Calendar} accent="var(--warning)" />
         {urgent > 0 && (
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--error)]/10 text-[var(--error)] text-[11px] font-medium">
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--error-10)] text-[var(--error)] text-[11px] font-medium">
             <AlertCircle size={11} />
             {urgent} urgent
           </div>
@@ -343,7 +343,7 @@ export function SleepSummary() {
         {ctx.sleepData.map((day, i) => (
           <div key={i} className="flex-1 flex flex-col items-center gap-1">
             <motion.div
-              className="w-full rounded-t-sm bg-[var(--info)]/60"
+              className="w-full rounded-t-sm bg-[var(--info-60)]"
               initial={{ height: 0 }}
               animate={{ height: `${(day.hours / 10) * 100}%` }}
               transition={{ duration: 0.4, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
@@ -721,7 +721,7 @@ export function FinanceSummary() {
       {homeData?.trends?.focus && (
         <div className="flex items-end gap-1 mt-1">
           {homeData.trends.focus.slice(-7).map((v: number, i: number) => (
-            <div key={i} className="flex-1 bg-[var(--page-accent)]/20 rounded-t" style={{ height: Math.max(4, v * 2) }} />
+            <div key={i} className="flex-1 bg-[var(--page-accent-20)] rounded-t" style={{ height: Math.max(4, v * 2) }} />
           ))}
         </div>
       )}

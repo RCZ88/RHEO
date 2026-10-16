@@ -75,7 +75,7 @@ export function TodayDashboard({ today, graph, profileSignals, loading, error, o
                 <SectionHead accent="cyan" icon={<Clock size={16} />} title="Active Now" desc="Current schedule block" />
                 <button
                   onClick={() => onNodeClick(node)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 ring-1 ring-zinc-800/50 text-left transition-all hover:ring-cyan-500/30 hover:bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]"
+                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-40)] ring-1 ring-zinc-800/50 text-left transition-all hover:ring-cyan-500/30 hover:bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]"
                 >
                   <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -108,7 +108,7 @@ export function TodayDashboard({ today, graph, profileSignals, loading, error, o
                     <button
                       key={goalId}
                       onClick={() => onNodeClick(node)}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 ring-1 ring-zinc-800/50 text-left transition-all hover:ring-emerald-500/30"
+                      className="w-full flex items-center gap-3 p-3 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-40)] ring-1 ring-zinc-800/50 text-left transition-all hover:ring-emerald-500/30"
                     >
                       <span className={`h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center ${node.metadata.status === 'completed' ? 'border-emerald-400 bg-emerald-400/20' : 'border-zinc-600'}`}>
                         {node.metadata.status === 'completed' && <span className="text-[8px] text-emerald-400">✓</span>}
@@ -149,7 +149,7 @@ export function TodayDashboard({ today, graph, profileSignals, loading, error, o
                     <button
                       key={dlId}
                       onClick={() => onNodeClick(node)}
-                      className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 ring-1 ring-zinc-800/50 text-left transition-all hover:ring-amber-500/30"
+                      className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-40)] ring-1 ring-zinc-800/50 text-left transition-all hover:ring-amber-500/30"
                     >
                       <span className={`text-[11px] font-mono tabular-nums shrink-0 ${priorityColor}`}>
                         {isNaN(daysLeft) ? 'TBD' : daysLeft <= 0 ? 'TODAY' : daysLeft === 1 ? '1d' : `${daysLeft}d`}
@@ -196,7 +196,7 @@ export function TodayDashboard({ today, graph, profileSignals, loading, error, o
               <SectionHead accent="pink" icon={<TrendingUp size={16} />} title="Identity Signals" desc="Patterns from your connections" />
               <div className="space-y-2">
                 {profileSignals.map(sig => (
-                  <div key={sig.trait} className="flex items-center gap-3 p-2.5 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface)]/40 ring-1 ring-zinc-800/50">
+                  <div key={sig.trait} className="flex items-center gap-3 p-2.5 rounded-lg bg-zinc-950 light:bg-[var(--ws-surface-40)] ring-1 ring-zinc-800/50">
                     <div className="flex-1 min-w-0">
                       <div className={`text-[12px] font-medium ${TEXT.primary}`}>{sig.trait}</div>
                     </div>

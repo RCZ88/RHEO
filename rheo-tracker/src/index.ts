@@ -22,6 +22,8 @@ import {
 } from './ownership';
 import type { HeartbeatPatch } from './ownership';
 import * as session from './session';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 
 (globalThis as Record<string, unknown>).__rheoTrackerBootedAt = new Date().toISOString();
 
@@ -83,6 +85,18 @@ function heartbeatPatch(reason: string, active: boolean): HeartbeatPatch {
   };
 }
 
+// ── AFK event queue (daemon → app) ────────────────────────────────────────────
+// The app polls this file to detect AFK start/end events and show the gap-fill prompt.
+const AFK_EVENT_QUEUE = path.join(USER_DATA, 'tracker-afk-events.jsonl');
+
+function enqueueAfkEvent(event: session.AfkEvent): void {
+  try {
+    fs.appendFileSync(AFK_EVENT_QUEUE, JSON.stringify(event) + '\n', 'utf8');
+  } catch (err) {
+    warn('failed to enqueue AFK event:', (err as Error).message);
+  }
+}
+
 async function applyOwnership(own: boolean, reason: string): Promise<void> {
   // Announce on the FIRST evaluation as well as on every later transition. With
   // `owning` seeded to false and a bare equality guard, the initial stand-down was
@@ -125,6 +139,11 @@ async function claimOwnershipIfFree(): Promise<void> {
 }
 
 await claimOwnershipIfFree();
+
+// Register AFK event handler — writes events to a queue file the app polls.
+session.onAfkEvent((event) => {
+  enqueueAfkEvent(event);
+});
 
 // ── Poll loop ────────────────────────────────────────────────────────────────
 async function tick(): Promise<void> {

@@ -159,26 +159,100 @@ export function useTimeStore(): TimeSnapshot {
   );
 }
 
+/* The 1 Hz clock is a SECOND, independent store from the stopwatch/timer state
+   above, with its own listeners: emitting into `listeners` would re-render every
+   `useTimeStore` consumer twice a second to serve a component that only wanted
+   a ticking number.
+
+   `nowSnapshot` is the entire point. `useSyncExternalStore` compares snapshots
+   with `Object.is` and calls React's internal `forceStoreRerender` whenever they
+   differ — checked on EVERY commit, via `updateStoreInstance`. So a getSnapshot
+   of `() => Date.now()` always differs from the value React just stored (the
+   clock moved between the two calls), which re-renders on every commit,
+   which commits again, which compares again: an infinite loop that React aborts
+   with "Maximum update depth exceeded" (error #185). The tick was never 1 Hz;
+   it was unbounded.
+
+   Caching the value in a module variable makes the snapshot reference stable
+   between ticks, so it only changes when the interval actually fires. */
+let nowSnapshot = Date.now();
+const nowListeners = new Set<() => void>();
+
+function tickNow() {
+  const next = Date.now();
+  /* Several subscribers may tick at different cadences (the App clock runs at
+     1 Hz, some readouts faster). Bail when the value did not move so one tick
+     cannot notify twice. */
+  if (next === nowSnapshot) return;
+  nowSnapshot = next;
+  nowListeners.forEach(l => l());
+}
+
 /** 1 Hz tick so live readouts re-render. */
 export function useNow(intervalMs = 500): number {
   return useSyncExternalStore(
-    cb => { const i = setInterval(cb, intervalMs); return () => clearInterval(i); },
-    () => Date.now(),
-    () => Date.now(),
+    cb => {
+      nowListeners.add(cb);
+      const i = setInterval(tickNow, intervalMs);
+      return () => { clearInterval(i); nowListeners.delete(cb); };
+    },
+    () => nowSnapshot,
+    () => nowSnapshot,
   );
 }
 
-/** Best-effort: fire a renderer notification when a timer hits zero. */
+/**
+ * Send a notification through the MAIN process.
+ *
+ * WHY NOT `new Notification()`: a renderer-side Notification needs the renderer
+ * to hold a DBus session bus, which Electron's sandboxed renderer does not, so
+ * on Linux it silently did nothing — the reason timer fires "didn't work".
+ * Going through main means the OS popup, the sound, and the SQLite inbox all
+ * happen, and it still works with the window unfocused.
+ */
+function notify(title: string, body: string, kind: string, tier: 'info' | 'warn' | 'success' | 'error') {
+  try {
+    const api = (globalThis as any).deskflowAPI;
+    api?.notifications?.send?.({ kind, title, body, tier })?.catch?.(() => {});
+  } catch { /* preload not ready yet — never let a notification break a timer */ }
+}
+
+/** Fire a notification for every timer that has just reached zero. */
 export function checkTimerCompletions() {
   const now = Date.now();
   let changed = false;
   const timers = state.timers.map(t => {
     if (!t.finished && timerRemainingMs(t, now) <= 0) {
       changed = true;
-      try { new Notification('Timer done', { body: t.label }); } catch { /* not available */ }
+      notify('Timer finished', t.label, 'timer', 'success');
       return { ...t, finished: true, runningSinceMs: null, accumulatedMs: t.totalMs };
     }
     return t;
   });
   if (changed) setState({ ...state, timers });
+  return changed;
+}
+
+/** Alarms due within the next minute — the tick granularity of the checker. */
+export function dueAlarms(now = Date.now()): Alarm[] {
+  const d = new Date(now);
+  const nowMinute = d.getHours() * 60 + d.getMinutes();
+  return state.alarms.filter(a => {
+    if (!a.enabled) return false;
+    if (a.repeatDays.length > 0 && !a.repeatDays.includes(d.getDay())) return false;
+    return a.atMinute >= nowMinute && a.atMinute - nowMinute <= 1;
+  });
+}
+
+/** Ring any alarm that has come due. Call on the same tick as the timer check. */
+export function checkAlarmFires(): boolean {
+  const due = dueAlarms();
+  if (due.length === 0) return false;
+  for (const a of due) {
+    notify(formatAlarmAt(a.atMinute), a.label, 'alarm', 'warn');
+    // A one-shot alarm disarms itself so it cannot re-ring every tick. A
+    // repeating alarm stays armed for its next matching day.
+    if (a.repeatDays.length === 0) alarmToggle(a.id);
+  }
+  return true;
 }

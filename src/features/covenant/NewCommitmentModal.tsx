@@ -92,7 +92,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Morning stillness, Read scripture, Call a friend"
-            className="w-full mb-3 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-[13px] text-[var(--text-primary)] placeholder:text-zinc-600 focus:outline-none focus:border-[#e8866b]/50"
+            className="w-full mb-3 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-[13px] text-[var(--text-primary)] placeholder:text-zinc-600 focus:outline-none focus:border-[var(--color-clay-500)]/50"
           />
 
           <label className="block text-[11px] text-[var(--text-muted)] mb-1">A short note to yourself (optional)</label>
@@ -100,7 +100,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Why this matters to you"
-            className="w-full mb-3 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-[13px] text-[var(--text-primary)] placeholder:text-zinc-600 focus:outline-none focus:border-[#e8866b]/50"
+            className="w-full mb-3 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-[13px] text-[var(--text-primary)] placeholder:text-zinc-600 focus:outline-none focus:border-[var(--color-clay-500)]/50"
           />
 
           <label className="block text-[11px] text-[var(--text-muted)] mb-1.5">Color</label>
@@ -125,7 +125,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
                 key={c}
                 onClick={() => setCadence(c)}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
-                  cadence === c ? 'bg-[#e8866b]/15 text-[#e8866b] border-[#e8866b]/30' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700/50'
+                  cadence === c ? 'bg-[var(--color-clay-500-15)] text-[var(--color-clay-400)] border-[var(--color-clay-500)]/30' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700/50'
                 }`}
               >
                 {c === 'daily' ? 'Every day' : 'Specific days'}
@@ -140,7 +140,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
                   key={d}
                   onClick={() => setWeeklyTargetDays(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
                   className={`w-8 h-8 rounded-full text-[11px] font-medium transition-colors ${
-                    weeklyTargetDays.includes(i) ? 'bg-[#e8866b]/20 text-[#e8866b]' : 'bg-zinc-800/50 text-zinc-500'
+                    weeklyTargetDays.includes(i) ? 'bg-[var(--color-clay-500-20)] text-[var(--color-clay-400)]' : 'bg-zinc-800/50 text-zinc-500'
                   }`}
                 >
                   {d[0]}
@@ -156,7 +156,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
               min={0}
               value={targetDays}
               onChange={e => setTargetDays(Math.max(0, Number(e.target.value) || 0))}
-              className="w-20 px-2.5 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-[13px] text-[var(--text-primary)] text-center focus:outline-none focus:border-[#e8866b]/50"
+              className="w-20 px-2.5 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-[13px] text-[var(--text-primary)] text-center focus:outline-none focus:border-[var(--color-clay-500)]/50"
             />
             <span className="text-[12px] text-zinc-400">days</span>
             {targetDays > 0 && (
@@ -166,7 +166,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
 
           <div className="rounded-lg bg-zinc-800/40 p-3 mb-4">
             <label className="flex items-center gap-2 text-[12px] text-zinc-300 mb-2 cursor-pointer select-none">
-              <input type="checkbox" checked={detectEnabled} onChange={e => setDetectEnabled(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800 text-[#e8866b]" />
+              <input type="checkbox" checked={detectEnabled} onChange={e => setDetectEnabled(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800 text-[var(--color-clay-400)]" />
               Auto-detect from activity (optional)
             </label>
             {detectEnabled && (
@@ -179,8 +179,8 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
                       className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
                         detectMode === m
                           ? m === 'positive'
-                            ? 'bg-[var(--color-mem-400)]/15 text-[var(--color-mem-400)] border-[var(--color-mem-400)]/30'
-                            : 'bg-[#e8866b]/15 text-[#e8866b] border-[#e8866b]/30'
+                            ? 'bg-[var(--color-mem-400-15)] text-[var(--color-mem-400)] border-[var(--color-mem-400)]/30'
+                            : 'bg-[var(--color-clay-500-15)] text-[var(--color-clay-400)] border-[var(--color-clay-500)]/30'
                           : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-500 border-zinc-700/50'
                       }`}
                     >
@@ -208,15 +208,15 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
                   </div>
                 )}
                 {detectMode === 'avoidance' && (
-                  <p className="text-[11px] text-[#e8866b]/80">Detecting any of these keywords will cancel today&apos;s streak</p>
+                  <p className="text-[11px] text-[var(--color-clay-400)]/80">Detecting any of these keywords will cancel today&apos;s streak</p>
                 )}
                 <label className="flex items-center gap-2 text-[11px] text-zinc-400 cursor-pointer select-none">
-                  <input type="checkbox" checked={requireJournal} onChange={e => setRequireJournal(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800 text-[#e8866b]" />
+                  <input type="checkbox" checked={requireJournal} onChange={e => setRequireJournal(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800 text-[var(--color-clay-400)]" />
                   Require journal entry before confirming
                 </label>
                 {detectMode === 'avoidance' && (
                   <label className="flex items-center gap-2 text-[11px] text-zinc-400 cursor-pointer select-none">
-                    <input type="checkbox" checked={autoConfirm} onChange={e => setAutoConfirm(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800 text-[#e8866b]" />
+                    <input type="checkbox" checked={autoConfirm} onChange={e => setAutoConfirm(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800 text-[var(--color-clay-400)]" />
                     Auto-confirm when no violations detected
                   </label>
                 )}
@@ -227,7 +227,7 @@ export function NewCommitmentModal({ existing, onClose, onCreate, onUpdate }: Ne
           <button
             disabled={!canSave}
             onClick={submit}
-            className="w-full py-2.5 rounded-lg bg-[#e8866b] text-white text-[13px] font-semibold hover:bg-[#d96846] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-2.5 rounded-lg bg-[var(--color-clay-500)] text-white text-[13px] font-semibold hover:bg-[#d96846] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {isEditing ? 'Save changes' : 'Begin this practice'}
           </button>

@@ -546,7 +546,7 @@ export const Sidebar = memo(function SidebarComponent({
                     className={cn(
                       'flex-1 px-1.5 py-1 rounded text-[10px] capitalize transition-colors',
                       config.side === s
-                        ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]'
+                        ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
                         : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 light:text-[var(--text-muted)] light:hover:bg-[var(--ws-veil)] light:hover:text-[var(--text-primary)]',
                     )}
                   >
@@ -786,7 +786,7 @@ export const Sidebar = memo(function SidebarComponent({
                   className={cn(
                     'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
                     editMode
-                      ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]'
+                      ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
                       : 'text-zinc-500 hover:text-white hover:bg-zinc-800',
                   )}
                   title="Arrange groups and sidebar side"
@@ -907,7 +907,7 @@ export const Sidebar = memo(function SidebarComponent({
                     className={cn(
                       'flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] transition-colors',
                       editMode
-                        ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]'
+                        ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
                         : 'text-zinc-500 hover:text-white hover:bg-zinc-800',
                     )}
                     title="Arrange groups and sidebar side"

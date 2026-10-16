@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Mic, Square, Send, Mail, Inbox, Calendar, ClipboardList, RefreshCw, Search, PenLine, Newspaper, Eye, Target, Zap, Paperclip, X } from "lucide-react"
-import { SlashCommandPalette } from "./SlashCommandPalette"
+import { Mic, Square, Send, Mail, Inbox, Calendar, ClipboardList, RefreshCw, Search, PenLine, Newspaper, Eye, Target, Zap, Paperclip, X, Rows3, Check } from "lucide-react"
+import { SlashCommandPalette, type SlashCommand } from "./SlashCommandPalette"
 import { VoiceInputWrapper } from '@/components/VoiceInputWrapper';
 import { getAllCommands } from "../../../services/customSlashCommands"
 
@@ -17,7 +17,7 @@ export interface ChatInputProps {
   onOpenCommands?: () => void
 }
 
-const SLASH_COMMANDS = [
+const SLASH_COMMANDS: SlashCommand[] = [
   { id: "unread", name: "/unread", desc: "Show unread emails", icon: <Mail size={14} />, category: "email" },
   { id: "inbox", name: "/inbox", desc: "Show recent emails", icon: <Inbox size={14} />, category: "email" },
   { id: "calendar", name: "/calendar", desc: "Show upcoming events", icon: <Calendar size={14} />, category: "calendar" },
@@ -30,16 +30,28 @@ const SLASH_COMMANDS = [
   { id: "focus", name: "/focus", desc: "Start focus session", icon: <Target size={14} />, category: "ai" },
 ]
 
-/** Composer growth ceilings. `140` is the historical hardcoded value, kept as the
- *  default so existing users see no change on upgrade. */
+/** Composer growth ceilings.
+ *  `closed` is the default: a single closed line that does NOT grow as you
+ *  type, so the composer stops eating the panel. `compact` is the old default
+ *  (140) and stays reachable — it used to be the floor for everyone.
+ *  Dragging writes a free-form px override that beats every preset until the
+ *  user picks one again or hits Reset. */
 export const GROW_CAPS = {
+  closed: 44,
   compact: 140,
   comfortable: 320,
   full: 640,
 } as const
 export type GrowMode = keyof typeof GROW_CAPS
-export const GROW_MIN = 88
+export const GROW_MIN = 44
 export const GROW_MAX = 720
+
+export const GROW_LABELS: Record<GrowMode, string> = {
+  closed: 'Closed',
+  compact: 'Compact',
+  comfortable: 'Comfortable',
+  full: 'Full',
+}
 
 const GROW_KEY = 'ai.composer.growMode'
 const GROW_OVERRIDE_KEY = 'ai.composer.growPx'
@@ -56,14 +68,14 @@ export function ChatInput(props: ChatInputProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteIndex, setPaletteIndex] = useState(0)
-  const [filteredCommands, setFilteredCommands] = useState(SLASH_COMMANDS)
+  const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>(SLASH_COMMANDS)
   const [pendingImages, setPendingImages] = useState<string[]>([])
   const historyIndexRef = useRef(-1)
   const draftRef = useRef("")
 
   const [growMode, setGrowMode] = useState<GrowMode>(() => {
     const v = readStored(GROW_KEY)
-    return v && v in GROW_CAPS ? (v as GrowMode) : 'compact'
+    return v && v in GROW_CAPS ? (v as GrowMode) : 'closed'
   })
   const [growOverride, setGrowOverride] = useState<number | null>(() => {
     const v = readStored(GROW_OVERRIDE_KEY)
@@ -81,6 +93,25 @@ export function ChatInput(props: ChatInputProps) {
     writeStored(GROW_KEY, m)
     writeStored(GROW_OVERRIDE_KEY, null)
   }, [])
+
+  /* Size picker popover. A drag writes a free-form px override that beats
+     every preset, so the button has to admit that state and offer a way out —
+     otherwise the presets silently stop working after the first drag. */
+  const [sizeMenuOpen, setSizeMenuOpen] = useState(false)
+  const sizeBtnRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!sizeMenuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (sizeBtnRef.current && !sizeBtnRef.current.contains(e.target as Node)) setSizeMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSizeMenuOpen(false) }
+    document.addEventListener("mousedown", onDown)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDown)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [sizeMenuOpen])
 
   // `cap` is a DEPENDENCY, not just props.value: without it a drag resize is
   // immediately overwritten the next time the value changes, and the two fight.
@@ -107,8 +138,12 @@ export function ChatInput(props: ChatInputProps) {
     let latest = cap
 
     const onMove = (ev: PointerEvent) => {
-      // dragging UP (smaller clientY) should make the box TALLER
-      latest = Math.min(Math.max(startCap + (startY - ev.clientY), GROW_MIN), GROW_MAX)
+      // The handle sits on the BOTTOM edge of the composer, so pulling DOWN
+      // moves that edge away from the text and makes the box TALLER. This was
+      // `startY - ev.clientY`, which inverted it: drag down shrank the box and
+      // drag up grew it. Matches the canvas composer's top-edge handle, where
+      // `ev.clientY - startY` is equally the natural direction.
+      latest = Math.min(Math.max(startCap + (ev.clientY - startY), GROW_MIN), GROW_MAX)
       setGrowOverride(latest)
     }
     const onUp = () => {
@@ -144,6 +179,37 @@ export function ChatInput(props: ChatInputProps) {
       reader.readAsDataURL(file)
     })
   }, [])
+
+  /* Global "/" jump-to-composer.
+     The palette used to be unreachable unless you were ALREADY focused in the
+     textarea and typed "/" — which defeats the point of a shortcut. Now `/`
+     works from anywhere on the AI page: it focuses the composer, seeds a "/"
+     (which opens the palette through the normal onChange path), and lets the
+     user keep typing to filter. Only fires when focus is genuinely elsewhere,
+     so it never steals a keystroke you meant for another field. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return
+      const el = document.activeElement as HTMLElement | null
+      // Already typing somewhere (composer, an input, a textarea, contenteditable)?
+      // Then "/" is literal text and this shortcut must stay out of the way.
+      const inEditable = !!el && (
+        el.tagName === "TEXTAREA" ||
+        el.tagName === "INPUT" ||
+        el.isContentEditable
+      )
+      if (inEditable) return
+      // A modal owns the keyboard while it is open. Chat History binds its own
+      // "/" to focus its search box, and two handlers racing for one keystroke
+      // is exactly the kind of thing that ends up focusing neither.
+      if (document.querySelector("[data-dk-modal-open]")) return
+      e.preventDefault()
+      taRef.current?.focus()
+      props.onChange("/")
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [props.onChange])
 
   const removeImage = useCallback((idx: number) => {
     setPendingImages((prev) => prev.filter((_, i) => i !== idx))
@@ -235,7 +301,7 @@ export function ChatInput(props: ChatInputProps) {
     }
   }, [props])
 
-  const handleSelectCommand = useCallback((cmd: typeof SLASH_COMMANDS[0]) => {
+  const handleSelectCommand = useCallback((cmd: SlashCommand) => {
     props.onChange(cmd.name + " ")
     setPaletteOpen(false)
     taRef.current?.focus()
@@ -286,6 +352,7 @@ export function ChatInput(props: ChatInputProps) {
             onKeyDown={handleKeyDown}
             placeholder="Ask anything, type / for commands..."
             disabled={props.streaming}
+            style={{ fontSize: 13, lineHeight: 1.5, fontFamily: 'var(--sans)' }}
           />
         </VoiceInputWrapper>
         <div
@@ -340,6 +407,94 @@ export function ChatInput(props: ChatInputProps) {
               <Zap size={14} />
             </button>
           )}
+          {/* Composer size — presets + reset, and it admits a drag override */}
+          <div ref={sizeBtnRef} style={{ position: "relative", display: "flex" }}>
+            <button
+              type="button"
+              onClick={() => setSizeMenuOpen((v) => !v)}
+              className="dk-iconbtn"
+              aria-haspopup="menu"
+              aria-expanded={sizeMenuOpen}
+              title={`Composer size: ${growOverride ? `${growOverride}px (custom)` : GROW_LABELS[growMode]}`}
+              style={growOverride ? { color: "var(--cyan)" } : undefined}
+            >
+              <Rows3 size={14} />
+            </button>
+
+            {sizeMenuOpen && (
+              <div
+                role="menu"
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 6px)",
+                  right: 0,
+                  minWidth: 156,
+                  padding: 4,
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg-elevated)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                  zIndex: 40,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                {(Object.keys(GROW_CAPS) as GrowMode[]).map((m) => {
+                  const active = growOverride === null && growMode === m
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={active}
+                      onClick={() => { setMode(m); setSizeMenuOpen(false) }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        padding: "5px 7px",
+                        borderRadius: 5,
+                        border: "none",
+                        background: active ? "var(--surface-2)" : "transparent",
+                        color: "var(--tp)",
+                        fontSize: 12,
+                        fontFamily: "var(--sans)",
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span>{GROW_LABELS[m]}</span>
+                      <span style={{ fontSize: 10, color: "var(--tm)", fontVariantNumeric: "tabular-nums" }}>
+                        {active ? <Check size={11} /> : `${GROW_CAPS[m]}`}
+                      </span>
+                    </button>
+                  )
+                })}
+
+                {growOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => { setMode(growMode); setSizeMenuOpen(false) }}
+                    style={{
+                      marginTop: 3,
+                      padding: "5px 7px",
+                      borderRadius: 5,
+                      border: "1px solid var(--border)",
+                      background: "transparent",
+                      color: "var(--cyan)",
+                      fontSize: 11,
+                      fontFamily: "var(--sans)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Reset to {GROW_LABELS[growMode].toLowerCase()} ({growOverride}px)
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           {props.onToggleVoice && (
             <button
               type="button"

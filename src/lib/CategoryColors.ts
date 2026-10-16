@@ -46,3 +46,16 @@ export const ENTITY_COLORS = {
     light: { text: 'text-zinc-800', border: 'border-zinc-300/50', bg: 'bg-zinc-100', bar: 'bg-zinc-500' },
   },
 } as const;
+
+/** Category dot tokens — replaces the duplicated CAT_META hex literals.
+ *  Maps category keys to Tailwind color variables so dots follow the theme.
+ *  Keys match the existing CAT_META keys across GoldPage, HabitsPage, SchedulePage.
+ */
+export const CATEGORY_DOTS: Record<string, { label: string; dot: string }> = {
+  work:          { label: 'Work',          dot: 'var(--color-rose-400)' },
+  personal:      { label: 'Personal',      dot: 'var(--color-violet-400)' },
+  health:        { label: 'Health',        dot: 'var(--color-emerald-400)' },
+  learning:      { label: 'Learning',      dot: 'var(--color-cyan-400)' },
+  finance:       { label: 'Finance',       dot: 'var(--color-amber-400)' },
+  relationships: { label: 'Relationships', dot: 'var(--color-pink-400)' },
+} as const;

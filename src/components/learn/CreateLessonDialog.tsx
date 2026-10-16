@@ -380,7 +380,7 @@ function PromptSectionPreview({ prompt }: { prompt: string }) {
   if (current.content.trim()) sections.push(current);
 
   return (
-    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/50 overflow-hidden">
+    <div className="rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface-50)] overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-zinc-800/30 transition-colors"
@@ -1519,7 +1519,7 @@ export function CreateLessonDialog({
                   <PromptSectionPreview prompt={prompt} />
 
                     {/* Prompt block */}
-                    <div className="relative rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface)]/80 backdrop-blur-xl overflow-hidden">
+                    <div className="relative rounded-xl border border-zinc-800/50 bg-zinc-950 light:bg-[var(--ws-surface-80)] backdrop-blur-xl overflow-hidden">
                       <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-2.5">
                         <span className="text-xs font-medium text-zinc-400">Generated prompt</span>
                         <div className="flex gap-1.5">

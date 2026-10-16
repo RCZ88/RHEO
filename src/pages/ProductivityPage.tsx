@@ -1063,7 +1063,7 @@ export default function ProductivityPage({
         <div className="sticky top-0 z-30 -mx-5 px-5 bg-[var(--color-background)] border-b border-[var(--color-border)] py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg grid place-items-center bg-[var(--page-accent)]/12 border border-[var(--page-accent)]/25">
+              <div className="h-9 w-9 rounded-lg grid place-items-center bg-[var(--page-accent-12)] border border-[var(--page-accent)]/25">
                 <Target className="w-4.5 h-4.5 text-[var(--page-accent)]" />
               </div>
               <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Productivity</h1>
@@ -1115,9 +1115,9 @@ export default function ProductivityPage({
           {comparison && (
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
               comparison.direction === 'up'
-                ? 'border-[var(--tier-productive)]/30 bg-[var(--tier-productive)]/10 text-[var(--tier-productive)]'
+                ? 'border-[var(--tier-productive)]/30 bg-[var(--tier-productive-10)] text-[var(--tier-productive)]'
                 : comparison.direction === 'down'
-                  ? 'border-[var(--tier-distracting)]/30 bg-[var(--tier-distracting)]/10 text-[var(--tier-distracting)]'
+                  ? 'border-[var(--tier-distracting)]/30 bg-[var(--tier-distracting-10)] text-[var(--tier-distracting)]'
                   : 'border-[var(--color-border)] bg-[var(--color-muted)] text-[var(--text-secondary)]'
             }`}>
               {comparison.direction === 'up' && <ArrowUp className="w-4 h-4" />}
@@ -1423,21 +1423,21 @@ export default function ProductivityPage({
         <div className="flex items-center gap-2">
               <button onClick={() => setTierFilter('productive')}
                 className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${tierFilter === 'productive'
-                    ? 'bg-[var(--tier-productive)]/15 text-[var(--tier-productive)] border border-[var(--tier-productive)]/40'
+                    ? 'bg-[var(--tier-productive-15)] text-[var(--tier-productive)] border border-[var(--tier-productive)]/40'
                     : 'bg-[var(--color-muted)] border border-[var(--color-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}>
                 <div className="w-2 h-2 rounded-full bg-[var(--tier-productive)]" /> Productive
               </button>
               <button onClick={() => setTierFilter('neutral')}
                 className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${tierFilter === 'neutral'
-                    ? 'bg-[var(--tier-neutral)]/15 text-[var(--tier-neutral)] border border-[var(--tier-neutral)]/40'
+                    ? 'bg-[var(--tier-neutral-15)] text-[var(--tier-neutral)] border border-[var(--tier-neutral)]/40'
                     : 'bg-[var(--color-muted)] border border-[var(--color-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}>
                 <div className="w-2 h-2 rounded-full bg-[var(--tier-neutral)]" /> Neutral
               </button>
               <button onClick={() => setTierFilter('distracting')}
                 className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${tierFilter === 'distracting'
-                    ? 'bg-[var(--tier-distracting)]/15 text-[var(--tier-distracting)] border border-[var(--tier-distracting)]/40'
+                    ? 'bg-[var(--tier-distracting-15)] text-[var(--tier-distracting)] border border-[var(--tier-distracting)]/40'
                     : 'bg-[var(--color-muted)] border border-[var(--color-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}>
             <div className="w-2 h-2 rounded-full bg-[var(--tier-distracting)]" /> Distracting
@@ -1686,7 +1686,7 @@ export default function ProductivityPage({
                 className="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--tier-distracting)]/[0.07] border border-[var(--tier-distracting)]/20"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-[var(--tier-distracting)]/12 flex items-center justify-center flex-shrink-0 text-[var(--tier-distracting)]">
+                  <div className="w-8 h-8 rounded-lg bg-[var(--tier-distracting-12)] flex items-center justify-center flex-shrink-0 text-[var(--tier-distracting)]">
                     {item.type === 'app' ? (
                       <Monitor className="w-4 h-4" />
                     ) : item.type === 'website' ? (

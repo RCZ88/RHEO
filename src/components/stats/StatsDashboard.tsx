@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { BarChart3, Loader2, AlertCircle } from 'lucide-react';
 import { KpiRow, type KpiData } from './KpiRow';
@@ -162,20 +162,14 @@ function StripedBarCard({
       initial={reduce ? undefined : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="relative overflow-hidden rounded-xl p-5 min-h-[220px] flex flex-col"
-      style={{
-        background: 'linear-gradient(135deg, rgba(20,22,30,0.9) 0%, rgba(11,12,16,0.95) 100%)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0px 20px 40px -10px rgba(0,0,0,0.5)',
-      }}
+      className="relative overflow-hidden rounded-xl p-5 min-h-[220px] flex flex-col bg-[linear-gradient(135deg,rgba(20,22,30,0.9)_0%,rgba(11,12,16,0.95)_100%)] light:bg-none light:bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] light:border-[var(--ws-border)] shadow-[0px_20px_40px_-10px_rgba(0,0,0,0.5)] light:shadow-none"
     >
       {/* LAMINAR §7.1: no decorative chrome gradient. Depth comes from the
           hairline above, not a white wash. */}
       <div className="flex items-center justify-between mb-5 relative">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#8E95A5]">{title}</h3>
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <BarChart3 className="w-4 h-4 text-[#8E95A5]" />
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--text-muted)]">{title}</h3>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-[rgba(255,255,255,0.05)] light:bg-[var(--ws-surface-sunken)] border border-[rgba(255,255,255,0.08)] light:border-[var(--ws-border)]">
+          <BarChart3 className="w-4 h-4 text-[var(--text-muted)]" />
         </div>
       </div>
 
@@ -183,20 +177,20 @@ function StripedBarCard({
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="flex flex-col items-center gap-2">
-              <Loader2 className="w-5 h-5 text-[#8E95A5] animate-spin" />
-              <span className="text-[11px] text-[#8E95A5]">Loading...</span>
+              <Loader2 className="w-5 h-5 text-[var(--text-muted)] animate-spin" />
+              <span className="text-[11px] text-[var(--text-muted)]">Loading...</span>
             </div>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-full gap-2">
-            <AlertCircle className="w-5 h-5" style={{ color: NEON.crimson }} />
-            <button onClick={onRetry} className="text-xs transition-colors" style={{ color: NEON.crimson }}>
+            <AlertCircle className="w-5 h-5 text-[#FF2A4B] light:text-[var(--error)]" />
+            <button onClick={onRetry} className="text-xs transition-colors text-[#FF2A4B] light:text-[var(--error)]">
               {error}
             </button>
           </div>
         ) : empty || sorted.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <span className="text-sm" style={{ color: '#8E95A5' }}>No data available</span>
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>No data available</span>
           </div>
         ) : (
           <div className="space-y-3">
@@ -204,30 +198,31 @@ function StripedBarCard({
               const pct = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
               return (
                 <div key={item.key} className="flex items-center gap-3 group">
-                  <span className="text-[11px] w-4 text-right tabular-nums" style={{ color: '#8E95A5' }}>
+                  <span className="text-[11px] w-4 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>
                     {i + 1}
                   </span>
-                  <div className="flex-1 h-7 rounded-lg overflow-hidden relative"
-                    style={{ background: 'rgba(255,255,255,0.03)' }}>
+                  <div className="flex-1 h-7 rounded-lg overflow-hidden relative bg-[rgba(255,255,255,0.03)] light:bg-[var(--ws-surface-sunken)]">
                     <motion.div
                       initial={reduce ? undefined : { width: 0 }}
                       animate={{ width: `${pct}%` }}
                       transition={{ duration: 0.7, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                      className="h-full rounded-lg relative"
+                      className="h-full rounded-lg relative hue-bar"
                       style={{
-                        background: `repeating-linear-gradient(45deg, ${item.color}40 0px, ${item.color}40 2px, transparent 2px, transparent 6px)`,
-                        borderTop: `2px solid ${item.color}`,
-                        boxShadow: `0px -2px 8px ${item.glow}`,
-                      }}
+                        '--hue': item.color,
+                        '--hue-glow': item.glow,
+                        background: 'repeating-linear-gradient(45deg, var(--hue-fill) 0px, var(--hue-fill) 2px, transparent 2px, transparent 6px)',
+                        borderTop: '2px solid var(--hue-cap)',
+                        boxShadow: '0px -2px 8px var(--hue-flare)',
+                      } as CSSProperties}
                     />
                     {/* Glow overlay on hover */}
-                    <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                      style={{ boxShadow: `inset 0 0 20px ${item.glow}` }} />
+                    <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none hue-bar"
+                      style={{ '--hue': item.color, '--hue-glow': item.glow, boxShadow: 'inset 0 0 20px var(--hue-hover)' } as CSSProperties} />
                   </div>
-                  <span className="text-[11px] w-24 truncate text-right font-medium" style={{ color: '#E4E4E7' }}>
+                  <span className="text-[11px] w-24 truncate text-right font-medium" style={{ color: 'var(--text-primary)' }}>
                     {item.label}
                   </span>
-                  <span className="text-[11px] w-16 text-right tabular-nums" style={{ color: '#8E95A5' }}>
+                  <span className="text-[11px] w-16 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>
                     {formatValue(item.value)}
                   </span>
                 </div>

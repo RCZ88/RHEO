@@ -25,7 +25,7 @@ export function MemoryUploader({ onFiles }: MemoryUploaderProps) {
     >
       <div className="warmth-aurora" />
       <div className="relative z-10 flex flex-col items-center gap-2">
-        <div className="w-10 h-10 rounded-full bg-[var(--color-mem-400)]/15 flex items-center justify-center text-[var(--color-mem-400)]">
+        <div className="w-10 h-10 rounded-full bg-[var(--color-mem-400-15)] flex items-center justify-center text-[var(--color-mem-400)]">
           <ImagePlus className="w-5 h-5" />
         </div>
         <p className="text-[13px] text-[var(--text-primary)] font-medium">Add photos or videos</p>

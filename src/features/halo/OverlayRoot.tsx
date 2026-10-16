@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, Globe, Lock, Mic, Pause, Pin, Play, RotateCcw, Timer } from 'lucide-react';
 import { StopwatchHero } from './StopwatchHero';
+import { CompactPill, type CompactKind } from './CompactPill';
 import { FocusPageRow } from './FocusPageRow';
 import { DictationIsland } from './DictationIsland';
 import './halo.css';
@@ -188,7 +189,16 @@ function overdueLabel(deltaMs: number | undefined): string {
   return `in ${days} day${days === 1 ? '' : 's'}`;
 }
 
-/** Overdue uses the signal hue; on-time stays muted. Never a second accent. */
+/** Board 1's COMPACT deadline form: "34d overdue". Abbreviated, unlike board 2's
+   *  `overdueLabel()` which spells "34 days overdue" — the pill has ~198px and the full phrase
+   *  does not fit beside the title. Two forms of one value, both from the file. */
+  function formatDeadlineDue(deltaMs: number | undefined): string {
+    if (deltaMs == null) return '—';
+    const days = Math.floor(Math.abs(deltaMs) / 86_400_000);
+    return deltaMs < 0 ? `${days}d overdue` : days <= 0 ? 'today' : `in ${days}d`;
+  }
+
+  /** Overdue uses the signal hue; on-time stays muted. Never a second accent. */
 function overdueColor(isOverdue: boolean | undefined): string {
   return isOverdue ? 'var(--halo-signal)' : 'var(--halo-muted)';
 }
@@ -323,9 +333,39 @@ const IDLE_GAP_SHOW_MS = 60_000;
 
 const FIXTURE_APP: NowPayload = { app: 'No app detected', category: '—', tier: 'neutral' };
 
-export function OverlayRoot() {
+/** The kinds that have a board-1 pill DESIGN in HALO_STATES.html. Anything else keeps the
+ *  app-derived default rather than rendering an undesigned pill. */
+const BOARD1_PILL_KINDS = new Set<CompactKind>([
+  'stopwatch',
+  'stopwatchSite',
+  'now',
+  'website',
+  'private',
+  'dictation',
+  'aiUsage',
+  'hud',
+  'nextDeadline',
+  'critical',
+]);
+
+export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(false);
+  /* Whether main's hover test currently reports the cursor INSIDE the island's rect. Distinct
+   * from `expanded`, which only becomes true after the open delay matures (§50: `hovered` means
+   * "cursor is inside", not "the surface is open"). `resident: 'hover'` uses this to keep the
+   * pill unpainted until the cursor actually arrives; reading `expanded` there instead would
+   * leave a 110ms window where the pill is invisible but click-through is already re-enabled. */
+  const [hovered, setHovered] = useState(false);
+
+  /* THE SIZE MAIN ACTUALLY GAVE THE WINDOW. Defaults to the Medium preset so the first paint
+   * before `halo:geometry` arrives is a real size rather than a zero box. */
+  const [geom, setGeom] = useState({
+    expanded: { width: 560, height: 134 },
+    compact: { width: 198, height: 32 },
+    squeeze: 1,
+    tight: false,
+  });
   const reduce = useReducedMotion();
   const [prefs, setPrefs] = useState<HaloPrefs>(HALO_DEFAULTS);
 
@@ -372,7 +412,7 @@ export function OverlayRoot() {
    *   1. A producer that FAILS produces NO activity. Its widget then shows its honest
    *      empty sentence. Creating an entry with zeros would be a fabricated measurement.
    *   2. A `null` field means UNKNOWN, not zero, and the card renders `unknown` for it. */
-  const [producers, setProducers] = useState<{ ai?: AiUsagePayload; hud?: HudPayload; deadline?: NextDeadlinePayload }>({});
+  const [producers, setProducers] = useState<{ ai?: AiUsagePayload; hud?: HudPayload; deadline?: NextDeadlinePayload; dictation?: DictationPayload }>({});
   /* §12 error state. The producer below used to swallow BOTH a thrown call and an `ok:false`
    * reply into the same "no entry" outcome, so a dead database and an empty one were
    * indistinguishable in the UI — and a dead one looked like a healthy empty list.
@@ -539,10 +579,15 @@ export function OverlayRoot() {
   }, [pinned, open]);
 
   // Authoritative path: the main process owns hover intent once the window exists.
+  // IN-APP MODE: Prefer local DOM hover (see below) so the island never depends
+  // on the main process hot-zone geometry or a second window. GPT decision: no
+  // separate surface; hover must be a real DOM interaction inside RHEO.
   useEffect(() => {
+    if (inApp) return;
     if (!bridge?.onHover) return;
     return bridge.onHover(({ inside, pinned: isPinned }) => {
       setPinned(isPinned);
+      setHovered(inside);
       if (isPinned) return void open();
       clearTimers();
       if (inside && hoverTriggered) {
@@ -564,12 +609,12 @@ export function OverlayRoot() {
         );
       }
     });
-  }, [clearTimers, open, hoverTriggered, prefs.trigger.openDelayMs, prefs.trigger.closeDelayMs]);
-
+  }, [inApp, clearTimers, open, hoverTriggered, prefs.trigger.openDelayMs, prefs.trigger.closeDelayMs]);
   // Local path: keeps the island interactive when running without the native
-  // window, which is how it gets verified in a plain browser.
+  // window, which is how it gets verified in a plain browser. In in-app mode we ALSO
+  // use this path, because the island is DOM inside RHEO and the pointer is directly ours.
   useEffect(() => {
-    if (bridge?.onHover) return;
+    if (!inApp && bridge?.onHover) return;
     // A click-only or hotkey-only island has no local hover path at all. Registering the
     // listener anyway would let a pointer sample open a surface the user explicitly asked
     // to be pointer-inert.
@@ -584,6 +629,11 @@ export function OverlayRoot() {
     const onMove = (e: PointerEvent) => {
       if (pinned) return;
       const inside = e.clientY <= resolveHaloSize(prefs.scale).compactHeight + prefs.trigger.padY;
+      /* Same feed as the bridge path, so `resident: 'hover'` behaves identically with and
+       * without a native window. Set BEFORE the first-sample guard below, because that guard
+       * exists to suppress the OPEN transition, not to hide the pill — a cursor already inside
+       * at mount must still show the pill. */
+      setHovered(inside);
       if (wasInside === null) {
         wasInside = inside;
         return;
@@ -602,9 +652,16 @@ export function OverlayRoot() {
       window.removeEventListener('pointermove', onMove);
       clearTimers();
     };
-  }, [clearTimers, open, close, pinned, hoverTriggered, prefs.trigger.openDelayMs, prefs.trigger.closeDelayMs]);
+  }, [inApp, clearTimers, open, close, pinned, hoverTriggered, prefs.trigger.openDelayMs, prefs.trigger.closeDelayMs]);
 
   // Real data, when the main process supplies it.
+  // The size main gave the window. Without this the renderer can only guess, and on a
+  // clamped display its guess is too big — the content overflows a box main already shrank.
+  useEffect(() => {
+    if (!bridge?.onGeometry) return;
+    return bridge.onGeometry((g) => setGeom(g));
+  }, []);
+
   useEffect(() => {
     if (!bridge?.onSnapshot) return;
     return bridge.onSnapshot((s) => {
@@ -995,6 +1052,49 @@ const inBrowser = currentApp.category === 'Browser';
 
   /* Honest-empty copy for the resident when its producer has nothing. Never a fake value. */
   const residentEmpty = composed.resident ? EMPTY_COPY[composed.resident.kind] : undefined;
+
+  /* ══ THE RENDERER HALF OF `resident` ══════════════════════════════════════════════
+   *
+   * Main only owns the kill switch (`resident: 'off'` destroys the window). Whether the pill
+   * PAINTS before it is hovered is a renderer decision, and it is what the user means by
+   * "always on".
+   *
+   *   always — the pill is painted whenever the island is collapsed, so the window is never a
+   *            blank transparent rectangle sitting on the desktop. Default.
+   *   hover  — nothing paints until the cursor arrives; the surface stays fully transparent and
+   *            the island is invisible until then. This is the classic dynamic-island behaviour.
+   *   off    — main has already destroyed the window; this is belt-and-braces.
+   *
+   * `hovered` comes from the same main-process hover feed that opens the island, so the pill
+   * appearing is driven by the SAME rectangle test that expands it. Deriving it from a separate
+   * signal is how a pill can be on screen in a place the hover test does not cover.
+   *
+   * `pinned` forces the pill on regardless: a pinned island is open by design (§51), so hiding
+   * its collapsed form would be a lie about its own state. */
+  const showPill =
+    prefs.resident === 'off' ? false : prefs.resident === 'always' || expanded || pinned || hovered;
+
+  /* DOES THIS PAGE HAVE CONTENT OF ITS OWN?
+   *
+   * One answer, used once. The AmbientCard strip and the page body both live inside the same
+   * 118-154px window, so only one of them may occupy the content row — HALO_STATES board 2 shows
+   * the page's blocks plus the tab rail, with no card. The strip is therefore the page's
+   * FALLBACK: it renders only when the page would otherwise be empty, which is what keeps the
+   * panel from overflowing.
+   *
+   * Per page, from what each one actually renders:
+   *   focus     — ALWAYS has content (stopwatch + productive + controls), so never the strip.
+   *   now       — has content whenever a snapshot exists (it shows the honest empty otherwise).
+   *   deadlines — content only when a deadline list came back non-empty.
+   *   tools     — content only when dictation or console data exists.
+   */
+  const pageHasContent: Record<string, boolean> = {
+    focus: true,
+    now: currentApp !== null,
+    deadlines: Boolean(producers.deadline),
+    tools: Boolean(producers.dictation || producers.hud),
+  };
+  const expandStrip = pageHasContent[tab] !== true;
   /* THE RENDERER PAINTS THE SAME PRESET THE MAIN PROCESS SIZED THE WINDOW WITH.
    *
    * This line used to be `scaled(HALO_SIZE_TOKENS, prefs.scale)`, i.e. the legacy token bag
@@ -1004,11 +1104,64 @@ const inBrowser = currentApp.category === 'Browser';
    * enforced, applied to geometry.
    */
   const size = resolveHaloSize(prefs.scale);
-  const width = expanded ? size.expandedWidth : size.compactWidth;
-  // Height follows content per phase rather than a fixed guess, so the expanded
-  // surface has no dead band under the last row. `minHeight` still reserves the
-  // shell so the collapse transition has somewhere to shrink from.
-  const height = expanded ? size.expandedHeight : size.compactHeight;
+
+  /* THE FITTED BOX, FROM MAIN.
+   *
+   * Main sizes the native window with `fitToCanvas`, which CLAMPS the preset to the space
+   * actually available (Large 680x154 becomes 380x86 at 380px of available width). This
+   * component used to lay itself out from `resolveHaloSize(prefs.scale)` alone, so on any
+   * clamped display the content stayed at full size inside a shrunken window and overflowed —
+   * 62px of it, measured at a 380px display. That is the "everything is cut off" report, and
+   * it is a two-sided bug: main was right about the window and the renderer was right about
+   * the content, and neither could see the other.
+   *
+   * So `squeeze` scales the CONTENT with the BOX. This is §175's density principle applied on
+   * the responsive axis: when there is not enough room, the layout tightens — the type and the
+   * rhythm step down together — rather than overflowing or clipping. It never shrinks type below
+   * the 11px floor, because the CSS `max()` on every type token enforces that independently.
+   *
+   * Before the first geometry push arrives this is 1, i.e. exactly the preset. That is the
+   * correct default for the common case (a display wide enough to fit it unchanged) and it
+   * costs one frame on the clamped one. */
+  const squeeze = geom.squeeze || 1;
+  const width = expanded ? geom.expanded.width : geom.compact.width;
+  const height = expanded ? geom.expanded.height : geom.compact.height;
+
+  /* WHICH BOARD-1 PILL TO DRAW. Derived from live state, never a fixed demo value, so the pill
+   * always describes what is actually happening:
+   *   - a verified private window   -> lock + "Private window"   (board 1, `private`)
+   *   - a browser is foreground     -> globe + the domain        (board 1, `website`)
+   *   - the stopwatch tracks a site -> dot + clock + globe       (board 1, `stopwatchSite`)
+   *   - otherwise                   -> dot + clock + app name    (board 1, `stopwatch`)
+   *
+   * `isPrivate` is only true for a VERIFIED private window — main never infers it from a missing
+   * domain, so this cannot claim "private" just because the browser extension was quiet. */
+  const compactKind: CompactKind = currentApp.isPrivate
+    ? 'private'
+    : currentApp.domain
+      ? swPayload.displaySource === 'idle'
+        ? 'website'
+        : 'stopwatchSite'
+      : 'stopwatch';
+
+  /* …UNLESS SOMETHING ELSE IS LIVE.
+   *
+   * `composed.toast` is the slot model's highest-precedence activity (§5 priority: transient
+   * beats persistent), and it is what the expanded strip shows first. The pill must agree with
+   * it, or hovering up reveals a card about one thing while the pill you just left said another.
+   *
+   * Only the six kinds with a board-1 pill DESIGN take over. The rest (`now`, `focus`,
+   * `tierBreakdown`, `afkGap`, `clock`, `pinnedActivity`) have no board-1 pill in
+   * HALO_STATES.html — the file draws ten, and inventing an eleventh is exactly the drift this
+   * probe exists to catch. So an unknown kind leaves the pill on its app-derived default rather
+   * than rendering something no design specifies. */
+  const pillKind: CompactKind = BOARD1_PILL_KINDS.has(composed.toast?.kind as CompactKind)
+    ? (composed.toast!.kind as CompactKind)
+    : compactKind;
+
+  // Hide the whole island when the user turns it off (resident) or disables it.
+  // Otherwise the capsule stays on screen after the toggle, the reported defect.
+  if (!prefs.enabled || prefs.resident === 'off') return null;
 
   return (
     <div className="halo-root" data-halo-root="true" data-phase={expanded ? 'expanded' : 'compact'}>
@@ -1033,6 +1186,16 @@ const inBrowser = currentApp.category === 'Browser';
            * `-width/2` could not be. */
           style={{
             ...motionVars,
+            /* `resident: 'hover'` with the cursor away must leave the window VISUALLY EMPTY, not
+             * merely childless. A surface with no children still paints the `--halo-surface`
+             * background and its 12px radius as a stray rounded rectangle on the desktop with
+             * nothing in it, so the surface itself has to be hidden for the transparent canvas
+             * to be genuinely transparent.
+             *
+             * `visibility`, not `opacity`: an opacity-0 surface still receives pointer events, so
+             * the hot zone would expand an island the user cannot see. `visibility: hidden` also
+             * removes it from hit testing, which matches a pill that is not there. */
+            visibility: showPill || expanded ? 'visible' : 'hidden',
             /* THE SINGLE SOURCE OF THE SCALE.
              *
              * `width`/`height` below are `scaled(HALO_SIZE_TOKENS, prefs.scale)`, so the BOX
@@ -1047,7 +1210,20 @@ const inBrowser = currentApp.category === 'Browser';
             /* The preset's DESIGNED type scale (0.85 / 1.0 / 1.2), not the raw slider value.
              * Passing `prefs.scale` here meant a stored 0.7 produced 0.7 type on a Small
              * surface — a fourth size that exists in no design. */
-            ...({ '--halo-scale': String(resolveHaloSize(prefs.scale).typeScale) } as Record<string, string>),
+            ...({
+              /* The preset's DESIGNED type scale multiplied by how far main had to CLAMP the box.
+               * At 1 this is exactly the preset's scale, so a display wide enough to fit the
+               * island unchanged renders identically to before. Below 1 the type and rhythm step
+               * down with the box (the `max(11px, ...)` floor in halo.css still applies, so a
+               * very tight display gets a tighter LAYOUT rather than unreadable text).
+               *
+               * `Math.min` guards the degenerate case: a squeeze of 0 would collapse the scale to
+               * 0 and every `calc()` would resolve to its floor, which is survivable, but a
+               * NaN from a malformed geometry push would poison every token in the stylesheet. */
+              '--halo-scale': String(
+                Math.max(0.1, resolveHaloSize(prefs.scale).typeScale * squeeze),
+              ),
+            } as Record<string, string>),
             /* THE REVEAL SCALE — deliberately near 1.
              *
              * An earlier version set this to `compactHeight / expandedHeight` (0.24) and scaled
@@ -1109,24 +1285,40 @@ const inBrowser = currentApp.category === 'Browser';
 
 
         <div className="halo-clip-x">
-        {/* ── THE AMBIENT STRIP (curation RESULT §1.3 precedence) ──────────────────
-            toast > live+rail > rail > honest empty. Every card renders its own honest
-            state, so a widget whose channel is unwired shows its literal empty sentence
-            rather than a fabricated number. */}
-        {expanded && composed.toast && (
+{/* ── THE AMBIENT STRIP (curation RESULT §1.3 precedence) ──────────────────
+             toast > live+rail > rail > honest empty. Every card renders its own honest
+             state, so a widget whose channel is unwired shows its literal empty sentence
+             rather than a fabricated number.
+
+             ⚠ ONLY WHEN THE PAGE BODY HAS NOTHING TO SHOW.
+
+             These rows were gated on `expanded` alone, and `composed.live` is populated for
+             essentially every session, so a normal expanded island rendered an AmbientCard AND
+             the Focus page AND the tab rail inside a 134px window. That is the "big but cropped,
+             bottom cut off" report: the card is a fixed `padding:12px` + content + border, and it
+             pushed the rail off the bottom edge.
+
+             HALO_STATES.html board 2 is the authority for what an expanded page contains: the
+             page's own blocks plus the tab rail. No card. So the strip is now the page's FALLBACK
+             — it fills the slot when the page has no content of its own, which is exactly what
+             `stripMode === 'empty'` means.
+
+             `expandStrip` is derived below from the resident/page state so there is one answer to
+             "does this page have content", not a per-row guess. */}
+        {expanded && expandStrip && composed.toast && (
           <div data-halo-strip-row="toast">
             <AmbientCard activity={composed.toast} />
           </div>
         )}
 
-        {expanded && !composed.toast && composed.live && (
+        {expanded && expandStrip && !composed.toast && composed.live && (
           <div data-halo-strip-row="live+rail" className="flex" style={{ gap: 12 }}>
             <AmbientCard activity={composed.live} />
             {composed.rail[0] && <AmbientCard activity={composed.rail[0]} />}
           </div>
         )}
 
-        {expanded && !composed.toast && !composed.live && composed.rail.length > 0 && (
+        {expanded && expandStrip && !composed.toast && !composed.live && composed.rail.length > 0 && (
           <div data-halo-strip-row="rail" className="flex" style={{ gap: 12 }}>
             {composed.rail.slice(0, 2).map((a) => (
               <AmbientCard key={a.id} activity={a} />
@@ -1148,7 +1340,7 @@ const inBrowser = currentApp.category === 'Browser';
         {/* COMPACT PIP: the live state's value inside the 232px capsule, plus trailing
             identity dots for activities with no compact content of their own. */}
         {/* `compactStyle: 'off'` — no pip, no dots. The hero numeral is the whole pill. */}
-        {prefs.compactStyle !== 'off' && !expanded && composed.live && (
+        {prefs.compactStyle !== 'off' && !expanded && showPill && composed.live && (
           /* CENTRED ON THE REAL PILL HEIGHT, not `top: 4`.
            *
            * `top: 4` and the dots' `top: 18` were both written for the old fixed 40px pill.
@@ -1167,7 +1359,7 @@ const inBrowser = currentApp.category === 'Browser';
           </div>
         )}
 
-        {prefs.compactStyle !== 'off' && !expanded && composed.compact.dots.length > 0 && (
+        {prefs.compactStyle !== 'off' && !expanded && showPill && composed.compact.dots.length > 0 && (
           <div
             data-halo-dots="true"
             className="flex items-center"
@@ -1182,6 +1374,49 @@ const inBrowser = currentApp.category === 'Browser';
             {composed.compact.dots.map((k) => (
               <AmbientDot key={k} kind={k} />
             ))}
+          </div>
+        )}
+
+        {/* ══ THE COMPACT PILL BODY — spec §72 ══════════════════════════════════════
+         *
+         * §72, verbatim: "Do not shrink the entire expanded dashboard into compact mode."
+         *
+         * Every page block below was guarded by `tab === '<page>'` alone, so collapsing the
+         * island left the Focus/Now/Deadlines/Tools rows mounted inside a 28-40px capsule. That
+         * is the "it opens alongside the small thing" report and the "only one thing shows"
+         * report, and it is the direct cause of the cropped panel: a page body is 48-64px tall
+         * and the pill is 28px, so the row was clipped mid-way down.
+         *
+         * This is the pill's OWN content — board 1's four kinds — rendered only when
+         * collapsed. `CompactPill` decides which kind from live state, so the pill always
+         * describes what is actually happening rather than a fixed demo. */}
+        {!expanded && showPill && (
+          <div
+            data-halo-pill-body="true"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              height: '100%',
+              padding: `0 ${size.padding}px`,
+              overflow: 'hidden',
+            }}
+          >
+            <CompactPill
+              kind={pillKind}
+              stopwatch={swPayload}
+              now={currentApp}
+              fBody={size.fBody}
+              listening={producers.dictation?.state === 'recording'}
+              usageFraction={producers.ai?.usageFraction}
+              hudCount={producers.hud?.activeSessions ?? undefined}
+              deadlineTitle={producers.deadline?.title}
+              deadlineDue={
+                producers.deadline?.deltaMs !== undefined
+                  ? formatDeadlineDue(producers.deadline.deltaMs)
+                  : undefined
+              }
+            />
           </div>
         )}
 
@@ -1231,7 +1466,7 @@ const inBrowser = currentApp.category === 'Browser';
          * layout keeps the hero it has always had. Gated on `uiVersion` so the two designs
          * cannot bleed into each other. The compact pill still uses `StopwatchHero` in BOTH
          * layouts — the file specifies one compact instance, and it is unchanged. */}
-        {tab === 'focus' && prefs.uiVersion === 'figma' && expanded && (
+        {expanded && tab === 'focus' && prefs.uiVersion === 'figma' && (
           <FocusPageRow
             snapshot={storeSnap}
             productiveMs={storeSnap.productiveMs}
@@ -1241,7 +1476,7 @@ const inBrowser = currentApp.category === 'Browser';
           />
         )}
 
-        {tab === 'focus' && !(prefs.uiVersion === 'figma' && expanded) && (
+        {expanded && tab === 'focus' && !(prefs.uiVersion === 'figma') && (
           <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
             <StopwatchHero
               snapshot={swPayload}
@@ -1318,7 +1553,7 @@ const inBrowser = currentApp.category === 'Browser';
           </div>
         )}
 
-        {tab === 'now' && (
+        {expanded && tab === 'now' && (
           <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
             {/*
               §12 DATA STATES. HALO_STATES.html:110-111 designs two Now states this row did
@@ -1489,7 +1724,7 @@ const inBrowser = currentApp.category === 'Browser';
           </div>
         )}
 
-        {tab === 'deadlines' && (
+        {expanded && tab === 'deadlines' && (
           <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
             {/*
               §12 DATA STATES. HALO_STATES.html:117-121 designs FOUR Deadlines states and the
@@ -1594,7 +1829,7 @@ const inBrowser = currentApp.category === 'Browser';
           </div>
         )}
 
-        {tab === 'tools' && (
+        {expanded && tab === 'tools' && (
           <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
             <DictationIsland expanded={expanded} />
             <span aria-hidden="true" style={DIVIDER} />

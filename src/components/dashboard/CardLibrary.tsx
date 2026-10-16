@@ -200,7 +200,7 @@ function ColumnPicker({ columns, onChange }: { columns: number; onChange: (n: nu
             aria-pressed={columns === v}
             className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[12px] font-mono font-medium transition-colors ${
               columns === v
-                ? 'bg-[var(--page-accent)]/20 text-[var(--page-accent)]'
+                ? 'bg-[var(--page-accent-20)] text-[var(--page-accent)]'
                 : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
@@ -558,7 +558,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
         </button>
         <button
           onClick={() => { persistLayout(layout); onChanged?.(layout); onSaved?.(); }}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent)]/15 px-3 py-1.5 text-[12px] font-medium text-[var(--page-accent)] hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--page-accent)]/40 bg-[var(--page-accent-15)] px-3 py-1.5 text-[12px] font-medium text-[var(--page-accent)] hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
           disabled={!dirty}
         >
           <Save size={13} />
@@ -602,7 +602,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
               onClick={() => setCategoryFilter(cat.value)}
               className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
                 categoryFilter === cat.value
-                  ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)] border border-[var(--page-accent)]/30'
+                  ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)] border border-[var(--page-accent)]/30'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
@@ -627,7 +627,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
           <button
             onClick={() => setViewMode('grid')}
             className={`p-1.5 rounded-md transition-colors ${
-              viewMode === 'grid' ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              viewMode === 'grid' ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
             <Grid3X3 size={14} />
@@ -635,7 +635,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
           <button
             onClick={() => setViewMode('list')}
             className={`p-1.5 rounded-md transition-colors ${
-              viewMode === 'list' ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              viewMode === 'list' ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
             <List size={14} />
@@ -685,7 +685,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       </div>
 
       {filteredHiddenWidgets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--color-card)]/50 p-8 text-center min-h-[200px]">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--color-card-50)] p-8 text-center min-h-[200px]">
           <Box size={24} className="text-[var(--text-muted)] mb-2 opacity-50" />
           <p className="text-[12px] text-[var(--text-secondary)]">
             {searchQuery || categoryFilter !== 'all'
@@ -771,7 +771,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                 <button
                   type="button"
                   onClick={e => { e.stopPropagation(); addWidget(widget.id); }}
-                  className="mt-1 w-full flex items-center justify-center gap-1 rounded-md border border-[var(--page-accent)]/30 bg-[var(--page-accent)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--page-accent)] hover:bg-[var(--page-accent)]/20 transition-colors"
+                  className="mt-1 w-full flex items-center justify-center gap-1 rounded-md border border-[var(--page-accent)]/30 bg-[var(--page-accent-10)] px-2 py-0.5 text-[10px] font-medium text-[var(--page-accent)] hover:bg-[var(--page-accent-20)] transition-colors"
                 >
                   <Plus size={10} />
                   Add to dashboard
@@ -847,7 +847,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={e => { e.stopPropagation(); addWidget(widget.id); }}
-                    className="p-1.5 rounded-md bg-[var(--page-accent)]/15 text-[var(--page-accent)] hover:opacity-90 transition-opacity"
+                    className="p-1.5 rounded-md bg-[var(--page-accent-15)] text-[var(--page-accent)] hover:opacity-90 transition-opacity"
                     aria-label="Add to dashboard"
                   >
                     <Plus size={11} />
@@ -887,7 +887,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       </div>
 
       {visibleWidgets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--color-card)]/50 p-8 text-center min-h-[200px]">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--color-card-50)] p-8 text-center min-h-[200px]">
           <LayoutDashboard size={24} className="text-[var(--text-muted)] mb-2 opacity-50" />
           <p className="text-[12px] text-[var(--text-secondary)]">
             Your dashboard is empty.
@@ -900,7 +900,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
         <div
           ref={gridRef}
           className={`relative rounded-xl border-2 transition-colors ${
-            dragOverDashboard ? 'border-[var(--page-accent)] bg-[var(--page-accent)]/5' : 'border-[var(--border-subtle)]'
+            dragOverDashboard ? 'border-[var(--page-accent)] bg-[var(--page-accent-5)]' : 'border-[var(--border-subtle)]'
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -914,7 +914,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 flex items-center justify-center bg-[var(--page-accent)]/10 rounded-xl pointer-events-none"
+                className="absolute inset-0 flex items-center justify-center bg-[var(--page-accent-10)] rounded-xl pointer-events-none"
               >
                 <div className="flex items-center gap-2 text-[var(--page-accent)]">
                   <Plus size={16} />
@@ -969,7 +969,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                     <button
                       type="button"
                       onClick={() => removeWidget(widget.id)}
-                      className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--error)]/15 text-[var(--error)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--error)]/25"
+                      className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--error-15)] text-[var(--error)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--error-25)]"
                       aria-label={`Remove ${widget.name}`}
                     >
                       <X size={10} />
@@ -1044,7 +1044,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                               }}
                               className={`flex items-center justify-between w-full px-1.5 py-1 rounded-md text-left transition-colors ${
                                 selectedSize?.cols === size.cols && selectedSize?.rows === size.rows
-                                  ? 'bg-[var(--page-accent)]/15 text-[var(--page-accent)]'
+                                  ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
                                   : 'hover:bg-white/[0.04]'
                               }`}
                             >
@@ -1222,7 +1222,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
             <button
               onClick={saveAsPreset}
               disabled={!presetName.trim() || isSavingPreset}
-              className="flex items-center gap-1 rounded-md bg-[var(--page-accent)]/15 border border-[var(--page-accent)]/30 px-2.5 py-1.5 text-[11px] font-medium text-[var(--page-accent)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-90"
+              className="flex items-center gap-1 rounded-md bg-[var(--page-accent-15)] border border-[var(--page-accent)]/30 px-2.5 py-1.5 text-[11px] font-medium text-[var(--page-accent)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-90"
             >
               {isSavingPreset ? (
                 <span className="animate-pulse">Saving...</span>
@@ -1262,7 +1262,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                   {activePresetId !== preset.id && (
                     <button
                       onClick={() => deletePreset(preset.id)}
-                      className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors"
+                      className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error-10)] transition-colors"
                       aria-label={`Delete preset ${preset.name}`}
                     >
                       <Trash2 size={11} />

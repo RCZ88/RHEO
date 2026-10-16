@@ -181,7 +181,7 @@ export function AiContextPanel({ open }: { open: boolean }) {
         )}
 
         {isExpanded && !isEditing && (
-          <div className="p-3 border-t border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface)]/50 max-h-96 overflow-y-auto space-y-3 light:bg-white light:border-[var(--ws-border)]">
+          <div className="p-3 border-t border-zinc-800/60 bg-zinc-950 light:bg-[var(--ws-surface-50)] max-h-96 overflow-y-auto space-y-3 light:bg-white light:border-[var(--ws-border)]">
             {(cap.messages || []).map((m: any, i: number) => (
               <div key={i} className={`p-2 rounded text-xs ${m.role === 'user' ? 'bg-cyan-900/20 border-l-2 border-cyan-500' : 'bg-zinc-800/50 border-l-2 border-zinc-600 light:bg-[var(--ws-surface-raised)] light:border-[var(--ws-border-strong)]'}`}>
                 <div className="text-[10px] text-zinc-500 uppercase mb-1 light:text-[var(--text-muted)]">{m.role}</div>

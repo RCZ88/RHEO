@@ -37,7 +37,8 @@ import {
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import { format, subDays, eachDayOfInterval, startOfWeek, addWeeks } from 'date-fns';
 import { getDateRange } from '../lib/dateRange';
-import { glassBackdrop, centerText, makeGradient, sharedTooltipStyle, sharedScales, formatAxisTick, barAnimation, pieAnimation } from '../lib/chart-plugins';
+import { glassBackdrop, centerText, makeGradient, sharedTooltipStyle, sharedScales, formatAxisTick, barAnimation, pieAnimation, cssColor } from '../lib/chart-plugins';
+import { useIsLight } from '../lib/theme';
 import type { Period } from '../lib/dateRange';
 import { CurrentCanvas } from '../components/CurrentCanvas';
 import { renderSignal } from '../lib/renderers/signal';
@@ -127,6 +128,7 @@ function formatDuration(seconds: number): string {
 
 export default function StatsPage({ embedded, appStats, logs, allLogs, selectedPeriod = 'week', dateOffset = 0, onDateOffsetChange, timeMode = 'total', tierAssignments, liveActivityLogs, platformFilter = 'all', compareMode = false, availablePlatforms = [] }: StatsPageProps) {
   useEffect(() => { startPhaseClock(); }, []);
+  const isLight = useIsLight();
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
   const [detailPeriod, setDetailPeriod] = useState<Period>('week');
   const [detailDateOffset, setDetailDateOffset] = useState(0);
@@ -240,12 +242,16 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
         data: sortedApps.map(s => s.total_ms / 1000),
         backgroundColor: colors,
         hoverBackgroundColor: colors.map((c: string) => c.replace('cc', 'aa')),
-        borderColor: '#0a0a0a',
+        // The 2px border exists to cut a GAP between segments, so it must be the
+        // surface BEHIND the donut, never a second colour. A hardcoded `#0a0a0a` drew a
+        // black outline around the data on paper — and `var()` cannot be handed to
+        // canvas at all, so the card token is resolved here (see cssColor).
+        borderColor: isLight ? cssColor('--color-card', '#fcfbf8') : '#0a0a0a',
         borderWidth: 2,
         hoverOffset: 6,
       }]
     };
-  }, [sortedApps]);
+  }, [sortedApps, isLight]);
 
   // Daily/hourly usage data based on selected period + dateOffset
   // In Focus mode only productive activity is included — matches the top-bar clock
@@ -724,7 +730,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
     plugins: {
       glassBackdrop: true,
       centerText: { enabled: true },
-      legend: { position: 'bottom' as const, labels: { color: '#a1a1aa', padding: 18, usePointStyle: true } },
+      legend: { position: 'bottom' as const, labels: { color: isLight ? cssColor('--text-muted', '#57534e') : '#a1a1aa', padding: 18, usePointStyle: true } },
       tooltip: {
         ...sharedTooltipStyle,
         callbacks: {
@@ -742,7 +748,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
       mode: 'index' as const,
       intersect: false,
     },
-  }), []);
+  }), [isLight]);
 
   // Memoized summary cards — was inline array created every render
   // Memoized reversed live logs — avoiding slice().reverse() every render
@@ -766,10 +772,10 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
   const avgBarLabel = selectedPeriod === 'today' ? 'Avg Hour' : selectedPeriod === 'all' ? 'Avg Month' : 'Avg Daily';
 
   const summaryCards = useMemo(() => [
-    { label: 'Total Time', value: totals.totalTime, display: `${Math.floor(totals.totalTime / 3600000)}h ${Math.floor((totals.totalTime % 3600000) / 60000)}m`, numeric: false, icon: Clock, accentColor: 'indigo', chipBg: 'rgba(99,102,241,0.14)', iconColor: '#6366f1', gradientFrom: '#6366f1', gradientTo: '#a855f7' },
-    { label: 'Total Sessions', value: totals.totalSessions, display: String(totals.totalSessions), numeric: true, icon: Activity, accentColor: 'blue', chipBg: 'rgba(59,130,246,0.14)', iconColor: '#3b82f6', gradientFrom: '#3b82f6', gradientTo: '#6366f1' },
-    { label: avgBarLabel, value: formatDuration(avgBarSeconds), display: formatDuration(avgBarSeconds), numeric: false, icon: Timer, accentColor: 'violet', chipBg: 'rgba(139,92,246,0.14)', iconColor: '#8b5cf6', gradientFrom: '#8b5cf6', gradientTo: '#a78bfa' },
-    { label: 'Active Apps', value: totals.uniqueApps, display: String(totals.uniqueApps), numeric: true, icon: LayoutGrid, accentColor: 'emerald', chipBg: 'rgba(16,185,129,0.14)', iconColor: '#10b981', gradientFrom: '#10b981', gradientTo: '#34d399' },
+    { label: 'Total Time', value: totals.totalTime, display: `${Math.floor(totals.totalTime / 3600000)}h ${Math.floor((totals.totalTime % 3600000) / 60000)}m`, numeric: false, icon: Clock, accentColor: 'indigo', chipBg: 'color-mix(in srgb, var(--color-indigo-400) 14%, transparent)', iconColor: 'var(--color-indigo-400)', gradientFrom: 'var(--color-indigo-400)', gradientTo: 'var(--color-violet-400)' },
+    { label: 'Total Sessions', value: totals.totalSessions, display: String(totals.totalSessions), numeric: true, icon: Activity, accentColor: 'blue', chipBg: 'color-mix(in srgb, var(--color-sky-400) 14%, transparent)', iconColor: 'var(--color-sky-400)', gradientFrom: 'var(--color-sky-400)', gradientTo: 'var(--color-indigo-400)' },
+    { label: avgBarLabel, value: formatDuration(avgBarSeconds), display: formatDuration(avgBarSeconds), numeric: false, icon: Timer, accentColor: 'violet', chipBg: 'color-mix(in srgb, var(--color-violet-400) 14%, transparent)', iconColor: 'var(--color-violet-400)', gradientFrom: 'var(--color-violet-400)', gradientTo: 'var(--color-violet-300)' },
+    { label: 'Active Apps', value: totals.uniqueApps, display: String(totals.uniqueApps), numeric: true, icon: LayoutGrid, accentColor: 'emerald', chipBg: 'color-mix(in srgb, var(--color-emerald-400) 14%, transparent)', iconColor: 'var(--color-emerald-400)', gradientFrom: 'var(--color-emerald-400)', gradientTo: 'var(--color-emerald-300)' },
   ], [totals.totalTime, totals.totalSessions, totals.uniqueApps, avgBarSeconds, avgBarLabel]);
 
   const effectivePeriod = timeLock ? 'all' : selectedPeriod;
@@ -793,7 +799,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
               className={`flex items-center gap-1.5 px-4 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
                 timeLock
                   ? 'bg-[rgba(99,102,241,0.14)] border border-[rgba(99,102,241,0.40)] text-indigo-300'
-                  : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-zinc-400 hover:text-white'
+                  : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border border-zinc-800/50 text-zinc-400 hover:text-white light:text-[var(--text-primary)]'
               }`}
               title={timeLock ? 'Unlock timeframe (use nav)' : 'Lock to All Time'}
             >
@@ -1210,7 +1216,7 @@ export default function StatsPage({ embedded, appStats, logs, allLogs, selectedP
                   <SelectItem value="ide">IDE</SelectItem>
                 </Select>
               </div>
-              <div className="bg-zinc-950 light:bg-[var(--ws-surface)]/60 rounded-xl border border-zinc-800/50 h-48 overflow-y-auto font-mono text-xs">
+              <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] rounded-xl border border-zinc-800/50 h-48 overflow-y-auto font-mono text-xs">
                 {displayedLogs.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">

@@ -38,7 +38,7 @@ export function CareerTapestry({ phaseStatus, currentPhase, onPhaseClick, compac
     >
       {/* Subtle background glow */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-[10%] w-[200px] h-[200px] bg-[var(--page-accent)]/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-[10%] w-[200px] h-[200px] bg-[var(--page-accent-5)] rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-[20%] w-[150px] h-[150px] bg-amber-500/5 rounded-full blur-3xl" />
       </div>
 
@@ -51,7 +51,7 @@ export function CareerTapestry({ phaseStatus, currentPhase, onPhaseClick, compac
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => onPhaseClick(1)}
-              className="px-5 py-2 rounded-lg bg-[var(--page-accent)]/20 text-[var(--page-accent)] font-medium text-sm hover:bg-[var(--page-accent)]/30 transition-colors border border-[var(--page-accent)]/20"
+              className="px-5 py-2 rounded-lg bg-[var(--page-accent-20)] text-[var(--page-accent)] font-medium text-sm hover:bg-[var(--page-accent-30)] transition-colors border border-[var(--page-accent)]/20"
             >
               Begin Journey
             </motion.button>

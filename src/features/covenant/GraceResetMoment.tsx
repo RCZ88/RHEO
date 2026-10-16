@@ -36,7 +36,7 @@ export function GraceResetMoment({ commitmentId, commitmentName, onDone }: Grace
         animate={wrapMotion.animate}
         exit={wrapMotion.exit}
         transition={wrapMotion.transition}
-        className="relative overflow-hidden rounded-xl border border-[#e8866b]/25 bg-[#e8866b]/[0.06] p-4 mb-3"
+        className="relative overflow-hidden rounded-xl border border-[var(--color-clay-500)]/25 bg-[var(--color-clay-500)]/[0.06] p-4 mb-3"
       >
         {!reduce && (
           <motion.div
@@ -48,7 +48,7 @@ export function GraceResetMoment({ commitmentId, commitmentName, onDone }: Grace
           />
         )}
         <div className="relative z-10 flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#e8866b]/15 flex items-center justify-center text-[#e8866b] shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-[var(--color-clay-500-15)] flex items-center justify-center text-[var(--color-clay-400)] shrink-0">
             <Sunrise className="w-4.5 h-4.5" />
           </div>
           <div className="flex-1 min-w-0">

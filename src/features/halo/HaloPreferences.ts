@@ -138,8 +138,31 @@ export type HaloUiVersion = 'legacy' | 'figma';
 
 export const HALO_UI_VERSIONS: HaloUiVersion[] = ['figma', 'legacy'];
 
+/**
+ * WHEN THE COMPACT PILL IS ON SCREEN. Distinct from `trigger.mode`, which answers a different
+ * question ("what EXPANDS it"); this answers "is it there at all".
+ *
+ * `trigger.mode` had no value for "always visible" — its four options are hover, click, hotkey
+ * and hover-or-click, all of which are ways to EXPAND. So the user could not express "leave the
+ * pill up" at all, which is why the "always on" setting appeared to do nothing.
+ *
+ * - `always` — the pill is painted on the desktop at all times, whatever else is focused. This
+ *   is the DEFAULT, and it is the answer to "it only works when I'm inside RHEO": the island is
+ *   its own always-on-top window (spec §13/§37), so it is visible over any application.
+ * - `hover`  — the pill appears only once the cursor reaches the hot zone.
+ * - `off`    — no island at all. Equivalent to `enabled: false`, kept for the three-way UI.
+ *
+ * Note this does NOT change what expands it: `always` still expands on hover, and `pinned`
+ * (the pin button) still holds it open.
+ */
+export type HaloResident = 'always' | 'hover' | 'off';
+
+export const HALO_RESIDENT_MODES: HaloResident[] = ['always', 'hover', 'off'];
+
 export interface HaloPrefs {
   enabled: boolean;
+  /** When the compact pill itself is on screen. Defaults to `always`. */
+  resident: HaloResident;
   /** 0.7 – 1.6. Applied to the compact and expanded token sizes alike. */
   scale: number;
   /**
@@ -332,6 +355,7 @@ export const HALO_OFFSET_Y_MAX = 64;
 
 export const HALO_DEFAULTS: HaloPrefs = {
   enabled: true,
+  resident: 'always',
   scale: 1,
   edge: 'top',
   anchor: 'center',
@@ -613,6 +637,7 @@ export function normalizeHaloPrefs(raw: unknown): HaloPrefs {
 
   return {
     enabled: typeof r.enabled === 'boolean' ? r.enabled : HALO_DEFAULTS.enabled,
+    resident: pickEnum(r.resident, HALO_RESIDENT_MODES, HALO_DEFAULTS.resident),
     scale: clampScale(r.scale),
     uiVersion: pickEnum(r.uiVersion, HALO_UI_VERSIONS, HALO_DEFAULTS.uiVersion),
     edge: pickEnum(r.edge, HALO_EDGES, HALO_DEFAULTS.edge),

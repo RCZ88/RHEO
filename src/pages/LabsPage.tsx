@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   Gauge,
+  Timer,
 } from 'lucide-react';
 
 import { PageShell } from '@/components/PageShell';
@@ -48,6 +49,7 @@ const LAB_ICON: Record<Lab['icon'], React.ComponentType<{ className?: string }>>
   'file-text': FileText,
   presentation: Presentation,
   gauge: Gauge,
+  timer: Timer,
 };
 
 /**

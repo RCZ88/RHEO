@@ -370,7 +370,7 @@ export function FieldAIButton({
           <textarea
             value={pasteValue}
             onChange={(e) => setPasteValue(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface)]/60 p-1.5 text-[11px] text-zinc-200 resize-none font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-60)] p-1.5 text-[11px] text-zinc-200 resize-none font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518]/50"
             rows={4}
             placeholder="Paste the AI's JSON response here…"
           />

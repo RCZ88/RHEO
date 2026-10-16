@@ -3715,7 +3715,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                   ))}
                 </select>
                 <div className="flex-1 relative">
-                  <textarea ref={instructionTextareaRef} value={instructionText} onChange={(e) => setInstructionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendInstruction(); } }} rows={1} autoFocus placeholder="Type instruction... (Enter to send)" className="w-full px-3 py-1.5 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 resize-none overflow-hidden" />
+                  <textarea ref={instructionTextareaRef} value={instructionText} onChange={(e) => setInstructionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendInstruction(); } }} rows={1} autoFocus placeholder="Type instruction... (Enter to send)" className="w-full px-3 py-1.5 bg-zinc-900/80 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl text-xs text-white light:text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 resize-none overflow-hidden" />
                 </div>
                 <button onClick={sendInstruction} disabled={!instructionText.trim() || isSending} className="inline-flex items-center gap-1.5 h-7 px-3 rounded-xl text-[11px] font-semibold text-zinc-950 bg-green-500 hover:bg-green-400 transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
                   {isSending ? <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" /> : 'Send'}
@@ -4985,7 +4985,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
                         value={messagesSearchQuery}
                         onChange={(e) => setMessagesSearchQuery(e.target.value)}
                         placeholder="Search messages..."
-                        className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-colors duration-150"
+                        className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded text-xs text-white light:text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-colors duration-150"
                       />
                     </div>
                   </div>
@@ -5057,7 +5057,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               value={saveDialogName}
               onChange={(e) => setSaveDialogName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveCheckpointSubmit()}
-              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded px-3 py-2 text-white text-sm"
+              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded px-3 py-2 text-white light:text-[var(--text-primary)] text-sm"
               placeholder="e.g. Fix login bug"
               autoFocus
             />
@@ -5224,7 +5224,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
               value={workspaceSaveAsName}
               onChange={(e) => setWorkspaceSaveAsName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && workspaceSaveAsName.trim() && handleSaveWorkspace(workspaceSaveAsName.trim()).then(() => setShowWorkspaceSaveAsDialog(false))}
-              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded px-3 py-2 text-white text-sm"
+              className="w-full bg-zinc-950 light:bg-[var(--ws-surface)] border border-zinc-800/60 rounded px-3 py-2 text-white light:text-[var(--text-primary)] text-sm"
               placeholder="e.g. Bug fixing session"
               autoFocus
             />

@@ -5,7 +5,7 @@ interface InterestCloudProps {
   accentColor?: string
 }
 
-export function InterestCloud({ data, accentColor = '#a855f7' }: InterestCloudProps) {
+export function InterestCloud({ data, accentColor = 'var(--color-violet-400)' }: InterestCloudProps) {
   const items = useMemo(() => {
     return Object.values(data)
       .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
@@ -30,8 +30,8 @@ export function InterestCloud({ data, accentColor = '#a855f7' }: InterestCloudPr
             fontWeight: item.confidence > 0.6 ? 600 : 400,
             color: accentColor,
             opacity: item.opacity,
-            background: `${accentColor}10`,
-            border: `1px solid ${accentColor}${Math.round(item.opacity * 40).toString(16).padStart(2, '0')}`,
+            background: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${accentColor} 20%, transparent)`,
           }}
           title={`${item.content} (${Math.round(item.confidence * 100)}% confidence, ${item.occurrences}x)`}
         >

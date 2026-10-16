@@ -24,6 +24,10 @@ export const MAX_SESSION_MS = 120 * 60_000;
 export const MAX_LOGGED_SESSION_MS = 60 * 60_000;
 export const SLEEP_GAP_MS = 5 * 60_000;
 
+// AFK detection: if no foreground change for this long, consider user AFK.
+// Matches app's afkThresholdSeconds (default 5 min, synced via userPreferences).
+export const AFK_THRESHOLD_MS = 5 * 60_000;
+
 // Null-poll budgets, also from src/main.ts:5069-5070. Once the window is absent
 // for this many consecutive polls we hold the last app open as "keepalive"
 // rather than closing the session, because a transient compositor hiccup must

@@ -19,7 +19,7 @@ import { Notification, powerMonitor } from 'electron'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { execSync } from 'child_process'
+import { execSync, spawnSync } from 'child_process'
 
 // ---------------------------------------------------------------------------
 // Platform detection for notification strategy
@@ -82,6 +82,108 @@ function sendNotifySend(title: string, body: string, icon: string): void {
     )
   } catch (e: any) {
     console.warn('[Notifications] notify-send failed:', e.message)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sound
+// ---------------------------------------------------------------------------
+//
+// WHY SOUND LIVES HERE AND NOT IN THE RENDERER
+//
+// `src/services/NotificationService.ts` plays beeps with a Web Audio
+// `OscillatorNode` in the page. That only makes noise while the renderer is
+// alive AND the window is focused enough for the AudioContext to be running.
+// A timer firing at 3am, or a reminder arriving while the user is in the
+// terminal, produced silence. The MAIN process has no such dependency — it
+// outlives every route, every `<Routes key={location.pathname}>` remount, and
+// any hidden window. So every sound now goes through `playNotificationSound`.
+//
+// Linux has no `Notification.sound`; the freedesktop spec puts audio in the
+// `sound-name` hint and even that is optional. The portable path is to play a
+// system sound file ourselves, which is what the player list below does.
+
+let _soundMuted: boolean | null = null
+
+/** True when the user has muted notification sound (app_settings key). */
+export function isSoundMuted(db?: Db): boolean {
+  if (db) {
+    try {
+      const row = db.prepare(`SELECT value FROM app_settings WHERE key = 'notification_sound'`).get() as any
+      if (row?.value != null) return row.value === 'off'
+    } catch { /* table may not exist yet — fall through to the cached value */ }
+  }
+  return _soundMuted === true
+}
+
+/** Persist the mute preference. Safe to call before the DB is ready (no-op). */
+export function setSoundMuted(db: Db | undefined, muted: boolean): void {
+  _soundMuted = muted
+  if (!db) return
+  try {
+    db.prepare(
+      `INSERT INTO app_settings (key, value) VALUES ('notification_sound', ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ).run(muted ? 'off' : 'on')
+  } catch { /* no DB yet — the in-memory cache still applies this session */ }
+}
+
+/** Seed the cached mute flag from the DB once at startup. */
+export function loadSoundPreference(db: Db): void {
+  try {
+    const row = db.prepare(`SELECT value FROM app_settings WHERE key = 'notification_sound'`).get() as any
+    _soundMuted = row?.value === 'off'
+  } catch {
+    _soundMuted = false
+  }
+}
+
+/** Per-tier sound file. `error`/`warn` get the attention-grabbing alert tone. */
+const SOUND_FILE: Record<string, string[]> = {
+  error: ['/usr/share/sounds/freedesktop/stereo/dialog-error.oga', '/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga'],
+  warn: ['/usr/share/sounds/freedesktop/stereo/dialog-warning.oga', '/usr/share/sounds/freedesktop/stereo/message.oga'],
+  success: ['/usr/share/sounds/freedesktop/studio/bell.oga', '/usr/share/sounds/freedesktop/stereo/complete.oga'],
+  info: ['/usr/share/sounds/freedesktop/stereo/message.oga', '/usr/share/sounds/freedesktop/stereo/bell.oga'],
+}
+
+/**
+ * Play a short system sound for a notification tier.
+ *
+ * Deliberately `spawnSync`-free and failure-silent: a missing sound file or a
+ * missing player must NEVER throw into the notification path, because that
+ * path also writes the inbox row. Sound is best-effort; the notification is not.
+ */
+export function playNotificationSound(tier: string = 'info'): void {
+  try {
+    if (isSoundMuted()) return
+
+    if (process.platform === 'win32' || process.platform === 'darwin') {
+      // Electron's shell has no portable "play a sound file" call. On these
+      // platforms the OS notification carries its own sound, so this is a no-op
+      // by design rather than a silent failure.
+      return
+    }
+
+    if (process.platform !== 'linux') return
+
+    const candidates = SOUND_FILE[tier] ?? SOUND_FILE.info
+    const file = candidates.find((p) => fs.existsSync(p))
+    if (!file) {
+      console.warn(`[Notifications] no sound file found for tier "${tier}" (looked in ${candidates.join(', ')})`)
+      return
+    }
+
+    // `paplay` ships with PulseAudio, `canberra-gtk-play` with GTK. Try each
+    // player with each file; the first success wins and the rest are skipped.
+    const players = ['paplay', 'canberra-gtk-play', 'aplay -q']
+    for (const player of players) {
+      const [bin, ...prefix] = player.split(' ')
+      const res = spawnSync(bin, [...prefix, file], { stdio: 'ignore', timeout: 3000 })
+      if (!res.error && res.status === 0) return
+    }
+    console.warn('[Notifications] no audio player available (paplay / canberra-gtk-play / aply)')
+  } catch (e: any) {
+    console.warn('[Notifications] sound failed:', e?.message)
   }
 }
 
@@ -163,6 +265,7 @@ export function enqueueNotification(db: Db, n: {
   // Fire OS notification + emit IPC event for live renderer updates.
   try {
     const icon = resolveNotifIcon()
+    const muted = isSoundMuted(db)
 
     if (canUseElectronNotification()) {
       // Windows / macOS, or Linux with a working DBus notification daemon.
@@ -170,12 +273,26 @@ export function enqueueNotification(db: Db, n: {
         title: n.title,
         body: n.body,
         icon,
-        sound: n.tier === 'error' || n.tier === 'warn',
+        // Electron honours `sound` on Windows/macOS only; on Linux the daemon
+        // may ignore it entirely. `playNotificationSound` below is the reliable
+        // path, so the flag is suppressed there rather than double-playing.
+        // Electron's `NotificationConstructorOptions.sound` is typed `string`,
+        // not boolean, so this is the sound NAME rather than a flag. An empty
+        // string means silent. On Linux the flag is forced empty because the
+        // daemon ignores it and `playNotificationSound` handles audio instead.
+        sound: (muted || process.platform === 'linux')
+          ? ''
+          : (n.tier === 'error' || n.tier === 'warn' ? 'Notification' : 'Default'),
       }).show()
     } else if (process.platform === 'linux') {
       // No DBus notification daemon — fall back to notify-send CLI.
       sendNotifySend(n.title, n.body, icon)
     }
+
+    // One sound for every tier, every platform, regardless of which OS-notify
+    // path above ran. Runs in the main process so it is audible with the
+    // window unfocused or a route remount mid-reminder.
+    if (!muted) playNotificationSound(n.tier)
     // else: unsupported platform — inbox row is still the source of truth.
 
     // Notify renderer for live toasts + bell-badge refresh.
@@ -334,6 +451,21 @@ const TIER_LABEL: Record<TierKey, string> = {
   h1: '1 hour left',
 };
 
+/** "1 day before" — used in the notification title so it says WHY it fired. */
+function leadLabel(leadMin: number): string {
+  const min = Math.max(0, Math.trunc(Number(leadMin) || 0))
+  if (min === 0) return 'due now'
+  if (min < 60) return `${min}m before`
+  if (min % (7 * 24 * 60) === 0) return `${min / (7 * 24 * 60)}w before`
+  if (min % (24 * 60) === 0) return `${min / (24 * 60)}d before`
+  if (min % 60 === 0) return `${min / 60}h before`
+  const h = Math.floor(min / 60)
+  return `${h}h ${min % 60}m before`
+}
+
+/** How late a relative lead may get before we retire it instead of firing. */
+const STALE_REMINDER_GRACE_MS = 5 * 60_000;
+
 export function checkDeadlinesAndNotify(db: Db): void {
   if (!db) return;
   try {
@@ -405,6 +537,108 @@ export function checkDeadlinesAndNotify(db: Db): void {
         break
       }
     }
+  }
+  /* ── Reminders as rows: relative leads AND absolute instants, many per
+     deadline. This runs AFTER the legacy urgency block, and it is the one
+     that actually covers the feature. Order is load-bearing, not cosmetic —
+     see the note on re-reading `notified_at` below.
+
+     Two things were quietly missing and both looked identical from the UI:
+       1. `deadlines.remind_at` is ONE column, so a deadline could only ever
+          remind you once — "a week out AND the morning of" was unstorable.
+       2. A relative lead cannot be stored in an instant at all. Baked into a
+          timestamp it goes stale the moment the deadline moves, and keeps
+          firing relative to the OLD date. So `lead_min` is resolved against
+          the deadline's CURRENT due date on every poll, which is what makes a
+          rescheduled deadline drag its reminders along correctly.
+
+     `fired` is the dedupe. It is set in the same statement that enqueues, and
+     `INSERT OR IGNORE` on the notification id makes a double-tick harmless, so
+     a race between two polls cannot produce two alerts. */
+  try {
+    const dueById = new Map<string, number>()
+    for (const row of rows) {
+      const raw = String(row.due_date || '')
+      const t = new Date(raw.length > 10 ? raw : raw + 'T09:00:00').getTime()
+      if (Number.isFinite(t)) dueById.set(row.id, t)
+    }
+
+    const pending = db.prepare(`
+      SELECT r.id, r.deadline_id, r.mode, r.lead_min, r.remind_at
+      FROM deadline_reminders r
+      JOIN deadlines d ON d.id = r.deadline_id
+      WHERE r.fired = 0
+        AND d.status != 'done'
+        AND (d.snoozed_until IS NULL OR d.snoozed_until <= ?)
+    `).all(new Date().toISOString()) as any[]
+
+    const fire = db.prepare('UPDATE deadline_reminders SET fired = 1 WHERE id = ? AND fired = 0')
+    const markStmt = db.prepare('UPDATE deadlines SET notified_at = ? WHERE id = ?')
+
+    for (const r of pending) {
+      const row = rows.find(x => x.id === r.deadline_id)
+      if (!row) continue
+
+      let fireAt = Number.NaN
+      if (r.mode === 'absolute') {
+        fireAt = r.remind_at ? new Date(r.remind_at).getTime() : Number.NaN
+      } else {
+        const due = dueById.get(r.deadline_id)
+        if (due === undefined) continue
+        const lead = Number.isFinite(r.lead_min) ? Math.max(0, Math.trunc(r.lead_min)) : 0
+        fireAt = due - lead * 60000
+      }
+      if (!Number.isFinite(fireAt) || now < fireAt) continue
+
+      // Only claim it if nobody else got there first.
+      if (fire.run(r.id).changes !== 1) continue
+
+      /* A RELATIVE LEAD THAT HAS ALREADY MISSED ITS MOMENT IS SILENTLY RETIRED,
+         NOT FIRED LATE. Adding is blocked at creation, but rescheduling can walk
+         the deadline back under a lead: you asked to be reminded a day before,
+         then moved the deadline to 20 minutes' time, and the honest alert is
+         nothing — not "Reminder — 1d before" arriving 23 hours after the day it
+         referred to. An alarm that goes off describing a moment that has passed
+         is worse than no alarm, because it teaches you to ignore the ones that
+         matter.
+
+         Absolute reminders are exempt: an absolute time is a fixed appointment,
+         so being late about it is still worth saying. */
+      if (r.mode === 'relative' && now - fireAt > STALE_REMINDER_GRACE_MS) {
+        const n0 = JSON.parse(
+          (db.prepare('SELECT notified_at FROM deadlines WHERE id = ?').get(r.deadline_id) as any)?.notified_at || '{}',
+        )
+        n0[`rem_${r.id}`] = true
+        markStmt.run(JSON.stringify(n0), r.deadline_id)
+        continue
+      }
+
+      enqueueNotification(db, {
+        id: `dl-rem-${r.id}`,
+        kind: 'deadline',
+        title: r.mode === 'relative' && r.lead_min > 0 ? `Reminder — ${leadLabel(r.lead_min)}` : 'Reminder',
+        body: `${row.title}${row.course ? ` · ${row.course}` : ''}`,
+        tier: 'warn',
+        data: { deadlineId: r.deadline_id, reminderId: r.id, type: 'remind', mode: r.mode },
+      })
+
+      /* RE-READ, do not reuse the `row` snapshot. The legacy urgency block
+         below also does a read-modify-write on `notified_at` for this same
+         deadline. Two blocks reading one snapshot and each writing their own
+         key means the second write silently drops the first, so the dropped
+         key is never persisted and that notification fires again on every
+         poll — forever. Measured: the two blocks overwrite each other's key,
+         and a second tick duplicates an alert. So this block runs AFTER the
+         legacy one and re-reads what was actually stored. */
+      const fresh = JSON.parse(
+        (db.prepare('SELECT notified_at FROM deadlines WHERE id = ?').get(r.deadline_id) as any)?.notified_at
+        || '{}',
+      )
+      fresh[`rem_${r.id}`] = true
+      markStmt.run(JSON.stringify(fresh), r.deadline_id)
+    }
+  } catch (e) {
+    console.error('[DeskFlow] deadline_reminders firing error:', e)
   }
   } catch (e) {
     // A bare `catch { }` is what let an undefined `now` sit here silently,

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
 import DevTriggerPanel from './components/DevTriggerPanel';
+import { HaloInAppMount } from './features/halo/HaloInAppMount';
 import { format as dateFormat } from 'date-fns';
 import SettingsPage from './pages/SettingsPage';
 import TranscriptPage from './pages/TranscriptPage';
@@ -31,8 +32,10 @@ import IDEHelpPage from './pages/IDEHelpPage';
 import TutorialPage from './pages/TutorialPage';
 import { LearnPage } from './components/learn/LearnPage';
 import GuidePage from './pages/GuidePage';
+import GoalsPage from './pages/GoalsPage';
 import GoldPage from './features/warmth/gold/GoldPage';
 import LabsPage from './pages/LabsPage';
+import TimeToolsPage from './pages/TimeToolsPage';
 import PenguinConsole from './terminal/App';
 import ExternalPage from './pages/ExternalPage';
 import RankingsPage from './pages/RankingsPage';
@@ -79,6 +82,7 @@ import {
 } from './lib/afk';
 import { stopwatch, startStopwatchDriver } from './lib/stopwatchStore';
 import { ClockDropdown } from './components/ClockDropdown';
+import { useNow } from './lib/timeStore';
 import {
   getSleepWindow,
   isWithinSleepWindow,
@@ -328,6 +332,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [, forceRender] = useState(0);
+  const now = useNow(1000);
 
   // Global command palette — ⌘K / Ctrl+K navigation search (app-wide)
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -2623,6 +2628,77 @@ function App() {
     };
   }, []);
 
+  // Poll daemon's AFK event queue and populate afkPromptQueue
+  // The daemon writes AFK start/end events to ~/.config/RHEO/tracker-afk-events.jsonl
+  // We poll this file and convert afk_end events to AfkPromptEntry
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    let lastEventId = 0;
+
+    const pollAfkEvents = async () => {
+      if (!window.deskflowAPI?.readAfkEvents) return;
+      
+      try {
+        const result = await window.deskflowAPI.readAfkEvents();
+        if (!result?.events?.length) return;
+
+        const newEvents = result.events.filter((e: any) => {
+          // Simple deduplication by timestamp + type
+          const eventId = `${e.type}_${e.timestamp}`;
+          return eventId > lastEventId;
+        });
+
+        if (newEvents.length === 0) return;
+
+        // Process afk_end events and add to afkPromptQueue
+        for (const event of newEvents) {
+          if (event.type === 'afk_end' && event.durationMs && event.durationMs >= 60000) {
+            // Only prompt for AFK periods >= 1 minute
+            const afkStartMs = event.afkStartMs;
+            const afkEndMs = event.afkEndMs || event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
+            const durationMs = event.durationMs || (afkEndMs - afkStartMs);
+            const durationSec = Math.max(1, Math.floor(durationMs / 1000));
+            const duration = durationSec < 60 ? `${durationSec}s` : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`;
+            
+            // Check if we already have an entry for this AFK period
+            const alreadyQueued = afkPromptQueueRef.current.some((q) => 
+              Math.abs((q.idleStartMs ?? 0) - (event.afkStartMs ?? 0)) < 1000
+            );
+            
+            if (!alreadyQueued) {
+              setAfkPromptQueue(prev => [...prev, {
+                id: afkQueueIdRef.current++,
+                duration: durationSec < 60 ? `${durationSec}s` : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`,
+                idleStartMs: event.afkStartMs,
+                returnMs: event.afkEndMs || Date.now(),
+                defaultNotAfk: durationSec <= 15 * 60, // default "not AFK" for <= 15 min
+              }]);
+            }
+          }
+        }
+
+        // Update last processed event marker
+        const maxEventId = newEvents.reduce((max: number, e: any) => {
+          const id = `${e.type}_${e.timestamp}`;
+          return id > max ? id : max;
+        }, lastEventId);
+        lastEventId = maxEventId;
+
+        // Clear processed events from the queue to avoid reprocessing
+        try {
+          await window.deskflowAPI?.clearAfkEvents?.();
+        } catch {
+          // ignore
+        }
+      } catch (err) {
+        console.warn('[DeskFlow] Failed to poll AFK events:', err);
+      }
+    };
+
+    interval = setInterval(pollAfkEvents, 5000); // poll every 5 seconds
+    return () => clearInterval(interval);
+  }, []); // empty deps - runs once on mount
+
   // Live tracking timer with OS-level idle detection
   // Uses powerMonitor.getSystemIdleTime() from main process (via heartbeat)
   // which detects actual user input idle (keyboard/mouse) regardless of window focus
@@ -3601,15 +3677,14 @@ const devFireSmartFill = async () => {
               </button>
             </div>
 
-            {/* Display current time */}
+            {/* Tracked time readout — Focus or Total, per the toggle above */}
             <div
-              className="text-sm font-mono font-semibold text-white tabular-nums flex items-center gap-2 cursor-help"
+              className="text-sm font-mono font-semibold text-white tabular-nums flex items-center gap-2 cursor-help light:text-zinc-800"
               title={`Apps: ${formatDuration(timeBreakdown.apps)} | Websites: ${formatDuration(timeBreakdown.websites)}`}
             >
-              <Clock className="w-4 h-4 text-zinc-500" />
+              {timeMode === 'focus' ? <Zap className="w-4 h-4 text-zinc-500" /> : <Clock className="w-4 h-4 text-zinc-500" />}
               {formatDuration(displayTime)}
             </div>
-            <ClockDropdown />
 
             <div className="flex bg-zinc-900 rounded-full p-1 text-xs light:bg-zinc-100">
               {/* Today */}
@@ -3719,10 +3794,12 @@ const devFireSmartFill = async () => {
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-sm text-zinc-400 light:text-zinc-500">
-                <Clock className="w-4 h-4" />
-                {format(new Date(), 'HH:mm')}
-              </div>
+              <ClockDropdown label="Timers, stopwatch and alarms">
+                <div className="flex items-center gap-2 text-sm text-zinc-400 light:text-zinc-500">
+                  <Clock className="w-4 h-4" />
+                  {format(new Date(), 'HH:mm')}
+                </div>
+              </ClockDropdown>
               {isIdle && (
                 <div className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs flex items-center gap-1 light:bg-amber-50/50 light:text-amber-600">
                   <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" /> IDLE
@@ -3765,7 +3842,22 @@ const devFireSmartFill = async () => {
 
         {/* Main Scroll Area — also the root the find bar's All/Section scopes
             index, so that app-wide search covers whatever is actually rendered. */}
-        <div data-page-root className={`flex-1 min-h-0 ${location.pathname === '/terminal' || location.pathname === '/database' ? 'flex flex-col overflow-hidden' : 'overflow-auto'}`}>
+        {/* `/life` joins `/terminal` and `/database` as a route that OWNS its own
+            scrolling.
+
+            Every other route gets `overflow-auto` here, which makes the app-level
+            page root a second scroller. That is invisible for a page that scrolls
+            normally, but LifePage mounts `ScheduleLayoutShell`, whose entire
+            design is "one screen, no page scroll; each panel scrolls inside
+            itself" — so the root scroller and the shell scroller fought, the grid
+            overflowed its box, and content appeared cropped behind the root
+            scroller. The fix is not inside LifePage at all: the root has to stop
+            scrolling for the route that declares it will not.
+
+            The other Life tabs keep working because their own wrappers still
+            scroll (`overflow-auto p-5` for pages mode, `ws-scroll` for the
+            River) — this only removes the OUTER duplicate. */}
+        <div data-page-root className={`flex-1 min-h-0 ${location.pathname === '/terminal' || location.pathname === '/database' || location.pathname === '/life' ? 'flex flex-col overflow-hidden' : 'overflow-auto'}`}>
           <ErrorBoundary key={location.pathname}>
             <Routes key={location.pathname}>
               {/* Dashboard */}
@@ -3820,6 +3912,9 @@ const devFireSmartFill = async () => {
 
               <Route path="/guide" element={<GuidePage />} />
               <Route path="/labs" element={<LabsPage />} />
+              <Route path="/goals" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Goals...</div>}><GoalsPage /></Suspense></ErrorBoundary>} />
+              <Route path="/time-tools" element={<TimeToolsPage />} />
+
               <Route path="/compositions" element={<Navigate to="/ai" replace />} />
 
               <Route path="/life" element={<ErrorBoundary><Suspense fallback={<div className="p-5 text-zinc-500 text-sm">Loading Life...</div>}><LifePage /></Suspense></ErrorBoundary>} />
@@ -4167,6 +4262,7 @@ onFillGap={(gap) => {
           </AnimatePresence>
 
           {/* -- AFK Activity Prompt -- */}
+          <AnimatePresence>
           {afkPromptQueue.length > 0 && (() => {
             const entry = afkPromptQueue[0];
             const periodStart = entry.idleStartMs ? new Date(entry.idleStartMs).toISOString() : new Date(entry.returnMs - 90000).toISOString();
@@ -4224,6 +4320,7 @@ onFillGap={(gap) => {
               </AfkPromptModal>
             );
           })()}
+          </AnimatePresence>
 
           {/* -- Single gap-fill prompt (replaces three GapFillModal mounts) --
               Renders "While you were away" against whatever gap is at the head of
@@ -4390,6 +4487,17 @@ onFillGap={(gap) => {
         </div>
       </div>
       </div>
+        {/* HALO IN-APP ISLAND.
+         * Architect decision (generate-prompt-docs/halo-window-architecture-12102026/RESULT.md):
+         * delete the Halo BrowserWindow and render inside this window. "No separate window" and
+         * "visible over other apps" cannot both hold on Wayland - the second needs a
+         * compositor-managed surface, which IS a window. The window wins; cross-app presence is
+         * dropped from the requirements.
+         * Wrapped in an ErrorBoundary deliberately: this mounts inside the app's root tree, so an
+         * exception here would otherwise unmount the entire UI (AGENTS.md 8, black screen). */}
+        <ErrorBoundary>
+          <HaloInAppMount />
+        </ErrorBoundary>
       <TutorialOverlay />
     </div>
     </TutorialProvider>

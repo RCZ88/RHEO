@@ -53,4 +53,44 @@ export function registerTrackingHandlers(deps: TrackingHandlerDeps) {
     console.log('[DeskFlow] 🔄 Tracking restarted via IPC');
     return true;
   });
+
+  ipcMain.handle('tracking:read-afk-events', async () => {
+    const { app } = require('electron');
+    const fs = require('fs');
+    const path = require('path');
+    const userData = app.getPath('userData');
+    const queuePath = path.join(userData, 'tracker-afk-events.jsonl');
+    
+    if (!fs.existsSync(queuePath)) {
+      return { events: [] };
+    }
+    
+    try {
+      const content = fs.readFileSync(queuePath, 'utf8');
+      const lines = content.trim().split('\n').filter(Boolean);
+      const events = lines.map((line: string) => JSON.parse(line));
+      return { events };
+    } catch (err) {
+      console.error('[DeskFlow] Failed to read AFK event queue:', err);
+      return { events: [], error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle('tracking:clear-afk-events', async () => {
+    const { app } = require('electron');
+    const fs = require('fs');
+    const path = require('path');
+    const userData = app.getPath('userData');
+    const queuePath = path.join(userData, 'tracker-afk-events.jsonl');
+    
+    try {
+      if (fs.existsSync(queuePath)) {
+        fs.unlinkSync(queuePath);
+      }
+      return { ok: true };
+    } catch (err) {
+      console.error('[DeskFlow] Failed to clear AFK event queue:', err);
+      return { ok: false, error: (err as Error).message };
+    }
+  });
 }

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "DeskFlow Browser Bridge",
-  "version": "1.7.0",
-  "description": "Bridge between DeskFlow and AI chat websites. Captures conversations, injects context, shows capture status and content creation tools directly on ChatGPT, Claude, Gemini, Perplexity, and You.com.",
+  "name": "RHEO Browser Bridge",
+  "version": "1.8.0",
+  "description": "Bridge between RHEO and AI chat websites. Captures conversations, injects context, shows capture status and content creation tools directly on ChatGPT, Claude, Gemini, Perplexity, and You.com.",
   "permissions": [
     "tabs",
     "webNavigation",
@@ -18,7 +18,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "DeskFlow Browser Bridge",
+    "default_title": "RHEO Browser Bridge",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png"

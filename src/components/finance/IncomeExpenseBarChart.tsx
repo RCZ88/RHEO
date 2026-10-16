@@ -125,7 +125,7 @@ export default function IncomeExpenseBarChart({
               title={disabled ? 'Weekly view needs transaction-level data, which this chart was not given' : undefined}
               className={`fin-label rounded-full px-2.5 py-1 transition-colors duration-150 fin-focusable ${
                 viewMode === m
-                  ? 'bg-[var(--color-foreground)]/10 text-[var(--text-primary)]'
+                  ? 'bg-[var(--color-foreground-10)] text-[var(--text-primary)]'
                   : disabled
                     ? 'opacity-40 cursor-not-allowed'
                     : 'hover:text-[var(--text-primary)]'
