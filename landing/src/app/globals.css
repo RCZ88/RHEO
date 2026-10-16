@@ -223,6 +223,29 @@
   animation-play-state: paused;
 }
 
+/* ---- AI "Thinking..." dots ----
+   Three dots and a word, which is the whole of what the real panel draws:
+   src/components/ai/canvas/CanvasInput.tsx:173-181. The landing console shows
+   the same thing instead of invented "querying timeline..." trace lines. It is
+   opacity only — no layout property is animated — and it stops dead under
+   prefers-reduced-motion, which is the same rule the marquee and the blink
+   cursor follow below. */
+@keyframes think-pulse {
+  0%, 60%, 100% { opacity: 0.25; }
+  30%           { opacity: 1; }
+}
+.dk-thinking-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #8a8a94;
+  animation: think-pulse 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+html[data-motion="off"] .dk-thinking-dot {
+  animation: none;
+  opacity: 0.6;
+}
+
 /* ---- Blinking block cursor ---- */
 @keyframes blink {
   0%,
@@ -294,7 +317,8 @@
   .marquee-track-left,
   .marquee-track-right,
   .blink-cursor,
-  .ridge-anim {
+  .ridge-anim,
+  .dk-thinking-dot {
     animation: none !important;
   }
 }
@@ -1995,6 +2019,14 @@ section[id] {
  * tracks an OS setting changing mid-session, which a stamp never would), and the
  * no-JS first paint. */
 html[data-motion="off"] .hero-enter { animation: none; opacity: 1; transform: none; }
+/* OWED 2. The blink cursor was suppressed under the MEDIA QUERY only. A visitor who
+   sets MOTION OFF via the chip — with no OS reduce setting anywhere — kept a running
+   animation, because the stamp had no counterpart for this class. Measured:
+   `SPAN.blink-cursor "▍" anim=blink` sitting at opacity < 0.05 during its dark phase
+   under (off, no-preference). Both suppression paths now carry the class, so an
+   explicit choice governs it exactly as the system setting does. */
+html[data-motion="off"] .blink-cursor { animation: none; }
+
 html[data-motion="on"]  .hero-enter {
   animation: hero-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

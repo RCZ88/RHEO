@@ -10,42 +10,54 @@ type Scenario = {
   /** short label for the segmented control; `q` is the full question it asks */
   short: string;
   q: string;
-  traces: string[];
   answer: string;
-  bars: number[]; // 7 values 0..1
 };
 
+/**
+ * THE THREE EXAMPLES, AND WHY THEY LOOK LIKE THIS.
+ *
+ * The previous set promised things the product cannot do. A grep of
+ * `src/services/aiContextBundle.ts` — the file that builds the system prompt —
+ * found exactly three period literals in the whole thing, and all three are
+ * `"today"` (lines 211, 217, 265). There is no date-range tool, no function
+ * calling over the tracking tables, and no way to ask about last Tuesday. So the
+ * old questions ("tuesday's deep work down 22%", "scoring 30-day focus", "this
+ * week") were demonstrating a feature that does not exist, and "31% deeper" used
+ * a word — depth — that a sibling sweep found 335 times in src/, none of them
+ * being this product.
+ *
+ * Each scenario below uses ONLY a call that is actually in the prompt, named in
+ * its comment. Each answer carries no number, because a written example cannot
+ * be checked and an invented percentage is the fabricated-readout rule one
+ * layer down.
+ */
 const SCENARIOS: Scenario[] = [
   {
-    id: "deep-work",
-    short: "Deep work",
-    q: "> why was tuesday's deep work down 22%?",
-    traces: [
-      "querying timeline…",
-      "cross-referencing calendar…",
-      "comparing 7-day baseline…",
-    ],
+    id: "today",
+    short: "Today",
+    q: "> where did today go?",
+    // fed by getDashboardAggregates({ period: "today" }) — aiContextBundle.ts:265
     answer:
-      "Two unplanned meetings split your 09–12 block; recovery started 40 min later than baseline.",
-    bars: [0.9, 0.82, 0.42, 0.78, 0.86, 0.7, 0.9],
+      "Most of today went to your editor and your terminal. The browser came second.",
   },
   {
-    id: "learning",
-    short: "Learning",
-    q: "> what did I learn this week?",
-    traces: ["collecting lyceum sessions…", "grouping by topic…"],
+    id: "sleep",
+    short: "Sleep",
+    q: "> how did last night line up with today?",
+    // fed by getSleepForDate(todayIso()) + getGoals(todayIso())
+    // — aiContextBundle.ts:207, 206
     answer:
-      "9 focused sessions across 3 topics — most on context systems. Longest streak: Thursday.",
-    bars: [0.4, 0.55, 0.6, 0.9, 0.7, 0.5, 0.45],
+      "Sleep was on the short side last night, and today's goals are still open. Starting with the smallest one would be a gentle way in.",
   },
   {
-    id: "sharpest",
-    short: "Sharpest",
-    q: "> when am I sharpest?",
-    traces: ["scoring 30-day focus…", "clustering by hour…"],
+    id: "outside",
+    short: "Outside",
+    q: "> what did I log away from the computer today?",
+    // fed by getExternalSessions('today') — aiContextBundle.ts:217. "Exercise"
+    // and "Reading" are two of the eight seeded defaults at src/main.ts:4726-4733,
+    // so those two names are the app's, not mine.
     answer:
-      "Your focus peaks 09:00–11:30. Mornings run 31% deeper than afternoons.",
-    bars: [0.3, 0.95, 0.8, 0.5, 0.45, 0.35, 0.3],
+      "You logged Exercise and Reading. Neither shows up in your app time, so they are listed separately.",
   },
 ];
 
@@ -55,7 +67,7 @@ export default function ActUnderstand() {
       <div className="px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto">
         <div className="mb-12 sm:mb-16 max-w-[680px]">
           <p className="mono-label" style={{ fontSize: 11 }}>
-            <DecryptedText text="SECTION 03 / UNDERSTAND" speed={28} maxIterations={6} />
+            <DecryptedText text="SECTION 03 / UNDERSTAND · EXAMPLE ANSWERS" speed={28} maxIterations={6} />
           </p>
           <h2 className="display-h2 mt-3">AN AI THAT WAS THERE.</h2>
           <p
@@ -80,6 +92,27 @@ export default function ActUnderstand() {
             0.9s path draw ran under reduce). Source kept at
             .bak-20261008-actunderstand/. One thing, said once, demonstrated once. */}
         <Console />
+
+        {/* The honesty line. Every clause is a call that is actually in the prompt
+            builder, src/services/aiContextBundle.ts: getDashboardAggregates (265),
+            getSleepForDate (216), getGoals (207), getExternalSessions (217), and
+            connectors.items (333) when the user has connected something. If one of
+            those stops being called, this sentence is wrong in the same way the
+            trace lines were. */}
+        <p
+          className="mono"
+          style={{
+            marginTop: 18,
+            fontSize: 12,
+            lineHeight: 1.6,
+            color: "#8a8a94",
+            maxWidth: 640,
+          }}
+        >
+          Written examples, not recordings. A real answer uses today&rsquo;s
+          activity, last night&rsquo;s sleep, your goals, activity you logged away
+          from the computer, and anything you connect.
+        </p>
       </div>
     </section>
   );
@@ -93,11 +126,9 @@ function Console() {
 
   const [idx, setIdx] = useState(0);
   const [typed, setTyped] = useState("");
-  const [phase, setPhase] = useState<"typing" | "traces" | "answer" | "hold">(
+  const [phase, setPhase] = useState<"typing" | "thinking" | "answer" | "hold">(
     "typing"
   );
-  const [traceShown, setTraceShown] = useState(0);
-  const [input, setInput] = useState("");
 
   const scenario = SCENARIOS[idx];
 
@@ -105,7 +136,6 @@ function Console() {
   useEffect(() => {
     setTyped("");
     setPhase("typing");
-    setTraceShown(0);
   }, [idx]);
 
   useEffect(() => {
@@ -113,7 +143,6 @@ function Console() {
       if (reduced) {
         setTyped(scenario.q);
         setPhase("answer");
-        setTraceShown(scenario.traces.length);
       }
       return;
     }
@@ -125,23 +154,23 @@ function Console() {
       setTyped(target.slice(0, i));
       if (i >= target.length) {
         clearInterval(id);
-        setTimeout(() => setPhase("traces"), 400);
+        // "traces" was renamed "thinking": the old phase name described three
+        // staggered lines the real app does not draw. What it actually shows is
+        // src/components/ai/canvas/CanvasInput.tsx:173-181 — three dots and the
+        // word "Thinking...". This section now shows that, and nothing else.
+        setTimeout(() => setPhase("thinking"), 400);
       }
     }, 28);
     return () => clearInterval(id);
   }, [inView, phase, scenario.q, reduced]);
 
-  // stagger traces
+  // thinking -> answer, after a beat a human would take to read
   useEffect(() => {
     if (!inView || reduced) return;
-    if (phase !== "traces") return;
-    if (traceShown >= scenario.traces.length) {
-      const t = setTimeout(() => setPhase("answer"), 450);
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(() => setTraceShown((n) => n + 1), 150);
+    if (phase !== "thinking") return;
+    const t = setTimeout(() => setPhase("answer"), 1100);
     return () => clearTimeout(t);
-  }, [phase, traceShown, inView, scenario.traces.length, reduced]);
+  }, [phase, inView, reduced]);
 
   // R6 blocker 1 — the 4.2s auto-advance is DELETED. It was WCAG 2.2.2 (Pause,
   // Stop, Hide): content that moves by itself with no control. It also meant a
@@ -195,24 +224,43 @@ function Console() {
         )}
       </div>
 
-      {/* traces */}
-      <div style={{ minHeight: 60, marginBottom: 12 }}>
-        {phase !== "typing" &&
-          scenario.traces.slice(0, traceShown).map((t, i) => (
-            <motion.div
-              key={`${idx}-${i}`}
-              className="mono"
-              initial={{ opacity: reduced ? 1 : 0, x: reduced ? 0 : -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              style={{ fontSize: 12, color: "#8a8a94", marginBottom: 4 }}
-            >
-              → {t}
-            </motion.div>
-          ))}
+      {/* THINKING — the only status the real panel draws. The three trace lines
+          this replaced ("querying timeline…", "cross-referencing calendar…",
+          "comparing 7-day baseline…") were staggered by a setTimeout and named
+          steps the assistant never performs. A grep of src/components/ai/** for a
+          renderer of step lines returned an `agentSteps` prop that nothing
+          populates; the real panel shows this: src/components/ai/canvas/
+          CanvasInput.tsx:173-181. Anything richer here would be advertising a
+          capability the app does not have. */}
+      <div
+        style={{ minHeight: 60, marginBottom: 12 }}
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {phase === "thinking" && (
+          <span
+            className="mono"
+            style={{
+              fontSize: 12,
+              color: "#8a8a94",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            Thinking
+            <span aria-hidden style={{ display: "inline-flex", gap: 3 }}>
+              <span className="dk-thinking-dot" />
+              <span className="dk-thinking-dot" style={{ animationDelay: "0.2s" }} />
+              <span className="dk-thinking-dot" style={{ animationDelay: "0.4s" }} />
+            </span>
+          </span>
+        )}
       </div>
 
-      {/* answer */}
+      {/* answer — no BarChart. The seven-value `bars` array was seven invented
+          numbers laid out as a week, and a chart shape is a promise that the
+          screen behind it has that shape. */}
       <div style={{ minHeight: 120 }}>
         {phase === "answer" && (
           <motion.div
@@ -223,7 +271,6 @@ function Console() {
             <p style={{ fontSize: 14, lineHeight: 1.6, color: "#f4f4f5" }}>
               {scenario.answer}
             </p>
-            <BarChart values={scenario.bars} />
           </motion.div>
         )}
       </div>
@@ -250,7 +297,7 @@ function Console() {
               // markup does not provide.
               tabIndex={active ? 0 : -1}
               data-scenario={sc.id}
-              onClick={() => { setIdx(i); setPhase("query"); setTraceShown(0); }}
+              onClick={() => setIdx(i)}
               onKeyDown={(e) => {
                 if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
                   e.preventDefault();
@@ -258,8 +305,6 @@ function Console() {
                     ? Math.min(SCENARIOS.length - 1, i + 1)
                     : Math.max(0, i - 1);
                   setIdx(next);
-                  setPhase("query");
-                  setTraceShown(0);
                   document.getElementById(`console-tab-${SCENARIOS[next].id}`)?.focus();
                 }
               }}
@@ -284,54 +329,3 @@ function Console() {
   );
 }
 
-function BarChart({ values }: { values: number[] }) {
-  // Own hook instance: BarChart is a separate component, so the Console's `reduced`
-  // is not in scope here. Getting this wrong threw "reduced is not defined" and
-  // took the entire reduced-motion render down with it.
-  const reduced = !useShouldAnimate();
-  const days = ["M", "T", "W", "T", "F", "S", "S"];
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-end",
-        gap: 6,
-        marginTop: 14,
-        height: 54,
-        padding: "6px 8px",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 6,
-        background: "#0a0a0c",
-      }}
-    >
-      {values.map((v, i) => (
-        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-          {/* R6 blocker 3 — the WRAPPER holds the final height; the bar is a
-              full-height child animated with scaleY from the bottom. Animating
-              `height` is a layout-property animation: it reflows every frame and
-              fights the scroll-snap rail it lives inside. */}
-          <div style={{ width: "100%", height: 40, display: "flex", alignItems: "flex-end" }}>
-            <motion.div
-              initial={{ scaleY: reduced ? 1 : 0 }}
-              animate={{ scaleY: 1 }}
-              transition={{
-                duration: reduced ? 0 : 0.6,
-                delay: reduced ? 0 : i * 0.07,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              style={{
-                width: "100%",
-                height: "100%",
-                transformOrigin: "bottom",
-                background: i === 2 ? "#ffffff" : "rgba(255,255,255,0.4)",
-              }}
-            />
-          </div>
-          <span className="mono" style={{ fontSize: 8, color: "#8a8a94" }}>
-            {days[i]}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
