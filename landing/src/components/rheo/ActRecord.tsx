@@ -13,23 +13,45 @@ import { useShouldAnimate } from "./use-motion-preference";
 import DecryptedText from "./DecryptedText";
 import { RealClip } from "./RealFootage";
 
-type Phase = {
+/** The authored half. Everything here is a literal — that is the whole problem. */
+type BlockSeed = {
   key: string;
   range: string;
   startH: number;
   endH: number; // may exceed 24 for wrap (REST)
   total: number; // minutes
-  blurb: string;
 };
 
-const PHASES: Phase[] = [
+/** A seed plus the sentence derived from it. */
+type Block = BlockSeed & { blurb: string };
+
+/**
+ * BLOCKS, not phases. "Phase" means three different things in this product and
+ * using one word for a different thing is a claim problem too:
+ *   - a life era with dates and reflections  -> life_phases, the Life screen
+ *   - Learn / Burn-down training mode        -> phaseRules.ts, user-set
+ *   - the four blocks below                  -> THIS, a hand-typed sample day
+ * Renaming this one removes the collision. "Phases" in this section was a third
+ * meaning nobody could disambiguate while scrolling.
+ *
+ * WHY THESE NUMBERS ARE NOT REAL. Every value here is a literal. Nothing queries
+ * the database for them, they were typed by hand, and they sum to exactly 840
+ * minutes (14 hours) — the shape of an illustration, not a measurement. Rendered
+ * as a live record beside scrubbed footage, they read as YOUR day, which is the
+ * same failure as the retired 1,204,032 s stopwatch counter. Hence the
+ * `A SAMPLE DAY` label that both branches now carry.
+ *
+ * The blurbs are DERIVED from the numbers rather than typed next to them, so a
+ * caption can never contradict the figure it sits under. Change a duration and
+ * its sentence changes with it.
+ */
+const BLOCKS: BlockSeed[] = [
   {
     key: "REST",
     range: "23–06",
     startH: 23,
-    endH: 30, // wraps past 24 → 06
+    endH: 30, // wraps past 24 -> 06
     total: 420,
-    blurb: "Recovery is a phase, not a gap. RHEO guards it.",
   },
   {
     key: "DEEP WORK",
@@ -37,7 +59,6 @@ const PHASES: Phase[] = [
     startH: 9,
     endH: 12,
     total: 180,
-    blurb: "Unbroken focus. The record marks its depth, not just its length.",
   },
   {
     key: "MEETINGS",
@@ -45,7 +66,6 @@ const PHASES: Phase[] = [
     startH: 12,
     endH: 14,
     total: 120,
-    blurb: "Context switches, logged. Later you see what they cost.",
   },
   {
     key: "LEARNING",
@@ -53,9 +73,14 @@ const PHASES: Phase[] = [
     startH: 19,
     endH: 21,
     total: 120,
-    blurb: "Study compounds. The timeline remembers every session.",
   },
 ];
+
+/** Built once, from the constant, so the words cannot drift from the numbers. */
+const BLOCKS_WITH_TEXT: Block[] = BLOCKS.map((b) => ({
+  ...b,
+  blurb: `${fmtHM(b.total)} in this sample day, ${b.range.replace("\u2013", " to ")}.`,
+}));
 
 function activeIndexFromHour(h: number): number {
   if (h >= 9 && h < 12) return 1; // DEEP WORK
@@ -122,7 +147,7 @@ export default function ActRecord() {
       if (hhmmRef.current) {
         hhmmRef.current.textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
       }
-      PHASES.forEach((ph, i) => {
+      BLOCKS_WITH_TEXT.forEach((ph, i) => {
         const el = counterRefs.current[i];
         if (el) {
           const val = Math.round(v * ph.total);
@@ -167,7 +192,7 @@ export default function ActRecord() {
           {showAnimated && (
           <div className="absolute top-16 left-5 sm:left-10 lg:left-16 max-w-[340px]">
             <p className="mono-label" style={{ fontSize: 11 }}>
-              <DecryptedText text="SECTION 02 / RECORD" speed={28} maxIterations={6} />
+              <DecryptedText text="SECTION 02 / RECORD \u00b7 A SAMPLE DAY" speed={28} maxIterations={6} />
             </p>
             <h2 className="display-h2 mt-3">A DAY, REPLAYABLE.</h2>
             <p
@@ -208,13 +233,13 @@ export default function ActRecord() {
                       className="mono-label-strong"
                       style={{ fontSize: 11, color: "#f4f4f5" }}
                     >
-                      {PHASES[active].key}
+                      {BLOCKS_WITH_TEXT[active].key}
                     </p>
                     <p
                       className="mono"
                       style={{ fontSize: 11, color: "#8a8a94", marginTop: 4 }}
                     >
-                      {PHASES[active].range} · phase {active + 1}/4
+                      {BLOCKS_WITH_TEXT[active].range} · block {active + 1}/4
                     </p>
                     <p
                       style={{
@@ -224,7 +249,7 @@ export default function ActRecord() {
                         marginTop: 12,
                       }}
                     >
-                      {PHASES[active].blurb}
+                      {BLOCKS_WITH_TEXT[active].blurb}
                     </p>
                     <div
                       className="mt-5 flex items-baseline gap-2"
@@ -262,7 +287,7 @@ export default function ActRecord() {
                       className="mono-label"
                       style={{ fontSize: 11, color: "#8a8a94" }}
                     >
-                      BETWEEN PHASES
+                      BETWEEN BLOCKS_WITH_TEXT
                     </p>
                     <p
                       style={{
@@ -285,7 +310,7 @@ export default function ActRecord() {
                 className="mt-8 hairline-t"
                 style={{ borderTopColor: "rgba(255,255,255,0.08)", paddingTop: 12 }}
               >
-                {PHASES.map((ph, i) => (
+                {BLOCKS_WITH_TEXT.map((ph, i) => (
                   <div
                     key={ph.key}
                     className="flex items-center justify-between"
@@ -324,7 +349,7 @@ export default function ActRecord() {
             <div className="flex flex-col gap-6 w-full max-w-[1280px]">
               <div className="flex flex-col gap-3">
                 <p className="mono-label" style={{ fontSize: 11 }}>
-                  <DecryptedText text="SECTION 02 / RECORD" speed={28} maxIterations={6} />
+                  <DecryptedText text="SECTION 02 / RECORD \u00b7 A SAMPLE DAY" speed={28} maxIterations={6} />
                 </p>
                 <h2 className="display-h2">A DAY, REPLAYABLE.</h2>
                 <p
@@ -334,7 +359,7 @@ export default function ActRecord() {
                   can&apos;t. Here, you can.
                 </p>
               </div>
-              {PHASES.map((ph, i) => (
+              {BLOCKS_WITH_TEXT.map((ph, i) => (
                 <div
                   key={ph.key}
                   className="surface-panel"
