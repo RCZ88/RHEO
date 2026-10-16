@@ -65,23 +65,46 @@ const SCREENS: Screen[] = [
   // the gallery all 7 recordings. All three cannot hold. §1.2 decides it:
   // "a capture serves its section's claim." The 24h-timeline clip IS the record
   // loop, so #act-record owns it; the Dashboard screen shows IDLE.
-    { id: "dashboard", label: "Dashboard", still: "/media/app-dashboard.png", alt: "The RHEO dashboard with a real day's tracked time", caption: "The whole day on one surface — depth, not duration.", recordings: [{ src: "/media/app-dashboard-idle.mp4", label: "IDLE" }] },
+    { id: "dashboard", label: "Dashboard", still: "/media/app-dashboard.png", alt: "The RHEO dashboard with a real day's tracked time", caption: "The day on one screen.", recordings: [{ src: "/media/app-dashboard-idle.mp4", label: "IDLE" }] },
   { id: "console", label: "Penguin Console", still: "/media/app-console.png", alt: "Penguin Console running real commands in a real shell", caption: "A real PTY. Real commands, real output, no wrapper.", recordings: [{ src: "/media/app-terminal-real.mp4", label: "TERMINAL" }, { src: "/media/app-terminal-work.mp4", label: "REAL WORK" }] },
   { id: "activity", label: "Activity", still: "/media/app-activity.png", alt: "The raw record behind the timeline", caption: "Every app and site, logged. The record before it becomes anything." },
-  { id: "insights", label: "Insights", still: "/media/app-insights.png", alt: "Insights showing real productive, neutral and distracting totals", caption: "Productive, neutral, distracting — weighted by depth.", recordings: [{ src: "/media/app-insights-detail.mp4", label: "DETAIL" }] },
+  { id: "insights", label: "Insights", still: "/media/app-insights.png", alt: "Insights showing real productive, neutral and distracting totals", caption: "Time split into productive, neutral and distracting.", recordings: [{ src: "/media/app-insights-detail.mp4", label: "DETAIL" }] },
   { id: "life", label: "Life", still: "/media/app-life.png", alt: "The Life page with a real week", caption: "The week, with its phases. Not a mood ring.", recordings: [{ src: "/media/app-life-week.mp4", label: "WEEK" }] },
-  { id: "ai", label: "AI Assistant", still: "/media/app-ai.png", alt: "The AI Assistant querying a real tracked record", caption: "It answers against your record, and cites the sessions it used." },
-  { id: "learn", label: "Lyceum", still: "/media/app-learn.png", alt: "A lesson open in Lyceum", caption: "Lessons that redraw as you grow. Weights adjust themselves." },
+  { id: "ai", label: "AI Assistant", still: "/media/app-ai.png", alt: "The AI Assistant querying a real tracked record", caption: "Ask questions about your day." },
+  { id: "learn", label: "Lyceum", still: "/media/app-learn.png", alt: "A lesson open in Lyceum", caption: "Tracks what you have mastered and what to review next." },
   { id: "finance", label: "Finance", still: "/media/app-finance.png", alt: "The Finance page with real transactions", caption: "Where the money went, from the same record. No bank sync." },
-  { id: "ide", label: "IDE Projects", still: "/media/app-ide.png", alt: "IDE Projects tracking real work", caption: "Coding time, organised per project." },
-  { id: "database", label: "Database", still: "/media/app-database.png", alt: "The local-first database browser", caption: "One SQLite file on your disk. Browse it. It's yours.", recordings: [{ src: "/media/app-database-scroll.mp4", label: "SCROLL" }] },
-  { id: "rankings", label: "Rankings", still: "/media/app-rankings.png", alt: "Rankings computed from the real record", caption: "Computed from the record, never typed in." },
+  { id: "ide", label: "IDE Projects", still: "/media/app-ide.png", alt: "IDE Projects tracking real work", caption: "Coding time and AI tool tokens, per project and per tool." },
+  { id: "database", label: "Database", still: "/media/app-database.png", alt: "The local-first database browser", caption: "One SQLite database on your disk. Browse it. It's yours.", recordings: [{ src: "/media/app-database-scroll.mp4", label: "SCROLL" }] },
+  { id: "rankings", label: "Rankings", still: "/media/app-rankings.png", alt: "Rankings computed from the real record", caption: "Computed from your record, ranked by the metric you pick." },
   { id: "labs", label: "Labs", still: "/media/app-labs.png", alt: "Labs, the experimental surface", caption: "Where unfinished things live until they're not." },
-  { id: "studio", label: "Content Engine", still: "/media/app-studio.png", alt: "The Overlay Studio content engine", caption: "Sessions become documentation and explainers." },
-  { id: "guide", label: "Guide", still: "/media/app-guide.png", alt: "The in-app Guide", caption: "How the instruments fit together." },
-  { id: "settings", label: "Settings", still: "/media/app-settings.png", alt: "Settings", caption: "Local-first by default. Zero telemetry." },
-  { id: "lecture", label: "Lecture", still: "/media/app-lecture.png", alt: "Lecture mode", caption: "Teach the room from the record." },
-  { id: "profiler", label: "Profiler", still: "/media/app-profiler.png", alt: "The in-app performance profiler", caption: "RHEO measures itself with RHEO." },
+  { id: "studio", label: "Content Engine", still: "/media/app-studio.png", alt: "The Overlay Studio content engine", caption: "Import a recording, cut a plan, export the overlay." },
+  { id: "guide", label: "Guide", still: "/media/app-guide.png", alt: "The in-app Guide", caption: "Every feature, what you'll find in it and what you can do." },
+  { id: "settings", label: "Settings", still: "/media/app-settings.png", alt: "Settings", caption: "Local-first by default. No analytics code." },
+  { id: "lecture", label: "Lecture", still: "/media/app-lecture.png", alt: "Lecture mode", caption: "Decks, transcripts, and research notes." },
+  /* ──────────────────────────────────────────────────────────────────────────
+     TWO OF THESE SEVENTEEN CAPTURES SHOW AN EMPTY STATE. READ THIS BEFORE
+     RE-SHOOTING ANYTHING.
+
+     I opened all four PNGs the spec asked for. Two are honest captures of a
+     screen with nothing on it:
+
+       app-profiler.png  every tile reads "Not measuring", "Sampling is off",
+                         "Not exposed in this build", "Nothing measured yet"
+       app-studio.png    "No active overlay session", "No overlay sessions yet",
+                         plus visibly overlapping text in the Pipeline Tools
+                         cards ("Manually", "CutSetup", "SceneApp", "Sceneup")
+
+     The captions above now describe what is actually visible, which is the rule
+     and the only honest option. But an empty state is the worst possible picture
+     for a section whose headline is THE WHOLE APP. UNRETOUCHED. — the shot is
+     technically unretouched and rhetorically worthless.
+
+     These two want RE-SHOOTING with a real session running, not better words.
+     Flagged to the owner rather than papered over. The studio capture also has a
+     genuine layout defect in the Pipeline Tools grid that is an app bug, not a
+     landing bug.
+     ────────────────────────────────────────────────────────────────────────── */
+  { id: "profiler", label: "Profiler", still: "/media/app-profiler.png", alt: "The in-app performance profiler", caption: "Frame time and blocking tasks. Measuring is off until you start it." },
 ];
 
 
