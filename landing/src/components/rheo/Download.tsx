@@ -2,21 +2,14 @@
 
 import { motion, useInView } from "framer-motion";
 import { useShouldAnimate } from "./use-motion-preference";
-import { Download as DownloadIcon, ChevronDown } from "lucide-react";
+import { Download as DownloadIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import DecryptedText from "./DecryptedText";
 import { Button } from "@/components/ui/button";
 import Ledger from "./Ledger";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { useDetectedOS } from "./use-detected-os";
-
-const VERSIONS = [
-  { version: "v0.2.0", date: "2026-09-30", kind: "NEW", notes: ["Chat Library — every AI conversation is kept, searchable, pinnable, groupable, and exportable.", "Dashboard rebuilt around a widget registry, with jump-to-widget navigation and persisted layouts.", "Native find bar now really highlights each match and scrolls it into view."] },
-  { version: "v0.1.0", date: "2026-08-31", kind: "NEW", notes: ["First public preview build. Timeline, phases, AI-understand, lessons engine.", "Local-first by default. Zero telemetry. macOS / Windows / Linux.", "Reduced-motion mode renders scrub sections as static panels."] },
-  { version: "v0.0.9", date: "2026-08-24", kind: "CHG", notes: ["Refined phase-detection heuristics — fewer false 'meeting' tags during solo calls.", "Dashboard donut now reflects weighted depth, not raw duration."] },
-  { version: "v0.0.8", date: "2026-08-17", kind: "FIX", notes: ["Fixed a rare crash when a session spanned midnight across timezones.", "Stopped the AI panel re-querying on every keystroke; Enter is now explicit."] },
-  { version: "v0.0.7", date: "2026-08-10", kind: "NEW", notes: ["Added cited-session chips under every AI answer — receipts, not guesses.", "Lessons now redraw when a referenced session is deleted or re-tagged."] },
-];
+import { RELEASE_VERSION } from "./release";
 
 const OS_LIST = [
   // `size` and `hash` were placeholder fabrications ("78 MB", "a1b2c3d4e5f6…").
@@ -27,12 +20,6 @@ const OS_LIST = [
   { key: "Windows", label: "Windows", arch: "x64", min: "Windows 10+", ext: ".exe" },
   { key: "Linux", label: "Linux", arch: "x64 (tar.gz)", min: "glibc 2.31+ / x86_64", ext: ".tar.gz" },
 ] as const;
-
-const KIND_STYLE = {
-  NEW: { color: "#f4f4f5", bg: "rgba(255,255,255,0.16)", label: "NEW" },
-  FIX: { color: "#a1a1aa", bg: "rgba(255,255,255,0.08)", label: "FIX" },
-  CHG: { color: "#a1a1aa", bg: "rgba(255,255,255,0.08)", label: "CHG" },
-};
 
 export default function Download() {
   // OWED 2. This file had NO reduced-motion awareness at all: eight ungated
@@ -45,7 +32,6 @@ export default function Download() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { margin: "-20% 0px", once: true });
   const detected = useDetectedOS();
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   return (
     <section id="download" ref={ref} className="relative surface-page py-28 sm:py-36">
@@ -98,8 +84,16 @@ export default function Download() {
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
         >
-          RHEO isn&apos;t on sale yet. Join the waitlist and we&apos;ll write once,
-          the day it leaves preview.
+          Not released yet. There is no binary and no waitlist form, so there is
+          nothing here to sign up to.{" "}
+          <a
+            href="mailto:hello@rheo.app?subject=RHEO%20release%20notification"
+            className="mono"
+            style={{ color: "#f4f4f5", textDecoration: "underline", textUnderlineOffset: 3 }}
+          >
+            Email me at launch
+          </a>
+          .
         </motion.p>
 
           {/*
@@ -223,101 +217,6 @@ export default function Download() {
           </div>
         </motion.div>
 
-        {/* version history — visible, toggleable */}
-        <motion.div
-          className="mt-12 flex flex-wrap items-center justify-center gap-x-5 gap-y-2"
-          initial={{ opacity: rm ? 1 : 0 }}
-          animate={inView ? { opacity: 1 } : {}}
-          transition={{ duration: 0.7, delay: 0.3 }}
-        >
-          <button
-            type="button"
-            onClick={() => setHistoryOpen((h) => !h)}
-            className="mono"
-            style={{
-              fontSize: 12,
-              color: historyOpen ? "#ffffff" : "#a1a1aa",
-              letterSpacing: "0.08em",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              transition: "color 0.4s cubic-bezier(0.16,1,0.3,1)",
-            }}
-            aria-expanded={historyOpen}
-          >
-            Version history
-            <ChevronDown
-              size={14}
-              strokeWidth={1.5}
-              style={{
-                transform: historyOpen ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.3s cubic-bezier(0.16,1,0.3,1)",
-              }}
-            />
-          </button>
-        </motion.div>
-
-        {/* version history panel */}
-        {historyOpen && (
-          <motion.div
-            initial={{ opacity: rm ? 1 : 0, height: rm ? "auto" : 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            style={{
-              marginTop: 12,
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 12,
-              overflow: "hidden",
-            }}
-          >
-            {VERSIONS.map((v, i) => {
-              const ks = KIND_STYLE[v.kind];
-              return (
-                <div
-                  key={v.version}
-                  style={{
-                    padding: "16px 20px",
-                    borderBottom: i < VERSIONS.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
-                  }}
-                >
-                  <div className="flex items-center gap-3" style={{ marginBottom: 10 }}>
-                    <span className="mono" style={{ fontSize: 14, color: "#ffffff", fontWeight: 500, letterSpacing: "-0.01em" }}>
-                      {v.version}
-                    </span>
-                    <span
-                      className="mono"
-                      style={{
-                        fontSize: 9,
-                        color: ks.color,
-                        letterSpacing: "0.12em",
-                        background: ks.bg,
-                        borderRadius: 4,
-                        padding: "2px 6px",
-                      }}
-                    >
-                      {ks.label}
-                    </span>
-                    <span className="mono tabular-nums" style={{ fontSize: 10, color: "#8a8a94", marginLeft: "auto" }}>
-                      {v.date}
-                    </span>
-                  </div>
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-                    {v.notes.map((n, j) => (
-                      <li key={j} className="flex items-start gap-2" style={{ fontSize: 13, lineHeight: 1.55, color: "#a1a1aa" }}>
-                        <span style={{ color: "#8a8a94", flexShrink: 0, marginTop: 7, width: 4, height: 1, background: "#8a8a94" }} />
-                        {n}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </motion.div>
-        )}
-
         <motion.p
           className="mono"
           style={{
@@ -330,7 +229,7 @@ export default function Download() {
           animate={inView ? { opacity: 1 } : {}}
           transition={{ duration: 0.7, delay: 0.4 }}
         >
-          v0.1 PRE-RELEASE · LOCAL FIRST · 0 BYTES TO CLOUD
+          {RELEASE_VERSION} PRE-RELEASE · LOCAL FIRST
         </motion.p>
 
         <motion.div

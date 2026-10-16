@@ -8,38 +8,49 @@ import { usePrefersReducedMotion } from "./use-reduced-motion";
  * Ledger — the trust counter row, in #download above the CTA.
  *
  * WHY IT EXISTS. Every other claim on this page is an adjective: local-first,
- * private, open. An adjective cannot be checked. "0 bytes leave your machine"
- * can. This row converts three of them into countable facts, which is the whole
- * argument of a local-first app stated as arithmetic.
+ * private, open. An adjective cannot be checked. These three rows are the ones
+ * that can, and every number below carries the code line it came from.
  *
- * THE NUMBERS, AND WHERE THEY COME FROM — the rule is that a number ships only
- * if it can be sourced:
+ * ── WHAT CHANGED, AND WHY IT HAD TO ────────────────────────────────────────
  *
- *   0  bytes that leave your machine   <- there is no network call in the renderer
- *   0  telemetry events                <- same
- *   1  SQLite file is your history     <- open the data directory
+ * The first version said "0 bytes that leave your machine", "0 telemetry events,
+ * ever" and "1 SQLite file is your entire history". A full grep of the app's main
+ * process, preload and renderer found that all three were false. The rule this
+ * page runs on is that a number ships only if it can be sourced, so unsourced
+ * numbers do not get softened, they get replaced with the sourced ones:
+ *
+ *   OLD "0 bytes that leave your machine"   -> NEW "2" calls with no setup
+ *   OLD "0 telemetry events, ever"          -> NEW "0" analytics or tracking code
+ *   OLD "1 SQLite file is your entire history" -> NEW "1" database, three files
+ *
+ * SOURCES, all verified by grep, not inference:
+ *
+ *   2  calls that need no setup
+ *      - update check. src/main/autoUpdate.ts:147 fires once per 24h, gated only
+ *        on app.isPackaged. It GETs the GitHub release feed with an `accept`
+ *        header and no key, no account, no install id. See
+ *        electron-updater/out/providers/GitHubProvider.js:40-45.
+ *      - currency rates. src/components/finance/currency-data.ts:59 fetches
+ *        api.exchangerate-api.com when the Finance page opens. No key.
+ *      Neither sends activity. That is why the claim is "no setup", not "no bytes".
+ *
+ *   0  analytics or tracking code
+ *      No analytics SDK, beacon, WebSocket or EventSource in src/main.ts,
+ *      src/main/**, src/preload.ts, src/pages, src/components, src/hooks,
+ *      src/features. "ever" was dropped because it is a word about the future.
+ *
+ *   1  SQLite database, in three files on disk
+ *      src/main.ts:27306 sets db.pragma('journal_mode = WAL'), so the live
+ *      folder holds deskflow-data.db, -wal and -shm. One logical database,
+ *      three files. The old "entire history in one file" was wrong on the
+ *      filesystem, which is the only place anyone can check.
  *
  * NOT on this page: "10,000 happy users", "4.9 rating", "trusted by teams".
  * Those have nothing behind them, and putting them beside three real ones
  * devalues the three.
- *
- * ── THE COUNTER WAS DELETED ────────────────────────────────────────────────
- *
- * The first version ported `@react-bits/Counter-TS-TW` and rolled the digits up
- * from 0. GLM killed it and the reasoning is right, so it is recorded here
- * rather than quietly removed:
- *
- *   **A count-up encodes "this number was counted." There is nothing to count
- *   on the way to 0, 0, 1.** Every digit in this row travels upward from zero,
- *   which is the one direction that implies accumulation. It is the least
- *   informative part of three lines whose entire payload is words.
- *
- * A static zero is also a stronger claim: it is a constant, not a journey. The
- * animation was adding a narrative that isn't true — that the app accumulated
- * something. These numbers are the absence of accumulation.
- *
- * What remains is a plain scroll-reveal, opacity only, house curve, once.
  */
+
+import { RELEASE_VERSION } from "./release";
 
 type Fact = {
   value: string;
@@ -48,9 +59,21 @@ type Fact = {
 };
 
 const FACTS: Fact[] = [
-  { value: "0", claim: "bytes that leave your machine", how: "no network call in the renderer" },
-  { value: "0", claim: "telemetry events, ever", how: "there is nothing to send them to" },
-  { value: "1", claim: "SQLite file is your entire history", how: "open the data directory" },
+  {
+    value: "2",
+    claim: "calls with no setup: the update check and currency rates",
+    how: "neither sends your activity",
+  },
+  {
+    value: "0",
+    claim: "analytics or tracking code, in the app or on this page",
+    how: "checked in main, preload and renderer",
+  },
+  {
+    value: "1",
+    claim: `SQLite database holds your history. Three files, settings beside it. ${RELEASE_VERSION}.`,
+    how: "open the data directory",
+  },
 ];
 
 function Cell({ fact, index }: { fact: Fact; index: number }) {
@@ -83,6 +106,23 @@ export default function Ledger() {
       {FACTS.map((f, i) => (
         <Cell key={f.claim} fact={f} index={i} />
       ))}
+
+      {/* THE RULE, stated once. The three rows above are the exceptions; this is
+          the general truth they are exceptions to. */}
+      <p
+        className="mono"
+        style={{
+          marginTop: 18,
+          fontSize: 12,
+          lineHeight: 1.6,
+          color: "#8a8a94",
+          maxWidth: 640,
+        }}
+      >
+        Everything else needs your key, your provider, or something you turned
+        on. Ask the AI a question and your day&rsquo;s summary goes to the
+        provider you picked &mdash; choose a local one and nothing leaves.
+      </p>
     </div>
   );
 }

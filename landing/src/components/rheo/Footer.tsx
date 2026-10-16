@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMotionPreferenceSetter, useShouldAnimate } from "./use-motion-preference";
+import { RELEASE_VERSION } from "./release";
 
 function useNow() {
   const [now, setNow] = useState<Date | null>(null);
@@ -208,7 +209,7 @@ export default function Footer() {
           style={{ paddingBottom: 16 }}
         >
           <span className="mono" style={{ fontSize: 10, color: "#8a8a94", letterSpacing: "0.08em" }}>
-            v0.1 PRE-RELEASE · LOCAL FIRST · 0 BYTES TO CLOUD
+            {RELEASE_VERSION} PRE-RELEASE · LOCAL FIRST
           </span>
           <span className="mono" style={{ fontSize: 10, color: "#8a8a94", letterSpacing: "0.08em" }}>
             ῥέω · TO FLOW

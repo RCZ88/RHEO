@@ -9,7 +9,9 @@ import SectionIndex from "@/components/rheo/SectionIndex";
 import CursorGlow from "@/components/rheo/CursorGlow";
 import Footer from "@/components/rheo/Footer";
 import CommandPalette from "@/components/rheo/CommandPalette";
-import Changelog from "@/components/rheo/Changelog";
+// Changelog import removed with the component. The file stays on disk rather than
+// being deleted: it is another agent's surface, and an unmounted component breaks
+// nothing while a deleted file is a destructive act on shared work.
 import Hero from "@/components/rheo/Hero";
 import ActRecord from "@/components/rheo/ActRecord";
 import Gallery from "@/components/rheo/Gallery";
@@ -67,7 +69,16 @@ export default function Home() {
         </main>
         <Footer />
         <CommandPalette />
-        <Changelog />
+        {/* Changelog REMOVED 2026-10-16. The list described v0.0.7 through v0.2.0
+            with dates and a "First public preview build" claim, and the product has
+            no public binaries. Three entries were false against the source: the
+            v0.0.7 "cited-session chips" (no citation code exists anywhere in src/),
+            the v0.0.9 "refined phase-detection heuristics" (phases are user-set and
+            the one detector is wired to zeros), and v0.1.0's "zero telemetry". Seven
+            more were never read. Shipping a version list that describes releases
+            that did not happen sits directly under the Ledger, which is the worst
+            place for it. It returns at the first real release, one entry per shipped
+            binary. See conversation/round-05, round-06, round-07 in this repo. */}
       </div>
     </MotionConfig>
   );

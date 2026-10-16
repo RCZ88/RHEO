@@ -1,14 +1,10 @@
 "use client";
 
 import FlowFieldCanvas from "./FlowFieldCanvas";
-import { useDetectedOS } from "./use-detected-os";
 import DecryptedText from "./DecryptedText";
-import OSLogo from "./OSLogo";
 import SessionClock from "./SessionClock";
 
 export default function Hero() {
-  const os = useDetectedOS();
-
   return (
     <section
       id="hero"
@@ -53,8 +49,37 @@ export default function Hero() {
           MADE LEGIBLE.
         </h1>
 
+        {/* THE PLAIN SENTENCE. The manifesto below is the emotional spine and it
+            is good, but it does not tell a first-time visitor what the product
+            IS. This is the sentence that does, and every clause is checkable:
+              "private"               -> 0 analytics code, verified by grep over
+                                          main, preload and renderer
+              "which apps you use"    -> src/main.ts:5121-5132 writes `logs` and
+                                          `browser_sessions` from the tracking poll
+              "your own data folder"  -> deliberately NOT "one file". WAL mode
+                                          (src/main.ts:27306) puts the record in
+                                          three files, so the precise claim is the
+                                          Ledger's, not this paragraph's
+              "ask questions"         -> real, and conditional on a provider,
+                                          which the Proof section states plainly
+            Written here rather than pulled from the copy deck for exactly that
+            reason: it had to survive being checked. */}
         <p
-          className="mt-8 max-w-[640px] hero-enter hero-enter--manifesto"
+          className="mt-8 hero-enter hero-enter--manifesto"
+          style={{
+            fontSize: 17,
+            lineHeight: 1.55,
+            color: "#f4f4f5",
+            maxWidth: 560,
+          }}
+        >
+          RHEO is a private time tracker for your desktop. It records which apps
+          you use, keeps the record in your own data folder, and lets you ask
+          questions about it.
+        </p>
+
+        <p
+          className="mt-6 hero-enter hero-enter--manifesto"
           style={{
             fontSize: 16,
             lineHeight: 1.6,
@@ -62,12 +87,6 @@ export default function Hero() {
             maxWidth: 560,
           }}
         >
-            {/* The manifesto line is the product's own words and the
-                emotional spine of the reflection half (§0.2). It was dropped
-                while the atlas's 180 words went into captions — backwards:
-                captions were the compressible material, this was not.
-                Restored VERBATIM; the 60-word trim came off the stopwatch
-                counter below, which the ledger now carries. */}
             Your hours are the only currency you can never earn back. RHEO
             records how they flow — so every phase of your life can be seen,
             questioned, and improved.
@@ -102,32 +121,6 @@ export default function Hero() {
             <span aria-hidden className="btn-sheen-sweep" />
           </a>
 
-          {/* GHOST — the ask, with the platform it will detect at runtime */}
-          <a
-            href="#download"
-            className="mono inline-flex items-center gap-2"
-            style={{
-              border: "1px solid rgba(255,255,255,0.16)",
-              borderRadius: 6,
-              padding: "12px 22px",
-              fontSize: 13,
-              color: "#a1a1aa",
-              letterSpacing: "0.02em",
-              transition:
-                "color 0.5s cubic-bezier(0.16,1,0.3,1), border-color 0.5s cubic-bezier(0.16,1,0.3,1)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#f4f4f5";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "#a1a1aa";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.16)";
-            }}
-          >
-            <span>Download for {os}</span>
-            <OSLogo os={os} />
-          </a>
         </div>
 
       </div>
@@ -180,7 +173,14 @@ export default function Hero() {
                 whose register is an INSTRUMENT READOUT — and it is now checkable, so
                 it can be a fact rather than a promise. `field: laminar` was removed:
                 the flow field is already visible, so labelling it encoded nothing. */}
-            <span style={{ color: "#f4f4f5" }}>0 bytes sent</span>
+            {/* "0 bytes sent" is gone because it was unprovable as stated and the
+                page is about provable claims. What replaces it is narrower and
+                therefore checkable: this page loads no analytics, no beacons, no
+                third-party scripts. Fonts are self-hosted via next/font/local
+                (src/app/layout.tsx:2), so even the type is not a CDN request.
+                A grep for analytics SDKs, tag managers and external <script src>
+                over src/ and index.html returns nothing. */}
+            <span style={{ color: "#f4f4f5" }}>no analytics on this page</span>
           </span>
         </div>
       </div>
