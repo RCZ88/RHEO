@@ -434,8 +434,9 @@ export const PRIORITY_OPTIONS: { value: number; label: string }[] = [
    The prop is deleted rather than repointed: `longTermGoals` is already the
    component's real source, and the group header below now counts that same
    array, so the number and the list are the same fact. */
-function TheVault({ longTermGoals, onSave, onDelete }: {
+function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
   longTermGoals: LongTermGoal[];
+  todayGoals: Goal[];
   onSave: (form: LTGForm, existing?: LongTermGoal) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
@@ -1098,6 +1099,13 @@ export default function GoldPage({ embedded, onManagePhases }: {
   }, [goals])
 
   const dailies = buckets.daily
+  /* `activeDailies` / `completedDailies` used to be derived here from `goals` in
+     one pass each. The bucket refactor left the derivations behind while the
+     StatPill row and the Today group kept calling them, so "Active" and "Sealed"
+     threw ReferenceError on render — and with no ErrorBoundary above the page,
+     that took the whole Life page down with them. */
+  const activeDailies = dailies.filter(g => g.status !== 'done')
+  const completedDailies = dailies.filter(g => g.status === 'done')
   const habitGoals = buckets.habit
   const routineGoals = buckets.routine
   const vaultGoals = buckets.vault
@@ -1105,6 +1113,20 @@ export default function GoldPage({ embedded, onManagePhases }: {
      rows in the live DB were unreachable. They are a REVIEW QUEUE: the point is
      to accept the ones you want and dismiss the rest. */
   const suggestedGoals = buckets.suggested
+
+  /* Four more derivations the bucket refactor dropped while the JSX kept
+     calling them: the Habits and Routines group headers, the Sealed list, and
+     the long-term vault's "serving" count. Same failure mode as the pair above —
+     each is a ReferenceError on render, and with no ErrorBoundary above the page
+     any one of them blanks the whole Life page. */
+  const activeHabits = habitGoals.filter(g => g.status !== 'done')
+  const activeRoutines = routineGoals.filter(g => g.status !== 'done')
+  const completedRoutines = routineGoals.filter(g => g.status === 'done')
+  /* `todayGoals` was a PROP of `TheVault`, which was dead code at HEAD — defined,
+     never rendered. Inlining the vault's JSX finally gave that reference a
+     caller, so the derivation has to exist. `date` is the goal's own day field
+     and `selectedDate` is the page's current day, so the count follows day nav. */
+  const todayGoals = goals.filter(g => g.date === selectedDate)
 
   const missedGoals = useMemo(() => getMissedGoals(goals, selectedDate), [goals, selectedDate]);
   const doneCount = goals.filter(g => g.status === 'done').length;
@@ -1514,6 +1536,7 @@ export default function GoldPage({ embedded, onManagePhases }: {
               title="The Vault" count={longTermGoals.length} noun="destination" />
             <TheVault
               longTermGoals={longTermGoals}
+              todayGoals={todayGoals}
               onSave={handleLTGSave}
               onDelete={handleLTGDelete}
             />

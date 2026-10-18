@@ -16,6 +16,7 @@ import { PhaseFormDialog } from '@/components/life-river/phase-form-dialog'
 import { MemoryLightbox } from '@/components/life-river/memory-lightbox'
 import { NotesTab } from '@/components/life-river/NotesTab'
 import { LivingSubstrate } from '@/components/life-river/LivingSubstrate'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import type { LensId } from '@/components/life-river/RingCanvas'
 import type { LifePhase } from '@/lib/riverMath'
 import lifePage from '@/pages/registry/pages/life'
@@ -598,6 +599,22 @@ export default function LifePage() {
       </div>
 
       {/* ── Content ── */}
+      {/* Containment, keyed by tab.
+          The route boundary in App.tsx is `key={location.pathname}`, and a Life
+          sub-tab switch is internal state — the pathname does not change. So a
+          boundary that trips on ONE tab never resets when you click to another,
+          and its fallback is `fixed inset-0 z-[9999]`: measured against the built
+          bundle, that replaces the entire viewport including the sidebar, so
+          every subpage looks dead until a real route change. Keying a boundary
+          on the tab makes one tab's crash cost exactly that tab.
+          ErrorBoundary renders its child directly when healthy, so this adds no
+          DOM node and no layout box.
+          Ruled out while finding this, recorded so nobody re-suspects it:
+          `mode="wait"` does NOT stall on the schedule tab's non-motion wrapper.
+          framer-motion's PresenceChild auto-completes an exit only when no motion
+          descendant registered, and the wrapper's motion child does register
+          through context and does fire its exit. */}
+      <ErrorBoundary key={`${viewMode}:${pageTab}`}>
       {viewMode === 'pages' ? (
         /* ═══ OLD 3-TAB MODE ═══ */
         /* Schedule is full-bleed: its shell owns the whole content box and
@@ -1128,6 +1145,7 @@ export default function LifePage() {
           )}
         </div>
       )}
+      </ErrorBoundary>
       </div>
     </div>
   )

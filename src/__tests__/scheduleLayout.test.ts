@@ -1,5 +1,5 @@
 import {
-  defaultLayout, sanitizeLayout, swapPanels, toggleHidden, setSlotSize,
+  defaultLayout, withPreset, sanitizeLayout, swapPanels, toggleHidden, setSlotSize,
   snapSize, isHidden, panelsVisibleIn, PRESET_SLOTS, PANEL_IDS,
   PANEL_META, PRESET_IDS, type PanelId,
 } from '../features/warmth/schedule/layout';
@@ -35,6 +35,24 @@ describe('layout engine — presets place every panel', () => {
 
   it('Focus shows only the calendar, everything else goes to the drawer', () => {
     expect(panelsVisibleIn(defaultLayout('focus'), 'focus')).toEqual(['calendar']);
+  });
+
+  it('withPreset rebuilds the slot map for the new preset', () => {
+    /* Regression. The shell used to commit `{ ...layout, preset }`, which kept
+       the OLD preset's slot names. Slots are keyed by name and every preset
+       declares its own, so each slot the new preset names read undefined and
+       `cell()` returned null — measured on the live bundle as week-first and
+       focus rendering 0 of 4 panels. */
+    const l = withPreset(defaultLayout('today-first'), 'week-first');
+    expect(l.preset).toBe('week-first');
+    expect(Object.keys(l.slots).sort()).toEqual([...PRESET_SLOTS['week-first']].sort());
+    for (const slot of Object.keys(l.slots)) {
+      expect(PANEL_IDS).toContain(l.slots[slot]);
+      expect(SLOT_CELL['week-first'][slot] !== undefined).toBeTruthy();
+    }
+    /* hidden is keyed by panel, so it survives a preset switch */
+    const hidden = withPreset(toggleHidden(defaultLayout(), 'todos'), 'calendar-first');
+    expect(hidden.hidden).toEqual({ todos: true });
   });
 
   it('a layout hidden in Focus does not empty the other presets', () => {

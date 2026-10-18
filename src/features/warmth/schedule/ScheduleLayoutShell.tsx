@@ -34,7 +34,7 @@ import {
 import {
   type PanelId, type PresetId, type ScheduleLayout, type ViewMode,
   PRESET_IDS, PRESET_LABEL, PRESET_SLOTS, PANEL_META,
-  defaultLayout, loadLayout, saveLayout, swapPanels, toggleHidden, isHidden,
+  defaultLayout, withPreset, loadLayout, saveLayout, swapPanels, toggleHidden, isHidden,
   setSlotSize, snapSize,
 } from './layout'
 
@@ -212,7 +212,7 @@ export function ScheduleLayoutShell(props: ScheduleLayoutShellProps) {
         d.setDate(d.getDate() + (e.key === 'ArrowRight' ? 1 : -1))
         onDateChange(d.toISOString().slice(0, 10))
       } else if ('1234'.includes(k)) {
-        commit({ ...layout, preset: PRESET_IDS[Number(k) - 1] })
+        commit(withPreset(layout, PRESET_IDS[Number(k) - 1]))
       }
     }
     window.addEventListener('keydown', onKey)
@@ -340,7 +340,7 @@ export function ScheduleLayoutShell(props: ScheduleLayoutShellProps) {
                   <button
                     key={p}
                     type="button"
-                    onClick={() => { commit({ ...layout, preset: p }); setMenuOpen(false) }}
+                    onClick={() => { commit(withPreset(layout, p)); setMenuOpen(false) }}
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-zinc-800"
                   >
                     {/* the thumbnail is the preset's own grid, at 1/4 scale */}

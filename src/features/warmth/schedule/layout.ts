@@ -87,6 +87,18 @@ export function defaultLayout(preset: PresetId = 'today-first'): ScheduleLayout 
   return { preset, slots: identity(preset), hidden: {}, sizes: {} };
 }
 
+/** Switching preset is not "keep the old slots and change the label". Every
+ *  preset declares its OWN slot names, so the map has to be rebuilt — reading
+ *  the new preset's slots out of the old map yields `undefined` for each slot
+ *  the two presets do not share, and `cell()` then returns null for those
+ *  panels. Measured on the live bundle: today-first rendered 4 panels, while
+ *  week-first and focus rendered 0.
+ *  `hidden` is keyed by PANEL, so it carries over unchanged. `sizes` is keyed by
+ *  SLOT NAME, which is preset-specific, so it cannot carry over. */
+export function withPreset(layout: ScheduleLayout, preset: PresetId): ScheduleLayout {
+  return { preset, slots: identity(preset), hidden: layout.hidden, sizes: {} };
+}
+
 /** A layout loaded from storage is untrusted — it may predate a panel, or have
  *  been hand-edited. Anything unrecognised is dropped, never rendered. */
 export function sanitizeLayout(raw: unknown): ScheduleLayout {
