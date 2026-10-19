@@ -240,7 +240,12 @@ export function ScheduleLayoutShell(props: ScheduleLayoutShellProps) {
         <div
           style={{ gridArea: cellName }}
           className={[
-            'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border',
+            /* `flex-1` is inert while this element is a grid item, and gives the
+               four panels an equal share of the column in the stacked fallback
+               below 1100px — so the narrow path satisfies §17 the same way the
+               grid does (fill the height, scroll inside) instead of stacking to
+               a fixed floor and pushing the page past the viewport. */
+            'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border',
             dragOver === slot ? 'border-[var(--page-accent)] ring-2 ring-[var(--page-accent)]/40' : 'border-zinc-800/60',
             'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)]',
           ].join(' ')}
@@ -293,7 +298,13 @@ export function ScheduleLayoutShell(props: ScheduleLayoutShellProps) {
   }, [layout, dragOver, dragging, renderPanel, startResize, onResizeMove, endResize, commit, slots, onDrop])
 
   const gridStyle = useMemo(() => ({
-    display: 'grid',
+    /* `display` is deliberately NOT set here. An inline style outranks every
+       class, so `display: 'grid'` in this object made the container a grid at
+       ALL widths — including below 1100px, where §21 requires one column, and
+       including when this element was the half that was supposed to be `hidden`.
+       The mode is chosen by the `[@media(min-width:1100px)]:grid` class instead.
+       The template below is inert until something turns the display on, so it
+       costs nothing while the container is still a flex column. */
     gridTemplateColumns: grid.cols,
     gridTemplateRows: grid.rows,
     gridTemplateAreas: grid.areas,
@@ -421,21 +432,30 @@ export function ScheduleLayoutShell(props: ScheduleLayoutShellProps) {
         )}
       </header>
 
-      {/* ── the grid (§17, §21) ── */}
+      {/* ── the grid (§17, §21) ──
+       *
+       * ONE container for both breakpoints, and every panel is rendered exactly
+       * once. This used to be two sibling containers — a grid for ≥1100px and a
+       * stacked copy for below — with CSS deciding which was visible. The narrow
+       * end never worked: below 1100px BOTH were in flow, so every panel appeared
+       * twice, and the first copy was still forced into the 2–3 column template,
+       * which is what pushed panel content sideways out of its own column.
+       *
+       * Two reasons it could not be fixed by hiding one half: `gridStyle` used to
+       * carry an inline `display: grid` that outranked `hidden`, and the stacked
+       * copy was only hidden ABOVE 1100px, so below that both halves were live at
+       * once. Deriving the mode from the media variant on a single element makes
+       * the two mutually exclusive by construction.
+       *
+       * It also halves the mounts. A panel is a real consumer with its own
+       * effects — the calendar derives a month of events, the upcoming and todo
+       * panels fetch, ScheduleCard runs a minute timer — so the copy that could
+       * never be seen was doubling every read and every timer on this page. */}
       <div
         style={gridStyle}
-        className="hidden min-h-0 flex-1 [@media(min-width:1100px)]:grid"
+        className="flex min-h-0 flex-1 flex-col gap-2 [@media(min-width:1100px)]:grid"
       >
         {slots.filter(s => !s.startsWith('drawer')).map(cell)}
-      </div>
-
-      {/* §21 below 1100px: one column, same panels, same order */}
-      <div className="min-h-0 flex-1 flex-col gap-2 [@media(min-width:1100px)]:hidden">
-        {slots.filter(s => !s.startsWith('drawer')).map(s => (
-          <div key={s} className="flex min-h-[220px] flex-1 flex-col">
-            {cell(s)}
-          </div>
-        ))}
       </div>
 
       {/* §39 Focus drawer */}

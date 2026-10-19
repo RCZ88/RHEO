@@ -558,6 +558,20 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
                     error={error}
                     onRetry={reloadAll}
                   />
+                  {/* The day the form writes is a first-class choice, not a side
+                      effect of the date. `WeekdayRail` and its `blockCounts` were
+                      both written for this page and then never mounted, so the
+                      only way to aim a block at another weekday was to move the
+                      DATE first — which moved every other panel with it. Rendered
+                      here, directly above the card whose title and form it
+                      drives. ScheduleCard keeps `hideDaySelector` so the page has
+                      exactly ONE day control rather than two that can disagree. */}
+                  <WeekdayRail
+                    selectedDay={selectedDay}
+                    onSelect={setSelectedDay}
+                    counts={blockCounts}
+                    todayDay={new Date().getDay()}
+                  />
                   <ScheduleCard
                     entries={todaySchedule}
                     selectedDate={selectedDate}

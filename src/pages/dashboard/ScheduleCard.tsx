@@ -114,6 +114,17 @@ export function ScheduleCard({
     category: 'class' as ScheduleCategory, goalId: '',
   });
 
+  /* A form that is already on screen follows the day the user picks. Without
+     this, choosing another weekday on the page's rail left the open form aimed
+     at the PREVIOUS day, so the block was written to a day the user was no
+     longer looking at — "it saved to the day I was on, not the day I chose".
+     Gated on `!editingId` so an edit never has its own day rewritten, and the
+     updater returns the SAME object when nothing changed so it cannot loop. */
+  useEffect(() => {
+    if (!isAdding || editingId) return;
+    setForm(p => (p.day === String(selectedDay) ? p : { ...p, day: String(selectedDay) }));
+  }, [selectedDay, isAdding, editingId]);
+
   const dayEntries = useMemo(() =>
     entries
       .filter(e => showAll ? true : e.day_of_week === selectedDay)
