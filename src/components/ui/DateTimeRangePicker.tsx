@@ -270,39 +270,56 @@ export default function DateTimeRangePicker({
      cannot be mistaken for a range. §9: dragging past the last day of the month
      rubber-bands rather than hard-stopping, and we simply hold the last day. */
   const [dragging, setDragging] = useState(false);
-  const dragOrigin = useRef<{ x: number; y: number } | null>(null);
+  /* The pointerdown that starts a drag ALSO starts a click, and the two must not
+     fight. Committing the range on pointerdown destroyed the start of a
+     start→end selection: click 15, click 20, and the range came out 20→20
+     because the second pointerdown had already overwritten the 15. So the
+     pointerdown records an anchor and nothing else; the range only moves once
+     the pointer has actually travelled DRAG_THRESHOLD_PX. */
+  const dragOrigin = useRef<{ x: number; y: number; day: Date } | null>(null);
+  const didDrag = useRef(false);
 
   const DRAG_THRESHOLD_PX = 10;
 
   function beginDrag(day: Date, e: React.PointerEvent) {
-    // Start the range at THIS cell and follow the pointer, rather than entering
-    // the existing selecting-end mode — grabbing the end handle and dragging
-    // past the start must normalise, and that is what setRange() does.
-    dragOrigin.current = { x: e.clientX, y: e.clientY };
-    setDragging(true);
-    setSelectingEnd(false);
-    setStartDate(atMidnight(day));
-    setEndDate(atMidnight(day));
+    dragOrigin.current = { x: e.clientX, y: e.clientY, day };
+    didDrag.current = false;
   }
 
   function extendDrag(day: Date, e: React.PointerEvent) {
     const o = dragOrigin.current;
-    if (!o || !dragging) return;
-    if (Math.abs(e.clientX - o.x) < DRAG_THRESHOLD_PX && Math.abs(e.clientY - o.y) < DRAG_THRESHOLD_PX) return;
+    if (!o) return;
+    // Hover is not a drag: without a held button a pointerenter must be inert.
+    if ((e.buttons & 1) === 0) return;
+    if (
+      Math.abs(e.clientX - o.x) < DRAG_THRESHOLD_PX &&
+      Math.abs(e.clientY - o.y) < DRAG_THRESHOLD_PX
+    ) return;
+
+    didDrag.current = true;
     const picked = atMidnight(day);
+    if (!dragging) {
+      /* First cell past the threshold: the range is anchored on the cell the
+         drag STARTED on, not on whatever was selected before. */
+      const anchor = atMidnight(o.day);
+      setDragging(true);
+      setSelectingEnd(false);
+      setStartDate(picked < anchor ? picked : anchor);
+      setEndDate(picked < anchor ? anchor : picked);
+    } else if (picked < startDate) setStartDate(picked);
+    else setEndDate(picked);
+
+    // §9: dragging past the last day of the month rubber-bands rather than
+    // hard-stopping, and we simply hold the last day.
     if (picked.getMonth() !== visibleMonth.getMonth()) {
       setVisibleMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
     }
-    // Normalise: dragging backwards grows the range the other way instead of
-    // producing an inverted one.
-    if (picked < startDate) setStartDate(picked);
-    else setEndDate(picked);
   }
 
   function endDrag() {
+    dragOrigin.current = null;
     if (!dragging) return;
     setDragging(false);
-    dragOrigin.current = null;
     setSelectingEnd(false);
     // Same-day range needs an end time later than its start, or the span is
     // negative and every downstream duration is nonsense.
@@ -312,6 +329,24 @@ export default function DateTimeRangePicker({
       setEndTime(`${String(shifted.getHours()).padStart(2, "0")}:${String(shifted.getMinutes()).padStart(2, "0")}`);
     }
   }
+
+  /* A drag can be released outside every day cell — over the header, off the
+     popover, past the window edge. Without this the range stays half-open until
+     the next click. The ref keeps the listener pointed at the newest closure
+     (endDrag reads startDate/endDate/startTime/endTime), and it is only mounted
+     while a drag is live. */
+  const endDragRef = useRef(endDrag);
+  endDragRef.current = endDrag;
+  useEffect(() => {
+    if (!dragging) return;
+    const stop = () => endDragRef.current();
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [dragging]);
 
   // Escape and outside-click dismissal — the source listed both as "production
   // considerations"; without them the picker is a trap once open.
@@ -426,11 +461,10 @@ export default function DateTimeRangePicker({
                       weekday: "long", month: "long", day: "numeric", year: "numeric",
                     })}
                     aria-pressed={isStart || isEnd}
-                    onClick={() => (dragging ? undefined : selectDate(day))}
+                    onClick={() => (didDrag.current ? undefined : selectDate(day))}
                     onPointerDown={e => beginDrag(day, e)}
                     onPointerEnter={e => extendDrag(day, e)}
                     onPointerUp={endDrag}
-                    onPointerLeave={endDrag}
                   >
                     {day.getDate()}
                   </button>

@@ -62,6 +62,20 @@ function getDaysUntil(dateStr: string | undefined): number | null {
   return Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * `due_date` is a calendar DAY, not an instant.
+ *
+ * The column is TEXT and the rest of the app already writes 'YYYY-MM-DD' (the
+ * AI tool schema documents exactly that shape, and live rows contain it). This
+ * form used `toISOString()`, which converts LOCAL midnight to UTC: at UTC+7,
+ * picking 20 Oct stored `2026-10-19T17:00:00.000Z` — the deadline landed a day
+ * early, and the stored value disagreed with every other writer. Formatting the
+ * day directly keeps the picked day as the saved day in every timezone.
+ */
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function getUrgency(daysLeft: number | null): 'overdue' | 'urgent' | 'critical' | 'soon' | 'normal' {
   if (daysLeft === null) return 'normal';
   if (daysLeft < 0) return 'overdue';
@@ -211,10 +225,10 @@ export function DeadlinesCard({
     if (!newDl.title.trim()) return;
 
     const dueDate = addType === 'deadline' && newDl.dueDate
-      ? newDl.dueDate.toISOString()
+      ? localDayKey(newDl.dueDate)
       : addType === 'reminder' && newDl.remindAtDate
-        ? newDl.remindAtDate.toISOString()
-        : new Date().toISOString();
+        ? localDayKey(newDl.remindAtDate)
+        : localDayKey(new Date());
 
     let remindAt: string | undefined;
     if (addType === 'reminder' && newDl.remindAtDate) {
