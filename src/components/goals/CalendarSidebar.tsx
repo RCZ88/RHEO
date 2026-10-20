@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { MonthWall } from '../MonthWall/MonthWall';
-import { PanelLeft, PanelRight, CalendarDays } from 'lucide-react';
+import { PanelLeft, PanelRight } from 'lucide-react';
 
 // Session-scope one-shot flag: app relaunch replays the entrance; tab flips do not.
 let entrancePlayedThisSession = false;
@@ -61,7 +61,10 @@ export function CalendarSidebar({
   // matched nothing at all — `.calendar-scene` was declared and never applied, so
   // the wall rendered dead flat and nothing looked 3D. Declared unconditionally on
   // the wrapper; the effect only manages the transient `is-entrancing` half.
-  const sceneClassName = 'calendar-scene relative overflow-visible rounded-lg';
+  /* `min-h-0 flex-1` is what lets the wall FIT the panel. Without it the scene
+     is as tall as its content, the wall never receives a bounded height, and the
+     month keeps laying itself out at ~700px inside a 403px panel. */
+  const sceneClassName = 'calendar-scene relative min-h-0 flex-1 overflow-visible rounded-lg';
 
   // Cursor tilt ±4°. DISABLED for now.
   //
@@ -118,14 +121,23 @@ export function CalendarSidebar({
          parent's flex row — so square tiles are the same proportion on the left
          and on the right by construction, not by two rules kept in sync. */
 
-      className="lg:flex-1 min-w-[420px] max-w-[560px] lg:h-full lg:overflow-y-auto"
+      /* FILLS ITS PANEL, WHATEVER THE PANEL IS. This element was written for
+         the Gold page, where it was a sidebar in a flex row and `min-w-[420px]
+         max-w-[560px]` was the contract that stopped it swallowing the page.
+         In the schedule shell it is a PANEL whose width comes from the layout
+         preset — 318px in a narrow today-first, 945px in calendar-first. The
+         fixed band then did the two things a band does: at the narrow end it
+         forced 420px into a 318px cell, so the right of the month was clipped;
+         at the wide end it capped at 560px and left ~385px of the panel's own
+         background showing behind it. Width belongs to the container now, and
+         only the height can scroll. */
+      className="flex h-full min-h-0 w-full flex-col overflow-y-auto"
       aria-label="Calendar"
     >
-      {/* Header strip: label + side toggle. Flat chrome, never 3D. */}
-      <div className="flex items-center justify-between mb-2 px-1">
-        <span className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-300">
-          <CalendarDays size={13} className="text-zinc-500" />Calendar
-        </span>
+      {/* Header strip: side toggle only. The panel chrome above already prints
+          "Calendar", so repeating it here stacked the same label twice on one
+          panel — two identical headings 20px apart read as a rendering bug. */}
+      <div className="flex items-center justify-end mb-2 px-1">
         <div className="flex items-center gap-1" role="group" aria-label="Calendar side">
           <button type="button" onClick={onToggleSide} aria-pressed={side === 'left'}
             title="Move calendar to the left"

@@ -229,6 +229,31 @@ export function ScheduleCard({
       }
     >
       <div className="flex flex-col gap-3 min-h-[320px]">
+        {/* The add affordance has to be visible WITHOUT scrolling. It used to
+            live in exactly two places: `emptyAction` (only rendered when the
+            day has zero entries) and the card FOOTER — which sits below a
+            `min-h-[320px]` body inside a panel that scrolls. So on any day that
+            already had a block, selecting that day showed no way to add
+            another: the button existed, under the fold. One control, at the
+            top, always. */}
+        {!isAdding && !editingId && (
+          <div className="flex shrink-0 items-center justify-between gap-2">
+            <span className="text-[11px] text-[var(--text-muted)]">
+              {dayEntries.length === 0
+                ? `Nothing on ${DAY_SHORT[selectedDay]}`
+                : `${dayEntries.length} block${dayEntries.length === 1 ? '' : 's'} on ${DAY_SHORT[selectedDay]}`}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={startAdd}
+              className="h-7 gap-1 px-2 text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            >
+              <Plus size={12} /> Add block
+            </Button>
+          </div>
+        )}
+
         {/* Day selector (hidden in showAll mode, or when the parent owns it) */}
         {!showAll && !hideDaySelector && (
           <div className="flex items-center gap-1 shrink-0" role="group" aria-label="Day of week">

@@ -193,10 +193,13 @@ describe('layout engine — sanitize (untrusted storage)', () => {
   });
 
   it('clamps a stored size that no longer fits its limits', () => {
-    // `left` is the SLOT name that holds `calendar` in the default preset —
-    // `sizes` is keyed by slot name, like `slots` itself.
-    const l = sanitizeLayout({ sizes: { left: 99 } });
-    expect(l.sizes.left).toBe(PANEL_META.calendar.max);
+    // `sizes` is keyed by SLOT name, like `slots` itself, and the limits come
+    // from the panel that slot holds. In today-first the calendar is `right-top`
+    // (`left` is the agenda's full-height column), so that is the slot whose
+    // stored 99% must clamp to the CALENDAR's max — not to whatever panel
+    // happens to sit first in the slot list.
+    const l = sanitizeLayout({ sizes: { 'right-top': 99 } });
+    expect(l.sizes['right-top']).toBe(PANEL_META.calendar.max);
   });
 
   it('ignores a non-numeric stored size instead of rendering NaN', () => {

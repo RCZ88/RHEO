@@ -8,7 +8,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronLeft, ChevronRight, Plus, Trash2, X, CalendarDays, Sun,
+  Plus, Trash2, X, CalendarDays, Sun,
 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { CATEGORY_COLORS, getCategoryColor } from '../../lib/CategoryColors';
@@ -321,54 +321,42 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
   return (
     <div
       data-monthwall="wall"
-      className="relative rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5"
+      /* FILLS THE PANEL IT IS GIVEN. The wall used to size itself from its own
+         content — square tiles whose height came from the width — so in the
+         Today-first panel (797x403) six rows needed ~700px and the last four
+         weeks fell below the fold. The spec asks for the opposite: "the
+         calendar must work well when small ... show the month grid with dots
+         only". A flex column with the month grid as the flexible child lets the
+         rows share whatever height the panel has. */
+      className="relative flex h-full min-h-0 flex-col overflow-y-auto ws-scroll rounded-xl border border-zinc-800/50 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5"
 
     >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-card)', border: '1px solid var(--page-accent)' }}>
-            <CalendarDays size={15} style={{ color: 'var(--page-accent)' }} />
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold text-zinc-100">Month Wall</h3>
-            <p className="text-[11px] text-zinc-500">{events.length === 0 ? 'Tap a day to add an event' : `${events.length} event${events.length > 1 ? 's' : ''} on this view`}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <motion.button whileTap={{ scale: 0.9 }} onClick={goToday}
-            className="h-8 px-2 rounded-lg bg-zinc-800/50 text-[11px] text-zinc-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600">
-            Today
-          </motion.button>
-          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => nav(-1)}
-            className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-400 hover:text-white border border-zinc-700/50" aria-label="Previous month">
-            <ChevronLeft size={14} />
-          </motion.button>
-          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => nav(1)}
-            className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-400 hover:text-white border border-zinc-700/50" aria-label="Next month">
-            <ChevronRight size={14} />
-          </motion.button>
-
-        </div>
-      </div>
-
-      {/* Month nav */}
-      <nav aria-label="Month" className="flex items-center justify-center gap-2 mb-3">
+      {/* ONE row of navigation. The wall used to print its own "Month Wall"
+          title and an event caption directly beneath a panel header that
+          already says "Calendar", then repeat the prev/next chevrons in a
+          second row — 88px of chrome above a month grid that only had ~245px
+          for six rows, so the last week fell below the panel. The title is the
+          panel's job, so it is gone; Today joins the month nav; the arrows
+          appear once. The colour legend went with it: 36px of labels for four
+          dot hues, and it was the last 36px standing between six rows and the
+          panel's height. The dots themselves remain on every cell. */}
+      <nav aria-label="Month" className="mb-3 flex shrink-0 items-center gap-2">
         <button onClick={() => nav(-1)} aria-label="Previous month" className="h-7 w-7 rounded-[6px] border border-zinc-800 text-zinc-400 hover:text-white">‹</button>
         <span className="text-[13px] font-semibold text-zinc-200 tabular-nums">{MONTHS[month]} {year}</span>
         <button onClick={() => nav(1)} aria-label="Next month" className="h-7 w-7 rounded-[6px] border border-zinc-800 text-zinc-400 hover:text-white">›</button>
+        <span className="flex-1" />
+        <motion.button whileTap={{ scale: 0.95 }} onClick={goToday}
+          className="h-7 rounded-lg border border-zinc-700/50 bg-zinc-800/50 px-2 text-[11px] text-zinc-300 hover:text-white">
+          Today
+        </motion.button>
       </nav>
 
-      {/* Legend */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <span className="flex items-center gap-1 text-[9px] text-zinc-500"><span className="w-1.5 h-1.5 rounded-full" style={{ background: hueFor('deadline') }} />Deadline</span>
-        <span className="flex items-center gap-1 text-[9px] text-zinc-500"><span className="w-1.5 h-1.5 rounded-full" style={{ background: hueFor('reminder') }} />Reminder</span>
-        <span className="flex items-center gap-1 text-[9px] text-zinc-500"><span className="w-1.5 h-1.5 rounded-full" style={{ background: hueFor('goal') }} />Goal</span>
-        <span className="flex items-center gap-1 text-[9px] text-zinc-500"><span className="w-1.5 h-1.5 rounded-full" style={{ background: hueFor('schedule') }} />Schedule</span>
-      </div>
-
       {/* Weekday header */}
-      <div className="grid grid-cols-7 gap-[10px] mb-1">
+      {/* Same horizontal padding as the month grid below it (which is padded
+          inline). Without it the letters were 10px left of their own columns
+          and the drift grew to ~9px at the edges. Inline, not a new arbitrary
+          class: this value must not depend on a rebuild emitting a new rule. */}
+      <div className="grid grid-cols-7 gap-[10px] mb-1" style={{ paddingLeft: 10, paddingRight: 10 }}>
         {DAY_LETTER.map((d, i) => (
           <div key={i} className="text-center text-[10px] font-medium text-zinc-600 uppercase tracking-wider">{d}</div>
         ))}
@@ -410,9 +398,15 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                 computed once, with no geometry to mis-hit. `preserve-3d` on the
                 OUTER wrapper is left alone; it only tilts the card, and it has no
                 transformed descendants left to reorder. */}
-            <div className="grid grid-cols-7 gap-[10px]" style={{ padding: 10 }}>
+            {/* Fits when it can, SCROLLS when it cannot. A 296px panel (Week
+                first's bottom row) or a stacked 165px one cannot hold six
+                readable rows plus the header/nav, and the wall's own
+                `overflow-hidden` used to clip the rest of the month away with
+                no scrollbar. `overflow-y-auto` makes the missing weeks
+                reachable instead of invisible. */}
+            <div className="grid min-h-0 flex-1 grid-cols-7 gap-[10px]" style={{ padding: 10, gridTemplateRows: 'repeat(6, minmax(24px, 1fr))' }}>
               {grid.map((day, idx) => {
-                if (!day) return <div key={`empty-${idx}`} className="aspect-square" />;
+                if (!day) return <div key={`empty-${idx}`} className="min-h-0" />;
                 const key = localDateKey(day);
                 const isToday = key === todayKey;
                 const isPast = key < todayKey;
@@ -457,7 +451,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                           opacity: 1 - Math.abs(rowOffset) * 0.055,
                           transition: reactiveTransition,
                         }}
-                        className={`aspect-square rounded-lg border cursor-pointer relative
+                        className={`min-h-0 rounded-lg border cursor-pointer relative
                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-background)]
                           ${isSelected
                             ? 'ring-2 ring-[var(--page-accent)] border-transparent z-10'

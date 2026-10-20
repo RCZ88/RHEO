@@ -71,13 +71,42 @@ export const PRESET_SLOTS: Record<PresetId, string[]> = {
   focus: ['stage', 'drawer-1', 'drawer-2', 'drawer-3'],
 };
 
+/** Which panel each preset's slots start with.
+ *
+ *  This is NOT plain `PANEL_IDS` order, and that is the whole point. `PANEL_IDS`
+ *  is the panel catalogue (calendar first, because it is the page's
+ *  centrepiece), but a preset's SLOTS are named for the thing that belongs in
+ *  them — and two presets do not start with the calendar:
+ *
+ *    today-first   `left` is `ag`: "Day agenda as a timeline, full height".
+ *                  The calendar is the block on the right, above Upcoming and
+ *                  Todos. Zipping PANEL_IDS onto the slots put the CALENDAR in
+ *                  the agenda's full-height column and squeezed the agenda into
+ *                  the right-hand slot.
+ *    week-first    `top` is `wk`: "Week timeline, full width". The calendar
+ *                  belongs in the bottom row. Zipping put a 1440px-tall-grid
+ *                  calendar across the top and the week card in a 475px cell.
+ *
+ *  The visible symptom was that the layout menu appeared to have only one
+ *  working entry: today-first and calendar-first both rendered
+ *  calendar-on-the-left, so choosing between them changed proportions and
+ *  nothing else, and week-first rendered the wrong panel in the big slot.
+ *  `SCHEDULE-LAYOUT-SYSTEM.md` §Presets is the authority for these orders. */
+const PRESET_PANELS: Record<PresetId, PanelId[]> = {
+  'calendar-first': ['calendar', 'agenda', 'upcoming', 'todos'],
+  'today-first':    ['agenda', 'calendar', 'upcoming', 'todos'],
+  'week-first':     ['agenda', 'calendar', 'upcoming', 'todos'],
+  focus:            ['calendar', 'agenda', 'upcoming', 'todos'],
+};
+
 /** Every slot the preset declares, each holding the panel that belongs there.
  *  Slot names come from `PRESET_SLOTS` (`left`, `right-top`, `drawer-1`, …) and
- *  `PANEL_IDS` is in the matching order, so the two zip into a bijection. */
+ *  `PRESET_PANELS` is in the matching order, so the two zip into a bijection. */
 function identity(preset: PresetId = 'today-first'): SlotMap {
   const slots: SlotMap = {};
+  const order = PRESET_PANELS[preset];
   PRESET_SLOTS[preset].forEach((slot, i) => {
-    const panel = PANEL_IDS[i];
+    const panel = order[i];
     if (panel) slots[slot] = panel;
   });
   return slots;
