@@ -49,8 +49,13 @@ and unambiguous.
   Scoped checks: esbuild transpile OK ×3; `TS2304` clean; **30/30** scheduleLayout tests; `validate:pages` =
   pre-existing `/agentic` only.
 
-**NEXT ACTION:** CZ must **rebuild + relaunch** — `dist/index.html` is still the **2026-10-16 20:59** build and
-`withPreset` is absent from it, so none of this is visible yet. `38123` = HTTP 000, app down.
+**NEXT ACTION:** **BUILT 2026-10-20 09:59** (CZ authorised it: `npm run build` → **exit 0, 192 s, peak RSS
+0.11 GB**, `oomSuspect:false` in `agent/logs/build.log` — the 8 GB OOM fear did not materialise). Artifacts
+verified rather than assumed: `pick the day you are scheduling` is in `LifePage.JBotfvE5.js` (rail rendered),
+`@media (min-width: 1100px) { .…\:grid { display:grid } }` is in `index.DaWmMZQp.css` (single container),
+`min-h-[220px]` is 0 in both source and CSS, `preload.cjs` 162 KB, `main.cjs` 1.96 MB. **RHEO was NOT
+launched** — the app is the only writer on the live profile (§0-0z), so CZ launches it. Then attach with Probe
+and measure: the rail, the four panels either side of 1100px, and the duplicate-mount count.
 Then decide the two widenings: (1) build the calendar's Month/Week/Day modes so the toggle is real;
 (2) add a reminder column + ticker for schedule blocks (schema change).
 
