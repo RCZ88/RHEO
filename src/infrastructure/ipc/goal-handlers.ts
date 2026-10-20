@@ -2636,6 +2636,22 @@ ipcMain.handle('entity:get-links', async (_event, feature: string, entityId: str
   } catch (err: any) { return { success: false, error: String(err?.message || err), goalIds: [] }; }
 });
 
+/* Goals and the schedule are two halves of ONE link, and only one half was ever
+   written. `schedule_entries.goal_id` says which goal a block serves; the
+   reciprocal `goals.linked_schedule_id` is what momentum's "schedule adherence"
+   reads (main.ts, 30% of the score). The schedule UI never wrote the reciprocal
+   side, so its `linkedGoals` filter was ALWAYS empty and adherence stayed at the
+   neutral 50 forever, whatever the user scheduled. These helpers keep both sides
+   agreeing on add, edit and delete. */
+function linkGoalToSchedule(scheduleId: string, goalId: string | null | undefined) {
+  if (!goalId) return;
+  try { db!.prepare('UPDATE goals SET linked_schedule_id = ? WHERE id = ?').run(scheduleId, goalId); } catch { /* optional */ }
+}
+
+function unlinkGoalFromSchedule(scheduleId: string) {
+  try { db!.prepare('UPDATE goals SET linked_schedule_id = NULL WHERE linked_schedule_id = ?').run(scheduleId); } catch { /* optional */ }
+}
+
 ipcMain.handle('get-schedule', async () => {
   try {
     const rows = db!.prepare('SELECT * FROM schedule_entries ORDER BY day_of_week, start_time').all();
@@ -2648,12 +2664,14 @@ ipcMain.handle('add-schedule-entry', async (_event, entry: any) => {
     const id = 'sch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     db!.prepare('INSERT INTO schedule_entries (id, title, location, day_of_week, start_time, end_time, category, color, goal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(id, entry.title, entry.location || null, entry.day_of_week, entry.start_time, entry.end_time, entry.category || 'class', entry.color || '#22d3ee', entry.goal_id || null);
+    linkGoalToSchedule(id, entry.goal_id);
     return { success: true, id };
   } catch (err: any) { return { success: false, error: err.message }; }
 });
 
 ipcMain.handle('delete-schedule-entry', async (_event, id: string) => {
   try {
+    unlinkGoalFromSchedule(id);
     db!.prepare('DELETE FROM schedule_entries WHERE id = ?').run(id);
     return { success: true };
   } catch (err: any) { return { success: false, error: err.message }; }
@@ -2666,6 +2684,13 @@ ipcMain.handle('update-schedule-entry', async (_event, id: string, patch: any) =
     const sets = fields.map(f => `${f} = ?`).join(', ');
     const vals = fields.map(f => patch[f]);
     db!.prepare(`UPDATE schedule_entries SET ${sets} WHERE id = ?`).run(...vals, id);
+    /* Re-point the reciprocal link only when the goal actually changed, and
+       clear the OLD goal first so a block moved from goal A to goal B cannot
+       leave A still claiming this schedule id. */
+    if (fields.includes('goal_id')) {
+      unlinkGoalFromSchedule(id);
+      linkGoalToSchedule(id, patch.goal_id);
+    }
     return { success: true };
   } catch (err: any) { return { success: false, error: err.message }; }
 });

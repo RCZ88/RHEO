@@ -81,6 +81,11 @@ function buildMonthGrid(year: number, month: number): (Date | null)[] {
   for (let i = 0; i < startOffset; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
   while (cells.length < 42) cells.push(null);
+  /* A month that finishes inside its fifth week does not need a sixth EMPTY
+     row. That row was ~17% of the wall's height, and at 1366x768 it is the
+     difference between a month that fits its panel and one that reads as cut
+     off (or scrolls, hiding the last week). */
+  if (cells.length > 35 && cells.slice(-7).every(c => c === null)) cells.length = 35;
   return cells;
 }
 
@@ -329,6 +334,10 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
          only". A flex column with the month grid as the flexible child lets the
          rows share whatever height the panel has. */
       className="relative flex h-full min-h-0 flex-col overflow-y-auto ws-scroll rounded-xl border border-zinc-800/50 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5"
+      /* 20px of padding on every side was 40px of pure chrome above and below a
+         month that has to fit a 227px wall at 1366x768. Inline so the value is
+         honoured without depending on a new utility class being emitted. */
+      style={{ padding: '4px 8px' }}
 
     >
       {/* ONE row of navigation. The wall used to print its own "Month Wall"
@@ -340,7 +349,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
           appear once. The colour legend went with it: 36px of labels for four
           dot hues, and it was the last 36px standing between six rows and the
           panel's height. The dots themselves remain on every cell. */}
-      <nav aria-label="Month" className="mb-3 flex shrink-0 items-center gap-2">
+      <nav aria-label="Month" className="mb-3 flex shrink-0 items-center gap-2" style={{ marginBottom: 4 }}>
         <button onClick={() => nav(-1)} aria-label="Previous month" className="h-7 w-7 rounded-[6px] border border-zinc-800 text-zinc-400 hover:text-white">‹</button>
         <span className="text-[13px] font-semibold text-zinc-200 tabular-nums">{MONTHS[month]} {year}</span>
         <button onClick={() => nav(1)} aria-label="Next month" className="h-7 w-7 rounded-[6px] border border-zinc-800 text-zinc-400 hover:text-white">›</button>
@@ -356,7 +365,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
           inline). Without it the letters were 10px left of their own columns
           and the drift grew to ~9px at the edges. Inline, not a new arbitrary
           class: this value must not depend on a rebuild emitting a new rule. */}
-      <div className="grid grid-cols-7 gap-[10px] mb-1" style={{ paddingLeft: 10, paddingRight: 10 }}>
+      <div className="grid grid-cols-7 gap-[10px] mb-1" style={{ paddingLeft: 4, paddingRight: 4, gap: 4 }}>
         {DAY_LETTER.map((d, i) => (
           <div key={i} className="text-center text-[10px] font-medium text-zinc-600 uppercase tracking-wider">{d}</div>
         ))}
@@ -404,7 +413,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                 `overflow-hidden` used to clip the rest of the month away with
                 no scrollbar. `overflow-y-auto` makes the missing weeks
                 reachable instead of invisible. */}
-            <div className="grid min-h-0 flex-1 grid-cols-7 gap-[10px]" style={{ padding: 10, gridTemplateRows: 'repeat(6, minmax(24px, 1fr))' }}>
+            <div className="grid min-h-0 flex-1 grid-cols-7 gap-[10px]" style={{ padding: 4, gap: 4, gridTemplateRows: `repeat(${Math.ceil(grid.length / 7)}, minmax(24px, 1fr))` }}>
               {grid.map((day, idx) => {
                 if (!day) return <div key={`empty-${idx}`} className="min-h-0" />;
                 const key = localDateKey(day);

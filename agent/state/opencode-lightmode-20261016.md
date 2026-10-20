@@ -3,78 +3,59 @@
 
 # Agent State — opencode-lightmode-20261016
 
-> **STATUS:** active | **UPDATED:** 2026-10-20T15:25Z
+> **STATUS:** active | **UPDATED:** 2026-10-20T16:10Z
 
 ---
 
 ## CURRENT CYCLE (12)
-**ROLE:** CZ asked whether the problems are known "clearly and in the most detail". Audited the three surfaces he
-named against the real code and the live DB, and fixed two proven defects in the custom date picker.
+**ROLE:** CZ: "no u haven't finished" + "the layout fix and everything?" + "the connections with the alarm stuff?".
+Stopped reporting and shipped the fixes that do not need a schema change. Every number below is measured in
+Chromium with the REAL components and the REAL stylesheet (`app4.css`/`app5.css` linked — see GOTCHA).
 
-**FIXED + VERIFIED (uncommitted at time of writing):**
-- **Every deadline added through the form was saved ONE DAY EARLY.** `due_date` is a calendar DAY, but
-  `DeadlinesCard.handleAdd` did `dueDate.toISOString()`: at UTC+7, picking 20 Oct stored
-  `2026-10-19T17:00:00.000Z`. Live DB proves both shapes — 3 rows `YYYY-MM-DD`, 6 rows `...T17:00:00.000Z`.
-  Canonical is date-only (`deadlineInstant` documents it, the AI tool schema says `YYYY-MM-DD`). New
-  `localDayKey()` writes the picked day. Verified: `onApply` → local **2026-10-15 → 2026-10-20** (was 14 → 19).
-- **A range could not be made by clicking.** `beginDrag` on pointerdown clobbered start/`selectingEnd` and `onClick`
-  was skipped while dragging, so click 15 then 20 produced **20 → 20**. Now the pointerdown records an anchor only;
-  the range moves after 10px; a `didDrag` ref stops the click from collapsing a drag; hover is inert
-  (`e.buttons`); a window `pointerup` ends a drag released outside the grid. Verified in Chromium with the real
-  component: two clicks 15 → 20; drag 15→29 = 15→29; backward 8→22; hover never moves the range; 0 errors.
+**DONE + MEASURED (this cycle):**
+- **Month wall fits.** Three separate causes, all fixed: (a) `buildMonthGrid` padded every month to 42 cells and the
+  grid hardcoded `repeat(6, …)` — October 2026 needs 5 rows, so an empty row burned 39px; (b) gaps 10→4 and
+  padding 10→4 (the documented 24px tile minimum); (c) the wall's own `p-5` + `nav mb-3` = 48px of chrome →
+  `padding: 4px 8px`, `marginBottom: 4`. Result at 1366x768: **wall 229px, content 228px, `wallScrolls: false`,
+  31/31 tiles visible**, screenshot confirms the 25-31 row. 1440x900 and 1920x1080 also fit. 1280x720 still
+  scrolls 24px (228 in 204) — the last row is reachable, not clipped.
+- **The calendar panel was clipping its own content.** `CalendarSidebar`'s aside had `overflow-y-auto`, which makes
+  a `flex-1` child size to CONTENT; the wall was laid out to y=530 inside a cell ending at y=481, so the last week
+  was outside the cell (24/31 tiles). Now `overflow-hidden`; the wall is the only scroller. Measured: aside 265 in
+  265, wall box inside the cell.
+- **Picker: 35 cells** when the trailing week holds no day of the month. Popover 362 → 324px. Two-click range
+  still 15→20 with the real CSS.
+- **The span is no longer lost on "Done".** `DateTimeRangePicker` gained `onChange` (fires on every selection
+  change); `DeadlinesCard.applySpan` is wired to BOTH `onApply` and `onChange`, so the modal always holds the
+  current range.
+- **Goals ↔ schedule are now reciprocal.** `schedule_entries.goal_id` was written; `goals.linked_schedule_id` —
+  the pointer momentum's 30%-weight "schedule adherence" reads — never was, so its `linkedGoals` filter was
+  permanently empty and adherence was pinned at the neutral 50. `add/update/delete-schedule-entry` now keep the
+  goal's pointer in sync (clear old, set new, clear on delete).
 
-**TWO THINGS I GOT WRONG THIS CYCLE (do not repeat):**
-1. I called the drag "genuinely broken" from numbers taken with an **unlinked stylesheet**. The harness page linked
-   the app CSS but not esbuild's `app5.css`, so the picker rendered unstyled at 15x20px/cell. With it linked:
-   36x35 cells, popover 278x362, both drags exact, **0 px reflow** on selection. A component rendered without its
-   stylesheet proves nothing about its geometry.
-2. `9/2/2026` in one range was my selector: `text=/^29$/` matched BOTH Sept 29 (leading cell) and Oct 29. Pick
-   picker days by `aria-label` ("October 29, 2026"), never by day number.
+**STILL OPEN (needs CZ's word):**
+- **Day / Week / Month toggle is INERT.** `renderPanel(panel, slot)` gets no `view`; `CalendarSidebar` receives no
+  `view`; `SchedulePage.tsx:271-273` admits it. Building the three views is a feature, not a fix.
+- **Schedule-block alarms do not exist.** `schedule_entries` has no remind column; needs
+  `ALTER TABLE schedule_entries ADD COLUMN remind_min` + a ticker pass + a form field. Schema change → permission.
+  (Deadline reminders ARE real: own table, relative+absolute, ticker in `deadlineReminders.ts`.)
+- **Light-mode scheme.** 128 hardcoded `zinc-*`: MonthWall 65, ScheduleLayoutShell 49, CalendarSidebar 14.
+  Confirm CZ means the THEME.
 
-## THE THREE PROBLEMS CZ NAMED — STATUS
-- **1a. Preset menu (Today first / Calendar first / Week first / Focus)** — source FIXED in `294e066`
-  (`PRESET_PANELS` per spec §Presets; 4/4 panels measured in every preset). **Not in the running app**:
-  `dist/index.html` is 09:59, the edits are 11:45–12:15, and `"Add block"` is absent from the bundle. Needs a build.
-- **1b. Day / Week / Month toggle — INERT IN SOURCE, NOT FIXED.** `ScheduleLayoutShell.renderPanel(panel, slot)`
-  has no `view`; `SchedulePage.tsx:271-273` admits it in a comment; `CalendarSidebar` receives no `view`. The
-  spec's §55-67 calendar views were never built, so clicking only moves the highlight.
-- **2. Custom pickers** — the two defects above are fixed. The other one, `DateTimePicker` (ReminderEditorSheet +
-  DeadlinesCard), is UTC-safe: it emits local `YYYY-MM-DDTHH:mm` via `toLocalInput`. Remaining: the span modal's
-  **"Done" closes without applying** a picked range.
-- **3. UI cut off** — measured, two causes. (a) At 1366x768 the shell gets 638px after 130px Life chrome; the
-  calendar cell is 309px and the wall's content is 343px, so it scrolls (343 vs 227 visible ≈ 3.5 weeks).
-  (b) Fixable waste: `buildMonthGrid` pads to **42 cells** and the grid hardcodes `repeat(6, ...)`, but October
-  2026 needs **5 rows** (Sep 27–Oct 31) — one empty row ≈ 17% of the wall. `buildCalendarDays` (picker) also pads
-  to 42, and the popover is 362px tall. No page scroll at 1366/1280/1024/1440/1920; panels scroll internally (§17).
+**NEXT:** CZ builds (`npm run build`) — the running `dist` is 09:59 and none of this is in it. Then re-check
+presets / Add block / month fit at his real window size.
 
-## TODO — ORDERED (work from this list)
-1. **MonthWall: use 35 cells when the month fits** — drop a fully-empty trailing week and size
-   `repeat(rows, minmax(24px,1fr))`. Direct cause of "cut off"; recovers ~17% height at every preset.
-2. **Picker: 35 cells when the month fits** (`buildCalendarDays`) — one wasted row is where the bottom weeks are
-   cut in a modal at 768px.
-3. **Span modal "Done" must apply** (or be relabelled Cancel) — it discards a picked range today.
-4. **Day/Week/Month toggle** — wire `view` into the calendar panel (month = MonthWall, week = selected-week
-   strip, day = selected-day list), reusing existing primitives. Feature, not fix: needs CZ's go-ahead.
-5. **Light-mode scheme** — 128 hardcoded `zinc-*`: MonthWall 65, ScheduleLayoutShell 49, CalendarSidebar 14
-   (ScheduleCard 0). In light mode they paint dark greys on a light surface. Confirm CZ means the THEME before
-   rewriting.
-6. **CZ builds**, then re-check presets / Add block / month fit at his real window size.
-7. Waiting on CZ: schedule-block alarms (`ALTER TABLE schedule_entries ADD COLUMN remind_min` + ticker);
-   momentum adherence (`goals.linked_schedule_id` is never written by the schedule UI).
+**GOTCHA (cost a full pass):** the harness page must link BOTH `app.css` (the app's built CSS) and esbuild's
+`appN.css` (component CSS such as `DateTimeRangePicker.css`). Without the second, `.dt-day` was unstyled at
+15x20px and every geometry/drag conclusion drawn from it was false. Component day cells are selected by
+`aria-label` ("October 29, 2026"), never `/^29$/` — leading-month cells duplicate the number.
 
-**NOT TESTED:** the app itself. No debug port (9222/9223/9229/8315 closed), Probe MCP absent from the catalog, and
-launching would be a second writer on the live 122 MB profile while `rheo-tracker.service` is active.
-
-**NEXT ACTION:** item 1 (MonthWall 35-cell months), then item 2, verified in the harness at 1366x768 / 1280x720 /
-1440x900 with the real components and the real stylesheet.
-
-**PROCESSES:** esbuild ×3 + Playwright chromium ×3, all short-lived and closed | net 0.
+**PROCESSES:** esbuild ×6 + Playwright chromium ×5, all short-lived and closed | net 0.
 
 ---
 ## HISTORY
-- **Cycle 11 — calendar fit + presets + add button (COMMITTED `294e066`).** `CalendarSidebar`'s
-  `min-w-[420px] max-w-[560px]` band → `w-full h-full`; MonthWall became a flex column sized by height, chrome
-  reduced 88px, column drift 0.0; always-visible "Add block" row; `PRESET_PANELS` per spec; 30/30 tests.
+- **Cycle 11 — calendar fit + presets + add button (COMMITTED `294e066`).** `CalendarSidebar` width band →
+  `w-full h-full`; MonthWall flex column; always-visible "Add block"; `PRESET_PANELS` per spec; 30/30 tests.
 - **Cycle 10 — day control + duplication (COMMITTED `643d376`, built 09:59).** `WeekdayRail` mounted; the open
-  add-form follows `selectedDay`; one grid container (inline `display:grid` outranked `hidden`, mounting every
-  panel twice below 1100px). Disproved: the `[@media(min-width:1100px)]:` variant DOES compile on Tailwind 4.2.1.
+  add-form follows `selectedDay`; one grid container (inline `display:grid` outranked `hidden` below 1100px).
+  Disproved: the `[@media(min-width:1100px)]:` variant DOES compile on Tailwind 4.2.1.

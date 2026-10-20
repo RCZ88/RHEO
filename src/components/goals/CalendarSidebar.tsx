@@ -129,9 +129,15 @@ export function CalendarSidebar({
          fixed band then did the two things a band does: at the narrow end it
          forced 420px into a 318px cell, so the right of the month was clipped;
          at the wide end it capped at 560px and left ~385px of the panel's own
-         background showing behind it. Width belongs to the container now, and
-         only the height can scroll. */
-      className="flex h-full min-h-0 w-full flex-col overflow-y-auto"
+         background showing behind it. Width belongs to the container now.
+
+         `overflow-hidden` here, NOT `overflow-y-auto`: a scrolling flex parent
+         sizes its `flex-1` child to CONTENT rather than to the space that is
+         left, so the scene grew to the month's full height and the wall was
+         laid out 49px past the panel's own bottom edge. The cell clipped it, so
+         the last week (25-31) was simply missing — 24 of 31 tiles. The wall
+         itself is the scroller; this box must only bound it. */
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden"
       aria-label="Calendar"
     >
       {/* Header strip: side toggle only. The panel chrome above already prints

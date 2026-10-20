@@ -11,6 +11,12 @@ type DateTimeRange = {
 type Props = {
   initialValue?: DateTimeRange;
   onApply?: (value: DateTimeRange) => void;
+  /** Fires on EVERY change of the selection, not only on "Apply range".
+   *  A caller that embeds this picker inside a modal needs the newest value even
+   *  when the user dismisses the modal with the modal's own button — otherwise
+   *  the range they just picked is silently thrown away (which is exactly what
+   *  "Done" used to do). */
+  onChange?: (value: DateTimeRange) => void;
   timeFormat?: "24h" | "12h";
   /** Copy for WHAT THIS PICKER IS SETTING, supplied by the caller. Defaults are
    *  deliberately generic: the component must not claim to know it is editing a
@@ -94,13 +100,17 @@ function buildCalendarDays(month: Date) {
   const gridStart = new Date(first);
   gridStart.setDate(first.getDate() - startOffset);
 
-  return Array.from({ length: 42 }, (_, index) => {
+  const days = Array.from({ length: 42 }, (_, index) => {
     const day = new Date(gridStart);
     day.setDate(gridStart.getDate() + index);
     return day;
   });
+  /* 35 cells when the trailing week holds no day of this month. A sixth empty
+     row is 35px of popover height that buys nothing, and in a short modal it is
+     exactly the row that pushes the last week out of reach. */
+  if (days.slice(-7).every(day => day.getMonth() !== month.getMonth())) days.length = 35;
+  return days;
 }
-
 function TimeColumn({
   label,
   value,
@@ -237,6 +247,7 @@ function TimeEditor({
 export default function DateTimeRangePicker({
   initialValue,
   onApply,
+  onChange,
   timeFormat = "24h",
   labels,
 }: Props) {
@@ -390,6 +401,16 @@ export default function DateTimeRangePicker({
     onApply?.({ startDate, endDate, startTime, endTime });
     setCalendarOpen(false);
   }
+
+  /* Live commit. The explicit "Apply range" button still exists for the popover,
+     but the CURRENT selection is pushed on every change so an enclosing modal
+     can close at any moment without losing it. Deliberately not listing
+     `onChange` as a dependency: callers pass an inline handler, and re-firing on
+     its identity would run this on every parent render. */
+  useEffect(() => {
+    onChange?.({ startDate, endDate, startTime, endTime });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, startTime, endTime]);
 
   const activeTimeValue = activeTime === "start" ? startTime : endTime;
   const setActiveTimeValue = activeTime === "start" ? setStartTime : setEndTime;

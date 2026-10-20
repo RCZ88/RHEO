@@ -221,6 +221,19 @@ export function DeadlinesCard({
     setAddType('deadline');
   };
 
+  /* One handler for both ways the span arrives: the picker's explicit "Apply
+     range" button AND its live `onChange`. Closing the modal with "Done" used
+     to discard a range the user had already picked, because only "Apply range"
+     ever handed the value back. */
+  const applySpan = (r: { startDate: Date; endDate: Date; startTime: string; endTime: string }) => {
+    setSpan({ startDate: r.startDate, endDate: r.endDate, startTime: r.startTime, endTime: r.endTime });
+    // The span's start becomes the deadline's own date/time, so the two can
+    // never disagree about when the thing starts.
+    if (r.startDate) {
+      setNewDl(p => ({ ...p, dueDate: r.startDate, dueTime: r.startTime }));
+    }
+  };
+
   const handleAdd = () => {
     if (!newDl.title.trim()) return;
 
@@ -943,18 +956,8 @@ export function DeadlinesCard({
               startTime: span.startTime,
               endTime: span.endTime,
             }}
-            onApply={r => {
-              setSpan({ startDate: r.startDate, endDate: r.endDate, startTime: r.startTime, endTime: r.endTime });
-              // The span's start becomes the deadline's own date/time, so the
-              // two can never disagree about when the thing starts.
-              if (r.startDate) {
-                setNewDl(p => ({
-                  ...p,
-                  dueDate: r.startDate,
-                  dueTime: r.startTime,
-                }));
-              }
-            }}
+            onApply={applySpan}
+            onChange={applySpan}
           />
           <div className="flex justify-end mt-3">
             <Button size="sm" variant="ghost" onClick={() => setSpanOpen(false)}>Done</Button>
