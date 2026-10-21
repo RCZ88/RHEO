@@ -20,6 +20,7 @@ import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { execSync, spawnSync } from 'child_process'
+import { deadlineInstant } from '../shared/deadlineReminders'
 
 // ---------------------------------------------------------------------------
 // Platform detection for notification strategy
@@ -466,6 +467,25 @@ function leadLabel(leadMin: number): string {
 /** How late a relative lead may get before we retire it instead of firing. */
 const STALE_REMINDER_GRACE_MS = 5 * 60_000;
 
+/**
+ * The moment a deadline is *actually* due, in the user's own timezone.
+ *
+ * `due_date` is a calendar DAY and `due_time` is a separate column, so
+ * `new Date('2026-10-22')` is wrong: that is UTC midnight, which in WIB is
+ * 07:00 — every date-only deadline went overdue seven hours before the day
+ * had even started. `deadlineInstant` builds it from the local wall clock and
+ * applies `due_time` (the 09:00 fallback is documented there).
+ *
+ * Rows written before the date fix carry a UTC stamp (`…Z`); those were always
+ * read as instants, so they keep that reading. Only date-only / time-shaped
+ * values go through the local builder.
+ */
+function deadlineDueMs(row: any): number {
+  const raw = String(row?.due_date || '').trim()
+  if (/Z$|[+-]\d{2}:?\d{2}$/.test(raw)) return new Date(raw).getTime()
+  return deadlineInstant(row)?.getTime() ?? Number.NaN
+}
+
 export function checkDeadlinesAndNotify(db: Db): void {
   if (!db) return;
   try {
@@ -498,7 +518,7 @@ export function checkDeadlinesAndNotify(db: Db): void {
     }
 
     // Tiered urgency
-    const due = new Date(row.due_date).getTime()
+    const due = deadlineDueMs(row)
     if (Number.isFinite(due) && !notified['overdue']) {
       const overdueBy = now - due;
       const overdueByDays = Math.floor(overdueBy / 86_400_000);
@@ -558,8 +578,11 @@ export function checkDeadlinesAndNotify(db: Db): void {
   try {
     const dueById = new Map<string, number>()
     for (const row of rows) {
-      const raw = String(row.due_date || '')
-      const t = new Date(raw.length > 10 ? raw : raw + 'T09:00:00').getTime()
+      /* A relative lead is measured from the moment the thing is actually due,
+         so this MUST be the same instant the urgency tiers use. It used to be
+         `due_date + 'T09:00:00'`, which ignored `due_time` entirely: a 14:00
+         deadline with a 30-minute lead fired at 08:30 — six hours early. */
+      const t = deadlineDueMs(row)
       if (Number.isFinite(t)) dueById.set(row.id, t)
     }
 
