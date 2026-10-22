@@ -383,10 +383,10 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
           <p className="text-[11px] text-zinc-600 mt-1 max-w-[240px]">{error}</p>
         </div>
       ) : (
-        <div ref={wallRef} className="relative" aria-label="Month calendar">
+        <div ref={wallRef} className="relative flex min-h-0 flex-1 flex-col" aria-label="Month calendar">
           <div
             ref={containerRef}
-            className="relative"
+            className="relative flex min-h-0 flex-1 flex-col"
           >
             {/* FLAT, deliberately. This grid was `transformStyle: 'preserve-3d'`
                 and every cell carried `translateZ(z)` + its own `zIndex`, under a
