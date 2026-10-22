@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
@@ -74,7 +75,36 @@ export function DateTimePicker({
   disabled, className, id, deadlineDate, deadlineTime,
 }: DateTimePickerProps) {
   const [open, setOpen] = useState(false);
+  /* The TRIGGER and the popover are both "inside" the control as far as the
+     outside-click test is concerned. Checking only the popover was the
+     "it opens and closes by itself" bug: mousedown closed it, then the same
+     press's click toggled it straight back open. */
+  const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<null | {
+    left: number; width: number; maxHeight: number; top?: number; bottom?: number;
+  }>(null);
+
+  /* PORTALED + FIXED. It used to be `absolute` inside the trigger's wrapper, so
+     any scrolling sheet or `overflow-hidden` card cut it off — the reminder
+     sheet sits at the bottom of the window, which is exactly where the hr/min
+     row was being sliced. `place()` measures the trigger and opens on the side
+     with room, flipping above when the space below cannot hold it. */
+  const place = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(268, window.innerWidth - 16);
+    const below = window.innerHeight - r.bottom - 8;
+    const above = r.top - 8;
+    const up = below < 340 && above > below;
+    const maxHeight = Math.max(200, up ? above : below);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    setPos(up
+      ? { left, width, maxHeight, bottom: window.innerHeight - r.top + 4 }
+      : { left, width, maxHeight, top: r.bottom + 4 });
+  }, []);
 
   const selected = parseLocal(value);
   const minD = useMemo(() => parseLocal(min || ''), [min]);
@@ -86,10 +116,24 @@ export function DateTimePicker({
   const [pickedDate, setPickedDate] = useState<Date | null>(null);
   useEffect(() => { if (open) setPickedDate(selected ?? new Date()); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return; }
+    place();
+    const onMove = () => place();
+    window.addEventListener('resize', onMove);
+    window.addEventListener('scroll', onMove, true);
+    return () => {
+      window.removeEventListener('resize', onMove);
+      window.removeEventListener('scroll', onMove, true);
+    };
+  }, [open, place]);
+
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (popRef.current && !popRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', onDown);
@@ -121,9 +165,10 @@ export function DateTimePicker({
     : null;
 
   return (
-    <div className={cn('relative', className)} ref={popRef}>
+    <div className={cn('relative', className)} ref={rootRef}>
       <button
         id={id}
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
@@ -157,15 +202,26 @@ export function DateTimePicker({
         )}
       </button>
 
-      <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
-          transition={{ type: 'spring', damping: 1, stiffness: 340, mass: 0.7 }}
-          role="dialog"
-          aria-label="Choose a date and time"
-          className="absolute z-50 mt-1 w-[268px] rounded-xl border border-[var(--color-border)] bg-[var(--color-popover)] p-2.5 shadow-xl"
-        >
+      {createPortal(
+        <AnimatePresence>
+        {open && pos && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+            transition={{ type: 'spring', damping: 1, stiffness: 340, mass: 0.7 }}
+            ref={popRef}
+            role="dialog"
+            aria-label="Choose a date and time"
+            style={{
+              position: 'fixed',
+              left: pos.left,
+              top: pos.top,
+              bottom: pos.bottom,
+              width: pos.width,
+              maxHeight: pos.maxHeight,
+              overflowY: 'auto',
+            }}
+            className="z-[9999] rounded-xl border border-[var(--color-border)] bg-[var(--color-popover)] p-2.5 shadow-xl"
+          >
           {/* Step 1 — the day */}
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-medium text-[var(--color-muted-foreground)]">Day</span>
@@ -190,7 +246,16 @@ export function DateTimePicker({
             <Calendar
               mode="single"
               selected={pickedDate ?? undefined}
-              onSelect={d => { if (d) { setPickedDate(d); commit(d); } }}
+              onSelect={d => {
+                if (!d) return;
+                /* Picking a DAY must not wipe the clock. `commit(d)` alone took
+                   the hours from the calendar cell (always 00:00), so choosing
+                   "the 24th" after setting 14:00 silently became 00:00 — and
+                   choosing 14:00 first then a day looked like the time control
+                   had never worked. Keep the chosen clock; default to 09:00. */
+                setPickedDate(d);
+                commit(d, selected?.getHours() ?? 9, selected?.getMinutes() ?? 0);
+              }}
               disabled={(d: Date) => isBeforeMin(d) || isAfterMax(d)}
               autoFocus
             />
@@ -208,31 +273,29 @@ export function DateTimePicker({
             <div className="grid grid-cols-2 gap-1.5">
               <label className="flex items-center gap-1.5">
                 <span className="text-[10px] text-[var(--color-muted-foreground)] w-3">hr</span>
-                <input
-                  type="number" min={0} max={23} step={1} inputMode="numeric"
-                  value={selected ? pad(selected.getHours()) : ''}
-                  onChange={e => {
-                    if (!pickedDate) return;
-                    const h = Math.max(0, Math.min(23, parseInt(e.target.value, 10) || 0));
-                    commit(pickedDate, h, selected ? selected.getMinutes() : 0);
-                  }}
+                <select
+                  value={selected ? String(selected.getHours()) : ''}
+                  onChange={e => { if (!pickedDate) return; commit(pickedDate, Number(e.target.value), selected ? selected.getMinutes() : 0); }}
                   aria-label="Hour"
-                  className="w-full h-7 px-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] text-[12px] font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
-                />
+                  className="w-full h-7 px-1 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] text-[12px] font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+                >
+                  {(selected ? Array.from({ length: 24 }, (_, h) => h) : Array.from({ length: 24 }, (_, h) => h)).map(h => (
+                    <option key={h} value={h}>{pad(h)}</option>
+                  ))}
+                </select>
               </label>
               <label className="flex items-center gap-1.5">
                 <span className="text-[10px] text-[var(--color-muted-foreground)] w-3">min</span>
-                <input
-                  type="number" min={0} max={59} step={5} inputMode="numeric"
-                  value={selected ? pad(selected.getMinutes()) : ''}
-                  onChange={e => {
-                    if (!pickedDate) return;
-                    const mm = Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0));
-                    commit(pickedDate, selected ? selected.getHours() : 0, mm);
-                  }}
+                <select
+                  value={selected ? String(selected.getMinutes()) : ''}
+                  onChange={e => { if (!pickedDate) return; commit(pickedDate, selected ? selected.getHours() : 0, Number(e.target.value)); }}
                   aria-label="Minute"
-                  className="w-full h-7 px-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] text-[12px] font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
-                />
+                  className="w-full h-7 px-1 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] text-[12px] font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]"
+                >
+                  {Array.from(new Set([selected ? selected.getMinutes() : 0, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])).map(m => (
+                    <option key={m} value={m}>{pad(m)}</option>
+                  ))}
+                </select>
               </label>
             </div>
           </div>
@@ -246,8 +309,10 @@ export function DateTimePicker({
             </p>
           )}
         </motion.div>
+        )}
+        </AnimatePresence>,
+        document.body,
       )}
-      </AnimatePresence>
     </div>
   );
 }
