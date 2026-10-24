@@ -270,6 +270,9 @@ export default function DateTimeRangePicker({
   const [startTime, setStartTime] = useState(initialValue?.startTime ?? "09:00");
   const [endTime, setEndTime] = useState(initialValue?.endTime ?? "17:30");
   const [activeTime, setActiveTime] = useState<"start" | "end">("start");
+  /* Mode: "range" (start→end) or "single" (one date + one time; start is
+     auto-filled so the caller always gets a complete range). */
+  const [mode, setMode] = useState<"range" | "single">("range");
 
   /* ── DRAG TO EXTEND THE RANGE (apple-design §2 direct manipulation) ──
      Two clicks to set a range is precise but costs a re-aim, and the reference
@@ -367,8 +370,10 @@ export default function DateTimeRangePicker({
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const sameDayInvalid =
-    atMidnight(startDate).getTime() === atMidnight(endDate).getTime() && endTime <= startTime;
+  /* In single mode, endTime always tracks startTime. */
+  useEffect(() => {
+    if (mode === "single") setEndTime(startTime);
+  }, [mode, startTime]);
 
   const days = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
   const monthTitle = visibleMonth.toLocaleDateString("en-US", {
@@ -378,6 +383,14 @@ export default function DateTimeRangePicker({
 
   function selectDate(day: Date) {
     const picked = atMidnight(day);
+    if (mode === "single") {
+      setStartDate(picked);
+      setEndDate(picked);
+      if (picked.getMonth() !== visibleMonth.getMonth()) {
+        setVisibleMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
+      }
+      return;
+    }
     if (!selectingEnd) {
       setStartDate(picked);
       setEndDate(picked);
@@ -397,26 +410,56 @@ export default function DateTimeRangePicker({
     setSelectingEnd(false);
   }
 
-  function apply() {
-    onApply?.({ startDate, endDate, startTime, endTime });
-    setCalendarOpen(false);
-  }
-
   /* Live commit. The explicit "Apply range" button still exists for the popover,
      but the CURRENT selection is pushed on every change so an enclosing modal
      can close at any moment without losing it. Deliberately not listing
      `onChange` as a dependency: callers pass an inline handler, and re-firing on
      its identity would run this on every parent render. */
   useEffect(() => {
-    onChange?.({ startDate, endDate, startTime, endTime });
+    if (mode === "single") {
+      onChange?.({ startDate, endDate: startDate, startTime, endTime: startTime });
+    } else {
+      onChange?.({ startDate, endDate, startTime, endTime });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, startTime, endTime]);
+  }, [startDate, endDate, startTime, endTime, mode]);
+
+  function apply() {
+    if (mode === "single") {
+      onApply?.({ startDate, endDate: startDate, startTime, endTime: startTime });
+    } else {
+      onApply?.({ startDate, endDate, startTime, endTime });
+    }
+    setCalendarOpen(false);
+  }
 
   const activeTimeValue = activeTime === "start" ? startTime : endTime;
   const setActiveTimeValue = activeTime === "start" ? setStartTime : setEndTime;
 
   return (
     <div className="dt-picker">
+      {/* Mode toggle: range (start→end) or single (one date + one time) */}
+      <div className="dt-mode-toggle" role="tablist" aria-label="Picker mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "range"}
+          className={mode === "range" ? "is-active" : ""}
+          onClick={() => setMode("range")}
+        >
+          Range
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "single"}
+          className={mode === "single" ? "is-active" : ""}
+          onClick={() => setMode("single")}
+        >
+          Single
+        </button>
+      </div>
+
       <div className="dt-date-section">
         <label className="dt-field-label" htmlFor="dt-range-input">{L.range}</label>
         <button
@@ -426,7 +469,11 @@ export default function DateTimeRangePicker({
           aria-expanded={calendarOpen}
           onClick={() => setCalendarOpen((open) => !open)}
         >
-          <span>{formatDate(startDate)} <span className="dt-range-dash">·</span> {formatDate(endDate)}</span>
+          <span>
+            {mode === "single"
+              ? formatDate(startDate)
+              : `${formatDate(startDate)} · ${formatDate(endDate)}`}
+          </span>
           <CalendarIcon />
         </button>
 
@@ -499,7 +546,9 @@ export default function DateTimeRangePicker({
           </div>
         )}
 
-        <p className="dt-field-note">Choose a start date, then an end date.</p>
+        <p className="dt-field-note">
+          {mode === "single" ? "Choose a date." : "Choose a start date, then an end date."}
+        </p>
       </div>
 
       <div className="dt-time-section">
@@ -513,45 +562,49 @@ export default function DateTimeRangePicker({
           </span>
         </div>
 
-        <div className="dt-time-tabs" role="tablist" aria-label="Choose which time to edit">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTime === "start"}
-            className={activeTime === "start" ? "is-active" : ""}
-            onClick={() => setActiveTime("start")}
-          >
-            <span className="dt-tab-dot dt-tab-dot-start" />
-            <span><small>STARTS</small><strong>{formatTime(startTime, timeFormat)}</strong></span>
-          </button>
-          <span className="dt-time-tab-connector" />
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTime === "end"}
-            className={activeTime === "end" ? "is-active" : ""}
-            onClick={() => setActiveTime("end")}
-          >
-            <span className="dt-tab-dot dt-tab-dot-end" />
-            <span><small>ENDS</small><strong>{formatTime(endTime, timeFormat)}</strong></span>
-          </button>
-        </div>
+        {mode === "range" && (
+          <div className="dt-time-tabs" role="tablist" aria-label="Choose which time to edit">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTime === "start"}
+              className={activeTime === "start" ? "is-active" : ""}
+              onClick={() => setActiveTime("start")}
+            >
+              <span className="dt-tab-dot dt-tab-dot-start" />
+              <span><small>STARTS</small><strong>{formatTime(startTime, timeFormat)}</strong></span>
+            </button>
+            <span className="dt-time-tab-connector" />
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTime === "end"}
+              className={activeTime === "end" ? "is-active" : ""}
+              onClick={() => setActiveTime("end")}
+            >
+              <span className="dt-tab-dot dt-tab-dot-end" />
+              <span><small>ENDS</small><strong>{formatTime(endTime, timeFormat)}</strong></span>
+            </button>
+          </div>
+        )}
 
         <TimeEditor
-          label={activeTime === "start" ? "START TIME" : "END TIME"}
-          value={activeTimeValue}
-          onChange={setActiveTimeValue}
+          label={mode === "single" ? "TIME" : (activeTime === "start" ? "START TIME" : "END TIME")}
+          value={mode === "single" ? startTime : activeTimeValue}
+          onChange={mode === "single" ? setStartTime : setActiveTimeValue}
           format={timeFormat}
         />
       </div>
 
       <div className="dt-actions">
         <span className="dt-selection-summary">
-          {startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          {" – "}
-          {endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          {mode === "single"
+            ? startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+            : `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
         </span>
-        <button type="button" className="dt-apply-button" onClick={apply}>Apply range <span>↗</span></button>
+        <button type="button" className="dt-apply-button" onClick={apply}>
+          {mode === "single" ? "Apply" : "Apply range"} <span>↗</span>
+        </button>
       </div>
     </div>
   );
