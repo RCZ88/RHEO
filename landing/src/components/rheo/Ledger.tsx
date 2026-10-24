@@ -13,15 +13,15 @@ import { usePrefersReducedMotion } from "./use-reduced-motion";
  *
  * ── WHAT CHANGED, AND WHY IT HAD TO ────────────────────────────────────────
  *
- * The first version said "0 bytes that leave your machine", "0 telemetry events,
- * ever" and "1 SQLite file is your entire history". A full grep of the app's main
+ * The first version said "the old first claim", "0 telemetry events,
+ * ever" and "the old third claim". A full grep of the app's main
  * process, preload and renderer found that all three were false. The rule this
  * page runs on is that a number ships only if it can be sourced, so unsourced
  * numbers do not get softened, they get replaced with the sourced ones:
  *
- *   OLD "0 bytes that leave your machine"   -> NEW "2" calls with no setup
- *   OLD "0 telemetry events, ever"          -> NEW "0" analytics or tracking code
- *   OLD "1 SQLite file is your entire history" -> NEW "1" database, three files
+ *   OLD "the old first claim"   -> NEW "2" calls with no setup
+ *   OLD "the old second claim"          -> NEW "0" analytics or tracking code
+ *   OLD "the old third claim" -> NEW "1" database, three files
  *
  * SOURCES, all verified by grep, not inference:
  *

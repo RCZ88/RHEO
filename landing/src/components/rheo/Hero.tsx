@@ -173,13 +173,10 @@ export default function Hero() {
                 whose register is an INSTRUMENT READOUT — and it is now checkable, so
                 it can be a fact rather than a promise. `field: laminar` was removed:
                 the flow field is already visible, so labelling it encoded nothing. */}
-            {/* "0 bytes sent" is gone because it was unprovable as stated and the
-                page is about provable claims. What replaces it is narrower and
-                therefore checkable: this page loads no analytics, no beacons, no
-                third-party scripts. Fonts are self-hosted via next/font/local
-                (src/app/layout.tsx:2), so even the type is not a CDN request.
-                A grep for analytics SDKs, tag managers and external <script src>
-                over src/ and index.html returns nothing. */}
+            {/* The hero line is now "no analytics on this page" instead of
+                the old hero line, because it was unprovable. Fonts
+                are self-hosted via next/font/local (src/app/layout.tsx:2), so
+                even the type is not a CDN request. */}
             <span style={{ color: "#f4f4f5" }}>no analytics on this page</span>
           </span>
         </div>

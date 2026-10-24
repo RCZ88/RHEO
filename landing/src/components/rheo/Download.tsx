@@ -10,6 +10,7 @@ import Ledger from "./Ledger";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { useDetectedOS } from "./use-detected-os";
 import { RELEASE_VERSION } from "./release";
+import OSLogo from "./OSLogo";
 
 const OS_LIST = [
   // `size` and `hash` were placeholder fabrications ("78 MB", "a1b2c3d4e5f6…").
@@ -103,15 +104,17 @@ export default function Download() {
             #gallery owns it and shows it among the other 16.
           } satisfies null}
 
-        {/* Three OS cards — shadcn Card primitives */}
+        {/* OS cards — bigger, more prominent, design quality preserved.
+            LAMINAR: importance by brightness/weight/scale, never hue.
+            Detected card gets scale + brightness, not colour. */}
         <motion.div
           initial={{ opacity: rm ? 1 : 0, y: rm ? 0 : 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className="mx-auto mt-10"
-          style={{ maxWidth: 640 }}
+          className="mx-auto mt-14"
+          style={{ maxWidth: 960 }}
         >
-          <div className="flex flex-col sm:flex-row items-stretch gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch gap-5">
             {OS_LIST.map((os) => {
               const isDetected = os.key === detected;
               return (
@@ -120,60 +123,65 @@ export default function Download() {
                   className="flex-1 flex flex-col"
                   style={{
                     background: "#0a0a0c",
-                    border: `1px solid ${isDetected ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.10)"}`,
+                    border: `1px solid ${isDetected ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.10)"}`,
                     borderRadius: 16,
                     padding: 0,
                     gap: 0,
                     transition: "border-color 0.35s cubic-bezier(0.16,1,0.3,1)",
-                    ...(isDetected ? { boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.4)" } : {}),
+                    ...(isDetected ? { boxShadow: "0 0 0 1px rgba(255,255,255,0.08), 0 8px 32px rgba(0,0,0,0.5)" } : {}),
                   }}
                 >
-                  <CardHeader className="flex flex-col items-start gap-2 px-6 pt-5 pb-0">
+                  <CardHeader className="flex flex-col items-start gap-2 px-8 pt-7 pb-0">
+                    <div className="flex items-center gap-3">
+                      <OSLogo os={os.key as "macOS" | "Windows" | "Linux"} size={20} />
+                      <p
+                        className="mono"
+                        style={{
+                          fontSize: 16,
+                          color: isDetected ? "#ffffff" : "#a1a1aa",
+                          fontWeight: 600,
+                          letterSpacing: "0.02em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {os.label}
+                      </p>
+                      {isDetected && (
+                        <span
+                          className="mono"
+                          style={{
+                            fontSize: 9,
+                            color: "#050506",
+                            background: "#ffffff",
+                            fontWeight: 600,
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase",
+                            borderRadius: 4,
+                            padding: "3px 7px",
+                          }}
+                        >
+                          detected
+                        </span>
+                      )}
+                    </div>
                     <p
                       className="mono"
                       style={{
-                        fontSize: 11,
-                        color: isDetected ? "#ffffff" : "#a1a1aa",
-                        fontWeight: 500,
-                        letterSpacing: "0.04em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {os.label}
-                    </p>
-                    <p
-                      className="mono"
-                      style={{
-                        fontSize: 10,
+                        fontSize: 12,
                         color: isDetected ? "#a1a1aa" : "#8a8a94",
-                        letterSpacing: "0.06em",
+                        letterSpacing: "0.04em",
+                        marginTop: 2,
                       }}
                     >
                       {os.arch}
                     </p>
-                    {isDetected && (
-                      <span
-                        className="mono"
-                        style={{
-                          fontSize: 9,
-                          color: "#8a8a94",
-                          letterSpacing: "0.12em",
-                          textTransform: "uppercase",
-                          border: "1px solid rgba(255,255,255,0.12)",
-                          borderRadius: 4,
-                          padding: "2px 6px",
-                        }}
-                      >
-                        detected
-                      </span>
-                    )}
                   </CardHeader>
-                  <CardContent className="px-6 pt-3 pb-0">
-                    <p className="mono" style={{ fontSize: 11, color: "#8a8a94", letterSpacing: "0.04em" }}>
+                  <CardContent className="px-8 pt-4 pb-0">
+                    <p className="mono" style={{ fontSize: 12, color: "#8a8a94", letterSpacing: "0.04em" }}>
                       {os.min} <span style={{ color: "#a1a1aa" }}>{os.ext}</span>
                     </p>
                   </CardContent>
-                  <CardFooter className="flex flex-col items-stretch gap-3 px-6 pb-5 pt-3">
+                  <CardFooter className="flex flex-col items-stretch gap-3 px-8 pb-7 pt-5">
                     <Button
                       variant="default"
                       className="w-full"
@@ -182,34 +190,26 @@ export default function Download() {
                         color: "#050506",
                         border: "none",
                         borderRadius: 6,
-                        padding: "11px 20px",
-                        fontSize: 13,
+                        padding: "14px 24px",
+                        fontSize: 14,
                         fontWeight: 500,
                         letterSpacing: "0.02em",
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        gap: 8,
+                        gap: 10,
                         cursor: "pointer",
                         transition: "transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s cubic-bezier(0.16,1,0.3,1)",
                         ...(isDetected
-                          ? { boxShadow: "0 0 0 1px rgba(255,255,255,0.16), 0 4px 16px rgba(255,255,255,0.12)" }
+                          ? { boxShadow: "0 0 0 1px rgba(255,255,255,0.16), 0 6px 24px rgba(255,255,255,0.12)" }
                           : {}),
                       }}
                     >
-                      <DownloadIcon size={14} strokeWidth={2} />
+                      <DownloadIcon size={16} strokeWidth={2} />
                       <span className="mono" style={{ fontWeight: 500 }}>
                         DOWNLOAD <span style={{ fontWeight: 400, opacity: 0.7 }}>{os.label}</span>
                       </span>
                     </Button>
-                  {/*
-                    REMOVED 2026-10-07 — this row labelled a value "SHA-256"
-                    and offered a copy-to-clipboard button, but the value was a
-                    placeholder ("a1b2c3d4e5f6…"). A verification affordance for
-                    a number that cannot verify is worse than no number at all.
-                    RESULT.md §4.3.5. Restore with a real digest from the release
-                    build.
-                  */}
                   </CardFooter>
                 </Card>
               );

@@ -21,8 +21,8 @@ type Scenario = {
  * found exactly three period literals in the whole thing, and all three are
  * `"today"` (lines 211, 217, 265). There is no date-range tool, no function
  * calling over the tracking tables, and no way to ask about last Tuesday. So the
- * old questions ("tuesday's deep work down 22%", "scoring 30-day focus", "this
- * week") were demonstrating a feature that does not exist, and "31% deeper" used
+ * old questions (a past day, a focus score, "this
+ * week") were demonstrating a feature that does not exist, and the old 31%-deeper phrase used
  * a word — depth — that a sibling sweep found 335 times in src/, none of them
  * being this product.
  *
@@ -226,7 +226,7 @@ function Console() {
 
       {/* THINKING — the only status the real panel draws. The three trace lines
           this replaced ("querying timeline…", "cross-referencing calendar…",
-          "comparing 7-day baseline…") were staggered by a setTimeout and named
+          a one-week baseline") were staggered by a setTimeout and named
           steps the assistant never performs. A grep of src/components/ai/** for a
           renderer of step lines returned an `agentSteps` prop that nothing
           populates; the real panel shows this: src/components/ai/canvas/
