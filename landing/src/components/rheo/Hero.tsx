@@ -128,14 +128,22 @@ export default function Hero() {
       {/* right half — real screenshot, unretouched. The hero was left with an empty
           right side; putting a real capture here closes the dead space and keeps the
           "unretouched" claim first thing. */}
-      <div className="hidden lg:block absolute top-1/2 -translate-y-1/2 right-6 w-[42%] z-5">
+      {/* The screenshot is a real capture, but it sits on top of the flow field,
+          so a full-opacity rectangle breaks the page's own rule that importance
+          comes from brightness, not from a box. Translucent + a fade at the
+          left edge lets the flow field show through and keeps the image as
+          evidence rather than as a second hero. */}
+      <div className="hidden lg:block absolute top-1/2 -translate-y-1/2 right-6 w-[42%] z-5 pointer-events-none">
         <div
           className="relative"
           style={{
             borderRadius: 12,
-            border: "1px solid rgba(255,255,255,0.16)",
+            border: "1px solid rgba(255,255,255,0.08)",
             overflow: "hidden",
-            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
+            opacity: 0.7,
+            maskImage: "linear-gradient(to right, transparent 0%, black 8%, black 100%)",
+            WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 8%, black 100%)",
           }}
         >
           <img
