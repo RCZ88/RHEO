@@ -43,6 +43,11 @@ const fs_1 = __importDefault(require("fs"));
 const child_process_1 = require("child_process");
 const active_win_1 = __importDefault(require("active-win"));
 const linuxForeground_1 = require("./linuxForeground");
+// Device-wide input clock (Linux evdev). `powerMonitor.getSystemIdleTime()` is
+// dead on Linux, and foreground-window guesses cannot see you typing in the
+// window that is already focused. This reads the actual input devices.
+const systemInputIdle_1 = require("./systemInputIdle");
+const appIdentity_1 = require("./shared/appIdentity");
 const http_1 = __importDefault(require("http"));
 const os = require("os");
 const ProblemsServiceModule = require("./services/ProblemsService");
@@ -114,7 +119,7 @@ import { migrateConnectors } from "./services/connectors/migrate";
 import {
     CATALOGUE_VERSION, capabilities, getTrigger, getAction, isValidAutomation, matches,
 } from "./shared/automationCatalogue";
-import { createHaloIsland, registerHaloIpc, reconcileHaloGeometry, toggleHaloIsland, sendHaloCommand, configureHaloPrefs, destroyHaloIsland } from "./main/halo/haloIsland";
+import { createHaloIsland, registerHaloIpc, reconcileHaloGeometry, toggleHaloIsland, sendHaloCommand, configureHaloPrefs, destroyHaloIsland, handleHaloDrag, pushHaloMove } from "./main/halo/haloIsland";
 import { OffscreenHaloRenderer } from "./main/halo/offscreenRenderer";
 import { KwinBridge } from "./main/halo/offscreenRenderer";
 import { HALO_PREFS_KEY } from "./features/halo/HaloPreferences";
@@ -493,7 +498,8 @@ const DEFAULT_TIER_ASSIGNMENTS = {
 };
 const DEFAULT_APP_CATEGORIES = {
     // IDEs
-    'code': 'IDE', 'pycharm': 'IDE', 'intellij': 'IDE', 'visual studio': 'IDE', 'obsidian': 'IDE',
+    'code': 'IDE', 'pycharm': 'IDE', 'intellij': 'IDE', 'visual studio': 'IDE',
+    'idea': 'IDE', 'jetbrains-idea': 'IDE', 'idea64': 'IDE',
     'vs code': 'IDE', 'vscode': 'IDE', 'webstorm': 'IDE', 'phpstorm': 'IDE', 'rubymine': 'IDE',
     'goland': 'IDE', 'clion': 'IDE', 'rider': 'IDE', 'datagrip': 'IDE', 'appcode': 'IDE',
     'sublime': 'IDE', 'atom': 'IDE', 'vim': 'IDE', 'neovim': 'IDE', 'emacs': 'IDE',
@@ -503,6 +509,8 @@ const DEFAULT_APP_CATEGORIES = {
     'chrome': 'Browser', 'firefox': 'Browser', 'safari': 'Browser', 'edge': 'Browser',
     'brave': 'Browser', 'opera': 'Browser', 'vivaldi': 'Browser', 'arc': 'Browser',
     'comet': 'Browser', 'google chrome': 'Browser', 'microsoft edge': 'Browser',
+    'chromium': 'Browser', 'chromium-browser': 'Browser', 'firefox-esr': 'Browser',
+    'zen': 'Browser', 'zen browser': 'Browser', 'app.zen_browser.zen': 'Browser',
     // AI Tools
     'claude': 'AI Tools', 'chatgpt': 'AI Tools', 'gpt': 'AI Tools', 'copilot': 'AI Tools',
     'perplexity': 'AI Tools', 'gemini': 'AI Tools', 'bard': 'AI Tools', 'mistral': 'AI Tools',
@@ -512,6 +520,7 @@ const DEFAULT_APP_CATEGORIES = {
     'twitch': 'Entertainment', 'hulu': 'Entertainment', 'disney': 'Entertainment',
     'prime video': 'Entertainment', 'apple tv': 'Entertainment', 'hbo': 'Entertainment',
     'vimeo': 'Entertainment', 'soundcloud': 'Entertainment', 'vlc': 'Entertainment',
+    'mpv': 'Entertainment', 'obs': 'Entertainment', 'obs studio': 'Entertainment',
     // Gaming
     'minecraft': 'Gaming', 'fortnite': 'Gaming', 'valorant': 'Gaming', 'league': 'Gaming',
     'dota': 'Gaming', 'csgo': 'Gaming', 'counter-strike': 'Gaming', 'rocket league': 'Gaming',
@@ -520,6 +529,7 @@ const DEFAULT_APP_CATEGORIES = {
     'blizzard': 'Gaming', 'riot': 'Gaming', 'ubisoft': 'Gaming', 'origin': 'Gaming',
     'xbox': 'Gaming', 'playstation': 'Gaming', 'nintendo': 'Gaming',
     'godot': 'Gaming',
+    'wine': 'Gaming', 'proton': 'Gaming', 'gamescope': 'Gaming', 'lutris': 'Gaming', 'heroic': 'Gaming',
     'wuthering': 'Gaming', 'honkai': 'Gaming', 'star rail': 'Gaming',
     'elden ring': 'Gaming', 'cyberpunk': 'Gaming', 'baldur': 'Gaming',
     'call of duty': 'Gaming', 'gta': 'Gaming', 'v rising': 'Gaming',
@@ -533,9 +543,15 @@ const DEFAULT_APP_CATEGORIES = {
     'sketch': 'Design', 'adobe xd': 'Design', 'indesign': 'Design', 'affinity': 'Design',
     'canva': 'Design', 'dribbble': 'Design', 'behance': 'Design',
     'invision': 'Design', 'zeplin': 'Design', 'miro': 'Design',
+    'kolourpaint': 'Design', 'gimp': 'Design', 'inkscape': 'Design', 'krita': 'Design',
     // Productivity
     'terminal': 'Productivity', 'powershell': 'Productivity', 'cmd': 'Productivity',
+    'konsole': 'Productivity', 'kwrite': 'Productivity', 'gnome terminal': 'Productivity', 'alacritty': 'Productivity',
+    'kitty': 'Productivity', 'wezterm': 'Productivity', 'iterm': 'Productivity',
     'explorer': 'Productivity', 'file explorer': 'Productivity', 'finder': 'Productivity',
+    'dolphin': 'Productivity', 'nautilus': 'Productivity', 'thunar': 'Productivity',
+    'okular': 'Productivity', 'soffice.bin': 'Productivity', 'libreoffice': 'Productivity',
+    'obsidian': 'Productivity', 'rheo': 'Productivity', 'deskflow': 'Productivity',
     'notion': 'Productivity', 'evernote': 'Productivity', 'bear': 'Productivity',
     'apple notes': 'Productivity', 'todoist': 'Productivity', 'asana': 'Productivity',
     'trello': 'Productivity', 'linear': 'Productivity',
@@ -550,7 +566,8 @@ const DEFAULT_APP_CATEGORIES = {
     // Tools
     'wispr': 'Tools', '1password': 'Tools', 'lastpass': 'Tools', 'bitwarden': 'Tools',
     'keepass': 'Tools', 'dropbox': 'Tools', 'google drive': 'Tools', 'onedrive': 'Tools',
-    'icloud': 'Tools', 'box': 'Tools', 'syncthing': 'Tools',
+    'icloud': 'Tools', 'box': 'Tools', 'syncthing': 'Tools', 'spectacle': 'Tools',
+    'plasma-systemmonitor': 'Tools',
     // Windows Apps
     'windows shell': 'Other', 'shell experience': 'Other', 
     'credential manager': 'Tools', 'cloudflare warp': 'Tools',
@@ -563,13 +580,14 @@ const DEFAULT_APP_CATEGORIES = {
     'windows': 'Other', 'macos': 'Other', 'linux': 'Other', 'ubuntu': 'Other',
     'system settings': 'Other', 'control panel': 'Other', 'task manager': 'Other',
     'activity monitor': 'Other', 'device manager': 'Other', 'disk utility': 'Other',
+    'xdg-desktop-portal': 'Other', 'xdg-document-portal': 'Other',
     // News & Reading
-    'reddit': 'News', 'medium': 'News', 'substack': 'News', 'news': 'News',
+    'medium': 'News', 'substack': 'News', 'news': 'News',
     // Shopping
     'amazon': 'Shopping', 'ebay': 'Shopping', 'etsy': 'Shopping', 'shopify': 'Shopping',
     'walmart': 'Shopping', 'aliexpress': 'Shopping', 'target': 'Shopping',
     // Social Media
-    'twitter': 'Social Media', 'x': 'Social Media', 'facebook': 'Social Media',
+    'reddit': 'Social Media', 'twitter': 'Social Media', 'x': 'Social Media', 'facebook': 'Social Media',
     'instagram': 'Social Media', 'linkedin': 'Social Media', 'tiktok': 'Social Media',
     'snapchat': 'Social Media', 'pinterest': 'Social Media', 'threads': 'Social Media',
     // Search
@@ -599,6 +617,60 @@ const DEFAULT_DOMAIN_CATEGORIES = {
     'google.com': 'Search Engine', 'bing.com': 'Search Engine', 'duckduckgo.com': 'Search Engine',
     'yahoo.com': 'Search Engine'
 };
+
+/**
+ * Canonical category vocabulary — must stay in sync with
+ * `src/lib/afk.ts ALL_CATEGORIES` and the daemon's copy. Rows carrying a value
+ * outside this list vanish from category filters and charts, which is exactly
+ * what the daemon's old 'Development' / 'Web' / 'Music' / 'Media' / 'Social'
+ * vocabulary did.
+ */
+const CANONICAL_CATEGORIES = [
+    'IDE', 'AI Tools', 'Browser', 'Entertainment', 'Communication',
+    'Design', 'Productivity', 'Tools', 'Education', 'Developer Tools',
+    'Search Engine', 'News', 'Shopping', 'Social Media', 'Gaming',
+    'Uncategorized', 'Other',
+];
+const CATEGORY_ALIASES: Record<string, string> = {
+    development: 'Developer Tools',
+    developer: 'Developer Tools',
+    programming: 'Developer Tools',
+    web: 'Browser',
+    browsing: 'Browser',
+    music: 'Entertainment',
+    media: 'Entertainment',
+    video: 'Entertainment',
+    social: 'Social Media',
+    misc: 'Other',
+    'non-categorized': 'Uncategorized',
+    uncategorised: 'Uncategorized',
+};
+/** Map legacy/foreign category values onto the app's canonical vocabulary. */
+function normalizeCategoryValue(value: string | null | undefined): string {
+    const raw = (value || '').trim();
+    if (!raw) return 'Uncategorized';
+    const canonical = CANONICAL_CATEGORIES.find((c) => c.toLowerCase() === raw.toLowerCase());
+    if (canonical) return canonical;
+    return CATEGORY_ALIASES[raw.toLowerCase()] || 'Uncategorized';
+}
+
+/**
+ * Keyword match for app/process names — NOT a raw substring test.
+ *
+ * The old `lower.includes(keyword)` made the single-letter key `x` match every
+ * process containing an x: `xdg-desktop-portal-kde` became 'Social Media',
+ * `xterm` too. Short keys are now exact matches only, and everything else must
+ * land on a token boundary so `code` cannot match `encode` and `edge` cannot
+ * match `knowledge`. Hyphens/dots/underscores are boundaries, which keeps
+ * `jetbrains-idea`, `app.zen_browser.zen` and `soffice.bin` working.
+ */
+function appKeywordMatches(lower: string, keyword: string): boolean {
+    if (!keyword) return false;
+    if (lower === keyword) return true;
+    if (keyword.length <= 2) return false;
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(lower);
+}
 
 // ============================================
 // AI AGENT PLUGIN SYSTEM
@@ -2972,6 +3044,16 @@ function initializeStorage() {
               updated_at INTEGER DEFAULT (unixepoch() * 1000)
             )
         `);
+        // Origin identity for in-app chats (which workspace/canvas a thread
+        // was started from). These were introduced after the v2 table already
+        // shipped, so existing profiles need the additive ALTER — the same
+        // idempotent pattern every other late column in this bootstrap uses.
+        // Without them, ai-chat:save's INSERT and ai-chat:list-threads' SELECT
+        // throw "no such column: workspace_name" and every history save/list
+        // silently no-ops (confirmed on the live profile — no thread saved in
+        // ~9 days).
+        try { db.exec(`ALTER TABLE ai_chat_threads ADD COLUMN workspace_name TEXT`); } catch (_e) {}
+        try { db.exec(`ALTER TABLE ai_chat_threads ADD COLUMN canvas_name TEXT`); } catch (_e) {}
 
         // AI Chat memories / RAG facts
         db.exec(`
@@ -4929,7 +5011,7 @@ const { buildChain, runWithFallback } = require("./services/providers/router");
         try { registerGoalHandlers({ db, mainWindow: mainWindow as any, userPreferences, getLocalDateStr, toInt, buildChain, runWithFallback }); console.log('[DeskFlow] ✅ Goal handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Goal handlers failed to register:', err.message); }
         try { registerFinanceHandlers({ db, mainWindow: mainWindow as any, userPreferences, financePasswordHash, financePasswordSalt: financePasswordSalt, financeDataKey: financeDataKey, financeLocked, financeRememberDevice, financeRememberDeviceExpiry, financeLockTimeout, getLocalDateStr, toInt, financeDisplayCurrency, hashPassword, verifyPassword, encryptField, decryptField, isEncrypted, safeDecrypt, logAuditEvent, diffFields, formatAuditChanges, decryptAuditData, deriveFinanceDataKey, enc }); console.log('[DeskFlow] ✅ Finance handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Finance handlers failed to register:', err.message); }
         try { registerSessionHandlers({ db, useJson }); console.log('[DeskFlow] ✅ Session handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Session handlers failed to register:', err.message); }
-        try { registerTrackingHandlers({ db, getIsTracking: () => isTracking, setIsTracking: (v) => { isTracking = v; }, getTrackingInterval: () => trackingInterval, setTrackingInterval: (v) => { trackingInterval = v; }, getLastPollTime: () => lastPollTime, setLastPollTime: (v) => { lastPollTime = v; }, pollForeground, userPreferences }); console.log('[DeskFlow] ✅ Tracking handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Tracking handlers failed to register:', err.message); }
+        try { registerTrackingHandlers({ db, getIsTracking: () => isTracking, setIsTracking: (v) => { isTracking = v; if (v) trackingPausedByAfk = false; }, getTrackingInterval: () => trackingInterval, setTrackingInterval: (v) => { trackingInterval = v; }, getLastPollTime: () => lastPollTime, setLastPollTime: (v) => { lastPollTime = v; }, pollForeground, userPreferences, getAfkPaused: () => trackingPausedByAfk, setAfkPaused: (v: boolean) => { trackingPausedByAfk = v; } }); console.log('[DeskFlow] ✅ Tracking handlers registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Tracking handlers failed to register:', err.message); }
         try { registerGasHandlers({ db }); console.log('[GAS] ✅ Gas handlers registered'); } catch (err: any) { console.error('[GAS] ⚠️ Gas handlers failed to register:', err.message); }
         try { registerLectureHandlers(db); console.log('[Lecture] ✅ SlideMind handlers registered'); } catch (err: any) { console.error('[Lecture] ⚠️ SlideMind handlers failed to register:', err.message); }
         // Auto-update: a no-op under `npm start` (app.isPackaged is false), active
@@ -5292,6 +5374,15 @@ let currentApp = null;
 let sessionStart = Date.now();
 let trackingInterval = null;
 let isTracking = true;
+/**
+ * True only while tracking is paused because the renderer detected AFK.
+ *
+ * The main-process auto-resume must not fight a MANUAL pause: without this
+ * flag, "user is present" is always true on the next poll and a deliberate
+ * pause would silently turn itself back on within a second. The renderer owns
+ * the AFK state and mirrors it here.
+ */
+let trackingPausedByAfk = false;
 let focusManager = null;
 let focusGroupManager = null;
 let compositionEngine = null;
@@ -5688,6 +5779,13 @@ const TRANSIENT_APPS = [
     'application frame', 'console window host',
     'screen snip', 'snipping tool',
     'lockapp', 'winlogon', 'credentialui', 'logonui',
+    // Linux/KDE system surfaces. These are compositor/portal daemons, not work:
+    // `xdg-desktop-portal-kde` in particular used to be logged as 'Social Media'
+    // because the keyword `x` matched the first letter of its name.
+    'plasmashell', 'kwin', 'kwin_wayland', 'kwin_x11', 'kwin_wayland_wrapper',
+    'kded', 'kded5', 'kded6', 'kglobalaccel', 'kactivitymanagerd',
+    'xdg-desktop-portal', 'xdg-document-portal', 'xdg-permission-store',
+    'ksecretd', 'polkit', 'baloo', 'krunner', 'ksmserver',
 ];
 // --- Browser tracking state ---
 let browserServer = null;
@@ -6009,18 +6107,28 @@ function categorizeApp(appName, opts?: { isResolvedGame?: boolean }) {
     // An exact-key lookup silently missed every override, so tracking always
     // fell through to keyword detection / 'Uncategorized'. Match case-insensitively.
     const overrideMap = categoryConfig.appCategoryMap || {};
-    if (overrideMap[appName]) return overrideMap[appName];
+    if (overrideMap[appName]) return normalizeCategoryValue(overrideMap[appName]);
     const lowerKey = Object.keys(overrideMap).find((k) => k.toLowerCase() === lower);
-    if (lowerKey) return overrideMap[lowerKey];
-    if (categoryConfig.detectedApps[lower]) {
-        return categoryConfig.detectedApps[lower];
-    }
+    if (lowerKey) return normalizeCategoryValue(overrideMap[lowerKey]);
+    // CANONICAL KEYWORDS BEFORE THE CACHE. `detectedApps` is machine-written,
+    // shared with the daemon, and never expires — one stale guess (firefox →
+    // 'Media', konsole → 'AI Tools') otherwise outranks the correct built-in
+    // mapping forever. A real user override still wins above.
     for (const [keyword, category] of Object.entries(DEFAULT_APP_CATEGORIES)) {
-        if (lower.includes(keyword)) {
-            categoryConfig.detectedApps[lower] = category;
-            saveCategoryConfig();
+        if (appKeywordMatches(lower, keyword)) {
+            // Only write when the cache actually disagrees. This loop now runs
+            // before the cache (so a stale 'firefox → Media' can be healed), and
+            // saving unconditionally would rewrite the shared JSON every poll
+            // and race the daemon's own writer.
+            if (categoryConfig.detectedApps[lower] !== category) {
+                categoryConfig.detectedApps[lower] = category;
+                saveCategoryConfig();
+            }
             return category;
         }
+    }
+    if (categoryConfig.detectedApps[lower]) {
+        return normalizeCategoryValue(categoryConfig.detectedApps[lower]);
     }
     return 'Uncategorized';
 }
@@ -6104,13 +6212,13 @@ function categorizeDomain(domain, title, url) {
     // 1. Check user override (manual category assignment)
     if (categoryConfig.domainCategoryMap[lower]) {
         console.log('[DeskFlow] categorizeDomain result (override):', categoryConfig.domainCategoryMap[lower]);
-        return categoryConfig.domainCategoryMap[lower];
+        return normalizeCategoryValue(categoryConfig.domainCategoryMap[lower]);
     }
     
     // 2. Check detected domains cache
     if (categoryConfig.detectedDomains[lower]) {
         console.log('[DeskFlow] categorizeDomain result (detected):', categoryConfig.detectedDomains[lower]);
-        return categoryConfig.detectedDomains[lower];
+        return normalizeCategoryValue(categoryConfig.detectedDomains[lower]);
     }
     
     // 3. Use keyword-based categorization rules (configurable per domain)
@@ -6126,7 +6234,7 @@ function categorizeDomain(domain, title, url) {
                 );
                 if (matched) {
                     console.log('[DeskFlow] categorizeDomain result (keyword match):', set.category);
-                    return set.category;
+                    return normalizeCategoryValue(set.category);
                 }
             }
             // No keywords matched - fall back to Category Overrides (domainCategoryMap)
@@ -6134,7 +6242,7 @@ function categorizeDomain(domain, title, url) {
             const fallbackFromOverrides = categoryConfig.domainCategoryMap?.[domainPattern];
             if (fallbackFromOverrides) {
                 console.log('[DeskFlow] categorizeDomain result (fallback to overrides):', fallbackFromOverrides);
-                return fallbackFromOverrides;
+                return normalizeCategoryValue(fallbackFromOverrides);
             }
             // No keywords matched - also check DEFAULT_DOMAIN_CATEGORIES
             if (DEFAULT_DOMAIN_CATEGORIES[domainPattern]) {
@@ -6193,23 +6301,31 @@ async function pollForegroundInner() {
     lastPollTime = now;
 
     // AUTO-RESUME tracking when the user comes back, even with no window open.
-    // AFK detection pauses tracking (`set-tracking` -> false). Normally the
-    // renderer calls `setTracking(true)` on user input; with a minimised/tray
-    // app there is no renderer, so tracking would stay paused forever and the
-    // absence would keep "counting". Mirror the return-detection in the main
-    // process, which is the only always-alive component.
-    if (!isTracking) {
+    // ONLY an AFK pause qualifies. A manual pause is the user's decision and must
+    // survive: outside AFK the app is not paused by absence, so there is nothing
+    // to auto-resume.
+    if (!isTracking && trackingPausedByAfk) {
         let resume = false;
         try {
             const thresholdSec = (typeof afkThresholdSeconds === 'number' && afkThresholdSeconds > 0)
                 ? afkThresholdSeconds : 300;
-            let sysIdleSec = electron_1.powerMonitor.getSystemIdleTime();
-            if (!isIdleApiUsable() && lastForegroundChangeMs) {
-                sysIdleSec = (now - lastForegroundChangeMs) / 1000;
+            // DEVICE-WIDE INPUT WINS. Any keystroke or pointer movement anywhere
+            // resets the input clock, so returning to the machine ends AFK even
+            // when the foreground window never changed and RHEO is in the tray.
+            const inputIdleMs = systemInputIdle_1.getSystemInputIdleMs();
+            let sysIdleSec: number;
+            if (inputIdleMs !== null) {
+                sysIdleSec = inputIdleMs / 1000;
+            } else {
+                sysIdleSec = electron_1.powerMonitor.getSystemIdleTime();
+                if (!isIdleApiUsable() && lastForegroundChangeMs) {
+                    sysIdleSec = (now - lastForegroundChangeMs) / 1000;
+                }
             }
             resume = (sysIdleSec * 1000 < thresholdSec * 1000);
         } catch { /* ignore, keep paused */ }
         if (resume) {
+            trackingPausedByAfk = false;
             console.log('[DeskFlow] 🔄 User present again — auto-resuming tracking (main process)');
             setIsTracking(true);
             const pollInterval = userPreferences.trackingPollInterval || 1000;
@@ -6230,8 +6346,13 @@ async function pollForegroundInner() {
         // never fire. Fall back to "the foreground window has not changed for a
         // long time", which is measurable here and is the same signal in
         // practice: an active user changes what is in front of them.
-        let sysIdleSec = electron_1.powerMonitor.getSystemIdleTime();
-        if (!isIdleApiUsable()) {
+        // Same precedence as the AFK resume path: real device input first, then
+        // the OS clock where it works, then foreground recency as a last resort.
+        const inputIdleMs = systemInputIdle_1.getSystemInputIdleMs();
+        let sysIdleSec = inputIdleMs !== null
+            ? inputIdleMs / 1000
+            : electron_1.powerMonitor.getSystemIdleTime();
+        if (inputIdleMs === null && !isIdleApiUsable()) {
             sysIdleSec = lastForegroundChangeMs ? (now - lastForegroundChangeMs) / 1000 : sysIdleSec;
         }
         if (sysIdleSec * 1000 >= SLEEP_DETECTION_MIN_GAP_MS) {
@@ -6469,7 +6590,7 @@ async function pollForegroundInner() {
             sessionStart = sessionStart ?? now; // do NOT reset ongoing session
         }
 
-        const appName = resolved.name;
+        const appName = appIdentity_1.canonicalAppName(resolved.name);
         const windowTitle = result?.title ?? '';
         if (windowTitle && windowTitle !== lastForegroundTitle) {
             lastForegroundTitle = windowTitle;
@@ -7144,7 +7265,14 @@ function createWindow() {
     // Send tracking heartbeat to renderer every 5 seconds
     const heartbeatInterval = setInterval(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            const systemIdleSeconds = electron_1.powerMonitor.getSystemIdleTime();
+            // `systemIdleSeconds` is now the DEVICE-WIDE input clock wherever it
+            // is available, because that is what every consumer actually meant:
+            // seconds since a human last touched the machine. On platforms
+            // without the evdev watcher it is the OS clock as before.
+            const inputIdleMs = systemInputIdle_1.getSystemInputIdleMs();
+            const systemIdleSeconds = inputIdleMs !== null
+                ? Math.floor(inputIdleMs / 1000)
+                : electron_1.powerMonitor.getSystemIdleTime();
             const currentCategory = currentApp ? categorizeApp(currentApp) : null;
             safeSend(mainWindow, 'tracking-heartbeat', {
                 isTracking,
@@ -7152,6 +7280,10 @@ function createWindow() {
                 currentCategory,
                 uptime: Date.now(),
                 systemIdleSeconds,
+                // True only when the value above came from real input devices, so
+                // the renderer can treat 0 as authoritative instead of falling
+                // through to its window-focus guess.
+                inputIdleAvailable: inputIdleMs !== null,
                 // Dead on Linux; the renderer uses this instead to tell "away
                 // from the desk" apart from "busy in another window".
                 foregroundTitle: lastForegroundTitle,
@@ -12918,6 +13050,181 @@ electron_1.ipcMain.handle('add-project', (event, projectData) => {
     }
 });
 
+// Detect VCS info for a directory so the Add Project form can auto-fill the
+// repository link. Reads .git/config directly instead of spawning `git`:
+// no process spawn, no dependency on git being on PATH, and it does not throw
+// on a Windows path (`C:\...`) where execFileSync({ cwd }) fails.
+electron_1.ipcMain.handle('detect-project-git', async (_: any, projectPath: string) => {
+    const fs = require('fs');
+    const path = require('path');
+    const empty = { isRepo: false, vcsType: null, remoteUrl: null, host: null, owner: null, repo: null, branch: null, suggestedName: null, dirName: null };
+    try {
+        if (!projectPath || typeof projectPath !== 'string') return empty;
+        let dir = projectPath.trim();
+        if (!fs.existsSync(dir)) return empty;
+        if (fs.statSync(dir).isFile()) dir = path.dirname(dir);
+        const dirName = path.basename(dir) || null;
+
+        // `.git` is a DIRECTORY in a normal clone and a FILE in a worktree or
+        // submodule ("gitdir: /path/to/real/gitdir").
+        let gitDir = path.join(dir, '.git');
+        if (!fs.existsSync(gitDir)) return { ...empty, dirName };
+        if (fs.statSync(gitDir).isFile()) {
+            const pointer = fs.readFileSync(gitDir, 'utf8').match(/^\s*gitdir:\s*(.+?)\s*$/m);
+            if (!pointer) return { ...empty, dirName };
+            gitDir = path.resolve(dir, pointer[1]);
+        }
+        const configPath = path.join(gitDir, 'config');
+        if (!fs.existsSync(configPath)) return { ...empty, dirName };
+
+        // Section-aware: only the FIRST `url` inside [remote "origin"]. A blind
+        // `url =` scan would pick up another remote or an includeIf target.
+        let origin: string | null = null;
+        let inOrigin = false;
+        for (const raw of fs.readFileSync(configPath, 'utf8').split(/\r?\n/)) {
+            const line = raw.trim();
+            if (!line || line[0] === '#' || line[0] === ';') continue;
+            const section = line.match(/^\[(.+)\]$/);
+            if (section) { inOrigin = /^remote\s+"origin"$/i.test(section[1].trim()); continue; }
+            if (!inOrigin) continue;
+            const kv = line.match(/^url\s*=\s*(.+)$/i);
+            if (kv) { origin = kv[1].trim(); break; }
+        }
+
+        let branch: string | null = null;
+        try {
+            const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+            const m = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+            if (m) branch = m[1];
+        } catch (_e) { /* detached HEAD or unreadable — not fatal */ }
+
+        // Normalize to a clickable https URL. Three shapes in the wild:
+        //   git@github.com:owner/repo.git   (scp-like)
+        //   ssh://git@github.com/owner/repo.git
+        //   https://github.com/owner/repo.git
+        const normalize = (rawRemote: string | null) => {
+            if (!rawRemote) return null;
+            let url = String(rawRemote).trim();
+            const scp = url.match(/^[A-Za-z0-9._-]+@([^:/]+):(.+)$/);
+            if (scp) url = `https://${scp[1]}/${scp[2]}`;
+            else url = url.replace(/^(?:ssh|git):\/\/(?:[^@/]+@)?/i, 'https://');
+            url = url.replace(/\.git$/i, '').replace(/\/+$/, '');
+            if (!/^https?:\/\//i.test(url)) return { url: String(rawRemote).trim(), host: null, owner: null, repo: null };
+            const parts = url.replace(/^https?:\/\//i, '').split('/').filter(Boolean);
+            const host = (parts.shift() || '').toLowerCase() || null;
+            // GitLab subgroups: owner is everything except the last segment.
+            const repo = parts.length ? parts[parts.length - 1] : null;
+            const owner = parts.length > 1 ? parts.slice(0, -1).join('/') : null;
+            return { url, host, owner, repo };
+        };
+        const resolved = normalize(origin);
+
+        return {
+            isRepo: true,
+            vcsType: 'git',
+            remoteUrl: resolved ? resolved.url : null,
+            host: resolved ? resolved.host : null,
+            owner: resolved ? resolved.owner : null,
+            repo: resolved ? resolved.repo : null,
+            branch,
+            suggestedName: (resolved && resolved.repo) || dirName,
+            dirName,
+        };
+    } catch (err) {
+        console.error('[DeskFlow] detect-project-git failed:', err);
+        return empty;
+    }
+});
+
+// --- GitHub metadata for the Add Project form -------------------------------
+// READ-ONLY. Two calls exist: who is this token (so the username can be filled
+// for you) and which repositories can be seen. Anonymous access covers public
+// repos (60 req/h); a token adds private repos (5000 req/h). Nothing is written.
+
+/** GET a GitHub JSON endpoint with a hard timeout and a UA (GitHub 403s without one). */
+const _ghApiGet = async (url: string, token?: string, timeoutMs = 15000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const headers: Record<string, string> = {
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'RHEO',
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(url, { headers, signal: controller.signal });
+        let body: any = null;
+        try { body = await res.json(); } catch (_e) { body = null; }
+        return {
+            ok: res.ok,
+            status: res.status,
+            body,
+            remaining: res.headers.get('x-ratelimit-remaining'),
+            reset: res.headers.get('x-ratelimit-reset'),
+        };
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+/** Turn a GitHub failure into a sentence the form can show. */
+const _ghApiError = (r: any) => {
+    const detail = r && r.body && r.body.message ? String(r.body.message) : `HTTP ${r ? r.status : '?'}`;
+    if (r && r.status === 401) return 'GitHub token rejected';
+    if (r && r.status === 404) return 'GitHub user not found';
+    if (r && (r.status === 403 || r.status === 429) && String(r.remaining) === '0') {
+        const when = r.reset ? new Date(Number(r.reset) * 1000).toLocaleTimeString() : 'shortly';
+        return `GitHub rate limit reached (resets ${when})`;
+    }
+    return detail;
+};
+
+// Who owns this token? Used to fill the username field from a pasted token.
+electron_1.ipcMain.handle('github:whoami', async (_: any, token: string) => {
+    try {
+        if (!token || typeof token !== 'string') return { success: false, error: 'No token' };
+        const r = await _ghApiGet('https://api.github.com/user', token);
+        if (!r.ok) return { success: false, error: _ghApiError(r) };
+        return {
+            success: true,
+            login: r.body?.login || null,
+            name: r.body?.name || null,
+            avatarUrl: r.body?.avatar_url || null,
+        };
+    } catch (err: any) {
+        return { success: false, error: String(err?.message || err) };
+    }
+});
+
+// The user's repositories, newest push first (max 100 — the form is a picker,
+// not a browser), so the repository link can be chosen instead of typed.
+electron_1.ipcMain.handle('github:list-repos', async (_: any, opts: { user?: string; token?: string }) => {
+    try {
+        const user = String(opts?.user || '').trim();
+        const token = String(opts?.token || '').trim();
+        if (!user && !token) return { success: false, error: 'No GitHub user set' };
+        const url = token
+            ? 'https://api.github.com/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member'
+            : `https://api.github.com/users/${encodeURIComponent(user)}/repos?per_page=100&sort=pushed`;
+        const r = await _ghApiGet(url, token);
+        if (!r.ok) return { success: false, error: _ghApiError(r) };
+        const items = Array.isArray(r.body) ? r.body : [];
+        return {
+            success: true,
+            login: items[0]?.owner?.login || (token ? null : user),
+            repos: items.map((x: any) => ({
+                fullName: x.full_name || null,
+                name: x.name || null,
+                url: x.html_url || null,
+                private: !!x.private,
+                language: x.language || null,
+                pushedAt: x.pushed_at || null,
+            })),
+        };
+    } catch (err: any) {
+        return { success: false, error: String(err?.message || err) };
+    }
+});
+
 // Update project details
 electron_1.ipcMain.handle('update-project', (event, projectId: string, updates: {
     name?: string;
@@ -15754,7 +16061,10 @@ electron_1.ipcMain.handle('terminal:get-system-stats', async () => {
     let swapTotalBytes = 0;
     let swapFreeBytes = 0;
     try {
-      const procmon = require('./procmon');
+      /* `./procmon` did not exist: the module is `src/main/procmon/index.ts`, so the require
+       * resolved to `src/procmon` (nothing) in source and to `dist-electron/procmon` (nothing)
+       * in the bundle — it only ever threw when the procmon code path ran. */
+      const procmon = require('./main/procmon');
       const mi = procmon.readMeminfo(Date.now());
       memTotalBytes = mi.memTotalBytes || memTotalBytes;
       memAvailBytes = mi.memAvailableBytes || memAvailBytes;
@@ -22127,6 +22437,14 @@ function startBrowserTrackingServer() {
             req.on('end', async () => {
                 try {
                     const data = JSON.parse(body);
+                    // Some pages (chrome://, about:, new-tab) yield no domain in the
+                    // extension, which previously made every payload look like 'missing
+                    // domain' and left the island/stopwatch on the app name forever.
+                    // Derive it from the URL when it is absent so a real site is still
+                    // surfaced; handleBrowserData validates the result.
+                    if (!data.domain && data.url) {
+                        try { data.domain = new URL(data.url).hostname.replace(/^www\./, ''); } catch (_) {}
+                    }
 
                     // ── Self-healing adoption ───────────────────────────────────
                     // The extension announces itself via /browser-identify, but that
@@ -23210,7 +23528,12 @@ function handleBrowserData(data, foregroundReadSaysBrowser: boolean = false) {
     lastActiveBrowserTabByProfile.set(sessionKey.split('::')[0], { domain: data.domain, timestamp: dataTimestamp });
     // Update last active domain (global, for /status diagnostics only)
     lastActiveBrowserDomain = data.domain;
-    lastActiveBrowserTimestamp = dataTimestamp;
+    // LIVENESS, not session identity. The island's `fresh` check only cares about
+    // 'did we hear from the extension recently' -- measuring against the session
+    // START (a tab-switch payload's timestamp) made a tab open for >90s look stale
+    // even while periodic payloads kept arriving, so the pill showed only the app
+    // name forever. dataTimestamp is still used for the row's session identity.
+    lastActiveBrowserTimestamp = Date.now();
     /* Strict boolean: the field is absent on older extensions, and `undefined` must read as
      * "not private" rather than leak into the island payload as a third state. */
     lastActiveBrowserIsPrivate = data.isPrivate === true;
@@ -24155,6 +24478,22 @@ if (!gotTheLock) {
 } else {
     electron_1.app.whenReady().then(() => {
       electron_1.app.setName('RHEO');
+
+      // ── Device input clock ────────────────────────────────────────────────
+      // Start before any tracking/AFK code can run. On this machine
+      // `powerMonitor.getSystemIdleTime()` reports 0 forever, so without this
+      // the only "is the user here?" signals were window focus and foreground
+      // switches — which is why AFK never ended until RHEO itself was clicked.
+      try {
+        const inputClock = systemInputIdle_1.startSystemInputWatcher();
+        console.log(
+          inputClock.available
+            ? `[DeskFlow] ⌨️ Device input clock active (${inputClock.devices} /dev/input devices) — AFK follows real input`
+            : '[DeskFlow] ⚠️ Device input clock unavailable (not in the input group?) — AFK falls back to foreground signals',
+        );
+      } catch (err) {
+        console.warn('[DeskFlow] Device input clock failed to start:', err);
+      }
   
       // [procmon] Re-attach to terminals still alive from a previous run. Runs
     // here because it needs `db` to have been initialised by
@@ -24219,6 +24558,266 @@ if (!gotTheLock) {
         } catch (err: any) {
           // A missing table on an older database must not take the island down.
           return { ok: false, count: null, title: null, dueAtMs: null, deltaMs: null, isOverdue: null, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+    } catch { /* handler registration must never break startup */ }
+
+    // ── halo:get-life ─────────────────────────────────────────────────────────
+    // The island's Deadlines page is supposed to be a COMPACT LIFE → SCHEDULE view, not a
+    // submission banner. Two things it was missing, both from the real tables:
+    //
+    //   1. The nearest SCHEDULE block. `schedule_entries` is a RECURRING WEEKDAY model
+    //      (day_of_week 0-6 + start/end HH:MM), so "nearest" means the next point in the
+    //      week at which that weekday+time occurs — including "happening right now", which
+    //      must not be pushed a week out just because its start is in the past.
+    //   2. EVERY open deadline with its ALARM. The old producer returned only the next one
+    //      and dropped `remind_at`, so the island could show a submission and never the
+    //      reminder the user actually set. `remind_at` is the alarm timestamp (absolute);
+    //      null means no alarm was set, and that is reported as null rather than invented.
+    //
+    // DATE PARSING IS LOCAL ON PURPOSE. `due_date` is stored as `YYYY-MM-DD` and means a
+    // LOCAL calendar day; `Date.parse('2026-10-19')` is UTC midnight, which shifts every
+    // date-only deadline by the UTC offset (the same trap that made Rankings render a day
+    // early). A date-only row with no due_time is due at the END of that day (23:59 local),
+    // which is what "submit it today" means.
+    try {
+      const lifeDeadlineDueMs = (dateStr: unknown, timeStr: unknown): number => {
+        const d = String(dateStr ?? '').trim();
+        if (!d) return NaN;
+        const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+        if (dateOnly) {
+          const t = String(timeStr ?? '').trim();
+          const tm = /^(\d{1,2}):(\d{2})/.exec(t);
+          const hh = tm ? Number(tm[1]) : 23;
+          const mi = tm ? Number(tm[2]) : 59;
+          return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), hh, mi, 0, 0).getTime();
+        }
+        const parsed = Date.parse(d);
+        return Number.isFinite(parsed) ? parsed : NaN;
+      };
+
+      electron_1.ipcMain.handle('halo:get-life', () => {
+        if (useJson || !db) return { ok: false, now: Date.now(), schedule: null, deadlines: [] };
+        try {
+          const nowMs = Date.now();
+          const now = new Date(nowMs);
+
+          /* NEAREST SCHEDULE BLOCK. Recurring weekday, so the candidate is this week's
+           * occurrence or next week's. An occurrence that has not FINISHED yet is still the
+           * nearest one — that is the "you are in class right now" state. */
+          const entries = db
+            .prepare(`SELECT id, title, location, day_of_week, start_time, end_time, category FROM schedule_entries`)
+            .all() as Array<Record<string, unknown>>;
+          let schedule: Record<string, unknown> | null = null;
+          let bestStart = Infinity;
+          for (const e of entries) {
+            const dow = Number(e.day_of_week);
+            if (!Number.isFinite(dow) || dow < 0 || dow > 6) continue;
+            const st = String(e.start_time ?? '').trim();
+            const et = String(e.end_time ?? '').trim();
+            const sm = /^(\d{1,2}):(\d{2})/.exec(st);
+            if (!sm) continue;
+            const em = /^(\d{1,2}):(\d{2})/.exec(et);
+            const start = new Date(now);
+            start.setHours(Number(sm[1]), Number(sm[2]), 0, 0);
+            start.setDate(start.getDate() + ((dow - start.getDay() + 7) % 7));
+            const end = new Date(start);
+            if (em) end.setHours(Number(em[1]), Number(em[2]), 0, 0);
+            else end.setHours(start.getHours(), start.getMinutes(), 0, 0);
+            /* Already finished -> next week. Equal start/end is a zero-length block; treat it
+             * as finished once its start passes, otherwise it would look live forever. */
+            if (end.getTime() <= nowMs) {
+              start.setDate(start.getDate() + 7);
+              end.setDate(end.getDate() + 7);
+            }
+            if (start.getTime() < bestStart) {
+              bestStart = start.getTime();
+              schedule = {
+                id: String(e.id ?? ''),
+                title: String(e.title ?? ''),
+                location: e.location == null ? null : String(e.location),
+                dayOfWeek: dow,
+                startTime: st,
+                endTime: et,
+                category: e.category == null ? null : String(e.category),
+                startsAtMs: start.getTime(),
+                endsAtMs: end.getTime(),
+                isNow: start.getTime() <= nowMs && nowMs < end.getTime(),
+              };
+            }
+          }
+
+          /* EVERY OPEN DEADLINE, soonest first. Twenty is far more than the island can show
+           * at once; the list scrolls, and the cap only bounds the IPC payload. */
+          const rows = db
+            .prepare(
+              `SELECT id, title, due_date, due_time, remind_at, status FROM deadlines
+                WHERE LOWER(COALESCE(status, 'pending')) NOT IN ('completed','cancelled','canceled','done','archived')
+                ORDER BY due_date ASC, due_time ASC LIMIT 20`,
+            )
+            .all() as Array<Record<string, unknown>>;
+
+          /* EVERY ALARM THE USER SET, from the table the app actually writes.
+           *
+           * `deadlines.remind_at` is NOT the alarm model any more. `deadline_reminders` is:
+           * one row per reminder, `mode` 'relative' (lead_min before the deadline) or
+           * 'absolute' (a fixed `remind_at`), possibly several per deadline. The app's own
+           * "add reminder" handler writes THOSE rows, so reading only the legacy column meant a
+           * deadline with three alarms showed none of them — the "connect the reminders/alarms"
+           * gap.
+           *
+           * A RELATIVE REMINDER'S MOMENT IS DUE-MINUS-LEAD. `remind_at` is NULL for relative
+           * rows the APP writes; rows the ISLAND writes stamp it (see `halo:add-reminder`) so the
+           * ticker can fire them. The island still reports `mode` + `leadMin` verbatim and lets
+           * the row say "1d before" instead of inventing a time-of-day, and `fired` is carried so
+           * a reminder that already went off is not presented as pending. */
+          const alarmRows = db
+            .prepare(
+              `SELECT r.id, r.deadline_id, r.mode, r.lead_min, r.remind_at, r.fired
+                 FROM deadline_reminders r
+                 JOIN deadlines d ON d.id = r.deadline_id
+                WHERE LOWER(COALESCE(d.status, 'pending')) NOT IN ('completed','cancelled','canceled','done','archived')
+                ORDER BY r.fired ASC, r.remind_at ASC`,
+            )
+            .all() as Array<Record<string, unknown>>;
+          const alarmsByDeadline = new Map<string, Array<Record<string, unknown>>>();
+          for (const a of alarmRows) {
+            const key = String(a.deadline_id ?? '');
+            if (!key) continue;
+            const list = alarmsByDeadline.get(key) ?? [];
+            const mode = a.mode === 'absolute' ? 'absolute' : 'relative';
+            const leadMin = Math.max(0, Math.trunc(Number(a.lead_min) || 0));
+            const atParsed = a.remind_at == null ? NaN : Date.parse(String(a.remind_at));
+            list.push({
+              id: String(a.id ?? ''),
+              mode,
+              leadMin,
+              /* An ABSOLUTE alarm has a real timestamp. A RELATIVE one has one only when the
+               * island wrote it (it stamps due-minus-lead so the ticker can fire it); app-written
+               * relative rows carry NULL and the ticker skips them. */
+              atMs: Number.isFinite(atParsed) ? atParsed : null,
+              fired: Number(a.fired) === 1,
+            });
+            alarmsByDeadline.set(key, list);
+          }
+
+          const deadlines = rows.map((r) => {
+            const dueAtMs = lifeDeadlineDueMs(r.due_date, r.due_time);
+            const hasDue = Number.isFinite(dueAtMs);
+            const remindRaw = r.remind_at == null ? '' : String(r.remind_at).trim();
+            const remindParsed = remindRaw ? Date.parse(remindRaw) : NaN;
+            return {
+              id: String(r.id ?? ''),
+              title: String(r.title ?? ''),
+              dueAtMs: hasDue ? dueAtMs : null,
+              deltaMs: hasDue ? dueAtMs - nowMs : null,
+              isOverdue: hasDue ? dueAtMs < nowMs : null,
+              remindAtMs: Number.isFinite(remindParsed) ? remindParsed : null,
+              alarms: alarmsByDeadline.get(String(r.id ?? '')) ?? [],
+            };
+          });
+
+          return { ok: true, now: nowMs, schedule, deadlines };
+        } catch (err: any) {
+          return { ok: false, now: Date.now(), schedule: null, deadlines: [], error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+
+      // ── halo:add-reminder ───────────────────────────────────────────────────
+      // The island's alarm editor (HALO_RESULT §4.6). It writes the SAME table as the app's
+      // own `add-deadline-reminder`, with the one difference that makes the alarm fire:
+      // `remind_at` is stamped with the REAL moment (due minus lead) in SQLite's local
+      // `YYYY-MM-DD HH:MM:SS` shape — the shape `reminderTicker` compares against.
+      //
+      // `mode` stays 'relative' so the row keeps reading "1d before" instead of inventing a
+      // clock time. The app's own handler leaves `remind_at` NULL for relative rows and the
+      // ticker skips those; that pre-existing path is deliberately NOT changed here.
+      electron_1.ipcMain.handle('halo:add-reminder', (_e, deadlineId: string, input: { mode?: string; leadMin?: number }) => {
+        if (useJson || !db) return { ok: false, error: 'The database is not available.' };
+        try {
+          const row = db
+            .prepare('SELECT id, due_date, due_time FROM deadlines WHERE id = ?')
+            .get(deadlineId) as any;
+          if (!row) return { ok: false, error: 'That deadline no longer exists.' };
+
+          const leadMin = Math.max(0, Math.trunc(Number(input?.leadMin) || 0));
+          /* THE SAME PARSER THE PAGE USES. `lifeDeadlineDueMs` treats a date-only row with no
+           * due_time as the END of that day (23:59 local), and it parses local, not UTC. A second
+           * implementation here would make "on time" fire fifteen hours before the row it is
+           * attached to. */
+          const dueMs = lifeDeadlineDueMs(row.due_date, row.due_time);
+          if (!Number.isFinite(dueMs)) return { ok: false, error: 'That deadline has no readable due date.' };
+
+          const remindMs = dueMs - leadMin * 60_000;
+          if (remindMs <= Date.now()) return { ok: false, error: 'That reminder time has already passed.' };
+
+          const p2 = (n: number) => String(n).padStart(2, '0');
+          const d = new Date(remindMs);
+          const remindAt =
+            `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ` +
+            `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+
+          const id = 'drem_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+          db.prepare(
+            'INSERT INTO deadline_reminders (id, deadline_id, mode, lead_min, remind_at) VALUES (?, ?, ?, ?, ?)',
+          ).run(id, deadlineId, 'relative', leadMin, remindAt);
+          return { ok: true, id };
+        } catch (err: any) {
+          return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+
+      electron_1.ipcMain.handle('halo:delete-reminder', (_e, id: string) => {
+        if (useJson || !db) return { ok: false, error: 'The database is not available.' };
+        try {
+          db.prepare('DELETE FROM deadline_reminders WHERE id = ?').run(id);
+          return { ok: true };
+        } catch (err: any) {
+          return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+    } catch { /* handler registration must never break startup */ }
+
+    // ── halo:get-focus ────────────────────────────────────────────────────────
+    // THE FOCUS FEATURE THE ISLAND WAS NEVER CONNECTED TO.
+    //
+    // `FocusPayload` has existed in `shared/halo/types.ts` since the curation merge and had
+    // ZERO producers — the island's "Focus" page was a stopwatch with a Focus label on it.
+    // This reads the REAL FocusManager's public state, so the island can show the session
+    // that is actually running: how long is left, and what the LOCK is doing.
+    //
+    // The lock is the point. `strictness` is the two rules the manager enforces in
+    // `isAllowed()`:
+    //   'distracting'  -> everything classified distracting is blocked, neutral is allowed
+    //   'non_allowed'  -> ONLY the session's allowed apps/domains are tolerated
+    // and `allowed_json` is where the manager stores that list. Both are reported as-is;
+    // nothing here re-derives a rule, because a UI that guesses the policy and a manager
+    // that enforces a different one is worse than no indicator at all.
+    try {
+      electron_1.ipcMain.handle('halo:get-focus', () => {
+        try {
+          const fm: any = focusManager;
+          if (!fm || typeof fm.getPublicState !== 'function') return { ok: false };
+          const s = fm.getPublicState() ?? {};
+          let allowed: any = {};
+          try { allowed = JSON.parse(String(s.allowed_json ?? '{}')); } catch { allowed = {}; }
+          return {
+            ok: true,
+            active: !!s.active,
+            paused: !!s.paused,
+            /* `endsAt === null` is STOPWATCH MODE: the manager supports an open-ended
+             * session (`durationSec === 0`), where there is no countdown. Reporting 0
+             * remaining for it would read as "finished"; null is the honest value. */
+            endsAt: typeof s.endsAt === 'number' ? s.endsAt : null,
+            remainingSec: typeof s.endsAt === 'number' ? Math.max(0, Math.round((s.endsAt - Date.now()) / 1000)) : null,
+            startedAt: typeof s.startedAt === 'number' ? s.startedAt : null,
+            strictness: s.strictness === 'non_allowed' ? 'non_allowed' : 'distracting',
+            allowedApps: Array.isArray(allowed?.apps) ? allowed.apps.map(String) : [],
+            allowedDomains: Array.isArray(allowed?.domains) ? allowed.domains.map(String) : [],
+            allowedTiers: Array.isArray(allowed?.tiers) ? allowed.tiers.map(String) : [],
+          };
+        } catch (err: any) {
+          return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
         }
       });
     } catch { /* handler registration must never break startup */ }
@@ -24325,6 +24924,9 @@ if (!gotTheLock) {
           currentApp: haloCurrentAppSnapshot(),
           dictation: haloDictationPayload,
         }),
+        /* Captured at registration so `applyHaloPrefs` can kill the native host even when there
+         * is no handle left — the exact state a second "turn it off" click lands in. */
+        setCrossAppEnabled: (on: boolean) => setCrossAppHaloEnabled(on),
       });
       /* The renderer owns the stopwatch clock and the mic, so it reports up here and main
          * republishes. Registered before the island is created so the first snapshot is not
@@ -24356,78 +24958,240 @@ if (!gotTheLock) {
       let haloLayerHostProcess: any = null;
       const kwinBridge = new KwinBridge({
         onFrame: (_header, _pixels) => { /* KWin effect will pull frames via socket */ },
+        onDrag: (event) => {
+          /* DRAG — the press-and-hold that moves the island. The host reports the cumulative
+           * offset from the press point; `handleHaloDrag` owns what that means (it captures the
+           * press position, applies the offset live, and persists on `end`). Routed here because
+           * the bridge is the only thing that hears the host. */
+          handleHaloDrag(event);
+        },
+        onHostConnected: () => {
+          /* The host starts every session at offset 0, so a (re)connect would snap the island
+           * back to centre. Re-send the persisted position. */
+          pushHaloMove();
+        },
         onPointerEvent: (event) => {
           /* POINTER BACK-CHANNEL — the receiver is the OFFSCREEN island (`halo.html`), not the
-           * main window. The in-app island polls the cursor against its own geometry; the
-           * windowless capsule's cursor arrives HERE, from the layer host that owns the
-           * surface. `enter`/`leave` drive the same hover FSM the in-app path drives with
-           * `halo:hover`; motion and buttons are injected as REAL DOM input so every React
+           * main window: motion and buttons are injected as REAL DOM input so every React
            * handler in the island (hover styles, clicks, tab rows) runs unchanged. Coordinates
            * are frame-local — the host already added the pill's box origin — which is also the
-           * offscreen canvas' own coordinate space. This replaces the old
-           * `mainWindow.send('halo:pointer')`, a channel no renderer ever listened on. */
+           * offscreen canvas' own coordinate space.
+           *
+           * HOVER IS NOT DRIVEN FROM HERE ANY MORE, and that is the fix for the "Hitbox size"
+           * settings appearing to do nothing.
+           *
+           * `enter`/`leave` only arrive while the cursor is over a pixel the host PAINTS (its
+           * layer surface is sized to the island's alpha bbox). The padding (padX/padY) is
+           * invisible by design, so a stream that exists only over painted pixels can never
+           * include it: widening the hitbox in Settings changed nothing cross-app. The FSM in
+           * `haloIsland.ts` polls the real cursor (kdotool on Wayland) against the padded hot
+           * zone and now pushes `halo:hover` to every renderer, including this one. Clicks in
+           * the padding still reach the app underneath, because the host surface remains sized
+           * to the visible island — hover-only, exactly as the settings promise.
+           *
+           * So this channel carries pointer INPUT only. */
           const target = offscreenRenderer?.window();
           if (!target) return;
           const kind = event.kind;
-          if (kind === 'enter' || kind === 'leave') {
-            target.webContents.send('halo:hover', { inside: kind === 'enter', pinned: false });
-            return;
-          }
+          if (kind !== 'move' && kind !== 'down' && kind !== 'up') return;
           try {
-            if (kind === 'move' || kind === 'down' || kind === 'up') {
-              // A move first: Chromium positions the click at the LATEST mouse position, so a
-              // down/up that skipped it would land wherever the pointer last was.
-              target.webContents.sendInputEvent({ type: 'mouseMove', x: event.x, y: event.y });
-              if (kind !== 'move') {
-                target.webContents.sendInputEvent({
-                  type: kind === 'down' ? 'mouseDown' : 'mouseUp',
-                  x: event.x,
-                  y: event.y,
-                  button: 'left',
-                  clickCount: 1,
-                });
-              }
+            // A move first: Chromium positions the click at the LATEST mouse position, so a
+            // down/up that skipped it would land wherever the pointer last was.
+            target.webContents.sendInputEvent({ type: 'mouseMove', x: event.x, y: event.y });
+            if (kind !== 'move') {
+              target.webContents.sendInputEvent({
+                type: kind === 'down' ? 'mouseDown' : 'mouseUp',
+                x: event.x,
+                y: event.y,
+                button: 'left',
+                clickCount: 1,
+              });
             }
           } catch { /* a closed offscreen window must not take the bridge down */ }
         },
       });
       kwinBridge.start();
 
-      offscreenRenderer = new OffscreenHaloRenderer({
-        /* `appRoot` is NOT in scope here — it is only declared inside the
-         * `write-agent-file` handler at :18771. Referencing it threw
-         * `ReferenceError: appRoot is not defined` on EVERY launch, which the
-         * catch at the end of this block swallowed into
-         * `halo-diagnostic.log` as `{"event":"disabled","message":"appRoot is not defined"}`.
-         *
-         * That single line was the whole island: it threw BEFORE `createHaloIsland`
-         * ran, so there was no hover polling, no click region, no prefs push, and no
-         * surface at all. It is why the island stopped responding to hover, why the
-         * capsule would not hide when it was turned off (the renderer never received
-         * `halo:prefs`), and why nothing appeared over other apps. */
-        appRoot: electron_1.app.getAppPath(),
-        onFrame: (header, pixels) => {
-          // Push frame to KWin bridge (which forwards to connected effect)
-          kwinBridge.pushFrame(header, pixels);
-        },
-      });
-      (async () => { await offscreenRenderer.start(); })();
+      /* ══ CROSS-APP LIFECYCLE — ONE SWITCH, TWO RESOURCES, NO GHOST SURFACE ═══════════
+       *
+       * The native host and the offscreen renderer ARE the cross-app island. They used to be
+       * started unconditionally at launch and stopped only when the app quit, so switching the
+       * Halo off in Settings left a mapped Wayland layer surface holding the last frame it had
+       * received: a pill still visible over other apps (and still able to take the pointer)
+       * with no handle left to control it. That is the "weird pill", and it is why OFF did not
+       * mean off.
+       *
+       * `setCrossAppHaloEnabled` is now the ONLY writer of both resources, and it is idempotent
+       * so a repeated disable cannot spawn a second host or leave a second offscreen window. */
+      const haloDiag = (event: string, data: Record<string, unknown> = {}) => {
+        try {
+          require('fs').appendFileSync(
+            path_1.default.join(userDataPath, 'halo-diagnostic.log'),
+            JSON.stringify({ t: new Date().toISOString(), event, ...data }) + '\n',
+          );
+        } catch { /* ignore */ }
+      };
 
-      /* Layer-shell host: the native companion that paints the windowless island over other
-       * apps (an Electron window cannot own a layer surface). Spawned HERE so its lifetime is
-       * the app's: the host hides its surface the moment the bridge disconnects and we kill it
-       * on quit; its single-instance flock makes a duplicate spawn a silent no-op, so this is
-       * safe even when a host from a previous run is still reconnecting. */
-      try {
-        const hostBin = path_1.default.join(electron_1.app.getAppPath(), 'native', 'halo-layer-host', 'halo-layer-host');
-        if (require('fs').existsSync(hostBin)) {
-          haloLayerHostProcess = require('child_process').spawn(hostBin, [], { stdio: 'ignore' });
-          haloLayerHostProcess.unref?.();
+      const startHaloOffscreen = () => {
+        if (offscreenRenderer) return;
+        const renderer = new OffscreenHaloRenderer({
+          /* `appRoot` is NOT in scope here — it is only declared inside the
+           * `write-agent-file` handler at :18771. Referencing it threw
+           * `ReferenceError: appRoot is not defined` on EVERY launch, which the
+           * catch at the end of this block swallowed into
+           * `halo-diagnostic.log` as `{"event":"disabled","message":"appRoot is not defined"}`.
+           *
+           * That single line was the whole island: it threw BEFORE `createHaloIsland`
+           * ran, so there was no hover polling, no click region, no prefs push, and no
+           * surface at all. It is why the island stopped responding to hover, why the
+           * capsule would not hide when it was turned off (the renderer never received
+           * `halo:prefs`), and why nothing appeared over other apps. */
+          appRoot: electron_1.app.getAppPath(),
+          onFrame: (header, pixels) => {
+            // Push frame to KWin bridge (which forwards to connected effect)
+            kwinBridge.pushFrame(header, pixels);
+          },
+        });
+        offscreenRenderer = renderer;
+        void renderer.start().catch((e: Error) => {
+          haloDiag('offscreen-start-FAILED', { message: String(e?.message ?? e) });
+        });
+      };
+
+      const stopHaloOffscreen = () => {
+        const renderer = offscreenRenderer;
+        offscreenRenderer = null;
+        try {
+          renderer?.stop();
+        } catch { /* already gone */ }
+      };
+
+      /* LOUD HOST SPAWN — now a function, because OFF has to be able to undo it.
+       *
+       * The spawn was `stdio: 'ignore'` + a bare catch: a missing binary, an exec failure, or
+       * an instantly-crashing host all produced NO log line, NO process, and NO capsule — the
+       * failure mode is invisible from outside. Every outcome now lands in the diagnostic
+       * log, and the host's stderr is captured so its own state lines survive. */
+      const startHaloHost = () => {
+        if (haloLayerHostProcess) return;
+        try {
+          const hostBin = path_1.default.join(electron_1.app.getAppPath(), 'native', 'halo-layer-host', 'halo-layer-host');
+          if (require('fs').existsSync(hostBin)) {
+            /* GDK BACKEND — THE HOST IS A WAYLAND CLIENT EVEN WHEN THE APP IS NOT.
+             *
+             * `start-dev.sh:368` starts Electron with `--ozone-platform=x11`, and Electron then
+             * sets `GDK_BACKEND=x11` in its OWN `process.env` AT RUNTIME — it never shows up in
+             * `/proc/<pid>/environ`, so inspecting the process env from outside looks innocent
+             * (WAYLAND_DISPLAY is there; GDK_BACKEND is not). This GTK helper inherits the runtime
+             * value, GDK picks X11, and layer-shell dies within ~1.5s:
+             *   init_and_get_layer_shell_global: assertion 'GDK_IS_WAYLAND_DISPLAY(gdk_display)' failed
+             * The cross-app island IS this one child, so the symptom is "the capsule never appears
+             * over other apps" with only a single stderr line to show for it (`host-exit code 2`).
+             * Force the child onto Wayland when the session actually has one; without Wayland,
+             * leave the env untouched and let the helper print its own unsupported message. */
+            const hostEnv = { ...process.env };
+            if (hostEnv.WAYLAND_DISPLAY) hostEnv.GDK_BACKEND = 'wayland';
+            haloLayerHostProcess = require('child_process').spawn(hostBin, [], {
+              stdio: ['ignore', 'ignore', 'pipe'],
+              env: hostEnv,
+            });
+            haloLayerHostProcess.unref?.();
+            const hostErrTail: string[] = [];
+            haloLayerHostProcess.stderr?.on('data', (d: Buffer) => {
+              hostErrTail.push(d.toString('utf8'));
+              if (hostErrTail.length > 60) hostErrTail.shift();
+            });
+            haloLayerHostProcess.on('error', (e: Error) => {
+              haloDiag('host-spawn-error', { message: String(e?.message ?? e) });
+            });
+            haloLayerHostProcess.on('exit', (code: number | null, signal: string | null) => {
+              haloDiag('host-exit', {
+                code,
+                signal: String(signal ?? null),
+                stderr: hostErrTail.join('').trim().split('\n').slice(-8).join(' | '),
+              });
+            });
+            haloDiag('host-spawned', { pid: haloLayerHostProcess.pid ?? null });
+          } else {
+            haloDiag('host-missing', { hostBin });
+          }
+        } catch (e) {
+          haloDiag('host-spawn-threw', { message: String((e as Error)?.message ?? e) });
         }
-      } catch { /* the island is optional; it must never take the app down */ }
+      };
+
+      /* KILLING THE HOST IS THE ONLY THING THAT REMOVES THE SURFACE. Transparent frames leave
+       * the layer surface mapped; `destroyHaloIsland` only removes the in-app copy. */
+      const stopHaloHost = () => {
+        const child = haloLayerHostProcess;
+        haloLayerHostProcess = null;
+        if (!child) return;
+        try { child.kill(); } catch { /* already gone */ }
+        haloDiag('host-stopped', { pid: child.pid ?? null });
+      };
+
+      const setCrossAppHaloEnabled = (on: boolean) => {
+        if (on) {
+          startHaloOffscreen();
+          startHaloHost();
+          return;
+        }
+        /* FRAMES FIRST, THEN THE SURFACE. Stopping the renderer guarantees no further frame can
+         * be emitted while the host is going down; killing the host removes the layer surface
+         * itself, which is the only way to make it stop painting over other apps. */
+        stopHaloOffscreen();
+        stopHaloHost();
+      };
+
       electron_1.app.on('will-quit', () => {
+        stopHaloHost();
+      });
+      /* Safety net for abnormal exits, where will-quit never fires. */
+      process.on('exit', () => {
         try { haloLayerHostProcess?.kill(); } catch { /* ignore */ }
       });
+
+      /* BOOT GATE — THE SAME PREDICATE THE ISLAND USES.
+       *
+       * A disabled Halo must not own a layer surface. `createHaloIsland` already refuses to
+       * build the in-app surface when `enabled` is false (or `resident` is 'off'), but the host
+       * and the offscreen renderer used to start anyway — which is exactly the "I turned it off
+       * and there is still a pill" state, and the reason the surface survived a disable: it had
+       * never been tied to the pref in the first place. */
+      {
+        const bootPrefs: any = userPreferences[HALO_PREFS_KEY] || {};
+        const bootOn = bootPrefs.enabled !== false && bootPrefs.resident !== 'off';
+        if (bootOn) {
+          setCrossAppHaloEnabled(true);
+          haloDiag('cross-app-enabled-at-boot');
+        } else {
+          haloDiag('cross-app-disabled-at-boot', {
+            enabled: bootPrefs.enabled !== false,
+            resident: bootPrefs.resident ?? 'always',
+          });
+        }
+      }
+
+      /* SINGLE-PILL RULE — THE HOST FOLLOWS THE FOCUS SIDE.
+       *
+       * The in-app island (React inside RHEO's own window) and the cross-app layer-surface host
+       * are the same pill painted in two places. The design ruling is "no separate window" OR
+       * "cross-app visible" — mutually exclusive — and the in-app window wins, yet the host used
+       * to be started unconditionally at boot, so while the user was INSIDE the app both surfaces
+       * painted at the same rect: the in-app pill and the host pill. That is the double pill the
+       * user has been reporting ("one is in the app, one is outside").
+       *
+       * The host is therefore the cross-app painter ONLY while the user is NOT in the app. When
+       * RHEO's window holds focus the in-app island owns the paint (host stopped); when it loses
+       * focus the host takes over for the desktop. One pill, always. */
+      const syncCrossAppWithFocus = () => {
+        const focused = !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
+        try {
+          setCrossAppHaloEnabled(!focused);
+        } catch { /* in-app-only builds never reach the host half */ }
+      };
+      mainWindow?.on?.('focus', syncCrossAppWithFocus);
+      mainWindow?.on?.('blur', syncCrossAppWithFocus);
 
       // Keep the in-app island for when KWin effect isn't available
       createHaloIsland({
@@ -24437,6 +25201,17 @@ if (!gotTheLock) {
           currentApp: haloCurrentAppSnapshot(),
           dictation: haloDictationPayload,
         }),
+        /* THE TOP BAR'S WINDOW. The island floats over RHEO's own toolbar, so the app has to
+         * know where the pill is in order to keep its controls out from under it — and the app
+         * cannot measure a window it does not own. Addressed by a callback, not a captured
+         * reference: `mainWindow` is reassigned on macOS window re-creation, and this deps
+         * object is created once and kept for the process lifetime.
+         *
+         * The cast mirrors `main.ts:236` (`splashWindow: Electron.BrowserWindow | null`): the
+         * local `mainWindow` binding at 6594 is an untyped `let … = null`, so every use of it
+         * in this file already reports TS7005. Casting here keeps this line out of that pile
+         * instead of adding an 83rd identical error. */
+        mainWindow: () => mainWindow as Electron.BrowserWindow | null,
         /* The windowless path renders a SECOND copy of the island in the offscreen window
          * (`offscreenRenderer.ts`): same `OverlayRoot`, same preload, same channels — it
          * just has to be addressed, or it renders the "No app detected" fixture while the
@@ -24445,6 +25220,20 @@ if (!gotTheLock) {
           const w = offscreenRenderer?.window();
           return w ? [w] : [];
         },
+        /* POSITION OWNERSHIP. The layer-shell host only knows margins, so the app tells it
+         * where to put the island: `haloMove` is the write path (drag updates, geometry
+         * changes) and `savePrefs` is how a finished drag persists its offset. Both are
+         * optional in haloIsland, so an in-app-only session (no host) still works. */
+        haloMove: (dx: number, dy: number, top: number) => {
+          try { kwinBridge.sendMove(dx, dy, top); } catch { /* host not connected yet */ }
+        },
+        savePrefs: (next) => {
+          userPreferences[HALO_PREFS_KEY] = next;
+          savePreferences();
+        },
+        /* The cross-app half — host + offscreen frames. Owned here because only main can spawn
+         * or kill a process; decided in `haloIsland` because that is where `enabled` is read. */
+        setCrossAppEnabled: (on: boolean) => setCrossAppHaloEnabled(on),
       }).catch((e) => {
         console.warn('[Halo] island creation failed:', e?.message ?? e);
         try {
