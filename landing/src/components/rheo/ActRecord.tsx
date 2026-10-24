@@ -287,7 +287,7 @@ export default function ActRecord() {
                       className="mono-label"
                       style={{ fontSize: 11, color: "#8a8a94" }}
                     >
-                      BETWEEN BLOCKS_WITH_TEXT
+                      BETWEEN BLOCKS
                     </p>
                     <p
                       style={{
