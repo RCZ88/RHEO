@@ -137,7 +137,7 @@ export function CalendarSidebar({
          laid out 49px past the panel's own bottom edge. The cell clipped it, so
          the last week (25-31) was simply missing — 24 of 31 tiles. The wall
          itself is the scroller; this box must only bound it. */
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden"
+      className="flex flex-1 min-h-0 w-full flex-col overflow-hidden"
       aria-label="Calendar"
     >
       {/* Header strip: side toggle only. The panel chrome above already prints

@@ -333,11 +333,11 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
          calendar must work well when small ... show the month grid with dots
          only". A flex column with the month grid as the flexible child lets the
          rows share whatever height the panel has. */
-      className="relative flex h-full min-h-0 flex-col overflow-y-auto ws-scroll rounded-xl border border-zinc-800/50 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)] p-5"
+      className="relative flex flex-1 min-h-0 flex-col overflow-y-auto ws-scroll rounded-xl border border-zinc-800/50 bg-zinc-900/30 light:bg-[var(--ws-surface-raised)]"
       /* 20px of padding on every side was 40px of pure chrome above and below a
          month that has to fit a 227px wall at 1366x768. Inline so the value is
          honoured without depending on a new utility class being emitted. */
-      style={{ padding: '4px 8px' }}
+      style={{ padding: '4px 8px', flex: '1 1 0%', minHeight: 0 }}
 
     >
       {/* ONE row of navigation. The wall used to print its own "Month Wall"
@@ -383,10 +383,11 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
           <p className="text-[11px] text-zinc-600 mt-1 max-w-[240px]">{error}</p>
         </div>
       ) : (
-        <div ref={wallRef} className="relative flex min-h-0 flex-1 flex-col" aria-label="Month calendar">
+        <div ref={wallRef} className="relative flex min-h-0 flex-1 flex-col" style={{ flex: '1 1 0%', minHeight: 0 }} aria-label="Month calendar">
           <div
             ref={containerRef}
             className="relative flex min-h-0 flex-1 flex-col"
+            style={{ flex: '1 1 0%', minHeight: 0 }}
           >
             {/* FLAT, deliberately. This grid was `transformStyle: 'preserve-3d'`
                 and every cell carried `translateZ(z)` + its own `zIndex`, under a
@@ -413,7 +414,7 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                 `overflow-hidden` used to clip the rest of the month away with
                 no scrollbar. `overflow-y-auto` makes the missing weeks
                 reachable instead of invisible. */}
-            <div className="grid min-h-0 flex-1 grid-cols-7 gap-[10px]" style={{ padding: 4, gap: 4, gridTemplateRows: `repeat(${Math.ceil(grid.length / 7)}, minmax(24px, 1fr))` }}>
+            <div className="grid min-h-0 flex-1 grid-cols-7 gap-[10px]" style={{ padding: 4, gap: 4, flex: '1 1 0%', minHeight: 0, gridTemplateRows: `repeat(${Math.ceil(grid.length / 7)}, minmax(24px, 1fr))` }}>
               {grid.map((day, idx) => {
                 if (!day) return <div key={`empty-${idx}`} className="min-h-0" />;
                 const key = localDateKey(day);

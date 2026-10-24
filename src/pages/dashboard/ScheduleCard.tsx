@@ -11,6 +11,7 @@ import {
   BookOpen, FlaskConical, Brain, FileText, Users, MoreHorizontal
 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
+import { LocationAutocomplete } from '../../components/ui/LocationAutocomplete';
 import { Button } from '../../components/ui/button';
 import { Select, SelectItem } from '../../components/ui/select';
 import { WidgetCard } from '../../components/dashboard/WidgetCard';
@@ -304,9 +305,9 @@ export function ScheduleCard({
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <Input
+                <LocationAutocomplete
                   value={form.location}
-                  onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
+                  onChange={v => setForm(p => ({ ...p, location: v }))}
                   placeholder="Location (optional)"
                   className="flex-1 bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9"
                 />

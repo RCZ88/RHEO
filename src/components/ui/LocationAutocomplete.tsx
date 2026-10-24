@@ -147,7 +147,7 @@ export function LocationAutocomplete({
         <Input
           ref={inputRef}
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={e => { setQuery(e.target.value); onChange(e.target.value); }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}

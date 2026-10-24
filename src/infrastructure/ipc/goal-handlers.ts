@@ -2059,14 +2059,14 @@ ipcMain.handle('notes:groups', async () => {
 // --- Schedule Parser IPC -----------------------------------------------------------
 ipcMain.handle('parse-schedule', async (_event, input: string) => {
   try {
-    const { parseScheduleInput } = require('../lib/scheduleParser');
+    const { parseScheduleInput } = require('../../lib/scheduleParser');
     return parseScheduleInput(input);
   } catch { return null; }
 });
 
 ipcMain.handle('parse-deadline', async (_event, input: string) => {
   try {
-    const { parseDeadlineInput } = require('../lib/scheduleParser');
+    const { parseDeadlineInput } = require('../../lib/scheduleParser');
     return parseDeadlineInput(input);
   } catch { return null; }
 });
@@ -2841,7 +2841,8 @@ ipcMain.handle('get-all-locations', async () => {
   try {
     const goalLocs = db!.prepare("SELECT DISTINCT location FROM goals WHERE location IS NOT NULL AND location != ''").all() as any[];
     const reminderLocs = db!.prepare("SELECT DISTINCT location FROM deadline_reminders WHERE location IS NOT NULL AND location != ''").all() as any[];
-    const all = [...goalLocs.map((r: any) => r.location), ...reminderLocs.map((r: any) => r.location)];
+    const scheduleLocs = db!.prepare("SELECT DISTINCT location FROM schedule_entries WHERE location IS NOT NULL AND location != ''").all() as any[];
+    const all = [...goalLocs.map((r: any) => r.location), ...reminderLocs.map((r: any) => r.location), ...scheduleLocs.map((r: any) => r.location)];
     const unique = [...new Set(all)].sort();
     return { success: true, locations: unique };
   } catch (err: any) {
