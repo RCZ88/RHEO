@@ -63,6 +63,9 @@
 .dt-duration-chip { padding: 7px 9px; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 6px; background: var(--color-card); font: 500 10px var(--font-mono); white-space: nowrap; }
 .dt-duration-chip span { padding: 0 4px; color: color-mix(in oklab, var(--color-foreground) 39%, var(--color-card)); }
 
+.dt-mode-toggle { display: flex; gap: 4px; margin-bottom: 12px; }
+.dt-mode-toggle > button { flex: 1; padding: 6px 12px; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 6px; background: var(--color-card); color: color-mix(in oklab, var(--color-foreground) 42%, var(--color-card)); font: 500 11px var(--font-sans); cursor: pointer; transition: all 150ms; }
+.dt-mode-toggle > button.is-active { border-color: color-mix(in oklab, var(--color-foreground) 85%, var(--color-card)); color: var(--color-foreground); background: color-mix(in oklab, var(--color-foreground) 6%, var(--color-card)); }
 .dt-time-tabs { display: flex; align-items: center; margin: 17px 0 18px; }
 .dt-time-tabs > button { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 10px 11px; border: 1px solid color-mix(in oklab, var(--color-foreground) 9%, var(--color-card)); border-radius: 8px; background: var(--color-card); text-align: left; cursor: pointer; }
 .dt-time-tabs > button.is-active { border-color: color-mix(in oklab, var(--color-foreground) 85%, var(--color-card)); box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-foreground) 85%, var(--color-card)); }
