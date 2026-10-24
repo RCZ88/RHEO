@@ -64,7 +64,7 @@ export function CalendarSidebar({
   /* `min-h-0 flex-1` is what lets the wall FIT the panel. Without it the scene
      is as tall as its content, the wall never receives a bounded height, and the
      month keeps laying itself out at ~700px inside a 403px panel. */
-  const sceneClassName = 'calendar-scene relative min-h-0 flex-1 overflow-visible rounded-lg';
+  const sceneClassName = 'calendar-scene relative min-h-0 flex-1 flex flex-col overflow-visible rounded-lg';
 
   // Cursor tilt ±4°. DISABLED for now.
   //

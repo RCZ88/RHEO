@@ -95,7 +95,7 @@ export function DateTimePicker({
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const width = Math.min(268, window.innerWidth - 16);
+    const width = Math.min(320, window.innerWidth - 16);
     const below = window.innerHeight - r.bottom - 8;
     const above = r.top - 8;
     const up = below < 340 && above > below;
