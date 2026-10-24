@@ -450,46 +450,38 @@ export function MonthWall({ onMonthChange, renderDay, goals = [], deadlines = []
                 const isSelected = !!selectedDate && key === selectedDate;
 
                 return (
-                  <Popover key={key} open={openDate === key} onOpenChange={(o) => (o ? openDay(key) : setOpenDate(null))}>
-                    <PopoverTrigger asChild>
-                      <div
-                        style={{
-                          // Static per-row depth. Opacity, not translateZ: it keeps
-                          // the "nearer row reads stronger" cue that the 3D used to
-                          // give, while leaving the cell in normal 2D flow so a
-                          // pointer event lands on the cell you actually aimed at.
-                          opacity: 1 - Math.abs(rowOffset) * 0.055,
-                          transition: reactiveTransition,
-                        }}
-                        className={`min-h-0 rounded-lg border cursor-pointer relative
-                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-background)]
-                          ${isSelected
-                            ? 'ring-2 ring-[var(--page-accent)] border-transparent z-10'
-                            : isToday ? 'border-zinc-700/60' : isPast ? 'border-zinc-800/50' : 'border-zinc-800/40'}`}
-                      >
-                        <div className="relative h-full rounded-lg flex flex-col items-center justify-center p-1"
-                          style={{
-                            background: isPast ? 'var(--color-card)' : 'var(--color-background)',
-                          }}>
-                          <span className={`text-[11px] leading-none tabular-nums ${isSelected ? 'font-bold text-[var(--page-accent)]' : isToday ? 'font-bold text-zinc-100' : isPast ? 'text-zinc-500' : 'text-zinc-400'}`}>{day.getDate()}</span>
-                          {list.length > 0 ? (
-                            <div className="flex items-center gap-0.5 mt-0.5 flex-wrap justify-center">
-                              {cellDots.map(d => (
-                                <span key={d.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hueFor(d.category) }} />
-                              ))}
-                              {cellOverflow > 0 && <span className="text-[8px] text-zinc-500">+{cellOverflow}</span>}
-                            </div>
-                          ) : (
-                            <span className="mt-0.5 h-1 w-1 rounded-full opacity-0 group-hover:opacity-40" style={{ backgroundColor: 'var(--page-accent)' }} />
-                          )}
+                  <motion.button
+                    key={key}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => onDateChange?.(key)}
+                    className={`min-h-0 rounded-lg border cursor-pointer relative
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-background)]
+                      ${isSelected
+                        ? 'ring-2 ring-[var(--page-accent)] border-transparent z-10'
+                        : isToday ? 'border-zinc-700/60' : isPast ? 'border-zinc-800/50' : 'border-zinc-800/40'}`}
+                    style={{
+                      opacity: 1 - Math.abs(rowOffset) * 0.055,
+                      transition: reactiveTransition,
+                      background: isPast ? 'var(--color-card)' : 'var(--color-background)',
+                    }}
+                    aria-label={day.toLocaleDateString()}
+                    aria-pressed={isSelected}
+                  >
+                    <div className="relative h-full rounded-lg flex flex-col items-center justify-center p-1">
+                      <span className={`text-[11px] leading-none tabular-nums ${isSelected ? 'font-bold text-[var(--page-accent)]' : isToday ? 'font-bold text-zinc-100' : isPast ? 'text-zinc-500' : 'text-zinc-400'}`}>{day.getDate()}</span>
+                      {list.length > 0 ? (
+                        <div className="flex items-center gap-0.5 mt-0.5 flex-wrap justify-center">
+                          {cellDots.map(d => (
+                            <span key={d.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hueFor(d.category) }} />
+                          ))}
+                          {cellOverflow > 0 && <span className="text-[8px] text-zinc-500">+{cellOverflow}</span>}
                         </div>
-                        <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'var(--hairline)' }} />
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 bg-zinc-900 light:bg-[var(--ws-surface-raised)] border-zinc-800 text-zinc-200">
-                      <DayPanel date={day} events={getEventsForDay(events, key)} hueFor={hueFor} form={form} setForm={setForm} onSave={addEvent} onDelete={deleteEvent} inputRef={inputRef} />
-                    </PopoverContent>
-                  </Popover>
+                      ) : (
+                        <span className="mt-0.5 h-1 w-1 rounded-full opacity-0 group-hover:opacity-40" style={{ backgroundColor: 'var(--page-accent)' }} />
+                      )}
+                    </div>
+                    <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'var(--hairline)' }} />
+                  </motion.button>
                 );
               })}
             </div>

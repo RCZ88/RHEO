@@ -222,6 +222,14 @@ export function DateTimePicker({
             }}
             className="z-[9999] rounded-xl border border-[var(--color-border)] bg-[var(--color-popover)] p-2.5 shadow-xl"
           >
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className="absolute top-2 right-2 p-1 rounded-md text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors z-10"
+            >
+              <X size={14} />
+            </button>
           {/* Step 1 — the day */}
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-medium text-[var(--color-muted-foreground)]">Day</span>
