@@ -3,7 +3,7 @@
 
 # Agent State — opencode-trackadjust-20261016
 
-> **STATUS:** in-progress | **UPDATED:** 2026-10-16T07:25Z
+> **STATUS:** in-progress | **UPDATED:** 2026-10-24T15:00Z
 
 ---
 
@@ -41,6 +41,11 @@ amplification, so suspend stops being tracked and browser day-totals stop being 
   `browser_name`/`profile_id` columns at all** — that is why 5,835 of 6,345 browser rows are
   unattributed. Added the columns; normalised `app` to the domain so both writers emit one
   row shape.
+- **Unified TrackingTimeDialog (started).** Created `src/components/TrackingTimeDialog.tsx` with 3 tabs
+  (Correct recorded time / Fill gaps / Add manual time), a slider + exact HH:MM:SS input,
+  preview diff, and commit via `update-app-log` (proportional session scaling). Wired into
+  App.tsx (header button renamed Smart Fill → Tracking time) and ActivityPage (two buttons
+  → one dialog). Consolidated entry points. Commit `831ffd3` + `dceb955`.
 - **Two probes, both differential (new code vs the pre-fix backup):**
   `tracking-sleep-daemon.probe.mjs` **12/12** — 3 h suspend credits 1000 ms fixed vs
   `[1000, 3600000]` pre-fix. `tracking-browser-idempotency.probe.mjs` **14/14** — one
