@@ -2,8 +2,7 @@ import { useState, useMemo, lazy, Suspense, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Monitor, Globe, Target, Focus as FocusIcon, Clock, ArrowLeftRight, Sparkles } from 'lucide-react';
 import { LoadingState } from '../components/LoadingState';
-import { ManualAssignModal } from '../components/external/ManualAssignModal';
-import ManualFillModal from '../components/external/ManualFillModal';
+import { TrackingTimeDialog } from '../components/TrackingTimeDialog';
 import TrackingCoverage from '../components/external/TrackingCoverage';
 import type { Period } from '../lib/dateRange';
 import { MONO_STEPS, formatClock, monoStep, platformLabel } from '../lib/usageScale';
@@ -87,8 +86,8 @@ export default function ActivityPage(props: ActivityPageProps) {
     } catch {}
   }, [activeTab]);
 
-  const [showManualAssign, setShowManualAssign] = useState(false);
-  const [showManualFill, setShowManualFill] = useState(false);
+  const [showTrackingTime, setShowTrackingTime] = useState(false);
+  const [trackingTimeMode, setTrackingTimeMode] = useState<'correct' | 'fill' | 'manual'>('correct');
   const [manualAssignGap, setManualAssignGap] = useState<{ start: Date; end: Date } | null>(null);
   const [manualAssignDate, setManualAssignDate] = useState<Date | null>(null);
   const [manualVersion, setManualVersion] = useState(0);
@@ -149,7 +148,7 @@ export default function ActivityPage(props: ActivityPageProps) {
           <TrackingCoverage
             period={props.selectedPeriod === 'today' ? 'today' : props.selectedPeriod === 'week' ? 'week' : 'month'}
             dateOffset={props.dateOffset ?? 0}
-            onFillNow={() => setShowManualFill(true)}
+            onFillNow={() => { setTrackingTimeMode('fill'); setShowTrackingTime(true); }}
           />
       </div>
 
@@ -238,25 +237,21 @@ export default function ActivityPage(props: ActivityPageProps) {
           )}
 
           <button
-            onClick={() => {
-              setManualAssignGap(null);
-              setManualAssignDate(null);
-              setShowManualAssign(true);
-            }}
-            title="Assign manual time into empty spans (random or custom)"
+            onClick={() => { setTrackingTimeMode('manual'); setShowTrackingTime(true); }}
+            title="Add manual time into empty spans"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
           >
             <Clock className="h-3.5 w-3.5" />
-            Manual time
+            Tracking time
           </button>
 
           <button
-            onClick={() => setShowManualFill(true)}
+            onClick={() => { setTrackingTimeMode('fill'); setShowTrackingTime(true); }}
             title="Describe a period and the app generates the usage from your specification"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)]"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            Fill a range
+            Fill gaps
           </button>
         </div>
       </div>
@@ -447,24 +442,12 @@ export default function ActivityPage(props: ActivityPageProps) {
         </div>
       </div>
 
-      {/* Manual Time Assignment */}
-      <ManualAssignModal
-        open={showManualAssign}
-        initialDate={manualAssignDate ?? undefined}
-        initialGap={manualAssignGap}
-        onClose={() => {
-          setShowManualAssign(false);
-          setManualAssignGap(null);
-        }}
+      {/* Unified tracking-time dialog — the only time-editing surface */}
+      <TrackingTimeDialog
+        open={showTrackingTime}
+        initialMode={trackingTimeMode}
+        onClose={() => { setShowTrackingTime(false); setManualAssignGap(null); }}
         onChanged={() => setManualVersion((v) => v + 1)}
-      />
-
-      {/* Manual Range Backfill — user specifies, app generates */}
-      <ManualFillModal
-        open={showManualFill}
-        onClose={() => setShowManualFill(false)}
-        onChanged={() => setManualVersion((v) => v + 1)}
-        logs={props.allLogs}
       />
     </div>
   );

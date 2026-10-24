@@ -19,6 +19,7 @@ import {
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
 import DevTriggerPanel from './components/DevTriggerPanel';
 import { HaloInAppMount } from './features/halo/HaloInAppMount';
+import { useIslandLane } from './features/halo/islandFootprint';
 import { format as dateFormat } from 'date-fns';
 import SettingsPage from './pages/SettingsPage';
 import TranscriptPage from './pages/TranscriptPage';
@@ -319,7 +320,7 @@ function isAppMatchingBrowserRenderer(appName: string, browserName: string | str
 
 import { GapBanner } from './components/GapBanner';
 import { TodoMiniPage } from './features/todo/TodoMiniPage';
-import { ManualAssignModal } from './components/external/ManualAssignModal';
+import { TrackingTimeDialog } from './components/TrackingTimeDialog';
 import { TutorialProvider } from './contexts/TutorialContext';
 import TutorialOverlay from './components/TutorialOverlay';
 
@@ -327,6 +328,33 @@ import TutorialOverlay from './components/TutorialOverlay';
 window.addEventListener('hashchange', (e) => {
   console.log('[HASHCHANGE]', e.oldURL, '?', e.newURL);
 });
+
+/* ── Top-bar pills: period + Focus/Total time mode ─────────────────────────
+   Ten pills that used to be ten inline template strings, with three measured
+   defects in light mode:
+
+   1. The SELECTED pill was `bg-zinc-800`, which in light resolves to a fill
+      the same colour as the card it sits on — measured 1.0:1, i.e. the user
+      could not see which period was active.
+   2. The unselected pills had no hover surface at all (background stayed
+      `rgba(0,0,0,0)` on hover) and no focus ring.
+   3. Focus/Total selected with `emerald` and `indigo` in the same control —
+      green is a SEMANTIC slot in this system (LAMINAR §2: green is success,
+      never an accent), so a two-hue toggle was both a palette violation and
+      a contradiction of "one signal hue per surface".
+
+   Selection is now the surface signal hue in both themes
+   (`--page-accent-fill`/`--page-accent-on-fill` — the contrast-checked pair,
+   white on every one of the 18 light fills). Hover steps are tokens too:
+   `--ws-surface-recess-deep` is the only light surface that is a real step
+   below the sunken track (the light theme's steps are ~1.07:1 apart, so
+   `--ws-surface-hover` would be invisible on this track). */
+const PILL_BASE =
+  'px-3 py-1.5 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)]';
+const PILL_ON =
+  'bg-zinc-800 text-white light:bg-[var(--page-accent-fill)] light:text-[var(--page-accent-on-fill)]';
+const PILL_OFF =
+  'text-zinc-400 hover:text-white hover:bg-zinc-800/50 light:text-[var(--text-muted)] light:hover:text-[var(--text-primary)] light:hover:bg-[var(--ws-surface-recess-deep)]';
 
 function App() {
   const navigate = useNavigate();
@@ -841,6 +869,14 @@ function App() {
         // Store OS-level idle seconds for idle detection
         if (typeof data.systemIdleSeconds === 'number') {
           systemIdleSecondsRef.current = data.systemIdleSeconds;
+          // The main process marks whether this number is real device input.
+          // When it is, it is authoritative — including when it is 0.
+          if (data.inputIdleAvailable === true) {
+            systemInputIdleAvailableRef.current = true;
+            systemInputIdleSecondsRef.current = data.systemIdleSeconds;
+          } else {
+            systemInputIdleAvailableRef.current = false;
+          }
           // This heartbeat is the ONE signal that is alive for the whole app
           // lifetime, on every route. The stopwatch uses it as its presence
           // feed, so the timer advances identically no matter which page is
@@ -870,6 +906,12 @@ function App() {
             setIsIdle(false);
             setIsTracking(true);
             setSessionStart(new Date());
+            idleCooldownRef.current = Date.now() + 12000;
+            // MUST tell the main process too. This path previously relied on
+            // main's ungated auto-resume; now that only an AFK pause may be
+            // auto-resumed, forgetting this call can leave main paused after
+            // the renderer has already resumed.
+            window.deskflowAPI?.setTracking?.(true).catch(console.error);
             idleReturnFnRef.current();
           }
         }
@@ -1762,7 +1804,7 @@ function App() {
   const [afkPromptQueue, setAfkPromptQueue] = useState<AfkPromptEntry[]>([]);
   const [afkGapsData, setAfkGapsData] = useState<{ gaps: any[]; activities: any[]; sessions: any[] } | null>(null);
   const [afkFilledGapStarts, setAfkFilledGapStarts] = useState<string[]>([]);
-  const [showManualAssign, setShowManualAssign] = useState(false);
+  const [showTrackingTime, setShowTrackingTime] = useState(false);
   const afkQueueIdRef = useRef(0);
   const afkPromptShownRef = useRef(false);
   const pendingIdleRangeRef = useRef<{ idleStart: number; idleEnd: number | null } | null>(null);
@@ -2254,6 +2296,13 @@ function App() {
   const idleRef = useRef(isIdle);
   const trackingRef = useRef(isTracking);
   const systemIdleSecondsRef = useRef(0); // OS-level idle seconds (from main process)
+  // True when the heartbeat's idle value came from the Linux evdev watcher —
+  // i.e. real device input, in every app — rather than from window focus or a
+  // foreground-window guess. That distinction is the whole AFK fix: a value of
+  // 0 from the input clock means "you just touched the machine", while a value
+  // of 0 from the dead Linux OS API means "I cannot measure anything".
+  const systemInputIdleAvailableRef = useRef(false);
+  const systemInputIdleSecondsRef = useRef(0);
 
   /**
    * Fallback idle clock, measured from real input events in THIS window.
@@ -2293,6 +2342,11 @@ function App() {
   useEffect(() => {
     idleRef.current = isIdle;
     trackingRef.current = isTracking;
+    // Tell main WHY tracking is paused. Only an AFK pause may be auto-resumed
+    // when device input returns; a manual pause must stay paused. This is the
+    // single place that owns the flag, so every resume path clears it and the
+    // AFK entry sets it, without duplicating the call in a dozen handlers.
+    try { window.deskflowAPI?.setAfkPaused?.(isIdle); } catch { /* preload older than this change */ }
   }, [isIdle, isTracking]);
 
   useEffect(() => {
@@ -2338,6 +2392,17 @@ function App() {
    *      "busy in another window" on Linux.
    */
   const effectiveIdleSeconds = useCallback((): number => {
+    // DEVICE-WIDE INPUT IS AUTHORITATIVE WHEN AVAILABLE.
+    //
+    // Every signal below this line answers "has anything changed in a window I
+    // can see?" — which is not the question. It made AFK fire while you worked
+    // in a static window and refuse to clear until you clicked RHEO. The evdev
+    // clock answers the real question: seconds since a human last touched the
+    // keyboard, mouse, touchpad or touchscreen, anywhere. When it exists, use
+    // it and nothing else.
+    if (systemInputIdleAvailableRef.current) {
+      return Math.max(0, systemInputIdleSecondsRef.current || 0);
+    }
     const os = typeof systemIdleSecondsRef.current === 'number' ? systemIdleSecondsRef.current : 0;
     // A working OS clock is authoritative — macOS/Windows.
     if (os > 0) return os;
@@ -2583,6 +2648,9 @@ function App() {
         thresholdMs: afkIdleMs,
         osIdleSeconds: systemIdleSecondsRef.current,
         osApiUsable: systemIdleSecondsRef.current > 0,
+        // The clock that actually decides on this machine.
+        inputIdleAvailable: systemInputIdleAvailableRef.current,
+        inputIdleSeconds: systemInputIdleSecondsRef.current,
         rendererIdleSeconds: Math.round((Date.now() - lastUserInputAtRef.current) / 1000),
         foregroundQuietSeconds: foregroundQuietRef.current,
         systemQuietSeconds: Math.round(
@@ -2757,6 +2825,40 @@ function App() {
       clearInterval(interval);
     };
   }, [isTracking, elapsedTime, currentApp, sessionStart, afkIdleMs, effectiveIdleSeconds]);
+
+  /**
+   * RETURN-FROM-AFK DETECTOR — must keep ticking while auto-tracking is paused.
+   *
+   * Input inside RHEO already resumes via the activity/focus listeners, and the
+   * heartbeat has a best-effort resume path, but neither can see a keystroke in
+   * another app when the foreground window never changes. So the AFK state
+   * latched until the user clicked RHEO — the exact bug this effect removes.
+   *
+   * The device input clock drops to ~0 on ANY interaction anywhere, so this
+   * one-second check ends the absence without requiring the user to visit the
+   * app. `idleReturnFnRef` still decides whether the absence is worth a prompt.
+   */
+  useEffect(() => {
+    if (!isIdle) return;
+    const interval = setInterval(() => {
+      if (!isMountedRef.current) return;
+      if (Date.now() < idleCooldownRef.current) return;
+      // Without a reliable device clock, leave the older return paths intact
+      // rather than resuming on a number we cannot trust.
+      if (!systemInputIdleAvailableRef.current) return;
+      const idleSec = effectiveIdleSeconds();
+      if (idleSec * 1000 < afkIdleMs) {
+        console.log('[DeskFlow] Device input detected while AFK — resuming without app focus');
+        setIsIdle(false);
+        setIsTracking(true);
+        setSessionStart(new Date());
+        idleCooldownRef.current = Date.now() + 12000;
+        window.deskflowAPI?.setTracking?.(true).catch(console.error);
+        idleReturnFnRef.current();
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isIdle, afkIdleMs, effectiveIdleSeconds]);
 
   // Switch app simulation
   const switchApp = (newApp: string) => {
@@ -3539,14 +3641,14 @@ const devFireSmartFill = async () => {
      setSleepFilledGapStarts([]);
      setAfkPromptQueue([]); setAfkGapsData(null); setAfkFilledGapStarts([]);
      setGapFillQueue([]); setGapFillSource('external');
-     setShowManualAssign(false); setPairPhoneModal(null); setShowConfirmClear(false);
+     setShowTrackingTime(false); setPairPhoneModal(null); setShowConfirmClear(false);
      setShowConfirmExport(null); setShowSummary(false); setNotifPanelOpen(false);
      setShowWorkspaceWarning(false); setShowUnsavedWarning(false);
      setPaletteOpen(false); setDevForceGapBannerMinutes(null);
      setDevDetectedGaps([]); setDevSleepDetectionResult(null); setDevPreviewGaps([]);
      setDevAfkQueueView([]); setShowGapDrawer(false); setDevTriggerOpen(false);
    };
-  const devFireManualAssign = () => setShowManualAssign(true);
+  const devFireManualAssign = () => setShowTrackingTime(true);
   const devFirePairPhone = () => setPairPhoneModal({ terminalId: 'test-terminal', label: 'Test Device' });
   const devFireConfirmExportCsv = () => setShowConfirmExport('csv');
   const devFireConfirmExportJson = () => setShowConfirmExport('json');
@@ -3587,6 +3689,20 @@ const devFireSmartFill = async () => {
     { id: 'settings-warning', label: 'Settings Warning', icon: <Settings className="w-4 h-4" />, condition: 'Unsaved settings', fire: devFireGapBannerSetting },
     { id: 'activity-logs', label: 'Activity Logs Tab', icon: <BarChart3 className="w-4 h-4" />, condition: 'Navigate to logs', fire: devFireActivityLogs },
   ];
+
+  /* THE ISLAND LANE — the top bar yields to the Halo pill instead of being covered by it.
+   *
+   * `useIslandLane` reports the pill's occluding rect as a three-column layout for the row
+   * below: [left lane][hole][right lane]. See `features/halo/islandFootprint.ts` for why the
+   * numbers come from main rather than from this renderer, and for the clamp that keeps a pill
+   * wider than the bar from overflowing the grid.
+   *
+   * When there is no island, a hidden one, or one that does not overlap this row vertically,
+   * the hook returns the IDENTITY layout — two equal lanes and a zero-width hole — which
+   * reproduces the previous `justify-between` row exactly. So a user who turns the island off
+   * sees the top bar they had before, and only a genuinely occluding pill changes anything. */
+  const topbarRef = useRef<HTMLDivElement | null>(null);
+  const islandLane = useIslandLane(topbarRef);
 
   return (
     <VoiceProvider>
@@ -3634,8 +3750,26 @@ const devFireSmartFill = async () => {
         </AnimatePresence>
         {/* Top Bar � workspace (/terminal) and solar overlay render their own headers */}
         {location.pathname !== '/terminal' && !solarOverlayActive && (
-        <div className="h-16 border-b border-zinc-800 flex items-center justify-between px-8 glass">
-          <div className="flex items-center gap-4">
+        <div
+          ref={topbarRef}
+          data-island-lane={islandLane.active ? islandLane.phase : 'none'}
+          /* THREE COLUMNS, NOT `justify-between`.
+           *
+           * The middle column is the pill's HOLE and its width and position come from the
+           * measured pill, so nothing can be placed under it. `min-h-16` rather than `h-16`
+           * because each cluster is allowed to WRAP: when a lane is narrower than its contents,
+           * wrapping is the honest answer — the alternative is either overflow or dropping
+           * controls, and this repo has already ruled eviction out. A wrapper only happens when
+           * the pill leaves less room than the controls need, which is exactly the case that
+           * used to end with the tracked time hidden behind the pill.
+           *
+           * Horizontal padding moved onto the two clusters so the grid spans the full border
+           * box: the hole is placed in border-box pixels, and a container `px-8` would shift
+           * every column 32px away from the pill. */
+          className="min-h-16 py-2 border-b border-zinc-800 grid items-center glass"
+          style={{ gridTemplateColumns: islandLane.template }}
+        >
+          <div className="pl-8 flex items-center flex-wrap gap-x-4 gap-y-2 min-w-0">
             {(() => {
               const match = SIDEBAR_ITEMS.find(i => i.path === location.pathname);
               return match ? (
@@ -3656,12 +3790,18 @@ const devFireSmartFill = async () => {
             )}
           </div>
 
-          <div className="flex items-center gap-4">
+          {/* THE HOLE. Empty by construction — that is the entire point of the column. It is
+              `aria-hidden` and has no pointer surface: it is space reserved for a different
+              window's pixels, not a control. */}
+          <div aria-hidden="true" />
+
+          <div className="pr-8 flex items-center flex-wrap justify-end gap-x-4 gap-y-2 min-w-0">
             {/* Time mode toggle: Focus vs Total */}
-            <div className="flex bg-zinc-900 rounded-full p-1 flex-shrink-0 light:bg-zinc-100">
+            <div className="flex bg-zinc-900 rounded-full p-1 flex-shrink-0 light:bg-[var(--ws-surface-sunken)]">
               <button
                 onClick={() => setTimeMode('focus')}
-                className={`px-3 py-1.5 rounded-full transition flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'focus' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                aria-pressed={timeMode === 'focus'}
+                className={`${PILL_BASE} flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'focus' ? PILL_ON : PILL_OFF}`}
                 title="Focus Time: Productive apps only (websites belong to the tracking browser)"
               >
                 <Zap className="w-3 h-3" />
@@ -3669,7 +3809,8 @@ const devFireSmartFill = async () => {
               </button>
               <button
                 onClick={() => setTimeMode('total')}
-                className={`px-3 py-1.5 rounded-full transition flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'total' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                aria-pressed={timeMode === 'total'}
+                className={`${PILL_BASE} flex items-center gap-1.5 w-[72px] justify-center flex-shrink-0 text-xs ${timeMode === 'total' ? PILL_ON : PILL_OFF}`}
                 title="Total Time: Apps only (websites belong to the tracking browser)"
               >
                 <Clock className="w-3 h-3" />
@@ -3686,11 +3827,12 @@ const devFireSmartFill = async () => {
               {formatDuration(displayTime)}
             </div>
 
-            <div className="flex bg-zinc-900 rounded-full p-1 text-xs light:bg-zinc-100">
+            <div className="flex bg-zinc-900 rounded-full p-1 text-xs light:bg-[var(--ws-surface-sunken)]">
               {/* Today */}
               <button
                 onClick={() => { setExpandedPeriod(null); setSelectedPeriod('today'); }}
-                className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'today' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                aria-pressed={selectedPeriod === 'today'}
+                className={`${PILL_BASE} ${selectedPeriod === 'today' ? PILL_ON : PILL_OFF}`}
               >
                 Today
               </button>
@@ -3701,13 +3843,15 @@ const devFireSmartFill = async () => {
                   <>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('week'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'week' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                      aria-pressed={selectedPeriod === 'week'}
+                      className={`${PILL_BASE} ${selectedPeriod === 'week' ? PILL_ON : PILL_OFF}`}
                     >
                       Week
                     </button>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('7day'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === '7day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                      aria-pressed={selectedPeriod === '7day'}
+                      className={`${PILL_BASE} ${selectedPeriod === '7day' ? PILL_ON : PILL_OFF}`}
                     >
                       7 Day
                     </button>
@@ -3715,7 +3859,7 @@ const devFireSmartFill = async () => {
                 ) : (
                   <button
                     onClick={() => setExpandedPeriod('week')}
-                    className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'week' || selectedPeriod === '7day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                    className={`${PILL_BASE} ${selectedPeriod === 'week' || selectedPeriod === '7day' ? PILL_ON : PILL_OFF}`}
                   >
                     {selectedPeriod === '7day' ? '7 Day' : 'Week'}
                   </button>
@@ -3728,13 +3872,15 @@ const devFireSmartFill = async () => {
                   <>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('month'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'month' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                      aria-pressed={selectedPeriod === 'month'}
+                      className={`${PILL_BASE} ${selectedPeriod === 'month' ? PILL_ON : PILL_OFF}`}
                     >
                       Month
                     </button>
                     <button
                       onClick={() => { setExpandedPeriod(null); setSelectedPeriod('30day'); }}
-                      className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === '30day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                      aria-pressed={selectedPeriod === '30day'}
+                      className={`${PILL_BASE} ${selectedPeriod === '30day' ? PILL_ON : PILL_OFF}`}
                     >
                       30d
                     </button>
@@ -3742,7 +3888,7 @@ const devFireSmartFill = async () => {
                 ) : (
                   <button
                     onClick={() => setExpandedPeriod('month')}
-                    className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'month' || selectedPeriod === '30day' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                    className={`${PILL_BASE} ${selectedPeriod === 'month' || selectedPeriod === '30day' ? PILL_ON : PILL_OFF}`}
                   >
                     {selectedPeriod === '30day' ? '30d' : 'Month'}
                   </button>
@@ -3752,7 +3898,8 @@ const devFireSmartFill = async () => {
               {/* All Time */}
               <button
                 onClick={() => { setExpandedPeriod(null); setSelectedPeriod('all'); }}
-                className={`px-3 py-1.5 rounded-full transition ${selectedPeriod === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white light:text-zinc-500 light:hover:text-zinc-700'}`}
+                aria-pressed={selectedPeriod === 'all'}
+                className={`${PILL_BASE} ${selectedPeriod === 'all' ? PILL_ON : PILL_OFF}`}
               >
                 All Time
               </button>
@@ -3762,21 +3909,21 @@ const devFireSmartFill = async () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setDateOffset(o => o + 1)}
-                className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition light:bg-zinc-200/50 light:hover:bg-zinc-300/50 light:text-zinc-500 light:hover:text-zinc-700"
+                className="p-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] light:bg-[var(--ws-surface-sunken)] light:hover:bg-[var(--ws-surface-recess-deep)] light:text-[var(--text-muted)] light:hover:text-[var(--text-primary)]"
                 title="Previous period"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-xs text-zinc-400 min-w-[80px] text-center select-none font-medium light:text-zinc-500">
+              <span className="text-xs text-zinc-400 min-w-[80px] text-center select-none font-medium light:text-[var(--text-muted)]">
                 {getDateRange(selectedPeriod, dateOffset).label}
               </span>
               <button
                 onClick={() => setDateOffset(o => Math.max(0, o - 1))}
                 disabled={dateOffset === 0}
-                className={`p-1.5 rounded-lg transition ${
+                className={`p-1.5 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] ${
                   dateOffset === 0
-                    ? 'bg-zinc-800/20 text-zinc-600 cursor-not-allowed light:bg-zinc-200/20 light:text-zinc-400'
-                    : 'bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white light:bg-zinc-200/50 light:hover:bg-zinc-300/50 light:text-zinc-500 light:hover:text-zinc-700'
+                    ? 'bg-zinc-800/20 text-zinc-600 cursor-not-allowed light:bg-transparent light:text-[var(--text-disabled)]'
+                    : 'bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-white light:bg-[var(--ws-surface-sunken)] light:hover:bg-[var(--ws-surface-recess-deep)] light:text-[var(--text-muted)] light:hover:text-[var(--text-primary)]'
                 }`}
                 title="Next period"
               >
@@ -3785,20 +3932,21 @@ const devFireSmartFill = async () => {
             </div>
 
             <button
-              onClick={() => setShowManualAssign(true)}
-              title="Fill gaps with tracked apps, websites, or external activities"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition"
+              onClick={() => setShowTrackingTime(true)}
+              title="Correct recorded time, fill gaps, or add manual time"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] light:bg-[var(--ws-surface-raised)] light:text-[var(--text-secondary)] light:hover:text-[var(--text-primary)] light:hover:bg-[var(--ws-surface-hover)] light:ring-1 light:ring-[var(--ws-border-strong)]"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Smart Fill
+              Tracking time
             </button>
 
             <div className="flex items-center gap-3">
+              {/* ClockDropdown renders the Clock icon itself — children is text only,
+                  otherwise the button shows two icons side by side. */}
               <ClockDropdown label="Timers, stopwatch and alarms">
-                <div className="flex items-center gap-2 text-sm text-zinc-400 light:text-zinc-500">
-                  <Clock className="w-4 h-4" />
+                <span className="text-sm text-zinc-400 light:text-zinc-500">
                   {format(new Date(), 'HH:mm')}
-                </div>
+                </span>
               </ClockDropdown>
               {isIdle && (
                 <div className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs flex items-center gap-1 light:bg-amber-50/50 light:text-amber-600">
@@ -4397,10 +4545,10 @@ onFillGap={(gap) => {
             );
           })()}
 
-          {/* ── Manual Time Assign Modal ── */}
-          <ManualAssignModal
-            open={showManualAssign}
-            onClose={() => setShowManualAssign(false)}
+          {/* ── Unified Tracking Time dialog ── */}
+          <TrackingTimeDialog
+            open={showTrackingTime}
+            onClose={() => setShowTrackingTime(false)}
             onChanged={() => { fetchGaps(); }}
           />
 
