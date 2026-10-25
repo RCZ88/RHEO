@@ -3,7 +3,7 @@
 // keyed by string id. All data stays in the browser -- nothing is uploaded.
 
 const DB_NAME = 'deskflow-blob-store';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -11,7 +11,7 @@ function openDB(): Promise<IDBDatabase> {
     req.onupgradeneeded = () => {
       const db = req.result;
       // Create all known object stores if they don't already exist.
-      for (const name of ['memories', 'voiceNotes']) {
+      for (const name of ['memories', 'voiceNotes', 'memory-groups']) {
         if (!db.objectStoreNames.contains(name)) {
           db.createObjectStore(name, { keyPath: 'id' });
         }

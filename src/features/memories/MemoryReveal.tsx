@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, Tag, CalendarDays, StickyNote } from 'lucide-react';
+import { X, Trash2, Tag, CalendarDays, StickyNote, FolderOpen, MapPin } from 'lucide-react';
 import type { LoadedMemory } from './useMemories';
+import type { MemoryGroup } from './types';
 import { PersonChip } from './PersonChip';
+import { LocationAutocomplete } from '../../components/ui/LocationAutocomplete';
+import { GroupSelect } from './GroupSelect';
 
 interface MemoryRevealProps {
   memory: LoadedMemory;
@@ -10,11 +13,18 @@ interface MemoryRevealProps {
   onDelete: () => void;
   onUpdatePeople: (people: string[]) => void;
   onUpdateCaption: (caption: string) => void;
+  onUpdateTitle: (title: string) => void;
+  onUpdateLocation: (location: string) => void;
+  onUpdateGroup: (groupId: string | undefined) => void;
+  onUpdateTags: (tags: string[]) => void;
   /** meta.date drives the timeline grouping AND On This Day — it was writable
       via updateMeta but no UI ever exposed it, so a wrong EXIF date was
       permanently wrong. */
   onUpdateDate: (date: string) => void;
   onUpdateNotes: (noteIds: string[]) => void;
+  groups: MemoryGroup[];
+  onCreateGroup: (title: string) => Promise<MemoryGroup>;
+  allTags: string[];
 }
 
 const overlayMotion = { initial: { opacity: 0 }, animate: { opacity: 1 } };
@@ -25,8 +35,12 @@ const panelMotion = {
   transition: { duration: 0.3, delay: 0.15 },
 };
 
-export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpdateCaption, onUpdateDate, onUpdateNotes }: MemoryRevealProps) {
+export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpdateCaption, onUpdateTitle, onUpdateLocation, onUpdateGroup, onUpdateTags, onUpdateDate, onUpdateNotes, groups, onCreateGroup, allTags }: MemoryRevealProps) {
   const [caption, setCaption] = useState(memory.meta.caption || '');
+  const [title, setTitle] = useState(memory.meta.title || '');
+  const [location, setLocation] = useState(memory.meta.location || '');
+  const [tags, setTags] = useState<string[]>(memory.meta.tags || []);
+  const [tagInput, setTagInput] = useState('');
   const [personInput, setPersonInput] = useState('');
   const [notes, setNotes] = useState<{ id: string; title: string }[]>([]);
   const [noteQuery, setNoteQuery] = useState('');
@@ -85,6 +99,14 @@ export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpda
             className="p-4 space-y-2 warmth-serif"
           >
             <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onBlur={() => onUpdateTitle(title)}
+              onKeyDown={e => { if (e.key === 'Enter') { onUpdateTitle(title); (e.target as HTMLInputElement).blur(); } }}
+              placeholder="Untitled"
+              className="w-full bg-transparent pb-1 font-['Space_Grotesk'] text-[18px] font-semibold text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none border-b border-transparent focus:border-[var(--border-subtle)]"
+            />
+            <input
               value={caption}
               onChange={e => setCaption(e.target.value)}
               onBlur={() => onUpdateCaption(caption)}
@@ -103,6 +125,79 @@ export function MemoryReveal({ memory, onClose, onDelete, onUpdatePeople, onUpda
                 className="bg-transparent text-[12px] text-[var(--text-primary)] focus:outline-none"
               />
             </label>
+
+            {/* Location */}
+            <div className="flex items-center gap-2 pt-1">
+              <MapPin className="w-3.5 h-3.5 text-[var(--color-mem-400)]" />
+              <span className="text-[11px] text-[var(--text-muted)] w-16">Location</span>
+              <LocationAutocomplete
+                value={location}
+                onChange={v => { setLocation(v); onUpdateLocation(v); }}
+                placeholder="Where was this?"
+                className="flex-1"
+              />
+            </div>
+
+            {/* Album */}
+            <div className="flex items-center gap-2 pt-1">
+              <FolderOpen className="w-3.5 h-3.5 text-[var(--color-mem-400)]" />
+              <span className="text-[11px] text-[var(--text-muted)] w-16">Album</span>
+              <GroupSelect
+                groups={groups}
+                value={memory.meta.groupId}
+                onChange={gid => onUpdateGroup(gid)}
+                onCreate={async (title) => {
+                  const g = await onCreateGroup(title);
+                  return g;
+                }}
+                onAssign={gid => onUpdateGroup(gid)}
+              />
+            </div>
+
+            {/* Tags */}
+            <div className="pt-1 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-[var(--color-mem-400)]" />
+                <span className="text-[11px] text-[var(--text-muted)]">Tags</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map(t => (
+                  <span key={t} className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-raised)] px-2 py-0.5 text-[11px] text-[var(--text-primary)]">
+                    {t}
+                    <button
+                      type="button"
+                      onClick={() => { const next = tags.filter(x => x !== t); setTags(next); onUpdateTags(next); }}
+                      className="text-zinc-500 hover:text-zinc-200"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && tagInput.trim()) {
+                      const trimmed = tagInput.trim();
+                      if (!tags.includes(trimmed) && tags.length < 12 && trimmed.length <= 24) {
+                        const next = [...tags, trimmed];
+                        setTags(next);
+                        onUpdateTags(next);
+                      }
+                      setTagInput('');
+                    }
+                  }}
+                  placeholder="Add tag…"
+                  list="memory-tag-suggestions"
+                  className="bg-transparent text-[12px] text-[var(--text-primary)] placeholder:text-zinc-600 focus:outline-none w-24"
+                />
+                <datalist id="memory-tag-suggestions">
+                  {allTags.filter(t => !tags.includes(t) && t.toLowerCase().includes(tagInput.toLowerCase())).slice(0, 5).map(t => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
 
             {/* Notes this memory belongs to. */}
             <div className="pt-1 space-y-1.5">

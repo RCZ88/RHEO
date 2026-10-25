@@ -67,5 +67,15 @@ export function useMemories() {
     return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [items]);
 
-  return { items, loading, upload, remove, updateMeta, onThisDay, groupedByMonth, refresh };
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of items) {
+      for (const tag of item.meta.tags || []) {
+        if (tag.trim()) set.add(tag.trim());
+      }
+    }
+    return [...set].sort();
+  }, [items]);
+
+  return { items, loading, upload, remove, updateMeta, onThisDay, groupedByMonth, refresh, allTags };
 }
