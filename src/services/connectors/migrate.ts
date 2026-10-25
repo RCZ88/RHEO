@@ -7,6 +7,13 @@ function addColumnIfMissing(db: any, table: string, ddl: string, col: string) {
 }
 
 export function migrateConnectors(db: any, dbPath: string) {
+  // Ensure schema_migrations table exists with the correct schema. If a previous
+  // version created it with a different column layout (e.g. `version` instead
+  // of `id`), drop and recreate so the migration check below doesn't crash.
+  const cols = (db.prepare(`PRAGMA table_info(schema_migrations)`).all() as any[]).map(c => c.name)
+  if (cols.length > 0 && !cols.includes('id')) {
+    db.exec(`DROP TABLE schema_migrations`)
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT DEFAULT (datetime('now')))`)
   if (db.prepare(`SELECT 1 FROM schema_migrations WHERE id='001-messaging'`).get()) return
 
