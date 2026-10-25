@@ -161,37 +161,37 @@ export function ScheduleLayoutShell(props: ScheduleLayoutShellProps) {
     e.preventDefault(); e.stopPropagation()
     const host = (e.currentTarget as HTMLElement).parentElement
     if (!host) return
-    /* week-first splits its bottom row horizontally, every other preset splits
-     * vertically. Decide the axis ONCE here — deriving it per move event mixed
-     * a Y delta against an X baseline. */
     const horizontal = layout.preset === 'week-first'
     const rect = host.getBoundingClientRect()
     resizeRef.current = {
       slot, horizontal,
       start: horizontal ? e.clientY : e.clientX,
       startFrac: layout.sizes[slot] ?? 0.5,
-      /* the extent ALONG the split axis, which is height for week-first */
       extent: (horizontal ? rect.height : rect.width) || 1,
     }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  }, [layout.sizes])
-
-  const onResizeMove = useCallback((e: React.PointerEvent) => {
-    const r = resizeRef.current
-    /* `extent` (not `width`) — this field was renamed when the axis bug was
-       fixed and one reference was missed, so the guard read `undefined` and the
-       drag silently no-opped. */
-    if (!r || r.extent <= 1) return
-    const delta = (r.horizontal ? e.clientY : e.clientX) - r.start
-    const raw = r.startFrac + delta / r.extent
-    setLayout(prev => setSlotSize(prev, r.slot, snapSize(prev, r.slot, raw)))
-  }, [layout.preset])
-
-  const endResize = useCallback(() => {
-    if (!resizeRef.current) return
-    resizeRef.current = null
-    saveLayout(layout)
-  }, [layout])
+    // Use window-level listeners instead of element-level ones.
+    // setPointerCapture doesn't reliably fire move/up in all Electron/Chromium
+    // versions, especially on tiny elements. Window listeners always fire.
+    const onMove = (ev: PointerEvent) => {
+      const r = resizeRef.current
+      if (!r || r.extent <= 1) return
+      const delta = (r.horizontal ? ev.clientY : ev.clientX) - r.start
+      const raw = r.startFrac + delta / r.extent
+      setLayout(prev => setSlotSize(prev, r.slot, snapSize(prev, r.slot, raw)))
+    }
+    const onUp = () => {
+      if (!resizeRef.current) return
+      resizeRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      // Save the latest layout
+      setLayout(prev => { saveLayout(prev); return prev })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }, [layout.sizes, layout.preset])
 
   /* ── §64 keys ── */
   useEffect(() => {
@@ -280,22 +280,19 @@ export function ScheduleLayoutShell(props: ScheduleLayoutShellProps) {
             {renderPanel(panel, slot)}
           </div>
 
-          {/* §49 divider. min/max/snap all live in PANEL_META via the engine. */}
           {layout.preset !== 'focus' && slot !== slots[slots.length - 1] && (
             <div
               onPointerDown={e => startResize(slot, e)}
-              onPointerMove={onResizeMove}
-              onPointerUp={endResize}
-              onPointerCancel={endResize}
               role="separator"
               aria-label={`Resize ${meta.label}`}
-              className="h-1.5 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-[var(--page-accent-40)]"
+              className="h-3 shrink-0 cursor-col-resize bg-zinc-700/40 transition-colors hover:bg-[var(--page-accent)]/60 active:bg-[var(--page-accent)]"
+              style={{ touchAction: 'none' }}
             />
           )}
         </div>
       </div>
     )
-  }, [layout, dragOver, dragging, renderPanel, startResize, onResizeMove, endResize, commit, slots, onDrop])
+  }, [layout, dragOver, dragging, renderPanel, startResize, commit, slots, onDrop])
 
   const gridStyle = useMemo(() => ({
     /* `display` is deliberately NOT set here. An inline style outranks every
