@@ -37,6 +37,17 @@
   --radius-sm: 10px;
   --radius-md: 16px;
 
+  /* ── layout tokens (round-05 §7) ── */
+  --content-w: 1280px;
+  --gutter: clamp(20px, 4vw, 64px);
+  --section-pt: 96px;        /* mobile */
+  --section-pt-lg: 128px;    /* 640px and up */
+  --panel-bg: var(--color-panel);
+  --panel-border: 1px solid var(--color-hairline);
+  --panel-radius: 10px;      /* 6 / 10 / 16 only */
+  --docs-nav-w: 240px;
+  --docs-toc-w: 200px;
+
   /* keep shadcn vars sane (unused by RHEO, but required by components) */
   --color-background: var(--color-page);
   --color-foreground: var(--color-hi);

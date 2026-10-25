@@ -35,7 +35,7 @@ export default function Download() {
   const detected = useDetectedOS();
 
   return (
-    <section id="download" ref={ref} className="relative surface-page py-28 sm:py-36">
+    <section id="download" ref={ref} className="relative surface-page pt-24 sm:pt-32">
       {/* white 8% radial bloom */}
       <div
         aria-hidden
@@ -77,6 +77,38 @@ export default function Download() {
           <div className="mt-14 w-full">
             <Ledger />
           </div>
+
+          {/* Proof link. The ledger's three claims are the summary; this is the
+              full table of every outbound call, with file and line, so a reader
+              can check them instead of trusting them. */}
+          <motion.p
+            className="mt-6 mono"
+            style={{ fontSize: 12, color: "#8a8a94", letterSpacing: "0.04em" }}
+            initial={{ opacity: rm ? 1 : 0 }}
+            animate={inView ? { opacity: 1 } : {}}
+            transition={{ duration: 0.6, delay: 0.14 }}
+          >
+            Full list of every network call:{" "}
+            <a
+              href="/docs/network"
+              className="mono"
+              style={{ color: "#a1a1aa", textDecoration: "underline", textUnderlineOffset: 3 }}
+            >
+              /docs/network
+            </a>
+          </motion.p>
+
+          {/* The one honest line. No version list, no changelog, no "first public
+              preview build" — the product has no public binaries. */}
+          <motion.p
+            className="mono"
+            style={{ fontSize: 11, color: "#63636b", letterSpacing: "0.08em", marginTop: 8 }}
+            initial={{ opacity: rm ? 1 : 0 }}
+            animate={inView ? { opacity: 1 } : {}}
+            transition={{ duration: 0.6, delay: 0.16 }}
+          >
+            Not released yet. v0.2.0, pre-release.
+          </motion.p>
 
 <motion.p
           className="mt-5"
