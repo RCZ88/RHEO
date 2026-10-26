@@ -35,6 +35,7 @@ const OLD_PATH = join(process.cwd(), 'agent/backups/20261016-1330-daemon-sleepfi
 // as a `new Function` parameter, so the sandbox holds no real DB handle and CANNOT write.
 const INJECTED = [
   'commitLog', 'categorizeApp', 'warn', 'log', 'emitAfkEvent',
+  'getSystemInputIdleMs',
   'KEEPALIVE_NULL_POLLS', 'KEEPALIVE_EXTEND_MS', 'Date',
   'stats', 'afkState', 'afkStartMs',
 ];
@@ -108,6 +109,7 @@ function makeHarness(src, t0) {
     (...a) => warns.push(a.join(' ')),
     () => {},
     () => {},
+    () => null, // getSystemInputIdleMs — AFK clock, irrelevant to the suspend scenario
     3,        // KEEPALIVE_NULL_POLLS
     60_000,   // KEEPALIVE_EXTEND_MS
     FakeDate,

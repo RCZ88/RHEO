@@ -454,6 +454,7 @@ a dark hairline disappears into a bright field where a light one does
 	--color-teal-ink: #0f766e;
 	--color-blue-ink: #1d4ed8;
 	--color-indigo-ink: #4338ca;
+}
 
 /* ── `.hue-*` : one hue, two themes, set per element ────────────────────────
    Some surfaces derive their colours in JS rather than from a class — the
@@ -531,6 +532,8 @@ html.light .hue-bar {
 	--hue-flare: transparent;
 	--hue-hover: color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
+
+html.light {
 
 /* ── `hover:text-*` had NO light handling at all ────────────────────────────
    The grey ladder above nets bare `.text-zinc-300` etc., but `.hover\:text-zinc-300`
@@ -2721,9 +2724,21 @@ html.light {
 	--btn-ghost-on-hover: #1c1917;
 	--btn-ghost-hover: rgb(28 25 23 / 0.06);
 
-	--btn-selected-fill: #ffffff;
-	--btn-selected-on: #1c1917;
-	--btn-selected-border: rgb(28 25 23 / 0.20);
+	/* ── SELECTED state — the signal-hue slot, not a white chip ──────────
+	   These three were `#ffffff / #1c1917 / rgba(28,25,23,.20)`: a pure-white
+	   chip with a 1.5:1 hairline, sitting on cards that are `#fcfbf8`. White
+	   on `#fcfbf8` is 1.01:1 — measured, and the whole reason every "current
+	   choice" (period pill, tab, toggle) is invisible in light mode while
+	   dark's `#27272a` chip reads fine. A selection is not elevation; LAMINAR
+	   §4's slot model puts it in the signal hue. `--page-accent-fill` is the
+	   contrast-checked light fill for every page (all 18 remaps), so the
+	   selected chip now carries the surface's own accent in BOTH themes.
+	   Consumers of these tokens: 8 call sites in 3 files
+	   (IDEProjectsPage, ActivityPage, FocusTimer) — all of them were
+	   white-on-white in light before this line. */
+	--btn-selected-fill: var(--page-accent-fill);
+	--btn-selected-on: var(--page-accent-on-fill);
+	--btn-selected-border: var(--page-accent-fill);
 
 	--btn-on-accent: #ffffff;
 }
@@ -2743,6 +2758,25 @@ html.light {
  * renderer build. These are plain custom properties: no utility generation,
  * no fallback, no probe. */
 @layer base {
+/* ── Pointer affordance — a control must LOOK clickable ────────────────────
+   Tailwind v4's preflight deliberately sets `cursor: default` on buttons (to
+   match the native platforms), and nothing in this app ever counteracted it.
+   Measured on the IDE page in light mode: 37 of 51 controls reported
+   `cursor: default` — every nav row included — so the single cheapest signal
+   that a thing is clickable was missing app-wide. humancentred-UIUX pillar 6
+   ("it is always visually obvious what is clickable vs static") fails before
+   any colour is even considered.
+   `:disabled` keeps the arrow: a disabled control must NOT advertise itself.
+   This lives in `@layer base`, so any explicit `cursor-*` utility (e.g.
+   `disabled:cursor-not-allowed`) still wins, as it should. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+summary,
+label[for] {
+	cursor: pointer;
+}
+
 :root {
   --accent-10: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-primary-30: color-mix(in srgb, var(--accent-primary) 30%, transparent);
@@ -2846,6 +2880,25 @@ html.light {
    free to mean exactly one thing on this page — "past the frame budget" —
    which is the single most important thing the page has to say. */
 [data-page="profiler"] { --page-accent: #a78bfa; }
+
+/* ── The FILL pair — the selected-state slots, now defined in BOTH themes ──
+   The 18 `html.light[data-page=…]` remaps below already define
+   `--page-accent-fill` and `--page-accent-on-fill`, and only there. So the
+   value simply did not EXIST in dark mode, and any component that wanted a
+   filled selected state had to either special-case the theme or reach for a
+   neutral — which is how light mode ended up with selected chips painted
+   `#ffffff` on a `#fcfbf8` card (1.01:1, i.e. invisible) while dark kept a
+   perfectly visible `#27272a`.
+   These two lines make the pair exist everywhere; dark resolves the fill to
+   that page's own accent and light keeps its re-chroma'd, contrast-checked
+   override, which wins on specificity (0,2,1) over this (0,1,0).
+   Slot law (LAMINAR §4/§11): `--page-accent-fill` is the FILL (text sits ON
+   it, hence `--page-accent-on-fill`); `--page-accent` stays the text/hairline
+   slot. */
+:root {
+	--page-accent-fill: var(--page-accent);
+	--page-accent-on-fill: #ffffff;
+}
 
 /* ============ Page-accent LIGHT remaps (R-16, transform rule: keep hue, L*45±2, C−15%) ============ */
 html.light[data-page="dashboard"] {
@@ -3581,6 +3634,60 @@ html.light .sidebar-logo__text {
 .light .mcp-surface {
   background: rgba(255, 255, 255, 0.90);
   border: 1px solid rgba(228, 228, 231, 0.5);
+}
+
+/* MagicCard (src/components/ui/magic-card.tsx) paints its own `background`
+   SHORTHAND inline, so it overrides the themed fill of `.mcp-surface` above —
+   and its two `var(--surface…, <dark fallback>)` layers had no definer
+   anywhere, so they always resolved to their DARK fallbacks in BOTH themes:
+   on Warm Paper the interior read grey through the 85% white veil, the 1px
+   ring stayed #27272a, and the hover blob (#262626 at op .8) was a black
+   smudge — the defect CZ reported on the Activity page's three stat cards.
+   Define the interface ON THE CARD, not globally: `var(--surface)` also has
+   15 slide-renderer readers with their own conventions. Dark is unchanged by
+   construction — the values below ARE the fallbacks it used before. */
+.magic-card {
+  --surface: #18181b;
+  --surface-secondary: #27272a;
+}
+
+.light .magic-card {
+  --surface: var(--ws-surface-raised);
+  --surface-secondary: color-mix(in srgb, var(--text-primary) 8%, var(--ws-surface-raised));
+  /* Paper cannot use a dark-field sheen: on Warm Paper the hover affordance is
+     to darken toward ink (see the `.hue-bar` note). Ink 12% net .8 = ~#e6e5e2
+     against the #fcfbf8 card — visible feedback, no black blob. */
+  --magic-sheen: color-mix(in srgb, var(--text-primary) 12%, transparent);
+}
+
+/* ── AI Tools ▸ "Usage Pattern" heatmap ramp ───────────────────────────────
+   The cell colours are JS strings painted inline (`style={{backgroundColor}}`),
+   so — exactly like `.hue-bar` — they cannot carry a `light:` variant, and the
+   panel's own inline gradient kept them on a dark field. The ramp is therefore
+   a TOKEN PAIR: dark is the original alpha ramp, byte for byte; light mixes
+   the same emerald toward ink, the only way a step reads on paper (emerald at
+   α0.15 over Warm Paper is ~1.1:1, and `rgba(255,255,255,0.04)` — the empty
+   cell — is literally nothing there). Measured on #fcfbf8: the five light
+   steps run 3.50:1 → 9.91:1 with 1.29–1.31:1 between adjacent steps (the dark
+   ramp's step 1 is ~1.1:1 on its own field, so light is the stronger ramp). */
+:root {
+  --heat-0: rgba(255, 255, 255, 0.04);
+  --heat-1: rgba(16, 185, 129, 0.15);
+  --heat-2: rgba(16, 185, 129, 0.3);
+  --heat-3: rgba(16, 185, 129, 0.5);
+  --heat-4: rgba(16, 185, 129, 0.7);
+  --heat-5: rgba(16, 185, 129, 0.9);
+  --heat-today: rgba(255, 255, 255, 0.3);
+}
+
+html.light {
+  --heat-0: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  --heat-1: color-mix(in srgb, #10b981 80%, var(--text-primary));
+  --heat-2: color-mix(in srgb, #10b981 66%, var(--text-primary));
+  --heat-3: color-mix(in srgb, #10b981 54%, var(--text-primary));
+  --heat-4: color-mix(in srgb, #10b981 42%, var(--text-primary));
+  --heat-5: color-mix(in srgb, #10b981 30%, var(--text-primary));
+  --heat-today: color-mix(in srgb, var(--text-primary) 50%, transparent);
 }
 
 /* Penguin Console semantic trio. These are the ONLY places rose / emerald / amber
@@ -4541,6 +4648,11 @@ html.light {
 [data-page="reports"] { --page-accent: #6366f1; }
 [data-page="conductor"] { --page-accent: #8b5cf6; }
 [data-page="lecture"] { --page-accent: #34d399; }
+/* The Labs `LB-06` Time Tools page. Cyan is not decoration here: the Labs hub card that opens
+   this page carries the same cyan in `labRegistry.ts`, so the hue is continuous across the
+   navigation instead of the page falling back to the app's default accent. Cyan is also the
+   established "workspace / live instrument" hue in design.md §2, which a running stopwatch is. */
+[data-page="time-tools"] { --page-accent: #06b6d4; }
 
 html.light[data-page="transcripts"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
 html.light[data-page="stats"] { --page-accent: #b45309; --page-accent-fill: #b45309; --page-accent-on-fill: #ffffff; }
@@ -4585,6 +4697,11 @@ html.light[data-page="agentic"] { --page-accent: #0e7490; --page-accent-fill: #0
 html.light[data-page="ide-help"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
 html.light[data-page="simple-terminal"] { --page-accent: #0369a1; --page-accent-fill: #0369a1; --page-accent-on-fill: #ffffff; }
 html.light[data-page="old-dashboard"] { --page-accent: #be185d; --page-accent-fill: #be185d; --page-accent-on-fill: #ffffff; }
+/* Same cyan as `ide` and `agentic` in light mode, by the same transform rule (keep hue, L*45±2,
+   C−15%). Written in the three-token form rather than the bare `--page-accent` that
+   `[data-page="settings"]` used to carry: a bare accent leaves `--page-accent-fill` undefined,
+   and the page's accent buttons then render transparent. */
+html.light[data-page="time-tools"] { --page-accent: #0e7490; --page-accent-fill: #0e7490; --page-accent-on-fill: #ffffff; }
 
 /* ── ALPHA bg-[var(..)]/N — MUST live INSIDE @layer utilities ────────────
  * Measured in the running app, light mode, Settings:

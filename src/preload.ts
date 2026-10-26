@@ -244,6 +244,7 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   // Toggle tracking on/off
   toggleTracking: () => ipcRenderer.invoke('toggle-tracking'),
   setTracking: (enabled: boolean) => ipcRenderer.invoke('set-tracking', enabled),
+  setAfkPaused: (paused: boolean) => ipcRenderer.invoke('tracking:set-afk-paused', paused),
   restartTracking: () => ipcRenderer.invoke('restart-tracking'),
   // Auto-update (packaged builds only; the main process no-ops under dev)
   checkForAppUpdate: () => ipcRenderer.invoke('app:check-for-update'),
@@ -699,10 +700,28 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   removeProject: (projectId: string) => ipcRenderer.invoke('remove-project', projectId),
   openProject: (projectId: string, ideId?: string) => ipcRenderer.invoke('open-project', projectId, ideId),
   detectProjectLanguage: (projectPath: string) => ipcRenderer.invoke('detect-project-language', projectPath),
+  // Reads <projectPath>/.git/config (no git binary needed) so the Add Project
+  // form can auto-fill the repository link; returns { isRepo: false } when the
+  // path is not a repo so the caller can fall back to a templated link.
+  detectProjectGit: (projectPath: string) => ipcRenderer.invoke('detect-project-git', projectPath),
+  // GitHub metadata for the Add Project form (read-only). Public repos need no
+  // token; a token adds private repos and lifts the 60 req/h anonymous limit.
+  githubListRepos: (opts: { user?: string; token?: string }) => ipcRenderer.invoke('github:list-repos', opts),
+  githubWhoami: (token: string) => ipcRenderer.invoke('github:whoami', token),
   detectProjectsLanguages: (projectPaths: string[]) => ipcRenderer.invoke('detect-projects-languages', projectPaths),
   countProjectLines: (projectPath: string, projectId: string, options?: any) => ipcRenderer.invoke('count-project-lines', projectPath, projectId, options),
   getProjectLineStats: (projectId: string) => ipcRenderer.invoke('get-project-line-stats', projectId),
   deleteProjectLineStats: (projectId: string) => ipcRenderer.invoke('delete-project-line-stats', projectId),
+  // Per-file added/removed line changes (git-style). scanProjectChanges computes
+  // the delta since the previous scan; getProjectChanges returns the cumulative
+  // history; deleteProjectChanges wipes both deltas and snapshots.
+  scanProjectChanges: (projectPath: string, projectId: string, options?: { maxFiles?: number }) =>
+    ipcRenderer.invoke('scan-project-changes', projectPath, projectId, options),
+  getProjectChanges: (projectId: string, limit?: number) => ipcRenderer.invoke('get-project-changes', projectId, limit),
+  deleteProjectChanges: (projectId: string) => ipcRenderer.invoke('delete-project-changes', projectId),
+  // Ingest-service status (Live pill) + on-demand event ingestion (probes).
+  getChangesIngestStatus: () => ipcRenderer.invoke('get-changes-ingest-status'),
+  editorChangesIngest: (lines: string[]) => ipcRenderer.invoke('editor-changes:ingest', lines),
   scanIdeDefaultProjects: () => ipcRenderer.invoke('scan-ide-default-projects'),
   scanCustomDirectory: (rootDir: string) => ipcRenderer.invoke('scan-custom-directory', rootDir),
   getCustomScanDirs: () => ipcRenderer.invoke('get-custom-scan-dirs'),
@@ -2383,11 +2402,19 @@ contextBridge.exposeInMainWorld('haloBridge', {
     // ever saw the prefs that existed at `did-finish-load`, so every setting in the Halo
     // section of Settings was stored and ignored until a relaunch.
     applyPrefs: () => ipcRenderer.invoke('halo:apply-prefs'),
+    // The pull half of the prefs channel. `halo:prefs` only PUSHES, so a renderer that boots
+    // while the island is off (no handle => no pushes) used to stay on `HALO_DEFAULTS` and
+    // paint an orphan pill. Reads what is stored, once, at mount.
+    getPrefs: () => ipcRenderer.invoke('halo:get-prefs'),
     // Monitor list for the position picker. See listHaloDisplays in haloIsland.ts.
     listDisplays: () => ipcRenderer.invoke('halo:list-displays'),
     // HALO §51 "click outside -> unpin + collapse". Sent by the island's own document-level
     // pointer listener, so it can only fire for a click that did NOT land on the island.
     clickOutside: () => ipcRenderer.invoke('halo:click-outside'),
+    /* PRESS-AND-DRAG — move the island from the pill itself. Fire-and-forget (`send`, not
+     * `invoke`): a drag is a stream of events and awaiting each one would throttle it to the
+     * IPC round-trip. main validates every payload (validateDragEvent) before it acts. */
+    drag: (ev: { phase: string; dx: number; dy: number }) => ipcRenderer.send('halo:drag', ev),
   onPrefs: (cb: (prefs: unknown) => void) => {
     const handler = (_event: unknown, prefs: unknown) => cb(prefs);
     ipcRenderer.on('halo:prefs', handler);
@@ -2451,12 +2478,41 @@ contextBridge.exposeInMainWorld('haloBridge', {
      answer was "none", which the card renders as the zero literal. `ok: false` means we could
      not read it at all, which is the only case that earns the unknown literal. */
   getNextDeadline: () => ipcRenderer.invoke('halo:get-next-deadline'),
+  /* The island's Deadlines page is a compact LIFE → SCHEDULE view: the nearest recurring
+     schedule block AND every open deadline with the alarm the user set on it. */
+  getLife: () => ipcRenderer.invoke('halo:get-life'),
+  /* The real FocusManager state — including the lock (`strictness`). The island's Focus
+     page had no producer at all, so it was a stopwatch wearing a Focus label. */
+  getFocus: () => ipcRenderer.invoke('halo:get-focus'),
+  /** The island's alarm editor. Writes `deadline_reminders`; relative rows are stamped with the
+   *  real moment so the ticker can fire them. */
+  addReminder: (deadlineId: string, data: { mode?: string; leadMin?: number }) =>
+    ipcRenderer.invoke('halo:add-reminder', deadlineId, data),
+  deleteReminder: (id: string) => ipcRenderer.invoke('halo:delete-reminder', id),
   getTerminalUsage: () => ipcRenderer.invoke('halo:get-terminal-usage'),
   onSnapshot: (cb: (snapshot: unknown) => void) => {
     const handler = (_event: unknown, snapshot: unknown) => cb(snapshot);
     ipcRenderer.on('halo:snapshot', handler);
     return () => ipcRenderer.removeListener('halo:snapshot', handler);
   },
+  /* THE ISLAND'S OCCLUDING RECT — where the painted pill actually is, in this window's
+   * viewport pixels.
+   *
+   * The island is a separate always-on-top window parked over the top of the display, so RHEO's
+   * top bar cannot see it and cannot measure it. Main computes the rect from the same
+   * `computeSurfaceRect` that shapes the click region and positions the hot zone — one
+   * derivation, three consumers — then subtracts the main window's content origin so the
+   * numbers arrive as plain viewport coordinates.
+   *
+   * `getFootprint` is the PULL half: a renderer that mounts after the last push (a reload, or
+   * the main window created before/after the island) asks once instead of waiting for a hover.
+   * Both exist because neither launch order is guaranteed. */
+  onFootprint: (cb: (f: { x: number; y: number; width: number; height: number; phase: 'compact' | 'expanded'; visible: boolean }) => void) => {
+    const handler = (_event: unknown, f: unknown) => cb(f as never);
+    ipcRenderer.on('halo:footprint', handler);
+    return () => ipcRenderer.removeListener('halo:footprint', handler);
+  },
+  getFootprint: () => ipcRenderer.invoke('halo:get-footprint'),
 });
 
 // R-10: Single preference getter (needed by SettingsPage mount-load)

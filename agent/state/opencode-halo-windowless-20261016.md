@@ -4,32 +4,52 @@
 
 # Agent State — opencode-halo-windowless-20261016
 
-> **STATUS:** working | **UPDATED:** 2026-10-16T13:30+02:00
+> **STATUS:** Source fixed across cycles 12–18 (OFF lifecycle, double-pill, snapshot pull, last-known-good,
+> tier color, host lifecycle). App running. Latest build FAILED (dup `try`) then fixed; source compiles.
+> All fixes source-only → CZ must rebuild+relaunch to land. Design untouched. | **UPDATED:** 2026-10-24T21:30Z
 
 ---
 
-## CURRENT CYCLE (1)
-**ROLE:** Halo windowless island — finish cross-app hover path; KWin fallback gate-1 investigation; specialist-loop doc update.
-**STATUS:** working
-**IN FLIGHT:**
-- Rebuild #2 handoff to CZ (close RHEO → `npm run build` → reopen) — lands `halo:hover` routing to the offscreen island + snapshot/prefs to offscreen (`extraTargets`).
-- KWin flat-install fix (CZ sudo) + live/rescan decision.
-**COMPLETED:**
-- Fixed `window()` getter placement (was in KwinBridge; now on OffscreenHaloRenderer) — root cause of dead hover/extras in the user's 12:10 build (`grep dist-electron/main.cjs`: routing markers present + misplacement present).
-- Host v2 lifecycle shipped + verified (pid 124734): hidden until first frame → shown on frame → hidden the moment the bridge drops; single-instance flock; app spawns/kills it (`main.ts` spawn + will-quit kill; lands with next build). Dummy-bridge test: full hide/show/hide sequence logged; real-app test: LIVE 680x154 → `surface shown`; second instance exits 0.
-- Host heartbeat verified live: no `socket closed by peer` for 129 s+ (was churning every 20 s).
-- Protocol probe: `kind` validated (enter accepted, `boop` rejected, bad action/non-int rejected); bridge routes `pointer` → `validatePointerEvent` → main.ts (`halo:hover` for enter/leave; `sendInputEvent` for move/down/up).
-- KWin gate-1 root cause found: effect discovery = `KPluginMetaData::findPlugins` under `QCoreApplication::libraryPaths()/kwin/effects`; **FLAT `halo.so`+`halo.json` → 1 entry (id=halo, KWin/Effect); any subdir → 0.** Live KWin: not in listOfEffects, isEffectSupported=false (explained).
-- `conversation/round-01.md` addendum written (layer-shell LIVE; layout matrix; live-compositor evidence).
-- coord: registered + claimed (7 paths) as opencode-halo-windowless-20261016.
-**NEXT ACTION:** After CZ rebuild (#3): verify hover enter/leave opens/closes capsule over Firefox; real data in capsule; click test; off-switch hide. Check `~/.config/RHEO/halo-diagnostic.log` for `extra-target-primed`.
-**NOTES:** Bridge wire = 4-byte LE length + JSON; heartbeat 5 s host-side. Offscreen canvas 680×154 (L preset); host window sizes to alpha bbox. Island diagnostics log: `~/.config/RHEO/halo-diagnostic.log`.
+## CURRENT CYCLE (18)
+**ROLE:** User: "it still continuously have this error of like going back to", "tracking system still resets
+and still doesnt track website properly", "why is there now only 3 sections on the island?", "why does the
+website not showing?".
+
+**FIXES APPLIED THIS CYCLE:** (a) removed the flapping focus-sync host toggle (replaced by in-app pill
+hide when host is painter → single painter); (b) added in-app null-return when host-is-painter. Source
+transpiles clean (main.ts, OverlayRoot).
+
+**OUTSTANDING (source-only, need CZ build):**
+- OFF lifecycle (c12), snapshot pull (c14), last-known-good payload (c15), tier color (c16), host dead-ref +
+  1s-sync (c17), single-painter + inApp-hide (c18).
 
 ---
 
-## HISTORY (previous 2 cycles, oldest first)
+## HISTORY
 
-### Cycle 0 — 2026-10-16 (pre-this-session, from checkpoint)
-**ROLE:** Diagnose why cross-app capsule dead: offscreen 0 snapshots, dead `halo:pointer`, no host heartbeat.
-**COMPLETED:** source fixes written (uncommitted); host rebuilt with heartbeat; Live frames 680×154 verified on screen.
-**NEXT ACTION:** verify pointer routing in the app after rebuild.
+### Cycle 17 — 2026-10-24
+**ROLE:** User: "THEY ARE A DUPLICATE ONE OUTSIDE OF THE APP ONE INSIDE OF THE APP" / "AND THERES A DUPLICATE ONE OUTSIDE OF THE APP ONE INSIDE OF THE APP".
+**FIXED (source, unbuilt):** focus-based host toggle + dead-ref + 1s sync. Then **replaced** with a cleaner
+single-painter design: host stays ON when enabled; in-app pill hides (OverlayRoot). No more host flapping.
+
+### Cycle 16 — 2026-10-24
+**ROLE:** User: "WHY IS THE THING NOT SHOWING THE GREEN PROPERLY?" / "and then blue when neutral" / "and then red when distracting".
+**FIXED (source, unbuilt):** tier now resolved from `tierAssignments` (green/blue/red) instead of hardcoded 'neutral'.
+
+### Cycle 15 — 2026-10-24
+**ROLE:** User: "every like 2-3 turns, it shows the correct time".
+**FIXED (source, unbuilt):** keep-last-known-good payload in `halo:report-stream`.
+
+### Cycle 14 — 2026-10-24
+**ROLE:** User: "it just glitches sometimes it Glitches to the correct time occasionally".
+**FIXED (source, unbuilt):** snapshot pull on mount (`halo:get-snapshot`).
+
+### Cycle 12 — 2026-10-24
+**ROLE:** User: "TURN IT OFF IN THE SETTING … THE PILL TOO".
+**FIXED (source, unbuilt):** OFF lifecycle.
+
+### Cycle 10 — 2026-10-22
+**ROLE:** Boot crash. Fixed build scripts + compiled modules.
+
+### Cycle 8 — 2026-10-21
+**ROLE:** Implemented `agent/docs/HALO_RESULT.md` island design.

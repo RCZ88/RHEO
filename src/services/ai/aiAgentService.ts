@@ -256,11 +256,8 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
     console.log('[AiAgent:callLLM] round=' + round + '/' + totalRounds + ' historyLen=' + this.conversationHistory.length)
     const api = (window as unknown as { deskflowAPI: any }).deskflowAPI
 
-    let preferredModel = ''
     let state: any = null
     try {
-      const aiConfig = await api.getAiConfig()
-      if (aiConfig?.briefModel) preferredModel = aiConfig.briefModel
       state = await api.getAiProviders()
     } catch (err) {
       console.warn('[AiAgent] Failed to load provider config, falling back to OpenRouter:', err)
@@ -287,11 +284,13 @@ Security: ${JSON.stringify(securityGuard.getStats())}`
     if (enabled.length === 0) throw new Error('No enabled AI providers')
 
     const defaultRoute = state.routing?.default
-    const target = defaultRoute?.providerId
-      ? enabled.find((p: any) => p.id === defaultRoute.providerId) || enabled[0]
-      : enabled[0]
+    const target = this.config.providerId
+      ? (enabled.find((p: any) => p.id === this.config.providerId) || enabled[0])
+      : (defaultRoute?.providerId
+          ? (enabled.find((p: any) => p.id === defaultRoute.providerId) || enabled[0])
+          : enabled[0])
 
-    const model = preferredModel || defaultRoute?.model || target.models[0] || 'gpt-3.5-turbo'
+    const model = this.config.model || defaultRoute?.model || target.models?.[0] || 'gpt-3.5-turbo'
 
     const messages = [
       { role: 'system', content: systemPrompt },

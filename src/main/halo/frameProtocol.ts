@@ -241,6 +241,36 @@ export function validatePointerEvent(raw: unknown): HaloPointerEvent | null {
 }
 
 /**
+ * DRAG — the press-and-hold gesture that moves the island ("adjust the pill from itself").
+ *
+ * The host reports the CUMULATIVE offset from the press point, not a delta per event, so a
+ * dropped message cannot accumulate drift. The consumer turns it into an absolute offset
+ * (the press point is the island's position when the drag began) and persists that.
+ */
+export const HALO_DRAG_PHASES = ['begin', 'update', 'end'] as const;
+export type HaloDragPhase = (typeof HALO_DRAG_PHASES)[number];
+
+export interface HaloDragEvent {
+  phase: HaloDragPhase;
+  dx: number;
+  dy: number;
+}
+
+export function validateDragEvent(raw: unknown): HaloDragEvent | null {
+  if (raw === null || typeof raw !== 'object') fail('drag event is not an object');
+  const e = raw as Record<string, unknown>;
+  if (typeof e.phase !== 'string' || !(HALO_DRAG_PHASES as readonly string[]).includes(e.phase)) {
+    fail(`phase ${String(e.phase)} is not an allowed drag phase`);
+  }
+  const num = (key: string): number => {
+    const v = e[key];
+    if (typeof v !== 'number' || !Number.isInteger(v)) fail(`${key} must be an integer`);
+    return v;
+  };
+  return { phase: e.phase as HaloDragPhase, dx: num('dx'), dy: num('dy') };
+}
+
+/**
  * Research §74: "two buffers plus monotonic frame sequence numbers... render the latest frame
  * rather than queuing frames."
  *

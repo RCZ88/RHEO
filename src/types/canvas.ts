@@ -119,9 +119,47 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       const { [action.id]: _, ...rest } = state.cards
       return { ...state, cards: rest }
     }
-    case 'MOVE_CARD':
-      if (!state.cards[action.id]) return state
-      return { ...state, cards: { ...state.cards, [action.id]: { ...state.cards[action.id], position: action.position } } }
+    case 'MOVE_CARD': {
+      const moved = state.cards[action.id]
+      if (!moved) return state
+      const updatedCards = { ...state.cards, [action.id]: { ...moved, position: action.position } }
+      let updatedGroups = state.groups
+      // Dragging a GROUP CARD moves the whole group. The canonical group
+      // record, every member's live position and the rendered childCards
+      // snapshot must all carry the same delta — otherwise the next arrange,
+      // child drag or ungroup operates against where the group USED to be.
+      if (moved.type === 'group' && moved.data?.groupId && state.groups[moved.data.groupId]) {
+        const groupId = moved.data.groupId as string
+        const group = state.groups[groupId]
+        const dx = action.position.x - moved.position.x
+        const dy = action.position.y - moved.position.y
+        if (dx !== 0 || dy !== 0) {
+          updatedGroups = {
+            ...state.groups,
+            [groupId]: { ...group, position: { x: group.position.x + dx, y: group.position.y + dy } },
+          }
+          for (const id of group.cardIds) {
+            if (updatedCards[id]) {
+              updatedCards[id] = {
+                ...updatedCards[id],
+                position: { x: updatedCards[id].position.x + dx, y: updatedCards[id].position.y + dy },
+              }
+            }
+          }
+          updatedCards[action.id] = {
+            ...updatedCards[action.id],
+            data: {
+              ...updatedCards[action.id].data,
+              childCards: (updatedCards[action.id].data?.childCards || []).map((cc: any) => {
+                const p = cc.position || { x: 0, y: 0 }
+                return { ...cc, position: { x: p.x + dx, y: p.y + dy } }
+              }),
+            },
+          }
+        }
+      }
+      return { ...state, cards: updatedCards, groups: updatedGroups }
+    }
     case 'RESIZE_CARD':
       if (!state.cards[action.id]) return state
       return { ...state, cards: { ...state.cards, [action.id]: { ...state.cards[action.id], size: action.size } } }
@@ -296,6 +334,19 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
           updatedCards[cardId] = { ...updatedCards[cardId], position: pos }
         }
       })
+      // Sync the VISUAL group card too. GroupCard renders the childCards
+      // SNAPSHOT, not the live member cards — updating only the live cards
+      // (as this case used to) moved nothing on screen and left the frame at
+      // its old size, which is why arrangeGroup had zero callers: it was a
+      // no-op the moment it was wired up.
+      for (const [id, c] of Object.entries(updatedCards)) {
+        if (c.type === 'group' && c.data?.groupId === action.id) {
+          const childCards = (c.data?.childCards || []).map((cc: any) =>
+            action.positions[cc.id] ? { ...cc, position: action.positions[cc.id] } : cc
+          )
+          updatedCards[id] = { ...c, size: action.size, data: { ...c.data, childCards } }
+        }
+      }
       return {
         ...state,
         groups: { ...state.groups, [action.id]: { ...group, size: action.size } },

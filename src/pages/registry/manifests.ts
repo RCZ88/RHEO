@@ -36,6 +36,10 @@ import reports from './pages/reports'
 import database from './pages/database'
 import transcripts from './pages/transcripts'
 import profiler from './pages/profiler'
+/* The full-page view of the stopwatch/timer/alarms behind Labs `LB-06`. Declared here because
+   `validate:pages` fails the build on a route with no manifest — AGENTS.md §5d, no exceptions
+   for a page the Labs hub links to. */
+import timeTools from './pages/timeTools'
 import { settings, guide } from './pages/settings'
 import {
   penguinConsole, simpleTerminal, ideHelp, focusRetired,
@@ -62,6 +66,7 @@ export const PAGE_MANIFESTS: PageManifest[] = [
   lecture,
   studio,
   labs,
+  timeTools,
   goals,
   gold,
   finance,

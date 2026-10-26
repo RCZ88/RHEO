@@ -470,7 +470,9 @@ function StopwatchHeroExpanded({
               style={{ backgroundColor: TIER_TOKEN[currentApp?.tier ?? snapshot.tier], opacity: 0.8 }}
             />
             <span className="truncate halo-t-label font-medium" style={{ color: 'var(--halo-text)' }}>
-              {currentApp?.app ?? 'No app detected'}
+              {/* Prefer the site over the browser. See AmbientCard 'now' case for the null vs
+               * undefined distinction, which matters for the honest-empty copy. */}
+              {currentApp?.domain ?? currentApp?.app ?? 'No app detected'}
             </span>
             {currentApp && (
               <span

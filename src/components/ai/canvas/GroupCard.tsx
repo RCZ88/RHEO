@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Edit3, Palette, Ungroup, Layers } from 'lucide-react'
+import { ChevronDown, Edit3, Palette, Ungroup, Layers, LayoutGrid } from 'lucide-react'
 import { GROUP_COLORS, type CanvasCard, type CanvasGroup } from '../../../types/canvas'
 
 const CELL = 40
@@ -12,20 +12,33 @@ interface GroupCardProps {
   onUpdateGroup: (patch: Partial<Pick<CanvasGroup, 'label' | 'colorId'>>) => void
   onUngroup: (mode: 'restore' | 'scatter') => void
   onRemoveFromGroup: (cardId: string, newPosition?: { x: number; y: number }) => void
+  onTidy?: () => void
+  /** Commit a manually moved member. Position is ABSOLUTE canvas px. */
+  onMoveChild?: (cardId: string, position: { x: number; y: number }) => void
+  /** Board zoom — drag deltas arrive in CSS px and must be divided by it. */
+  zoom?: number
 }
 
-export function GroupCard({ group, cards, renderChild, onUpdateGroup, onUngroup, onRemoveFromGroup }: GroupCardProps) {
+export function GroupCard({ group, cards, renderChild, onUpdateGroup, onUngroup, onRemoveFromGroup, onTidy, onMoveChild, zoom = 1 }: GroupCardProps) {
   const [expanded, setExpanded] = useState(true)
   const [editing, setEditing] = useState(false)
   const [editLabel, setEditLabel] = useState(group.label)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const colorRef = useRef<HTMLDivElement>(null)
+  // In-group dragging. Members render from the childCards SNAPSHOT, so a drag
+  // previews locally and commits ONE absolute position on mouseup — the
+  // reducer re-fits the group frame from it.
+  const [dragPreview, setDragPreview] = useState<{ id: string; left: number; top: number } | null>(null)
+  const dragRef = useRef<{ id: string; startX: number; startY: number; startLeft: number; startTop: number; lastLeft: number; lastTop: number } | null>(null)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => { dragCleanupRef.current?.() }, [])
 
   const color = GROUP_COLORS.find(c => c.id === group.colorId) || GROUP_COLORS[0]
 
-  // Children are placed at their real canvas positions (relative to the group
-  // container) with their real sizes — grouping only wraps them in a box.
+  // Children render at the positions the group's layout holds — which are
+  // tidied into an even grid by layoutTidyGrid (on create / Tidy), so a group
+  // is an organised block, not a box drawn around scattered cards.
   const { placed, contentW, contentH } = useMemo(() => {
     const baseX = group.position?.x || 0
     const baseY = group.position?.y || 0
@@ -66,6 +79,53 @@ export function GroupCard({ group, cards, renderChild, onUpdateGroup, onUngroup,
     }
     setEditing(false)
   }, [editLabel, group.label, onUpdateGroup])
+
+  // Manual positioning: drag a member like a normal canvas card, but clamped to
+  // the group surface (the group itself is moved by dragging its header). The
+  // committed position is absolute canvas px — the inverse of the render
+  // convention below: rendered = pos - base - (10, 30).
+  const handleChildMouseDown = useCallback((e: React.MouseEvent, card: CanvasCard, left: number, top: number) => {
+    if (e.button !== 0) return
+    // Never start a member drag from an interactive control inside the card.
+    if ((e.target as HTMLElement).closest('button, input, textarea, select, a')) return
+    // Members move themselves — the group card (and the board) must not drag too.
+    e.stopPropagation()
+    e.preventDefault()
+
+    const baseX = group.position?.x || 0
+    const baseY = group.position?.y || 0
+    dragRef.current = { id: card.id, startX: e.clientX, startY: e.clientY, startLeft: left, startTop: top, lastLeft: left, lastTop: top }
+    setDragPreview({ id: card.id, left, top })
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      dragCleanupRef.current = null
+    }
+    const onMove = (me: MouseEvent) => {
+      const d = dragRef.current
+      if (!d) return
+      // Trackpad/mouse deltas arrive in CSS px; the board is scaled by `zoom`.
+      const z = zoom || 1
+      d.lastLeft = Math.max(0, d.startLeft + (me.clientX - d.startX) / z)
+      d.lastTop = Math.max(0, d.startTop + (me.clientY - d.startY) / z)
+      setDragPreview({ id: d.id, left: d.lastLeft, top: d.lastTop })
+    }
+    const onUp = () => {
+      const d = dragRef.current
+      if (!d) return
+      dragRef.current = null
+      cleanup()
+      setDragPreview(null)
+      onMoveChild?.(d.id, {
+        x: Math.round(baseX + 10 + d.lastLeft),
+        y: Math.round(baseY + 30 + d.lastTop),
+      })
+    }
+    dragCleanupRef.current = cleanup
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [group.position, zoom, onMoveChild])
 
   return (
     <div
@@ -156,6 +216,14 @@ export function GroupCard({ group, cards, renderChild, onUpdateGroup, onUngroup,
           </div>
 
           <button
+            onClick={() => onTidy?.()}
+            title="Tidy layout"
+            className="group-action-btn"
+          >
+            <LayoutGrid size={12} />
+          </button>
+
+          <button
             onClick={() => onUngroup(cards.length > 5 ? 'scatter' : 'restore')}
             title="Ungroup cards"
             className="group-action-btn group-action-danger"
@@ -174,6 +242,7 @@ export function GroupCard({ group, cards, renderChild, onUpdateGroup, onUngroup,
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="group-body-wrapper"
+            style={{ overflow: dragPreview ? 'visible' : undefined }}
           >
             <div
               className="group-cards"
@@ -193,17 +262,23 @@ export function GroupCard({ group, cards, renderChild, onUpdateGroup, onUngroup,
                   <span>No cards yet</span>
                 </div>
               ) : (
-                placed.map(({ card, left, top }) => (
+                placed.map(({ card, left, top }) => {
+                  const dragging = dragPreview?.id === card.id
+                  return (
                   <div
                     key={card.id}
                     className="group-real-card dk-canvas-card"
                     style={{
-                      left, top, width: card.size.w * CELL, height: card.size.h * CELL,
-                      position: 'absolute', zIndex: 0, cursor: 'default',
+                      left: dragging ? dragPreview!.left : left,
+                      top: dragging ? dragPreview!.top : top,
+                      width: card.size.w * CELL, height: card.size.h * CELL,
+                      position: 'absolute', zIndex: dragging ? 2 : 0,
+                      cursor: dragging ? 'grabbing' : 'grab',
                       // Override hover transform (group cards shouldn't lift)
                       transform: 'none',
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => handleChildMouseDown(e, card, left, top)}
                   >
                     <div className="dk-canvas-card-header" style={{ cursor: 'default' }}>
                       <span className="dk-canvas-card-type">{card.type}</span>
@@ -219,7 +294,8 @@ export function GroupCard({ group, cards, renderChild, onUpdateGroup, onUngroup,
                       {renderChild(card)}
                     </div>
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           </motion.div>

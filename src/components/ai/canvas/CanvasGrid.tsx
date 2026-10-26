@@ -19,6 +19,8 @@ interface CanvasGridProps {
   onUpdateGroup?: (groupId: string, patch: Partial<Pick<CanvasGroup, 'label' | 'colorId' | 'orientation' | 'ratio'>>) => void
   onUngroup?: (groupId: string, mode: 'restore' | 'scatter') => void
   onRemoveFromGroup?: (cardId: string, newPosition?: { x: number; y: number }) => void
+  onArrangeGroup?: (groupId: string, mode: 'grid' | 'stack' | 'mosaic') => void
+  onMoveGroupChild?: (groupId: string, cardId: string, position: { x: number; y: number }) => void
   isPanning: boolean
   setIsPanning: (v: boolean) => void
   focusedCardId?: string | null
@@ -33,7 +35,7 @@ const CELL = 40
 
 export function CanvasGrid({
   cards, pan, onPanChange, zoom, onZoomChange, onMoveCard, onDismissCard,
-  onPinCard, onResizeCard, onCardClick, onUpdateCard, groups, onUpdateGroup, onUngroup, onRemoveFromGroup,
+  onPinCard, onResizeCard, onCardClick, onUpdateCard, groups, onUpdateGroup, onUngroup, onRemoveFromGroup, onArrangeGroup, onMoveGroupChild,
   isPanning, setIsPanning, focusedCardId, onGroupCards, onDraggingChange,
 }: CanvasGridProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -397,6 +399,8 @@ export function CanvasGrid({
             onUpdateGroup={onUpdateGroup}
             onUngroup={onUngroup}
             onRemoveFromGroup={onRemoveFromGroup}
+            onArrangeGroup={onArrangeGroup}
+            onMoveGroupChild={onMoveGroupChild}
             onDragStart={() => handleCardDragStart(card.id)}
             onDragStop={() => handleCardDragStop(card.id)}
             zoom={zoom}

@@ -43,7 +43,7 @@ export function MagicCard({
   return (
     <motion.div
         className={cn(
-        "group relative isolate overflow-hidden rounded-[inherit] mcp-surface",
+        "magic-card group relative isolate overflow-hidden rounded-[inherit] mcp-surface",
         className
       )}
       onPointerMove={handlePointerMove}
@@ -65,7 +65,7 @@ export function MagicCard({
         style={{
           background: useMotionTemplate`
             radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
-              ${gradientColor},
+              var(--magic-sheen, ${gradientColor}),
               transparent 100%
             )
           `,

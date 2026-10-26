@@ -257,13 +257,13 @@ export function ContextGraph({ data, onNodeClick }: ContextGraphProps) {
         position: 'absolute', bottom: 12, left: 12,
         display: 'flex', gap: 8, flexWrap: 'wrap',
         padding: '6px 10px', borderRadius: 8,
-        background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--ws-surface-raised)',
+        border: '1px solid var(--ws-border)',
       }}>
         {Object.entries(TYPE_COLORS).filter(([k]) => k !== 'default').map(([type, color]) => (
           <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
-            <span style={{ fontSize: 10, color: '#71717a' }}>{type}</span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{type}</span>
           </div>
         ))}
       </div>
@@ -272,17 +272,17 @@ export function ContextGraph({ data, onNodeClick }: ContextGraphProps) {
       {selectedNode && (
         <div style={{
           position: 'absolute', top: 12, right: 12, width: 240, padding: 12, borderRadius: 10,
-          background: 'rgba(24,24,27,0.85)', backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'var(--ws-surface-raised)',
+          border: '1px solid var(--ws-border)',
         }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#fafafa', marginBottom: 4 }}>{selectedNode.name}</div>
-          <div style={{ fontSize: 11, color: '#52525b', marginBottom: 8 }}>{selectedNode.type}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{selectedNode.name}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{selectedNode.type}</div>
           {selectedNode.facts.length > 0 && (
-            <div style={{ fontSize: 11, color: '#71717a' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               <div style={{ fontWeight: 500, marginBottom: 4 }}>Facts:</div>
               {selectedNode.facts.slice(0, 5).map((f, i) => (
                 <div key={i} style={{ marginBottom: 2 }}>
-                  <span style={{ color: '#a1a1aa' }}>{f.predicate}</span>: {f.value}
+                  <span style={{ color: 'var(--text-secondary)' }}>{f.predicate}</span>: {f.value}
                 </div>
               ))}
             </div>
@@ -291,8 +291,8 @@ export function ContextGraph({ data, onNodeClick }: ContextGraphProps) {
             onClick={() => setSelectedNode(null)}
             style={{
               marginTop: 8, padding: '4px 8px', borderRadius: 6,
-              background: 'rgba(255,255,255,0.06)', border: 'none',
-              color: '#71717a', fontSize: 11, cursor: 'pointer',
+              background: 'var(--ws-surface-sunken)', border: 'none',
+              color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
             }}
           >
             Close

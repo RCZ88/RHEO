@@ -6,6 +6,7 @@ import EmptyLineStats from './EmptyLineStats';
 import IgnoreNotice from './IgnoreNotice';
 import { useLineStats } from './useLineStats';
 import type { ScanOptions } from '../../types/line-stats';
+import ProjectFileChanges from './ProjectFileChanges';
 
 interface Props {
   projectId: string;
@@ -48,6 +49,7 @@ export default function ProjectLineStats({ projectId, projectPath }: Props) {
           <FileDetailTable files={data.files} report={report} />
         </>
       ) : null}
+      <ProjectFileChanges projectId={projectId} projectPath={projectPath} />
     </div>
   );
 }

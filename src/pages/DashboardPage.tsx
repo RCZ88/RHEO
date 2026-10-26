@@ -2711,7 +2711,7 @@ export default function DashboardPage({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] max-w-7xl w-full max-h-[88vh] overflow-auto p-4"
+              className="relative rounded-xl border border-zinc-700/50 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] max-w-7xl w-full max-h-[88vh] overflow-hidden flex flex-col p-4"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -2733,8 +2733,10 @@ export default function DashboardPage({
               </div>
               <CardLibrary
                 onChanged={(layout) => {
+                  // Layout mutated (add / remove / resize / preset applied) — the
+                  // dashboard re-renders from the shared layout store. The library
+                  // STAYS OPEN through curation; only Save / Close / X end the session.
                   console.log('[Dashboard] Layout updated:', layout);
-                  setShowCardLibrary(false);
                 }}
                 onSaved={() => {
                   console.log('[Dashboard] Layout saved');

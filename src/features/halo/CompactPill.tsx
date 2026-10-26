@@ -178,10 +178,17 @@ export function CompactPill(props: CompactPillProps): ReactElement {
     flexShrink: 0,
   };
 
+  /* THE HOUR IS ZERO-PADDED AND `formatMmSs` NO LONGER LEADS WITH A COLON.
+   *
+   * The pill used to render `<i>{h}:</i>` + `formatMmSs(ms)`, and `formatMmSs` returned
+   * `:mm:ss` past an hour — so a session over an hour read `2::14:58`, a double colon
+   * that reads as two clocks jammed together. Board 1's literal is `dot · 00:42:18`, i.e.
+   * a DIM `00:` prefix and a BRIGHT `42:18` body, and `00:` is zero-padded. One colon,
+   * two digits, one clock. */
   const clock = (): ReactElement => (
     <span style={timeStyle}>
       <i style={{ fontStyle: 'normal', color: 'var(--halo-dim)' }}>
-        {Math.floor(stopwatch.displayMs / 3_600_000)}:
+        {String(Math.floor(stopwatch.displayMs / 3_600_000)).padStart(2, '0')}:
       </i>
       {formatMmSs(stopwatch.displayMs)}
     </span>
@@ -206,7 +213,7 @@ export function CompactPill(props: CompactPillProps): ReactElement {
     return (
       <span style={row}>
         {icon(Mic, 'var(--halo-accent)')}
-        <PillWave fBody={fBody} live={listening} />
+        <PillWave live={listening} />
         {label('Listening')}
       </span>
     );
@@ -318,7 +325,7 @@ export function CompactPill(props: CompactPillProps): ReactElement {
 
 /** Board 1's inline waveform: 24 bars, flat at 3px when idle. Same constants as the expanded
  * meter in `DictationActivity`, so the two cannot disagree. */
-function PillWave({ fBody, live }: { fBody: number; live: boolean }): ReactElement {
+function PillWave({ live }: { live: boolean }): ReactElement {
   const N = 24;
   const area = 20;
   return (
@@ -346,13 +353,13 @@ function PillWave({ fBody, live }: { fBody: number; live: boolean }): ReactEleme
   );
 }
 
-/** `mm:ss`, or `hh:mm:ss` past an hour. Board 1 renders `42:18` with a dimmed `00:` prefix. */
+/** `mm:ss`, or `mm:ss` past an hour — the HOUR is the dim prefix `clock()` renders, so this
+ * NEVER leads with a colon. Board 1 renders `42:18` with a dimmed `00:` prefix. */
 function formatMmSs(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   const mm = String(m).padStart(2, '0');
   const ss = String(s).padStart(2, '0');
-  return h > 0 ? `:${String(m).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+  return `${mm}:${ss}`;
 }

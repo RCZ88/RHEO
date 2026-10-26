@@ -1,23 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Globe, Lock, Mic, Pause, Pin, Play, RotateCcw, Timer } from 'lucide-react';
+import { Mic, Pause, Pin, Play, RotateCcw, Timer } from 'lucide-react';
 import { StopwatchHero } from './StopwatchHero';
 import { CompactPill, type CompactKind } from './CompactPill';
-import { FocusPageRow } from './FocusPageRow';
+import { FocusPageRow, type HaloFocusState } from './FocusPageRow';
+import { PillEdge } from './PillEdge';
+import { PillSubject } from './PillSubject';
+import { SchedulePageRow, formatDeadlineDue, type HaloLifePayload } from './SchedulePageRow';
+import { getAfkPrefs, isPassiveCategory } from '../../lib/afk';
 import { DictationIsland } from './DictationIsland';
 import './halo.css';
 import type { CriticalPayload, DictationPayload, NowPayload, StopwatchPayload } from '../../shared/halo/types';
 import {
   HALO_DEFAULT_ORDER,
   HALO_DEFAULTS,
-  HALO_SIZE_TOKENS,
   isWidgetVisible,
-  motionDurationMs,
-  motionEaseTuple,
-  motionEasing,
   normalizeHaloPrefs,
   resolveHaloSize,
-  scaled,
   shellRadii,
   surfaceAnchorFractions,
   surfaceTransformOrigin,
@@ -27,6 +26,7 @@ import {
 } from './HaloPreferences';
 import { HaloTabRail, nextVisiblePage, visiblePages, type HaloPage } from './HaloTabRail';
 import { LegacyHaloRail } from './LegacyHaloRail';
+import { publishInAppFootprint } from './islandFootprint';
 
   /* MOTION — TWEEN ONLY. THE SPRINGS ARE DELETED, AND THE DELETION IS THE VERDICT.
    *
@@ -130,78 +130,6 @@ const DIVIDER: React.CSSProperties = {
   background: 'var(--halo-hairline)',
   flexShrink: 0,
 };
-
-/* ══ §12 DATA STATES ═══════════════════════════════════════════════════════════════
- * HALO_STATES.html §146 captions the Deadlines loading state "loading (no shimmer, no
- * spinner)" and line 63 defines `.sk` as a plain block: a fixed height, radius 4, filled
- * with bg/hover. So a skeleton here is a RECTANGLE and nothing else — no animation, no
- * gradient sweep. An animated skeleton in a 56px row reads as a spinner, which is the
- * one thing the handoff rules out.
- *
- * `--halo-bg-hover` is the alias the token block binds to bg/hover (see halo.css:88), so
- * this tracks both themes instead of hardcoding the dark #27272a. */
-const SKELETON: React.CSSProperties = {
-  display: 'block',
-  height: 'var(--halo-t-value)',
-  borderRadius: 4,
-  background: 'var(--halo-bg-hover)',
-  flexShrink: 0,
-};
-
-/**
- * One skeleton bar. `width` is a px number because every call site in HALO_STATES.html
- * sizes its own bar (90px website, 120px deadline, 100px status, 28px open).
- *
- * `aria-hidden` because it carries no information: the label beside it is what a screen
- * reader should announce, and an unlabelled rectangle announced as a graphic would be noise.
- */
-function Skeleton({ width }: { width: number }): React.JSX.Element {
-  return <span aria-hidden="true" style={{ ...SKELETON, width }} />;
-}
-
-/** A label + skeleton pair, the shape every loading state in the file uses. */
-function SkeletonBlock({ label, width }: { label: string; width: number }): React.JSX.Element {
-  return (
-    <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-      <span style={EYEBROW}>{label}</span>
-      <Skeleton width={width} />
-    </div>
-  );
-}
-
-/**
- * Tokens → a compact string. `null` is UNKNOWN and renders an em-dash; a real 0 renders "0".
- * Conflating them is how a widget ends up claiming it measured nothing when it never looked.
- */
-function compactTokens(n: number | undefined): string {
-  if (n == null) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
-
-/** "34 days overdue" / "in 3 days" / "today". Board 2, Deadlines page. */
-function overdueLabel(deltaMs: number | undefined): string {
-  if (deltaMs == null) return '—';
-  const days = Math.floor(Math.abs(deltaMs) / 86_400_000);
-  if (deltaMs < 0) return days <= 0 ? 'overdue today' : `${days} day${days === 1 ? '' : 's'} overdue`;
-  if (days <= 0) return 'today';
-  return `in ${days} day${days === 1 ? '' : 's'}`;
-}
-
-/** Board 1's COMPACT deadline form: "34d overdue". Abbreviated, unlike board 2's
-   *  `overdueLabel()` which spells "34 days overdue" — the pill has ~198px and the full phrase
-   *  does not fit beside the title. Two forms of one value, both from the file. */
-  function formatDeadlineDue(deltaMs: number | undefined): string {
-    if (deltaMs == null) return '—';
-    const days = Math.floor(Math.abs(deltaMs) / 86_400_000);
-    return deltaMs < 0 ? `${days}d overdue` : days <= 0 ? 'today' : `in ${days}d`;
-  }
-
-  /** Overdue uses the signal hue; on-time stays muted. Never a second accent. */
-function overdueColor(isOverdue: boolean | undefined): string {
-  return isOverdue ? 'var(--halo-signal)' : 'var(--halo-muted)';
-}
 
 /** Present only when running inside the real island window. See haloBridge. */
 const bridge = typeof window !== 'undefined' ? window.haloBridge : undefined;
@@ -329,10 +257,16 @@ function useStoreSync(): void {
  * Set WELL ABOVE the store's own idle threshold: the pill must not flicker into an AFK state
  * for the instant between two keystrokes, and the store's threshold is user-configurable while
  * this is a fixed presentation constant. */
-const IDLE_GAP_SHOW_MS = 60_000;
 
 const FIXTURE_APP: NowPayload = { app: 'No app detected', category: '—', tier: 'neutral' };
 
+/**
+ * `halo:get-life` — the compact Life → Schedule view the Schedule page renders.
+ *
+ * WHY THIS IS ONE CALL AND NOT TWO. The page is one 56px row: the nearest CLASS BLOCK and the
+ * open DEADLINES are read together so they can never disagree about `now` (the two queries
+ * used to be two `Date.now()`s, which is enough to place a 00:00 deadline on different days).
+ */
 /** The kinds that have a board-1 pill DESIGN in HALO_STATES.html. Anything else keeps the
  *  app-derived default rather than rendering an undesigned pill. */
 const BOARD1_PILL_KINDS = new Set<CompactKind>([
@@ -413,6 +347,12 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
    *      empty sentence. Creating an entry with zeros would be a fabricated measurement.
    *   2. A `null` field means UNKNOWN, not zero, and the card renders `unknown` for it. */
   const [producers, setProducers] = useState<{ ai?: AiUsagePayload; hud?: HudPayload; deadline?: NextDeadlinePayload; dictation?: DictationPayload }>({});
+  /* The Schedule page's two facts (nearest class block + every open deadline with its alarm),
+   * and the real focus session. All three are MAIN-side reads, so they arrive by pull rather
+   * than through the renderer-owned snapshot. */
+  const [life, setLife] = useState<HaloLifePayload | null>(null);
+  const [lifeError, setLifeError] = useState<string | null>(null);
+  const [focus, setFocus] = useState<HaloFocusState | null>(null);
   /* §12 error state. The producer below used to swallow BOTH a thrown call and an `ok:false`
    * reply into the same "no entry" outcome, so a dead database and an empty one were
    * indistinguishable in the UI — and a dead one looked like a healthy empty list.
@@ -468,9 +408,28 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
          * empty". It is not empty — it is unreadable, and the two must not look alike. */
         dlError = 'Deadlines could not load. Retry.';
       }
+      /* THE LIFE → SCHEDULE VIEW — nearest class block + every open deadline with its alarm.
+       *
+       * Its own error channel, deliberately: `nextDeadline` feeds the PILL and this feeds the
+       * PAGE, so one failing must not blank the other. Same three-state rule as above —
+       * ok:false is a failure (Retry), ok:true with an empty list is a measurement. */
+      let lfPayload: HaloLifePayload | null = null;
+      let lfError: string | null = null;
+      try {
+        const l = await bridge?.getLife?.();
+        if (!cancelled) {
+          if (l && l.ok) lfPayload = l as HaloLifePayload;
+          else lfError = 'Schedule could not load. Retry.';
+        }
+      } catch {
+        if (!cancelled) lfError = 'Schedule could not load. Retry.';
+      }
+
       if (!cancelled) {
         setProducers(next);
         setDeadlinesError(dlError);
+        setLife(lfPayload);
+        setLifeError(lfError);
       }
     };
     pullRef.current = pull;
@@ -478,10 +437,56 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     const id = setInterval(pull, 30000);
     return () => { cancelled = true; clearInterval(id); pullRef.current = null; };
   }, []);
+
+  /* ── THE FOCUS SESSION ────────────────────────────────────────────────────────
+   * Polled FASTER than the other producers (5 s, not 30 s) because this one is a STATE MACHINE
+   * the user drives from the app: starting a session has to appear on the island while they are
+   * still looking at it. The COUNTDOWN does not depend on the poll — `endsAt` is absolute and
+   * the row ticks it locally — so the interval is about catching start/stop, not about the clock.
+   *
+   * Re-running on `expanded` also refreshes it the instant the island opens, which is the same
+   * "the page was showing a 30-second-old answer" fix applied to the producers above. */
+  useEffect(() => {
+    let cancelled = false;
+    const pullFocus = async () => {
+      try {
+        const f = await bridge?.getFocus?.();
+        if (cancelled) return;
+        setFocus(f && f.ok ? (f as HaloFocusState) : null);
+      } catch {
+        /* A failed read is NOT "no session" for the manager, but it is for this row: rendering
+         * the stopwatch is the honest fallback when we cannot see the session. */
+        if (!cancelled) setFocus(null);
+      }
+    };
+    void pullFocus();
+    const id = setInterval(pullFocus, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [expanded]);
+
+  /* REFRESH THE PRODUCERS WHEN THE ISLAND OPENS.
+   *
+   * The pull above runs once on mount and then every 30 s — and the island's root is mounted
+   * for the whole session, so "I just added a deadline" and "the Deadlines page still shows the
+   * answer from up to 30 s ago" were two different moments. That is the "the deadline page
+   * doesn't show my deadlines" report. Opening the island is the one instant the user is
+   * definitely looking at it, so it re-reads then; the interval stays as the background
+   * refresh for a page that is left open. */
+  useEffect(() => {
+    if (expanded) void pullRef.current?.();
+  }, [expanded]);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Set by DictationIsland so a global-shortcut command can toggle recording. */
   const recordToggleRef = useRef<(() => void) | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* THE LAST HOVER SIGNAL MAIN SENT, as `inside:pinned`.
+   *
+   * Main re-publishes its hover state after its own state changes (`halo:open`, `halo:close`,
+   * pin). Every one of those pushes used to re-arm this renderer's close timer — close() told
+   * main, main pushed `inside: false`, the handler re-armed the timer, and the two processes
+   * ping-ponged a no-op close every `closeDelayMs` forever. Ignoring a signal identical to the
+   * one already applied breaks that loop without dropping a real transition. */
+  const lastHoverSignal = useRef<string>('');
 
   /* §5: "Scroll also switches pages." The island has no scrollable content of its own —
    * every page is one fixed-height row — so the wheel is free to mean "next page" instead
@@ -582,10 +587,26 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   // IN-APP MODE: Prefer local DOM hover (see below) so the island never depends
   // on the main process hot-zone geometry or a second window. GPT decision: no
   // separate surface; hover must be a real DOM interaction inside RHEO.
+  /* ONE HOVER AUTHORITY — INCLUDING IN-APP.
+   *
+   * This used to `return` immediately when `inApp`, on the theory that a DOM island can see the
+   * pointer itself. It cannot, in the only configuration that ships: the GPT layer host paints a
+   * compositor surface at the SAME screen rect as the in-app pill, and a Wayland layer surface
+   * takes the pointer before the window underneath ever receives a `pointermove`. So the in-app
+   * copy heard nothing from the DOM, and it had been told to ignore the main process — which is
+   * the one component that polls the real cursor (kdotool) against the padded hot zone. The
+   * island could therefore not open on hover anywhere, which is the reported defect.
+   *
+   * Main's FSM is already the authority for the offscreen copy and for `extraTargets`; the in-app
+   * copy is one more renderer on that same push. There is no second owner any more. */
   useEffect(() => {
-    if (inApp) return;
     if (!bridge?.onHover) return;
     return bridge.onHover(({ inside, pinned: isPinned }) => {
+      /* Dedupe before touching state or timers — see `lastHoverSignal`. A duplicate must not
+       * re-arm a pending close (that is the close-loop described there). */
+      const signal = `${inside ? 1 : 0}:${isPinned ? 1 : 0}`;
+      if (lastHoverSignal.current === signal) return;
+      lastHoverSignal.current = signal;
       setPinned(isPinned);
       setHovered(inside);
       if (isPinned) return void open();
@@ -609,12 +630,15 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
         );
       }
     });
-  }, [inApp, clearTimers, open, hoverTriggered, prefs.trigger.openDelayMs, prefs.trigger.closeDelayMs]);
-  // Local path: keeps the island interactive when running without the native
-  // window, which is how it gets verified in a plain browser. In in-app mode we ALSO
-  // use this path, because the island is DOM inside RHEO and the pointer is directly ours.
+  }, [clearTimers, open, hoverTriggered, prefs.trigger.openDelayMs, prefs.trigger.closeDelayMs]);
+  /* Local path: ONLY for a surface that has no bridge at all (a plain-browser preview of
+   * `halo.html`). In-app is excluded on purpose — it now listens to main's FSM above, and this
+   * rect maths must not run as a second authority there: it computes the pill's position from
+   * `window.innerWidth` + preferences, which cannot know where the layer host actually paints,
+   * so it would disagree with the FSM and re-close what the FSM just opened. */
   useEffect(() => {
-    if (!inApp && bridge?.onHover) return;
+    if (inApp) return;
+    if (bridge?.onHover) return;
     // A click-only or hotkey-only island has no local hover path at all. Registering the
     // listener anyway would let a pointer sample open a surface the user explicitly asked
     // to be pointer-inert.
@@ -628,7 +652,38 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     let wasInside: boolean | null = null;
     const onMove = (e: PointerEvent) => {
       if (pinned) return;
-      const inside = e.clientY <= resolveHaloSize(prefs.scale).compactHeight + prefs.trigger.padY;
+      /* THE HITBOX IS A RECTANGLE, NOT "THE TOP OF THE WINDOW".
+       *
+       * This used `e.clientY <= compactHeight + padY` with no X test at all, so the entire
+       * width of RHEO was a trigger: the island opened from the far-left corner, and "How far
+       * in from the sides" (padX) could not change anything because there was no side boundary
+       * to move. The rect below mirrors `computeHotZone` exactly — the painted surface plus
+       * padX on the free sides, and padY downward from a top edge — so the in-app copy and the
+       * cross-app copy answer to ONE definition of "the hitbox". */
+      const w = expanded ? geom.expanded.width : geom.compact.width;
+      const h = expanded ? geom.expanded.height : geom.compact.height;
+      const base = surfaceAnchorFractions(prefs.edge);
+      const xFrac =
+        prefs.edge === 'top' && prefs.anchor ? ANCHOR_X_FRAC[prefs.anchor] : base.xFrac;
+      const yFrac = base.yFrac;
+      const gap = prefs.edge === 'top' ? clampGapPx(prefs.offsetY) : 0;
+      /* The surface's own placement maths (see the style block): `left`/`top` are fractions of
+       * the viewport, then a LENGTH margin pulls the box back by half/full its size. */
+      const left = window.innerWidth * xFrac - (xFrac === 0.5 ? w / 2 : xFrac === 1 ? w : 0);
+      const top =
+        (yFrac === 0 ? gap : window.innerHeight * yFrac) -
+        (yFrac === 0.5 ? h / 2 : yFrac === 1 ? h : 0);
+      const verticalSide = prefs.edge === 'left' || prefs.edge === 'right';
+      /* Same axis swap as `computeHotZone`: a side edge pads along Y with padX; the top edge
+       * pads left/right with padX and downward with padY. */
+      const sidePad = verticalSide ? prefs.trigger.padX : 0;
+      const horizontalPad = verticalSide ? 0 : prefs.trigger.padX;
+      const downPad = verticalSide ? 0 : prefs.trigger.padY;
+      const inside =
+        e.clientX >= left - horizontalPad &&
+        e.clientX <= left + w + horizontalPad &&
+        e.clientY >= top - sidePad &&
+        e.clientY <= top + h + sidePad + downPad;
       /* Same feed as the bridge path, so `resident: 'hover'` behaves identically with and
        * without a native window. Set BEFORE the first-sample guard below, because that guard
        * exists to suppress the OPEN transition, not to hide the pill — a cursor already inside
@@ -652,7 +707,7 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
       window.removeEventListener('pointermove', onMove);
       clearTimers();
     };
-  }, [inApp, clearTimers, open, close, pinned, hoverTriggered, prefs.trigger.openDelayMs, prefs.trigger.closeDelayMs]);
+  }, [inApp, clearTimers, open, close, pinned, hoverTriggered, expanded, prefs, geom]);
 
   // Real data, when the main process supplies it.
   // The size main gave the window. Without this the renderer can only guess, and on a
@@ -662,9 +717,36 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     return bridge.onGeometry((g) => setGeom(g));
   }, []);
 
+  /* THE PULL THAT MAKES THE SNAPSHOT AUTHORITATIVE AT FIRST PAINT.
+   *
+   * `halo:snapshot` is push-only, and the offscreen island (the cross-app pill) can miss the
+   * first push entirely — it mounts, renders its fixture ("No app detected", 0:00), and stays
+   * there until the next push lands. That is the "glitches to the correct time occasionally"
+   * symptom: the pill flickers between the fixture and the real reading whenever a push is
+   * delayed or dropped. Reading the stored snapshot ONCE at mount closes that window. A push
+   * that wins the race is newer by construction, so it must not be overwritten (guarded). */
+  const snapshotPushed = useRef(false);
+  useEffect(() => {
+    if (!bridge?.getSnapshot) return;
+    let cancelled = false;
+    void Promise.resolve(bridge.getSnapshot())
+      .then((raw: any) => {
+        if (cancelled || snapshotPushed.current) return;
+        if (!raw) return;
+        setRemote({
+          stopwatch: (raw?.stopwatch as StopwatchPayload | null) ?? null,
+          currentApp: (raw?.currentApp as NowPayload | null) ?? null,
+          dictation: (raw?.dictation as DictationPayload | null) ?? null,
+        });
+      })
+      .catch(() => { /* no main process (browser preview): defaults remain */ });
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (!bridge?.onSnapshot) return;
     return bridge.onSnapshot((s) => {
+      snapshotPushed.current = true;
       setRemote({
         // The bridge types payloads as `unknown` because the island and the app
         // can be out of step during a reload; the concrete shapes are the ones
@@ -690,11 +772,38 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     });
   }, []);
 
+  /* THE PULL THAT MAKES `enabled: false` AUTHORITATIVE AT FIRST PAINT.
+   *
+   * `halo:prefs` is push-only and this component starts from `HALO_DEFAULTS` (`enabled: true`).
+   * When the island is off, main creates no handle — so it also has nothing to push with — and
+   * the renderer had no way to discover the truth. It painted a complete pill that no process
+   * owned: the hover FSM was not running, `halo:open` answered "island closed", and the
+   * Settings toggle had no surface left to destroy. Turning the Halo off therefore left a pill
+   * on screen that could not be removed. This reads the stored bag ONCE, before first paint.
+   *
+   * A push that wins the race is newer by construction, so it must not be overwritten by this
+   * slower read — `prefsPushed` guards that. */
+  const prefsPushed = useRef(false);
+  useEffect(() => {
+    if (!bridge?.getPrefs) return;
+    let cancelled = false;
+    void Promise.resolve(bridge.getPrefs())
+      .then((raw) => {
+        if (cancelled || prefsPushed.current) return;
+        setPrefs(normalizeHaloPrefs(raw));
+      })
+      .catch(() => { /* no main process (browser preview): defaults remain, as before */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Size preference from main. The native canvas is always the clamped maximum,
   // so this only affects how much of it the painted surface occupies.
   useEffect(() => {
     if (!bridge?.onPrefs) return;
-    return bridge.onPrefs((raw) => setPrefs(normalizeHaloPrefs(raw)));
+    return bridge.onPrefs((raw) => {
+      prefsPushed.current = true;
+      setPrefs(normalizeHaloPrefs(raw));
+    });
   }, []);
 
   /* HALO §51 "click outside -> unpin + collapse".
@@ -721,6 +830,81 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     window.addEventListener('pointerdown', onDown);
     return () => window.removeEventListener('pointerdown', onDown);
   }, [pinned]);
+
+  /* PRESS-AND-DRAG — reposition the island from the pill itself. Bounded: slop-gated
+   * (HALO \u00a752), pointer-captured (\u00a753), clamped to \u00b1600px, terminates on release, and the
+   * trailing click is suppressed so a drag never toggles the stopwatch. The final resting
+   * position snaps to a predefined edge/anchor/gap (no freeform residue, \u00a7127). Only the
+   * island window drags. */
+  useEffect(() => {
+    if (inApp || !bridge?.drag) return;
+    const SLOP = 6;
+    const INTERACTIVE =
+      'button, a, input, select, textarea, [role="button"], [role="radio"], [role="slider"], [role="tab"], [role="switch"], [role="menuitem"], [data-no-drag]';
+    let pending = false;
+    let engaged = false;
+    let startX = 0;
+    let startY = 0;
+    let pointerId = -1;
+    let suppressClick = false;
+    let captureEl: Element | null = null;
+
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const t = e.target as HTMLElement | null;
+      const surface = t?.closest('.halo-surface') as HTMLElement | null;
+      if (!surface) return;
+      if (t?.closest(INTERACTIVE)) return;
+      pending = true;
+      engaged = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      pointerId = e.pointerId;
+      captureEl = surface;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!pending || e.pointerId !== pointerId) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!engaged) {
+        if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
+        engaged = true;
+        suppressClick = true;
+        try { captureEl?.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        bridge.drag?.({ phase: 'begin', dx: 0, dy: 0 });
+      }
+      bridge.drag?.({ phase: 'update', dx: Math.round(dx), dy: Math.round(dy) });
+    };
+    const finish = (e: PointerEvent) => {
+      if (!pending || e.pointerId !== pointerId) return;
+      if (engaged) {
+        bridge.drag?.({ phase: 'end', dx: 0, dy: 0 });
+      }
+      pending = false;
+      engaged = false;
+      pointerId = -1;
+      captureEl = null;
+      try { (e.target as Element)?.releasePointerCapture?.(e.pointerId); } catch { /* ignore */ }
+    };
+    const onClickCapture = (e: MouseEvent) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    window.addEventListener('click', onClickCapture, true);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('click', onClickCapture, true);
+    };
+  }, [inApp]);
 
 // Escape collapses — a keyboard user must not need a mouse to close this.
     // §5 also gives the expanded panel Ctrl+Left / Ctrl+Right to switch pages. Only Escape
@@ -760,6 +944,22 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   );
   const currentApp = remote?.currentApp ?? FIXTURE_APP;
 
+  /* ══ AFK — HALO_RESULT §7.3 ══════════════════════════════════════════════════════════════
+   * `lastInteractionAtMs` is the store's own heartbeat and the only honest idle signal on Linux
+   * (`getSystemIdleTime()` returns 0). `0` means UNKNOWN and is never "away".
+   *
+   * The threshold is the SAME preference the app's AFK behaviour uses, so the island and the app
+   * cannot disagree about whether you are at the desk. `IDLE_GAP_SHOW_MS` was a private 60s
+   * constant with no relationship to the setting; it is gone. */
+  const [afkPrefs, setAfkPrefs] = useState(() => getAfkPrefs());
+  useEffect(() => {
+    const read = () => setAfkPrefs(getAfkPrefs());
+    read();
+    window.addEventListener('storage', read);
+    return () => window.removeEventListener('storage', read);
+  }, [expanded]);
+
+
   /* HALO_STATES.html line 143 — the TRACKING row's three shapes, derived ONCE so the Focus
    * page and the Now page can never disagree about whether a private window is open.
    * `isPrivate` is tested BEFORE `domain` because main withholds the domain for a private
@@ -777,8 +977,12 @@ const inBrowser = currentApp.category === 'Browser';
   const trackedTarget: { kind: 'win' | 'web' | 'priv'; label: string } | undefined = useMemo(() => {
     if (!currentApp || currentApp.app === 'No app detected') return undefined;
     if (currentApp.isPrivate) return { kind: 'priv', label: 'Private window' };
-    if (currentApp.domain) return { kind: 'web', label: currentApp.domain };
-    if (!inBrowser) return undefined;
+    /* HALO_STATES.html line 143: a BROWSER site shows its domain, a DESKTOP app shows its
+     * name. The `!inBrowser` branch used to return `undefined`, which dropped the name for
+     * every non-browser app — so the open island showed a bare "Stopwatch" with no target
+     * while the pill next to it named the app. That is the "where is the app name" report:
+     * not a missing producer, an inverted branch. */
+    if (inBrowser) return { kind: 'web', label: currentApp.domain ?? currentApp.app };
     return { kind: 'win', label: currentApp.app };
   }, [currentApp, inBrowser]);
 
@@ -892,11 +1096,12 @@ const inBrowser = currentApp.category === 'Browser';
        * So the field is published instead — it is the store's own interaction heartbeat, which
        * is precisely what the AfkGapPayload doc calls for ("heartbeat-fed, because
        * getSystemIdleTime() returns 0 on Linux"). Read-only; it changes no behaviour. */
-      if (snap && snap.lastInteractionAtMs > 0) {
+      if (snap && snap.lastInteractionAtMs > 0 && afkPrefs.enabled) {
         const awayMs = t - snap.lastInteractionAtMs;
-        /* Well above the store's own (user-configurable) idle threshold: the pill must not
-         * flicker into an AFK state in the gap between two keystrokes. */
-        if (awayMs > IDLE_GAP_SHOW_MS) {
+        /* The SAME threshold the preference names, so the expanded card and the pill cannot
+         * disagree about whether the user is away. Passive categories (a film, a game) are idle
+         * by design and must never raise an away state. */
+        if (awayMs >= afkPrefs.thresholdMinutes * 60_000 && !isPassiveCategory(currentApp.category, afkPrefs)) {
           out.push(
             mk('afkGap', { awayMs, since: new Date(snap.lastInteractionAtMs).toISOString() }, { persistent: false }),
           );
@@ -905,7 +1110,7 @@ const inBrowser = currentApp.category === 'Browser';
     if (producers.hud) out.push(mk('hud', producers.hud));
     if (producers.deadline) out.push(mk('nextDeadline', producers.deadline));
     return out;
-  }, [stopwatch, currentApp, remote?.dictation, producers]);
+  }, [stopwatch, currentApp, remote?.dictation, producers, afkPrefs]);
 
   /* User layout: which widgets are on, in what order, how many at once. `visibleOrder`
    * drops hidden kinds; the model's `maxVisible` then caps the roster.
@@ -915,16 +1120,25 @@ const inBrowser = currentApp.category === 'Browser';
    * pill" is excluded only while COLLAPSED, and comes back when the island opens. Passing
    * the same set in both phases — which is what a single unconditional `hiddenKinds` memo
    * does — makes the flag impossible to express, because there is only one set to pass. */
+  /* AUTO-SHOW ACTIVE FEATURES. When `autoShowActive` is on, any kind that is currently
+   * producing an activity is never hidden — active work stays visible even if the user
+   * toggled the widget off in settings. */
   const hiddenKinds = useMemo(() => {
     const order = prefs.order ?? HALO_DEFAULT_ORDER;
     const roster = visibleOrder(prefs);
+    const autoShow = prefs.autoShowActive !== false;
+    const activeKinds = autoShow ? new Set(activities.map((a) => a.kind)) : new Set();
     if (expanded) {
-      return new Set(order.filter((k) => !roster.includes(k)));
+      return new Set(order.filter((k) => !roster.includes(k) && !activeKinds.has(k)));
     }
     return new Set(
-      order.filter((k) => !roster.includes(k) || prefs.widgets?.[k]?.compact === false),
+      order.filter(
+        (k) =>
+          (!roster.includes(k) || prefs.widgets?.[k]?.compact === false) &&
+          !activeKinds.has(k),
+      ),
     );
-  }, [prefs, expanded]);
+  }, [prefs, expanded, activities]);
 
   /* THE COMPACT ROSTER — the widgets allowed to appear in the 232px pill, in the user's
    * order. Passed to the composer so the pill's CONTENTS stop being a function of which
@@ -933,10 +1147,24 @@ const inBrowser = currentApp.category === 'Browser';
    * deterministic; under `off` the pill is the hero numeral only. */
   const compactRoster = useMemo<readonly string[]>(() => {
     if (prefs.compactStyle !== 'always') return [];
-    return (prefs.order ?? HALO_DEFAULT_ORDER).filter(
+    const base = (prefs.order ?? HALO_DEFAULT_ORDER).filter(
       (k) => isWidgetVisible(prefs, k) && prefs.widgets?.[k]?.compact !== false,
     );
-  }, [prefs]);
+    if (prefs.autoShowActive === false) return base;
+    const activeKinds = new Set(activities.map((a) => a.kind));
+    const extra = [...activeKinds].filter((k) => !base.includes(k));
+    return [...base, ...extra];
+  }, [prefs, activities]);
+
+  /* Effective order: visibleOrder(prefs) plus any active kinds when autoShowActive is on,
+   * so a running feature appears even if the user hid its widget. */
+  const effectiveOrder = useMemo(() => {
+    const base = visibleOrder(prefs);
+    if (prefs.autoShowActive === false) return base;
+    const activeKinds = new Set(activities.map((a) => a.kind));
+    const extra = [...activeKinds].filter((k) => !base.includes(k));
+    return [...base, ...extra];
+  }, [prefs, activities]);
 
   const composed = useMemo<ComposedIsland>(
     () =>
@@ -944,13 +1172,13 @@ const inBrowser = currentApp.category === 'Browser';
         now: Date.now(),
         pointerEngaged: expanded,
         phase: expanded ? 'expanded' : 'compact',
-        order: visibleOrder(prefs) as never,
+        order: effectiveOrder as never,
         hidden: hiddenKinds as never,
         maxVisible: prefs.maxVisible,
         residentKind: (prefs.pill?.resident as never) ?? undefined,
         compactRoster: prefs.compactStyle === 'always' ? (compactRoster as never) : undefined,
       }),
-    [activities, expanded, prefs, hiddenKinds, compactRoster],
+    [activities, expanded, prefs, hiddenKinds, compactRoster, effectiveOrder],
   );
 
   const radii = shellRadii(prefs.shape, expanded ? 'expanded' : 'compact', prefs.edge, prefs.radius);
@@ -1009,6 +1237,12 @@ const inBrowser = currentApp.category === 'Browser';
    * freeform positioning, so the model stays a union of anchors rather than two numbers. */
   const xFrac = prefs.edge === 'top' && prefs.anchor ? ANCHOR_X_FRAC[prefs.anchor] : edgeXFrac;
   const gapPx = prefs.edge === 'top' ? clampGapPx(prefs.offsetY) : 0;
+  /* THE DRAG OFFSET — the user's press-and-hold repositioning. The cross-app capsule is
+   * moved by the layer-shell host (margins); the in-app pill is moved HERE, by the same
+   * offset, so the two surfaces cannot end up in different places. `0` when unset, which is
+   * every install that has never dragged. */
+  const dragXPx = Math.round(Number.isFinite(prefs.dragX) ? prefs.dragX : 0);
+  const dragYPx = Math.round(Number.isFinite(prefs.dragY) ? prefs.dragY : 0);
   const origin = surfaceTransformOrigin(prefs.edge);
   /* The transition is written to CSS custom properties rather than left to the
    * stylesheet's hardcoded 250ms, so the stylesheet's `transition` and this component
@@ -1073,6 +1307,29 @@ const inBrowser = currentApp.category === 'Browser';
    * its collapsed form would be a lie about its own state. */
   const showPill =
     prefs.resident === 'off' ? false : prefs.resident === 'always' || expanded || pinned || hovered;
+
+  /* THE APP-SIDE LANE, FROM THE IN-APP PRODUCER.
+   *
+   * In the default path the island is its own always-on-top window and main publishes its rect
+   * over IPC (see `islandFootprint.ts`). When the island is instead mounted INSIDE this renderer
+   * there is no second window and nothing for main to measure — but there IS a real DOM node, so
+   * it reports its own rect. Exactly one producer is live per session, so the two cannot fight.
+   *
+   * Declared HERE, above the `return null` for a disabled island, because a hook after that
+   * return would be conditional: `prefs.enabled` flips at runtime from Settings, and React
+   * forbids a hook whose call count depends on render output. `showPill` is already resolved
+   * above, so nothing here depends on the return being reached.
+   *
+   * `visible` mirrors what is actually PAINTED rather than whether the node exists: the surface
+   * keeps its layout box while `visibility: hidden`, so an un-painted pill would otherwise
+   * reserve a lane for something the user cannot see. */
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!inApp) return;
+    const el = surfaceRef.current;
+    if (!el) return;
+    return publishInAppFootprint(el, expanded ? 'expanded' : 'compact', showPill || expanded);
+  }, [inApp, expanded, showPill]);
 
   /* DOES THIS PAGE HAVE CONTENT OF ITS OWN?
    *
@@ -1144,6 +1401,139 @@ const inBrowser = currentApp.category === 'Browser';
         : 'stopwatchSite'
       : 'stopwatch';
 
+  /* WHICH TIER TINTS THE AMBIENT EDGE.
+   *
+   * The user's wording: "the productivity / neutral / distracting category that is supposed to
+   * give the scent, or like ambient colour". That is the CATEGORY OF WHAT YOU ARE DOING RIGHT
+   * NOW — `NowPayload.tier`, classified by the tracker per app/domain — not the stopwatch's
+   * `activeTier`. `stopwatchStore.setTier()` only accepts 'productive' | 'distracting' and is
+   * never set by the tracker at all, so tinting from it meant the ring was neutral almost
+   * always and flipped only when the user manually cycled a tier: an ambience that never
+   * reacted to the app in front of you.
+   *
+   * `currentApp.tier` is the live reading. The stopwatch tier stays the fallback for the one
+   * case the reading cannot cover — no foreground app at all (`currentApp` is the fixture, whose
+   * tier is the honest 'neutral'). */
+  const ambientTier = currentApp.tier ?? swPayload.tier;
+
+  /* ONE ERROR FOR THE SCHEDULE PAGE. Two producers read the same `deadlines` table — the
+   * single-row one that feeds the pill and the list one that feeds this page — so if either
+   * could not read it, the list on screen is not trustworthy and the page offers its Retry. */
+  const scheduleError = lifeError ?? deadlinesError;
+
+  const passiveNow = isPassiveCategory(currentApp.category, afkPrefs);
+  const idleMs =
+    storeSnap.lastInteractionAtMs > 0 ? Math.max(0, now - storeSnap.lastInteractionAtMs) : 0;
+  const isAway = !!afkPrefs.enabled && idleMs >= afkPrefs.thresholdMinutes * 60_000 && !passiveNow;
+  const awayMs = isAway ? idleMs : null;
+
+  /* RETURN — six seconds of acknowledgement, then the normal pill. Only after a REAL absence:
+   * the heartbeat has to have MOVED. A first mount is not a return. */
+  const awayRef = useRef<{ lastInteraction: number; awayMs: number } | null>(null);
+  const [returnedAfterMs, setReturnedAfterMs] = useState<number | null>(null);
+  /* The latest idle reading, so the effect below can depend on `isAway` ALONE. If `idleMs`
+   * were a dependency, every one-second tick while the acknowledgement is on screen would
+   * clear its 6-second timer and the "Back after 12m" state would last one tick. */
+  const idleRef = useRef({ lastInteraction: storeSnap.lastInteractionAtMs, idleMs });
+  useEffect(() => {
+    idleRef.current = { lastInteraction: storeSnap.lastInteractionAtMs, idleMs };
+  });
+  useEffect(() => {
+    if (isAway) {
+      awayRef.current = { lastInteraction: idleRef.current.lastInteraction, awayMs: idleRef.current.idleMs };
+      return;
+    }
+    const prev = awayRef.current;
+    awayRef.current = null;
+    if (!prev || idleRef.current.lastInteraction <= prev.lastInteraction) return;
+    setReturnedAfterMs(prev.awayMs);
+    const t = window.setTimeout(() => setReturnedAfterMs(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [isAway]);
+
+  const returnConsequence =
+    afkPrefs.action === 'reset-stopwatch' ? 'timer reset'
+      : afkPrefs.action === 'reset-streak' ? 'streak reset'
+        : afkPrefs.action === 'reset-both' ? 'timer and streak reset'
+          : 'timer paused';
+
+  /* ══ THE TIER DWELL — HALO_RESULT §7.2 ══════════════════════════════════════════════════
+   * A window switch must not strobe the edge. The first reading applies at once; after that a
+   * change has to HOLD for 1500ms before it is allowed to move the hairline. */
+  const [dwellTier, setDwellTier] = useState(ambientTier);
+  const dwellRef = useRef(ambientTier);
+  useEffect(() => {
+    if (ambientTier === dwellRef.current) return;
+    const t = window.setTimeout(() => {
+      dwellRef.current = ambientTier;
+      setDwellTier(ambientTier);
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [ambientTier]);
+
+  /* ══ THE BOUND DEADLINE — HALO_RESULT §7.8 ═══════════════════════════════════════════════
+   * The binding lives in memory until a per-deadline time table exists (design §9.3). The
+   * elapsed chip counts from the BINDING, not from the stopwatch total: earlier time is not
+   * credited, exactly as the design specifies. */
+  const [trackedDeadline, setTrackedDeadline] = useState<{ id: string; title: string; startedAt: number } | null>(null);
+  const trackedMs = trackedDeadline ? Math.max(0, now - trackedDeadline.startedAt) : 0;
+  const toggleTrack = useCallback((d: { id: string; title: string }) => {
+    if (trackedDeadline?.id === d.id) {
+      setTrackedDeadline(null);
+      return;
+    }
+    /* Starting to track a deadline is starting the clock: if the stopwatch was paused, resuming
+     * it is the only interpretation of "track time on this" that measures anything. */
+    if (storeSnap.paused) stopwatch.setPaused(false);
+    setTrackedDeadline({ id: d.id, title: d.title, startedAt: Date.now() });
+  }, [storeSnap.paused, trackedDeadline?.id]);
+  const addDeadlineAlarm = useCallback(async (deadlineId: string, leadMin: number) => {
+    const res = await bridge?.addReminder?.(deadlineId, { mode: 'relative', leadMin });
+    if (res && res.ok) return { ok: true };
+    return { ok: false, error: res?.error };
+  }, []);
+  const deleteDeadlineAlarm = useCallback(async (id: string) => {
+    const res = await bridge?.deleteReminder?.(id);
+    if (res && res.ok) return { ok: true };
+    return { ok: false, error: res?.error };
+  }, []);
+
+  /* ══ SESSION COMPLETE, AND THE PILL'S TIME-LEFT STROKE — HALO_RESULT §7.1 ═══════════════
+   * The stroke exists ONLY for a bounded target: an active session with an `endsAt`. The plain
+   * stopwatch and an open-ended session get no stroke, because a ring with no end is a lie. */
+  const sessionActive = !!focus?.ok && !!focus.active;
+  const sessionPaused = !!focus?.paused;
+  const sessionEndsAt = typeof focus?.endsAt === 'number' ? focus.endsAt : null;
+  const sessionStartedAt = typeof focus?.startedAt === 'number' ? focus.startedAt : null;
+  const sessionTotal =
+    sessionEndsAt != null && sessionStartedAt != null ? sessionEndsAt - sessionStartedAt : null;
+  const pillRemaining =
+    sessionActive && sessionTotal && sessionTotal > 0 && sessionEndsAt != null
+      ? Math.min(1, Math.max(0, (sessionEndsAt - now) / sessionTotal))
+      : null;
+  const pillFinal = sessionActive && sessionEndsAt != null && sessionEndsAt - now <= 60_000;
+
+  const durationRef = useRef(0);
+  useEffect(() => {
+    if (sessionActive && sessionTotal && sessionTotal > 0) durationRef.current = sessionTotal;
+  }, [sessionActive, sessionTotal]);
+
+  const prevSessionActive = useRef(false);
+  const [completeMs, setCompleteMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (sessionActive) {
+      prevSessionActive.current = true;
+      setCompleteMs(null);
+      return;
+    }
+    if (!prevSessionActive.current || focus?.ok !== true) return;
+    prevSessionActive.current = false;
+    setCompleteMs(durationRef.current || 0);
+    const t = window.setTimeout(() => setCompleteMs(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [sessionActive, focus?.ok]);
+
+
   /* …UNLESS SOMETHING ELSE IS LIVE.
    *
    * `composed.toast` is the slot model's highest-precedence activity (§5 priority: transient
@@ -1159,15 +1549,29 @@ const inBrowser = currentApp.category === 'Browser';
     ? (composed.toast!.kind as CompactKind)
     : compactKind;
 
-  // Hide the whole island when the user turns it off (resident) or disables it.
-  // Otherwise the capsule stays on screen after the toggle, the reported defect.
+  // ONE OFF, NOT TWO.
+  //
+  // `enabled` is the master switch, and `resident: 'off'` is the Settings option whose own hint
+  // reads "No island at all". Main treats BOTH as a hard kill (`applyHaloPrefs` destroys the
+  // surface), so this component must hide on both. An earlier version let an already-expanded
+  // island survive `resident: 'off'`; because main had destroyed the handle underneath it, that
+  // panel could not be closed by `halo:close` (it answers `island closed`) — a visible ghost
+  // with no owner. The way to keep the island available without a pill on screen is the
+  // "Hidden until hover" option, which keeps the handle and paints nothing until the pointer
+  // arrives.
   if (!prefs.enabled || prefs.resident === 'off') return null;
+  /* SINGLE PAINTER. When the cross-app host is the painter (Halo enabled), the in-app pill is
+   * redundant — rendering it too produces a duplicate pill of a different size. The host owns
+   * the single pill; the in-app mount only keeps the stopwatch clock alive (hooks above already
+   * ran, so reporting to main is unaffected). */
+  if (inApp && prefs.enabled && prefs.resident !== 'off') return null;
 
   return (
     <div className="halo-root" data-halo-root="true" data-phase={expanded ? 'expanded' : 'compact'}>
       <LayoutGroup>
         <motion.div
           layout
+          ref={surfaceRef}
           // §171: the OS-level `prefers-reduced-motion` outranks the in-app liveliness
           // preference, so it forces the same short non-spring path `motionReduced` selects.
           transition={reduce ? STATIC_TRANSITION : surfaceTransition}
@@ -1223,6 +1627,8 @@ const inBrowser = currentApp.category === 'Browser';
               '--halo-scale': String(
                 Math.max(0.1, resolveHaloSize(prefs.scale).typeScale * squeeze),
               ),
+              /* The schedule rows derive their height from this: (row - 4) / 2 = 22 / 26 / 30. */
+              '--halo-row': `${size.rowHeight}px`,
             } as Record<string, string>),
             /* THE REVEAL SCALE — deliberately near 1.
              *
@@ -1241,7 +1647,7 @@ const inBrowser = currentApp.category === 'Browser';
              * fraction, never folded into the percentage — the same double-count the margin
              * comments below describe. Applied only on the top edge; a side edge has no
              * "below the edge" to speak of. */
-            top: yFrac === 0 ? `${gapPx}px` : `${yFrac * 100}%`,
+            top: yFrac === 0 ? `${gapPx + dragYPx}px` : `${yFrac * 100}%`,
             /* BUG (live shared edit, now fixed): this was
                `calc(${xFrac*100}% - ...)`. But `left: ${xFrac*100}%` has ALREADY resolved
                the fraction against the parent width, so subtracting `${xFrac*100}%` again
@@ -1249,7 +1655,7 @@ const inBrowser = currentApp.category === 'Browser';
                `50% - 230px` applied to a 50%-positioned box, landing the surface at
                x=1050 instead of 410. The subtraction must be a LENGTH only —
                half the surface width when centred, the full width when right-anchored. */
-            marginLeft: -(xFrac === 0.5 ? width / 2 : xFrac === 1 ? width : 0),
+            marginLeft: -(xFrac === 0.5 ? width / 2 : xFrac === 1 ? width : 0) + dragXPx,
             /* THE SAME DOUBLE-COUNT, ON THE OTHER AXIS — this is the "opens from the side"
              * bug (see agent/HALO_SIDE_OPEN_REGRESSION.md). `top: ${yFrac*100}%` has ALREADY
              * resolved the fraction against the parent height, so putting `${yFrac*100}%` into
@@ -1258,12 +1664,32 @@ const inBrowser = currentApp.category === 'Browser';
              * on left/right (yFrac=0.5) it computed `50% - height/2` and pushed the surface
              * down by half its own height. The subtraction must be a LENGTH only, exactly
              * like marginLeft above. */
-            marginTop: -(yFrac === 0.5 ? height / 2 : yFrac === 1 ? height : 0),
+            marginTop: -(yFrac === 0.5 ? height / 2 : yFrac === 1 ? height : 0) + dragYPx,
             transformOrigin: origin,
             borderTopLeftRadius: radii.topLeft,
             borderTopRightRadius: radii.topRight,
             borderBottomRightRadius: radii.bottomRight,
             borderBottomLeftRadius: radii.bottomLeft,
+            /* THE EDGE MODEL — HALO_RESULT §2, §4.2. One edge, three channels:
+             *   border-color + bloom  = PRODUCTIVITY TIER (this block)
+             *   2px ink stroke        = TIME LEFT (PillEdge, below)
+             *   dashed red            = AFK (the layer below; the tier is switched OFF)
+             * The old `0 0 0 1px var(--tier-x)` ring put the tier on the STROKE channel, where
+             * it was indistinguishable from progress; it is deleted. Light mode multiplies the
+             * bloom by 0 through `--halo-bloom`, so the warm-paper edge is a hairline only. */
+            ...(prefs.ambient === 'edge' && !isAway
+              ? {
+                  borderColor: `color-mix(in srgb, var(--tier-${dwellTier}) ${dwellTier === 'neutral' ? 40 : 55}%, var(--halo-border))`,
+                  boxShadow: expanded
+                    ? 'var(--halo-shadow)'
+                    : `var(--halo-shadow), 0 0 12px color-mix(in srgb, var(--tier-${dwellTier}) calc(${dwellTier === 'neutral' ? 14 : 28}% * var(--halo-bloom)), transparent)`,
+                }
+              : isAway
+                /* AFK kills the BLOOM, not the elevation: `--halo-shadow` is the pill's lift off
+                 * the desktop, and flattening it would make the island look broken rather than
+                 * away. Only the tier's coloured glow is suppressed. */
+                ? { borderColor: 'transparent', boxShadow: 'var(--halo-shadow)' }
+                : {}),
           }}
           /* Stop a click on the island from also reading as a "click outside" (HALO §51).
            * Without this the pin button's own click would bubble to the document listener
@@ -1276,6 +1702,22 @@ const inBrowser = currentApp.category === 'Browser';
           data-halo-width={composed.expanded.widthClass}
           aria-describedby={residentEmpty ? 'halo-resident-state' : undefined}
         >
+          {/* TIME LEFT, drawn over the hairline. `remaining === null` renders NOTHING: a ring
+              with no bounded target would be invented progress (HALO_RESULT §2). */}
+          {!expanded && showPill && (
+            <PillEdge
+              width={width}
+              height={height}
+              remaining={pillRemaining}
+              paused={sessionPaused}
+              final={pillFinal}
+            />
+          )}
+
+          {/* AFK: a dashed layer, not a hue swap, so the two reds cannot be confused. The tier
+              bloom is already switched off by the style block above. */}
+          {isAway && <span className="halo-afk-edge" aria-hidden="true" />}
+
           {/* Screen-reader surface for the resident's honest state. Never invents a value. */}
           {residentEmpty && (
             <span id="halo-resident-state" className="sr-only">
@@ -1340,7 +1782,12 @@ const inBrowser = currentApp.category === 'Browser';
         {/* COMPACT PIP: the live state's value inside the 232px capsule, plus trailing
             identity dots for activities with no compact content of their own. */}
         {/* `compactStyle: 'off'` — no pip, no dots. The hero numeral is the whole pill. */}
-        {prefs.compactStyle !== 'off' && !expanded && showPill && composed.live && (
+        {/* `composed.live?.kind !== 'afkGap'` — the afk/coffee pip overflows the pill's
+            right edge into the identity dots: it is an interrupt, not a "live value", and
+            HALO_STATES.html gives it no board-1 pill design. The card still appears in
+            the expanded strip's live+rail row, so no information is lost — only the
+            mis-placement inside the capsule is. */}
+        {prefs.compactStyle !== 'off' && !expanded && showPill && composed.live && composed.live.kind !== 'afkGap' && (
           /* CENTRED ON THE REAL PILL HEIGHT, not `top: 4`.
            *
            * `top: 4` and the dots' `top: 18` were both written for the old fixed 40px pill.
@@ -1402,19 +1849,33 @@ const inBrowser = currentApp.category === 'Browser';
               overflow: 'hidden',
             }}
           >
-            <CompactPill
-              kind={pillKind}
-              stopwatch={swPayload}
-              now={currentApp}
+            <PillSubject
+              snapshot={storeSnap}
+              focus={focus}
+              now={now}
+              tracked={trackedTarget}
+              awayMs={awayMs}
+              returnedAfterMs={returnedAfterMs}
+              returnConsequence={returnConsequence}
+              completeMs={completeMs}
+              deadlineTitle={trackedDeadline?.title ?? null}
               fBody={size.fBody}
-              listening={producers.dictation?.state === 'recording'}
-              usageFraction={producers.ai?.usageFraction}
-              hudCount={producers.hud?.activeSessions ?? undefined}
-              deadlineTitle={producers.deadline?.title}
-              deadlineDue={
-                producers.deadline?.deltaMs !== undefined
-                  ? formatDeadlineDue(producers.deadline.deltaMs)
-                  : undefined
+              fallback={
+                <CompactPill
+                  kind={pillKind}
+                  stopwatch={swPayload}
+                  now={currentApp}
+                  fBody={size.fBody}
+                  listening={producers.dictation?.state === 'recording'}
+                  usageFraction={producers.ai?.usageFraction}
+                  hudCount={producers.hud?.activeSessions ?? undefined}
+                  deadlineTitle={producers.deadline?.title}
+                  deadlineDue={
+                    producers.deadline?.deltaMs !== undefined
+                      ? formatDeadlineDue(producers.deadline.deltaMs)
+                      : undefined
+                  }
+                />
               }
             />
           </div>
@@ -1431,7 +1892,7 @@ const inBrowser = currentApp.category === 'Browser';
          * deleted while its `halo:set-pinned` IPC stayed wired. */}
         {expanded && prefs.uiVersion === 'legacy' && (
           <LegacyHaloRail
-            tab={tab === 'deadlines' || tab === 'now' ? 'focus' : tab}
+            tab={tab === 'deadlines' ? 'focus' : tab}
             onSelect={(next) => setTab(next)}
             pinned={pinned}
             onTogglePin={togglePin}
@@ -1464,15 +1925,28 @@ const inBrowser = currentApp.category === 'Browser';
          *
          * So the Figma layout gets `FocusPageRow`, transcribed node by node, and the legacy
          * layout keeps the hero it has always had. Gated on `uiVersion` so the two designs
-         * cannot bleed into each other. The compact pill still uses `StopwatchHero` in BOTH
-         * layouts — the file specifies one compact instance, and it is unchanged. */}
+         * cannot bleed into each other. The COMPACT pill is `CompactPill` in both layouts
+         * (`PillSubject` only overlays the away/return/complete/session/bound states on top of
+         * it), because the file specifies one compact instance. */}
         {expanded && tab === 'focus' && prefs.uiVersion === 'figma' && (
           <FocusPageRow
             snapshot={storeSnap}
-            productiveMs={storeSnap.productiveMs}
-            onReset={() => stopwatch.reset()}
+            onReset={() => {
+              /* Reset ends the deadline binding too: the binding was created to measure THIS
+               * stopwatch run, and leaving it live over a zeroed clock would keep claiming time. */
+              setTrackedDeadline(null);
+              stopwatch.reset();
+            }}
             onTogglePause={() => stopwatch.setPaused(!storeSnap.paused)}
             tracked={trackedTarget}
+            trackedTier={currentApp.tier ?? null}
+            focus={focus}
+            now={now}
+            awayMs={awayMs}
+            deadlineTitle={trackedDeadline?.title ?? null}
+            completeMs={!sessionActive ? completeMs : null}
+            onDismissComplete={() => setCompleteMs(null)}
+            onEditFocus={() => bridge?.navigate?.('/activity?tab=focus')}
           />
         )}
 
@@ -1553,280 +2027,43 @@ const inBrowser = currentApp.category === 'Browser';
           </div>
         )}
 
-        {expanded && tab === 'now' && (
-          <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
-            {/*
-              §12 DATA STATES. HALO_STATES.html:110-111 designs two Now states this row did
-              not have: `waiting` and `failed`.
-
-              `waiting` is `currentApp === null`, which is NOT the same as "no app". null means
-              no reading has arrived yet; rendering that as "No app detected" (the old
-              behaviour) asserted a measurement that had not been taken. So null now renders
-              the file's own waiting copy with skeletons for the parts still unknown.
-
-              `failed` is a separate branch from `waiting`, not a third flavour of it: the
-              reason the reading failed is the useful thing, and the file gives it a Retry.
-              There is no error channel on NowPayload today, so this branch is reached by
-              the string the existing producer already emits rather than by inventing one —
-              see the note on the check below.
-            */}
-            {currentApp === null ? (
-              <>
-                <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                  <span style={EYEBROW}>App</span>
-                  <span style={{ fontSize: 'var(--halo-t-value)', color: 'var(--halo-muted)' }}>
-                    Reading the current app…
-                  </span>
-                </div>
-                <span aria-hidden="true" style={DIVIDER} />
-                <SkeletonBlock label="Website" width={90} />
-                <span aria-hidden="true" style={DIVIDER} />
-              </>
-            ) : /failed|denied|error/i.test(currentApp.app) ? (
-              /* HALO_STATES.html:111. Clamped to 2 lines there; same clamp here so a long OS
-                 error string can never grow the row past size.rowHeight. */
-              <>
-                <span
-                  style={{
-                    fontSize: 'var(--halo-t-value)',
-                    color: 'var(--halo-text)',
-                    maxWidth: 230,
-                    lineHeight: 1.25,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {currentApp.app}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void pullRef.current?.()}
-                  aria-label="Retry reading the current app"
-                  style={{
-                    width: 44, height: 44, borderRadius: 999, flexShrink: 0,
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    border: '1px solid var(--halo-hairline)', background: 'transparent',
-                    color: 'var(--halo-muted)', cursor: 'pointer',
-                  }}
-                >
-                  <RotateCcw size={16} strokeWidth={2} aria-hidden="true" />
-                </button>
-                <span aria-hidden="true" style={DIVIDER} />
-              </>
-            ) : currentApp.app === 'No app detected' ? (
-              /* HALO_STATES.html `idle`: "No active app" AND "Not in a browser", both muted.
-               * Distinct from `waiting` above — the reading arrived and said nothing is
-               * running, which is a measurement. */
-              <>
-                <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                  <span style={EYEBROW}>App</span>
-                  <span style={{ fontSize: 'var(--halo-t-value)', color: 'var(--halo-dim)' }}>
-                    No active app
-                  </span>
-                </div>
-                <span aria-hidden="true" style={DIVIDER} />
-              </>
-            ) : (
-              <>
-            <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-              <span style={EYEBROW}>App</span>
-              <div className="flex items-baseline" style={{ gap: 8, minWidth: 0 }}>
-                <span className="truncate" style={{ fontSize: 'var(--halo-t-value)', color: 'var(--halo-text)' }}>
-                  {currentApp.app}
-                </span>
-                {/* `null` here means we have no reading yet — which is not the same as zero minutes. */}
-                {typeof currentApp.secondsInApp === 'number' && currentApp.secondsInApp > 0 && (
-                  <span style={{ fontSize: 'var(--halo-t-label)', color: 'var(--halo-muted)' }}>
-                    {Math.round(currentApp.secondsInApp / 60)} min
-                  </span>
-                )}
-              </div>
-            </div>
-            <span aria-hidden="true" style={DIVIDER} />
-                <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                  <span style={EYEBROW}>Website</span>
-                  {/* The three states of HALO_STATES.html line 113 (`web`). Previously this
-                      rendered `inBrowser ? "Not in a browser" : "No site data"` — INVERTED, so it
-                      told you that you were not in a browser precisely while you were in one, and
-                      had no third state because main never published a domain. */}
-                  {currentApp.isPrivate ? (
-                    <span className="flex items-center" style={{ gap: 6 }}>
-                      <Lock size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)' }} />
-                      <span style={{ fontSize: 'var(--halo-t-value)', color: 'var(--halo-dim)' }}>
-                        Private window
-                      </span>
-                    </span>
-                  ) : currentApp.domain ? (
-                    <span className="flex items-center" style={{ gap: 6 }}>
-                      <Globe size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)' }} />
-                      <span className="truncate" style={{ fontSize: 'var(--halo-t-value)', color: 'var(--halo-text)' }}>
-                        {currentApp.domain}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center" style={{ gap: 6 }}>
-                      <Globe size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)' }} />
-                      <span style={{ fontSize: 'var(--halo-t-value)', color: 'var(--halo-dim)' }}>
-                        Not in a browser
-                      </span>
-                    </span>
-                  )}
-                </div>
-                <span aria-hidden="true" style={DIVIDER} />
-              </>
-            )}
-            <div className="flex flex-col" style={{ gap: 4, minWidth: 0 }}>
-              <span style={EYEBROW}>AI usage</span>
-{producers.ai ? (
-                  <div className="flex items-center" style={{ gap: 8 }}>
-                    <span className="font-mono tabular-nums" style={{ fontSize: 'var(--halo-t-value)' }}>
-                      {/* Board 2 prints the PERCENTAGE, not a token count: "AI USAGE  62%".
-                          * `usageFraction` is 0..1 and is only set when the producer can report a
-                          * real denominator. With no denominator the row shows the token count
-                          * instead, and there is no invented percentage anywhere. */}
-                      {typeof producers.ai.usageFraction === 'number'
-                        ? `${Math.round(producers.ai.usageFraction * 100)}%`
-                        : compactTokens(producers.ai.tokensToday)}
-                    </span>
-                    {/* board 2: a 4px track with a #6fb38f fill — the file's only accent. */}
-                    {typeof producers.ai.usageFraction === 'number' && (
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 72,
-                          height: 4,
-                          borderRadius: 2,
-                          background: 'var(--halo-raised)',
-                          display: 'block',
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: 'block',
-                            width: `${Math.round(Math.max(0, Math.min(1, producers.ai.usageFraction)) * 100)}%`,
-                            height: '100%',
-                            borderRadius: 2,
-                            background: 'var(--halo-accent)',
-                          }}
-                        />
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                /* honest: no ai_usage rows today is UNKNOWN, so no percentage is invented */
-                <span style={{ fontSize: 'var(--halo-t-label)', color: 'var(--halo-muted)' }}>
-                  No usage data yet
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
+        {/* ══ THE SCHEDULE PAGE — a compact LIFE → SCHEDULE view ══════════════════
+         *
+         * WHAT THIS REPLACED. The page used to print ONE deadline as three labelled figures —
+         * NEXT DEADLINE | STATUS | OPEN — which is why the user could only ever see one thing:
+         * `halo:get-next-deadline` returns a single row by design, and there was no list behind
+         * it. The remaining width was a divider and empty space, and adding a second deadline
+         * changed nothing on screen.
+         *
+         * WHAT IT IS NOW. The Life page's two live facts, in one scrollable column that is
+         * exactly `size.rowHeight` tall:
+         *   - the NEAREST CLASS BLOCK (from `schedule_entries`, recurring weekday + HH:MM), and
+         *   - EVERY open DEADLINE, each with the ALARM the user set on it (`remind_at`).
+         *
+         * WHY A SCROLLER AND NOT A TALLER PAGE. The expanded surface is a fixed preset
+         * (134px on Medium = 1 + 12 + 56 + 8 + 44 + 12 + 1), so a page may never exceed
+         * `rowHeight`. A list that grows with the data would push the tab rail out of the
+         * window — the "adding new stuff breaks the UI" report. The height is fixed, the rows
+         * are fixed, and the overflow scrolls: adding the twentieth deadline cannot move
+         * anything outside the panel.
+         *
+         * The wheel is STOPPED here on purpose. The surface's own handler treats a wheel as
+         * "next page", so without this one flick over the list would flip to Tools instead of
+         * scrolling the deadlines the user was trying to reach. */}
         {expanded && tab === 'deadlines' && (
-          <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
-            {/*
-              §12 DATA STATES. HALO_STATES.html:117-121 designs FOUR Deadlines states and the
-              row had two. The distinction that matters is the one already called out in
-              RESULT.md §2.7 and preserved in the old comment below:
-
-                count > 0            -> populated
-                count === 0          -> "0 deadlines"  (a MEASUREMENT, not an unknown)
-                producer absent      -> loading skeletons (never the unknown sentence)
-                producer failed      -> the file's error copy + a Retry that exists
-
-              `0 deadlines` is deliberately NOT merged into the empty state. Zero open
-              deadlines is a real, actionable fact; "we could not read the table" is not.
-            */}
-            {deadlinesError ? (
-              <>
-                <span
-                  style={{
-                    fontSize: 'var(--halo-t-value)',
-                    color: 'var(--halo-text)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {deadlinesError}
-                </span>
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => void pullRef.current?.()}
-                  aria-label="Retry loading deadlines"
-                  style={{
-                    width: 44, height: 44, borderRadius: 999, flexShrink: 0,
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    border: '1px solid var(--halo-hairline)', background: 'transparent',
-                    color: 'var(--halo-muted)', cursor: 'pointer',
-                  }}
-                >
-                  <RotateCcw size={16} strokeWidth={2} aria-hidden="true" />
-                </button>
-              </>
-            ) : !producers.deadline ? (
-              /* HALO_STATES.html:119 — three skeletons, widths copied from the file.
-                 `aria-busy` marks the row as settling without claiming it has failed. */
-              <div
-                className="flex items-center"
-                aria-busy="true"
-                style={{ gap: 'var(--halo-gap-loose)', width: '100%' }}
-              >
-                <SkeletonBlock label="Next deadline" width={120} />
-                <span aria-hidden="true" style={DIVIDER} />
-                <SkeletonBlock label="Status" width={100} />
-                <span aria-hidden="true" style={DIVIDER} />
-                <SkeletonBlock label="Open" width={28} />
-              </div>
-            ) : producers.deadline.count > 0 ? (
-              <>
-                <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                  <span style={EYEBROW}>Next deadline</span>
-                  <span className="truncate" style={{ fontSize: 'var(--halo-t-value)' }}>
-                    {producers.deadline.title ?? 'Untitled'}
-                  </span>
-                </div>
-                <span aria-hidden="true" style={DIVIDER} />
-                <div className="flex flex-col" style={{ gap: 2 }}>
-                  <span style={EYEBROW}>Status</span>
-                  <span style={{ fontSize: 'var(--halo-t-value)', color: overdueColor(producers.deadline.isOverdue) }}>
-                    {overdueLabel(producers.deadline.deltaMs)}
-                  </span>
-                </div>
-                <span aria-hidden="true" style={DIVIDER} />
-                <div className="flex flex-col" style={{ gap: 2 }}>
-                  <span style={EYEBROW}>Open</span>
-                  <span className="font-mono tabular-nums" style={{ fontSize: 'var(--halo-t-value)' }}>
-                    {producers.deadline.count}
-                  </span>
-                </div>
-              </>
-            ) : (
-              /* HALO_STATES.html:118 — the empty state names the fix ("Add one in Schedule")
-                 and ships the arrow button that performs it, so the row is actionable rather
-                 than a dead end. The button navigates; it does not create (handoff §11). */
-              <>
-                <span style={{ fontSize: 'var(--halo-t-value)', color: 'var(--halo-muted)', whiteSpace: 'nowrap' }}>
-                  No open deadlines. Add one in Schedule.
-                </span>
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => bridge?.navigate?.('/life')}
-                  aria-label="Open Schedule"
-                  style={{
-                    width: 44, height: 44, borderRadius: 999, flexShrink: 0,
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    border: '1px solid var(--halo-hairline)', background: 'transparent',
-                    color: 'var(--halo-muted)', cursor: 'pointer',
-                  }}
-                >
-                  <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
-                </button>
-              </>
-            )}
-          </div>
+          <SchedulePageRow
+            life={life}
+            error={scheduleError}
+            rowHeight={size.rowHeight}
+            now={now}
+            onRetry={() => void pullRef.current?.()}
+            onOpenSchedule={() => bridge?.navigate?.('/life')}
+            onAddAlarm={addDeadlineAlarm}
+            onDeleteAlarm={deleteDeadlineAlarm}
+            trackingId={trackedDeadline?.id ?? null}
+            trackedMs={trackedMs}
+            onToggleTrack={toggleTrack}
+          />
         )}
 
         {expanded && tab === 'tools' && (

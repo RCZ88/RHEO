@@ -73,9 +73,30 @@ mark[${MARK_ATTR}][${ACTIVE_ATTR}] {
   100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
 }
 mark[${MARK_ATTR}][${PULSE_ATTR}] { animation: df-find-ring 1.1s ease-out 1; }
+/* ── Open glow: announces the bar the moment Ctrl+F opens it. ──
+   A soft amber halo that flares on mount and settles to a gentle persistent
+   glow, so the bar is impossible to miss and clearly reads as "open". */
+@keyframes df-find-open-glow {
+  0%   { opacity: 0.95; transform: scale(1.06); filter: blur(14px); }
+  45%  { opacity: 0.6;  transform: scale(1.02); filter: blur(12px); }
+  100% { opacity: 0.32; transform: scale(1.0);  filter: blur(10px); }
+}
+.df-find-open-glow {
+  animation: df-find-open-glow 1.25s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
+}
+/* A second, slower pulse on the bar's outline so it "breathes" while open. */
+@keyframes df-find-bar-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.30), 0 0 22px -2px rgba(251, 191, 36, 0.34); }
+  50%      { box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.55), 0 0 30px 0px rgba(251, 191, 36, 0.50); }
+}
+.df-find-bar-glow {
+  animation: df-find-bar-breathe 2.6s ease-in-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   mark[${MARK_ATTR}] { transition: none; }
   mark[${MARK_ATTR}][${PULSE_ATTR}] { animation: none; }
+  .df-find-open-glow { animation: none; opacity: 0.32; transform: none; }
+  .df-find-bar-glow { animation: none; }
 }
 `;
 
@@ -748,15 +769,21 @@ export function NativeFindOverlay({
         data-df-find-bar
         style={anchorStyle(anchor)}
         onPointerDown={startDrag}
-        className="w-fit max-w-[min(92vw,420px)]"
+        className="relative w-fit max-w-[min(92vw,420px)]"
       >
+        {/* ── Open glow: a soft amber halo that flares on mount so the bar is
+            impossible to miss the moment Ctrl+F opens it. ── */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -inset-2 rounded-[18px] bg-amber-400/25 blur-xl df-find-open-glow"
+        />
         {/* ── The instrument ── */}
         <div
           role="search"
           aria-label="Find in page"
           style={{ userSelect: 'none', touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
-          className={`flex items-center gap-1.5 rounded-[12px] border border-white/10 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] pl-1 pr-1.5 py-1.5 transition-shadow ${
-            dragging ? 'shadow-xl shadow-black/60' : 'shadow-lg shadow-black/40'
+          className={`relative flex items-center gap-1.5 rounded-[12px] border border-amber-400/30 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] pl-1 pr-1.5 py-1.5 transition-shadow ${
+            dragging ? 'shadow-xl shadow-black/60' : 'shadow-lg shadow-black/40 df-find-bar-glow'
           }`}
         >
           <Search size={15} className="shrink-0 text-zinc-500" />

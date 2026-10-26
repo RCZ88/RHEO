@@ -363,7 +363,7 @@ html.light .dk-root {
 }
 
 .dk-av.dk-ai {
-  background: linear-gradient(140deg, #f472b6, #a78bfa);
+  background: var(--page-accent, #8b5cf6);
   color: #0b0b0d;
 }
 
@@ -384,7 +384,7 @@ html.light .dk-root {
   background: var(--raised);
   border: 1px solid var(--line-2);
   padding: 11px 16px;
-  border-radius: 16px 16px 4px 16px;
+  border-radius: 12px 12px 4px 12px;
   color: #f4f4f5;
 }
 
@@ -395,21 +395,21 @@ html.light .dk-root {
 
 /* Enhanced AI bubble — gradient bg, left accent bar, shadow */
 .dk-bubble.dk-bubble-ai {
-  background: linear-gradient(135deg, rgba(24,24,27,0.8) 0%, rgba(9,9,11,0.6) 100%);
-  border: 1px solid rgba(63, 63, 70, 0.4);
-  border-left: 2px solid rgba(167, 139, 250, 0.5);
+  background: var(--surface-2, rgba(24, 24, 27, 0.8));
+  border: 1px solid var(--line-2, rgba(63, 63, 70, 0.4));
+  border-left: 2px solid var(--page-accent, #8b5cf6);
   padding: 11px 16px 11px 14px;
-  border-radius: 4px 16px 16px 16px;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.15);
+  border-radius: 4px 12px 12px 12px;
+  box-shadow: none;
 }
 
 /* User bubble — keep existing + add subtle glow */
 .dk-bubble.dk-bubble-user {
-  background: linear-gradient(135deg, rgba(236,72,153,0.12) 0%, rgba(236,72,153,0.06) 100%);
-  border: 1px solid rgba(236,72,153,0.2);
+  background: var(--raised, rgba(39, 39, 42, 0.6));
+  border: 1px solid var(--line-2, rgba(63, 63, 70, 0.4));
   padding: 11px 16px;
-  border-radius: 16px 16px 4px 16px;
-  color: #f4f4f5;
+  border-radius: 12px 12px 4px 12px;
+  color: var(--tp, #f4f4f5);
 }
 
 /* System messages — full-width, dim, italic */
@@ -1108,7 +1108,12 @@ html.light .dk-root {
 
 /* --- Responsive --- */
 @media (max-width: 640px) {
-  .dk-wrap { padding: 12px 16px 20px; }
+  /* The shorthand resets padding-RIGHT — which at this breakpoint silently
+     killed the navrail gutter: the rail painted min(188px, 22vw) while the
+     wrap reserved 16px, so the canvas was covered by up to ~120px of rail.
+     Same variable as the base rule, restated AFTER the shorthand, so the
+     "reserve exactly what the rail paints" invariant survives every width. */
+  .dk-wrap { padding: 12px 16px 20px; padding-right: var(--dk-navrail-actual, min(188px, 22vw)); }
   .dk-stream { padding: 16px 16px 8px; }
   .dk-msg { max-width: 94%; }
   .dk-strip { grid-template-columns: 1fr; }

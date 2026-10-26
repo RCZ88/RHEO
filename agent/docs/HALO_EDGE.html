@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-size="M">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halo edge model, focus session, schedule</title>
+<style>
+/* Tokens. Island tokens match halo.css. Tier tokens match index.css. New tokens are marked NEW. */
+[data-theme="dark"]{--surface:#09090b;--raised:#18181b;--tab:#27272a;--border:#2e2e33;--text:#fafafa;--muted:#a1a1aa;--dim:#8b8b94;--accent:#6fb38f;--on-accent:#09090b;--signal:#d97706;
+ --tier-productive:#22c55e;--tier-neutral:#3b82f6;--tier-distracting:#ef4444;--stage:#3b4252;--bloom:1}
+[data-theme="light"]{--surface:#fcfbf8;--raised:#f5f2ec;--tab:#edeae2;--border:rgb(28 25 23 / .10);--text:#1c1917;--muted:#57534e;--dim:#6f665e;--accent:#0e7490;--on-accent:#fff;--signal:#a8500a;
+ --tier-productive:#166534;--tier-neutral:#1d4ed8;--tier-distracting:#b91c1c;--stage:#cfc8b8;--bloom:0}
+:root{ /* NEW tokens */
+ --away:var(--tier-distracting);      /* AFK. Same red as distracting, different grammar (dashed, no bloom). */
+ --ring:var(--text);                  /* time-left stroke. Not a hue, so it never clashes with tier colour. */
+ --ring-w:2px;--ring-w-final:3px;
+ --ease:cubic-bezier(.16,1,.3,1);
+}
+[data-size="S"]{--w:480;--pad:8;--gap:8;--row:48;--ch:28;--cw:182;--cp:12;--f-body:11;--hero:22;--f-val:14;--ic:12;--scale:.85}
+[data-size="M"]{--w:560;--pad:12;--gap:8;--row:56;--ch:32;--cw:198;--cp:14;--f-body:12;--hero:26;--f-val:14;--ic:14;--scale:1}
+[data-size="L"]{--w:680;--pad:16;--gap:12;--row:64;--ch:40;--cw:227;--cp:17;--f-body:14;--hero:31;--f-val:16;--ic:17;--scale:1.2}
+*{box-sizing:border-box;margin:0}
+body{background:var(--stage);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif;padding:24px}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+h1{font-size:18px;font-weight:500}h2{font:400 12px "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;margin:32px 0 12px}
+.note{font-size:13px;max-width:760px;margin:4px 0}
+.cap{font:400 11px "JetBrains Mono",monospace;margin:14px 0 6px}
+.bar{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap;align-items:center}
+.bar button{height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--border);background:var(--raised);color:var(--text);font:inherit;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--tab);font-weight:500;box-shadow:0 0 0 2px var(--accent)}
+.bar label{font-size:13px;display:flex;gap:8px;align-items:center}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,max-content));gap:12px 24px;align-items:start}
+.cell{display:flex;flex-direction:column;gap:6px}
+/* ===== THE PILL ===== */
+.pill{position:relative;display:inline-flex;align-items:center;gap:8px;width:calc(var(--cw)*1px);height:calc(var(--ch)*1px);padding:0 calc(var(--cp)*1px);border-radius:999px;background:var(--surface);
+ border:1px solid var(--bc,var(--border));box-shadow:var(--bl,none);font-size:calc(var(--f-body)*1px);white-space:nowrap;overflow:visible;
+ transition:border-color 250ms var(--ease),box-shadow 250ms var(--ease)}
+/* AMBIENT = hairline tint + bloom. Never the stroke. */
+.pill.t-neutral{--bc:color-mix(in srgb,var(--tier-neutral) 40%,var(--border));--bl:0 0 10px color-mix(in srgb,var(--tier-neutral) calc(14% * var(--bloom)),transparent)}
+.pill.t-productive{--bc:color-mix(in srgb,var(--tier-productive) 55%,var(--border));--bl:0 0 12px color-mix(in srgb,var(--tier-productive) calc(28% * var(--bloom)),transparent)}
+.pill.t-distracting{--bc:color-mix(in srgb,var(--tier-distracting) 55%,var(--border));--bl:0 0 12px color-mix(in srgb,var(--tier-distracting) calc(28% * var(--bloom)),transparent)}
+/* AFK = dashed away-red hairline. Tier bloom is suppressed while away. */
+.pill.afk{--bc:transparent;box-shadow:none}
+.pill.afk::after{content:"";position:absolute;inset:-1px;border-radius:inherit;border:1px dashed var(--away);pointer-events:none}
+/* PROGRESS = 2px stroke over the hairline. Only exists when there is a bounded target. */
+.ring{position:absolute;inset:-1px;pointer-events:none;overflow:visible}
+.ring path{fill:none;stroke:var(--ring);stroke-width:var(--ring-w);stroke-linecap:butt;stroke-dasharray:100 200;transition:stroke-dashoffset 1s linear}
+.ring.final path{stroke-width:var(--ring-w-final)}
+.ring.paused path{stroke:var(--dim);transition:none}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}.dot.off{background:var(--dim)}
+.time{font:500 calc(var(--f-body)*1px)/1 "JetBrains Mono",monospace;white-space:nowrap}.time i{font-style:normal;color:var(--dim)}.time.frozen{color:var(--dim)}
+.sep{width:1px;height:calc(var(--f-body)*1px);background:var(--border);flex:none}
+.nm{overflow:hidden;text-overflow:ellipsis;min-width:0;font-weight:500}
+.muted{color:var(--dim)}.away{color:var(--away);font-weight:500}.amber{color:var(--signal)}
+svg.i{width:calc(var(--ic)*1px);height:calc(var(--ic)*1px);flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.s{width:11px;height:11px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.b{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* ===== THE PANEL ===== */
+.halo{width:calc(var(--w)*1px);padding:calc(var(--pad)*1px);border:1px solid var(--border);border-radius:12px;background:var(--surface);display:flex;flex-direction:column;gap:calc(var(--gap)*1px);transition:border-color 250ms var(--ease)}
+.halo.t-productive{border-color:color-mix(in srgb,var(--tier-productive) 55%,var(--border))}
+.halo.t-distracting{border-color:color-mix(in srgb,var(--tier-distracting) 55%,var(--border))}
+.content{height:calc(var(--row)*1px);padding:0 4px;display:flex;align-items:center;gap:calc(var(--pad)*1px + 4px);min-width:0;position:relative}
+.lab{font:400 max(11px,calc(11px*var(--scale)))/1.2 "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.blk{display:flex;flex-direction:column;gap:2px;min-width:0}
+.eb{display:flex;align-items:center;gap:6px;min-width:0}
+.hero{font:500 max(22px,calc(26px*var(--scale)))/1.15 "JetBrains Mono",monospace;white-space:nowrap}.hero i{font-style:normal;color:var(--dim)}.hero.frozen{color:var(--dim)}
+.val{font:500 calc(var(--f-val)*1px)/1.2 "JetBrains Mono",monospace;color:var(--muted);white-space:nowrap}
+.vd{width:1px;height:calc(var(--row)*1px - 8px);background:var(--border);flex:none}
+.sp{flex:1}
+.lock{display:flex;align-items:center;gap:4px}
+.btn{width:44px;height:44px;border-radius:999px;border:1px solid var(--border);background:none;color:var(--muted);display:grid;place-items:center;cursor:pointer;flex:none}
+.btn:hover{background:var(--raised)}.btn:active{transform:scale(.96)}
+.btn.fill{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.btn.on{color:var(--text);box-shadow:0 0 0 1px var(--text) inset}
+.tabs{height:44px;display:flex;border-radius:8px;background:var(--raised)}
+.tab{flex:1;height:44px;border:0;border-radius:8px;background:none;color:var(--dim);display:flex;align-items:center;justify-content:center;gap:6px;font:400 max(11px,calc(12px*var(--scale)))/1 Inter,sans-serif}
+.tab[aria-selected="true"]{background:var(--tab);color:var(--text);font-weight:500}
+[data-size="S"] .tab span{display:none}
+/* focus: allow-list view */
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;flex:1;min-width:0;padding:2px 0}
+.chip{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:999px;display:flex;align-items:center;gap:6px;font-size:calc(var(--f-body)*1px);white-space:nowrap;flex:none}
+/* schedule */
+.left{flex:0 0 clamp(140px,34%,220px);min-width:0}
+.list{--rh:calc((var(--row)*1px - 4px)/2);height:calc(var(--row)*1px);overflow-y:auto;scroll-snap-type:y mandatory;display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;scrollbar-width:none;position:relative}
+.list::-webkit-scrollbar{display:none}
+.r{height:var(--rh);flex:none;scroll-snap-align:start;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:8px;min-width:0;font-size:calc(var(--f-body)*1px + 1px)}
+.r.cur{background:var(--tab)}
+.r .dt{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}.r.od .dt{background:var(--signal)}
+.r .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r .m{font:400 calc(var(--f-body)*1px)/1 "JetBrains Mono",monospace;white-space:nowrap}
+.al{display:flex;align-items:center;gap:4px;color:var(--muted)}.al.fired .m{color:var(--dim);text-decoration:line-through}.al.fired{color:var(--dim)}
+.cnt{font:400 11px "JetBrains Mono",monospace;color:var(--dim);position:absolute;right:2px;top:-14px}
+@container (max-width:400px){.al{display:none}}
+.ed{display:flex;align-items:center;gap:12px;width:100%;min-width:0}
+.q{height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--border);background:none;color:var(--text);font:400 calc(var(--f-body)*1px) Inter,sans-serif;cursor:pointer;white-space:nowrap}
+.q[aria-checked="true"]{background:var(--tab);font-weight:500;box-shadow:0 0 0 2px var(--accent)}
+.q:hover{background:var(--raised)}
+.skel{display:block;height:14px;border-radius:4px;background:var(--tab)}
+.wrapx{container-type:inline-size}
+</style>
+</head>
+<body>
+<h1>Halo: edge model, focus session, schedule and alarm</h1>
+<p class="note">Reference for HALO_RESULT.md. Read the CSS, not the picture. All data is sample data. Pill widths are the preset widths (182 / 198 / 227).</p>
+<div class="bar" id="ctl"></div>
+<div id="out"></div>
+<script>
+var root=document.documentElement,SIZES={S:[182,28],M:[198,32],L:[227,40]};
+var P={lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',pause:'<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',play:'<polygon points="6 3 20 12 6 21 6 3"/>',reset:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',win:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',globe:'<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',coffee:'<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M6 2v2"/><path d="M17 12h2a2 2 0 0 1 0 4h-2"/>',cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',timer:'<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>',bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',chev:'<path d="m9 18 6-6-6-6"/>',back:'<path d="m15 18-6-6 6-6"/>',x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',tools:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',check:'<path d="M20 6 9 17l-5-5"/>',arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>'};
+function ic(n,c){return '<svg class="'+(c||'i')+'" viewBox="0 0 24 24" aria-hidden="true">'+P[n]+'</svg>';}
+/* ---- the edge ring: stroke only, only when a bounded target exists ---- */
+function ring(remPct,cls){var s=SIZES[root.dataset.size],W=s[0],H=s[1],r=(H-2)/2,cx=W/2,off=-(100-remPct);
+ var d='M '+cx+' 1 H '+(W-1-r)+' A '+r+' '+r+' 0 0 1 '+(W-1-r)+' '+(H-1)+' H '+(1+r)+' A '+r+' '+r+' 0 0 1 '+(1+r)+' 1 H '+cx;
+ return '<svg class="ring '+(cls||'')+'" width="'+(W+2)+'" height="'+(H+2)+'" viewBox="-1 -1 '+(W+2)+' '+(H+2)+'" aria-hidden="true"><path d="'+d+'" pathLength="100" style="stroke-dashoffset:'+off+'"/></svg>';}
+function clock(h,m,frozen){return '<span class="time'+(frozen?' frozen':'')+'"><i>'+h+':</i>'+m+'</span>';}
+function pill(cls,inner,rem,ringCls,label){return '<div class="cell"><div class="pill '+cls+'" role="img" aria-label="'+label+'">'+inner+(rem!=null?ring(rem,ringCls):'')+'</div><div class="cap">'+label+'</div></div>';}
+var DOT='<span class="dot"></span>',SEP='<span class="sep"></span>';
+function nameOf(i,t,muted){return '<span class="'+(muted?'muted':'')+'" style="display:flex;gap:6px;align-items:center;min-width:0">'+ic(i)+'<span class="nm">'+t+'</span></span>';}
+function section1(){var sw=DOT+clock('00','42:18')+SEP+nameOf('win','Figma');
+ var h='<h2>1. The edge model: stroke = time left, glow = tier, dashed red = away</h2>';
+ h+='<p class="note">One edge, three channels. STROKE (2px, ink colour) is only drawn when a bounded target exists, which is a focus session with an end time. GLOW and hairline tint belong to the productivity tier. The DASHED red hairline belongs to AFK, which also switches the tier glow off. Amber never touches the edge.</p>';
+ h+='<div class="grid">';
+ h+=pill('',sw,null,'','Ambient off, or no tier: plain hairline');
+ h+=pill('t-neutral',sw,null,'','Neutral: blue at half weight (hairline 40%, glow 14%)');
+ h+=pill('t-productive',sw,null,'','Productive: green hairline 55%, glow 28%');
+ h+=pill('t-distracting',sw,null,'','Distracting: red hairline 55%, glow 28%');
+ var ses=ic('lock')+clock('00','24:10')+SEP+nameOf('win','Figma');
+ h+=pill('t-productive',ses,60,'','Session, 60% left: stroke + productive glow together');
+ h+=pill('',ic('lock')+'<span class="time frozen"><i>00:</i>24:10</span>'+SEP+'<span class="muted">Paused</span>',60,'paused','Session paused: stroke dims, clock dims, says Paused');
+ h+=pill('',ic('lock')+'<span class="time">00:42</span>'+SEP+nameOf('win','Figma'),2,'final','Last 60 seconds: stroke 3px, mm:ss only');
+ h+=pill('',ic('lock')+'<span class="time">00:12:40</span>'+SEP+nameOf('win','Figma'),null,'','Open-ended session: counts up, no stroke (no target)');
+ h+=pill('afk','<span class="away" style="display:flex">'+ic('coffee')+'</span><span class="time frozen"><i>00:</i>42:18</span>'+SEP+'<span class="away">Away 12m</span>',null,'','AFK: dashed red edge, frozen dim clock, no glow');
+ h+=pill('t-productive','<span class="t1" style="display:flex">'+ic('check')+'</span><span class="nm">Back after 12m</span>'+SEP+'<span class="muted">timer paused</span>',null,'','AFK return: 6 seconds, then normal');
+ h+=pill('t-productive',DOT+clock('00','42:18')+SEP+nameOf('cal','C Programming BNCC'),null,'','Stopwatch bound to a deadline: title takes the name slot');
+ h+=pill('afk',ic('lock')+'<span class="time frozen">00:24:10</span>'+SEP+'<span class="away">Away 6m</span>',60,'','Session + AFK: dashed track, stroke keeps running');
+ h+='</div>';
+ h+='<div class="bar"><label>Time left <input type="range" min="0" max="100" value="60" id="rg" style="width:240px;accent-color:var(--accent)" aria-label="Time left"> <span class="mono" id="rv">60%</span></label></div>';
+ return h;}
+/* ---- panel ---- */
+function tabs(sel){var t=[['Focus','timer'],['Schedule','cal'],['Tools','tools']];return '<div class="tabs" role="tablist">'+t.map(function(x){return '<button class="tab" role="tab" aria-selected="'+(x[0]===sel)+'" aria-label="'+x[0]+'">'+ic(x[1],'b')+'<span>'+x[0]+'</span></button>';}).join('')+'</div>';}
+function halo(cls,sel,body){return '<div class="halo '+cls+'"><div class="content">'+body+'</div>'+tabs(sel)+'</div>';}
+function eyebrow(dotOff,word,extra){return '<div class="eb"><span class="dot'+(dotOff?' off':'')+'"></span><span class="lab">'+word+'</span>'+(extra||'')+'</div>';}
+function lockChip(txt){return '<span class="lock" title="Distracting apps and sites are blocked" style="color:var(--accent)">'+ic('lock','s')+'<span class="lab" style="color:var(--text)">'+txt+'</span></span>';}
+function btns(p){return '<button class="btn" aria-label="Reset timer">'+ic('reset','b')+'</button><button class="btn fill" aria-label="'+(p?'Resume':'Pause')+' timer">'+ic(p?'play':'pause','b')+'</button>';}
+function stopRow(o){o=o||{};return '<div class="blk">'+eyebrow(o.afk,'Stopwatch',o.sub)+'<div class="hero'+(o.afk?' frozen':'')+'"><i>00:</i>42:18</div></div>'+(o.mid||'')+'<span class="sp"></span>'+btns(o.p);}
+function sessRow(o){var left='<div class="blk">'+eyebrow(o.paused,'Focus',o.paused?'<span class="lab" style="color:var(--text)">Paused</span>':lockChip(o.strict||'Locked'))+'<div class="hero'+(o.paused?' frozen':'')+'">'+(o.up?'<i>00:</i>12:40':'<i>00:</i>24:10')+'</div></div>';
+ var now='<span class="vd"></span><div class="blk" style="min-width:0">'+'<span class="lab">Now</span>'+'<span style="display:flex;gap:6px;align-items:center;min-width:0">'+ic('win','s')+'<span class="nm" style="font-size:calc(var(--f-val)*1px)">Figma</span><span class="muted" style="display:flex">'+ic('check','s')+'</span></span></div>';
+ var ends='<span class="vd"></span><div class="blk"><span class="lab">Ends</span><span class="val">'+(o.up?'no limit':'14:30')+'</span></div>';
+ return left+now+'<span class="sp"></span>'+ends+'<button class="btn" aria-label="Show what is allowed in this session">'+ic('chev','b')+'</button>';}
+function allowRow(){return '<button class="btn" aria-label="Back">'+ic('back','b')+'</button><div class="blk" style="min-width:0;flex:1"><span class="lab">Allowed in this session</span><div class="chips" tabindex="0" role="list" aria-label="Allowed apps and sites">'+
+ ['win:Figma','win:VS Code','globe:github.com','globe:docs.python.org','win:Terminal','globe:stackoverflow.com'].map(function(x){x=x.split(':');return '<span class="chip" role="listitem">'+ic(x[0],'s')+x[1]+'</span>';}).join('')+'</div></div><button class="btn" aria-label="Edit in Focus">'+ic('arrow','b')+'</button>';}
+function doneRow(){return '<div class="blk">'+eyebrow(1,'Focus','<span class="lab" style="color:var(--text)">Complete</span>')+'<div class="hero"><i>00:</i>25:00</div></div><span class="vd"></span><div class="blk"><span class="lab">Focused</span><span class="val">25 min, no blocks</span></div><span class="sp"></span><button class="btn" aria-label="Dismiss">'+ic('x','b')+'</button>';}
+function section2(){var h='<h2>2. Focus page</h2><p class="note">Controls belong to the stopwatch, so they are gone while a session runs. The chevron opens the allow-list view in the same 56px row. Rows never grow.</p><div style="display:flex;flex-direction:column;gap:12px">';
+ var c=[['Stopwatch, no session',halo('t-productive','Focus',stopRow({mid:'<span class="vd"></span><div class="blk"><span class="lab">Tracking</span><span style="display:flex;gap:6px;align-items:center">'+ic('win','s')+'<span style="font-size:calc(var(--f-val)*1px);font-weight:500">Figma</span></span></div>'}))],
+ ['Stopwatch bound to a deadline (Schedule play button)',halo('','Focus',stopRow({mid:'<span class="vd"></span><div class="blk"><span class="lab">For</span><span style="display:flex;gap:6px;align-items:center">'+ic('cal','s')+'<span style="font-size:calc(var(--f-val)*1px);font-weight:500">C Programming BNCC</span></span></div>'}))],
+ ['Stopwatch, AFK',halo('','Focus',stopRow({afk:1,sub:'<span class="lab away">Away</span>',mid:'<span class="vd"></span><div class="blk"><span class="lab">Away</span><span class="val away" style="display:flex;gap:6px;align-items:center">'+ic('coffee','s')+'12m</span></div>'}))],
+ ['Session running, Locked (distracting blocked)',halo('t-productive','Focus',sessRow({}))],
+ ['Session running, Allow-list (only allowed apps open)',halo('t-productive','Focus',sessRow({strict:'Allow-list'}))],
+ ['Session paused: dot, clock and label say so',halo('','Focus',sessRow({paused:1}))],
+ ['Open-ended session: counts up, Ends no limit',halo('','Focus',sessRow({up:1}))],
+ ['Allow-list view (chevron). Chips are display-only and scroll sideways',halo('','Focus',allowRow())],
+ ['Session complete (6 seconds, then the stopwatch row returns)',halo('','Focus',doneRow())]];
+ c.forEach(function(x){h+='<div class="cell"><div class="cap">'+x[0]+'</div>'+x[1]+'</div>';});return h+'</div>';}
+/* ---- schedule ---- */
+var ROWS=[{t:'NAR',m:'1d overdue',od:1,a:null},{t:'C Programming BNCC',m:'61d overdue',od:1,a:{l:'1d before',f:0}},{t:'Stats quiz 3',m:'in 5h',a:{l:'19:00',f:1}},{t:'Linear algebra set',m:'in 2d',a:null},{t:'Lab report',m:'in 4d',a:{l:'2h before',f:0}},{t:'Capstone proposal',m:'in 6d',a:null},{t:'Reading week 8',m:'in 8d',a:null},{t:'Group slides',m:'in 9d',a:null},{t:'Internship form',m:'in 12d',a:null},{t:'Thesis outline',m:'in 20d',a:null}];
+var W={};
+function alarmChip(a){if(!a)return '';return '<span class="al'+(a.f?' fired':'')+'" title="'+(a.f?'Alarm sent':'Alarm set')+'">'+ic('bell','s')+'<span class="m">'+a.l+'</span></span>';}
+function schedBody(id){var w=W[id];if(w.mode==='edit'){var r=w.rows[w.cur];
+ return '<div class="ed"><div class="blk" style="flex:0 0 clamp(110px,26%,150px)"><span class="lab">Alarm</span><span class="nm" style="font-size:calc(var(--f-val)*1px)">'+r.t+'</span></div><div role="group" aria-label="Alarm times" style="display:flex;gap:8px;flex:1;justify-content:flex-end">'+
+  ['1 hour','1 day','On time'].map(function(k){return '<button class="q" role="checkbox" aria-checked="'+(w.sel[w.cur+':'+k]?'true':'false')+'" data-q="'+id+'|'+k+'">'+k+'</button>';}).join('')+'<button class="q" data-q="'+id+'|custom">Custom</button></div><button class="btn" data-x="'+id+'" aria-label="Close alarm editor">'+ic('x','b')+'</button></div>';}
+ var left='<div class="blk left"><span class="lab">Next</span><span class="nm" style="font-size:calc(var(--f-val)*1px)">ALGO PROG</span><span class="m muted mono" style="font-size:calc(var(--f-body)*1px)">Wed 09:20 · in 10h</span></div><span class="vd"></span>';
+ var rows=w.rows.map(function(r,i){return '<div class="r'+(r.od?' od':'')+(i===w.cur?' cur':'')+'" data-i="'+i+'"><span class="dt"></span><span class="t">'+r.t+'</span>'+alarmChip(r.a)+'<span class="m'+(r.od?' amber':' muted')+'">'+r.m+'</span></div>';}).join('');
+ var n=w.rows.length;if(!n)return left+'<span class="muted" style="font-size:calc(var(--f-val)*1px)">No open deadlines. Add one in Schedule.</span><span class="sp"></span><button class="btn" aria-label="Open Schedule">'+ic('arrow','b')+'</button>';
+ var cur=w.rows[w.cur];
+ return left+'<div class="list" tabindex="0" role="listbox" aria-label="Open deadlines" data-l="'+id+'">'+(n>2?'<span class="cnt" id="cn-'+id+'">'+(w.cur+1)+'/'+n+'</span>':'')+rows+'</div>'+
+  '<button class="btn" data-b="'+id+'" aria-label="Set alarm for '+cur.t+'">'+ic('bell','b')+'</button><button class="btn" data-p="'+id+'" aria-label="Track time on '+cur.t+'">'+ic('timer','b')+'</button>';}
+function mkSched(id,n,title){W[id]={mode:'list',cur:0,sel:{},rows:ROWS.slice(0,n)};return '<div class="cell"><div class="cap">'+title+'</div><div class="halo wrapx" id="h-'+id+'"><div class="content" id="c-'+id+'">'+schedBody(id)+'</div>'+tabs('Schedule')+'</div></div>';}
+function section3(){W={};var h='<h2>3. Schedule page: fixed height, exactly two rows, scroll-snap, current row drives the buttons</h2><p class="note">The row height is (row preset minus 4) divided by 2: 22 / 26 / 30. Exactly two rows fit at every size. The top row is the current one. The bell and timer buttons act on it. Scroll the list with the wheel or the arrow keys. Press the bell to open the alarm editor in the same row.</p><div style="display:flex;flex-direction:column;gap:12px">';
+ h+=mkSched('a',2,'2 items (class + 2 deadlines, no scroll, no counter)');
+ h+=mkSched('b',10,'10 deadlines: counter 1/10, scroll inside the row, nothing outside moves');
+ h+=mkSched('c',0,'Empty: both tables answered and both said none');
+ h+='<div class="cell"><div class="cap">Loading: skeletons, no shimmer, no zero</div><div class="halo"><div class="content"><div class="blk left"><span class="lab">Next</span><span class="skel" style="width:90px"></span></div><span class="vd"></span><div class="list"><span class="skel" style="width:70%;margin:6px 8px"></span><span class="skel" style="width:55%;margin:6px 8px"></span></div></div>'+tabs('Schedule')+'</div></div>';
+ h+='<div class="cell"><div class="cap">Error: says what failed, offers retry</div><div class="halo"><div class="content"><span style="font-size:calc(var(--f-val)*1px)">Schedule could not load because the database is busy. Retry.</span><span class="sp"></span><button class="btn" aria-label="Retry loading the schedule">'+ic('reset','b')+'</button></div>'+tabs('Schedule')+'</div></div>';
+ return h+'</div>';}
+function build(){document.getElementById('out').innerHTML=section1()+section2()+section3();bind();}
+function redraw(id){var c=document.getElementById('c-'+id);c.innerHTML=schedBody(id);var l=c.querySelector('.list');if(l){l.scrollTop=W[id].cur*(l.querySelector('.r').offsetHeight+4);l.addEventListener('scroll',function(){onScroll(id,l);});}}
+function onScroll(id,l){var w=W[id],r=l.querySelector('.r'),i=Math.round(l.scrollTop/(r.offsetHeight+4));if(i===w.cur)return;w.cur=i;[].forEach.call(l.querySelectorAll('.r'),function(x,k){x.classList.toggle('cur',k===i);});var cn=document.getElementById('cn-'+id);if(cn)cn.textContent=(i+1)+'/'+w.rows.length;var b=document.querySelector('[data-b="'+id+'"]');if(b)b.setAttribute('aria-label','Set alarm for '+w.rows[i].t);}
+function bind(){['a','b','c'].forEach(function(id){var l=document.querySelector('[data-l="'+id+'"]');if(l)l.addEventListener('scroll',function(){onScroll(id,l);});});
+ var rg=document.getElementById('rg');if(rg)rg.oninput=function(){document.getElementById('rv').textContent=rg.value+'%';var p=document.querySelector('.pill.t-productive .ring path');if(p)p.style.strokeDashoffset=-(100-rg.value);};}
+document.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+ if(b.dataset.dev){if(b.dataset.dev==='theme')root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';else root.dataset.size=b.dataset.dev;ctl();build();return;}
+ if(b.dataset.b){W[b.dataset.b].mode='edit';redraw(b.dataset.b);var q=document.querySelector('#c-'+b.dataset.b+' .q');if(q)q.focus();return;}
+ if(b.dataset.x){W[b.dataset.x].mode='list';redraw(b.dataset.x);var bb=document.querySelector('[data-b="'+b.dataset.x+'"]');if(bb)bb.focus();return;}
+ if(b.dataset.q){var p=b.dataset.q.split('|'),w=W[p[0]];if(p[1]==='custom')return;var k=w.cur+':'+p[1];w.sel[k]=!w.sel[k];var lab=['1 hour','1 day','On time'].filter(function(x){return w.sel[w.cur+':'+x];}).map(function(x){return x==='On time'?'on time':x.replace(' ',' ')+' before';});w.rows[w.cur].a=lab.length?{l:lab[0].replace('1 hour','1h').replace('1 day','1d')+(lab.length>1?' +'+(lab.length-1):''),f:0}:null;redraw(p[0]);var qq=document.querySelector('#c-'+p[0]+' [data-q="'+p[0]+'|'+p[1]+'"]');if(qq)qq.focus();return;}
+ if(b.dataset.p){b.classList.toggle('on');return;}});
+document.addEventListener('keydown',function(e){var l=e.target.closest('[data-l]');if(l&&(e.key==='ArrowDown'||e.key==='ArrowUp')){e.preventDefault();l.scrollBy({top:(e.key==='ArrowDown'?1:-1)*(l.querySelector('.r').offsetHeight+4)});}
+ var ed=e.target.closest('.ed');if(ed&&e.key==='Escape'){var id=ed.parentNode.id.slice(2);W[id].mode='list';redraw(id);var bb=document.querySelector('[data-b="'+id+'"]');if(bb)bb.focus();}
+ if(ed&&(e.key==='ArrowRight'||e.key==='ArrowLeft')){var qs=[].slice.call(ed.querySelectorAll('.q')),i=qs.indexOf(document.activeElement);if(i>=0){e.preventDefault();qs[(i+(e.key==='ArrowRight'?1:-1)+qs.length)%qs.length].focus();}}});
+function ctl(){var c=document.getElementById('ctl');c.innerHTML='<button data-dev="theme" aria-pressed="'+(root.dataset.theme==='light')+'">Warm Paper</button>'+['S','M','L'].map(function(s){return '<button data-dev="'+s+'" aria-pressed="'+(root.dataset.size===s)+'">'+s+'</button>';}).join('');}
+ctl();build();
+</script>
+</body>
+</html>

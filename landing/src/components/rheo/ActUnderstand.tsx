@@ -63,7 +63,7 @@ const SCENARIOS: Scenario[] = [
 
 export default function ActUnderstand() {
   return (
-    <section id="understand" className="relative surface-page py-24 sm:py-32">
+    <section id="understand" className="relative surface-page pt-24 sm:pt-32">
       <div className="px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto">
         <div className="mb-12 sm:mb-16 max-w-[680px]">
           <p className="mono-label" style={{ fontSize: 11 }}>

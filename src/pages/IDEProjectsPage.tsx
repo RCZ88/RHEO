@@ -397,6 +397,40 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [showAddProject, setShowAddProject] = useState(false);
   const [newProject, setNewProject] = useState({ name: '', path: '', repositoryUrl: '', defaultIde: '' });
+  // New-project git detection (see detectGitFor). 'idle' = nothing typed yet,
+  // 'busy' = reading the folder, 'repo' = origin found, 'templated' = not a repo
+  // (link derived from the saved GitHub user + folder name), 'error' = the
+  // preload bridge is missing in this build.
+  const [gitDetect, setGitDetect] = useState<{ state: 'idle' | 'busy' | 'repo' | 'templated' | 'error'; detail?: string }>({ state: 'idle' });
+  const [ghUser, setGhUser] = useState<string>(() => { try { return localStorage.getItem('df-github-username') || ''; } catch { return ''; } });
+  // Optional read-only token: adds private repos to the picker and lifts the
+  // anonymous 60 req/h limit. Persisted in the app's own settings table.
+  const [ghToken, setGhToken] = useState<string>('');
+  const [repos, setRepos] = useState<{ state: 'idle' | 'loading' | 'ready' | 'error'; items: { url: string; label: string }[]; error?: string }>({ state: 'idle', items: [] });
+  const gitDetectTimer = useRef<number | null>(null);
+  const ghTimer = useRef<number | null>(null);
+  const repoDirtyRef = useRef(false);
+
+  // Settings outlive the renderer, so the username/token are read back from the
+  // app's settings table on mount (localStorage is only the instant seed).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const api = window.deskflowAPI as any;
+        const [u, t] = await Promise.all([
+          api?.appSettingGet?.('github_username'),
+          api?.appSettingGet?.('github_token'),
+        ]);
+        if (!alive) return;
+        const su = String(u?.value || '').trim();
+        const st = String(t?.value || '').trim();
+        if (su) { setGhUser(su); try { localStorage.setItem('df-github-username', su); } catch { /* storage unavailable */ } }
+        if (st) setGhToken(st);
+      } catch { /* settings unavailable — the localStorage seed still applies */ }
+    })();
+    return () => { alive = false; };
+  }, []);
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     const saved = localStorage.getItem('ide-projects-activeTab') || '';
     const resolved = (TAB_MIGRATION[saved] ?? saved) as TabKey;
@@ -1026,6 +1060,136 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
   }, [projectLanguages]);
 
 
+  /** Last path segment of a POSIX or a Windows path. Windows paths arrive as
+   *  `C:\Users\...` when a project already known to the Windows side is added. */
+  const dirNameOf = (p: string) => (p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
+
+  const persistSetting = (key: string, value: string | null) => {
+    try { (window.deskflowAPI as any)?.appSettingSet?.(key, value || null); } catch { /* settings unavailable */ }
+  };
+
+  /** Fetch the account's repositories so the link is picked, not typed. */
+  const loadRepos = async (userArg?: string, tokenArg?: string) => {
+    const u = String(userArg ?? ghUser).trim();
+    const t = String(tokenArg ?? ghToken).trim();
+    if (!u && !t) { setRepos({ state: 'idle', items: [] }); return; }
+    setRepos(prev => ({ ...prev, state: 'loading' }));
+    try {
+      const api = window.deskflowAPI as any;
+      if (!api?.githubListRepos) {
+        setRepos({ state: 'error', items: [], error: 'GitHub lookup unavailable in this build' });
+        return;
+      }
+      const r = await api.githubListRepos({ user: u, token: t });
+      if (!r?.success) {
+        setRepos({ state: 'error', items: [], error: r?.error || 'Could not reach GitHub' });
+        return;
+      }
+      // A token identifies its owner — use it to fill an empty username field.
+      if (!u && r.login) { setGhUser(r.login); persistSetting('github_username', r.login); }
+      setRepos({
+        state: 'ready',
+        items: (r.repos || [])
+          .filter((x: any) => x?.url)
+          .map((x: any) => ({
+            url: x.url,
+            label: [x.fullName, x.private ? 'private' : null, x.language].filter(Boolean).join(' · '),
+          })),
+      });
+    } catch (err: any) {
+      setRepos({ state: 'error', items: [], error: String(err?.message || 'GitHub unreachable') });
+    }
+  };
+
+  const handleGhUserChange = (value: string) => {
+    const v = value.trim();
+    setGhUser(v);
+    try { localStorage.setItem('df-github-username', v); } catch { /* storage unavailable */ }
+    persistSetting('github_username', v);
+    if (ghTimer.current) window.clearTimeout(ghTimer.current);
+    ghTimer.current = window.setTimeout(() => { void loadRepos(v, ghToken); }, 700);
+  };
+
+  const handleGhTokenChange = (value: string) => {
+    const v = value.trim();
+    setGhToken(v);
+    persistSetting('github_token', v);
+    if (ghTimer.current) window.clearTimeout(ghTimer.current);
+    ghTimer.current = window.setTimeout(async () => {
+      try {
+        const api = window.deskflowAPI as any;
+        if (v && !ghUser && api?.githubWhoami) {
+          const me = await api.githubWhoami(v);
+          if (me?.success && me.login) {
+            setGhUser(me.login);
+            try { localStorage.setItem('df-github-username', me.login); } catch { /* storage unavailable */ }
+            persistSetting('github_username', me.login);
+          }
+        }
+      } catch { /* the repo load below still reports the real error */ }
+      void loadRepos(ghUser, v);
+    }, 700);
+  };
+
+  /**
+   * Derive the repository link from the folder itself.
+   * Detection order: the folder's git remote (authoritative) -> the saved GitHub
+   * user + folder name (template) -> leave the field empty for the user.
+   * Never throws: an unreachable path (e.g. a Windows path on this box) simply
+   * falls back to the template.
+   */
+  const detectGitFor = async (rawPath: string) => {
+    const dir = (rawPath || '').trim();
+    if (!dir) { setGitDetect({ state: 'idle' }); return; }
+    setGitDetect({ state: 'busy' });
+    let r: any = null;
+    let bridgeMissing = false;
+    try {
+      const api = window.deskflowAPI as any;
+      if (!api?.detectProjectGit) bridgeMissing = true;
+      else r = await api.detectProjectGit(dir);
+    } catch { bridgeMissing = true; }
+
+    if (r?.isRepo && r.remoteUrl) {
+      setNewProject(prev => ({
+        ...prev,
+        repositoryUrl: repoDirtyRef.current ? prev.repositoryUrl : (prev.repositoryUrl || r.remoteUrl),
+        name: prev.name || r.suggestedName || ''
+      }));
+      setGitDetect({ state: 'repo', detail: r.owner ? `${r.owner}/${r.repo}` : r.remoteUrl });
+      return;
+    }
+    if (r?.isRepo) {
+      setGitDetect({ state: 'repo', detail: 'git repo, no "origin" remote' });
+      return;
+    }
+    const name = r?.dirName || dirNameOf(dir);
+    const templated = ghUser && name ? `https://github.com/${ghUser}/${name}` : '';
+    setNewProject(prev => ({
+      ...prev,
+      name: prev.name || name,
+      repositoryUrl: repoDirtyRef.current ? prev.repositoryUrl : (prev.repositoryUrl || templated)
+    }));
+    setGitDetect(bridgeMissing
+      ? { state: 'error', detail: 'git detection unavailable in this build' }
+      : { state: 'templated', detail: templated ? `${ghUser}/${name}` : '' });
+  };
+
+  /** Path field: fill as typed, detect once typing pauses (600 ms). */
+  const handlePathChange = (value: string) => {
+    repoDirtyRef.current = false;
+    setNewProject(prev => ({ ...prev, path: value }));
+    if (gitDetectTimer.current) window.clearTimeout(gitDetectTimer.current);
+    gitDetectTimer.current = window.setTimeout(() => { void detectGitFor(value); }, 600);
+  };
+
+  /** Quick-add suggestion: same fill as before, now also derives the repo link. */
+  const applySuggestedProject = (p: { name: string; path: string }) => {
+    repoDirtyRef.current = false;
+    setNewProject({ name: p.name, path: p.path, repositoryUrl: '', defaultIde: '' });
+    void detectGitFor(p.path);
+  };
+
   const handleAddProject = async () => {
     setAddProjectError(null);
     setAddingProject(true);
@@ -1091,7 +1255,9 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
         setAddProjectError(lastError);
       } else if (addedCount > 0 || skippedCount > 0) {
         setShowAddProject(false);
+        repoDirtyRef.current = false;
         setNewProject({ name: '', path: '', repositoryUrl: '', defaultIde: '' });
+        setGitDetect({ state: 'idle' });
         setSelectedQuickProjects(new Set());
         setAddProjectError(null);
         console.log('[IDEProjectsPage] Added', addedCount, 'skipped', skippedCount, 'projects, refreshing overview');
@@ -1641,12 +1807,22 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {/* Both toggles used to have a bare-text UNSELECTED state: no
+                      fill and no border, so a control with two states looked
+                      like a label until you pressed it. Selected now carries
+                      the surface signal hue (`--btn-selected-*`, which in
+                      light is `--page-accent-fill` — it was pure white on a
+                      cream card, 1.01:1), and unselected carries a chip edge.
+                      The light edge is `--ws-border-strong` and not
+                      `--ws-border`, per that token's own note: 0.10 alpha
+                      composites to 1.51:1, and WCAG 1.4.11 wants 3:1 for the
+                      boundary of an interactive control. */}
                   <button
                     onClick={() => setLogScale(!logScale)}
                     aria-pressed={logScale}
                     title="Logarithmic y-axis — use when one spike flattens the rest"
-                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
-                      logScale ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
+                      logScale ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)] bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border-strong)] light:hover:bg-[var(--ws-surface-recess-deep)]'
                     }`}
                   >
                     Log scale
@@ -1655,8 +1831,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     onClick={() => setExcludeOutliers(!excludeOutliers)}
                     aria-pressed={excludeOutliers}
                     title="Hide outlier days so the trend is readable"
-                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
-                      excludeOutliers ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)]'
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] ${
+                      excludeOutliers ? 'bg-[var(--btn-selected-fill)] text-[var(--btn-selected-on)] border border-[var(--btn-selected-border)]' : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-card-foreground)] bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border-strong)] light:hover:bg-[var(--ws-surface-recess-deep)]'
                     }`}
                   >
                     Hide outliers
@@ -1804,7 +1980,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                 </div>
                 <button
                   onClick={() => setActiveTab('projects')}
-                  className="text-xs text-[var(--page-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] rounded"
+                  className="text-xs text-[var(--page-accent)] hover:underline rounded-lg px-2 py-1 hover:bg-white/[0.05] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--btn-ring)] light:hover:bg-[var(--ws-veil)]"
                 >
                   View all →
                 </button>
@@ -4244,7 +4420,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => { setShowAddProject(false); setAddProjectError(null); setSelectedQuickProjects(new Set()); }}
+            onClick={() => { setShowAddProject(false); setAddProjectError(null); setSelectedQuickProjects(new Set()); repoDirtyRef.current = false; }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -4259,7 +4435,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   Add New Project
                 </h3>
                 <button
-                onClick={() => { setShowAddProject(false); setAddProjectError(null); setCustomDirResults({}); setSelectedQuickProjects(new Set()); }}
+                onClick={() => { setShowAddProject(false); setAddProjectError(null); setCustomDirResults({}); setSelectedQuickProjects(new Set()); repoDirtyRef.current = false; }}
   className="p-1 text-zinc-400 hover:text-white transition"
 >
   <X className="w-5 h-5" />
@@ -4297,7 +4473,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                     if (next.has(p.path)) next.delete(p.path); else next.add(p.path);
                                     return next;
                                   });
-                                  setNewProject({ name: p.name, path: p.path, repositoryUrl: '', defaultIde: '' });
+                                  applySuggestedProject(p);
                                 }}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition text-sm ${
                                   isSel
@@ -4384,7 +4560,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                                       if (next.has(p.path)) next.delete(p.path); else next.add(p.path);
                                       return next;
                                     });
-                                    setNewProject({ name: p.name, path: p.path, repositoryUrl: '', defaultIde: '' });
+                                    applySuggestedProject(p);
                                   }}
                                   className={`flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-lg border transition text-xs ${
                                     isSel
@@ -4457,7 +4633,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                       <input
                         type="text"
                         value={newProject.path}
-                        onChange={(e) => setNewProject({ ...newProject, path: e.target.value })}
+                        onChange={(e) => handlePathChange(e.target.value)}
                         placeholder="/path/to/my-project"
                         className="flex-1 px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                       />
@@ -4465,7 +4641,8 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                         onClick={async () => {
                           const result = await window.deskflowAPI!.pickFolder();
                           if (result.success && result.path) {
-                            setNewProject({ ...newProject, path: result.path });
+                            setNewProject(prev => ({ ...prev, path: result.path }));
+                            void detectGitFor(result.path);
                           }
                         }}
                         className="px-4 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition"
@@ -4476,14 +4653,108 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm text-zinc-400 mb-2">Repository URL (optional)</label>
+                    <div className="flex items-center gap-2 mb-2">
+                      <label className="block text-sm text-zinc-400">Repository URL (optional)</label>
+                      {gitDetect.state === 'busy' && (
+                        <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                          <Loader2 className="w-3 h-3 animate-spin" /> reading .git
+                        </span>
+                      )}
+                      {gitDetect.state === 'repo' && (
+                        <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                          <FolderGit2 className="w-3 h-3" />
+                          from remote <span className="text-zinc-300 light:text-[var(--text-primary)]">{gitDetect.detail}</span>
+                        </span>
+                      )}
+                      {gitDetect.state === 'templated' && gitDetect.detail && (
+                        <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                          no git repo, templated <span className="text-zinc-300 light:text-[var(--text-primary)]">{gitDetect.detail}</span>
+                        </span>
+                      )}
+                      {gitDetect.state === 'error' && (
+                        <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                          <AlertCircle className="w-3 h-3" /> {gitDetect.detail}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
+                      list="df-github-repos"
                       value={newProject.repositoryUrl}
-                      onChange={(e) => setNewProject({ ...newProject, repositoryUrl: e.target.value })}
+                      onChange={(e) => { repoDirtyRef.current = true; setNewProject(prev => ({ ...prev, repositoryUrl: e.target.value })); }}
+                      onFocus={() => { if ((ghUser || ghToken) && repos.state === 'idle') void loadRepos(); }}
                       placeholder="https://github.com/user/repo"
                       className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
                     />
+                    {/* Closed selection: the browser's own list control, fed by the account's repos. */}
+                    <datalist id="df-github-repos">
+                      {repos.items.map(o => (
+                        <option key={o.url} value={o.url}>{o.label}</option>
+                      ))}
+                    </datalist>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <label htmlFor="df-github-user" className="text-xs text-zinc-500 light:text-[var(--text-muted)] shrink-0">GitHub user</label>
+                      <input
+                        id="df-github-user"
+                        type="text"
+                        value={ghUser}
+                        onChange={(e) => handleGhUserChange(e.target.value)}
+                        placeholder="your-handle"
+                        title="Saved once and reused to template the repo link when a folder has no git remote"
+                        className="w-36 px-2.5 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
+                      />
+                      <input
+                        id="df-github-token"
+                        type="password"
+                        value={ghToken}
+                        onChange={(e) => handleGhTokenChange(e.target.value)}
+                        placeholder="token"
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-label="GitHub token (optional)"
+                        title="Optional read-only personal access token. Stored in this app's local settings; used only to list repositories."
+                        className="w-28 px-2.5 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-indigo-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void loadRepos()}
+                        disabled={(!ghUser && !ghToken) || repos.state === 'loading'}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 light:hover:bg-[var(--ws-surface-recess-deep)] text-zinc-300 light:text-[var(--text-secondary)] rounded-lg border border-zinc-600 light:border-zinc-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                      >
+                        <FolderGit2 className="w-3.5 h-3.5" />
+                        Load repos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void detectGitFor(newProject.path)}
+                        disabled={!newProject.path || gitDetect.state === 'busy'}
+                        className="px-2.5 py-1.5 text-xs bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 light:hover:bg-[var(--ws-surface-recess-deep)] text-zinc-300 light:text-[var(--text-secondary)] rounded-lg border border-zinc-600 light:border-zinc-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                      >
+                        Detect from folder
+                      </button>
+                    </div>
+                    <div className="mt-1.5 min-h-[16px] text-xs">
+                      {repos.state === 'loading' && (
+                        <span className="inline-flex items-center gap-1 text-zinc-500 light:text-[var(--text-muted)]">
+                          <Loader2 className="w-3 h-3 animate-spin" /> reading github…
+                        </span>
+                      )}
+                      {repos.state === 'ready' && repos.items.length > 0 && (
+                        <span className="text-zinc-500 light:text-[var(--text-muted)]">
+                          {repos.items.length} repos — click the field above and pick one
+                        </span>
+                      )}
+                      {repos.state === 'ready' && repos.items.length === 0 && (
+                        <span className="text-zinc-500 light:text-[var(--text-muted)]">
+                          no repositories visible for this account
+                        </span>
+                      )}
+                      {repos.state === 'error' && (
+                        <span className="inline-flex items-center gap-1 text-zinc-500 light:text-[var(--text-muted)]">
+                          <AlertCircle className="w-3 h-3" /> {repos.error}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm text-zinc-400 mb-2">Default IDE (optional)</label>
@@ -4503,7 +4774,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
 
               <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 light:border-zinc-200">
                 <button
-                  onClick={() => { setShowAddProject(false); setAddProjectError(null); setCustomDirResults({}); setSelectedQuickProjects(new Set()); }}
+                  onClick={() => { setShowAddProject(false); setAddProjectError(null); setCustomDirResults({}); setSelectedQuickProjects(new Set()); repoDirtyRef.current = false; }}
                   className="px-4 py-2 text-zinc-400 hover:text-white transition"
                 >
                   Cancel

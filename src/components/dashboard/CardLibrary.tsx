@@ -18,7 +18,7 @@ import { DashboardDataProvider, type DashboardData } from './DashboardContext';
 import { getWidgetTheme } from './widgetTheme';
 import './registerWidgets';
 import { useDashboardLayout } from '../../hooks/useDashboardLayout';
-import { toDashboardId } from './widgetRegistry';
+import { ROW_TEMPLATES, OPT_IN_WIDGETS, toDashboardId } from './widgetRegistry';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -220,6 +220,8 @@ type CategoryFilter = 'all' | WidgetConfig['category'];
 /** Natural (un-squeezed) render size for a widget inside a preview cell. */
 const PREVIEW_NATURAL_W = 300;
 const PREVIEW_NATURAL_H = 260;
+/** One dashboard "row" in px — converts ROW_TEMPLATES height units to pixels. */
+const PREVIEW_ROW_H = 92;
 
 interface CardLibraryProps {
   onChanged?: (layout: DashboardLayoutConfig) => void;
@@ -870,6 +872,41 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
 
   // ── Render: Dashboard Preview Panel ───────────────────────────────────────
 
+  // Preview placement — derived from ROW_TEMPLATES (the 1:1 mirror of DashboardPage's
+  // real geometry in widgetRegistry.tsx), NOT from the stale v4 gridPositions. Cells
+  // carry the template's width share (w) and height unit (h), which is what makes the
+  // preview's dimensions match the live dashboard instead of an invented mosaic.
+  const previewLookup: Map<string, { col: number; row: number; colSpan: number; rowSpan: number; bc: number; height: number }> = new Map();
+  {
+    const groups: Array<{ bc: number; cells: Array<{ widgetId: string; colStart: number; colSpan: number; height: number }> }> = [];
+    for (const row of ROW_TEMPLATES) {
+      const cells = row.cells
+        .map(c => ({ id: c.id, dashId: toDashboardId(c.id), w: c.w, h: c.h, bc: row.breakpointCols }))
+        .filter(c => c.dashId && isVisible(c.dashId));
+      if (cells.length === 0) continue;
+      groups.push({
+        bc: row.breakpointCols,
+        cells: cells.map((c, i) => ({
+          widgetId: c.id,
+          colStart: cells.slice(0, i).reduce((s, p) => s + p.w, 0),
+          colSpan: c.w,
+          height: c.h * PREVIEW_ROW_H,
+        })),
+      });
+    }
+    for (const opt of OPT_IN_WIDGETS) {
+      const dashId = toDashboardId(opt.id);
+      if (!dashId || !isVisible(dashId)) continue;
+      if (groups.some(g => g.cells.some(c => c.widgetId === opt.id))) continue;
+      groups.push({ bc: 12, cells: [{ widgetId: opt.id, colStart: 0, colSpan: opt.w, height: opt.h * PREVIEW_ROW_H }] });
+    }
+    for (const g of groups) {
+      for (const c of g.cells) {
+        previewLookup.set(c.widgetId, { col: 0, row: 0, colSpan: c.colSpan, rowSpan: Math.max(1, Math.round(c.height / PREVIEW_ROW_H)), bc: g.bc, height: c.height });
+      }
+    }
+  }
+
   const renderDashboardPreview = () => (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center justify-between mb-3">
@@ -899,7 +936,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       ) : (
         <div
           ref={gridRef}
-          className={`relative rounded-xl border-2 transition-colors ${
+          className={`relative flex-1 min-h-0 rounded-xl border-2 transition-colors ${
             dragOverDashboard ? 'border-[var(--page-accent)] bg-[var(--page-accent-5)]' : 'border-[var(--border-subtle)]'
           }`}
           onDragOver={handleDragOver}
@@ -924,32 +961,29 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
             )}
           </AnimatePresence>
 
-          {/* Grid preview */}
+          {/* Grid preview — rows stack vertically; each cell's width/height come
+              from the ROW_TEMPLATES mirror of the live dashboard, not from an
+              invented grid, so the preview's dimensions match reality. */}
           <div className="p-3 flex-1 min-h-0 overflow-y-auto">
-            <div
-              className="grid gap-2"
-              style={{
-                gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-              }}
-            >
+            <div className="flex flex-col" style={{ gap: 8 }}>
               {visibleWidgets.map(widget => {
-                const position = layout.gridPositions[widget.id] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
+                const position = previewLookup.get(widget.id) ?? { col: 0, row: 0, colSpan: 1, rowSpan: 1, bc: layout.columns, height: 68 };
                 const currentSize = { cols: position.colSpan, rows: position.rowSpan };
                 const availableSizes = getAvailableSizes(widget);
                 const selectedSize = availableSizes.find(s => s.cols === currentSize.cols && s.rows === currentSize.rows);
 
                 const FallbackComponent = WidgetRegistry.get(widget.id)?.component;
 
-                // Scale the widget to fit its grid cell. The widget renders at
-                // NATURAL_W/NATURAL_H (its real proportions) and is scaled down,
-                // so text never overlaps the way it does when the cell squeezes it.
+                // Scale the widget to fit its dashboard-accurate cell. The widget
+                // renders at NATURAL_W/NATURAL_H (its real proportions) and is scaled
+                // down to the size the live dashboard would give it, so the preview
+                // mirrors real dimensions instead of an invented grid.
                 const GAP = 8;
-                const ROW_UNIT = 68;
                 const cellW = gridW > 0
-                  ? (gridW - GAP * (layout.columns - 1)) / layout.columns * position.colSpan + GAP * (position.colSpan - 1)
+                  ? (gridW - GAP * (position.bc - 1)) / position.bc * position.colSpan + GAP * (position.colSpan - 1)
                   : 0;
-                const scale = cellW > 0 ? Math.min(1, cellW / PREVIEW_NATURAL_W) : 0;
-                const cellH = position.rowSpan * ROW_UNIT;
+                const scale = cellW > 0 ? Math.min(cellW / PREVIEW_NATURAL_W, position.height / PREVIEW_NATURAL_H) : 0;
+                const cellH = position.height;
 
                 return (
                   <motion.div
@@ -961,8 +995,8 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                     transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                     className="relative group rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] overflow-hidden"
                     style={{
-                      gridColumn: `span ${position.colSpan}`,
-                      gridRow: `span ${position.rowSpan}`,
+                      width: cellW,
+                      height: cellH,
                     }}
                   >
                     {/* Remove button */}
@@ -1289,7 +1323,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
 
   const innerContent = (
     <div
-      className="relative w-full max-w-[1600px] max-h-[92vh] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col"
+      className="relative w-full h-full max-w-[1600px] max-h-[92vh] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col min-h-0"
       onClick={e => e.stopPropagation()}
     >
       {/* Header */}
@@ -1303,7 +1337,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       </div>
 
       {/* Main content — two columns */}
-      <div className="flex-1 min-h-[360px] overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className="flex h-full">
           {/* Available widgets — left panel */}
           <div className="w-[380px] flex-shrink-0 border-r border-[var(--border-subtle)] min-h-0">

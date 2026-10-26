@@ -20,29 +20,9 @@ export function FindCardsArrow({ viewportSize, pan, clusterCenter, onRecenter }:
     return ARROWS[octant]
   }, [viewportSize, pan, clusterCenter])
 
-  const position = useMemo(() => {
-    const vCenterX = -pan.x + viewportSize.w / 2
-    const vCenterY = -pan.y + viewportSize.h / 2
-    const dx = clusterCenter.x - vCenterX
-    const dy = clusterCenter.y - vCenterY
-
-    const padding = 60
-    if (Math.abs(dx) > Math.abs(dy)) {
-      return {
-        left: dx > 0 ? 'auto' : `${padding}px`,
-        right: dx > 0 ? `${padding}px` : 'auto',
-        top: '50%',
-        transform: 'translateY(-50%)',
-      }
-    } else {
-      return {
-        top: dy > 0 ? 'auto' : `${padding}px`,
-        bottom: dy > 0 ? `${padding}px` : 'auto',
-        left: '50%',
-        transform: 'translateX(-50%)',
-      }
-    }
-  }, [viewportSize, pan, clusterCenter])
+  // Fixed, predictable placement: bottom-center above the composer, so the
+  // button never appears to jump around. The arrow still indicates direction.
+  const position = { bottom: '118px', left: '50%', transform: 'translateX(-50%)' }
 
   return (
     <button className="dk-find-arrow" style={position} onClick={onRecenter}>

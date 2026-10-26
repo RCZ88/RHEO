@@ -1,6 +1,8 @@
 import { PageShell } from '@/components/PageShell';
 import { TimePanel } from '@/components/TimePanel';
 import { Timer } from 'lucide-react';
+import { usePageSurface } from '@/pages/registry/usePageSurface';
+import timeToolsManifest from '@/pages/registry/pages/timeTools';
 
 console.log(
   '%c[TimeToolsPage] v1.0 loaded',
@@ -8,6 +10,12 @@ console.log(
 );
 
 export default function TimeToolsPage() {
+  /* Joins the navigation system: publishes this page's Ctrl+F segments under the manifest's id,
+     and audits — in dev — that every `sections[].id` below has a real `data-section` element in
+     the DOM. Without this call the manifest's anchors are declared, indexed, and unfindable,
+     which is exactly the silent failure AGENTS.md §5d was written to end. */
+  usePageSurface(timeToolsManifest);
+
   return (
     <PageShell page="time-tools" variant="default" className="p-6 space-y-6">
       <header className="space-y-2">
@@ -26,10 +34,16 @@ export default function TimeToolsPage() {
       </header>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="md:col-span-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)] p-6">
+        <div
+          data-section="time-tools.panel"
+          className="md:col-span-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)] p-6"
+        >
           <TimePanel />
         </div>
-        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)] p-6">
+        <div
+          data-section="time-tools.quick"
+          className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)] p-6"
+        >
           <h3 className="font-semibold text-[var(--text-primary)] mb-4">Quick actions</h3>
           <div className="space-y-2">
             <p className="text-xs text-[var(--text-muted)]">

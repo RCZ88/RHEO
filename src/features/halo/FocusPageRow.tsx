@@ -1,152 +1,377 @@
 /**
- * THE FIGMA `page/focus` ROW — board 2, transcribed node by node.
+ * THE FOCUS ROW — `HALO_RESULT.md` §4.4, §6, §7.8.
  *
- * WHY THIS IS A SEPARATE COMPONENT
- * --------------------------------
- * The Focus page previously rendered `StopwatchHeroExpanded` when expanded, which is a large
- * composition: a `ShareRing` donut, a productive/distracting tier bar, a "Tracked" eyebrow and
- * an app-name block. That layout is NOT what the Figma file specifies, and it is the reason
- * the expanded island reads as heavy in a 134px surface: the file's `page/focus` is a single
- * 51px ROW with a 34px time block and two 44px round controls.
+ * THE ROW HAS TWO JOBS AND IT MUST NOT CONFUSE THEM:
  *
- * So this implements the file's row and is used ONLY by the Figma layout. `StopwatchHeroExpanded`
- * is untouched and still serves the legacy layout, so nothing that was working regresses and
- * the two designs can never silently bleed into each other.
+ *   1. THE STOPWATCH — one clock, one subject. The app or site it is measuring sits WITH the
+ *      clock (a `Tracking` block), not as a second unrelated figure. Controls exist only here,
+ *      because they drive this clock.
+ *   2. THE FOCUS SESSION — the app is now ENFORCING, not measuring. The row changes job: it
+ *      shows the lock (what is blocked), the `Now` block (what is tracked, with an allowed
+ *      check), the wall-clock the lock lifts, and a chevron into the allow-list. The stopwatch
+ *      controls stand down: a pause button beside a countdown you cannot pause is a lie.
  *
- * THE NODE TREE, verbatim (`node-id=9:304`):
+ * ONE CLOCK. The previous "two stopwatch" defect was two mono `hh:mm:ss` figures on one row.
+ * The session countdown REPLACES the stopwatch numeral; the stopwatch value is never printed
+ * alongside it. The subject block carries words, not a second time.
  *
- *   page/focus [FRAME] 526x51
- *     Frame 199x51
- *       Frame 199x15
- *         Ellipse 6x6 fill=#6fb38f                              <- live status dot
- *         TEXT 187x15 #71717a JetBrains Mono 400/11 "STOPWATCH   HALO REDESIGN"
- *       time [FRAME] 125x34
- *         TEXT 47x34 #71717a JetBrains Mono 500/26 "00:"         <- hours DIMMED
- *         TEXT 78x34 #fafafa JetBrains Mono 500/26 "42:18"       <- m:ss BRIGHT
- *     Rectangle 1x44 fill=#2e2e33                                <- divider
- *     Frame 68x38
- *       TEXT 37x15 #8b8b94 JetBrains Mono 400/11 "PRODUCTIVE"  <- renamed, see below
- *       TEXT 68x21 #a1a1aa JetBrains Mono 500/16 "3:12:40"
- *     spacer [FRAME] 98x1
- *     Frame 96x44
- *       button/reset 44x44 r=999 stroke=#2e2e33 w=1
- *         icon/reset 16x16  Vector 12x12 stroke=#a1a1aa w=2
- *       button/pause 44x44 r=999 fill=#6fb38f
- *         icon/pause 16x16  Vector 3x11 stroke=#09090b w=2  (x2)
- *
- * TWO DETAILS THAT ARE EASY TO GET WRONG AND WERE:
- *   1. The time is SPLIT and the hours are DIMMED (#71717a), not one uniform bright string.
- *      A single `<span>` of the whole clock loses the file's only use of dimmed type in the
- *      numeral, which is what makes `00:` recede and `42:18` carry the eye.
- *   2. The pause icon is #09090b — DARK ON THE ACCENT. It is the one place in the whole file
- *      where the foreground inverts, because the pause button is the only solid fill.
+ * THE PRIVACY RULE IS UNCHANGED: a private window shows a lock and the words "Private window",
+ * never a hostname. `tracked.kind === 'priv'` carries no hostname at all.
  */
-import { memo } from 'react';
-import { AppWindow, Globe, Lock, Pause, Play, RotateCcw } from 'lucide-react';
+import { memo, useEffect, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { AppWindow, Check, ChevronLeft, ChevronRight, Coffee, Globe, Lock, Pause, Play, RotateCcw, X } from 'lucide-react';
 import { formatStopwatch, type StopwatchSnapshot } from '../../lib/stopwatchStore';
 
-/** The file's literal. The 3-space gap is a designed separator, not a typo — do not collapse it. */
-/** HALO_STATES.html line 105, verbatim: `lab('Stopwatch')`.
- *
- * WAS `'STOPWATCH   HALO REDESIGN'` — a FIGMA FRAME NAME, not user-facing copy. It read as a
- * design artefact on screen and it silently replaced the spec's own label, so the first block
- * did not match the file it claims to transcribe. The file's three block labels are Stopwatch /
- * Tracking / Productive, and the other two were already correct.
- *
- * Uppercase is applied by `EYEBROW_STYLE` (`text-transform`), matching `.lab` in the spec. */
-const EYEBROW = 'Stopwatch';
+/** The shape `halo:get-focus` returns (`FocusManager.getPublicState()`). */
+export interface HaloFocusState {
+  ok: boolean;
+  active?: boolean;
+  paused?: boolean;
+  /** `null` = open-ended. That is NOT "finished": the clock counts UP and there is no stroke. */
+  endsAt?: number | null;
+  remainingSec?: number | null;
+  startedAt?: number | null;
+  strictness?: 'distracting' | 'non_allowed';
+  allowedApps?: string[];
+  allowedDomains?: string[];
+  allowedTiers?: string[];
+  error?: string;
+}
 
 export interface FocusPageRowProps {
   snapshot: StopwatchSnapshot;
-  /** The tracked time, in ms. `formatStopwatch` is the single clock both surfaces read. */
-  productiveMs: number;
   onReset: () => void;
   onTogglePause: () => void;
-  /**
-   * What the stopwatch is tracking — HALO_STATES.html line 143 specifies THREE shapes:
-   *   win  a desktop app    -> "Figma"
-   *   web  a browser site   -> "github.com"
-   *   priv a private window -> "Private window", with NO name shown
-   * The `priv` case is a privacy guarantee, not a label, so this carries no hostname field.
-   * Omitted = no reading yet, which renders the honest waiting state.
-   */
+  /** What the stopwatch measures: app, site, or the private shape (no hostname by design). */
   tracked?: { kind: 'win' | 'web' | 'priv'; label: string };
+  /** The live tier of the tracked app, used only by the "is this allowed?" check. */
+  trackedTier?: string | null;
+  focus?: HaloFocusState | null;
+  now?: number;
+  /** ms since the user left, when AFK is active. `null`/absent = present. */
+  awayMs?: number | null;
+  /** The deadline the stopwatch is bound to (§7.8). Replaces the Tracking block with `For`. */
+  deadlineTitle?: string | null;
+  /** Show the 6-second "Complete" state, owned by OverlayRoot so the pill agrees with the row. */
+  completeMs?: number | null;
+  onDismissComplete?: () => void;
+  /** Editing the allow-list is a hand-off (no write API), so this navigates to the Focus tab. */
+  onEditFocus?: () => void;
 }
 
-/** Split `HH:MM:SS` so the hours can be dimmed and `MM:SS` left bright, per board 2. */
+const MONO = 'var(--font-mono, ui-monospace, monospace)';
+
+const EYEBROW: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: 'var(--halo-t-eyebrow, 11px)',
+  fontWeight: 400,
+  color: 'var(--halo-dim)',
+  lineHeight: 1.2,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  whiteSpace: 'nowrap',
+};
+
+const LABEL: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: 'var(--halo-t-label, 11px)',
+  color: 'var(--halo-dim)',
+  lineHeight: 1.2,
+  whiteSpace: 'nowrap',
+};
+
+const VALUE: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: 'var(--halo-t-value, 13px)',
+  color: 'var(--halo-muted)',
+  lineHeight: 1.2,
+  whiteSpace: 'nowrap',
+};
+
+const HERO: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: 'var(--halo-t-hero, 26px)',
+  fontWeight: 500,
+  lineHeight: 1.15,
+  whiteSpace: 'nowrap',
+};
+
+const DIVIDER: CSSProperties = {
+  width: 1,
+  height: 'calc(var(--halo-row, 56px) - 8px)',
+  background: 'var(--halo-border)',
+  flexShrink: 0,
+};
+
+function IconBtn({
+  label,
+  onClick,
+  fill,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  fill?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 999,
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: fill ? 'var(--halo-accent)' : 'transparent',
+        border: fill ? '1px solid transparent' : '1px solid var(--halo-border)',
+        color: fill ? 'var(--halo-on-accent)' : 'var(--halo-muted)',
+        cursor: 'pointer',
+        transition: 'background 150ms var(--halo-ease)',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Split `HH:MM:SS` so the hours recede and `MM:SS` carries the eye. One span cannot do this. */
 function splitClock(ms: number): { dim: string; bright: string } {
-  const full = formatStopwatch(ms); // always HH:MM:SS
+  const full = formatStopwatch(ms);
   const idx = full.indexOf(':');
   return { dim: full.slice(0, idx + 1), bright: full.slice(idx + 1) };
 }
 
-const EYEBROW_STYLE: React.CSSProperties = {
-  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-  fontSize: 'max(11px, calc(11px * var(--halo-scale, 1)))',
-  fontWeight: 400,
-  color: 'var(--halo-dim)',
-  lineHeight: 1,
-  /* HALO_STATES.html line 29, verbatim: `.lab { letter-spacing:.08em; text-transform:uppercase }`.
-   * Applied in CSS so the label is stored in its real words and uppercased by the same rule the
-   * spec uses, rather than being typed in caps. */
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-};
+function Clock({ ms, frozen }: { ms: number; frozen?: boolean }) {
+  const { dim, bright } = splitClock(ms);
+  return (
+    <div
+      className="tabular-nums"
+      style={{ ...HERO, color: frozen ? 'var(--halo-dim)' : undefined, transition: 'color 150ms var(--halo-ease)' }}
+    >
+      <span style={{ color: 'var(--halo-dim)' }}>{dim}</span>
+      <span style={{ color: frozen ? 'var(--halo-dim)' : 'var(--halo-text)' }}>{bright}</span>
+    </div>
+  );
+}
 
-/*
- * PRODUCTIVE, not TODAY. THE LABEL IS A CLAIM AND IT WAS LYING.
- *
- * The number below is `stopwatch.productiveMs` — productive time ONLY. It excludes
- * neutral and distracting time, so labelling it "TODAY" claimed it was a whole-day total
- * when it was a subtotal. Claude's Round 3 ruling: "don't change the behavior. The number
- * is productive time only, so rename the label to PRODUCTIVE."
- *
- * So behaviour is untouched and the label now matches what the number is. Summing all
- * three tiers would make TODAY honest, but that is a behaviour change and was explicitly
- * not authorised. `HALO_STATES.html` line 106 uses `blk('Productive', ...)` and its own
- ** note repeats this.
- */
+function TrackIcon({ kind, color }: { kind: 'win' | 'web' | 'priv'; color?: string }) {
+  const style = { color: color ?? 'var(--halo-muted)', flexShrink: 0 } as CSSProperties;
+  if (kind === 'priv') return <Lock size={12} strokeWidth={2} aria-hidden="true" style={style} />;
+  if (kind === 'web') return <Globe size={12} strokeWidth={2} aria-hidden="true" style={style} />;
+  return <AppWindow size={12} strokeWidth={2} aria-hidden="true" style={style} />;
+}
+
+function formatAway(ms: number): string {
+  const mins = Math.max(0, Math.floor(ms / 60_000));
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function formatWallClock(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Is the tracked target tolerated by this session? `null` = unknown, and an unknown never
+ *  gets a check: a glyph is a claim that the app checked. */
+function allowedNow(
+  focus: HaloFocusState,
+  tracked: FocusPageRowProps['tracked'],
+  tier?: string | null,
+): boolean | null {
+  if (!tracked) return null;
+  if (focus.strictness === 'distracting') {
+    if (!tier) return null;
+    return tier !== 'distracting';
+  }
+  const apps = focus.allowedApps ?? [];
+  const domains = focus.allowedDomains ?? [];
+  const tiers = focus.allowedTiers ?? [];
+  if (tracked.kind === 'priv') return null;
+  if (tracked.kind === 'web') {
+    const label = tracked.label.toLowerCase();
+    return domains.some((d) => {
+      const host = d.toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      return host.length > 0 && (label === host || label.endsWith(`.${host}`));
+    });
+  }
+  if (apps.includes(tracked.label)) return true;
+  if (tier && tiers.includes(tier)) return true;
+  return apps.length + domains.length + tiers.length > 0 ? false : null;
+}
 
 export const FocusPageRow = memo(function FocusPageRow({
   snapshot,
-  productiveMs,
   onReset,
   onTogglePause,
   tracked,
+  trackedTier,
+  focus,
+  now,
+  awayMs,
+  deadlineTitle,
+  completeMs,
+  onDismissComplete,
+  onEditFocus,
 }: FocusPageRowProps) {
-  const { dim, bright } = splitClock(productiveMs);
-  const paused = snapshot.paused;
-  /* The dot is the file's live/recording indicator and it wears the ONLY accent. It tracks
-   * the real paused state — a dot that is green while paused would be a lie about data, and
-   * RESULT.md §5 forbids exactly that. */
-  const live = !paused;
+  const [view, setView] = useState<'row' | 'allowed'>('row');
+
+  /* A session is only trusted when the producer ANSWERED. A failed read must never swap a
+   * live countdown for a stopwatch while a lock is actually engaged. */
+  const session = focus && focus.ok && focus.active ? focus : null;
+  const sessionActive = !!session;
+
+  /* Back to the row when the session ends. The dep is the BOOLEAN, not the object: the producer
+   * replaces `focus` on every poll, so an object dep would close the allow-list view under the
+   * user's finger every five seconds. */
+  useEffect(() => {
+    if (!sessionActive) setView('row');
+  }, [sessionActive]);
+
+  const tickNow = typeof now === 'number' && Number.isFinite(now) ? now : Date.now();
+  const endsAt = typeof session?.endsAt === 'number' ? session.endsAt : null;
+  const startedAt = typeof session?.startedAt === 'number' ? session.startedAt : null;
+  const sessionMs =
+    endsAt != null
+      ? Math.max(0, endsAt - tickNow)
+      : startedAt != null
+        ? Math.max(0, tickNow - startedAt)
+        : 0;
+
+  const paused = !!session?.paused;
+  const away = !session && typeof awayMs === 'number' && awayMs > 0;
+  /* The dot is the live indicator. A running session is live; a paused one is not; an away
+   * stopwatch is not counting, so it is not live either. */
+  const live = session ? !paused : !snapshot.paused && !away;
+
+  /* ── 1. SESSION COMPLETE — six seconds, then the stopwatch row returns (§7.1). ───────── */
+  if (!session && typeof completeMs === 'number' && completeMs > 0) {
+    const minutes = Math.max(1, Math.round(completeMs / 60_000));
+    return (
+      <div
+        className="halo-row-swap"
+        data-halo-focus-row="complete"
+        style={{ display: 'flex', alignItems: 'center', gap: 'var(--halo-gap-loose, 12px)', width: '100%' }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--halo-dim)' }} />
+            <span style={EYEBROW}>Focus</span>
+            <span style={{ ...EYEBROW, color: 'var(--halo-text)', textTransform: 'uppercase' }}>Complete</span>
+          </div>
+          <Clock ms={completeMs} />
+        </div>
+        <span aria-hidden="true" style={DIVIDER} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={LABEL}>Focused</span>
+          <span style={{ ...VALUE, color: 'var(--halo-text)' }}>{minutes} min</span>
+        </div>
+        <span aria-hidden="true" style={{ flex: 1 }} />
+        <IconBtn label="Dismiss" onClick={() => onDismissComplete?.()}>
+          <X size={16} strokeWidth={2} aria-hidden="true" />
+        </IconBtn>
+      </div>
+    );
+  }
+
+  /* ── 2. THE ALLOW-LIST VIEW — reuses the same row, so the panel height never changes. ─── */
+  if (session && view === 'allowed') {
+    const apps = session.allowedApps ?? [];
+    const domains = session.allowedDomains ?? [];
+    const tiers = session.allowedTiers ?? [];
+    const none = apps.length + domains.length + tiers.length === 0;
+    const chips: Array<{ key: string; icon: ReactNode; text: string }> = [
+      ...apps.map((a) => ({ key: `a:${a}`, icon: <AppWindow size={11} strokeWidth={2} aria-hidden="true" />, text: a })),
+      ...domains.map((d) => ({ key: `d:${d}`, icon: <Globe size={11} strokeWidth={2} aria-hidden="true" />, text: d })),
+      ...tiers.map((t) => ({ key: `t:${t}`, icon: null, text: t })),
+    ];
+
+    return (
+      <div
+        className="halo-row-swap"
+        data-halo-focus-row="allowed"
+        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minWidth: 0 }}
+        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+          if (e.key === 'Escape') setView('row');
+        }}
+      >
+        <IconBtn label="Back" onClick={() => setView('row')}>
+          <ChevronLeft size={16} strokeWidth={2} aria-hidden="true" />
+        </IconBtn>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+          <span style={LABEL}>Allowed in this session</span>
+          {session.strictness === 'distracting' ? (
+            <span style={{ ...VALUE, color: 'var(--halo-text)' }}>Distracting apps and sites are blocked.</span>
+          ) : none ? (
+            <span style={{ ...VALUE, color: 'var(--halo-text)' }}>No apps or sites allowed. Everything is blocked.</span>
+          ) : (
+            <div
+              role="list"
+              aria-label="Allowed apps and sites"
+              tabIndex={0}
+              onWheel={(e) => e.stopPropagation()}
+              className="halo-chips"
+              style={{ display: 'flex', gap: 6, overflowX: 'auto', minWidth: 0, padding: '2px 0' }}
+            >
+              {chips.map((c) => (
+                <span
+                  key={c.key}
+                  role="listitem"
+                  title={c.text}
+                  style={{
+                    height: 28,
+                    padding: '0 10px',
+                    border: '1px solid var(--halo-border)',
+                    borderRadius: 999,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 'var(--halo-t-value, 13px)',
+                    color: 'var(--halo-text)',
+                    whiteSpace: 'nowrap',
+                    flex: 'none',
+                  }}
+                >
+                  {c.icon}
+                  {c.text}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        {onEditFocus && (
+          <IconBtn label="Edit in Focus" onClick={onEditFocus}>
+            <ChevronRight size={16} strokeWidth={2} aria-hidden="true" />
+          </IconBtn>
+        )}
+      </div>
+    );
+  }
+
+  /* ── 3. THE NORMAL ROW — stopwatch or session. ────────────────────────────────────────── */
+  const lockLabel = session?.strictness === 'non_allowed' ? 'Allow-list' : 'Locked';
+  const lockRule =
+    session?.strictness === 'non_allowed'
+      ? 'Only the apps and sites allowed in this session are open'
+      : 'Distracting apps and sites are blocked';
+  const endsAtLabel = endsAt != null ? formatWallClock(endsAt) : null;
+  const allowed = session ? allowedNow(session, tracked, trackedTier) : null;
 
   return (
     <div
-      className="flex items-center"
-      style={{ gap: 'var(--halo-gap-loose)', width: '100%' }}
-      data-halo-focus-row="true"
+      className="halo-row-swap"
+      data-halo-focus-row={session ? 'session' : 'stopwatch'}
+      style={{ display: 'flex', alignItems: 'center', gap: 'var(--halo-gap-loose, 12px)', width: '100%', minWidth: 0 }}
     >
-      {/* ── THE STOPWATCH GROUP — dot, label, app name, clock. ONE fact. ────────────
-       *
-       * THE USER'S CORRECTION, AND IT OVERRIDES BOARD 2.
-       * "I have been in Figma for 42 minutes" is ONE statement. The previous layout split it
-       * across three blocks separated by two dividers — STOPWATCH | TRACKING Figma |
-       * PRODUCTIVE — so the app name read as an unrelated figure next to the timer, and the eye
-       * had to re-join them. The name belongs WITH the stopwatch; that is where it is now.
-       *
-       * HALO_STATES.html line 143 specifies three separate blocks. This deliberately departs
-       * from it, at the user's instruction, and departs only in GROUPING — no dimension, no
-       * colour, no token and no control changed. One divider remains, between this group and
-       * PRODUCTIVE, so the row is still two figures rather than four.
-       *
-       * The private shape is preserved verbatim: a private window shows a lock and the words
-       * "Private window" and NEVER a hostname, because main suppresses the domain for one. */}
-      <div
-        className="flex flex-col justify-center"
-        style={{ minWidth: 0, gap: 2, flex: '0 1 auto' }}
-      >
-        <div className="flex items-center" style={{ gap: 6, minWidth: 0 }}>
+      {/* ── THE CLOCK GROUP. One clock, one label, and — while measuring — one subject. */}
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, minWidth: 0, flex: '0 1 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <span
             aria-hidden="true"
             style={{
@@ -154,145 +379,166 @@ export const FocusPageRow = memo(function FocusPageRow({
               height: 6,
               borderRadius: 999,
               flexShrink: 0,
-              /* `live` -> the only accent. `paused` -> the dim token, NOT opacity. */
               background: live ? 'var(--halo-accent)' : 'var(--halo-dim)',
+              transition: 'background 150ms var(--halo-ease)',
             }}
           />
-          <span style={{ ...EYEBROW_STYLE, flexShrink: 0 }}>{EYEBROW}</span>
-          {tracked && (
+          <span style={{ ...EYEBROW, flexShrink: 0 }}>{session ? 'Focus' : 'Stopwatch'}</span>
+
+          {/* Away is a LABEL, not a colour-only signal. */}
+          {away && <span style={{ ...EYEBROW, color: 'var(--halo-away)', textTransform: 'uppercase' }}>Away</span>}
+
+          {/* The lock: what the FocusManager is enforcing, in one word. Paused lifts the lock,
+           * so the word changes to Paused and the glyph goes away. */}
+          {session && !paused && (
+            <span
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+              title={lockRule}
+              aria-label={lockRule}
+            >
+              <Lock size={11} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-accent)' }} />
+              <span style={{ ...EYEBROW, color: 'var(--halo-text)' }}>{lockLabel}</span>
+            </span>
+          )}
+          {session && paused && <span style={{ ...EYEBROW, color: 'var(--halo-text)' }}>Paused</span>}
+
+          {/* While BOUND to a deadline the app/site stays in the eyebrow row (§7.8). */}
+          {!session && deadlineTitle && tracked && (
             <>
-              {/* hairline between the label and the name: a SEPARATOR, not a block divider.
-               * It reads as one label reading "STOPWATCH · Figma", not two figures. */}
-              <span aria-hidden="true" style={{ width: 1, height: 8, flexShrink: 0, background: 'var(--halo-border)' }} />
-              <span className="flex items-center" style={{ gap: 6, minWidth: 0, flex: '0 1 auto' }}>
-                {tracked.kind === 'priv' ? (
-                  <Lock size={13} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
-                ) : tracked.kind === 'web' ? (
-                  <Globe size={13} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
-                ) : (
-                  <AppWindow size={13} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)', flexShrink: 0 }} />
-                )}
-                {/* STOPPED -> the name turns MUTED (board 2 line 143). The dot already
-                 * follows `live`; a bright name beside a dim dot would still advertise an
-                 * active target. `minWidth: 0` is what lets the ellipsis work at all. */}
-                <span
-                  style={{
-                    fontSize: 'max(12px, calc(14px * var(--halo-scale, 1)))',
-                    color: live ? 'var(--halo-text)' : 'var(--halo-dim)',
-                    minWidth: 0,
-                    flex: '0 1 auto',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontWeight: 500,
-                  }}
-                >
+              <span aria-hidden="true" style={{ width: 1, height: 8, background: 'var(--halo-border)', flexShrink: 0 }} />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <TrackIcon kind={tracked.kind} />
+                <span className="truncate" style={{ fontSize: 'var(--halo-t-value, 13px)', fontWeight: 500, color: live ? 'var(--halo-text)' : 'var(--halo-dim)', minWidth: 0 }}>
                   {tracked.label}
                 </span>
               </span>
             </>
           )}
         </div>
-        <div
-          className="tabular-nums"
-          style={{
-            fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-            fontSize: 'max(20px, calc(26px * var(--halo-scale, 1)))',
-            fontWeight: 500,
-            lineHeight: 1.15,
-            letterSpacing: '-0.01em',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {/* THE SPLIT. Dimmed hours, bright minutes+seconds. One span cannot do this. */}
-          <span style={{ color: 'var(--halo-dim)' }}>{dim}</span>
-          <span style={{ color: 'var(--halo-text)' }}>{bright}</span>
-        </div>
+        <Clock ms={session ? sessionMs : snapshot.displayMs} frozen={session ? paused : away} />
       </div>
 
-      {/* ── THE ONE REMAINING DIVIDER: this group | PRODUCTIVE ─────────────────────── */}
-      <span
-        aria-hidden="true"
-        style={{ width: 1, height: 44, flexShrink: 0, background: 'var(--halo-border)' }}
-      />
+      {/* ── TRACKING (stopwatch) / FOR (bound deadline) / AWAY ─────────────────────────── */}
+      {!session && tracked && !deadlineTitle && (
+        <>
+          <span aria-hidden="true" style={DIVIDER} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span style={LABEL}>Tracking</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <TrackIcon kind={tracked.kind} />
+              <span
+                className="truncate"
+                style={{ fontSize: 'var(--halo-t-value, 13px)', fontWeight: 500, color: live ? 'var(--halo-text)' : 'var(--halo-dim)', minWidth: 0 }}
+              >
+                {tracked.label}
+              </span>
+            </span>
+          </div>
+        </>
+      )}
 
-      {/* PRODUCTIVE, not TODAY. The number is productive time ONLY — see the block note above. */}
-      <div className="flex flex-col" style={{ gap: 2 }}>
-        <span style={EYEBROW_STYLE}>Productive</span>
-        <span
-          className="tabular-nums"
-          style={{
-            fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-            /* file: JetBrains Mono 500/16 for the value; HTML uses --t2 (#a1a1aa) here */
-            fontSize: 'max(13px, calc(16px * var(--halo-scale, 1)))',
-            fontWeight: 500,
-            color: 'var(--halo-muted)',
-            lineHeight: 1.15,
-          }}
-        >
-          {formatStopwatch(productiveMs)}
-        </span>
-      </div>
+      {!session && deadlineTitle && (
+        <>
+          <span aria-hidden="true" style={DIVIDER} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span style={LABEL}>For</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <CalendarGlyph />
+              <span className="truncate" style={{ fontSize: 'var(--halo-t-value, 13px)', fontWeight: 500, color: 'var(--halo-text)', minWidth: 0 }}>
+                {deadlineTitle}
+              </span>
+            </span>
+          </div>
+        </>
+      )}
 
-      {/* spacer — the file's own 98px gap between the readout and the controls */}
-      <span aria-hidden="true" className="flex-1" />
+      {!session && away && (
+        <>
+          <span aria-hidden="true" style={DIVIDER} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={LABEL}>Away</span>
+            <span style={{ ...VALUE, color: 'var(--halo-away)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Coffee size={12} strokeWidth={2} aria-hidden="true" />
+              {formatAway(awayMs ?? 0)}
+            </span>
+          </div>
+        </>
+      )}
 
-      {/* ── button/reset: 44x44 r=999, OUTLINE #2e2e33, icon #a1a1aa ─────────── */}
-      <button
-        type="button"
-        onClick={onReset}
-        aria-label="Reset timer"
-        title="Reset timer"
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 999,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          background: 'transparent',
-          border: '1px solid var(--halo-border)',
-          color: 'var(--halo-muted)',
-          cursor: 'pointer',
-        }}
-      >
-        <RotateCcw size={13} strokeWidth={2} aria-hidden="true" />
-      </button>
+      {/* ── SESSION: Now + Ends, and no controls that pretend to drive it. ─────────────── */}
+      {session && (
+        <>
+          <span aria-hidden="true" style={DIVIDER} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span style={LABEL}>Now</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              {tracked ? <TrackIcon kind={tracked.kind} /> : null}
+              <span className="truncate" style={{ fontSize: 'var(--halo-t-value, 13px)', fontWeight: 500, color: 'var(--halo-text)', minWidth: 0 }}>
+                {tracked?.label ?? 'No app yet'}
+              </span>
+              {allowed === true && (
+                <Check size={11} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-accent)', flexShrink: 0 }} />
+              )}
+            </span>
+          </div>
+        </>
+      )}
 
-      {/* ── button/pause: 44x44 r=999, SOLID accent, icon #09090b (dark on accent) ─ */}
-      <button
-        type="button"
-        onClick={onTogglePause}
-        aria-label={paused ? 'Resume timer' : 'Pause timer'}
-        title={paused ? 'Resume' : 'Pause'}
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 999,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          /* the file's only solid fill, and only while live: paused it takes the outline
-           * treatment so the state is legible without reading the label. */
-          background: paused ? 'transparent' : 'var(--halo-accent)',
-          border: paused ? '1px solid var(--halo-border)' : '1px solid transparent',
-          /* `--halo-on-accent`, not a hardcoded ink. The glyph sits on the accent FILL, and
-           * the fill changes per theme while the glyph did not: dark ink was 8.07:1 on the
-           * dark sage accent but only 3.71:1 on the light teal one — a real AA body-text
-           * failure that was invisible in the theme the island was designed in. The token is
-           * white-on-accent in light and near-black-on-accent in dark. */
-          color: paused ? 'var(--halo-muted)' : 'var(--halo-on-accent)',
-          cursor: 'pointer',
-        }}
-      >
-        {paused ? (
-          <Play size={13} strokeWidth={2} aria-hidden="true" />
-        ) : (
-          <Pause size={13} strokeWidth={2} aria-hidden="true" />
-        )}
-      </button>
+      <span aria-hidden="true" style={{ flex: 1 }} />
+
+      {session && (
+        <>
+          <span aria-hidden="true" style={DIVIDER} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+            <span style={LABEL}>Ends</span>
+            {/* An open-ended session has no wall-clock to print. "no limit" is the truth. */}
+            <span style={{ ...VALUE, color: 'var(--halo-muted)' }}>{endsAtLabel ?? 'no limit'}</span>
+          </div>
+          <IconBtn label="Show what is allowed in this session" onClick={() => setView('allowed')}>
+            <ChevronRight size={16} strokeWidth={2} aria-hidden="true" />
+          </IconBtn>
+        </>
+      )}
+
+      {/* THE CONTROLS BELONG TO THE STOPWATCH. During a session they do not exist. */}
+      {!session && (
+        <>
+          <IconBtn label="Reset timer" onClick={onReset}>
+            <RotateCcw size={13} strokeWidth={2} aria-hidden="true" />
+          </IconBtn>
+          <IconBtn
+            label={snapshot.paused ? 'Resume timer' : 'Pause timer'}
+            fill={!snapshot.paused}
+            onClick={onTogglePause}
+          >
+            {snapshot.paused ? <Play size={13} strokeWidth={2} aria-hidden="true" /> : <Pause size={13} strokeWidth={2} aria-hidden="true" />}
+          </IconBtn>
+        </>
+      )}
     </div>
   );
 });
+
+/** Small calendar glyph for the `For` block — drawn locally so this file does not import a whole
+ *  icon set for one 12px shape, and so it matches the 2px stroke of its neighbours. */
+function CalendarGlyph() {
+  return (
+    <svg
+      width={12}
+      height={12}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ color: 'var(--halo-muted)', flexShrink: 0 }}
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}

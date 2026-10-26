@@ -1404,8 +1404,19 @@ html.light .dk-group-label::before { box-shadow: none; }
 .dk-response-expand:hover { color: var(--dk-text-primary); background: rgba(255,255,255,0.05); }
 
 /* Group cards */
-.group-card { display: flex; flex-direction: column; min-height: 0; }
-.group-card-header { display: flex; align-items: center; gap: 6px; padding: 2px 0 8px; }
+/* THE COATING — the chosen group color must tint the WHOLE group surface,
+   not just the title text. --group-accent/-bg/-border are set inline by
+   GroupCard.tsx from GROUP_COLORS; before this block existed, NOTHING in
+   the stylesheet consumed bg/border, which is exactly why changing a group
+   color "only changed the text of the group". */
+.group-card {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--group-bg, rgba(139,92,246,0.12));
+  border: 1px solid var(--group-border, rgba(139,92,246,0.35));
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.group-card-header { display: flex; align-items: center; gap: 6px; padding: 2px 6px 8px; }
 .group-expand-btn { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: transparent; border: none; cursor: pointer; color: var(--dk-text-secondary); padding: 0; }
 .group-expand-btn:hover { background: rgba(255,255,255,0.06); }
 .group-color-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }

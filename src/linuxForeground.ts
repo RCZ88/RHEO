@@ -639,11 +639,23 @@ async function cursorFromKdotool(): Promise<LinuxCursorPoint | undefined> {
   // NOTE: kdotool separates with a COLON, unlike every X11 tool this file already parses
   // (`x=1367`). Reusing the `key=value` reader here silently returned undefined for every
   // read, which is how "hover never opens on Wayland" survived a first attempt at the fix.
-  const out = await execFileAsync('kdotool', ['getmouselocation'], { timeout: COMMAND_TIMEOUT_MS });
-  const x = /(?:^|\s)x:\s*(-?\d+)/.exec(out.stdout)?.[1];
-  const y = /(?:^|\s)y:\s*(-?\d+)/.exec(out.stdout)?.[1];
-  if (x === undefined || y === undefined) return undefined;
-  return { x: Number(x), y: Number(y) };
+  /* kdotool reads the pointer by loading a KWin scripting object named /Scripting/Script1,
+   * so two invocations that overlap can collide — the loser exits with "No such object path
+   * '/Scripting/Script1'". Measured here: 1 failure in 20 sequential calls. One retry turns
+   * that into roughly 1 in 400, and it matters because a failed read falls through to
+   * xdotool, whose point is frozen on Wayland (see getLinuxCursorPoint). */
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const out = await execFileAsync('kdotool', ['getmouselocation'], { timeout: COMMAND_TIMEOUT_MS });
+      const x = /(?:^|\s)x:\s*(-?\d+)/.exec(out.stdout)?.[1];
+      const y = /(?:^|\s)y:\s*(-?\d+)/.exec(out.stdout)?.[1];
+      if (x === undefined || y === undefined) return undefined;
+      return { x: Number(x), y: Number(y) };
+    } catch {
+      /* retry once; a second failure is reported as "no point" by the caller's fallback */
+    }
+  }
+  return undefined;
 }
 
 export async function getLinuxCursorPoint(): Promise<LinuxCursorPoint | undefined> {
@@ -665,6 +677,16 @@ export async function getLinuxCursorPoint(): Promise<LinuxCursorPoint | undefine
       // Try the next strategy. A missing cursor is not an error worth surfacing to the user.
     }
   }
+
+  /* THE X POINTER IS NOT A FALLBACK ON WAYLAND.
+   *
+   * Under XWayland it only moves while the cursor is over an XWayland window; over a native
+   * Wayland app it stays at the last X coordinate — verified live: KWin reported (679, 933)
+   * while xdotool reported (138, 522). A frozen point is worse than no point: the caller's
+   * FSM would keep testing a hitbox the cursor left long ago, so the island could stay open
+   * (or open by itself) with nothing under the pointer. `undefined` means "unknown", which
+   * the FSM treats as "not hovering" — the safe direction. X11 sessions keep the fallback. */
+  if (process.env.WAYLAND_DISPLAY) return undefined;
 
   // XWayland fallback: `xdotool getmouselocation` / `xdotool getmouselocation --shell`.
   try {

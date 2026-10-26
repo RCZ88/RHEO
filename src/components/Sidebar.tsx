@@ -63,10 +63,26 @@ const NodeDot = memo(function NodeDot({
     <button
       onClick={() => onNavigate(item.path)}
       className={cn(
-        'group relative flex items-center w-full transition-all duration-150',
+        // `transition-all` → `transition-colors`: only colours change on this
+        // row, and `all` also animates layout (LAMINAR §6 bans it).
+        'group relative flex items-center w-full rounded-lg transition-colors duration-150',
+        // This row had NO surface state. Measured in light mode: background
+        // `rgba(0,0,0,0)` at rest, on hover AND while active, `radius: 0px`,
+        // `cursor: default`. The four `--sidebar-*` tokens below were written
+        // for exactly this row and referenced by ZERO components, so the one
+        // control the user touches most was the only control in the app with
+        // no hover and no "you are here" except a 6px dot.
+        // Rest/hover/active now come from tokens, so both themes resolve their
+        // own values. The active wash is the PAGE accent at 15% (not the fixed
+        // teal `--sidebar-active-bg`) because the dot on this same row is
+        // already `var(--page-accent)` in light — a teal wash under a pink dot
+        // was two signal hues on one row (LAMINAR §2). Hover stays neutral
+        // ink: hovering is not a signal.
+        isActive ? 'bg-[var(--page-accent-15)]' : 'hover:bg-[var(--sidebar-hover-bg)]',
         collapsed ? 'justify-center py-2' : 'gap-3 py-[7px] pl-3 pr-3',
       )}
       title={collapsed ? item.label : undefined}
+      aria-current={isActive ? 'page' : undefined}
     >
       <>
         {/* Icon chip — centered in collapsed; off-screen left in expanded */}

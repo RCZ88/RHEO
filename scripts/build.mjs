@@ -173,7 +173,22 @@ async function main() {
   const mainExtraFiles = findAllTs(resolve(SRC, 'main')).filter(f => !f.endsWith('terminalRelay.ts'));
   const gameDetectionFile = resolve(SRC, 'gameDetection.ts');
   const linuxForegroundFile = resolve(SRC, 'linuxForeground.ts');
-  const allTsFiles = [gameDetectionFile, linuxForegroundFile, ...serviceFiles, ...domainFiles, ...libFiles, ...sharedFiles, ...mainExtraFiles].filter(f => existsSync(f));
+  /* `src/systemInputIdle.ts` and `src/infrastructure/**` are required at RUNTIME by
+   * main.ts (`require('./systemInputIdle')`, `require('./infrastructure/ipc/goal-handlers')`),
+   * and rollup leaves those literal requires in the bundle — so a compiled sibling has to
+   * exist next to main.cjs. They were missing from this list, and the 2026-10-21 build
+   * shipped a main.cjs that died at boot with "Cannot find module './systemInputIdle'".
+   *
+   * The list is no longer the only line of defence: step 4b below calls
+   * scripts/build-main-modules.mjs, which derives the whole set from main.ts's own
+   * require() calls. */
+  const systemInputIdleFile = resolve(SRC, 'systemInputIdle.ts');
+  const infrastructureFiles = findAllTs(resolve(SRC, 'infrastructure'));
+  const allTsFiles = [
+    gameDetectionFile, linuxForegroundFile, systemInputIdleFile,
+    ...infrastructureFiles,
+    ...serviceFiles, ...domainFiles, ...libFiles, ...sharedFiles, ...mainExtraFiles,
+  ].filter(f => existsSync(f));
 
   for (const tsFile of allTsFiles) {
     const rel = relative(SRC, tsFile).replace(/\.ts$/, '.js');
@@ -305,6 +320,28 @@ async function main() {
   }
   if (existsSync(mainTemp)) rmSync(mainTemp, { recursive: true, force: true });
 
+  /* ── THE BUNDLE'S INLINED `require()` PATHS ───────────────────────────────────────────
+   * main.cjs is ONE file. A literal `require('../lib/x')` that lived in a module rollup
+   * INLINED now resolves against dist-electron/ instead of that module's own directory,
+   * and dies with "Cannot find module" the moment that code path runs.
+   *
+   * In main.cjs EVERY relative path is relative to dist-electron/, so collapsing the
+   * leading '../' segments to './' is exactly right: `../lib/scheduleParser` and
+   * `../../services/connectors/sync-imap` both become `./…`.
+   *
+   * scripts/rebuild-main.mjs has patched one of these by hand for a long time; this is the
+   * same fix, generalised and applied by the FULL build as well. */
+  {
+    const mainPath = resolve(OUT, 'main.cjs');
+    const before = readFileSync(mainPath, 'utf-8');
+    const after = before.replace(/require\((['"])(?:\.\.\/)+/g, 'require($1./');
+    if (after !== before) {
+      writeFileSync(mainPath, after);
+      const n = (before.match(/require\((['"])(?:\.\.\/)+/g) || []).length;
+      console.log(`  main.cjs: ${n} inlined require() path(s) rewritten to dist-electron-relative`);
+    }
+  }
+
   // Create a main.js shim so require('../main') from services resolves
   writeFileSync(resolve(OUT, 'main.js'), 'module.exports = require("./main.cjs");\n');
   console.log(`  main.js shim created`);
@@ -317,6 +354,20 @@ async function main() {
   const content = readFileSync(resolve(OUT, 'main.cjs'), 'utf-8');
   if (content.includes('./services/') || content.includes('./gameDetection')) {
     console.log('\n  ✅ Services left as external require() (expected)');
+  }
+
+  /* ── Step 4b: EVERY runtime module main.cjs requires, derived from main.ts itself ──────
+   * Step 3 compiles whole directories; this compiles exactly the modules main.ts pulls in
+   * with literal `require('./x')` calls, so a NEW runtime module cannot leave the app
+   * unbootable again ("Cannot find module './x'" at launch).
+   *
+   * scripts/build-main-modules.mjs is the same script scripts/rebuild-main.mjs already
+   * calls; the full build simply never did. */
+  {
+    const modScript = resolve(ROOT, 'scripts', 'build-main-modules.mjs');
+    if (existsSync(modScript)) {
+      execSync(`"${process.execPath}" "${modScript}"`, { cwd: ROOT, stdio: 'inherit', shell: true });
+    }
   }
 
   console.log('\n✅ Build complete!');

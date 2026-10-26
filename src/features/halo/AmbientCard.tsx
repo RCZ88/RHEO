@@ -237,8 +237,17 @@ function readKind(activity: IslandActivity, unknown: string): Reading {
     case 'now': {
       const d = (p ?? {}) as NowPayload;
       const has = isSet(d?.app) && d.app !== 'No app detected';
+      /* SHOW THE SITE, NOT THE BROWSER. When the user is on a browser, the whole point of
+       * the "Now" widget is "what am I looking at right now", which is the SITE, not the
+       * browser's process name. `domain` is `null` (not `undefined`) when a browser is
+       * focused but the site is unknown (private window, stale extension), and that
+       * distinction is load-bearing: null keeps "a browser is focused, site unknown" while
+       * undefined means "not a browser at all". Both fall through to the app name here. */
+      const shown = has
+        ? (isSet(d?.domain) ? String(d.domain) : String(d.app))
+        : unknown;
       return {
-        primary: { text: has ? String(d.app) : unknown, honest: !has },
+        primary: { text: shown, honest: !has },
         secondary: has && isSet(d?.category) ? tierLabel(String(d.category)) : null,
         pip: has ? tierLabel(String(d.tier)).slice(0, 4) : pipUnknown,
       };

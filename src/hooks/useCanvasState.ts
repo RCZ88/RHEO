@@ -23,6 +23,86 @@ const HISTORY_ACTIONS = new Set<CanvasAction['type']>([
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
+// ─── Group tidy layout ───────────────────────────────────────────────────
+// ONE algorithm for every path that organises a group (creation, the Tidy
+// button, arrange modes). Reads cards in reading order, packs them into
+// equal-width columns (the shortest column takes the next card — masonry, so
+// no holes), and returns an EXACT-fit frame size. Cards are never resized.
+const GROUP_CELL = 40
+const GROUP_PAD = 14       // item inset from the coating edge
+const GROUP_GAP = 16       // gap between items
+const GROUP_HEADER = 30    // matches the -30 offset in GroupCard's placement math
+const GROUP_CHROME = 54    // CardFrame header (~38px) + body padding (16px) above the group
+const GROUP_CHROME_W = 24  // CardFrame body horizontal padding (12px each side)
+const GROUP_HDR_ROW = 32   // the group's own header row (expand / rename / actions)
+
+// One algorithm for every path that organises a group (creation, the Tidy
+// button, arrange modes). Exported so the layout math is probeable: a probe
+// runs the REAL function and asserts every card lands inside the frame with
+// zero overlaps, instead of trusting hand-computed constants.
+export function layoutTidyGrid(
+  cards: CanvasCard[],
+  columns = 2,
+  anchor?: { x: number; y: number }
+) {
+  const ordered = [...cards].sort((a, b) =>
+    (a.position.y - b.position.y) || (a.position.x - b.position.x))
+
+  let minX = Infinity, minY = Infinity
+  for (const c of cards) {
+    minX = Math.min(minX, c.position.x)
+    minY = Math.min(minY, c.position.y)
+  }
+
+  // Keep the -10/-30 convention shared with GroupCard's placement math
+  // (rendered offset = card.pos - group.pos - (10, 30)).
+  const baseX = anchor ? anchor.x : minX - 10
+  const baseY = anchor ? anchor.y : minY - 30
+
+  const cols = Math.max(1, Math.min(columns, ordered.length))
+  const colW = Math.max(...ordered.map(c => c.size.w * GROUP_CELL))
+  const colY = new Array<number>(cols).fill(0)
+  const positions: Record<string, { x: number; y: number }> = {}
+
+  for (const c of ordered) {
+    let col = 0
+    for (let i = 1; i < cols; i++) if (colY[i] < colY[col]) col = i
+    positions[c.id] = {
+      x: baseX + 10 + GROUP_PAD + col * (colW + GROUP_GAP),
+      y: baseY + GROUP_HEADER + GROUP_PAD + colY[col],
+    }
+    colY[col] += c.size.h * GROUP_CELL + GROUP_GAP
+  }
+
+  return {
+    positions,
+    position: { x: baseX, y: baseY },
+    size: groupFrameFor(ordered, positions, { x: baseX, y: baseY }),
+  }
+}
+
+// Exact-fit frame for a group from where its members ACTUALLY sit. Shares the
+// placement convention with layoutTidyGrid (rendered = pos - base - (10, 30)),
+// so a hand-arranged layout sizes exactly like a tidied one and the frame
+// grows/shrinks as members are dragged. Exported for the layout probe.
+export function groupFrameFor(
+  members: Array<{ id: string; position: { x: number; y: number }; size: { w: number; h: number } }>,
+  positions: Record<string, { x: number; y: number }>,
+  base: { x: number; y: number },
+): { w: number; h: number } {
+  let rightMax = 0
+  let bottomMax = 0
+  for (const c of members) {
+    const p = positions[c.id] ?? c.position
+    rightMax = Math.max(rightMax, p.x - base.x - 10 + c.size.w * GROUP_CELL)
+    bottomMax = Math.max(bottomMax, p.y - base.y - 30 + c.size.h * GROUP_CELL)
+  }
+  return {
+    w: Math.max(10, Math.ceil((GROUP_CHROME_W + GROUP_PAD + rightMax) / GROUP_CELL)),
+    h: Math.max(6, Math.ceil((GROUP_CHROME + GROUP_HDR_ROW + GROUP_PAD + bottomMax) / GROUP_CELL)),
+  }
+}
+
 function seedCardsFromSetup(dispatch: (action: CanvasAction) => void, config: DefaultSetupConfig) {
   for (const c of config.cards) {
     if (!c.enabled) continue
@@ -233,33 +313,31 @@ export function useCanvasState() {
     const cards = cardIds.map(id => state.cards[id]).filter(Boolean)
     if (cards.length === 0) return null
 
-    // Compute bounding box
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const c of cards) {
-      minX = Math.min(minX, c.position.x)
-      minY = Math.min(minY, c.position.y)
-      maxX = Math.max(maxX, c.position.x + c.size.w * 40)
-      maxY = Math.max(maxY, c.position.y + c.size.h * 40)
-    }
-
     const groupId = generateUUID()
     const groupCardId = generateUUID()
+
+    // Tidy on creation: grouping must ORGANISE the members, not just wrap a
+    // union-box around wherever they happened to sit. (The old bounding-box
+    // math kept the raw scattered positions, which is why a group of cards
+    // from opposite corners rendered as one huge frame with cards floating
+    // in it — the "mess" CZ reported.)
+    const layout = layoutTidyGrid(cards)
 
     const group: CanvasGroup = {
       id: groupId,
       label,
       colorId,
       cardIds,
-      position: { x: minX - 10, y: minY - 30 },
-      size: { w: Math.max(10, Math.ceil((maxX - minX + 20) / 40)), h: Math.max(6, Math.ceil((maxY - minY + 60) / 40)) },
+      position: layout.position,
+      size: layout.size,
       createdAt: Date.now(),
     }
 
     const groupCard: CanvasCard = {
       id: groupCardId,
       type: 'group',
-      position: { x: minX - 10, y: minY - 30 },
-      size: group.size,
+      position: { ...layout.position },
+      size: layout.size,
       zIndex: 0,
       pinned: true,
       data: {
@@ -267,7 +345,7 @@ export function useCanvasState() {
         arrange: 'grid',
         childCards: cards.map(c => ({
           id: c.id, type: c.type, data: c.data, source: c.source,
-          position: c.position,
+          position: layout.positions[c.id] || c.position,
           size: c.size, pinned: c.pinned, status: c.status, createdAt: c.createdAt,
         })),
       },
@@ -277,6 +355,11 @@ export function useCanvasState() {
     }
 
     dispatch({ type: 'CREATE_GROUP', group, cardIds, groupCard })
+    // Move the LIVE member cards onto the tidy grid as well — React batches
+    // both dispatches into one commit (so one undo entry), and removing a
+    // card from the group later returns it to its tidy slot instead of a
+    // random corner of the board.
+    dispatch({ type: 'ARRANGE_GROUP', id: groupId, positions: layout.positions, size: layout.size })
     return groupId
   }, [state.cards])
 
@@ -311,55 +394,43 @@ export function useCanvasState() {
     if (!group) return
 
     const groupCards = group.cardIds.map(id => state.cards[id]).filter(Boolean)
-    const positions: Record<string, { x: number; y: number }> = {}
-    const CELL = 40
-    const GAP = 1
+    if (groupCards.length === 0) return
 
     if (mode === 'custom' && customPositions) {
-      Object.assign(positions, customPositions)
-    } else if (mode === 'stack') {
-      groupCards.forEach((card, i) => {
-        positions[card.id] = {
-          x: group.position.x + 2 * CELL,
-          y: group.position.y + (i + 1) * (3 * CELL + GAP),
-        }
-      })
-    } else if (mode === 'mosaic') {
-      groupCards.forEach((card, i) => {
-        const col = i % 2
-        const row = Math.floor(i / 2)
-        positions[card.id] = {
-          x: group.position.x + ((col * 5) + 1) * CELL,
-          y: group.position.y + ((row * 4) + 1) * CELL,
-        }
-      })
-    } else {
-      // grid (default)
-      const count = groupCards.length
-      const cols = Math.ceil(Math.sqrt(count))
-      groupCards.forEach((card, i) => {
-        const col = i % cols
-        const row = Math.floor(i / cols)
-        positions[card.id] = {
-          x: group.position.x + (col + 1) * (4 * CELL + GAP),
-          y: group.position.y + (row + 1) * (3 * CELL + GAP),
-        }
-      })
+      dispatch({ type: 'ARRANGE_GROUP', id: groupId, positions: customPositions, size: group.size })
+      return
     }
 
-    // Compute new group size based on arrangement
-    const posArray = Object.values(positions)
-    let newMaxX = 0, newMaxY = 0
-    for (const p of posArray) {
-      newMaxX = Math.max(newMaxX, p.x - group.position.x + 4 * CELL)
-      newMaxY = Math.max(newMaxY, p.y - group.position.y + 3 * CELL)
-    }
-    const newSize = {
-      w: Math.max(group.size.w, Math.ceil(newMaxX / CELL) + 2),
-      h: Math.max(group.size.h, Math.ceil(newMaxY / CELL) + 2),
-    }
+    // Every tidy mode shares ONE algorithm; the mode only picks the column
+    // count. Anchored at the group's current position so re-arranging snaps
+    // the frame to the content without teleporting the group itself.
+    const columns = mode === 'stack' ? 1 : mode === 'mosaic' ? 3 : 2
+    const layout = layoutTidyGrid(groupCards, columns, group.position)
+    dispatch({ type: 'ARRANGE_GROUP', id: groupId, positions: layout.positions, size: layout.size })
+  }, [state.groups, state.cards])
 
-    dispatch({ type: 'ARRANGE_GROUP', id: groupId, positions, size: newSize })
+  // Move ONE member inside a group (manual positioning). The frame is re-fitted
+  // from the childCards SNAPSHOT — the positions GroupCard actually renders —
+  // and dispatched through ARRANGE_GROUP so the live card, the snapshot and the
+  // group/frame sizes all stay in lock-step.
+  const moveGroupChild = useCallback((groupId: string, cardId: string, position: { x: number; y: number }) => {
+    const group = state.groups[groupId]
+    if (!group || !group.cardIds.includes(cardId)) return
+    const visual = Object.values(state.cards).find(c => c.type === 'group' && c.data?.groupId === groupId)
+    const snapshot: Array<{ id: string; position: { x: number; y: number }; size: { w: number; h: number } }> =
+      (visual?.data?.childCards || []).map((c: any) => ({
+        id: c.id,
+        position: c.position || { x: 0, y: 0 },
+        size: c.size || { w: 4, h: 4 },
+      }))
+    const members = snapshot.length
+      ? snapshot
+      : group.cardIds.map(id => state.cards[id]).filter(Boolean).map(c => ({ id: c.id, position: c.position, size: c.size }))
+    if (members.length === 0) return
+    const positions: Record<string, { x: number; y: number }> = {}
+    for (const m of members) positions[m.id] = m.id === cardId ? position : m.position
+    const size = groupFrameFor(members, positions, group.position)
+    dispatch({ type: 'ARRANGE_GROUP', id: groupId, positions: { [cardId]: position }, size })
   }, [state.groups, state.cards])
 
   const cards = Object.values(state.cards).filter(c => !c.dismissedAt)
@@ -444,7 +515,7 @@ export function useCanvasState() {
     wasLoaded: loadedFromStorage.current, canvasEpoch,
     addCard, updateCard, removeCard, moveCard, resizeCard, pinCard, dismissCard,
     setStatus, resetLayout, arrangeCards, clearAll, forceSave, setPanZoom,
-    createGroup, updateGroup, ungroup, deleteGroup, addToGroup, removeFromGroup, arrangeGroup, syncAutomations,
+    createGroup, updateGroup, ungroup, deleteGroup, addToGroup, removeFromGroup, arrangeGroup, moveGroupChild, syncAutomations,
     canvasList, saveAs, loadCanvas, rename, removeCanvas, refreshList,
     undo, redo, canUndo, canRedo,
   }

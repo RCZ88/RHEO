@@ -256,6 +256,14 @@ function hydrate(): Store {
     } else {
       return fresh();
     }
+    /* THE AFK HEARTBEAT, CROSS-WINDOW. The Halo island is a second JS realm: it only learns
+     * about the app's `touch()` calls through this persisted field. Without it the island's copy
+     * was whatever `fresh()` happened to set at module load, so the pill declared the user away
+     * while they were typing in another app. A stamp older than a minute is ignored: resurrecting
+     * yesterday's heartbeat on launch would trip AFK before the first real input. */
+    if (typeof saved?.lastInteractionAtMs === 'number' && saved.lastInteractionAtMs > Date.now() - 60_000) {
+      base.lastInteractionAtMs = saved.lastInteractionAtMs;
+    }
   } catch {
     // A corrupt or unreadable entry must never prevent the timer from working.
   }
@@ -340,7 +348,37 @@ function emit() {
   for (const l of store.listeners) l();
 }
 
+/**
+ * Are we running inside the Halo island window rather than the main app?
+ *
+ * WHY THIS MATTERS FOR persist()
+ * ------------------------------
+ * The island is a SECOND JS realm. It has its own copy of this module and its own
+ * `startStopwatchDriver()` interval, but it shares `localStorage` with the app. If both
+ * realms call `persist()`, they take turns writing their own (possibly stale) state to the
+ * same key. The island's copy hydrates from localStorage at module load, so on a fresh
+ * island load it can hold zeros or yesterday's totals for up to a second before the first
+ * `storage` event arrives. In that window the island's tick() fires, calls touch()/persist(),
+ * and writes its stale state OVER the app's accumulated time. The app then reads zeros back
+ * via the `storage` event and the stopwatch appears to reset to 0 every 2-3 seconds — the
+ * exact symptom reported, non-deterministically, because it depends on which side wins the
+ * race each second.
+ *
+ * The island is a READER. The main app is the single writer. Detecting the island by its
+ * URL (it loads /halo.html, the app loads /index.html) is the one check that does not
+ * depend on a global flag being set before this module evaluates.
+ */
+function isIslandWindow(): boolean {
+  try {
+    return typeof location !== 'undefined' && /halo/i.test(location.pathname || '');
+  } catch {
+    return false;
+  }
+}
+
 function persist() {
+  // The island never writes. See isIslandWindow() above.
+  if (isIslandWindow()) return;
   // Debounced: the tick interval runs every second and localStorage is synchronous.
   if (persistTimer) return;
   persistTimer = setTimeout(() => {
@@ -366,6 +404,9 @@ function persist() {
           // Writing the key also RE-ENABLES the stale-day guard that this made dead code:
           // a payload from yesterday now correctly fails the check and resets to `fresh()`.
           dayKey: store.dayKey,
+          /* Written so the island's realm can hydrate the heartbeat above. It is a timestamp,
+           * not a total, and it never affects accumulate/display. */
+          lastInteractionAtMs: store.lastInteractionAtMs,
         }),
       );
     } catch {
@@ -544,6 +585,10 @@ export const stopwatch = {
     // Guarded by `shouldRun()` so this cannot resurrect a deliberately paused
     // timer, one with no window to time, or one displaced by an external session.
     reconcile();
+    // PUBLISH THE HEARTBEAT. Persist is debounced to 1s, and `touch()` is called about once a
+    // second by the tracker heartbeat, so this is a single small write — not a per-keystroke one.
+    // The Halo island (another document, same origin) only learns the value through `storage`.
+    persist();
   },
 
   /** Force a re-render of subscribers; call from a 1s interval. */

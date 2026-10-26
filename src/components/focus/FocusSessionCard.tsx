@@ -6,8 +6,9 @@ import { AnimatedCircularProgressBar } from '../ui/animated-circular-progress-ba
 import { Particles } from '../ui/particles';
 import { NumberTicker } from '../ui/number-ticker';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Focus, Play, Square, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff } from 'lucide-react';
-import { fmtClock } from '../../features/focus/focusHelpers';
+import { Focus, Play, Square, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff, ChevronRight } from 'lucide-react';
+import { fmtClock, fmtDuration } from '../../features/focus/focusHelpers';
+import { cn } from '@/lib/utils';
 
 const PRESETS = [
   { label: '25m', sec: 25 * 60 },
@@ -29,6 +30,93 @@ const crossfade = {
 };
 
 const tapScale = { scale: 0.96 };
+
+interface RecentSessionRowProps {
+  h: {
+    id: number;
+    outcome: string;
+    started_at: string;
+    ended_at?: string;
+    planned_sec: number;
+    actual_sec?: number;
+    strictness?: string;
+    broke_on_name?: string;
+    return_count?: number;
+  };
+}
+
+function RecentSessionRow({ h }: RecentSessionRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const meta = OUTCOME_META[h.outcome] || { icon: Clock, color: 'text-zinc-500' };
+  const Icon = meta.icon;
+  const pct = h.planned_sec > 0 ? Math.min(100, Math.round((h.actual_sec || h.planned_sec) / h.planned_sec * 100)) : 100;
+  const startTime = new Date(h.started_at);
+  const dateStr = startTime.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const timeStr = startTime.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const endTime = h.ended_at ? new Date(h.ended_at) : null;
+  const endTimeStr = endTime ? endTime.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : null;
+
+  return (
+    <div className="rounded-md bg-zinc-800/30 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(prev => !prev)}
+        className="w-full flex items-center justify-between text-[11px] px-2 py-1.5 text-left hover:bg-zinc-800/40 transition-colors"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-2 text-zinc-500 min-w-0">
+          <Icon className="w-3 h-3 shrink-0" />
+          <span className="truncate">{dateStr} &middot; {Math.round(h.planned_sec / 60)}m</span>
+        </div>
+        <span className="flex items-center gap-1 shrink-0">
+          <span className={cn('font-medium', meta.color)}>
+            {h.outcome === 'failed' ? `broke on ${h.broke_on_name ?? '?'}` : h.outcome}
+          </span>
+          <ChevronRight className={cn('w-3 h-3 text-zinc-600 transition-transform', expanded && 'rotate-90')} />
+        </span>
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="px-2 pb-2 pt-1">
+              <div className="rounded bg-zinc-800/40 border border-zinc-800/40 p-2 space-y-1.5">
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="text-zinc-500">Start: <span className="text-zinc-300">{timeStr}</span></span>
+                  {endTimeStr && <span className="text-zinc-500">End: <span className="text-zinc-300">{endTimeStr}</span></span>}
+                </div>
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="text-zinc-500">Planned: <span className="text-zinc-300">{fmtDuration(h.planned_sec)}</span></span>
+                  <span className="text-zinc-500">Actual: <span className="text-zinc-300">{h.actual_sec ? fmtDuration(h.actual_sec) : '—'}</span></span>
+                  <span className="text-zinc-500">{pct}%</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-700/50 text-zinc-400">{h.outcome}</span>
+                  {h.strictness === 'non_allowed' && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">strict</span>
+                  )}
+                  {h.return_count != null && h.return_count > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-700/50 text-zinc-400">{h.return_count}x returns</span>
+                  )}
+                </div>
+                {h.outcome === 'failed' && h.broke_on_name && (
+                  <div className="text-[10px] text-rose-300/80">Broke on: {h.broke_on_name}</div>
+                )}
+                <div className="text-[8px] text-zinc-600 font-mono">Session #{h.id}</div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export function FocusSessionCard() {
   const { state, history, start, stop } = useFocusSession();
@@ -144,22 +232,9 @@ export function FocusSessionCard() {
         {history.length > 0 && (
           <div className="mt-5 border-t border-zinc-800/50 pt-3 space-y-1.5">
             <div className="text-[10px] text-zinc-600 mb-2 font-medium uppercase tracking-wider">Recent</div>
-            {history.slice(0, 5).map(h => {
-              const meta = OUTCOME_META[h.outcome] || { icon: Clock, color: 'text-zinc-500' };
-              const Icon = meta.icon;
-              return (
-                <div key={h.id} className="flex items-center justify-between text-[11px] px-2 py-1.5 rounded-md bg-zinc-800/30">
-                  <div className="flex items-center gap-2 text-zinc-500">
-                    <Clock className="w-3 h-3" />
-                    <span>{new Date(h.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} &middot; {Math.round(h.planned_sec / 60)}m</span>
-                  </div>
-                  <span className={`flex items-center gap-1 ${meta.color}`}>
-                    <Icon className="w-3 h-3" />
-                    {h.outcome === 'failed' ? `broke on ${h.broke_on_name ?? '?'}` : h.outcome}
-                  </span>
-                </div>
-              );
-            })}
+            {history.slice(0, 5).map(h => (
+              <RecentSessionRow key={h.id} h={h} />
+            ))}
           </div>
         )}
 

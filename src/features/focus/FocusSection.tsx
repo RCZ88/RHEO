@@ -28,14 +28,14 @@ interface PendingGroupSession {
 
 export function FocusSection() {
   const { state, history, start, stop, startWithGroup, startWithGroups } = useFocusSession();
-  const { groups, loading, error: groupsError, save, remove, selectedId, setSelectedId, selectedIds, toggleSelect, clearSelection } = useFocusGroups();
+  const { groups, loading, error: groupsError, save, remove, selectedId, setSelectedId, selectedIds, toggleSelect } = useFocusGroups();
   const { toasts, showToast, removeToast } = useToasts();
   const [mins, setMins] = useState(25);
   const [strict, setStrict] = useState<'distracting' | 'non_allowed'>('distracting');
   const [justCompleted, setJustCompleted] = useState(false);
   const [apiMissing, setApiMissing] = useState(false);
   const [mode, setMode] = useState<FocusMode>('timer');
-  const [distractions, setDistractions] = useState<Array<{ name: string; type: 'app' | 'website'; timestamp: number }>>([]);
+  const [distractions] = useState<Array<{ name: string; type: 'app' | 'website'; timestamp: number }>>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<FocusGroup | null>(null);
   const pendingGroupRef = useRef<PendingGroupSession | null>(null);
@@ -60,7 +60,7 @@ export function FocusSection() {
   const handleStop = () => stop();
 
   const handleStartWithGroup = (groupId: number, durationSec: number, strictness: 'distracting' | 'non_allowed') => {
-    startWithGroup(groupId, durationSec, strictness).then(res => {
+    startWithGroup(groupId, durationSec, strictness).then((res: any) => {
       if (res?.success === false) {
         console.error('[Focus] startWithGroup failed:', res.error);
       } else if (res?.sessionId != null) {
@@ -80,7 +80,7 @@ export function FocusSection() {
 
   const handleStartWithGroups = (groupIds: number[], durationSec: number, strictness: 'distracting' | 'non_allowed') => {
     if (groupIds.length === 0) return;
-    startWithGroups(groupIds, durationSec, strictness).then(res => {
+    startWithGroups(groupIds, durationSec, strictness).then((res: any) => {
       if (res?.success === false) {
         console.error('[Focus] startWithGroups failed:', res.error);
       } else if (res?.sessionId != null) {
@@ -152,12 +152,18 @@ export function FocusSection() {
 
   const handleSaveGroup = async (draft: GroupDraft): Promise<boolean> => {
     const id = await save(draft);
+    if (id != null) {
+      showToast(`Focus group "${draft.name}" saved`, 'success');
+    }
     return id != null;
   };
 
   const handleDeleteGroup = async (group: FocusGroup) => {
     const ok = await remove(group.id);
-    if (ok && selectedId === group.id) setSelectedId(null);
+    if (ok) {
+      if (selectedId === group.id) setSelectedId(null);
+      showToast(`Focus group "${group.name}" deleted`, 'success');
+    }
   };
 
   useEffect(() => {

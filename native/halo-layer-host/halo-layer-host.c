@@ -115,6 +115,24 @@ static gboolean g_live = FALSE;          /* at least one frame has arrived   */
 static gboolean g_shown = FALSE;         /* surface is mapped right now      */
 static int g_singleton_fd = -1;          /* flock fd, held for process life  */
 
+/* ── POSITION — the app owns WHERE the island sits ───────────────────────────
+ *
+ * The compositor only knows anchors and margins; it cannot know that the surface is a
+ * 231x77 painted box around a 198x32 pill. So the app sends an ABSOLUTE offset from the
+ * centred position and a base top margin, and the host applies them:
+ *
+ *     x = (monitor_width - bbox_width) / 2 + drag_x
+ *     y = base_top + drag_y
+ *
+ * The drag offsets are what the user set by dragging the pill ("adjust the pill from
+ * itself"), and they are persisted by the app. The host anchors LEFT|TOP explicitly —
+ * anchor=TOP alone leaves horizontal position to the compositor, which centres the
+ * surface but offers no way to shift it, which is why `anchor` in Settings never moved
+ * the cross-app capsule. */
+static int g_drag_x = 0;
+static int g_drag_y = 0;
+static int g_base_top = 8;
+
 static void state(const char *fmt, ...)
 {
     char buf[512];
@@ -240,6 +258,29 @@ static void send_pointer(const char *kind, int action, double wx, double wy,
     send_len_prefixed(json);
 }
 
+/* DRAG — the press-and-hold gesture the user uses to move the island.
+ *
+ * `GtkGestureDrag` is used rather than reading the click gesture plus the motion controller
+ * because only a drag gesture GRABS the pointer: a manual `pressed` + `motion` pair stops
+ * receiving motion the instant the cursor leaves the surface, so a drag that moves the pill
+ * to a new spot (which necessarily leaves the pill) would freeze mid-drag. The drag gesture
+ * keeps reporting offsets for the whole gesture, which is exactly the interaction.
+ *
+ * The host reports the CUMULATIVE offset from the press point, and the app owns what that
+ * offset means (it persists it as an absolute position). The host stays ignorant of screen
+ * coordinates here on purpose: it does not know the display it is on, and the app does. */
+static void send_drag(const char *phase, int dx, int dy)
+{
+    char json[160];
+
+    if (g_sock < 0 || !g_hello_ack)
+        return;
+    snprintf(json, sizeof(json),
+             "{\"type\":\"drag\",\"payload\":{\"phase\":\"%s\",\"dx\":%d,\"dy\":%d}}",
+             phase, dx, dy);
+    send_len_prefixed(json);
+}
+
 static void socket_close(void)
 {
     if (g_sock_watch) {
@@ -300,6 +341,43 @@ static void apply_surface_size(int w, int h)
     gtk_widget_queue_draw(g_area);
 }
 
+/* POSITION. See the globals above: the app sends an absolute offset from the centred
+ * position, and the host places the surface at that offset. `apply_position` is called on
+ * every bbox change too, because the centred x depends on the painted width, which differs
+ * between the compact pill and the expanded panel — if it were applied only once, the
+ * capsule would drift off-centre the moment the island opened. */
+static void apply_position(void)
+{
+    GdkDisplay *disp;
+    GListModel *mons;
+    GdkMonitor *mon = NULL;
+    GdkRectangle rect;
+    int mw = 0;
+    int x, y;
+
+    if (!g_window || !g_have_bbox)
+        return;
+
+    disp = gdk_display_get_default();
+    if (disp) {
+        mons = gdk_display_get_monitors(disp);
+        if (mons && g_list_model_get_n_items(mons) > 0)
+            mon = GDK_MONITOR(g_list_model_get_item(mons, 0));
+    }
+    if (mon) {
+        gdk_monitor_get_geometry(mon, &rect);
+        mw = rect.width;
+    }
+
+    x = (mw > 0 ? (mw - g_bbox[2]) / 2 : 0) + g_drag_x;
+    y = g_base_top + g_drag_y;
+
+    gtk_layer_set_anchor(GTK_WINDOW(g_window), GTK_LAYER_SHELL_EDGE_LEFT, TRUE);
+    gtk_layer_set_anchor(GTK_WINDOW(g_window), GTK_LAYER_SHELL_EDGE_TOP, TRUE);
+    gtk_layer_set_margin(GTK_WINDOW(g_window), GTK_LAYER_SHELL_EDGE_LEFT, x);
+    gtk_layer_set_margin(GTK_WINDOW(g_window), GTK_LAYER_SHELL_EDGE_TOP, y);
+}
+
 static void on_frame_complete(void)
 {
     int box[4];
@@ -323,6 +401,7 @@ static void on_frame_complete(void)
             memcpy(g_bbox, box, sizeof(box));
             g_have_bbox = TRUE;
             apply_surface_size(box[2], box[3]);
+            apply_position();
         }
     } else {
         /* Fully transparent frame: the island is hidden. Keep it out of the way
@@ -413,6 +492,19 @@ static gboolean socket_readable(gint fd, GIOCondition cond, gpointer data)
             }
             g_fill_target = g_frame_slots[g_slot_use];
             g_need_pixels = (uint64_t)blen;
+        } else if (strstr(msg, "\"move\"")) {
+            /* POSITION REQUEST from the app. `dx`/`dy` are ABSOLUTE offsets from the
+             * centred position and `top` is the base top margin; the host applies them and
+             * re-centres around the current painted box. See `apply_position`. */
+            long dx = 0, dy = 0, top = 8;
+            if (!json_int(msg, "dx", &dx)) dx = 0;
+            if (!json_int(msg, "dy", &dy)) dy = 0;
+            if (!json_int(msg, "top", &top)) top = 8;
+            g_drag_x = (int)dx;
+            g_drag_y = (int)dy;
+            g_base_top = (int)top;
+            apply_position();
+            state("move: dx=%d dy=%d top=%d", (int)dx, (int)dy, (int)top);
         }
         /* frame-ack and anything else: recognised and ignored. */
         g_free(msg);
@@ -628,19 +720,49 @@ static void on_leave(GtkEventControllerMotion *controller, gpointer data)
     }
 }
 
-static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, gpointer data)
+/* DRAG — press-and-hold on the pill moves the island.
+ *
+ * This REPLACES the click gesture. A click gesture cannot report motion once the pointer
+ * leaves the surface, and moving the pill necessarily leaves it — so a manual
+ * `pressed` + motion-controller pair froze mid-drag the moment the cursor crossed the pill's
+ * edge. `GtkGestureDrag` grabs the pointer for the whole gesture, so the cumulative offset
+ * keeps arriving for the entire drag. The `down`/`up` pair is still emitted, so a plain tap
+ * still reaches the offscreen island's DOM handlers as a real click. */
+static void on_drag_begin(GtkGestureDrag *gesture, double start_x, double start_y, gpointer data)
 {
     (void)gesture;
-    (void)n_press;
     (void)data;
     if (g_live) {
-        send_pointer("down", 0, x, y, 1, TRUE);
-        send_pointer("up", 0, x, y, 1, FALSE);
+        send_pointer("down", 0, start_x, start_y, 1, TRUE);
+        send_drag("begin", 0, 0);
         return;
     }
-    state("click inside placeholder — consumed, not delivered below. Quitting (proof).");
+    state("drag begin inside placeholder — consumed, not delivered below. Quitting (proof).");
     if (g_window)
         gtk_window_destroy(GTK_WINDOW(g_window));
+}
+
+static void on_drag_update(GtkGestureDrag *gesture, double offset_x, double offset_y, gpointer data)
+{
+    (void)gesture;
+    (void)data;
+    if (!g_live)
+        return;
+    /* No `move` pointer is emitted here on purpose: the FSM owns hover, and injecting a
+     * synthetic motion during a drag would open/close the island under a gesture whose only
+     * intent is to relocate it. The drag channel is reported on its own. */
+    send_drag("update", (int)offset_x, (int)offset_y);
+}
+
+static void on_drag_end(GtkGestureDrag *gesture, double offset_x, double offset_y, gpointer data)
+{
+    double sx = 0, sy = 0;
+    (void)data;
+    if (!g_live)
+        return;
+    gtk_gesture_drag_get_start_point(gesture, &sx, &sy);
+    send_pointer("up", 0, sx + offset_x, sy + offset_y, 1, FALSE);
+    send_drag("end", (int)offset_x, (int)offset_y);
 }
 
 static void on_destroy(GtkWidget *widget, gpointer data)
@@ -767,10 +889,12 @@ int main(int argc, char **argv)
     g_signal_connect(motion, "leave", G_CALLBACK(on_leave), NULL);
     gtk_widget_add_controller(g_window, motion);
 
-    GtkGesture *click = gtk_gesture_click_new();
-    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), 1);
-    g_signal_connect(click, "pressed", G_CALLBACK(on_click), NULL);
-    gtk_widget_add_controller(g_window, GTK_EVENT_CONTROLLER(click));
+    GtkGesture *drag = gtk_gesture_drag_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 1);
+    g_signal_connect(drag, "drag-begin", G_CALLBACK(on_drag_begin), NULL);
+    g_signal_connect(drag, "drag-update", G_CALLBACK(on_drag_update), NULL);
+    g_signal_connect(drag, "drag-end", G_CALLBACK(on_drag_end), NULL);
+    gtk_widget_add_controller(g_window, GTK_EVENT_CONTROLLER(drag));
 
     g_signal_connect(g_window, "destroy", G_CALLBACK(on_destroy), NULL);
 

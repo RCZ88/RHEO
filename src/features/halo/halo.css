@@ -791,3 +791,92 @@ html.light .halo-root {
 	padding-inline: 0;
 	gap: 0;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   HALO_RESULT.md §3 — THE EDGE MODEL'S NEW TOKENS, AND ITS THREE CHANNELS.
+
+   STROKE = time left (ink, never a hue) · TINT+BLOOM = productivity tier · DASHED = AFK.
+
+   `--halo-bloom` is the light-mode kill switch: LAMINAR §11 says depth comes from hairlines and
+   never from a shadow, so the bloom is multiplied to ZERO in Warm Paper rather than being deleted
+   from the markup. One expression, two themes, no branch in the component.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+.halo-root {
+	--halo-away: var(--tier-distracting);
+	--halo-ring: var(--halo-text);
+	--halo-ring-w: 2px;
+	--halo-ring-w-final: 3px;
+	--halo-bloom: 1;
+	--halo-ease: cubic-bezier(0.16, 1, 0.3, 1);
+	/* Set per preset inline from `size.rowHeight`; the default is Medium so a surface that has not
+	   been given a preset still resolves the schedule row arithmetic. */
+	--halo-row: 56px;
+	--halo-sched-row: calc((var(--halo-row) - 4px) / 2);
+}
+
+html.light .halo-root {
+	--halo-bloom: 0;
+}
+
+/* The tier channels' transition lives in CSS, not inline, so the reduced-motion rule below can
+   actually switch it off (`transition` set inline can only be overridden with !important).
+   The transform/opacity pair is the 200ms MORPH declared above; it is repeated here because a
+   later `transition` shorthand REPLACES the whole property, and dropping it would turn the
+   panel's open/close animation off. */
+.halo-surface {
+	transition:
+		transform var(--halo-move-ms, 200ms) var(--halo-move-ease, cubic-bezier(0.16, 1, 0.3, 1)),
+		opacity var(--halo-move-ms, 200ms) var(--halo-move-ease, cubic-bezier(0.16, 1, 0.3, 1)),
+		border-color 250ms var(--halo-ease),
+		box-shadow 250ms var(--halo-ease);
+}
+
+/* The time-left stroke: one linear second per tick. This is the ONE allowed loop (§6). */
+.halo-edge-path {
+	transition: stroke-dashoffset 1s linear;
+}
+
+/* AFK: a separate dashed layer so solid -> dashed can cross-fade (border-style cannot animate). */
+.halo-afk-edge {
+	position: absolute;
+	inset: -1px;
+	border-radius: inherit;
+	border: 1px dashed var(--halo-away);
+	pointer-events: none;
+	animation: halo-afk-in 150ms var(--halo-ease);
+}
+
+@keyframes halo-afk-in {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+
+/* Row state swaps (stopwatch / session / allow-list / alarm editor): opacity only, no slide. */
+.halo-row-swap {
+	animation: halo-row-in 150ms var(--halo-ease);
+}
+
+@keyframes halo-row-in {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+
+/* At a narrow panel the alarm's LABEL goes and the bell stays (§4.5). The list is the container,
+   declared inline in SchedulePageRow; this rule reads its inline size. */
+@container (max-width: 270px) {
+	.halo-sched-alarm > span {
+		display: none;
+	}
+}
+
+/* LAMINAR §6 / HALO_RESULT §6: reduced motion zeroes every duration. The stroke still updates
+   once per second with no interpolation; the tier changes instantly. */
+@media (prefers-reduced-motion: reduce) {
+	.halo-surface,
+	.halo-edge-path,
+	.halo-row-swap,
+	.halo-afk-edge {
+		transition: none !important;
+		animation: none !important;
+	}
+}

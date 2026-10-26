@@ -125,7 +125,7 @@ export function useAiChat(identity?: { workspaceName?: string; canvasName?: stri
       const td = threadDate ?? threadDateRef.current
       if (!b || typeof b.aiChatSave !== "function") return
       try {
-        (b.aiChatSave as (a: AnyRec) => unknown)({
+        void (b.aiChatSave as (a: AnyRec) => Promise<unknown>)({
           threadDate: td,
           workspaceName: identityRef.current?.workspaceName,
           canvasName: identityRef.current?.canvasName,
@@ -135,23 +135,16 @@ export function useAiChat(identity?: { workspaceName?: string; canvasName?: stri
             parsed_json: serializeParsed(m.parsed),
             timestamp: m.timestamp,
           })),
-        })
+        }).then(
+          (r: any) => { if (r && r.success === false) console.warn('[useAiChat] aiChatSave failed:', r?.error ?? 'unknown') },
+          (e: any) => console.warn('[useAiChat] aiChatSave rejected:', e?.message ?? e),
+        )
       } catch (e) {
         console.error('[useAiChat] persist:', e)
       }
     },
     [],
   )
-
-  // Debounced persist — saves messages whenever they change, so navigating away never loses data
-  useEffect(() => {
-    if (messages.length === 0) return
-    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
-    persistTimerRef.current = setTimeout(() => {
-      persist(messages)
-    }, 500)
-    return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
-  }, [messages, persist])
 
   // Load threads list
   const refreshThreads = useCallback(async () => {
@@ -175,6 +168,19 @@ export function useAiChat(identity?: { workspaceName?: string; canvasName?: stri
       console.error('[useAiChat] refreshThreads:', e)
     }
   }, [])
+
+  // Debounced persist — saves messages whenever they change, so navigating away never loses data
+  useEffect(() => {
+    if (messages.length === 0) return
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    persistTimerRef.current = setTimeout(() => {
+      persist(messages)
+      // New or updated threads must appear in the History list without a
+      // remount — the list state is otherwise only loaded at mount/reset.
+      void refreshThreads()
+    }, 500)
+    return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
+  }, [messages, persist, refreshThreads])
 
   useEffect(() => { refreshThreads() }, [refreshThreads])
 
@@ -397,6 +403,15 @@ return {
       setConnecting(true)
       setThinking(false)
 
+      // finish + target/providerState are hoisted ABOVE the agent-loop path on
+      // purpose: finish was a `const` declared ~80 lines below its first use,
+      // which is a TDZ ReferenceError — every send died with "Agent failed"
+      // the moment the agent loop became unconditional. Declaring finish as a
+      // function hoists its binding; the two `let`s feed only finish's
+      // best-effort aiDebugLog.
+      let target: { provider: unknown; model: string } | null = null
+      let providerState: ProviderState | null = null
+
       const useAgentLoop = true;
 
       // Agent loop path
@@ -404,6 +419,20 @@ return {
         aiAgentService.currentRequestId = crypto.randomUUID();
         setStreaming(true); setAgentSteps([]); setAgentStatus('Starting agent...');
         try {
+          // Resolve the user's selected provider/model and push it into the
+          // agent service BEFORE running. Otherwise the agent runs against
+          // whatever config it was initialised with (empty providerId/model)
+          // and silently ignores the AI-settings selection — the reported
+          // "model doesn't match what's selected" bug.
+          try {
+            providerState = (await (b.getAiProviders as () => Promise<unknown>)()) as ProviderState
+            target = pickTarget(providerState)
+            if (target) {
+              aiAgentService.updateConfig({ providerId: (target.provider as any)?.id, model: target.model })
+            }
+          } catch (e) {
+            console.error('[useAiChat] pickTarget (agent path):', e)
+          }
           const reply = await aiAgentService.processMessage(text);
           setAssistantMessage(assistantId, { content: reply });
           await finish(reply);
@@ -414,8 +443,6 @@ return {
         return;
       }
 
-      let target: { provider: unknown; model: string } | null = null
-      let providerState: ProviderState | null = null
       try {
         providerState = (await (b.getAiProviders as () => Promise<unknown>)()) as ProviderState
         target = pickTarget(providerState)
@@ -485,7 +512,7 @@ return {
       streamingRef.current = true
       setStreaming(true)
 
-      const finish = async (finalText: string) => {
+      async function finish(finalText: string) {
         // §11 — Natural Language → Automation. Detect fenced ```automation
         // JSON, create the rule via IPC, strip the block from the visible text.
         let displayText = finalText
@@ -525,6 +552,9 @@ setMessages((prev) => {
            void extractMemories(threadDateRef.current, next)
            return next
          })
+        // Refresh the history list so a just-saved thread (or its updated
+        // message count) appears in the History modal without a remount.
+        await refreshThreads()
         stop()
       }
 

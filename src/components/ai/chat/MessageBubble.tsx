@@ -67,9 +67,11 @@ export function MessageBubble(props: MessageBubbleProps) {
         {!isUser && thoughts.length > 0 && (
           <ThoughtSection thoughts={thoughts} forceOpen={Boolean(streaming)} />
         )}
-        <div className={`dk-bubble ${!isUser ? "dk-bubble-ai" : "dk-bubble-user"}`}>
-          {renderedContent}
-        </div>
+        {renderedContent && (
+          <div className={`dk-bubble ${!isUser ? "dk-bubble-ai" : "dk-bubble-user"}`}>
+            {renderedContent}
+          </div>
+        )}
         {hasCard && (
           <div style={{ width: "100%", marginTop: cleanContent ? 11 : 0 }}>
             <ParsedMessageRouter

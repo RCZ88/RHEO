@@ -29,6 +29,9 @@ interface CardContentCtx {
   onUpdateGroup?: (groupId: string, patch: Partial<Pick<CanvasGroup, 'label' | 'colorId' | 'orientation' | 'ratio'>>) => void
   onUngroup?: (groupId: string, mode: 'restore' | 'scatter') => void
   onRemoveFromGroup?: (cardId: string, newPosition?: { x: number; y: number }) => void
+  onArrangeGroup?: (groupId: string, mode: 'grid' | 'stack' | 'mosaic') => void
+  onMoveGroupChild?: (groupId: string, cardId: string, position: { x: number; y: number }) => void
+  zoom?: number
 }
 
 function renderCardContent(card: CanvasCardType, ctx: CardContentCtx) {
@@ -70,6 +73,9 @@ function renderCardContent(card: CanvasCardType, ctx: CardContentCtx) {
           onUpdateGroup={(patch) => ctx.onUpdateGroup?.(groupId, patch)}
           onUngroup={(mode) => ctx.onUngroup?.(groupId, mode)}
           onRemoveFromGroup={(cid, newPosition) => ctx.onRemoveFromGroup?.(cid, newPosition)}
+          onTidy={() => ctx.onArrangeGroup?.(groupId, 'grid')}
+          onMoveChild={(cid, position) => ctx.onMoveGroupChild?.(groupId, cid, position)}
+          zoom={ctx.zoom}
         />
       )
     }
@@ -110,6 +116,8 @@ interface CanvasCardProps {
   onUpdateGroup?: (groupId: string, patch: Partial<Pick<CanvasGroup, 'label' | 'colorId' | 'orientation' | 'ratio'>>) => void
   onUngroup?: (groupId: string, mode: 'restore' | 'scatter') => void
   onRemoveFromGroup?: (cardId: string, newPosition?: { x: number; y: number }) => void
+  onArrangeGroup?: (groupId: string, mode: 'grid' | 'stack' | 'mosaic') => void
+  onMoveGroupChild?: (groupId: string, cardId: string, position: { x: number; y: number }) => void
   zoom?: number
   isFocused?: boolean
   isDropTarget?: boolean
@@ -127,7 +135,7 @@ class CardErrorBoundary extends Component<{ cardType: string; onRetry: () => voi
   }
 }
 
-export function CanvasCard({ card, onDragEnd, onDismiss, onPin, onResize, onDragStart, onDragStop, onClick, onUpdateCard, groups, onUpdateGroup, onUngroup, onRemoveFromGroup, zoom = 1, isFocused, isDropTarget, onDropTarget: _onDropTarget }: CanvasCardProps) {
+export function CanvasCard({ card, onDragEnd, onDismiss, onPin, onResize, onDragStart, onDragStop, onClick, onUpdateCard, groups, onUpdateGroup, onUngroup, onRemoveFromGroup, onArrangeGroup, onMoveGroupChild, zoom = 1, isFocused, isDropTarget, onDropTarget: _onDropTarget }: CanvasCardProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
   const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null)
@@ -381,7 +389,7 @@ export function CanvasCard({ card, onDragEnd, onDismiss, onPin, onResize, onDrag
           onDismiss={isGroupCard ? undefined : () => onDismiss(card.id)}
           hideHeader={card.type === 'response'}
         >
-          {renderCardContent(card, { onUpdateCard, onDismiss, groups, onUpdateGroup, onUngroup, onRemoveFromGroup })}
+          {renderCardContent(card, { onUpdateCard, onDismiss, groups, onUpdateGroup, onUngroup, onRemoveFromGroup, onArrangeGroup, onMoveGroupChild, zoom })}
         </CardFrame>
         <div
           className="dk-canvas-resize-handle"

@@ -16,6 +16,9 @@ export interface TrackingHandlerDeps {
   setLastPollTime: (v: number) => void;
   pollForeground: () => void;
   userPreferences: Record<string, any>;
+  /** Whether the current tracking pause was caused by AFK (auto-resumable). */
+  getAfkPaused?: () => boolean;
+  setAfkPaused?: (v: boolean) => void;
 }
 
 export function registerTrackingHandlers(deps: TrackingHandlerDeps) {
@@ -29,6 +32,7 @@ export function registerTrackingHandlers(deps: TrackingHandlerDeps) {
     setLastPollTime,
     pollForeground,
     userPreferences,
+    setAfkPaused,
   } = deps;
 
   ipcMain.handle('toggle-tracking', () => {
@@ -40,8 +44,19 @@ export function registerTrackingHandlers(deps: TrackingHandlerDeps) {
 
   ipcMain.handle('set-tracking', (_event, enabled) => {
     setIsTracking(!!enabled);
+    if (enabled) setAfkPaused?.(false);
     console.log('[DeskFlow] Tracking set:', enabled ? 'ON' : 'OFF');
     return enabled;
+  });
+
+  /**
+   * The renderer mirrors its AFK state here. The main-process auto-resume is
+   * only allowed to undo an AFK pause, never a manual one.
+   */
+  ipcMain.handle('tracking:set-afk-paused', (_event, paused) => {
+    setAfkPaused?.(!!paused);
+    console.log('[DeskFlow] AFK pause flag:', !!paused);
+    return !!paused;
   });
 
   ipcMain.handle('restart-tracking', () => {

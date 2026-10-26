@@ -1450,122 +1450,76 @@ externalSelect: 'Enter',
     }
   };
 
-  const saveChanges = async () => {
+  const saveChanges = () => {
     clearSavedNoticeTimer();
-    // Each persistence step is isolated: a single missing/failing IPC channel
-    // must never abort the rest of the save. Previously one rejection at the
-    // first await silently discarded EVERY subsequent setting.
-    const failed: string[] = [];
-    const step = async (label: string, fn: () => Promise<unknown> | unknown) => {
-      try {
-        await fn();
-      } catch (err: any) {
-        failed.push(`${label}: ${err?.message || err}`);
-        console.error(`[Settings] save step failed — ${label}:`, err?.message || err);
-      }
-    };
-    try {
-      await step('setTierAssignments', () => window.deskflowAPI?.setTierAssignments?.(tierAssignments));
+    // INSTANT UX: apply all local state + show "saved" notice immediately, then
+    // persist to main process / DB in the background. The previous version awaited
+    // every IPC round-trip sequentially, so the button felt frozen for seconds.
+    // Each persistence step is isolated: one missing/failing IPC channel must never
+    // abort the rest of the save.
     localStorage.setItem('deskflow-tier-assignments', JSON.stringify(tierAssignments));
     localStorage.setItem('deskflow-planet-colors', JSON.stringify(localAppColors));
-    if (setAppColors) {
-      setAppColors(localAppColors);
-    }
+    if (setAppColors) setAppColors(localAppColors);
     if (setCategoryOrder) {
       setCategoryOrder(localCategoryOrder);
       localStorage.setItem('deskflow-category-order', JSON.stringify(localCategoryOrder));
     }
     localStorage.setItem('deskflow-app-category-overrides', JSON.stringify(appCategoryOverrides));
     localStorage.setItem('deskflow-domain-category-overrides', JSON.stringify(domainCategoryOverrides));
-    // Push individual app overrides to main process so tracking uses updated categories immediately
-    await step('setAppCategory', () => Promise.all(
-      Object.entries(appCategoryOverrides).map(([appName, category]) =>
-        window.deskflowAPI!.setAppCategory(appName, category)
-      )
-    ));
-    // Push domain overrides to main process
-    await step('setDomainCategory', () => Promise.all(
-      Object.entries(domainCategoryOverrides).map(([domain, category]) =>
-        window.deskflowAPI!.setDomainCategory(domain, category)
-      )
-    ));
     localStorage.setItem('deskflow-animation-speed', animationSpeed);
     localStorage.setItem('deskflow-agent-colors', JSON.stringify(agentColorOverrides));
+    try { if (typeof onCategoryOverridesChange === 'function') onCategoryOverridesChange(appCategoryOverrides); } catch (e) { console.error('[Settings] Error notifying parent:', e); }
+    setHasChanges(false);
+    onHasChangesChange?.(false);
+    setSavedNotice(true);
+    clearSavedNoticeTimer();
+    savedNoticeTimerRef.current = setTimeout(() => setSavedNotice(false), 2500);
 
-    // R-10: Save boot animation config to preference store (single source, ruling 2)
-    await step('boot_animation', () => window.deskflowAPI?.setPreference?.('boot_animation', {
-      enabled: bootAnimEnabled,
-      variant: bootAnimVariant,
-      warmStart: bootAnimWarm,
-    }));
+    const failed: string[] = [];
+    const step = async (label: string, fn: () => Promise<unknown> | unknown) => {
+      try { await fn(); }
+      catch (err: any) { failed.push(`${label}: ${err?.message || err}`); console.error(`[Settings] save step failed — ${label}:`, err?.message || err); }
+    };
 
-    await step('trackerAppMode', () => window.deskflowAPI?.setPreference?.('trackerAppMode', trackerAppMode));
-
-    if (openRouterApiKey) {
-      const cleanKey = openRouterApiKey.trim().replace(/^["']|["']$/g, '');
-      await step('openrouterApiKey', () => window.deskflowAPI?.setPreference?.('openrouterApiKey', cleanKey));
-    }
-
-    await step('saveAiConfig', () => window.deskflowAPI?.saveAiConfig?.({ ...aiConfig, apiKey: openRouterApiKey.trim().replace(/^["']|["']$/g, '') }));
-
-    await step('saveAiProviders', () => window.deskflowAPI?.saveAiProviders?.({
-      providers: aiProviders.map(({ _newModel, ...rest }) => rest),
-      routing: aiProviderRouting,
-    }));
-
-    try {
-      if (typeof onCategoryOverridesChange === 'function') {
-        onCategoryOverridesChange(appCategoryOverrides);
+    // Background persistence — does not block the UI.
+    (async () => {
+      try {
+        await Promise.all([
+          step('setTierAssignments', () => window.deskflowAPI?.setTierAssignments?.(tierAssignments)),
+          step('setAppCategory', () => Promise.all(Object.entries(appCategoryOverrides).map(([appName, category]) => window.deskflowAPI!.setAppCategory(appName, category)))),
+          step('setDomainCategory', () => Promise.all(Object.entries(domainCategoryOverrides).map(([domain, category]) => window.deskflowAPI!.setDomainCategory(domain, category)))),
+          step('boot_animation', () => window.deskflowAPI?.setPreference?.('boot_animation', { enabled: bootAnimEnabled, variant: bootAnimVariant, warmStart: bootAnimWarm })),
+          step('trackerAppMode', () => window.deskflowAPI?.setPreference?.('trackerAppMode', trackerAppMode)),
+          (openRouterApiKey ? step('openrouterApiKey', () => window.deskflowAPI?.setPreference?.('openrouterApiKey', openRouterApiKey.trim().replace(/^["']|["']$/g, ''))) : Promise.resolve()),
+          step('saveAiConfig', () => window.deskflowAPI?.saveAiConfig?.({ ...aiConfig, apiKey: openRouterApiKey.trim().replace(/^["']|["']$/g, '') })),
+          step('saveAiProviders', () => window.deskflowAPI?.saveAiProviders?.({ providers: aiProviders.map(({ _newModel, ...rest }) => rest), routing: aiProviderRouting })),
+        ]);
+        try { if (typeof onReloadData === 'function') onReloadData(); } catch (e) { console.error('[Settings] Error reloading data:', e); }
+        await Promise.all([
+          step('financeSetDisplayCurrency', () => window.deskflowAPI?.financeSetDisplayCurrency?.(financeCurrency)),
+          step('financeSetPasswordRequirement', () => Promise.all(Object.entries(passwordReqs).map(([key, value]) => window.deskflowAPI!.financeSetPasswordRequirement(key, value)))),
+          step('setLockedItems', () => window.deskflowAPI?.setLockedItems?.({ lockedApps, lockedDomains })),
+        ]);
+      } catch (err) {
+        failed.push(`saveChanges: ${(err as any)?.message || err}`);
+        console.error('[Settings] Save failed:', err);
+      } finally {
+        if (failed.length) console.error('[Settings] Incomplete save — these did not persist:', failed);
       }
-    } catch (e) {
-      console.error('[Settings] Error notifying parent:', e);
-    }
-
-    try {
-      if (typeof onReloadData === 'function') {
-        onReloadData();
-      }
-    } catch (e) {
-      console.error('[Settings] Error reloading data:', e);
-    }
-
-    await step('financeSetDisplayCurrency', () => window.deskflowAPI?.financeSetDisplayCurrency?.(financeCurrency));
-
-    // Save password requirements
-    await step('financeSetPasswordRequirement', () => Promise.all(
-      Object.entries(passwordReqs).map(([key, value]) =>
-        window.deskflowAPI!.financeSetPasswordRequirement(key, value)
-      )
-    ));
-
-    // Save locked items
-    await step('setLockedItems', () => window.deskflowAPI?.setLockedItems?.({ lockedApps, lockedDomains }));
-    } catch (err) {
-      failed.push(`saveChanges: ${(err as any)?.message || err}`);
-      console.error('[Settings] Save failed:', err);
-    } finally {
-      if (failed.length) {
-        console.error('[Settings] Incomplete save — these did not persist:', failed);
-      }
-      setHasChanges(false);
-      onHasChangesChange(false);
-      setSavedNotice(true);
-      clearSavedNoticeTimer();
-      savedNoticeTimerRef.current = setTimeout(() => setSavedNotice(false), 2500);
-    }
+    })();
   };
 
   const handleAppColorChange = (app: string, color: string) => {
     setLocalAppColors(prev => ({ ...prev, [app]: color }));
     setHasChanges(true);
-    onHasChangesChange(true);
+    onHasChangesChange?.(true);
   };
 
   const handleCategoryColorChange = (category: string, color: string) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(`deskflow-category-color-${category}`, color);
       setHasChanges(true);
-      onHasChangesChange(true);
+      onHasChangesChange?.(true);
     }
   };
 
@@ -2070,12 +2024,14 @@ externalSelect: 'Enter',
    * It also normalises before writing, so what lands on disk is always a value the island
    * will accept — a partially-edited object can never be persisted half-formed.
    */
-  /* Settings copy for the four handoff §5 pages. The `hint` is the one-line description shown
-   * under the name, taken from the handoff's own wording for each page. */
+  /* Settings copy for the three handoff §5 pages. The `hint` is the one-line description shown
+   * under the name, taken from the handoff's own wording for each page.
+   *
+   * `now` was removed: its app/website readout folded into Focus, which is where the tracked
+   * target already lived, and Focus now also shows the real focus session and its lock. */
   const HALO_PAGE_LABELS: Record<HaloPageId, { label: string; hint: string }> = {
-    focus: { label: 'Focus', hint: 'Stopwatch, what is being tracked, productive time' },
-    now: { label: 'Now', hint: 'Current app and website, AI usage' },
-    deadlines: { label: 'Deadlines', hint: 'Next deadline and open count' },
+    focus: { label: 'Focus', hint: 'Stopwatch, what is being tracked, the focus session and its lock' },
+    deadlines: { label: 'Schedule', hint: 'Nearest class block and open deadlines with their alarms' },
     tools: { label: 'Tools', hint: 'Dictation and console' },
   };
   const HALO_PILL_LABELS: Record<HaloPillResident, { label: string; hint: string }> = {
@@ -2090,8 +2046,23 @@ externalSelect: 'Enter',
    * array is complete, de-duped and never fully hidden. */
   const haloPages: HaloPageId[] = haloPrefs.pages?.order?.length
     ? haloPrefs.pages.order
-    : (['focus', 'now', 'deadlines', 'tools'] as HaloPageId[]);
+    : (['focus', 'deadlines', 'tools'] as HaloPageId[]);
   const haloHidden: HaloPageId[] = haloPrefs.pages?.hidden ?? [];
+
+  /* THE HITBOX DIAGRAM MUST DRAW THE REAL PILL.
+   *
+   * It used `HALO_SIZE_TOKENS.compactWidth` for the width (232 — the legacy token bag) and
+   * `resolveHaloSize(prefs.scale).compactHeight` for the height (32 on Medium). The real pill
+   * is 198x32 on Medium, so the "TRUE ratio" diagram was 34px too wide before a slider was
+   * touched, and the dashed zone inherited the error. One preset, both axes, same as the
+   * renderer and `computeHotZone`. */
+  const haloPreviewSize = resolveHaloSize(haloPrefs.scale);
+  const haloZoneW = haloPreviewSize.compactWidth + haloPrefs.trigger.padX * 2;
+  const haloZoneH = haloPreviewSize.compactHeight + haloPrefs.trigger.padY;
+  /* The panel is 320px wide and the zone can be 678px (padX 240). A diagram that silently
+   * overflows the panel stops being a diagram, so scale the whole group down; the RATIO — the
+   * thing this preview exists to show — is preserved. */
+  const haloPreviewFit = Math.min(1, (320 - 24) / haloZoneW, (96 - 12) / haloZoneH);
 
   const haloPrefsRef = useRef(haloPrefs);
   /* Drag-reorder state for the Pages list. `dragIndex` is a ref because it is only read inside
@@ -6398,6 +6369,22 @@ externalSelect: 'Enter',
               }}
             />
           </div>
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <div className="text-[12px] text-zinc-300">Auto-show active features</div>
+              <div className="text-[11px] text-zinc-500">
+                Show a feature in the island while it is running, even if its widget is
+                hidden below. Default on.
+              </div>
+            </div>
+            <SettingsSwitch
+              checked={haloPrefs.autoShowActive !== false}
+              label="Auto-show active features"
+              onChange={(v) => {
+                void saveHaloPrefs({ autoShowActive: v });
+              }}
+            />
+          </div>
 
           {/* DUAL-BOOT: which of the two shipped layouts the island renders.
            *
@@ -6896,8 +6883,8 @@ externalSelect: 'Enter',
               The live diagram is the point. The hitbox is invisible on the desktop, so
               a slider with a number next to it is unauditable — you cannot tell whether
               60px reaches past the pill or eats half your title bar. The dashed outline
-              is drawn at the TRUE ratio (pill 232x40 inside the zone), so what you see
-              is what the cursor actually does. */}
+              is drawn at the TRUE ratio (the real preset's pill inside the zone), so what
+              you see is what the cursor actually does. */}
           <div className="py-2 space-y-3" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
             <div className="flex items-baseline justify-between">
               <span className="text-[12px] text-zinc-300">Hitbox size</span>
@@ -6910,33 +6897,37 @@ externalSelect: 'Enter',
               className="relative mx-auto"
               style={{ width: '100%', maxWidth: 320, height: 96 }}
             >
+              {/* The dashed zone IS the hitbox: pill + padX on both sides, padY downward.
+                  Anchored at the top exactly like the island, so "down" reads as down. */}
               <div
                 className="absolute"
                 style={{
                   left: '50%',
                   top: 6,
-                  width: `calc(${HALO_SIZE_TOKENS.compactWidth + haloPrefs.trigger.padX * 2}px)`,
-                  height: resolveHaloSize(haloPrefs.scale).compactHeight + haloPrefs.trigger.padY,
-                  transform: 'translateX(-50%)',
+                  width: haloZoneW,
+                  height: haloZoneH,
+                  transform: `translateX(-50%) scale(${haloPreviewFit})`,
+                  transformOrigin: 'top center',
                   border: '1px dashed var(--page-accent)',
                   borderRadius: 4,
                   opacity: 0.75,
                 }}
-              />
-              <div
-                className="absolute flex items-center justify-center"
-                style={{
-                  left: '50%',
-                  top: 6,
-                  width: HALO_SIZE_TOKENS.compactWidth,
-                  height: resolveHaloSize(haloPrefs.scale).compactHeight,
-                  transform: 'translateX(-50%)',
-                  background: 'var(--ws-surface-raised)',
-                  border: '1px solid var(--ws-border-strong)',
-                  borderRadius: 9999,
-                }}
               >
-                <span className="text-[10px] text-zinc-500">the island</span>
+                <div
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    left: '50%',
+                    top: 0,
+                    width: haloPreviewSize.compactWidth,
+                    height: haloPreviewSize.compactHeight,
+                    transform: 'translateX(-50%)',
+                    background: 'var(--ws-surface-raised)',
+                    border: '1px solid var(--ws-border-strong)',
+                    borderRadius: 9999,
+                  }}
+                >
+                  <span className="text-[10px] text-zinc-500">the island</span>
+                </div>
               </div>
             </div>
             <div className="space-y-2">
@@ -7083,6 +7074,7 @@ externalSelect: 'Enter',
               and changed nothing on screen. */}
           <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
             <div className="text-[12px] text-zinc-300 mb-2">Where it sits</div>
+
             <HaloPlacementPreview prefs={haloPrefs} />
               {/* Claude's ruling: the island is 560x134, so a side edge would need a vertical
                   layout that is not designed anywhere. The top edge is the only one offered, and
@@ -7139,8 +7131,7 @@ externalSelect: 'Enter',
                   </span>
                 </div>
               </div>
-            </div>
-
+          </div>
           {/* ── Which monitor ──────────────────────────────────────────────────── */}
           <div className="py-2" style={{ opacity: haloPrefs.enabled ? 1 : 0.5 }}>
             <div className="text-[12px] text-zinc-300 mb-2">Display</div>
@@ -7349,7 +7340,39 @@ externalSelect: 'Enter',
                 disappearing, so a quiet widget is never mistaken for a missing one.
               </p>
             )}
-          
+
+            <div className="text-[12px] text-zinc-300 mb-0.5 mt-3">Productivity ambience</div>
+            <p className="text-[10px] text-zinc-600 mb-2 leading-snug">
+              Tint the pill's edge by the stopwatch's tier — green for productive, red for
+              distracting. It is a state readout, not decoration, so it is off until you turn
+              it on.
+            </p>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Halo Island productivity ambience">
+              {([
+                ['off', 'Off', 'No ambience on the pill'],
+                ['edge', 'Edge glow', 'Green / red ring by tier'],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={haloPrefs.ambient === value}
+                  disabled={!haloPrefs.enabled}
+                  onClick={() => void saveHaloPrefs({ ambient: value })}
+                  className="text-left disabled:opacity-50"
+                  style={{
+                    padding: 8,
+                    borderRadius: 8,
+                    border: `1px solid ${haloPrefs.ambient === value ? 'var(--text-secondary)' : 'var(--ws-border)'}`,
+                    background: haloPrefs.ambient === value ? 'var(--ws-surface-raised)' : 'transparent',
+                  }}
+                >
+                  <div className="text-[11px] text-zinc-300">{label}</div>
+                  <div className="text-[10px] text-zinc-500 leading-tight mt-0.5">{hint}</div>
+                </button>
+              ))}
+            </div>
+
 
 <div className="text-[12px] text-zinc-300 mb-0.5">Collapsed pill</div>
             <HaloPillPreview prefs={haloPrefs} />

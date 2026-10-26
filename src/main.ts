@@ -185,16 +185,30 @@ function haloCurrentAppSnapshot() {
      * The string form below is the one the island actually receives. */
     if (typeof currentApp === 'undefined' || !currentApp) return null;
     const app = typeof currentApp === 'string' ? currentApp : (currentApp.app ?? currentApp.name ?? 'Unknown');
-    const base = {
-        app,
-        category: typeof currentApp === 'string' ? categorizeApp(app) : (currentApp.category ?? 'Uncategorized'),
-        tier: typeof currentApp === 'string' ? 'neutral' : (currentApp.tier ?? 'neutral'),
-    };
+    /* Resolve the tier from the user's category→tier assignments, NOT a hardcoded 'neutral'.
+     * The previous code always reported 'neutral' for every app, so the pill's tier glow
+     * (green/blue/red) was always blue — even for apps the user had marked productive. That
+     * is why "the green never showed properly" no matter what app was focused. */
+    const category = typeof currentApp === 'string' ? categorizeApp(app) : (currentApp.category ?? 'Uncategorized');
+    const tierAssignments = categoryConfig?.tierAssignments;
+    const tier: 'productive' | 'neutral' | 'distracting' =
+        tierAssignments?.productive?.includes(category) ? 'productive'
+      : tierAssignments?.distracting?.includes(category) ? 'distracting'
+      : 'neutral';
+    const base = { app, category, tier };
     if (!isBrowserAppName(app)) return base;
     const fresh = Date.now() - lastActiveBrowserTimestamp < HALO_DOMAIN_STALE_MS;
     if (!fresh || !lastActiveBrowserDomain) return { ...base, domain: null };
+    /* Resolve the tier from the DOMAIN's category too, so a productive website shows green
+     * instead of the browser's (usually neutral/blue) tier. */
+    const domainCategory = categorizeDomain(lastActiveBrowserDomain, '', '');
+    const domainTier: 'productive' | 'neutral' | 'distracting' =
+        tierAssignments?.productive?.includes(domainCategory) ? 'productive'
+      : tierAssignments?.distracting?.includes(domainCategory) ? 'distracting'
+      : tier;
     return {
         ...base,
+        tier: domainTier,
         isPrivate: lastActiveBrowserIsPrivate,
         domain: lastActiveBrowserIsPrivate ? null : lastActiveBrowserDomain,
     };
@@ -2702,6 +2716,61 @@ function initializeStorage() {
     `);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_line_stats_project ON project_line_stats(project_id)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_line_stats_type ON project_line_stats(project_id, file_type)`);
+
+        // Per-file change history (added/removed lines, git-style). Append-only:
+        // each scan records one row per changed file so the renderer can show
+        // deltas over time. Git repos use `git diff --numstat` (+ untracked);
+        // non-git folders use a snapshot + `git diff --no-index`.
+        db.exec(`
+      CREATE TABLE IF NOT EXISTS project_file_changes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_type TEXT,
+        added INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        total_lines INTEGER NOT NULL DEFAULT 0,
+        baseline_commit TEXT,
+        scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        source TEXT NOT NULL DEFAULT 'snapshot',
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      )
+    `);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_file_changes_project ON project_file_changes(project_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_file_changes_scanned ON project_file_changes(project_id, scanned_at)`);
+
+        // Content snapshots for non-git (and as a diff baseline). One row per
+        // file, upserted on each scan; content is capped to keep the DB sane.
+        db.exec(`
+      CREATE TABLE IF NOT EXISTS project_file_snapshots (
+        project_id TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        content TEXT,
+        total_lines INTEGER NOT NULL DEFAULT 0,
+        scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (project_id, file_path),
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      )
+    `);
+
+        // RESULT.md §3 — additive columns for the ledger. Guarded so re-running
+        // the migration is idempotent (ALTER TABLE ADD COLUMN errors if present).
+        const _addColumnIfMissing = (table: string, ddl: string, col: string) => {
+          try {
+            const cols = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
+            if (!cols.some((c) => c.name === col)) db.exec(ddl);
+          } catch (e: any) {
+            console.error(`[DeskFlow] addColumnIfMissing(${table}.${col}) failed:`, e.message);
+          }
+        };
+        // project_file_changes: approximation flag + session metadata.
+        _addColumnIfMissing('project_file_changes', 'ALTER TABLE project_file_changes ADD COLUMN approx INTEGER NOT NULL DEFAULT 0;', 'approx');
+        _addColumnIfMissing('project_file_changes', 'ALTER TABLE project_file_changes ADD COLUMN session_id TEXT;', 'session_id');
+        // project_file_snapshots: compressed content + oversize/binary support.
+        _addColumnIfMissing('project_file_snapshots', 'ALTER TABLE project_file_snapshots ADD COLUMN content_gz BLOB;', 'content_gz');
+        _addColumnIfMissing('project_file_snapshots', 'ALTER TABLE project_file_snapshots ADD COLUMN bytes INTEGER NOT NULL DEFAULT 0;', 'bytes');
+        _addColumnIfMissing('project_file_snapshots', 'ALTER TABLE project_file_snapshots ADD COLUMN binary INTEGER NOT NULL DEFAULT 0;', 'binary');
 
         // Project-Tool relationship
         db.exec(`
@@ -11750,7 +11819,13 @@ electron_1.ipcMain.handle('detect-ides', async () => {
     const cursorPaths = process.platform === 'win32'
         ? [path_1.default.join(process.env.LOCALAPPDATA || '', 'Programs', 'cursor', 'Cursor.exe'),
            path_1.default.join(process.env.APPDATA || '', 'Cursor')]
-        : ['/Applications/Cursor.app', path_1.default.join(require('os').homedir(), 'Library/Application Support/Cursor')];
+        : process.platform === 'darwin'
+            ? ['/Applications/Cursor.app', path_1.default.join(require('os').homedir(), 'Library/Application Support/Cursor')]
+            : [path_1.default.join(require('os').homedir(), '.config', 'Cursor'),
+               path_1.default.join(require('os').homedir(), '.cursor'),
+               '/usr/bin/cursor',
+               '/usr/share/cursor',
+               '/opt/Cursor'];
 
     for (const cursorPath of cursorPaths) {
         if (pathExists(cursorPath)) {
@@ -11768,6 +11843,18 @@ electron_1.ipcMain.handle('detect-ides', async () => {
         }
     }
 
+    // Detect Neovim (terminal editor, but tracked as an IDE surface)
+    try {
+        const nvimPath = process.platform === 'win32'
+            ? execFileSync('where', ['nvim'], { encoding: 'utf8', timeout: 3000 }).trim().split('\n')[0]
+            : execFileSync('which', ['nvim'], { encoding: 'utf8', timeout: 3000 }).trim();
+        if (nvimPath) {
+            let version = '';
+            try { version = execFileSync('nvim', ['--version'], { encoding: 'utf8', timeout: 3000 }).trim().split('\n')[0]; } catch {}
+            addIde({ id: 'neovim', name: 'Neovim', version, installPath: nvimPath });
+        }
+    } catch {}
+
     // Detect JetBrains IDEs using 'where' command (like VS Code)
     const jetbrainsCommands = [
         { cmd: 'idea', name: 'IntelliJ IDEA', id: 'intellij' },
@@ -11780,6 +11867,8 @@ electron_1.ipcMain.handle('detect-ides', async () => {
         { cmd: 'goland64', name: 'GoLand', id: 'goland' },
         { cmd: 'rider', name: 'Rider', id: 'rider' },
         { cmd: 'rider64', name: 'Rider', id: 'rider' },
+        { cmd: 'clion', name: 'CLion', id: 'clion' },
+        { cmd: 'clion64', name: 'CLion', id: 'clion' },
     ];
 
     for (const { cmd, name, id } of jetbrainsCommands) {
@@ -11803,7 +11892,11 @@ electron_1.ipcMain.handle('detect-ides', async () => {
     }
 
     // Detect JetBrains IDEs via Toolbox (multiple formats supported)
-    const toolboxBase = path_1.default.join(process.env.APPDATA || '', 'JetBrains', 'Toolbox', 'apps');
+    const toolboxBase = process.platform === 'win32'
+        ? path_1.default.join(process.env.APPDATA || '', 'JetBrains', 'Toolbox', 'apps')
+        : process.platform === 'darwin'
+            ? path_1.default.join(require('os').homedir(), 'Library', 'Application Support', 'JetBrains', 'Toolbox', 'apps')
+            : path_1.default.join(require('os').homedir(), '.local', 'share', 'JetBrains', 'Toolbox', 'apps');
     if (pathExists(toolboxBase)) {
         try {
             const appDirs = fs_1.default.readdirSync(toolboxBase);
@@ -11910,12 +12003,26 @@ electron_1.ipcMain.handle('detect-ides', async () => {
     }
 
     // Also detect JetBrains IDEs installed directly (not via Toolbox)
-    const directJetbrainsPaths = [
+    const directJetbrainsPaths = process.platform === 'win32' ? [
         { base: path_1.default.join(process.env.LOCALAPPDATA || '', 'JetBrains'), exe: 'idea64.exe', name: 'IntelliJ IDEA', id: 'intellij' },
         { base: path_1.default.join(process.env.LOCALAPPDATA || '', 'JetBrains'), exe: 'pycharm64.exe', name: 'PyCharm', id: 'pycharm' },
         { base: path_1.default.join(process.env.LOCALAPPDATA || '', 'JetBrains'), exe: 'webstorm64.exe', name: 'WebStorm', id: 'webstorm' },
         { base: path_1.default.join(process.env.LOCALAPPDATA || '', 'JetBrains'), exe: 'goland64.exe', name: 'GoLand', id: 'goland' },
         { base: path_1.default.join(process.env.LOCALAPPDATA || '', 'JetBrains'), exe: 'rider64.exe', name: 'Rider', id: 'rider' },
+    ] : process.platform === 'darwin' ? [
+        { base: '/Applications', exe: 'IntelliJ IDEA.app', name: 'IntelliJ IDEA', id: 'intellij' },
+        { base: '/Applications', exe: 'PyCharm.app', name: 'PyCharm', id: 'pycharm' },
+        { base: '/Applications', exe: 'WebStorm.app', name: 'WebStorm', id: 'webstorm' },
+        { base: '/Applications', exe: 'GoLand.app', name: 'GoLand', id: 'goland' },
+        { base: '/Applications', exe: 'Rider.app', name: 'Rider', id: 'rider' },
+    ] : [
+        { base: '/opt', exe: 'idea', name: 'IntelliJ IDEA', id: 'intellij' },
+        { base: '/opt', exe: 'pycharm', name: 'PyCharm', id: 'pycharm' },
+        { base: '/opt', exe: 'webstorm', name: 'WebStorm', id: 'webstorm' },
+        { base: '/opt', exe: 'goland', name: 'GoLand', id: 'goland' },
+        { base: '/opt', exe: 'rider', name: 'Rider', id: 'rider' },
+        { base: '/usr/share', exe: 'idea', name: 'IntelliJ IDEA', id: 'intellij' },
+        { base: path_1.default.join(require('os').homedir(), '.local', 'share', 'JetBrains'), exe: 'idea', name: 'IntelliJ IDEA', id: 'intellij' },
     ];
 
     for (const { base, exe, name, id } of directJetbrainsPaths) {
@@ -13045,6 +13152,9 @@ electron_1.ipcMain.handle('add-project', (event, projectData) => {
         console.log('[DeskFlow] Project added:', name, 'with IDE:', defaultIde);
         return { success: true, id, name };
     } catch (err: any) {
+        if (err && /UNIQUE constraint failed.*projects\.path/i.test(err.message || '')) {
+            return { success: false, message: 'A project with this path already exists' };
+        }
         console.error('[DeskFlow] Failed to add project:', err);
         return { success: false, message: err.message };
     }
@@ -13246,7 +13356,15 @@ electron_1.ipcMain.handle('update-project', (event, projectId: string, updates: 
         const values: any[] = [];
 
         if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
-        if (updates.path !== undefined) { fields.push('path = ?'); values.push(updates.path); }
+        if (updates.path !== undefined) {
+            if (updates.path && updates.path !== project.path) {
+                const clash = db.prepare('SELECT id FROM projects WHERE path = ? AND id <> ?').get(updates.path, projectId) as any;
+                if (clash) {
+                    return { success: false, message: 'A project with this path already exists' };
+                }
+            }
+            fields.push('path = ?'); values.push(updates.path);
+        }
         if (updates.repositoryUrl !== undefined) { fields.push('repository_url = ?'); values.push(updates.repositoryUrl || null); }
         if (updates.vcsType !== undefined) { fields.push('vcs_type = ?'); values.push(updates.vcsType || null); }
         if (updates.primaryLanguage !== undefined) { fields.push('primary_language = ?'); values.push(updates.primaryLanguage || null); }
@@ -13262,6 +13380,9 @@ electron_1.ipcMain.handle('update-project', (event, projectId: string, updates: 
         console.log('[DeskFlow] Project updated:', projectId, updates);
         return { success: true };
     } catch (err: any) {
+        if (err && /UNIQUE constraint failed.*projects\.path/i.test(err.message || '')) {
+            return { success: false, message: 'A project with this path already exists' };
+        }
         console.error('[DeskFlow] Failed to update project:', err);
         return { success: false, message: err.message };
     }
@@ -13715,6 +13836,213 @@ electron_1.ipcMain.handle('get-project-line-stats', async (_event, projectId: st
 
 electron_1.ipcMain.handle('delete-project-line-stats', async (_event, projectId: string) => {
   try { db.prepare('DELETE FROM project_line_stats WHERE project_id = ?').run(projectId); return { success: true }; } catch (err: any) { return { success: false, error: err.message }; }
+});
+
+// ---------- Per-file change tracking (the churn ledger) ----------
+// RESULT.md §1: a delta is (content now) − (content at last observation), and
+// project_file_snapshots is the single observation memory. This family replaces
+// the old git-numstat + per-file `git diff --no-index` approach with ONE ledger
+// engine shared by the scan button and the editor-event ingest service, so no
+// ordering of scans, saves, or commits can double-count a line. Non-git folders
+// work with no git binary at all.
+
+const _ledger = require('./main/lib/ledger');
+const _scanShared = require('./main/lib/scanShared');
+const _ingestLib = require('./main/lib/ingest');
+
+// The editor-event ingest service (JSONL tail). Created + started in
+// app.whenReady() after `db` is initialised; referenced by the status/ingest
+// handlers above, which run only after IPC is live.
+let _ingestService: any = null;
+
+// Baseline HEAD (informational only — the ledger never diffs commits).
+const _gitHead = (dir: string): string | null => {
+  try {
+    return require('child_process').execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+};
+
+// Active session id (metadata only — RESULT.md §2 Q3). Sessions are not
+// project-scoped, so we stamp the currently-active session when one exists;
+// NULL otherwise. Never used for delta math.
+const _activeSessionFor = (_projectId: string): string | null => {
+  try {
+    const r = db.prepare(`SELECT id FROM sessions WHERE is_active = 1 ORDER BY start_time DESC LIMIT 1`).get() as any;
+    return r?.id != null ? String(r.id) : null;
+  } catch {
+    return null;
+  }
+};
+
+electron_1.ipcMain.handle('scan-project-changes', async (_event, projectPath: string, projectId: string, options?: { maxFiles?: number }) => {
+  if (useJson) return { success: false, message: 'Project changes require SQLite' };
+  const maxFiles = options?.maxFiles || 20000;
+  try {
+    const row = db.prepare('SELECT path FROM projects WHERE id = ?').get(projectId) as any;
+    if (!row || !row.path) return { success: false, error: 'Project path not found' };
+    const dir = projectPath || row.path;
+    if (!dir || !_fs.existsSync(dir)) return { success: false, error: 'ENOENT' };
+
+    // 1. Observation memory.
+    const snapshots = _ledger.loadSnapshots(db, projectId);
+    const isFirstScan = snapshots.size === 0;
+
+    // 2. Walk the tree with the shared skip rules.
+    const candidates = _scanShared.walkProject(_fs, _path, dir, { maxFiles });
+
+    // 3. Observe each candidate against its snapshot.
+    const deltas: any[] = [];
+    const upserts: any[] = [];
+    const seen = new Set<string>();
+    let approxCount = 0;
+    for (const c of candidates) {
+      seen.add(c.rel);
+      const prev = snapshots.get(c.rel);
+      const obs = _ledger.observe(c.rel, c.abs, prev);
+      if (obs.skipUpsert) continue;
+      if (obs.delta) {
+        deltas.push(obs.delta);
+        if (obs.delta.approx) approxCount++;
+      }
+      if (obs.snapshot) upserts.push(obs.snapshot);
+    }
+
+    // 4. Deletions: snapshot paths not seen in this walk.
+    const deletes: string[] = [];
+    for (const [rel, prev] of snapshots) {
+      if (seen.has(rel)) continue;
+      const d = _ledger.observeDeletion(rel, prev);
+      if (d) deltas.push(d);
+      deletes.push(rel);
+    }
+
+    // 5. Bulk guard / first-scan re-baseline (RESULT.md §5.1 step 7).
+    const changedOrNew = deltas.length;
+    let rebaselined = 0;
+    if (isFirstScan || changedOrNew > _ledger.BULK_REBASELINE) {
+      // Re-baseline: persist every snapshot, record ZERO deltas.
+      rebaselined = upserts.length + deletes.length;
+      // Still delete removed snapshots, but drop delta rows.
+      _ledger.persist(db, projectId, new Date().toISOString(), 'scan', _gitHead(dir), null, [], upserts, deletes);
+      const engine = approxCount > 0 ? 'approx' : 'diff';
+      return {
+        success: true,
+        data: {
+          files: [], summary: { filesChanged: 0, added: 0, removed: 0 },
+          scannedAt: new Date().toISOString(), lastScanAt: new Date().toISOString(),
+          lastEventAt: null, source: 'ledger', engine, approxCount, rebaselined,
+          baselineCommit: _gitHead(dir), totalFiles: 0,
+        },
+      };
+    }
+
+    // 6. Persist deltas + snapshot advances in one transaction.
+    const scannedAt = new Date().toISOString();
+    const sessionId = _activeSessionFor(projectId);
+    _ledger.persist(db, projectId, scannedAt, 'scan', _gitHead(dir), sessionId, deltas, upserts, deletes);
+
+    // 7. Evict stale snapshot content (hash + totals kept).
+    _ledger.evictStaleContent(db, projectId);
+
+    const engine = approxCount > 0 ? 'approx' : 'diff';
+    const files = deltas
+      .filter((d) => d.added > 0 || d.removed > 0)
+      .map((d) => ({ filePath: d.filePath, fileType: d.fileType, added: d.added, removed: d.removed, totalLines: d.total, approx: d.approx }));
+    const summary = { filesChanged: files.length, added: files.reduce((s, f) => s + f.added, 0), removed: files.reduce((s, f) => s + f.removed, 0) };
+    return {
+      success: true,
+      data: {
+        files, summary, scannedAt, lastScanAt: scannedAt, lastEventAt: null,
+        source: 'ledger', engine, approxCount, rebaselined,
+        baselineCommit: _gitHead(dir), totalFiles: files.length,
+      },
+    };
+  } catch (err: any) {
+    console.error('[DeskFlow] scan-project-changes error:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+electron_1.ipcMain.handle('get-project-changes', async (_event, projectId: string, limit?: number) => {
+  try {
+    const lim = limit || 200;
+    const rows = db.prepare('SELECT file_path, file_type, added, removed, total_lines, approx, source, baseline_commit, scanned_at FROM project_file_changes WHERE project_id = ? ORDER BY scanned_at DESC, id DESC LIMIT ?').all(projectId, 5000) as any[];
+    // Normalize legacy source values ('git'/'snapshot') to 'scan' at read time.
+    const normSrc = (s: string) => (s === 'git' || s === 'snapshot' ? 'scan' : s === 'editor' ? 'editor' : 'scan');
+    // Cumulative per-file totals (one row per path, summed deltas).
+    const byFile = new Map<string, { filePath: string; fileType: string; added: number; removed: number; totalLines: number; approx: boolean; lastScannedAt: string; source: string }>();
+    for (const r of rows) {
+      const prev = byFile.get(r.file_path);
+      if (!prev) {
+        byFile.set(r.file_path, { filePath: r.file_path, fileType: r.file_type, added: r.added, removed: r.removed, totalLines: r.total_lines, approx: !!r.approx, lastScannedAt: r.scanned_at, source: normSrc(r.source) });
+      } else {
+        prev.added += r.added;
+        prev.removed += r.removed;
+        prev.totalLines = r.total_lines || prev.totalLines;
+        prev.approx = prev.approx || !!r.approx;
+        if (r.scanned_at > prev.lastScannedAt) { prev.lastScannedAt = r.scanned_at; prev.source = normSrc(r.source); }
+      }
+    }
+    const files = [...byFile.values()].sort((a, b) => (b.added + b.removed) - (a.added + a.removed));
+    const summary = { filesChanged: files.length, added: files.reduce((s, f) => s + f.added, 0), removed: files.reduce((s, f) => s + f.removed, 0) };
+    // History: the last `lim` raw rows (for tooltips / future charts).
+    const history = rows.slice(0, lim).map((r) => ({ filePath: r.file_path, fileType: r.file_type, added: r.added, removed: r.removed, totalLines: r.total_lines, approx: !!r.approx, source: normSrc(r.source), scannedAt: r.scanned_at }));
+    // lastScanAt = latest 'scan' row; lastEventAt = latest 'editor' row.
+    let lastScanAt: string | null = null;
+    let lastEventAt: string | null = null;
+    for (const r of rows) {
+      const s = normSrc(r.source);
+      if (s === 'scan' && !lastScanAt) lastScanAt = r.scanned_at;
+      if (s === 'editor' && !lastEventAt) lastEventAt = r.scanned_at;
+    }
+    const scannedAt = rows[0]?.scanned_at || null;
+    const engine = rows.some((r) => r.approx) ? 'approx' : 'diff';
+    const baselineCommit = rows[0]?.baseline_commit || null;
+    return {
+      success: true,
+      data: { files, summary, history, scannedAt, lastScanAt, lastEventAt, source: 'ledger', engine, baselineCommit, totalFiles: files.length, totalRows: rows.length },
+    };
+  } catch (err: any) {
+    console.error('[DeskFlow] get-project-changes error:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+electron_1.ipcMain.handle('delete-project-changes', async (_event, projectId: string) => {
+  try {
+    db.prepare('DELETE FROM project_file_changes WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM project_file_snapshots WHERE project_id = ?').run(projectId);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Ingest status for the Live pill popover (RESULT.md §4.1, §6.2).
+electron_1.ipcMain.handle('get-changes-ingest-status', async (_event: any) => {
+  if (useJson) return { success: false, message: 'Requires SQLite' };
+  try {
+    return { success: true, data: _ingestService ? _ingestService.status() : null };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// On-demand ingestion of a batch of editor events (used by probes and any
+// in-process producer). Reads nothing from disk — the caller supplies lines.
+electron_1.ipcMain.handle('editor-changes:ingest', async (_event: any, lines: string[]) => {
+  if (useJson) return { success: false, message: 'Requires SQLite' };
+  try {
+    if (!_ingestService) return { success: false, error: 'Ingest service not started' };
+    _ingestService.ingestOnce(Array.isArray(lines) ? lines : [String(lines)]);
+    return { success: true, data: _ingestService.status() };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 });
 
 // Soft delete project (mark as deleted, can be restored)
@@ -24501,6 +24829,36 @@ if (!gotTheLock) {
     // app was closed is rejected instead of adopted.
     try { rehydrateMonitoredTerminals(); } catch (_e) { /* identity is best-effort */ }
 
+    // ── File-change ingest service (JSONL spine, RESULT.md §5.5) ────────────
+    // Tails `changes.jsonl` in userData for editor-reported save/delete events
+    // and reconciles them through the same ledger engine the scan button uses.
+    // Read-only from the editors' side; this process is the sole DB writer.
+    try {
+      const _normProj = (p: string): string => {
+        let s = _path.resolve(p || '');
+        if (s.length > 1 && (s.endsWith(_path.sep) || s.endsWith('/'))) s = s.slice(0, -1);
+        if (process.platform === 'win32' || process.platform === 'darwin') s = s.toLowerCase();
+        return s;
+      };
+      _ingestService = _ingestLib.createIngestService({
+        db,
+        getUserDataPath: () => electron_1.app.getPath('userData'),
+        resolveProject: (normalizedPath: string) => {
+          try {
+            const rows = db.prepare('SELECT id, path FROM projects WHERE deleted_at IS NULL').all() as any[];
+            for (const r of rows) {
+              if (_normProj(r.path) === normalizedPath) return { id: r.id, path: r.path };
+            }
+          } catch (_e) { /* no projects table yet */ }
+          return null;
+        },
+      });
+      _ingestService.start();
+      console.log('[DeskFlow] Changes ingest service started —', _ingestService.status().ingestPath);
+    } catch (err) {
+      console.warn('[DeskFlow] Changes ingest service failed to start:', err);
+    }
+
     // ── halo:get-next-deadline ────────────────────────────────────────────────
     // `nextDeadline` was the one promoted kind that needed NO new table: `deadlines` already
     // exists and holds the answer. This is a READ, and it is the proof that the producer path
@@ -24933,8 +25291,13 @@ if (!gotTheLock) {
          * lost to a startup race. */
       electron_1.ipcMain.on('halo:report-stream', (_e: unknown, payload: any) => {
         if (!payload || typeof payload !== 'object') return;
-        if ('stopwatch' in payload) haloStopwatchPayload = payload.stopwatch ?? null;
-        if ('dictation' in payload) haloDictationPayload = payload.dictation ?? null;
+        /* KEEP THE LAST KNOWN GOOD READING. The renderer reports on every snapshot change,
+         * and during a remount/hydration the store can briefly publish a null/zero reading
+         * before it has re-read localStorage. Overwriting with null made the pill reset to 0
+         * every few seconds and then climb back — the "glitches to the correct time" pattern.
+         * `??` keeps the previous value when the new one is absent/null. */
+        if ('stopwatch' in payload) haloStopwatchPayload = payload.stopwatch ?? haloStopwatchPayload;
+        if ('dictation' in payload) haloDictationPayload = payload.dictation ?? haloDictationPayload;
       });
 
       /* A card's route belongs to the MAIN window; the island has no router. */
@@ -25073,7 +25436,10 @@ if (!gotTheLock) {
        * failure mode is invisible from outside. Every outcome now lands in the diagnostic
        * log, and the host's stderr is captured so its own state lines survive. */
       const startHaloHost = () => {
-        if (haloLayerHostProcess) return;
+        /* A dead process ref (host crashed/exited on its own) must not block a respawn — otherwise
+         * the host never comes back and the cross-app pill stays gone forever. */
+        if (haloLayerHostProcess && haloLayerHostProcess.exitCode === null && !haloLayerHostProcess.killed) return;
+        haloLayerHostProcess = null;
         try {
           const hostBin = path_1.default.join(electron_1.app.getAppPath(), 'native', 'halo-layer-host', 'halo-layer-host');
           if (require('fs').existsSync(hostBin)) {
@@ -25110,6 +25476,9 @@ if (!gotTheLock) {
                 signal: String(signal ?? null),
                 stderr: hostErrTail.join('').trim().split('\n').slice(-8).join(' | '),
               });
+              /* Null the ref so the next sync (focus blur / re-enable) can respawn it. Without
+               * this the host dies once and never comes back — "not working outside the app". */
+              haloLayerHostProcess = null;
             });
             haloDiag('host-spawned', { pid: haloLayerHostProcess.pid ?? null });
           } else {
@@ -25172,26 +25541,18 @@ if (!gotTheLock) {
         }
       }
 
-      /* SINGLE-PILL RULE — THE HOST FOLLOWS THE FOCUS SIDE.
+      /* SINGLE-PAINTER RULE.
        *
-       * The in-app island (React inside RHEO's own window) and the cross-app layer-surface host
-       * are the same pill painted in two places. The design ruling is "no separate window" OR
-       * "cross-app visible" — mutually exclusive — and the in-app window wins, yet the host used
-       * to be started unconditionally at boot, so while the user was INSIDE the app both surfaces
-       * painted at the same rect: the in-app pill and the host pill. That is the double pill the
-       * user has been reporting ("one is in the app, one is outside").
+       * The in-app island (React inside RHEO's window) and the cross-app layer-surface host are
+       * the same pill. Running both paints two pills of different sizes — the duplicate the user
+       * kept seeing.
        *
-       * The host is therefore the cross-app painter ONLY while the user is NOT in the app. When
-       * RHEO's window holds focus the in-app island owns the paint (host stopped); when it loses
-       * focus the host takes over for the desktop. One pill, always. */
-      const syncCrossAppWithFocus = () => {
-        const focused = !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
-        try {
-          setCrossAppHaloEnabled(!focused);
-        } catch { /* in-app-only builds never reach the host half */ }
-      };
-      mainWindow?.on?.('focus', syncCrossAppWithFocus);
-      mainWindow?.on?.('blur', syncCrossAppWithFocus);
+       * Instead of toggling the HOST based on focus (which flapped under XWayland and killed
+       * animations), the host stays ON whenever the Halo is enabled, and the in-app pill simply
+       * does NOT render in that mode (OverlayRoot returns null for in-app + enabled). The host
+       * owns the single pill everywhere — over RHEO and over other apps. One painter, always.
+       * OFF (enabled:false / resident:'off') still removes everything. */
+      /* (host availability is driven solely by applyHaloPrefs / the boot gate — no focus toggling) */
 
       // Keep the in-app island for when KWin effect isn't available
       createHaloIsland({

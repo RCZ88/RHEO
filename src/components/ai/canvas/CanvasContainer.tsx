@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   FolderOpen, FilePlus2, Save, SquarePlus, LayoutGrid, Frame,
   ZoomIn, ZoomOut, Scan, Magnet, Undo2, Redo2, Maximize2, Minimize2,
+  ChevronDown, ChevronUp, MessageCircle,
 } from 'lucide-react'
 import { DotPattern } from '../../ui/dot-pattern'
 import { CanvasGrid } from './CanvasGrid'
@@ -53,6 +54,8 @@ interface CanvasContainerProps {
   onUpdateGroup?: (groupId: string, patch: Partial<Pick<CanvasGroup, 'label' | 'colorId' | 'orientation' | 'ratio'>>) => void
   onUngroup?: (groupId: string, mode: 'restore' | 'scatter') => void
   onRemoveFromGroup?: (cardId: string, newPosition?: { x: number; y: number }) => void
+  onArrangeGroup?: (groupId: string, mode: 'grid' | 'stack' | 'mosaic') => void
+  onMoveGroupChild?: (groupId: string, cardId: string, position: { x: number; y: number }) => void
   saveStatus: 'idle' | 'saving' | 'saved' | 'error'
   onSaveCanvas?: () => void
   onSend: (text: string) => void
@@ -88,7 +91,7 @@ interface CanvasContainerProps {
 
 export function CanvasContainer({
   cards, onMoveCard, onDismissCard, onArrangeCards, onPinCard, onResizeCard, onCardClick, onUpdateCard,
-  groups, onUpdateGroup, onUngroup, onRemoveFromGroup,
+  groups, onUpdateGroup, onUngroup, onRemoveFromGroup, onArrangeGroup, onMoveGroupChild,
   saveStatus, onSaveCanvas, onSend, onStop, streaming, thinking, connecting, messages, onCardAction, actionResults, focusedCardId, autoFocus, onToggleAutoFocus,
   onOpenPalette, onGroupCards,   canvasList, activeCanvasId, onLoadCanvas, onRenameCanvas, onDeleteCanvas, onSaveAs,
   onSetPanZoom, onNewCanvas, onAddCard, onUndo, onRedo, canUndo, canRedo,
@@ -100,6 +103,24 @@ export function CanvasContainer({
   const [confirmNewCanvas, setConfirmNewCanvas] = useState(false)
   const [showSaveAs, setShowSaveAs] = useState(false)
   const [saveAsName, setSaveAsName] = useState('')
+
+  // Collapsible conversation transcript — rests collapsed so the canvas stays
+  // visible; pops open automatically when a new message arrives (send or reply).
+  const [transcriptCollapsed, setTranscriptCollapsed] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('rheo-canvas-transcript-collapsed')
+      return v === null ? true : v === '1'
+    } catch { return true }
+  })
+  const transcriptPrevCountRef = useRef(messages?.length ?? 0)
+  useEffect(() => {
+    const n = messages?.length ?? 0
+    if (n > transcriptPrevCountRef.current) setTranscriptCollapsed(false)
+    transcriptPrevCountRef.current = n
+  }, [messages?.length])
+  useEffect(() => {
+    try { localStorage.setItem('rheo-canvas-transcript-collapsed', transcriptCollapsed ? '1' : '0') } catch {}
+  }, [transcriptCollapsed])
   const [pan, setPan] = useState<{ x: number; y: number }>(() => {
     try {
       const raw = localStorage.getItem(PAN_STORAGE_KEY)
@@ -508,6 +529,8 @@ export function CanvasContainer({
         onUpdateGroup={onUpdateGroup}
         onUngroup={onUngroup}
         onRemoveFromGroup={onRemoveFromGroup}
+        onArrangeGroup={onArrangeGroup}
+        onMoveGroupChild={onMoveGroupChild}
         isPanning={isPanning}
         setIsPanning={setIsPanning}
         focusedCardId={focusedCardId}
@@ -536,35 +559,73 @@ export function CanvasContainer({
         </div>
       )}
 
-      {/* Transcript — floats above the composer, mirroring the input pill.
-          This is the only place canvas mode ever rendered a reply; before it,
-          canvas mode had a composer but no message list at all. */}
+      {/* Transcript — floats above the composer. Collapsible so the canvas
+          stays visible; auto-expands whenever a new message arrives. */}
       {messages && messages.length > 0 && (
-        <div
-          data-tutorial="ai.messages"
-          className="dk-canvas-transcript"
-          role="log"
-          aria-live="polite"
-          aria-label="Conversation"
-        >
-          <div className="dk-canvas-transcript-scroll">
-            {messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                role={(m.role === 'user' || m.role === 'assistant' ? m.role : 'system') as any}
-                content={m.content}
-                parsed={m.parsed}
-                streaming={streaming && m.role === 'assistant'}
-                onAction={onCardAction as any}
-                actionResults={actionResults as any}
-              />
-            ))}
-          </div>
-        </div>
+        <AnimatePresence initial={false}>
+          {transcriptCollapsed ? (
+            <motion.button
+              key="pill"
+              type="button"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="dk-canvas-transcript-pill"
+              onClick={() => setTranscriptCollapsed(false)}
+              aria-label="Show conversation"
+              title="Show conversation"
+            >
+              <MessageCircle size={13} />
+              <span>{messages.length} message{messages.length === 1 ? '' : 's'}</span>
+              <ChevronUp size={13} />
+            </motion.button>
+          ) : (
+            <motion.div
+              key="panel"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              data-tutorial="ai.messages"
+              className="dk-canvas-transcript"
+              role="log"
+              aria-live="polite"
+              aria-label="Conversation"
+            >
+              <div className="dk-canvas-transcript-header">
+                <span className="dk-canvas-transcript-title">Conversation</span>
+                <span className="dk-canvas-transcript-count">{messages.length}</span>
+                <button
+                  type="button"
+                  className="dk-canvas-transcript-collapse"
+                  onClick={() => setTranscriptCollapsed(true)}
+                  aria-label="Collapse conversation"
+                  title="Collapse"
+                >
+                  <ChevronDown size={13} />
+                </button>
+              </div>
+              <div className="dk-canvas-transcript-scroll">
+                {messages.map((m) => (
+                  <MessageBubble
+                    key={m.id}
+                    role={(m.role === 'user' || m.role === 'assistant' ? m.role : 'system') as any}
+                    content={m.content}
+                    parsed={m.parsed}
+                    streaming={streaming && m.role === 'assistant'}
+                    onAction={onCardAction as any}
+                    actionResults={actionResults as any}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       )}
 
       <div data-tutorial="ai.input">
-        <CanvasInput onSend={onSend} onStop={onStop} streaming={streaming} thinking={thinking} connecting={connecting} onOpenPalette={onOpenPalette} />
+        <CanvasInput onSend={onSend} onStop={onStop} streaming={streaming} thinking={thinking} connecting={connecting} onOpenPalette={onOpenPalette} transcriptCollapsed={transcriptCollapsed} onToggleTranscript={() => setTranscriptCollapsed(v => !v)} />
       </div>
 
       <CardDrawer

@@ -19,6 +19,7 @@ import {
 import SleepDetectionModal, { type AdjacentSleepGap } from './components/SleepDetectionModal';
 import DevTriggerPanel from './components/DevTriggerPanel';
 import { HaloInAppMount } from './features/halo/HaloInAppMount';
+import { FloatingDictation } from './features/stt/FloatingDictation';
 import { useIslandLane } from './features/halo/islandFootprint';
 import { format as dateFormat } from 'date-fns';
 import SettingsPage from './pages/SettingsPage';
@@ -1416,7 +1417,7 @@ function App() {
 
       if (window.deskflowAPI?.confirmSleep) {
         const result = await window.deskflowAPI.confirmSleep({
-          started_at: fellAsleep.toISOString(),
+          started_at: deviceOff.toISOString(),
           ended_at: wokeUp.toISOString(),
           device_off_to_sleep_seconds: deviceOffToSleepSec,
           wake_up_to_app_seconds: wakeUpToAppSec,
@@ -3557,7 +3558,7 @@ const devFireSmartFill = async () => {
        const wakeUpToAppSec = Math.max(0, Math.round((deviceOn.getTime() - wokeUp.getTime()) / 1000));
        if (window.deskflowAPI?.confirmSleep) {
          const result = await window.deskflowAPI.confirmSleep({
-           started_at: fellAsleep.toISOString(), ended_at: wokeUp.toISOString(),
+           started_at: deviceOff.toISOString(), ended_at: wokeUp.toISOString(),
            device_off_to_sleep_seconds: deviceOffToSleepSec, wake_up_to_app_seconds: wakeUpToAppSec,
          });
          if (result?.success) {
@@ -3756,20 +3757,20 @@ const devFireSmartFill = async () => {
           /* THREE COLUMNS, NOT `justify-between`.
            *
            * The middle column is the pill's HOLE and its width and position come from the
-           * measured pill, so nothing can be placed under it. `min-h-16` rather than `h-16`
-           * because each cluster is allowed to WRAP: when a lane is narrower than its contents,
-           * wrapping is the honest answer — the alternative is either overflow or dropping
-           * controls, and this repo has already ruled eviction out. A wrapper only happens when
-           * the pill leaves less room than the controls need, which is exactly the case that
-           * used to end with the tracked time hidden behind the pill.
+           * measured pill, so nothing can be placed under it. The bar is a SINGLE row (`h-16`,
+           * `flex-nowrap`): clusters never wrap onto a second line. When a lane is genuinely
+           * narrower than its contents the trailing items overflow the cell visibly rather than
+           * wrapping — wrapping was tried first and CZ rejected it on sight ("since when is the
+           * top nav two rows?"). The pill-detection still guarantees the tracked-time readout and
+           * the Focus/Total switch are never painted under the pill.
            *
            * Horizontal padding moved onto the two clusters so the grid spans the full border
            * box: the hole is placed in border-box pixels, and a container `px-8` would shift
            * every column 32px away from the pill. */
-          className="min-h-16 py-2 border-b border-zinc-800 grid items-center glass"
+          className="h-16 border-b border-zinc-800 grid items-center glass"
           style={{ gridTemplateColumns: islandLane.template }}
         >
-          <div className="pl-8 flex items-center flex-wrap gap-x-4 gap-y-2 min-w-0">
+          <div className="pl-8 flex items-center gap-x-4 min-w-0 flex-nowrap">
             {(() => {
               const match = SIDEBAR_ITEMS.find(i => i.path === location.pathname);
               return match ? (
@@ -3795,7 +3796,7 @@ const devFireSmartFill = async () => {
               window's pixels, not a control. */}
           <div aria-hidden="true" />
 
-          <div className="pr-8 flex items-center flex-wrap justify-end gap-x-4 gap-y-2 min-w-0">
+          <div className="pr-8 flex items-center justify-end gap-x-4 min-w-0 flex-nowrap">
             {/* Time mode toggle: Focus vs Total */}
             <div className="flex bg-zinc-900 rounded-full p-1 flex-shrink-0 light:bg-[var(--ws-surface-sunken)]">
               <button
@@ -4646,6 +4647,7 @@ onFillGap={(gap) => {
         <ErrorBoundary>
           <HaloInAppMount />
         </ErrorBoundary>
+      <FloatingDictation />
       <TutorialOverlay />
     </div>
     </TutorialProvider>

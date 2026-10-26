@@ -10,12 +10,11 @@
  * two windows.
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Zap, Activity } from 'lucide-react'
 import type { GraphNode } from '../context-graph/types'
 import { getNodeGlow } from './physics/avalanche'
-import { ACCENTS } from '../ContextGraphView'
 
 // ── Activity event types ──
 export interface ActivityEvent {
@@ -35,7 +34,6 @@ interface ActivityFeedProps {
 const MAX_LOG = 30
 const AVATAR_COLS = 20
 
-// ── Helpers ──
 function formatTimeAgo(ts: number): string {
   const s = Math.floor((Date.now() - ts) / 1000)
   if (s < 5) return 'now'
@@ -43,13 +41,6 @@ function formatTimeAgo(ts: number): string {
   return `${Math.floor(s / 60)}m`
 }
 
-function magnitudeColor(mag: number): string {
-  if (mag > 0.7) return '#f59e0b'
-  if (mag > 0.4) return '#fbbf24'
-  return '#a16207'
-}
-
-// ── Component ──
 export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: ActivityFeedProps) {
   const [log, setLog] = useState<ActivityEvent[]>([])
   const [activeNodes, setActiveNodes] = useState<Set<string>>(new Set())
@@ -60,28 +51,24 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
     const now = Date.now()
     const active = new Set<string>()
     for (const node of nodes) {
-      if (node.state === 'active' || (node.lastFiredAt !== undefined && now - node.lastFiredAt < 2000)) {
+      if (node.state === 'active' || (node.lastFiredAt !== undefined && now - (node.lastFiredAt as number) < 2000)) {
         active.add(node.id)
       }
     }
     setActiveNodes(active)
   }, [nodes])
 
-  // Process incoming activity events into the log
+  // Process incoming activity events into the log. Dedup by nodeId+timestamp.
   useEffect(() => {
-    if (activity.length === 0) return
-    const newEvents = activity.filter(e => {
-      if (reducedMotion) return false
-      const lastLog = log[0]
-      if (!lastLog) return true
-      return e.timestamp !== lastLog.timestamp || e.nodeId !== lastLog.nodeId
+    if (!activity || activity.length === 0) return
+    setLog(prev => {
+      const seen = new Set(prev.map(e => `${e.nodeId}:${e.timestamp}`))
+      const incoming = activity.filter(e => !seen.has(`${e.nodeId}:${e.timestamp}`))
+      if (incoming.length === 0) return prev
+      return [...incoming.map(e => ({ ...e })), ...prev].slice(0, MAX_LOG)
     })
-    if (newEvents.length > 0) {
-      setLog(prev => [...newEvents.map(e => ({ ...e })), ...prev].slice(0, MAX_LOG))
-    }
-  }, [activity, reducedMotion]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activity])
 
-  // Tick glow periodically — drives re-renders so glow stays live
   const [, setTick] = useState(0)
   useEffect(() => {
     tickRef.current = window.setInterval(() => {
@@ -90,17 +77,15 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
     return () => clearInterval(tickRef.current)
   }, [])
 
-  // Aggregate glow — recomputed every render (cheap, ~nodes.length operations)
   const glow = useMemo(() => {
     const now = Date.now()
     let total = 0
     for (const node of nodes) {
-      total += getNodeGlow(node, now)
+      total += getNodeGlow(node as any, now)
     }
     return total
   }, [nodes])
 
-  // Cascade size history (last AVATAR_COLS events)
   const cascadeHistory = useMemo(() => {
     const events = log.slice(0, AVATAR_COLS)
     return events.map(e => e.magnitude)
@@ -109,15 +94,14 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
   const activeCount = activeNodes.size
   const maxGlow = Math.max(1, glow)
 
-  // Reduced-motion: show a static snapshot instead of a live log
   if (reducedMotion) {
     return (
       <div className="flex flex-col gap-2 h-full">
-        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono">
-          <Activity size={10} style={{ color: ACCENTS.cyan }} />
+        <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] font-mono">
+          <Activity size={10} className="text-[var(--page-accent)]" />
           Activity Snapshot
         </div>
-        <div className="flex-1 flex items-center justify-center text-[10px] text-zinc-600">
+        <div className="flex-1 flex items-center justify-center text-[10px] text-[var(--text-muted)]">
           {activeCount} nodes active · {nodes.length} total
         </div>
       </div>
@@ -127,12 +111,12 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
   return (
     <div className="flex flex-col gap-2 h-full">
       {/* Header */}
-      <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono">
-        <Zap size={10} style={{ color: '#f59e0b' }} />
+      <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] font-mono">
+        <Zap size={10} className="text-[var(--color-amber-400)]" />
         Avalanche Activity
         {activeCount > 0 && (
-          <span className="ml-auto flex items-center gap-1" style={{ color: '#f59e0b' }}>
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#f59e0b' }} />
+          <span className="ml-auto flex items-center gap-1 text-[var(--color-amber-400)]">
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[var(--color-amber-400)]" />
             {activeCount} firing
           </span>
         )}
@@ -140,32 +124,32 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
 
       {/* Cascade health bar */}
       <div className="flex items-center gap-2">
-        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)' }}>
+        <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-[var(--ws-surface-sunken)]">
           <div
             className="h-full rounded-full transition-all duration-300"
             style={{
               width: `${Math.min(100, (activeCount / Math.max(1, nodes.length)) * 100)}%`,
-              background: activeCount > 0 ? 'linear-gradient(90deg, #f59e0b, #fbbf24)' : '#27272a',
+              background: activeCount > 0 ? 'var(--color-amber-400)' : 'var(--ws-border)',
             }}
           />
         </div>
-        <span className="text-[9px] font-mono text-zinc-500 w-8 text-right">{activeCount}/{nodes.length}</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] w-8 text-right">{activeCount}/{nodes.length}</span>
       </div>
 
       {/* Aggregate glow bar */}
       <div className="flex items-center gap-2">
-        <span className="text-[9px] font-mono text-zinc-600">glow</span>
-        <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <span className="text-[9px] font-mono text-[var(--text-muted)]">glow</span>
+        <div className="flex-1 h-1 rounded-full overflow-hidden bg-[var(--ws-surface-sunken)]">
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{
               width: `${Math.min(100, (glow / maxGlow) * 100)}%`,
-              background: glow > 0.5 ? 'linear-gradient(90deg, #8b5cf6, #f59e0b)' : '#52525b',
+              background: glow > 0.5 ? 'var(--color-amber-400)' : 'var(--text-muted)',
               opacity: Math.max(0.3, glow / maxGlow),
             }}
           />
         </div>
-        <span className="text-[9px] font-mono text-zinc-500 w-10 text-right">{glow.toFixed(2)}</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] w-10 text-right">{glow.toFixed(2)}</span>
       </div>
 
       {/* Avalanche-size distribution (mini bar chart) */}
@@ -176,14 +160,14 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
             className="flex-1 rounded-t-sm transition-all duration-300"
             style={{
               height: `${Math.max(2, mag * 100)}%`,
-              background: magnitudeColor(mag),
+              background: 'var(--color-amber-400)',
               opacity: Math.max(0.2, mag * 2),
               minWidth: 2,
             }}
           />
         ))}
         {cascadeHistory.length === 0 && (
-          <span className="text-[9px] text-zinc-600 font-mono self-center">waiting…</span>
+          <span className="text-[9px] text-[var(--text-muted)] font-mono self-center">waiting…</span>
         )}
       </div>
 
@@ -200,19 +184,19 @@ export function ActivityFeed({ nodes, activity = [], reducedMotion = false }: Ac
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 className="flex items-center gap-2 px-2 py-1 rounded text-[9px] font-mono"
-                style={{ background: i === 0 ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.01)' }}
+                style={{ background: i === 0 ? 'rgba(245,158,11,0.06)' : 'transparent' }}
               >
-                <Zap size={8} style={{ color: magnitudeColor(event.magnitude), flexShrink: 0 }} />
-                <span className="text-zinc-400 truncate flex-1">{node?.name ?? event.nodeId.slice(0, 12)}</span>
-                <span style={{ color: magnitudeColor(event.magnitude) }}>×{event.magnitude.toFixed(2)}</span>
-                <span className="text-zinc-600">{event.depth}h</span>
-                <span className="text-zinc-700 shrink-0">{formatTimeAgo(event.timestamp)}</span>
+                <Zap size={8} className="text-[var(--color-amber-400)] shrink-0" />
+                <span className="text-[var(--text-secondary)] truncate flex-1">{node?.name ?? event.nodeId.slice(0, 12)}</span>
+                <span className="text-[var(--color-amber-400)]">×{event.magnitude.toFixed(2)}</span>
+                <span className="text-[var(--text-muted)]">{event.depth}h</span>
+                <span className="text-[var(--text-muted)] shrink-0">{formatTimeAgo(event.timestamp)}</span>
               </motion.div>
             )
           })}
         </AnimatePresence>
         {log.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-[9px] text-zinc-600">
+          <div className="flex-1 flex items-center justify-center text-[9px] text-[var(--text-muted)]">
             No spikes yet — the network is at rest
           </div>
         )}

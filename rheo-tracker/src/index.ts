@@ -1,5 +1,6 @@
 import * as http from 'node:http';
 import { getLinuxForegroundWindow, probeLinuxTrackingEnvironment } from '../../src/linuxForeground';
+import { startSystemInputWatcher } from '../../src/systemInputIdle';
 import {
   DB_PATH,
   OWNERSHIP_CHECK_INTERVAL_MS,
@@ -50,6 +51,21 @@ try {
   }
 } catch (err) {
   warn('environment probe failed:', (err as Error).message);
+}
+
+// ── Device-wide input clock ──────────────────────────────────────────────────
+// AFK must follow real keyboard/mouse/touch input, not "did the foreground
+// window change". Start it before the first poll so a boot during an absence
+// cannot immediately count as activity.
+try {
+  const clock = startSystemInputWatcher();
+  log(
+    clock.available
+      ? `input clock active (${clock.devices} /dev/input devices) — AFK follows real input`
+      : 'input clock unavailable (not in the input group?) — AFK falls back to foreground changes',
+  );
+} catch (err) {
+  warn('input clock failed to start:', (err as Error).message);
 }
 
 loadCategories(true);
@@ -118,6 +134,14 @@ async function applyOwnership(own: boolean, reason: string): Promise<void> {
     await stopBrowserServer(browserServer);
     browserServer = null;
     log(`tracking IDLE — ${reason}`);
+    // Clear the AFK event queue so the app never processes stale daemon events
+    // that accumulated while it was closed. The app has its own idle detection
+    // (powerMonitor.getSystemIdleTime) and will handle AFK from here.
+    try {
+      fs.unlinkSync(AFK_EVENT_QUEUE);
+    } catch {
+      // file doesn't exist — fine
+    }
   }
   await writeHeartbeat(heartbeatPatch(reason, owning)).catch(() => undefined);
 }
@@ -153,8 +177,12 @@ async function tick(): Promise<void> {
     loadCategories();
     const win = await getLinuxForegroundWindow();
     const app = win?.owner?.name ? session.normalizeApp(win.owner.name) : null;
-    session.feed(app ? { app, title: win?.title ?? null } : null);
+    // A null observation after a successful poll means "no trackable foreground
+    // app", which still proves the poll itself worked. Only a thrown error is a
+    // failed poll — and a failed poll must not advance the success clock.
+    session.feed({ ok: true, observation: app ? { app, title: win?.title ?? null } : null });
   } catch (err) {
+    session.feed({ ok: false, observation: null });
     warn('poll failed:', (err as Error).message);
   }
 }

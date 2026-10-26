@@ -159,6 +159,8 @@ export interface DeskflowAPI {
   // ── Tracking ──
   toggleTracking: () => Promise<any>
   setTracking: (enabled: boolean) => Promise<any>
+  /** Mirrors the renderer's AFK state so main never auto-resumes a manual pause. */
+  setAfkPaused: (paused: boolean) => Promise<any>
   restartTracking: () => Promise<any>
   getTrackingMode: () => Promise<any>
   setTrackingMode: (mode: string) => Promise<any>
@@ -338,6 +340,17 @@ export interface HaloBridge {
    * after every `setPreference(HALO_PREFS_KEY, …)` or the control will be decorative.
    */
   applyPrefs?: () => Promise<unknown>
+  /**
+   * Read the STORED preferences once, at mount.
+   *
+   * `halo:prefs` is push-only, and `OverlayRoot` starts from `HALO_DEFAULTS`
+   * (`enabled: true`). When the island is off, main creates no handle — and therefore never
+   * pushes — so a freshly loaded renderer could not learn that it was supposed to be off.
+   * It painted a full pill that no process owned: hover was dead, and the Settings toggle had
+   * nothing left to destroy. This pull is what makes `enabled: false` authoritative at first
+   * paint.
+   */
+  getPrefs?: () => Promise<unknown>
   /** Displays for the monitor picker: `{ id, label, bounds, scaleFactor, primary }[]`. */
   listDisplays?: () => Promise<unknown>
   /**
@@ -346,6 +359,8 @@ export interface HaloBridge {
    * keeps a pinned island from holding a click region over the user's desktop.
    */
   clickOutside?: () => Promise<unknown>
+  /** PRESS-AND-DRAG — move the island from the pill itself. */
+  drag?: (ev: { phase: 'begin' | 'update' | 'end'; dx: number; dy: number }) => void
   onPrefs?: (cb: (prefs: unknown) => void) => () => void
   onCommand?: (cb: (cmd: { command: string }) => void) => () => void
   onHover?: (cb: (intent: HaloIntent) => void) => () => void
@@ -371,6 +386,17 @@ export interface HaloBridge {
    *  so a card's route has to be pushed to the app window. */
   navigate?: (route: string) => void
   getAiUsage?: () => Promise<{ tokensToday: number | null; sessionCount: number | null; topModel: string | null; error?: string }>
+  /**
+   * ALARM WRITES (HALO_RESULT §4.6). The island's alarm editor is the only writer that goes
+   * through the halo bridge. `mode: 'relative'` keeps the row's "1d before" label, while
+   * `remind_at` is stamped with the real moment so the reminder ticker can fire it.
+   */
+  addReminder?: (
+    deadlineId: string,
+    data: { mode?: 'relative' | 'absolute'; leadMin?: number },
+  ) => Promise<{ ok: boolean; id?: string; error?: string }>
+  deleteReminder?: (id: string) => Promise<{ ok: boolean; error?: string }>
+
   /** `ok:false` = could not read the table (unknown). `ok:true, count:0` = measured zero. */
   getNextDeadline?: () => Promise<{
     ok: boolean
@@ -379,6 +405,62 @@ export interface HaloBridge {
     dueAtMs: number | null
     deltaMs: number | null
     isOverdue: boolean | null
+    error?: string
+  }>
+  /** Compact LIFE → SCHEDULE view for the island. `schedule` is the nearest RECURRING block
+   *  (`schedule_entries` is weekday + HH:MM), `deadlines` is EVERY open deadline with the
+   *  absolute alarm time (`remindAtMs`, null = no alarm set), soonest first. */
+  getLife?: () => Promise<{
+    ok: boolean
+    now: number
+    schedule: {
+      id: string
+      title: string
+      location: string | null
+      dayOfWeek: number
+      startTime: string
+      endTime: string
+      category: string | null
+      startsAtMs: number
+      endsAtMs: number
+      isNow: boolean
+    } | null
+    deadlines: Array<{
+      id: string
+      title: string
+      dueAtMs: number | null
+      deltaMs: number | null
+      isOverdue: boolean | null
+      /** Legacy single alarm column. Kept as a fallback for rows written before
+       *  `deadline_reminders` existed. */
+      remindAtMs: number | null
+      /** Every alarm from `deadline_reminders`. A RELATIVE alarm's `atMs` is its real moment
+       *  when the row was written by the island (which stamps it so the ticker can fire it) and
+       *  null for legacy app-written rows; `leadMin` is what was configured either way. */
+      alarms?: Array<{
+        id?: string
+        mode: 'relative' | 'absolute'
+        leadMin: number
+        atMs: number | null
+        fired: boolean
+      }>
+    }>
+    error?: string
+  }>
+  /** The REAL FocusManager public state. `endsAt: null` is an open-ended session (no
+   *  countdown) — not the same thing as finished. `strictness` is the lock the manager
+   *  actually enforces: 'distracting' = distracting blocked, 'non_allowed' = only allowed. */
+  getFocus?: () => Promise<{
+    ok: boolean
+    active?: boolean
+    paused?: boolean
+    endsAt?: number | null
+    remainingSec?: number | null
+    startedAt?: number | null
+    strictness?: 'distracting' | 'non_allowed'
+    allowedApps?: string[]
+    allowedDomains?: string[]
+    allowedTiers?: string[]
     error?: string
   }>
   getTerminalUsage?: () => Promise<{ activeSessions: number | null; commandsToday: number | null; handbookPercent: number | null; error?: string }>

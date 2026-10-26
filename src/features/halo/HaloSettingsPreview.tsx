@@ -129,31 +129,14 @@ function PageBody({ page }: { page: HaloPageId }) {
       </>
     );
   }
-  if (page === 'now') {
-    return (
-      <>
-        <Block label="App">
-          <NameRow icon="win" name={SAMPLE.app} trailing={`${SAMPLE.appMins} min`} />
-        </Block>
-        <Divider />
-        <Block label="Website">
-          <NameRow icon="globe" name={SAMPLE.site} trailing={`${SAMPLE.siteMins} min`} />
-        </Block>
-        <Divider />
-        <Block label="AI usage">
-          <span style={Value}>{SAMPLE.aiPct}%</span>
-        </Block>
-      </>
-    );
-  }
   if (page === 'deadlines') {
     return (
       <>
-        <Block label="Next deadline">
+        <Block label="Next class">
           <span style={Value}>{SAMPLE.deadline}</span>
         </Block>
         <Divider />
-        <Block label="In 3 days">
+        <Block label="Open deadlines">
           <NameRow icon="win" name="Design review" />
         </Block>
       </>

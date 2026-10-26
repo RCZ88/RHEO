@@ -29,8 +29,21 @@
  * sparse index map, and a stale entry naming a kind that no longer exists is simply
  * dropped instead of corrupting the sequence.
  */
-/** The four tab pages the expanded island can show, in the handoff's §5 order. */
-export type HaloPageId = 'focus' | 'now' | 'deadlines' | 'tools';
+/** The three tab pages the expanded island can show, in the handoff's §5 order.
+ *
+ *  `now` WAS HERE. It was a whole page for "App / Website / AI usage", and the same app and
+ *  website were ALSO the two halves of the Focus row's `STOPWATCH · Figma` eyebrow — two
+ *  screens printing one fact, which is how the Focus page ended up looking like a stopwatch
+ *  widget while the actual Focus FEATURE ran somewhere else entirely.
+ *
+ *  The user's instruction: "move it to the Focus thing … the focus doesn't look like a focus
+ *  because it's not even connected to the Focus feature." So `now` is gone: the tracked app and
+ *  site live on Focus (where they already were), and Focus now also renders the real session.
+ *
+ *  `normalizeHaloPages` drops ids it does not recognise, so a persisted
+ *  `["focus","now","deadlines","tools"]` degrades to `["focus","deadlines","tools"]` by itself —
+ *  no migration, and no stale tab. */
+export type HaloPageId = 'focus' | 'deadlines' | 'tools';
 
 export interface HaloPagePrefs {
   /** User sequence. Normalised by de-dupe + appending anything missing, like `order`. */
@@ -190,6 +203,18 @@ export interface HaloPrefs {
    */
   offsetY: number;
   /**
+   * Free drag offset from the centred position, px. Set by press-and-holding the pill and
+   * moving it — the "adjust the pill from itself" gesture. It shifts the island horizontally
+   * (`dragX`) and below the top edge (`dragY`), and persists so the position survives a
+   * restart. 0 = centred. Clamped to ±600 so a drag cannot fling the island off-screen.
+   *
+   * §127 forbids freeform positioning in the CORE model; this is the user's explicit gesture
+   * overriding that, and it is deliberately a small integer offset rather than an absolute
+   * coordinate, so it stays meaningful on a display that changes size.
+   */
+  dragX: number;
+  dragY: number;
+  /**
    * Page selection for the expanded island. The Specialist's settings screen reorders and hides
    * PAGES, which is a different axis from `order`/`widgets` below (those are the ambient widget
    * roster, not the four tab pages).
@@ -294,6 +319,37 @@ export interface HaloPrefs {
    */
   compactStyle: 'auto' | 'always' | 'off';
   /**
+   * AUTO-SHOW ACTIVE FEATURES.
+   *
+   * When on (default), any feature that is currently running/active (stopwatch,
+   * focus group, dictation, ...) is shown in the island even if the user hid it
+   * in the widget list. Active work should never be invisible just because the
+   * user toggled the widget off. When off, the widget list is authoritative.
+   */
+  autoShowActive: boolean;
+  /**
+   * PRODUCTIVITY AMBIENCE on the pill's EDGE.
+   *
+   * 'off'  — no ambience. The pill is the surface token alone.
+   * 'edge' — a 1px edge ring, tinted by the stopwatch's tier: green for productive,
+   *          red for distracting, neutral for neutral. It answers "is this session
+   *          going well" at a glance, without spending any of the pill's 32px of height.
+   *
+   * The user asked for exactly this ("ambience of like the red blue green depending on
+   * the productivity") and chose the EDGE treatment over a background tint: a tint fills
+   * the whole capsule and competes with the numeral, while a 1px ring + a faint bloom
+   * reads as a state rather than as decoration.
+   *
+   * DEFAULT IS `edge`, and that is a USER DECISION, not a design flourish. The first cut
+   * defaulted to `off` on the LAMINAR §7.2 "no decorative glow" reading — but §7.2 bans a
+   * glow added for ornament, and the owner asked for this one by name: "ambient on the pill
+   * showing red blue green depending on the productivity", then picked "Edge glow only"
+   * over a background tint. Shipping a pref that defaults to the state the requester did
+   * not ask for is how a feature lands invisible and gets reported as "you didn't do it".
+   * The Settings control still turns it off; `off` remains a real, honoured value.
+   */
+  ambient: 'off' | 'edge';
+  /**
    * Which item the COLLAPSED pill leads with, and how that choice interacts with interrupts.
    *
    * The handoff §6 says "The hero is the stopwatch. Which kind shows is decided by the existing
@@ -336,7 +392,7 @@ export const HALO_DEFAULT_ORDER: string[] = [...HALO_ORDERABLE];
 export const HALO_PREFS_KEY = 'haloIsland';
 
 /** The handoff §5 page order. */
-export const HALO_DEFAULT_PAGE_ORDER: HaloPageId[] = ['focus', 'now', 'deadlines', 'tools'];
+export const HALO_DEFAULT_PAGE_ORDER: HaloPageId[] = ['focus', 'deadlines', 'tools'];
 
 /** The items `HALO_SETTINGS.html` offers as the pill's main item. */
 export const HALO_PILL_RESIDENTS: readonly HaloPillResident[] = [
@@ -347,11 +403,14 @@ export const HALO_PILL_RESIDENTS: readonly HaloPillResident[] = [
   'hud',
 ];
 
-export const HALO_PAGE_IDS: readonly HaloPageId[] = ['focus', 'now', 'deadlines', 'tools'];
+export const HALO_PAGE_IDS: readonly HaloPageId[] = ['focus', 'deadlines', 'tools'];
 export const HALO_ANCHORS = ['left', 'center', 'right'] as const;
 /** §8: Windows floats 8px below the edge; GNOME must clear a 32px top bar. */
 export const HALO_OFFSET_Y_MIN = 0;
 export const HALO_OFFSET_Y_MAX = 64;
+/** Clamp on the drag offset. 600px is far enough to reach any edge of a 1080p panel and
+ * small enough that a flung drag cannot push the island off-screen. */
+export const HALO_DRAG_MAX = 600;
 
 export const HALO_DEFAULTS: HaloPrefs = {
   enabled: true,
@@ -360,6 +419,8 @@ export const HALO_DEFAULTS: HaloPrefs = {
   edge: 'top',
   anchor: 'center',
   offsetY: 8,
+  dragX: 0,
+  dragY: 0,
   displayId: null,
   widgets: {},
   order: [...HALO_DEFAULT_ORDER],
@@ -384,7 +445,10 @@ export const HALO_DEFAULTS: HaloPrefs = {
   showPin: true,
   clickShield: 'surface',
   compactStyle: 'auto',
+  autoShowActive: true,
   uiVersion: 'figma',
+  /* See the `ambient` doc above: ON by the owner's request. */
+  ambient: 'edge',
 };
 
 /** HALO_SIZE ceiling for visible widgets — see the maxVisible doc comment. */
@@ -424,6 +488,7 @@ export const HALO_EASINGS = ['expo', 'standard', 'snappy', 'linear'] as const;
 export const HALO_LIVELINESS = ['full', 'reduced', 'off'] as const;
 export const HALO_CLICK_SHIELDS = ['surface', 'canvas'] as const;
 export const HALO_COMPACT_STYLES = ['auto', 'always', 'off'] as const;
+export const HALO_AMBIENT_STYLES = ['off', 'edge'] as const;
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const n = typeof value === 'number' ? value : Number(value);
@@ -643,6 +708,8 @@ export function normalizeHaloPrefs(raw: unknown): HaloPrefs {
     edge: pickEnum(r.edge, HALO_EDGES, HALO_DEFAULTS.edge),
     anchor: pickEnum(r.anchor, HALO_ANCHORS, HALO_DEFAULTS.anchor),
     offsetY: Math.round(clampNumber(r.offsetY, HALO_OFFSET_Y_MIN, HALO_OFFSET_Y_MAX, HALO_DEFAULTS.offsetY)),
+    dragX: Math.round(clampNumber(r.dragX, -HALO_DRAG_MAX, HALO_DRAG_MAX, HALO_DEFAULTS.dragX)),
+    dragY: Math.round(clampNumber(r.dragY, -HALO_DRAG_MAX, HALO_DRAG_MAX, HALO_DEFAULTS.dragY)),
     displayId,
     widgets,
     order,
@@ -656,6 +723,8 @@ export function normalizeHaloPrefs(raw: unknown): HaloPrefs {
     showPin: typeof r.showPin === 'boolean' ? r.showPin : HALO_DEFAULTS.showPin,
     clickShield: pickEnum(r.clickShield, HALO_CLICK_SHIELDS, HALO_DEFAULTS.clickShield),
     compactStyle: pickEnum(r.compactStyle, HALO_COMPACT_STYLES, HALO_DEFAULTS.compactStyle),
+    autoShowActive: typeof r.autoShowActive === 'boolean' ? r.autoShowActive : HALO_DEFAULTS.autoShowActive,
+    ambient: pickEnum(r.ambient, HALO_AMBIENT_STYLES, HALO_DEFAULTS.ambient),
   };
 }
 

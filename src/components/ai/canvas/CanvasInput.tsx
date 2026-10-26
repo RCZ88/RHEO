@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Send, Loader2, Rows3, Check } from 'lucide-react'
+import { Send, Loader2, Rows3, Check, ChevronUp, ChevronDown, MessageSquare } from 'lucide-react'
 import { VoiceInputWrapper } from '../../../components/VoiceInputWrapper'
 import './canvas.css'
 
@@ -10,6 +10,8 @@ interface CanvasInputProps {
   thinking?: boolean
   connecting?: boolean
   onOpenPalette?: () => void
+  transcriptCollapsed?: boolean
+  onToggleTranscript?: () => void
 }
 
 /* Composer growth ceilings. `closed` is the default: a single line that does
@@ -40,7 +42,7 @@ function writeStored(key: string, val: string | null): void {
   } catch { /* private mode */ }
 }
 
-export function CanvasInput({ onSend, onStop, streaming, thinking, connecting, onOpenPalette }: CanvasInputProps) {
+export function CanvasInput({ onSend, onStop, streaming, thinking, connecting, onOpenPalette, transcriptCollapsed, onToggleTranscript }: CanvasInputProps) {
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [growMode, setGrowMode] = useState<GrowMode>(() => {
@@ -120,6 +122,14 @@ export function CanvasInput({ onSend, onStop, streaming, thinking, connecting, o
     writeStored(GROW_KEY, m)
     writeStored(GROW_OVERRIDE_KEY, null)
   }, [])
+
+  const stepHeight = useCallback((delta: number) => {
+    const base = growOverride !== null ? growOverride : cap
+    const next = Math.min(Math.max(base + delta, GROW_MIN), GROW_MAX)
+    setGrowOverride(next)
+    writeStored(GROW_OVERRIDE_KEY, String(next))
+    writeStored(GROW_KEY, growMode)
+  }, [growOverride, cap, growMode])
 
   useEffect(() => {
     if (!sizeMenuOpen) return
@@ -220,7 +230,24 @@ export function CanvasInput({ onSend, onStop, streaming, thinking, connecting, o
         </VoiceInputWrapper>
 
         <div className="dk-canvas-input-actions">
-          <div ref={sizeBtnRef} style={{ position: 'relative', display: 'flex' }}>
+            <button
+              type="button"
+              onClick={() => stepHeight(-40)}
+              className="dk-canvas-input-btn"
+              title="Decrease composer height"
+              aria-label="Decrease composer height"
+            >
+              <ChevronDown size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => stepHeight(40)}
+              className="dk-canvas-input-btn"
+              title="Increase composer height"
+              aria-label="Increase composer height"
+            >
+              <ChevronUp size={15} />
+            </button>
             <button
               type="button"
               onClick={() => setSizeMenuOpen((v) => !v)}
@@ -306,7 +333,6 @@ export function CanvasInput({ onSend, onStop, streaming, thinking, connecting, o
                 )}
               </div>
             )}
-          </div>
 
           {streaming ? (
             <button onClick={onStop} className="dk-canvas-input-btn stop" title="Stop generating">

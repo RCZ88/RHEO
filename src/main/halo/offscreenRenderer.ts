@@ -27,15 +27,18 @@
 
 import { BrowserWindow } from 'electron';
 import { createServer, type Socket } from 'node:net';
-import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   HALO_FRAME_PROTOCOL_VERSION,
   HALO_PIXEL_FORMAT_BGRA,
   validateFrameHeader,
+  validatePointerEvent,
+  validateDragEvent,
   type HaloFrameHeader,
   type HaloPointerEvent,
+  type HaloDragEvent,
 } from './frameProtocol';
 
 /**
@@ -236,6 +239,13 @@ export interface KwinBridgeOptions {
    * see `HaloPointerEvent` in frameProtocol.ts. It is what lets the main process distinguish
    * "the cursor ARRIVED at the pill" (which opens the island) from plain motion across it. */
   onPointerEvent?: (event: HaloPointerEvent) => void;
+  /* The press-and-hold drag that moves the island. The host reports the CUMULATIVE offset
+   * from the press point (see `HaloDragEvent`); the consumer owns what that means. */
+  onDrag?: (event: HaloDragEvent) => void;
+  /* Fired when a client completes the handshake. The host starts every session at offset 0,
+   * so the app must re-send the persisted position on every (re)connect or the island snaps
+   * back to centre. */
+  onHostConnected?: () => void;
 }
 
 interface BridgeClient {
@@ -250,6 +260,7 @@ export class KwinBridge {
   private clients: Map<string, BridgeClient> = new Map();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private disposed = false;
+  private clientSeq = 0;
 
   private readonly opts: KwinBridgeOptions;
   constructor(opts: KwinBridgeOptions) { this.opts = opts; }
@@ -272,7 +283,15 @@ export class KwinBridge {
     });
 
     this.server.on('connection', (socket: Socket) => {
-      const clientId = `${socket.remoteAddress}:${socket.remotePort}`;
+      /* AF_UNIX sockets report NO remoteAddress/remotePort, so the old key
+       * `undefined:undefined` collapsed every client into ONE map slot: each new
+       * connection overwrote the previous entry, and the earlier socket kept its
+       * open fd but was dropped from the map — its frames stopped being pushed and
+       * its pointer/heartbeat messages hit the `if (!client) return` guard and were
+       * silently discarded. The serving host became a ghost the moment anything else
+       * (test probe, KWin effect) connected. Per-connection unique id, like every
+       * other multi-client server does. */
+      const clientId = `bridge-client-${++this.clientSeq}`;
       const client: BridgeClient = {
         socket,
         buffer: Buffer.alloc(0),
@@ -325,6 +344,7 @@ export class KwinBridge {
       const payload = msg.payload as { protocolVersion?: number };
       if (payload.protocolVersion === HALO_FRAME_PROTOCOL_VERSION) {
         client.socket.write(this.frame({ type: 'hello-ack', payload: { protocolVersion: HALO_FRAME_PROTOCOL_VERSION } }));
+        this.opts.onHostConnected?.();
       } else {
         client.socket.write(this.frame({ type: 'hello-nak', payload: { protocolVersion: HALO_FRAME_PROTOCOL_VERSION } }));
         client.socket.destroy();
@@ -334,7 +354,6 @@ export class KwinBridge {
     if (msg.type === 'frame') {
       const rawHeader = msg.payload as Record<string, unknown>;
       try {
-        const { validateFrameHeader } = require('./frameProtocol');
         const header = validateFrameHeader(rawHeader);
         if (header.sequence <= client.expectedSequence && client.expectedSequence !== 0) {
           return;
@@ -353,11 +372,20 @@ export class KwinBridge {
     if (msg.type === 'pointer' && this.opts.onPointerEvent) {
       const payload = msg.payload as Record<string, unknown>;
       try {
-        const { validatePointerEvent } = require('./frameProtocol');
         const event = validatePointerEvent(payload);
         if (event) this.opts.onPointerEvent(event);
       } catch (err) {
         console.error('[halo/bridge] invalid pointer event:', (err as Error).message);
+      }
+      return;
+    }
+    if (msg.type === 'drag' && this.opts.onDrag) {
+      const payload = msg.payload as Record<string, unknown>;
+      try {
+        const event = validateDragEvent(payload);
+        if (event) this.opts.onDrag(event);
+      } catch (err) {
+        console.error('[halo/bridge] invalid drag event:', (err as Error).message);
       }
       return;
     }
@@ -373,7 +401,7 @@ export class KwinBridge {
 
   private checkHeartbeats(): void {
     const now = Date.now();
-    for (const [id, client] of this.clients) {
+    for (const client of this.clients.values()) {
       if (now - client.lastHeartbeat > 15000) {
         client.socket.destroy();
       }
@@ -390,6 +418,23 @@ export class KwinBridge {
       if (!client.socket.destroyed) {
         client.socket.write(this.frame({ type: 'frame', payload: header }));
         client.socket.write(pixels);
+      }
+    }
+  }
+
+  /** Tell every connected host where to put the island.
+   *
+   * `dx`/`dy` are ABSOLUTE offsets from the centred position and `top` is the base top
+   * margin — the host re-centres its painted box and applies both. This is the whole of the
+   * "drag the pill to move it" plumbing: the app owns the position, the compositor only knows
+   * margins, and the host is the one that knows its own painted size. */
+  sendMove(dx: number, dy: number, top: number): void {
+    if (this.disposed) return;
+    for (const client of this.clients.values()) {
+      if (!client.socket.destroyed) {
+        client.socket.write(
+          this.frame({ type: 'move', payload: { dx: Math.round(dx), dy: Math.round(dy), top: Math.round(top) } }),
+        );
       }
     }
   }

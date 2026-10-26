@@ -487,7 +487,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
     <div className="space-y-3">
       {/* ── Controls ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
           {(['tools', 'models'] as const).map((d) => (
             <button
               key={d}
@@ -498,7 +498,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 dimension === d
                   ? 'bg-violet-500/20 text-violet-400'
-                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
               )}
             >
               {d === 'tools' ? 'Tools' : 'Models'}
@@ -506,7 +506,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
           ))}
         </div>
 
-        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
           {(['tokens', 'messages', 'sessions', 'cost'] as const).map((m) => (
             <button
               key={m}
@@ -517,7 +517,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 metric === m
                   ? 'bg-violet-500/20 text-violet-400'
-                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
               )}
             >
               {m.charAt(0).toUpperCase() + m.slice(1)}
@@ -536,7 +536,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                     'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                     tokenSub === sub
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                   )}
                 >
                   {sub === 'combined' ? 'All' : sub === 'input' ? 'In' : 'Out'}
@@ -546,7 +546,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
           {(['week', 'month', 'all'] as const).map((p) => (
             <button
               key={p}
@@ -557,7 +557,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 period === p
                   ? 'bg-zinc-700/60 text-zinc-200'
-                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
               )}
             >
               {p === 'week' ? '7D' : p === 'month' ? '30D' : 'All'}
@@ -577,7 +577,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                 layout === l
                   ? 'bg-zinc-700/60 text-zinc-200'
-                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
               )}
             >
               {l === 'overlay' ? 'Combined' : 'Split'}
@@ -595,7 +595,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
             'px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150',
             selection.length === 0
               ? 'bg-violet-500/20 text-violet-400'
-              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
           )}
         >
           All
@@ -674,7 +674,7 @@ function AgentComparePanel(props: AgentComparePanelProps) {
               </div>
             ))}
           </div>
-          <div className="h-56 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50">
+          <div className="h-56 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
             {chartType === 'bar' ? (
               <Bar data={overlayData as any} options={barOptions as any} />
             ) : (
@@ -1731,7 +1731,7 @@ export default function AIToolsTab({
                  {formatOffsetLabel(displayOffsetMinutes)}
                </button>
                {showTzControl && (
-                 <div className="flex items-center gap-1 px-1.5 py-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg ring-1 ring-zinc-800/50">
+                 <div className="flex items-center gap-1 px-1.5 py-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                    {[
                      { label: '-1h', delta: -60 },
                      { label: '-15m', delta: -15 },
@@ -1741,7 +1741,7 @@ export default function AIToolsTab({
                      <button
                        key={s.label}
                        onClick={() => applyDisplayOffset(displayOffsetMinutes + s.delta)}
-                       className="px-1.5 py-0.5 rounded-md text-[10px] font-medium text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-300 transition-colors duration-150"
+                       className="px-1.5 py-0.5 rounded-md text-[10px] font-medium text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-[var(--text-primary)] transition-colors duration-150"
                      >
                        {s.label}
                      </button>
@@ -1750,7 +1750,7 @@ export default function AIToolsTab({
                    <button
                      onClick={() => applyDisplayOffset(0)}
                      disabled={displayOffsetMinutes === 0}
-                     className="px-1.5 py-0.5 rounded-md text-[10px] font-medium text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-stone-300 disabled:opacity-40 transition-colors duration-150"
+                     className="px-1.5 py-0.5 rounded-md text-[10px] font-medium text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors duration-150"
                    >
                      Reset
                    </button>
@@ -1797,14 +1797,14 @@ export default function AIToolsTab({
 
       {/* ── Chart Controls ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
           <button
             onClick={() => { setChartType('line'); try { localStorage.setItem('ide-ai-chart-type', 'line') } catch {} }}
             className={cn(
               'px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
               chartType === 'line'
                 ? 'bg-violet-500/20 text-violet-400 ring-1 ring-violet-500/30'
-                : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
             )}
           >
             <span className="flex items-center gap-1.5">
@@ -1818,7 +1818,7 @@ export default function AIToolsTab({
               'px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
               chartType === 'bar'
                 ? 'bg-violet-500/20 text-violet-400 ring-1 ring-violet-500/30'
-                : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
             )}
           >
             <span className="flex items-center gap-1.5">
@@ -1842,7 +1842,7 @@ export default function AIToolsTab({
             'px-2.5 py-1 rounded-lg text-[11px] font-medium ring-1 transition-colors duration-150',
             logScale
               ? 'bg-cyan-500/15 text-cyan-400 ring-cyan-500/30'
-              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] ring-zinc-700/40'
           )}
         >
           Log
@@ -1861,7 +1861,7 @@ export default function AIToolsTab({
             'px-2.5 py-1 rounded-lg text-[11px] font-medium ring-1 transition-colors duration-150',
             excludeOutliers
               ? 'bg-amber-500/15 text-amber-400 ring-amber-500/30'
-              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] ring-zinc-700/40'
           )}
         >
           Outliers
@@ -1873,7 +1873,7 @@ export default function AIToolsTab({
             'px-2.5 py-1 rounded-lg text-[11px] font-medium ring-1 transition-colors duration-150',
             showDataOnly
               ? 'bg-emerald-500/15 text-emerald-400 ring-emerald-500/30'
-              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-zinc-700/40'
+              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] ring-zinc-700/40'
           )}
         >
           {showDataOnly ? 'Data Only' : 'All Days'}
@@ -1913,7 +1913,7 @@ export default function AIToolsTab({
               </div>
 
               {agentDebugInfo.database && (
-                <div className="mb-4 p-4 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50">
+                <div className="mb-4 p-4 bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)] mb-2">
                     Database State
                   </h4>
@@ -2358,14 +2358,14 @@ export default function AIToolsTab({
               Tools
             </span>
           </div>
-          <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+          <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
             <button
               onClick={() => setTopViewMode('tools')}
               className={cn(
                 'px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
                 topViewMode === 'tools'
                   ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30'
-                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
               )}
             >
               <span className="flex items-center gap-1.5">
@@ -2379,7 +2379,7 @@ export default function AIToolsTab({
                 'px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150',
                 topViewMode === 'models'
                   ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30'
-                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
               )}
             >
               <span className="flex items-center gap-1.5">
@@ -2755,7 +2755,7 @@ export default function AIToolsTab({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                        <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                           {([
                             { key: 'week' as const, label: '7D' },
                             { key: 'month' as const, label: '30D' },
@@ -2768,7 +2768,7 @@ export default function AIToolsTab({
                                 'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                                 modalPeriod === p.key
                                   ? 'bg-violet-500/20 text-violet-400'
-                                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                                  : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                               )}
                             >
                               {p.label}
@@ -2860,12 +2860,12 @@ export default function AIToolsTab({
                         })()}
 
                         {/* Daily Usage Timeline Chart */}
-                        <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                        <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                           <div className="flex items-center justify-between mb-4">
                             <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider font-semibold">
                               Daily Usage Timeline
                             </div>
-                            <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                            <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                               {(['tokens', 'messages', 'sessions', 'cost'] as const).map((mode) => (
                                 <button
                                   key={mode}
@@ -2874,7 +2874,7 @@ export default function AIToolsTab({
                                     'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                                     aiChartMode === mode
                                       ? 'bg-violet-500/20 text-violet-400'
-                                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                                   )}
                                 >
                                   {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -2904,19 +2904,19 @@ export default function AIToolsTab({
                                 </>
                               )}
                             </div>
-                            <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                            <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                               <button
                                 onClick={() => { setChartType('line'); try { localStorage.setItem('ide-ai-chart-type', 'line') } catch {} }}
                                 className={cn(
                                   'px-1.5 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
-                                  chartType === 'line' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                                  chartType === 'line' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                                 )}
                               >Line</button>
                               <button
                                 onClick={() => { setChartType('bar'); try { localStorage.setItem('ide-ai-chart-type', 'bar') } catch {} }}
                                 className={cn(
                                   'px-1.5 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
-                                  chartType === 'bar' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                                  chartType === 'bar' ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                                 )}
                               >Bar</button>
                             </div>
@@ -3009,7 +3009,7 @@ export default function AIToolsTab({
                           if (modelDatasets.length === 0) return null
 
                           return (
-                            <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                            <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                               <div className="flex items-center justify-between mb-3">
                                 <div className="text-[11px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider font-semibold">
                                   Models — {modelMetricLabel}
@@ -3019,7 +3019,7 @@ export default function AIToolsTab({
                                     onClick={() => setModalSelectedModels([])}
                                     className={cn(
                                       'px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150',
-                                      modalSelectedModels.length === 0 ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                                      modalSelectedModels.length === 0 ? 'bg-violet-500/20 text-violet-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                                     )}
                                   >All</button>
                                   {modelNames.slice(0, 6).map((m, i) => {
@@ -3068,7 +3068,7 @@ export default function AIToolsTab({
 
                         {/* Models list */}
                         {agent.models.length > 0 && (
-                          <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50">
+                          <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-4 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                             <div className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mb-3 font-semibold">
                               Models Used
                             </div>
@@ -3169,7 +3169,7 @@ export default function AIToolsTab({
                           { label: 'Messages', comp: <span>{totalMessages.toLocaleString()}</span>, color: 'text-blue-400' },
                           { label: 'Cost', comp: <CostValue value={totalCost} />, color: 'text-emerald-400' },
                         ].map((s) => (
-                          <div key={s.label} className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-lg p-2 text-center ring-1 ring-zinc-800/50">
+                          <div key={s.label} className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-lg p-2 text-center ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                             <div className={cn('text-sm font-bold tabular-nums', s.color)}>{s.comp}</div>
                             <div className="text-[8px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-0.5">{s.label}</div>
                           </div>
@@ -3311,13 +3311,19 @@ export default function AIToolsTab({
 
         if (days.length === 0) return heatmapEmpty
 
+        // The ramp is a TOKEN PAIR (`--heat-0…5`, dark in `:root`, emerald
+        // mixed toward ink under the light scope in index.css): a JS colour
+        // string cannot carry a `light:` variant, so the inline alpha ramp was
+        // a dark-field device — `rgba(255,255,255,0.04)` (the empty cell) is
+        // literally nothing on paper and emerald at α0.15 is ~1.1:1 there.
+        // Dark is the original values, byte for byte.
         const cellColor = (b: number) => {
-          if (b === 0) return 'rgba(255,255,255,0.04)'
-          if (b < 0.2) return 'rgba(16, 185, 129, 0.15)'
-          if (b < 0.4) return 'rgba(16, 185, 129, 0.3)'
-          if (b < 0.6) return 'rgba(16, 185, 129, 0.5)'
-          if (b < 0.8) return 'rgba(16, 185, 129, 0.7)'
-          return 'rgba(16, 185, 129, 0.9)'
+          if (b === 0) return 'var(--heat-0)'
+          if (b < 0.2) return 'var(--heat-1)'
+          if (b < 0.4) return 'var(--heat-2)'
+          if (b < 0.6) return 'var(--heat-3)'
+          if (b < 0.8) return 'var(--heat-4)'
+          return 'var(--heat-5)'
         }
 
         const dayLookup = new Map<string, typeof days[0]>()
@@ -3377,27 +3383,22 @@ export default function AIToolsTab({
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
-                  <button onClick={() => setToolFilter('all')} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === 'all' ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300')}>All</button>
+                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
+                  <button onClick={() => setToolFilter('all')} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === 'all' ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]')}>All</button>
                   {heatmapAgents.slice(0, 8).map(a => (
-                    <button key={a.id} onClick={() => setToolFilter(a.id)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === a.id ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300')}>{a.name.split(' ')[0]}</button>
+                    <button key={a.id} onClick={() => setToolFilter(a.id)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', selectedHeatmapTool === a.id ? 'bg-zinc-700/60 text-zinc-200' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]')}>{a.name.split(' ')[0]}</button>
                   ))}
                 </div>
-                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                <div className="flex items-center gap-0.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                   {(['tokens', 'messages', 'cost', 'sessions'] as const).map((mode) => (
-                    <button key={mode} onClick={() => setAiChartMode(mode)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', aiChartMode === mode ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300')}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</button>
+                    <button key={mode} onClick={() => setAiChartMode(mode)} className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-colors duration-150', aiChartMode === mode ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]')}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</button>
                   ))}
                 </div>
               </div>
             </div>
 
             <div
-              className="rounded-xl p-4 overflow-visible relative"
-              style={{
-                background: 'linear-gradient(135deg, rgba(20,22,30,0.9) 0%, rgba(11,12,16,0.95) 100%)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                boxShadow: '0px 20px 40px -10px rgba(0,0,0,0.5)',
-              }}
+              className="rounded-xl p-4 overflow-visible relative bg-[linear-gradient(135deg,rgba(20,22,30,0.9)_0%,rgba(11,12,16,0.95)_100%)] light:bg-none light:bg-[var(--color-card)] border border-[rgba(255,255,255,0.08)] light:border-[var(--ws-border)] shadow-[0px_20px_40px_-10px_rgba(0,0,0,0.5)] light:shadow-none"
             >
               <div className="overflow-x-auto max-w-full pb-1">
                 <div className="inline-block min-w-full">
@@ -3425,18 +3426,12 @@ export default function AIToolsTab({
                                 className="w-[14px] h-[14px] rounded-[3px] transition-colors duration-100 group-hover:scale-[1.4] cursor-default"
                                 style={{
                                   backgroundColor: cellColor(dayData ? b : 0),
-                                  outline: isToday ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                                  outline: isToday ? '1px solid var(--heat-today)' : 'none',
                                   outlineOffset: '1px',
                                 }}
                               />
                               {dayData && dayData.details.length > 0 && (
-                                <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-lg invisible group-hover:visible pointer-events-none"
-                                  style={{
-                                    background: 'rgba(15, 17, 24, 0.96)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
-                                    minWidth: 110,
-                                  }}
+                                <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-lg invisible group-hover:visible pointer-events-none min-w-[110px] bg-[rgba(15,17,24,0.96)] light:bg-[var(--ws-surface-raised)] border border-[rgba(255,255,255,0.1)] light:border-[var(--ws-border)] shadow-[0_4px_16px_rgba(0,0,0,0.6)] light:shadow-none"
                                 >
                                   <div className="text-[9px] font-medium text-white whitespace-nowrap">
                                     {format(dayData.date, 'MMM d')} · <span className="text-emerald-400">
@@ -3520,7 +3515,7 @@ export default function AIToolsTab({
                     'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors duration-150 ring-1',
                     isActive
                       ? 'bg-zinc-800/80 text-zinc-100 ring-zinc-600/60 light:bg-[var(--ws-surface-sunken)] light:text-[var(--text-primary)] light:ring-[var(--ws-border-strong)]'
-                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300 ring-transparent hover:ring-zinc-700/40'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] ring-transparent hover:ring-zinc-700/40'
                   )}
                 >
                   <span
@@ -3570,14 +3565,14 @@ export default function AIToolsTab({
             </div>
             <div className="flex items-center gap-2">
               {/* City/Charts toggle */}
-              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                 <button
                   onClick={() => setShowCityView(true)}
                   className={cn(
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     showCityView
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                   )}
                 >
                   City
@@ -3588,21 +3583,21 @@ export default function AIToolsTab({
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     !showCityView
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                   )}
                 >
                   Charts
                 </button>
               </div>
               {/* Tool/Model toggle */}
-              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                 <button
                   onClick={() => setViewMode('tool')}
                   className={cn(
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     viewMode === 'tool'
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                   )}
                 >
                   Tool
@@ -3613,14 +3608,14 @@ export default function AIToolsTab({
                     'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                     viewMode === 'model'
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                      : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                   )}
                 >
                   Model
                 </button>
               </div>
               {/* Metric selector */}
-              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-1 ring-1 ring-zinc-800/50">
+              <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-1 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                 {(
                   ['tokens', 'messages', 'sessions', 'cost'] as const
                 ).map((mode) => (
@@ -3631,7 +3626,7 @@ export default function AIToolsTab({
                       'px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors duration-150',
                       aiChartMode === mode
                         ? 'bg-violet-500/20 text-violet-400'
-                        : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                        : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                     )}
                   >
                     {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -3684,7 +3679,7 @@ export default function AIToolsTab({
                 </GlassCard>
               }
             >
-              <div className="rounded-xl overflow-hidden ring-1 ring-zinc-800/50">
+              <div className="rounded-xl overflow-hidden ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                 <AIUsageCityscape
                   agents={displayedAgents}
                   overview={overview}
@@ -3732,7 +3727,7 @@ export default function AIToolsTab({
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg ring-1 ring-zinc-800/50">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                     <span className="text-[10px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider">
                       In:Out
                     </span>
@@ -4188,19 +4183,19 @@ export default function AIToolsTab({
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                         <div className="text-base font-bold text-rose-400 tabular-nums">{formatCurrency(avgDailyCost)}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Avg/Day</div>
                       </div>
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                         <div className="text-base font-bold text-amber-400 tabular-nums">{formatCurrency(projectedMonthly)}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Projected Month</div>
                       </div>
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                         <div className="text-base font-bold text-orange-400 tabular-nums">{formatCurrency(projectedYearly)}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Projected Year</div>
                       </div>
-                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50">
+                      <div className="bg-zinc-950 light:bg-[var(--ws-surface-60)] light:bg-white rounded-xl p-3 text-center ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                         <div className="text-base font-bold text-emerald-400 tabular-nums">{freeModels.length}</div>
                         <div className="text-[9px] text-zinc-600 light:text-[var(--text-muted)] uppercase tracking-wider mt-1">Free Models</div>
                       </div>
@@ -4381,14 +4376,14 @@ export default function AIToolsTab({
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50">
+                      <div className="flex items-center gap-1 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] light:bg-[var(--ws-surface-sunken)] rounded-lg p-0.5 ring-1 ring-zinc-800/50 light:ring-[var(--ws-border)]">
                         <button
                           onClick={() => setSelectedTimelineModels([])}
                           className={cn(
                             'px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors duration-150',
                             selectedTimelineModels.length === 0
                               ? 'bg-violet-500/20 text-violet-400'
-                              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-stone-300'
+                              : 'text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
                           )}
                         >
                           All
