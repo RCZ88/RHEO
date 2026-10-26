@@ -627,13 +627,27 @@ export function NativeFindOverlay({
     if (dragCleanupRef.current) { dragCleanupRef.current(); dragCleanupRef.current = null; }
     dragRef.current = null;
     setDragging(false);
-    const cell = dropCellRef.current;
+    const cell = dropCellRef.current || anchor;
     setDropCell(null);
     if (cell) { setAnchor(cell); saveAnchor(cell); }
-    // Clear the inline styles the drag wrote so the anchor takes over again.
+    // Re-apply the anchor's styles imperatively. React may skip re-applying
+    // style properties whose values are unchanged (e.g. transform staying
+    // translateX(-50%)), leaving the drag's `none`/cleared value in place and
+    // pushing the bar off-screen. Writing them here guarantees the bar lands
+    // on its snapped cell.
     const el = rootRef.current;
-    if (el) { el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = ''; el.style.transform = ''; }
-  }, []);
+    if (el) {
+      const s = anchorStyle(cell);
+      const px = (v: unknown) => (v === undefined ? '' : (typeof v === 'number' ? `${v}px` : String(v)));
+      el.style.position = 'fixed';
+      el.style.zIndex = '9999';
+      el.style.left = px(s.left);
+      el.style.top = px(s.top);
+      el.style.right = px(s.right);
+      el.style.bottom = px(s.bottom);
+      el.style.transform = (s.transform === undefined ? '' : String(s.transform));
+    }
+  }, [anchor]);
 
   // Drag listeners are now attached synchronously in startDrag (see below) so
   // the very first pointermove after pointerdown is captured. This effect is
@@ -797,6 +811,7 @@ export function NativeFindOverlay({
           <Search size={15} className="shrink-0 text-zinc-500" />
           <input
             ref={inputRef}
+            data-df-find-input="1"
             type="text"
             value={query}
             spellCheck={false}

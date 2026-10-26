@@ -413,11 +413,12 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (!mod || e.key.toLowerCase() !== 'f') return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-        const el = e.target as HTMLElement;
-        if (!el.dataset?.smartSearchInput && !el.dataset?.dfFindInput) return;
-      }
+      const el = e.target as HTMLElement;
+      // Only defer to the find bar's own input (where Ctrl+F refocuses the
+      // existing bar). Everywhere else Ctrl+F must open the bar, even when
+      // focus sits in a page input/textarea — otherwise it can never be
+      // reopened once it has been closed.
+      if (el?.dataset?.dfFindInput) return;
       e.preventDefault();
       setFindScope('subpage');
       setNativeFindOpen(true);

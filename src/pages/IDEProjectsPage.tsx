@@ -1183,6 +1183,43 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
     gitDetectTimer.current = window.setTimeout(() => { void detectGitFor(value); }, 600);
   };
 
+  /** Edit-modal counterpart: same git detection, writes to editProjectForm. */
+  const detectGitForEdit = async (rawPath: string) => {
+    const dir = (rawPath || '').trim();
+    if (!dir) return;
+    let r: any = null;
+    let bridgeMissing = false;
+    try {
+      const api = window.deskflowAPI as any;
+      if (!api?.detectProjectGit) bridgeMissing = true;
+      else r = await api.detectProjectGit(dir);
+    } catch { bridgeMissing = true; }
+
+    if (r?.isRepo && r.remoteUrl) {
+      setEditProjectForm(prev => ({
+        ...prev,
+        repositoryUrl: repoDirtyRef.current ? prev.repositoryUrl : (prev.repositoryUrl || r.remoteUrl),
+        name: prev.name || r.suggestedName || ''
+      }));
+      return;
+    }
+    if (r?.isRepo) return;
+    const name = r?.dirName || dirNameOf(dir);
+    const templated = ghUser && name ? `https://github.com/${ghUser}/${name}` : '';
+    setEditProjectForm(prev => ({
+      ...prev,
+      name: prev.name || name,
+      repositoryUrl: repoDirtyRef.current ? prev.repositoryUrl : (prev.repositoryUrl || templated)
+    }));
+  };
+
+  const handleEditPathChange = (value: string) => {
+    repoDirtyRef.current = false;
+    setEditProjectForm(prev => ({ ...prev, path: value }));
+    if (gitDetectTimer.current) window.clearTimeout(gitDetectTimer.current);
+    gitDetectTimer.current = window.setTimeout(() => { void detectGitForEdit(value); }, 600);
+  };
+
   /** Quick-add suggestion: same fill as before, now also derives the repo link. */
   const applySuggestedProject = (p: { name: string; path: string }) => {
     repoDirtyRef.current = false;
@@ -1299,9 +1336,11 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       primaryLanguage: project.primary_language || '',
       defaultIde: project.default_ide || ''
     });
+    repoDirtyRef.current = !!project.repository_url;
     setShowEditProject(true);
     setLanguageSearch('');
     setShowLanguageDropdown(false);
+    void detectGitForEdit(project.path || '');
   };
 
   const handleLanguageSelect = (lang: string) => {
@@ -1356,6 +1395,7 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
       if (result.success) {
         setShowEditProject(false);
         setEditingProject(null);
+        repoDirtyRef.current = false;
         setEditProjectForm({ name: '', path: '', repositoryUrl: '', vcsType: '', primaryLanguage: '', defaultIde: '' });
         await loadOverview();
       } else {
@@ -4844,14 +4884,15 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                     <input
                       type="text"
                       value={editProjectForm.path}
-                      onChange={(e) => setEditProjectForm({ ...editProjectForm, path: e.target.value })}
+                      onChange={(e) => handleEditPathChange(e.target.value)}
                       className="flex-1 px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                     />
                     <button
                       onClick={async () => {
                         const result = await window.deskflowAPI!.pickFolder();
                         if (result.success && result.path) {
-                          setEditProjectForm({ ...editProjectForm, path: result.path });
+                          setEditProjectForm(prev => ({ ...prev, path: result.path }));
+                          void detectGitForEdit(result.path);
                         }
                       }}
                       className="px-4 py-3 bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition"
@@ -4862,14 +4903,83 @@ export default function IDEProjectsPage({ selectedPeriod = 'week', dateOffset = 
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-2">Repository URL (optional)</label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="block text-sm text-zinc-400">Repository URL (optional)</label>
+                    {gitDetect.state === 'busy' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                        <Loader2 className="w-3 h-3 animate-spin" /> reading .git
+                      </span>
+                    )}
+                    {gitDetect.state === 'repo' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                        <FolderGit2 className="w-3 h-3" />
+                        from remote <span className="text-zinc-300 light:text-[var(--text-primary)]">{gitDetect.detail}</span>
+                      </span>
+                    )}
+                    {gitDetect.state === 'templated' && gitDetect.detail && (
+                      <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                        no git repo, templated <span className="text-zinc-300 light:text-[var(--text-primary)]">{gitDetect.detail}</span>
+                      </span>
+                    )}
+                    {gitDetect.state === 'error' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                        <AlertCircle className="w-3 h-3" /> {gitDetect.detail}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
+                    list="df-github-repos"
                     value={editProjectForm.repositoryUrl}
-                    onChange={(e) => setEditProjectForm({ ...editProjectForm, repositoryUrl: e.target.value })}
+                    onChange={(e) => { repoDirtyRef.current = true; setEditProjectForm(prev => ({ ...prev, repositoryUrl: e.target.value })); }}
+                    onFocus={() => { if ((ghUser || ghToken) && repos.state === 'idle') void loadRepos(); }}
                     placeholder="https://github.com/user/repo"
                     className="w-full px-4 py-3 bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
                   />
+                  <datalist id="df-github-repos">
+                    {repos.items.map(o => (
+                      <option key={o.url} value={o.url}>{o.label}</option>
+                    ))}
+                  </datalist>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <label htmlFor="df-github-user-edit" className="text-xs text-zinc-500 light:text-[var(--text-muted)] shrink-0">GitHub user</label>
+                    <input
+                      id="df-github-user-edit"
+                      type="text"
+                      value={ghUser}
+                      onChange={(e) => handleGhUserChange(e.target.value)}
+                      placeholder="your-github-username"
+                      className="flex-1 min-w-[120px] px-2 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
+                    />
+                    <label htmlFor="df-github-token-edit" className="text-xs text-zinc-500 light:text-[var(--text-muted)] shrink-0">Token (optional)</label>
+                    <input
+                      id="df-github-token-edit"
+                      type="password"
+                      value={ghToken}
+                      onChange={(e) => handleGhTokenChange(e.target.value)}
+                      placeholder="ghp_…"
+                      className="flex-1 min-w-[120px] px-2 py-1.5 text-xs bg-zinc-800 light:bg-zinc-100 text-white rounded-lg border border-zinc-700 light:border-zinc-300 focus:border-violet-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void loadRepos()}
+                      disabled={repos.state === 'loading' || !ghUser}
+                      className="px-2.5 py-1.5 text-xs bg-zinc-700 light:bg-zinc-200 hover:bg-zinc-600 text-zinc-300 rounded-lg border border-zinc-600 light:border-zinc-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {repos.state === 'loading' ? 'Loading…' : 'Load repos'}
+                    </button>
+                    {repos.state === 'ready' && (
+                      <span className="text-xs text-zinc-500 light:text-[var(--text-muted)]">{repos.items.length} repos</span>
+                    )}
+                    {repos.state === 'ready' && repos.items.length === 0 && (
+                      <span className="text-xs text-zinc-500 light:text-[var(--text-muted)]">no repos found</span>
+                    )}
+                    {repos.state === 'error' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-zinc-500 light:text-[var(--text-muted)]">
+                        <AlertCircle className="w-3 h-3" /> {repos.error}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div ref={languageDropdownRef}>
                   <label className="block text-sm text-zinc-400 mb-2">Primary Language (optional)</label>

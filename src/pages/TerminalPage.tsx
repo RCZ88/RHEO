@@ -657,7 +657,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('terminal-sidebarWidth');
-    return saved ? parseInt(saved) : 400;
+    return saved ? Math.max(320, parseInt(saved)) : 560;
   });
   const [isResizing, setIsResizing] = useState(false);
   type GroupKey = 'setup' | 'work' | 'insights' | 'studio' | 'conductor' | 'context';
@@ -2200,7 +2200,7 @@ export default function TerminalPage({ projectId: propProjectId, projectPath: pr
      
      const handleMouseMove = (e: MouseEvent) => {
        const delta = startX - e.clientX;
-       const newWidth = Math.max(200, startWidth + delta);
+       const newWidth = Math.max(320, startWidth + delta);
        setSidebarWidth(newWidth);
      };
     
