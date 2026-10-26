@@ -27,6 +27,11 @@
 
   /* accent — pure white, the ONLY accent */
   --color-accent: #ffffff;
+  /* liveness — the very top of the zinc scale. Static emphasis stops at
+     --color-hi (#f4f4f5). Anything that ANSWERS the visitor — hover, focus,
+     scrub cursor, tooltip border — goes pure white. The page whitens where it
+     is alive. LAMINAR §6: importance = brightness/weight/scale, never hue. */
+  --color-live: #ffffff;
 
   /* type */
   --font-sans: var(--font-display), "Space Grotesk", system-ui, sans-serif;
@@ -286,6 +291,22 @@ html[data-motion="off"] .dk-thinking-dot {
 }
 .ridge-anim {
   animation: ridge-breathe 6s ease-in-out infinite;
+}
+
+/* ---- Liveness: the page whitens where it is alive ----
+   160ms color transition on the standard easing. Applied to every element
+   that answers the visitor (hover, focus, scrub cursor, tooltip border).
+   Static emphasis stays at --color-hi; only interactive surfaces reach
+   --color-live. No layout property is animated — transform/opacity/color only. */
+.interactive-live {
+  transition: color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.interactive-live:hover,
+.interactive-live:focus-visible {
+  color: var(--color-live);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 /* ---- Easing everywhere ---- */
