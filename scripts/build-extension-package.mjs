@@ -106,6 +106,39 @@ function main() {
     built.push({ id: v.id, zip, xpi, size: statSync(zip).size });
   }
 
+  // ── VALIDATE EVERY VARIANT BEFORE DECLARING SUCCESS ─────────────────────────
+  // A missing referenced file, a bad manifest, or a wrong background key is the
+  // difference between "installs fine" and "Firefox reports the XPI as corrupt".
+  // Validate here so a broken package can never be shipped silently.
+  for (const b of built) {
+    const listing = execFileSync('unzip', ['-l', b.zip], { encoding: 'utf8' });
+    const manifestText = execFileSync('unzip', ['-p', b.zip, 'manifest.json'], { encoding: 'utf8' });
+    let manifest;
+    try { manifest = JSON.parse(manifestText); }
+    catch (e) { console.error(`[build-extension-package] INVALID manifest in ${b.id}: ${e.message}`); process.exit(1); }
+    const required = ['manifest_version','name','version','description','permissions','icons','action','background','host_permissions','content_scripts','browser_specific_settings','data_collection_permissions'];
+    for (const k of required) {
+      if (!(k in manifest)) { console.error(`[build-extension-package] ${b.id}: missing manifest key '${k}'`); process.exit(1); }
+    }
+    if (!manifest.browser_specific_settings?.gecko?.id) {
+      console.error(`[build-extension-package] ${b.id}: missing gecko.id`); process.exit(1);
+    }
+    const archiveFiles = new Set(listing.split('\n').map(l => l.trim().split(/\s+/).pop()).filter(Boolean));
+    const referenced = [];
+    for (const v of Object.values(manifest.icons || {})) referenced.push(v);
+    for (const v of Object.values(manifest.action?.default_icon || {})) referenced.push(v);
+    if (manifest.action?.default_popup) referenced.push(manifest.action.default_popup);
+    for (const s of manifest.background?.scripts || []) referenced.push(s);
+    if (manifest.background?.service_worker) referenced.push(manifest.background.service_worker);
+    for (const cs of manifest.content_scripts || []) for (const js of cs.js || []) referenced.push(js);
+    for (const p of referenced) {
+      if (!archiveFiles.has(p)) { console.error(`[build-extension-package] ${b.id}: referenced file MISSING from archive: ${p}`); process.exit(1); }
+    }
+    if (b.id === 'firefox' && !manifest.background?.scripts) { console.error(`[build-extension-package] firefox variant missing background.scripts`); process.exit(1); }
+    if (b.id === 'chrome' && !manifest.background?.service_worker) { console.error(`[build-extension-package] chrome variant missing background.service_worker`); process.exit(1); }
+    console.log(`[build-extension-package] validated ${b.id}: ${referenced.length} referenced files present, manifest OK`);
+  }
+
   rmSync(STAGE, { recursive: true, force: true });
 
   console.log('[build-extension-package] built DeskFlow Browser Bridge');
