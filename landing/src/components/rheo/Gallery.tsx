@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useInView } from "framer-motion";
 import { Download, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "./use-reduced-motion";
@@ -111,6 +111,8 @@ const SCREENS: Screen[] = [
 
 export default function Gallery() {
   const reduced = usePrefersReducedMotion();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const headerInView = useInView(headerRef, { once: true, margin: "-10% 0px" });
   const railRef = useRef<HTMLUListElement>(null);
   const [index, setIndex] = useState(0);
   const [atStart, setAtStart] = useState(true);
@@ -209,7 +211,13 @@ export default function Gallery() {
   return (
     <section id="gallery" className="relative surface-page pt-24 sm:pt-32">
       <div className="px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto">
-        <div className="mb-8 max-w-[680px]">
+        <motion.div
+          ref={headerRef}
+          className="mb-8 max-w-[680px]"
+          initial={reduced ? false : { opacity: 0, y: 16 }}
+          animate={headerInView || reduced ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
           <p className="mono-label" style={{ fontSize: 11 }}>
             <DecryptedText text="SECTION 03 / EVERY SURFACE" speed={28} maxIterations={6} />
           </p>
@@ -219,7 +227,7 @@ export default function Gallery() {
             a real database. Five also have a recording. Nothing below is a
             mockup, and nothing is cropped to fit.
           </p>
-        </div>
+        </motion.div>
 
         {/* ---- controls: arrows, true count, and the recording toggle ---- */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">

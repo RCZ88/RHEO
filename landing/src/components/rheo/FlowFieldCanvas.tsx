@@ -153,8 +153,8 @@ export default function FlowFieldCanvas({}: Props) {
             RAMP_LEN - 1,
             Math.max(0, Math.floor(n * (RAMP_LEN - 1)))
           );
-          const alpha = 0.25 + n * 0.6;
-          context!.globalAlpha = Math.max(0.25, Math.min(0.9, alpha));
+          const alpha = 0.4 + n * 0.55;
+          context!.globalAlpha = Math.max(0.4, Math.min(0.95, alpha));
           context!.drawImage(
             sprites[idx],
             0,
@@ -214,8 +214,8 @@ export default function FlowFieldCanvas({}: Props) {
             const dx = cx - px;
             const dy = cy - py;
             const d = Math.sqrt(dx * dx + dy * dy);
-            if (d < 90) {
-              repulse = (1 - d / 90) * 0.5;
+            if (d < 120) {
+              repulse = (1 - d / 120) * 0.7;
             }
           }
 
@@ -228,7 +228,7 @@ export default function FlowFieldCanvas({}: Props) {
             Math.max(0, Math.floor(intensity * (RAMP_LEN - 1)))
           );
           const alpha = 0.25 + intensity * 0.65; // 0.25..0.9
-          context!.globalAlpha = Math.max(0.25, Math.min(0.9, alpha));
+          context!.globalAlpha = Math.max(0.4, Math.min(0.95, alpha));
           context!.drawImage(
             sprites[idx],
             0,

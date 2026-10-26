@@ -62,10 +62,19 @@ const SCENARIOS: Scenario[] = [
 ];
 
 export default function ActUnderstand() {
+  const headerRef = useRef<HTMLDivElement>(null);
+  const headerInView = useInView(headerRef, { once: true, margin: "-10% 0px" });
+  const reduced = !useShouldAnimate();
   return (
     <section id="understand" className="relative surface-page pt-24 sm:pt-32">
       <div className="px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto">
-        <div className="mb-12 sm:mb-16 max-w-[680px]">
+        <motion.div
+          ref={headerRef}
+          className="mb-12 sm:mb-16 max-w-[680px]"
+          initial={reduced ? false : { opacity: 0, y: 16 }}
+          animate={headerInView || reduced ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
           <p className="mono-label" style={{ fontSize: 11 }}>
             <DecryptedText text="SECTION 03 / UNDERSTAND · EXAMPLE ANSWERS" speed={28} maxIterations={6} />
           </p>
@@ -78,7 +87,7 @@ export default function ActUnderstand() {
             answers with receipts. Keep asking, and the record teaches back — your
             process, redrawn as your habits change.
           </p>
-        </div>
+        </motion.div>
 
         {/* REMOVED 2026-10-07 — app-ai.png is rendered by #gallery as one of the
             17 screens. RESULT.md §1.2 gives the gallery exclusive ownership of
