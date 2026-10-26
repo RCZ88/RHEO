@@ -1195,7 +1195,7 @@ export default function ProductivityPage({
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl font-bold font-mono tabular-nums text-[var(--text-primary)]">{Math.round(productivityData.dayUtilization)}%</span>
-                <span className="text-[11px] text-[var(--text-muted)] mt-0.5">of 24h tracked</span>
+                <span className="text-[11px] text-[var(--text-muted)] mt-0.5">of a 24h day</span>
               </div>
             </div>
           </div>
