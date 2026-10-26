@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { useShouldAnimate } from "./use-motion-preference";
 import DecryptedText from "./DecryptedText";
 import { RealClip } from "./RealFootage";
+import SampleDayTimeline from "./SampleDayTimeline";
 
 /** The authored half. Everything here is a literal — that is the whole problem. */
 type BlockSeed = {
@@ -435,14 +436,7 @@ export default function ActRecord() {
                 : { width: "min(640px, 100%)", marginTop: 24 }
             }
           >
-            <RealClip
-              src="/media/app-timeline-24h.mp4"
-              poster="/media/app-dashboard.png"
-              alt="The RHEO dashboard with the 24 hour timeline filling in as the day is recorded"
-              pauseControl
-              ratio={16 / 10}
-              scrub={p}
-            />
+            <SampleDayTimeline scrub={p} />
           </div>
 
           {/* RIGHT: vertical 24h timeline */}
