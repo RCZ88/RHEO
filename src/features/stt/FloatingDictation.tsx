@@ -66,7 +66,7 @@ function elapsed(ms: number): string {
 }
 
 export function FloatingDictation() {
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
   useEffect(() => {
     const unsub = subscribeDictation(setVisible);
     return unsub;

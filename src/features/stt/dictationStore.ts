@@ -1,4 +1,4 @@
-let visible = true;
+let visible = false;
 const listeners = new Set<(v: boolean) => void>();
 
 export function isDictationVisible() { return visible; }

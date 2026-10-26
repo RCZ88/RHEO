@@ -408,6 +408,24 @@ function App() {
   const [nativeFindOpen, setNativeFindOpen] = useState(false);
   const [findScope, setFindScope] = useState<'subpage' | 'app'>('subpage');
 
+  // Ctrl+F / ⌘F opens the find-in-page bar (subpage scope) anywhere in the app.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || e.key.toLowerCase() !== 'f') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        const el = e.target as HTMLElement;
+        if (!el.dataset?.smartSearchInput && !el.dataset?.dfFindInput) return;
+      }
+      e.preventDefault();
+      setFindScope('subpage');
+      setNativeFindOpen(true);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, []);
+
   const openFind = useCallback((scope: 'subpage' | 'app') => {
     setFindScope(scope);
     setNativeFindOpen(true);

@@ -371,7 +371,10 @@ export function NativeFindOverlay({
   const effectiveLive = live || (scope === 'page' && pageFallback);
 
   // ── Teardown: always hand the page back untouched ──
-  useEffect(() => () => { clearHighlights(); }, []);
+  useEffect(() => () => {
+    clearHighlights();
+    if (dragCleanupRef.current) { dragCleanupRef.current(); dragCleanupRef.current = null; }
+  }, []);
 
   // ── Placement: load once, then keep it reachable ──
   useEffect(() => { setAnchor(loadAnchor()); setAnchorLoaded(true); }, []);
@@ -617,7 +620,11 @@ export function NativeFindOverlay({
       : x > (window.innerWidth * 2) / 3 ? 'right' : 'center',
   });
 
+  const dropCellRef = useRef<Anchor | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
   const endDrag = useCallback(() => {
+    if (dragCleanupRef.current) { dragCleanupRef.current(); dragCleanupRef.current = null; }
     dragRef.current = null;
     setDragging(false);
     const cell = dropCellRef.current;
@@ -628,38 +635,9 @@ export function NativeFindOverlay({
     if (el) { el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = ''; el.style.transform = ''; }
   }, []);
 
-  const dropCellRef = useRef<Anchor | null>(null);
-
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove = (e: PointerEvent) => {
-      const el = rootRef.current;
-      const d = dragRef.current;
-      if (!el || !d) return;
-      const w = el.offsetWidth || 360;
-      const h = el.offsetHeight || 76;
-      // Follow the pointer 1:1 so the bar feels attached to the cursor.
-      const x = Math.min(Math.max(e.clientX - d.dx, 4), window.innerWidth - w - 4);
-      const y = Math.min(Math.max(e.clientY - d.dy, 4), window.innerHeight - h - 4);
-      el.style.left = `${x}px`;
-      el.style.top = `${y}px`;
-      el.style.right = 'auto';
-      el.style.bottom = 'auto';
-      el.style.transform = 'none';
-      const cell = cellFor(e.clientX, e.clientY);
-      dropCellRef.current = cell;
-      setDropCell((prev) => (prev && sameAnchor(prev, cell) ? prev : cell));
-    };
-    const onUp = () => endDrag();
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-    };
-  }, [dragging, endDrag]);
+  // Drag listeners are now attached synchronously in startDrag (see below) so
+  // the very first pointermove after pointerdown is captured. This effect is
+  // intentionally empty.
 
   const startDrag = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -674,6 +652,35 @@ export function NativeFindOverlay({
     setDropCell(anchor);
     setDragging(true);
     e.preventDefault();
+
+    // Attach move/up listeners SYNCHRONOUSLY so the first pointermove is captured.
+    const onMove = (ev: PointerEvent) => {
+      const node = rootRef.current;
+      const d = dragRef.current;
+      if (!node || !d) return;
+      const w = node.offsetWidth || 360;
+      const h = node.offsetHeight || 76;
+      const x = Math.min(Math.max(ev.clientX - d.dx, 4), window.innerWidth - w - 4);
+      const y = Math.min(Math.max(ev.clientY - d.dy, 4), window.innerHeight - h - 4);
+      node.style.left = `${x}px`;
+      node.style.top = `${y}px`;
+      node.style.right = 'auto';
+      node.style.bottom = 'auto';
+      node.style.transform = 'none';
+      const cell = cellFor(ev.clientX, ev.clientY);
+      dropCellRef.current = cell;
+      setDropCell((prev) => (prev && sameAnchor(prev, cell) ? prev : cell));
+    };
+    const onUp = () => endDrag();
+    const cleanup = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+    };
+    dragCleanupRef.current = cleanup;
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   };
 
   // ── Wheel containment ──────────────────────────────────────────────────────
@@ -775,6 +782,7 @@ export function NativeFindOverlay({
             impossible to miss the moment Ctrl+F opens it. ── */}
         <div
           aria-hidden
+          style={{ pointerEvents: 'none' }}
           className="pointer-events-none absolute -inset-2 rounded-[18px] bg-amber-400/25 blur-xl df-find-open-glow"
         />
         {/* ── The instrument ── */}
