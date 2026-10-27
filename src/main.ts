@@ -6396,7 +6396,7 @@ async function pollForegroundInner() {
         if (resume) {
             trackingPausedByAfk = false;
             console.log('[DeskFlow] 🔄 User present again — auto-resuming tracking (main process)');
-            setIsTracking(true);
+            isTracking = true;
             const pollInterval = userPreferences.trackingPollInterval || 1000;
             if (!trackingInterval) {
                 trackingInterval = setInterval(pollForeground, pollInterval);
@@ -6572,6 +6572,15 @@ async function pollForegroundInner() {
             sessionStart = now;
             lastSuccessfulObservationTime = now;
             consecutiveNullPolls = 0;
+            // Ensure tracking resumes after the gap (suspend/resume can leave
+            // isTracking stale). Reset AFK state too.
+            isTracking = true;
+            trackingPausedByAfk = false;
+            if (!trackingInterval) {
+                const pi = userPreferences.trackingPollInterval || 1000;
+                trackingInterval = setInterval(pollForeground, pi);
+            }
+            safeSend(mainWindow, 'tracking-resumed', { at: now });
             // Trigger sleep detection popup (covers case where window never lost focus)
             checkSleepGap(now - timeSinceLastPoll, now);
             return;
@@ -20950,7 +20959,7 @@ electron_1.ipcMain.handle('save-file', async (event, options) => {
             title: 'Save Export File',
             defaultPath: path_1.default.join(downloadsPath, filename),
             filters: [
-                { name: fileType === 'application/json' ? 'JSON' : 'CSV', extensions: [fileType === 'application/json' ? 'json' : 'csv'] },
+                { name: fileType === 'application/json' ? 'JSON' : fileType === 'text/markdown' ? 'Markdown' : 'Text', extensions: [fileType === 'application/json' ? 'json' : fileType === 'text/markdown' ? 'md' : 'txt'] },
                 { name: 'All Files', extensions: ['*'] }
             ]
         });
@@ -25863,6 +25872,16 @@ electron_1.ipcMain.handle('training:set-prefs', (_event, patch: { minimumDayMinu
             const gapMs = lastKnownAwake ? Date.now() - lastKnownAwake : 0;
             const gapMin = Math.round(gapMs / 60000);
             console.log(`[DeskFlow] 💤 powerMonitor resume/unlock — lastKnownAwake ${gapMin}min ago (lastPollTime=${!!lastPollTime}, lastFocusTime=${!!lastFocusTime})`);
+            // Ensure tracking state resets after a suspend/resume gap so the
+            // renderer and main process agree that tracking is live again.
+            pollInFlight = false;
+            isTracking = true;
+            trackingPausedByAfk = false;
+            const pollInterval = userPreferences.trackingPollInterval || 1000;
+            if (!trackingInterval) {
+                trackingInterval = setInterval(pollForeground, pollInterval);
+            }
+            safeSend(mainWindow, 'tracking-resumed', { at: Date.now() });
             if (lastKnownAwake) {
                 checkSleepGap(lastKnownAwake, Date.now(), { skipActiveGuard: true });
             }

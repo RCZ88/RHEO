@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Pin, Copy, ExternalLink, MessageSquarePlus, Edit3, ChevronDown, ChevronRight, Globe } from 'lucide-react';
+import { Search, Pin, Copy, ExternalLink, MessageSquarePlus, Edit3, ChevronDown, ChevronRight, Globe, Download, Brain } from 'lucide-react';
+import { addKnowledgeEntry } from '../../services/learn/learnerProfile';
 
 console.log('%c[AiContextPanel] v3.0 loaded', 'color: #22d3ee; font-weight: bold');
 
@@ -91,6 +92,40 @@ export function AiContextPanel({ open }: { open: boolean }) {
     setSendMenuId(null);
   };
 
+  const exportCapture = async (cap: any, format: 'markdown' | 'json') => {
+    const md = formatAsMarkdown(cap.messages || []);
+    let content: string;
+    let filename: string;
+    let fileType: string;
+    if (format === 'json') {
+      content = JSON.stringify({ provider: cap.provider, title: cap.nickname || cap.title, url: cap.url, captured_at: cap.captured_at, messages: cap.messages }, null, 2);
+      filename = `${(cap.nickname || cap.title || 'chat').replace(/[^a-z0-9]/gi, '_').slice(0, 40)}.json`;
+      fileType = 'application/json';
+    } else {
+      content = `# ${cap.nickname || cap.title || 'Untitled Chat'}\n\n**Provider:** ${cap.provider}\n**URL:** ${cap.url || 'N/A'}\n**Captured:** ${cap.captured_at ? new Date(cap.captured_at).toLocaleString() : 'N/A'}\n\n---\n\n${md}`;
+      filename = `${(cap.nickname || cap.title || 'chat').replace(/[^a-z0-9]/gi, '_').slice(0, 40)}.md`;
+      fileType = 'text/markdown';
+    }
+    try {
+      await (window as any).deskflowAPI?.saveFile?.({ content, filename, fileType });
+    } catch (e) { console.error('Export failed:', e); }
+    setSendMenuId(null);
+  };
+
+  const saveToKnowledge = async (cap: any) => {
+    try {
+      const md = formatAsMarkdown(cap.messages || []);
+      const statement = (cap.nickname || cap.title || 'Captured chat') + ': ' + md.slice(0, 500).replace(/\n/g, ' ');
+      addKnowledgeEntry({
+        statement,
+        topic: cap.provider,
+        keywords: [cap.provider, ...(cap.tags || [])],
+        level: 'intermediate',
+      });
+      setSendMenuId(null);
+    } catch (e) { console.error('Save to knowledge failed:', e); }
+  };
+
   const insertIntoChat = async (cap: any) => {
     await window.deskflowAPI?.extensionQueueCommand({ type: 'INSERT_INTO_CHAT', text: formatAsMarkdown(cap.messages || []) });
     setSendMenuId(null);
@@ -136,6 +171,8 @@ export function AiContextPanel({ open }: { open: boolean }) {
         <div className="flex items-center gap-3 px-3 pb-3 text-xs border-t border-zinc-800/40 pt-2 light:border-[var(--ws-border)]">
           <button onClick={(e) => { e.stopPropagation(); openEdit(cap); }} className="flex items-center gap-1 hover:text-cyan-400 transition-colors text-zinc-400 light:text-[var(--text-muted)]"><Edit3 className="w-3 h-3" /> Edit</button>
           <button onClick={(e) => { e.stopPropagation(); copyTranscript(cap); }} className="flex items-center gap-1 hover:text-cyan-400 transition-colors text-zinc-400 light:text-[var(--text-muted)]"><Copy className="w-3 h-3" /> Copy</button>
+          <button onClick={(e) => { e.stopPropagation(); exportCapture(cap, 'markdown'); }} className="flex items-center gap-1 hover:text-cyan-400 transition-colors text-zinc-400 light:text-[var(--text-muted)]"><Download className="w-3 h-3" /> Export</button>
+          <button onClick={(e) => { e.stopPropagation(); saveToKnowledge(cap); }} className="flex items-center gap-1 hover:text-emerald-400 transition-colors text-zinc-400 light:text-[var(--text-muted)]"><Brain className="w-3 h-3" /> Save to KB</button>
           <button onClick={(e) => { e.stopPropagation(); openLink(cap); }} className="flex items-center gap-1 hover:text-cyan-400 transition-colors text-zinc-400 light:text-[var(--text-muted)]"><ExternalLink className="w-3 h-3" /> Open</button>
           <button onClick={(e) => { e.stopPropagation(); togglePin(cap); }} className="flex items-center gap-1 hover:text-amber-400 transition-colors text-zinc-400 light:text-[var(--text-muted)]"><Pin className="w-3 h-3" /> {cap.pinned ? 'Unpin' : 'Pin'}</button>
           
