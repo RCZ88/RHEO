@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Pin, Copy, ExternalLink, MessageSquarePlus, Edit3, ChevronDown, ChevronRight, Globe, Download, Brain } from 'lucide-react';
-import { addKnowledgeEntry } from '../../services/learn/learnerProfile';
 
 console.log('%c[AiContextPanel] v3.0 loaded', 'color: #22d3ee; font-weight: bold');
 
@@ -115,13 +114,8 @@ export function AiContextPanel({ open }: { open: boolean }) {
   const saveToKnowledge = async (cap: any) => {
     try {
       const md = formatAsMarkdown(cap.messages || []);
-      const statement = (cap.nickname || cap.title || 'Captured chat') + ': ' + md.slice(0, 500).replace(/\n/g, ' ');
-      addKnowledgeEntry({
-        statement,
-        topic: cap.provider,
-        keywords: [cap.provider, ...(cap.tags || [])],
-        level: 'intermediate',
-      });
+      const prompt = `Extract knowledge entries from this conversation. Return a JSON array of objects with keys: statement, topic, keywords (array), level (beginner/intermediate/advanced/expert).\n\n--- CONVERSATION ---\n${md}\n--- END ---`;
+      await navigator.clipboard.writeText(prompt);
       setSendMenuId(null);
     } catch (e) { console.error('Save to knowledge failed:', e); }
   };
