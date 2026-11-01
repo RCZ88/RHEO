@@ -77,7 +77,7 @@ const SCREENS: Screen[] = [
   { id: "database", label: "Database", still: "/media/app-database.png", alt: "The local-first database browser", caption: "One SQLite database on your disk. Browse it. It's yours.", recordings: [{ src: "/media/app-database-scroll.mp4", label: "SCROLL" }] },
   { id: "rankings", label: "Rankings", still: "/media/app-rankings.png", alt: "Rankings computed from the real record", caption: "Computed from your record, ranked by the metric you pick." },
   { id: "labs", label: "Labs", still: "/media/app-labs.png", alt: "Labs, the experimental surface", caption: "Where unfinished things live until they're not." },
-  { id: "studio", label: "Content Engine", still: "/media/app-studio.png", alt: "The Overlay Studio content engine", caption: "Import a recording, cut a plan, export the overlay." },
+  { id: "studio", label: "Content Engine", still: "/media/app-studio.png", alt: "The Overlay Studio content engine", caption: "The overlay pipeline. Empty until you import a recording." },
   { id: "guide", label: "Guide", still: "/media/app-guide.png", alt: "The in-app Guide", caption: "Every feature, what you'll find in it and what you can do." },
   { id: "settings", label: "Settings", still: "/media/app-settings.png", alt: "Settings", caption: "Local-first by default. No analytics code." },
   { id: "lecture", label: "Lecture", still: "/media/app-lecture.png", alt: "Lecture mode", caption: "Decks, transcripts, and research notes." },
@@ -104,7 +104,7 @@ const SCREENS: Screen[] = [
      genuine layout defect in the Pipeline Tools grid that is an app bug, not a
      landing bug.
      ────────────────────────────────────────────────────────────────────────── */
-  { id: "profiler", label: "Profiler", still: "/media/app-profiler.png", alt: "The in-app performance profiler", caption: "Frame time and blocking tasks. Measuring is off until you start it." },
+  { id: "profiler", label: "Profiler", still: "/media/app-profiler.png", alt: "The in-app performance profiler", caption: "Frame time and blocking tasks, per page. Sampling on." },
 ];
 
 

@@ -57,6 +57,21 @@ export default function NetworkPage() {
         request, the server sees your IP address and standard headers such as the user agent.
       </p>
 
+      <h2 className="mono mt-10 mb-3" style={{ fontSize: 13, color: "#f4f4f5", fontWeight: 500 }}>
+        What a network monitor shows
+      </h2>
+      <div style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+        <img
+          src="/media/app-network-monitor.png"
+          alt="A network monitor during normal RHEO use, showing only api.github.com and api.exchangerate-api.com"
+          width={1762}
+          height={1194}
+          loading="lazy"
+          decoding="async"
+          style={{ display: "block", width: "100%", height: "auto" }}
+        />
+      </div>
+
       <p className="mono mt-12" style={{ fontSize: 11, color: "#63636b", letterSpacing: "0.08em" }}>
         Not released yet. v0.2.0, pre-release.
       </p>

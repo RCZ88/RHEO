@@ -46,6 +46,21 @@ export default function DataPage() {
         <li><code className="mono" style={{ color: "#f4f4f5" }}>deskflow-audit-key.bin</code> is the audit key. It is a file, not a secret in a keystore.</li>
       </ul>
 
+      <h2 className="mono mt-10 mb-3" style={{ fontSize: 13, color: "#f4f4f5", fontWeight: 500 }}>
+        The data folder, open
+      </h2>
+      <div style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+        <img
+          src="/media/app-data-dir.png"
+          alt="The RHEO data directory open in a file manager, showing deskflow-data.db, -wal, -shm, backups and config files"
+          width={2048}
+          height={1225}
+          loading="lazy"
+          decoding="async"
+          style={{ display: "block", width: "100%", height: "auto" }}
+        />
+      </div>
+
       <p className="mono mt-12" style={{ fontSize: 11, color: "#63636b", letterSpacing: "0.08em" }}>
         Not released yet. v0.2.0, pre-release.
       </p>
