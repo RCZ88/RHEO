@@ -1091,19 +1091,17 @@ async function readCursorPoint(): Promise<{ x: number; y: number } | null> {
     }
   }
 
-  /* X11 only. On Wayland this is the frozen X pointer described above — returning it would
-   * be worse than returning null, because null collapses the island instead of pinning a
-   * hitbox the cursor may have left long ago. For the same reason there is no stale-point
-   * last resort on Wayland: if the native source cannot answer, "I do not know" is the
-   * honest value, and it drives the FSM toward collapsed. */
-  if (!waylandSession) {
-    try {
-      return screen.getCursorScreenPoint();
-    } catch {
-      return lastNativePoint;
-    }
+  /* FALLBACK: if the native read (kdotool) failed or is unavailable, fall back to the X11
+   * pointer even on Wayland. A frozen point is not ideal, but it is strictly better than
+   * "I do not know" — the latter guarantees the island NEVER opens, which is the bug the
+   * user is hitting. With a frozen point the island at least opens while the cursor is over
+   * an XWayland window (RHEO itself, and any other X11 app), which is where the user spends
+   * most of their time. */
+  try {
+    return screen.getCursorScreenPoint();
+  } catch {
+    return lastNativePoint;
   }
-  return null;
 }
 
 /**
@@ -1187,6 +1185,10 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
         : false;
     const wasInside = h.hover.inside;
     const wasPinned = h.hover.pinned;
+    /* Diagnostic: log when hover state changes (not every tick) to avoid spam. */
+    if (inZone !== wasInside) {
+      diag('hover-zone-change', { inZone, point, triggerRect, hoverEnabled, mode: prefs.trigger.mode });
+    }
     const next = stepHover(
       h.hover,
       { now: Date.now(), inside: inZone, pinned: h.pinned },
