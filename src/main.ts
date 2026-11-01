@@ -145,7 +145,7 @@ let haloDictationPayload: any = null;
  * carrying the same timestamp so the two can never disagree about which tab they describe. */
 let lastActiveBrowserIsPrivate = false;
 
-const HALO_DOMAIN_STALE_MS = 90_000;
+const HALO_DOMAIN_STALE_MS = 300_000;
 
 function isBrowserAppName(name) {
     if (!name) return false;
@@ -196,7 +196,15 @@ function haloCurrentAppSnapshot() {
       : tierAssignments?.distracting?.includes(category) ? 'distracting'
       : 'neutral';
     const base = { app, category, tier };
-    if (!isBrowserAppName(app)) return base;
+    // Treat as a browser if ANY browser-detection path says so: known browsers,
+    // the user's configured browserProcessNames, OR a browser the user has
+    // explicitly assigned for website tracking (browsersWithExtension). The latter
+    // is what "assigned to be the website tracking one" means in Settings, and
+    // previously a browser that was only in browsersWithExtension (not in
+    // KNOWN_BROWSERS / browserProcessNames) fell through here and never got
+    // its domain merged — so the pill showed the app name forever.
+    const isBrowser = isBrowserAppName(app) || isKnownBrowser(app) || isBrowserWithExtension(app);
+    if (!isBrowser && category !== 'Browser') return base;
     const fresh = Date.now() - lastActiveBrowserTimestamp < HALO_DOMAIN_STALE_MS;
     if (!fresh || !lastActiveBrowserDomain) return { ...base, domain: null };
     /* Resolve the tier from the DOMAIN's category too, so a productive website shows green
@@ -3831,6 +3839,10 @@ function initializeStorage() {
           // Form-shape only: how many questions the phase wizard asks.
           // Nullable so every pre-existing row reads back as "unspecified".
           ['scale', 'TEXT DEFAULT NULL'],
+          // Life phases revamp (cover photos / reflection entries)
+          ['reflection_title', 'TEXT DEFAULT NULL'],
+          ['reflection_answers', 'TEXT DEFAULT NULL'],
+          ['reflection_entries', 'TEXT DEFAULT NULL'],
         ] as [string, string][]) {
           if (!lphHave.includes(col)) { try { db.exec(`ALTER TABLE life_phases ADD COLUMN ${col} ${type}`); } catch {} }
         }
@@ -22889,18 +22901,17 @@ function startBrowserTrackingServer() {
                         }
                     }
                     
-                    // STALE-GUARD: currentApp says "browser", but the poll may be lagging behind a real
-                    // app switch (active-win returning null/keepalive while the user is in another app).
-                    // Do a fresh OS foreground check before logging the website. If a real non-browser
-                    // app is focused, reject and tell the renderer to exit website mode immediately.
+                    // STALE-GUARD: only run the (unreliable on Wayland) OS foreground check when the
+                    // cached poll did NOT already identify a browser. When currentApp matches a
+                    // configured browser we trust the poll — the OS read has been observed to return
+                    // false negatives on Wayland and was silently dropping healthy website data.
                     if (matchesAnyBrowser) {
+                        osSaysBrowser = true;
+                    } else {
                         const stillBrowser = await freshForegroundIsBrowser(browsersList);
-                        // `null` is INDETERMINATE (no active window during a
-                        // transition), not "not a browser" — so only an explicit
-                        // false should cost the payload its cover.
-                        osSaysBrowser = stillBrowser !== false;
-                        if (stillBrowser === false) {
-                            console.log(`[DeskFlow] SKIPPED: fresh foreground check shows user in a non-browser app (stale currentApp)`);
+                        osSaysBrowser = stillBrowser === true;
+                        if (stillBrowser !== true) {
+                            console.log(`[DeskFlow] SKIPPED: currentApp='${curApp}' doesn't match any configured browser and fresh check not confirmed browser`);
                             notifyRendererClearBrowser();
                             notifyRendererClearBrowser();
                             clearLiveSite();
@@ -23826,6 +23837,13 @@ function handleBrowserData(data, foregroundReadSaysBrowser: boolean = false) {
     const sessionKey = browserSessionKey(identity, data.domain);
     const sessionDuration = data.active_duration_ms || 0;
     const dataTimestamp = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+    // LIVENESS + DOMAIN: the extension is talking right now, so the Halo island's `fresh`
+    // check must succeed and the website must be shown even when this particular payload is
+    // later skipped (background tab) or too short to log. Set these BEFORE any early return
+    // so a 1-second heartbeat still updates the pill.
+    lastActiveBrowserDomain = data.domain;
+    lastActiveBrowserTimestamp = Date.now();
+    lastActiveBrowserIsPrivate = data.isPrivate === true;
     // Only log if session is meaningful (> 2 seconds)
     if (sessionDuration < 2000)
         return;
@@ -25298,14 +25316,52 @@ if (!gotTheLock) {
       /* The renderer owns the stopwatch clock and the mic, so it reports up here and main
          * republishes. Registered before the island is created so the first snapshot is not
          * lost to a startup race. */
-      electron_1.ipcMain.on('halo:report-stream', (_e: unknown, payload: any) => {
+      let lastAppStopwatchReportAt = 0;
+      electron_1.ipcMain.on('halo:report-stream', (e: any, payload: any) => {
         if (!payload || typeof payload !== 'object') return;
+        /* SOURCE-AWARE: the app window (index.html) is the single writer of the stopwatch.
+         * The island/offscreen (halo.html) is a reader and must never overwrite the app's
+         * reading while the app is open — otherwise two clocks fight and the pill resets to
+         * 0 / a smaller value every few seconds. The island's report is only honoured when
+         * the app has not reported recently (i.e. the app is closed / --minimized). */
+        const senderUrl = (e?.sender?.getURL?.() || '') as string;
+        const isIslandSender = senderUrl.includes('halo.html');
+        const appRecentlyReported = Date.now() - lastAppStopwatchReportAt < 4000;
+        if (isIslandSender && appRecentlyReported) {
+            // ignore stopwatch from island while app is open
+            if ('dictation' in payload && payload.dictation != null) {
+                haloDictationPayload = payload.dictation ?? haloDictationPayload;
+            }
+            return;
+        }
         /* KEEP THE LAST KNOWN GOOD READING. The renderer reports on every snapshot change,
          * and during a remount/hydration the store can briefly publish a null/zero reading
          * before it has re-read localStorage. Overwriting with null made the pill reset to 0
          * every few seconds and then climb back — the "glitches to the correct time" pattern.
          * `??` keeps the previous value when the new one is absent/null. */
-        if ('stopwatch' in payload) haloStopwatchPayload = payload.stopwatch ?? haloStopwatchPayload;
+        if ('stopwatch' in payload) {
+            const next = payload.stopwatch;
+            /* Keep the last known good reading. A renderer that is remounting/hydrating can
+             * briefly publish a zero-valued stopwatch object (not null) before it has re-read
+             * localStorage. Overwriting with it made the pill reset to 0 and then climb back.
+             * Only accept a zero reading when it is a GENUINE reset (resetCount changed) or
+             * when we have no previous reading. Otherwise keep the previous value. */
+            if (next == null) {
+                // keep previous
+            } else if (haloStopwatchPayload == null) {
+                haloStopwatchPayload = next;
+            } else {
+                const prevReset = (haloStopwatchPayload as any)?.resetCount ?? 0;
+                const nextReset = (next as any)?.resetCount ?? 0;
+                const nextDisplay = (next as any)?.displayMs ?? 0;
+                const prevDisplay = (haloStopwatchPayload as any)?.displayMs ?? 0;
+                if (nextReset !== prevReset || nextDisplay > 0 || prevDisplay === 0) {
+                    haloStopwatchPayload = next;
+                }
+                // else: reject the zero flash, keep previous
+            }
+        }
+        if (!isIslandSender && 'stopwatch' in payload) lastAppStopwatchReportAt = Date.now();
         if ('dictation' in payload) haloDictationPayload = payload.dictation ?? haloDictationPayload;
       });
 
@@ -25868,10 +25924,16 @@ electron_1.ipcMain.handle('training:set-prefs', (_event, patch: { minimumDayMinu
     // RHEO window is not focused and the user is on another app.
     const checkResumeSleepGap = () => {
         try {
-            const lastKnownAwake = lastPollTime || lastFocusTime || appStartTime;
+            // Prefer the persisted lastFocusTime (survives app restarts and
+            // suspends) over lastPollTime (which resets to Date.now() at module
+            // load, making the gap 0 on every fresh app start). This is the
+            // fix for "sleep detection waits until the app is opened" — the
+            // background daemon tracks while the app is closed, but the sleep
+            // popup needs the real last-awake time, not the app-open time.
+            const lastKnownAwake = lastFocusTime || lastPollTime || appStartTime;
             const gapMs = lastKnownAwake ? Date.now() - lastKnownAwake : 0;
             const gapMin = Math.round(gapMs / 60000);
-            console.log(`[DeskFlow] 💤 powerMonitor resume/unlock — lastKnownAwake ${gapMin}min ago (lastPollTime=${!!lastPollTime}, lastFocusTime=${!!lastFocusTime})`);
+            console.log(`[DeskFlow] 💤 powerMonitor resume/unlock — lastKnownAwake ${gapMin}min ago (lastFocusTime=${!!lastFocusTime}, lastPollTime=${!!lastPollTime})`);
             // Ensure tracking state resets after a suspend/resume gap so the
             // renderer and main process agree that tracking is live again.
             pollInFlight = false;
