@@ -22795,6 +22795,15 @@ function startBrowserTrackingServer() {
                     if (!data.domain && data.url) {
                         try { data.domain = new URL(data.url).hostname.replace(/^www\./, ''); } catch (_) {}
                     }
+                    // LIVENESS: record that we heard from the extension, even if the
+                    // payload is later skipped (too short, excluded, etc.). This keeps
+                    // the Halo's "fresh" check honest so it shows the site (or the
+                    // honest "Site unavailable") instead of a stale domain forever.
+                    if (data.domain) {
+                        lastActiveBrowserDomain = data.domain;
+                        lastActiveBrowserTimestamp = Date.now();
+                        lastActiveBrowserIsPrivate = data.isPrivate === true;
+                    }
 
                     // ── Self-healing adoption ───────────────────────────────────
                     // The extension announces itself via /browser-identify, but that
