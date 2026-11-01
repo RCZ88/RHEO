@@ -52,6 +52,15 @@ export default function AiPage() {
         The newest 25,000 rows are kept. Known secret formats are removed before saving.
       </p>
 
+      <h2 className="mono mt-10 mb-3" style={{ fontSize: 13, color: "#f4f4f5", fontWeight: 500 }}>
+        What the assistant cannot do
+      </h2>
+      <p style={{ fontSize: 14, lineHeight: 1.6, color: "#a1a1aa" }}>
+        It cannot query older dates. The prompt carries today's data only. It cannot
+        cite sessions — no citation code exists in the app. It cannot answer "last
+        Tuesday" or "this week" from the data it is given.
+      </p>
+
       <p className="mono mt-12" style={{ fontSize: 11, color: "#63636b", letterSpacing: "0.08em" }}>
         Pick a local provider and nothing leaves your machine. Not released yet. v0.2.0, pre-release.
       </p>

@@ -8,7 +8,7 @@ const ROWS = [
   { name: "Speech to text", host: "Groq (default) or your configured STT endpoint", sends: "Recorded audio.", when: "Only if you set an API key." },
   { name: "GitHub commit sync", host: "api.github.com", sends: "Repo coordinates, optional token.", when: "Only when you run it." },
   { name: "GAS mirror", host: "Your Google Apps Script URL", sends: "Facts and triples derived from your activity.", when: "Only if you configure it. Scheduler is unwired." },
-  { name: "Sync server", host: "Your sync server (default 127.0.0.1:8787)", sends: "Credentials and activity data, encrypted in transit. Not encrypted on disk — see blocker.", when: "Only after you log in." },
+  { name: "Sync server", host: "Your sync server (default 127.0.0.1:8787)", sends: "Credentials and activity data, encrypted in transit. Not encrypted on disk.", when: "Only after you log in." },
   { name: "Design registries", host: "ui.aceternity.com, refero.design", sends: "Nothing but the slug.", when: "Only when you open the design browser." },
 ];
 
