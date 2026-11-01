@@ -394,7 +394,8 @@ html[data-motion="off"] .dk-thinking-dot {
 a:focus-visible,
 button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #050506, 0 0 0 3px #ffffff;
+  box-shadow: 0 0 0 2px #050506, 0 0 0 3px var(--color-live);
+  transition: box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ---- Skip to content link (screen readers / keyboard) ---- */
@@ -421,6 +422,15 @@ button:focus-visible {
 /* ---- Anchor scroll offset so fixed nav doesn't cover section tops ---- */
 section[id] {
   scroll-margin-top: 56px;
+}
+
+/* ---- Liveness: interactive elements whiten on hover/focus ----
+   The page whitens where it is alive. Static emphasis stops at --color-hi;
+   only elements that answer the visitor reach --color-live. */
+a:hover,
+button:hover {
+  color: var(--color-live);
+  transition: color 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ---- Card hover lift (subtle, transform/opacity only) ---- */

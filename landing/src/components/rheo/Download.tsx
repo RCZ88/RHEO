@@ -32,6 +32,8 @@ export default function Download() {
   const rm = !useShouldAnimate();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { margin: "-20% 0px", once: true });
+  const headerRef = useRef<HTMLDivElement>(null);
+  const headerInView = useInView(headerRef, { once: true, margin: "-10% 0px" });
   const detected = useDetectedOS();
 
   return (
@@ -53,6 +55,12 @@ export default function Download() {
 
       <div className="relative px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto text-center">
         <div className="mx-auto max-w-[760px]">
+        <motion.div
+          ref={headerRef}
+          initial={rm ? false : { opacity: 0, y: 16 }}
+          animate={headerInView || rm ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
         <motion.p
           className="mono-label"
           style={{ fontSize: 11 }}
@@ -71,6 +79,7 @@ export default function Download() {
         >
           OWN YOUR HOURS.
         </motion.h2>
+        </motion.div>
 
                   {/* Trust closes the deal, so the ledger sits directly above the CTA.
               Three sourced facts, no marketing numbers — RESULT.md §2. */}

@@ -63,6 +63,7 @@ export default function SampleDayTimeline({
 }) {
   const [data, setData] = useState<SampleDay | null>(null);
   const [progress, setProgress] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const [dragging, setDragging] = useState(false);
   const rulerRef = useRef<HTMLDivElement>(null);
   const reduced = typeof window !== "undefined"
@@ -73,7 +74,7 @@ export default function SampleDayTimeline({
   useEffect(() => {
     fetch("/data/sample-day.json")
       .then((r) => r.json())
-      .then((d: SampleDay) => setData(d))
+      .then((d: SampleDay) => { setData(d); setTimeout(() => setMounted(true), 100); })
       .catch(() => setData(null));
   }, []);
 
@@ -160,7 +161,8 @@ export default function SampleDayTimeline({
             inset: 0,
             transform: `scaleX(${progress})`,
             transformOrigin: "left",
-            transition: dragging ? "none" : "transform 0.05s linear",
+            transition: dragging ? "none" : "transform 0.05s linear, opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+            opacity: mounted ? 1 : 0,
           }}
         >
           <svg
