@@ -1080,9 +1080,32 @@ async function readCursorPoint(): Promise<{ x: number; y: number } | null> {
       try {
         const p = await getLinuxCursorPoint();
         if (p) {
-          lastNativePoint = p;
-          lastNativePointAtMs = Date.now();
-          return p;
+          // kdotool may return coordinates in a different space than Electron's
+          // screen coordinates (common on Wayland/XWayland with DPI scaling or
+          // multi-monitor). Try the raw point first; if it's not near the window,
+          // try adding the primary display's bounds origin (panel offset).
+          const displays = screen.getAllDisplays();
+          const primary = screen.getPrimaryDisplay();
+          const candidates = [p, { x: p.x + primary.bounds.x, y: p.y + primary.bounds.y }];
+          for (const cand of candidates) {
+            const inBounds = displays.some(d =>
+              cand.x >= d.bounds.x && cand.x < d.bounds.x + d.bounds.width &&
+              cand.y >= d.bounds.y && cand.y < d.bounds.y + d.bounds.height
+            );
+            const win = h?.window;
+            const winBounds = win && !win.isDestroyed() ? win.getBounds() : null;
+            const nearWindow = winBounds
+              ? Math.abs(cand.x - (winBounds.x + winBounds.width / 2)) < 1000 &&
+                Math.abs(cand.y - (winBounds.y + winBounds.height / 2)) < 1000
+              : true;
+            if (inBounds && nearWindow) {
+              lastNativePoint = cand;
+              lastNativePointAtMs = Date.now();
+              return cand;
+            }
+          }
+          // Neither candidate was plausible — fall through to XWayland cursor.
+          // kdotool returned an out-of-bounds point — try XWayland fallback.
         }
       } catch {
         // No native source on this desktop. Stop trying rather than spawning per tick.
