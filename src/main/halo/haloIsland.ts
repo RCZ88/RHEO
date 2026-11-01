@@ -80,7 +80,7 @@ function diag(event: string, detail?: Record<string, unknown>): void {
 }
 
 /** HALO §47 poll rates. Hover detection is not an animation clock. */
-const POLL_COLLAPSED_MS = 120;
+const POLL_COLLAPSED_MS = 250;
 const POLL_EXPANDED_MS = 40;
 
 const isLinux = process.platform === 'linux';
@@ -1129,7 +1129,6 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
       stopPolling(h);
       return;
     }
-    diag('hover-tick', { expanded: h.expanded, pollMs: h.pollMs });
     const point = await readCursorPoint();
     /* Re-read the preferences EVERY TICK rather than capturing them at startPolling().
      * This is what makes a hitbox or timing change in Settings apply to a live island
@@ -1186,8 +1185,6 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
         : false;
     const wasInside = h.hover.inside;
     const wasPinned = h.hover.pinned;
-    /* Diagnostic: log cursor + trigger rect every tick so we can see why hover doesn't fire. */
-    diag('hover-detail', { inZone, point, triggerRect, hoverEnabled, mode: prefs.trigger.mode });
     /* Diagnostic: log when hover state changes (not every tick) to avoid spam. */
     if (inZone !== wasInside) {
       diag('hover-zone-change', { inZone, point, triggerRect, hoverEnabled, mode: prefs.trigger.mode });
