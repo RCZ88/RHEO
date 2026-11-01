@@ -286,6 +286,10 @@ const BOARD1_PILL_KINDS = new Set<CompactKind>([
 export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(false);
+  /* Drag state for pill repositioning. */
+  const [dragging, setDragging] = useState(false);
+  const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ px: number; py: number; x: number; y: number; t: number; timer: any; moved: boolean } | null>(null);
   /* Whether main's hover test currently reports the cursor INSIDE the island's rect. Distinct
    * from `expanded`, which only becomes true after the open delay matures (§50: `hovered` means
    * "cursor is inside", not "the surface is open"). `resident: 'hover'` uses this to keep the
@@ -1248,8 +1252,10 @@ const inBrowser = currentApp.category === 'Browser';
    * moved by the layer-shell host (margins); the in-app pill is moved HERE, by the same
    * offset, so the two surfaces cannot end up in different places. `0` when unset, which is
    * every install that has never dragged. */
-  const dragXPx = Math.round(Number.isFinite(prefs.dragX) ? prefs.dragX : 0);
-  const dragYPx = Math.round(Number.isFinite(prefs.dragY) ? prefs.dragY : 0);
+  const baseDragX = Math.round(Number.isFinite(prefs.dragX) ? prefs.dragX : 0);
+  const baseDragY = Math.round(Number.isFinite(prefs.dragY) ? prefs.dragY : 0);
+  const dragXPx = dragPreview ? dragPreview.x : baseDragX;
+  const dragYPx = dragPreview ? dragPreview.y : baseDragY;
   const origin = surfaceTransformOrigin(prefs.edge);
   /* The transition is written to CSS custom properties rather than left to the
    * stylesheet's hardcoded 250ms, so the stylesheet's `transition` and this component
@@ -1855,6 +1861,55 @@ const inBrowser = currentApp.category === 'Browser';
         {!expanded && showPill && (
           <div
             data-halo-pill-body="true"
+            onPointerDown={(e) => {
+              const t = setTimeout(() => {
+                if (dragStartRef.current) dragStartRef.current.moved = false;
+              }, 350);
+              dragStartRef.current = { px: e.screenX, py: e.screenY, x: baseDragX, y: baseDragY, t: Date.now(), timer: t, moved: false };
+            }}
+            onPointerMove={(e) => {
+              const s = dragStartRef.current;
+              if (!s) return;
+              const elapsed = Date.now() - s.t;
+              if (elapsed < 350) return;
+              const dx = e.screenX - s.px;
+              const dy = e.screenY - s.py;
+              if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+              if (!dragging) {
+                setDragging(true);
+                try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch {}
+              }
+              const clamp = (n: number) => Math.max(-600, Math.min(600, Math.round(n)));
+              s.moved = true;
+              setDragPreview({ x: clamp(s.x + dx), y: clamp(s.y + dy) });
+            }}
+            onPointerUp={async (e) => {
+              const s = dragStartRef.current;
+              if (s?.timer) clearTimeout(s.timer);
+              if (dragging && dragPreview) {
+                try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch {}
+                const next = { ...prefs, dragX: dragPreview.x, dragY: dragPreview.y };
+                await window.deskflowAPI?.setPreference?.(HALO_PREFS_KEY, next);
+                await (window as any).haloBridge?.applyPrefs?.();
+                setDragPreview(null);
+                setDragging(false);
+              } else {
+                // short click: do nothing special (normal click handling remains)
+              }
+              dragStartRef.current = null;
+            }}
+            onPointerCancel={() => {
+              if (dragStartRef.current?.timer) clearTimeout(dragStartRef.current.timer);
+              setDragPreview(null);
+              setDragging(false);
+              dragStartRef.current = null;
+            }}
+            onDoubleClick={async () => {
+              const next = { ...prefs, dragX: 0, dragY: 0 };
+              await window.deskflowAPI?.setPreference?.(HALO_PREFS_KEY, next);
+              await (window as any).haloBridge?.applyPrefs?.();
+              setDragPreview(null);
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1862,6 +1917,8 @@ const inBrowser = currentApp.category === 'Browser';
               height: '100%',
               padding: `0 ${size.padding}px`,
               overflow: 'hidden',
+              cursor: dragging ? 'grabbing' : 'grab',
+              touchAction: 'none',
             }}
           >
             <PillSubject
