@@ -1863,7 +1863,10 @@ const inBrowser = currentApp.category === 'Browser';
             data-halo-pill-body="true"
             onPointerDown={(e) => {
               const t = setTimeout(() => {
-                if (dragStartRef.current) dragStartRef.current.moved = false;
+                const s = dragStartRef.current;
+                if (s && !s.moved) {
+                  (window as any).haloBridge?.drag?.({ phase: 'begin', dx: 0, dy: 0 });
+                }
               }, 350);
               dragStartRef.current = { px: e.screenX, py: e.screenY, x: baseDragX, y: baseDragY, t: Date.now(), timer: t, moved: false };
             }}
@@ -1878,19 +1881,19 @@ const inBrowser = currentApp.category === 'Browser';
               if (!dragging) {
                 setDragging(true);
                 try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch {}
+                (window as any).haloBridge?.drag?.({ phase: 'begin', dx: 0, dy: 0 });
               }
-              const clamp = (n: number) => Math.max(-600, Math.min(600, Math.round(n)));
               s.moved = true;
+              (window as any).haloBridge?.drag?.({ phase: 'update', dx, dy });
+              const clamp = (n: number) => Math.max(-600, Math.min(600, Math.round(n)));
               setDragPreview({ x: clamp(s.x + dx), y: clamp(s.y + dy) });
             }}
             onPointerUp={async (e) => {
               const s = dragStartRef.current;
               if (s?.timer) clearTimeout(s.timer);
-              if (dragging && dragPreview) {
+              if (dragging) {
                 try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch {}
-                const next = { ...prefs, dragX: dragPreview.x, dragY: dragPreview.y };
-                await window.deskflowAPI?.setPreference?.(HALO_PREFS_KEY, next);
-                await (window as any).haloBridge?.applyPrefs?.();
+                (window as any).haloBridge?.drag?.({ phase: 'end', dx: 0, dy: 0 });
                 setDragPreview(null);
                 setDragging(false);
               } else {
