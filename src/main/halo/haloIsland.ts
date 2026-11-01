@@ -1129,7 +1129,7 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
       stopPolling(h);
       return;
     }
-    diag('hover-tick', { expanded: h.expanded, pollMs: h.pollMs });
+    diag('hover-tick', { expanded: h.expanded, pollMs: h.pollMs, inZone, point, triggerRect, hoverEnabled });
     const point = await readCursorPoint();
     /* Re-read the preferences EVERY TICK rather than capturing them at startPolling().
      * This is what makes a hitbox or timing change in Settings apply to a live island
