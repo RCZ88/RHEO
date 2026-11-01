@@ -11,6 +11,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { useDetectedOS } from "./use-detected-os";
 import { RELEASE_VERSION } from "./release";
 import OSLogo from "./OSLogo";
+import { Vault } from "@lucasmarkes/hairline/react";
 
 const OS_LIST = [
   // `size` and `hash` were placeholder fabrications ("78 MB", "a1b2c3d4e5f6…").
@@ -85,6 +86,26 @@ export default function Download() {
               Three sourced facts, no marketing numbers — RESULT.md §2. */}
           <div className="mt-14 w-full">
             <Ledger />
+          </div>
+
+          {/* Vault — the privacy story as a gesture. AFFORDANCE: "Figure: Vault.
+              Locked by default; the combination is yours. It is not your data."
+              Gated P2: cuttable without guilt. */}
+          <div
+            aria-hidden
+            className="mx-auto mt-10"
+            style={{
+              maxWidth: 280,
+              "--hairline-plate": "#050506",
+              "--hairline-hi": "#f4f4f5",
+              "--hairline-edge": "#a1a1aa",
+              "--hairline-mid": "#52525b",
+              "--hairline-lo": "#27272a",
+              "--hairline-stroke": "0.9",
+              opacity: 0.4,
+            } as React.CSSProperties}
+          >
+            <Vault label="Locked by default; the combination is yours" />
           </div>
 
           {/* Proof link. The ledger's three claims are the summary; this is the

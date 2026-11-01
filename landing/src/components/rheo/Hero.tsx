@@ -1,6 +1,6 @@
 "use client";
 
-import FlowFieldCanvas from "./FlowFieldCanvas";
+import { Terrain } from "@lucasmarkes/hairline/react";
 import DecryptedText from "./DecryptedText";
 import SessionClock from "./SessionClock";
 
@@ -11,8 +11,26 @@ export default function Hero() {
       className="relative w-full overflow-hidden surface-page"
       style={{ height: "100dvh", minHeight: 600 }}
     >
-      {/* ASCII flow field */}
-      <FlowFieldCanvas />
+      {/* Terrain — 81 pillars for the minutes of a day. Pointer-reactive.
+          AFFORDANCE: "Figure: Terrain. Eighty-one pillars for the minutes of a
+          day. It answers your pointer; it is not your data."
+          Theme vars set to LAMINAR zinc so it rises out of the page floor.
+          play is NOT set (loop ban). intensity defaults to 0.5. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-auto"
+        style={{
+          "--hairline-plate": "#050506",
+          "--hairline-hi": "#f4f4f5",
+          "--hairline-edge": "#a1a1aa",
+          "--hairline-mid": "#52525b",
+          "--hairline-lo": "#27272a",
+          "--hairline-stroke": "0.9",
+          opacity: 0.35,
+        } as React.CSSProperties}
+      >
+        <Terrain label="Eighty-one pillars for the minutes of a day" />
+      </div>
 
       {/* ambient corner marks (instrument-frame feel) */}
       <div className="corner-marks" aria-hidden>
