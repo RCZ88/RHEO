@@ -111,6 +111,8 @@ export interface StopwatchPayload {
   displaySource: 'external' | 'productive' | 'distracting' | 'idle';
   paused: boolean;
   resetCount: number;
+  /** Monotonic revision, incremented on every authoritative store mutation. */
+  revision: number;
   externalLabel: string | null;
 }
 

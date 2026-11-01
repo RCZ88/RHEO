@@ -182,6 +182,7 @@ function toIslandPayload(s: StopwatchSnapshot): StopwatchPayload {
     displaySource: s.displaySource,
     paused: s.paused,
     resetCount: s.resetCount,
+    revision: s.revision,
     externalLabel: s.externalLabel || null,
   };
 }
@@ -932,7 +933,13 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   /* `swPayload`, NOT `stopwatch`: the imported `stopwatch` store is used inside this
    * component (subscribe/getSnapshot/reset/setPaused), and a local named `stopwatch`
    * shadowed it for every reference below — 30+ errors that all read as one mistake. */
-  const swPayload = remote?.stopwatch ?? liveStopwatch;
+  /* LAST-KNOWN-GOOD remote reading. The app's clock is authoritative; the island must
+   * not flash to 0 when a push is briefly null/late. Keep the last non-null remote
+   * stopwatch and fall back to it; only use the local store when we have never
+   * received a remote reading. */
+  const lastGoodRemoteStopwatch = useRef<StopwatchPayload | null>(null);
+  if (remote?.stopwatch) lastGoodRemoteStopwatch.current = remote.stopwatch;
+  const swPayload = remote?.stopwatch ?? lastGoodRemoteStopwatch.current ?? liveStopwatch;
 
   /* The raw STORE snapshot for the interactive surfaces (FocusPageRow, StopwatchHero), which
    * need `paused` / `activeTier` / `reset` / `setPaused` — none of which exist on the flat wire
@@ -1305,8 +1312,14 @@ const inBrowser = currentApp.category === 'Browser';
    *
    * `pinned` forces the pill on regardless: a pinned island is open by design (§51), so hiding
    * its collapsed form would be a lie about its own state. */
-  const showPill =
-    prefs.resident === 'off' ? false : prefs.resident === 'always' || expanded || pinned || hovered;
+  /* Shared presence predicate (src/shared/halo/hoverPresence.ts): the pill paints whenever
+   * hover is enabled + resident != 'off', so hover has a visible anchor. `hovered` is no
+   * longer a prerequisite for painting. */
+  const triggerMode = (prefs.trigger?.mode ?? 'hover') as 'hover' | 'click' | 'hotkey' | 'hover-or-click';
+  const showPill = (prefs.resident === 'off')
+    ? false
+    : (prefs.resident === 'always' || expanded || pinned || hovered ||
+       (triggerMode === 'hover' || triggerMode === 'hover-or-click'));
 
   /* THE APP-SIDE LANE, FROM THE IN-APP PRODUCER.
    *
@@ -1393,9 +1406,11 @@ const inBrowser = currentApp.category === 'Browser';
    *
    * `isPrivate` is only true for a VERIFIED private window — main never infers it from a missing
    * domain, so this cannot claim "private" just because the browser extension was quiet. */
-  const compactKind: CompactKind = currentApp.isPrivate
+  /* Tri-state domain: undefined = not a browser; null = browser, site unknown;
+   * string = verified hostname. Never collapse null into undefined. */
+  const compactKind: CompactKind = currentApp.isPrivate === true
     ? 'private'
-    : currentApp.domain
+    : currentApp.domain !== undefined
       ? swPayload.displaySource === 'idle'
         ? 'website'
         : 'stopwatchSite'

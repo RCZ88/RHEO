@@ -288,7 +288,9 @@ export function CompactPill(props: CompactPillProps): ReactElement {
    * timer, because that kind means "the stopwatch is tracking a website" rather than "a
    * website is in the foreground". */
   if (kind === 'website' || kind === 'stopwatchSite') {
-    const domain = now.domain ?? now.app;
+    // Tri-state domain: null = browser but site unknown → honest unknown copy.
+    const domain = now.domain === null ? 'Site unavailable'
+      : (typeof now.domain === 'string' && now.domain.length > 0 ? now.domain : (now.app || 'Site unavailable'));
     if (kind === 'website') {
       return (
         <span style={row}>

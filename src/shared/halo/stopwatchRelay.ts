@@ -55,6 +55,14 @@ export function validateStopwatchPayload(raw: unknown): StopwatchPayload | null 
   const productiveMs = num(r.productiveMs, 0);
   const distractingMs = num(r.distractingMs, 0);
 
+  // revision: required non-negative safe integer (monotonic). Missing → 0 fallback
+  // for older payloads, but never negative/NaN.
+  const revisionRaw = r.revision;
+  const revision =
+    typeof revisionRaw === 'number' && Number.isFinite(revisionRaw) && revisionRaw >= 0
+      ? Math.trunc(revisionRaw)
+      : 0;
+
   return {
     displayMs,
     productiveMs,
@@ -63,6 +71,7 @@ export function validateStopwatchPayload(raw: unknown): StopwatchPayload | null 
     displaySource: source(r.displaySource),
     paused: r.paused === true,
     resetCount: num(r.resetCount, 0),
+    revision,
     externalLabel:
       typeof r.externalLabel === 'string' && r.externalLabel.length > 0
         ? r.externalLabel.slice(0, MAX_LABEL)

@@ -111,6 +111,8 @@ export interface StopwatchSnapshot {
   displaySource: StopwatchSource;
   /** bumps only on a REAL reset, so the reset overlay cannot lie */
   resetCount: number;
+  /** monotonic revision, incremented on every authoritative mutation */
+  revision: number;
   externalLabel: string;
   /**
    * Epoch ms of the last recorded user interaction.
@@ -163,6 +165,8 @@ interface Store {
   external: { running: boolean; startedAtMs: number; label: string };
   /** bumped only by a real user/AFK reset */
   resetCount: number;
+  /** monotonic revision, incremented on every authoritative mutation */
+  revision: number;
   listeners: Set<() => void>;
 }
 
@@ -187,6 +191,7 @@ function fresh(): Store {
     hasRealApp: true,
     external: { running: false, startedAtMs: 0, label: '' },
     resetCount: 0,
+    revision: 0,
     listeners: new Set(),
   };
 }
@@ -200,6 +205,7 @@ function rollToNewDay() {
   store.dayKey = localDayKey();
   store.lastInteractionAtMs = Date.now();
   store.runningSinceMs = store.paused ? 0 : Date.now();
+  store.revision += 1;
 }
 
 /**
@@ -231,6 +237,8 @@ export function reloadFromStorage(): void {
   store.activeTier = next.activeTier;
   store.lastTickTier = null;
   store.dayKey = next.dayKey;
+  store.resetCount = next.resetCount;
+  store.revision = next.revision ?? store.revision;
   store.lastInteractionAtMs = next.lastInteractionAtMs;
   store.runningSinceMs = store.paused ? 0 : Date.now();
   snapshot = computeSnapshot();
@@ -263,6 +271,12 @@ function hydrate(): Store {
      * yesterday's heartbeat on launch would trip AFK before the first real input. */
     if (typeof saved?.lastInteractionAtMs === 'number' && saved.lastInteractionAtMs > Date.now() - 60_000) {
       base.lastInteractionAtMs = saved.lastInteractionAtMs;
+    }
+    if (typeof saved?.resetCount === 'number' && saved.resetCount >= 0) {
+      base.resetCount = saved.resetCount;
+    }
+    if (typeof saved?.revision === 'number' && saved.revision >= 0) {
+      base.revision = Math.trunc(saved.revision);
     }
   } catch {
     // A corrupt or unreadable entry must never prevent the timer from working.
@@ -329,6 +343,7 @@ function computeSnapshot(): StopwatchSnapshot {
     displayMs,
     displaySource,
     resetCount: store.resetCount,
+    revision: store.revision,
     externalLabel: store.external.label,
     lastInteractionAtMs: store.lastInteractionAtMs,
   };
@@ -404,6 +419,8 @@ function persist() {
           // Writing the key also RE-ENABLES the stale-day guard that this made dead code:
           // a payload from yesterday now correctly fails the check and resets to `fresh()`.
           dayKey: store.dayKey,
+          resetCount: store.resetCount,
+          revision: store.revision,
           /* Written so the island's realm can hydrate the heartbeat above. It is a timestamp,
            * not a total, and it never affects accumulate/display. */
           lastInteractionAtMs: store.lastInteractionAtMs,
@@ -556,6 +573,7 @@ export const stopwatch = {
   resetAfterAfkFill(): void {
     rollToNewDay();
     store.resetCount += 1;
+    store.revision += 1;
     emit();
     persist();
   },
@@ -569,6 +587,7 @@ export const stopwatch = {
     store.lastTickTier = null;
     store.dayKey = localDayKey();
     store.resetCount += 1;
+    store.revision += 1;
     emit();
     persist();
   },
@@ -598,6 +617,7 @@ export const stopwatch = {
     if (store.dayKey !== localDayKey()) {
       rollToNewDay();
       store.resetCount += 1;
+      store.revision += 1;
       persist();
       emit();
       return;
@@ -617,6 +637,7 @@ export const stopwatch = {
         store.distractingAccumulatedMs = 0;
         store.lastTickTier = null;
         store.resetCount += 1;
+        store.revision += 1;
       }
       persist();
       if (wasRunning) {
