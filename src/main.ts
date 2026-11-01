@@ -22892,16 +22892,11 @@ function startBrowserTrackingServer() {
                     // poll reset, while the user was really in a normal app.)
                     if (hasAnyBrowser && !matchesAnyBrowser) {
                         const stillBrowser = await freshForegroundIsBrowser(browsersList);
-                        // Record our own verdict. Previously this branch confirmed a
-                        // browser was foreground, fell through, and left osSaysBrowser
-                        // at its `false` default -- so handleBrowserData then honoured
-                        // the extension's (necessarily incomplete) focus flag and
-                        // discarded healthy data. This is the path that matters when
-                        // the poll's cached currentApp is stale or null, which is
-                        // exactly what happens on Wayland and after a window switch.
-                        osSaysBrowser = stillBrowser === true;
-                        if (stillBrowser !== true) {
-                            console.log(`[DeskFlow] SKIPPED: currentApp='${curApp}' doesn't match any configured browser and fresh check not confirmed browser`);
+                        // Only skip on a CONFIRMED non-browser (false). An indeterminate
+                        // result (null — no active window, common on Wayland) must NOT
+                        // drop the payload; trust the cached poll instead.
+                        if (stillBrowser === false) {
+                            console.log(`[DeskFlow] SKIPPED: currentApp='${curApp}' doesn't match any configured browser and fresh check confirmed non-browser`);
                             notifyRendererClearBrowser();
                             notifyRendererClearBrowser();
                             clearLiveSite();
@@ -22909,6 +22904,7 @@ function startBrowserTrackingServer() {
                             res.end(JSON.stringify({ status: 'skipped', reason: 'app_mismatch' }));
                             return;
                         }
+                        osSaysBrowser = stillBrowser === true;
                     }
                     
                     // STALE-GUARD: only run the (unreliable on Wayland) OS foreground check when the
@@ -22919,9 +22915,8 @@ function startBrowserTrackingServer() {
                         osSaysBrowser = true;
                     } else {
                         const stillBrowser = await freshForegroundIsBrowser(browsersList);
-                        osSaysBrowser = stillBrowser === true;
-                        if (stillBrowser !== true) {
-                            console.log(`[DeskFlow] SKIPPED: currentApp='${curApp}' doesn't match any configured browser and fresh check not confirmed browser`);
+                        if (stillBrowser === false) {
+                            console.log(`[DeskFlow] SKIPPED: currentApp='${curApp}' doesn't match any configured browser and fresh check confirmed non-browser`);
                             notifyRendererClearBrowser();
                             notifyRendererClearBrowser();
                             clearLiveSite();
@@ -22929,6 +22924,7 @@ function startBrowserTrackingServer() {
                             res.end(JSON.stringify({ status: 'skipped', reason: 'app_mismatch' }));
                             return;
                         }
+                        osSaysBrowser = stillBrowser === true;
                     }
                     
                     // Data accepted � process it
