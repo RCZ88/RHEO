@@ -123,6 +123,7 @@ import { createHaloIsland, registerHaloIpc, reconcileHaloGeometry, toggleHaloIsl
 import { OffscreenHaloRenderer } from "./main/halo/offscreenRenderer";
 import { KwinBridge } from "./main/halo/offscreenRenderer";
 import { HALO_PREFS_KEY } from "./features/halo/HaloPreferences";
+import { validateStopwatchPayload } from "./shared/halo/stopwatchRelay";
 
 /**
  * Halo stream cache.
@@ -25327,8 +25328,11 @@ if (!gotTheLock) {
         const senderUrl = (e?.sender?.getURL?.() || '') as string;
         const isIslandSender = senderUrl.includes('halo.html');
         const appRecentlyReported = Date.now() - lastAppStopwatchReportAt < 4000;
-        if (isIslandSender && appRecentlyReported) {
-            // ignore stopwatch from island while app is open
+        if (isIslandSender) {
+            // The island is a READER of the stopwatch, never a writer. Honouring its report
+            // (even when the app has been quiet for >4s) let a hydrating island publish a
+            // zero snapshot that overwrote the owner's accumulated time — the "randomly
+            // resets" bug. Only dictation is allowed to flow island->main.
             if ('dictation' in payload && payload.dictation != null) {
                 haloDictationPayload = payload.dictation ?? haloDictationPayload;
             }
@@ -25340,22 +25344,30 @@ if (!gotTheLock) {
          * every few seconds and then climb back — the "glitches to the correct time" pattern.
          * `??` keeps the previous value when the new one is absent/null. */
         if ('stopwatch' in payload) {
-            const next = payload.stopwatch;
-            /* Keep the last known good reading. A renderer that is remounting/hydrating can
-             * briefly publish a zero-valued stopwatch object (not null) before it has re-read
-             * localStorage. Overwriting with it made the pill reset to 0 and then climb back.
-             * Only accept a zero reading when it is a GENUINE reset (resetCount changed) or
-             * when we have no previous reading. Otherwise keep the previous value. */
-            if (next == null) {
+            const raw = payload.stopwatch;
+            /* KEEP LAST KNOWN GOOD. Validate at the boundary; a malformed publish must never
+             * replace a good cache. */
+            const next = raw == null ? null : validateStopwatchPayload(raw);
+            if (raw != null && next == null) {
+                // malformed — keep previous, log once
+                console.warn('[Halo] stopwatch publish rejected (malformed)');
+            } else if (next == null) {
                 // keep previous
             } else if (haloStopwatchPayload == null) {
                 haloStopwatchPayload = next;
             } else {
-                const prevReset = (haloStopwatchPayload as any)?.resetCount ?? 0;
-                const nextReset = (next as any)?.resetCount ?? 0;
-                const nextDisplay = (next as any)?.displayMs ?? 0;
-                const prevDisplay = (haloStopwatchPayload as any)?.displayMs ?? 0;
-                if (nextReset !== prevReset || nextDisplay > 0 || prevDisplay === 0) {
+                const prev = haloStopwatchPayload as any;
+                const prevReset = prev?.resetCount ?? 0;
+                const nextReset = next.resetCount ?? 0;
+                const prevRev = prev?.revision ?? 0;
+                const nextRev = next.revision ?? 0;
+                const nextDisplay = next.displayMs ?? 0;
+                const prevDisplay = prev?.displayMs ?? 0;
+                // Reject stale revisions within the same store epoch.
+                const staleRev = nextRev > 0 && prevRev > 0 && nextRev <= prevRev;
+                if (staleRev) {
+                    // keep previous
+                } else if (nextReset !== prevReset || nextDisplay > 0 || prevDisplay === 0) {
                     haloStopwatchPayload = next;
                 }
                 // else: reject the zero flash, keep previous
