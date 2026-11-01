@@ -1094,9 +1094,12 @@ async function readCursorPoint(): Promise<{ x: number; y: number } | null> {
             );
             const win = h?.window;
             const winBounds = win && !win.isDestroyed() ? win.getBounds() : null;
+            // Tighter check: the point must be within the window bounds + 100px margin.
+            // This rejects kdotool points that are in-bounds but far from the window
+            // (coordinate space mismatch).
             const nearWindow = winBounds
-              ? Math.abs(cand.x - (winBounds.x + winBounds.width / 2)) < 1000 &&
-                Math.abs(cand.y - (winBounds.y + winBounds.height / 2)) < 1000
+              ? cand.x >= winBounds.x - 100 && cand.x <= winBounds.x + winBounds.width + 100 &&
+                cand.y >= winBounds.y - 100 && cand.y <= winBounds.y + winBounds.height + 100
               : true;
             if (inBounds && nearWindow) {
               lastNativePoint = cand;
