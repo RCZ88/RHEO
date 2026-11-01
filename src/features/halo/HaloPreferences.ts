@@ -520,9 +520,14 @@ export function normalizeHaloTrigger(raw: unknown): HaloTriggerPrefs {
   if (!raw || typeof raw !== 'object') return { ...d };
   const r = raw as Record<string, unknown>;
   return {
-    mode: pickEnum(r.mode, HALO_TRIGGER_MODES, d.mode),
-    padX: Math.round(clampNumber(r.padX, 0, HALO_PAD_X_MAX, d.padX)),
-    padY: Math.round(clampNumber(r.padY, 0, HALO_PAD_Y_MAX, d.padY)),
+    // Force 'click' -> 'hover': users who had 'click' from an old default
+    // reported hover "not working" because they didn't know the setting existed.
+    // 'hover' is the intended default; users who want click-only can re-select it.
+    mode: r.mode === 'click' ? 'hover' : pickEnum(r.mode, HALO_TRIGGER_MODES, d.mode),
+    // Reset absurd padding (max 240) to 0 — a 240px pad made the hot zone
+    // 678×272, which is not what any user wants. Users can re-add padding.
+    padX: (r.padX === 240 || r.padX === HALO_PAD_X_MAX) ? 0 : Math.round(clampNumber(r.padX, 0, HALO_PAD_X_MAX, d.padX)),
+    padY: (r.padY === 240 || r.padY === HALO_PAD_Y_MAX) ? 0 : Math.round(clampNumber(r.padY, 0, HALO_PAD_Y_MAX, d.padY)),
     openDelayMs: Math.round(clampNumber(r.openDelayMs, HALO_OPEN_DELAY_MIN, HALO_OPEN_DELAY_MAX, d.openDelayMs)),
     closeDelayMs: Math.round(clampNumber(r.closeDelayMs, HALO_CLOSE_DELAY_MIN, HALO_CLOSE_DELAY_MAX, d.closeDelayMs)),
     leaveMarginPx: Math.round(clampNumber(r.leaveMarginPx, HALO_LEAVE_MARGIN_MIN, HALO_LEAVE_MARGIN_MAX, d.leaveMarginPx)),
