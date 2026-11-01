@@ -237,8 +237,11 @@ function ensureDriver(): void {
  * button and the island's numeral agree within one tick.
  */
 function useStoreSync(): void {
-  /* If nothing else will drive the clock, the island takes it — see `ensureDriver`. */
-  useEffect(() => { ensureDriver(); }, []);
+  /* The island is a CONSUMER of the stopwatch, never a driver. Starting its own clock
+   * here created a second JS realm ticking its own `runningSinceMs` and reporting up
+   * to main, which overwrote the owner's accumulated time — the "41 then 20 minutes"
+   * drift. Main owns the clock; the island renders whatever main pushes. */
+  // ensureDriver() intentionally NOT called.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key !== 'rheo-stopwatch-v1' || !e.newValue) return;
