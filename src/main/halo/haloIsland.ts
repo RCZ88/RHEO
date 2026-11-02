@@ -1212,9 +1212,7 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
     const wasInside = h.hover.inside;
     const wasPinned = h.hover.pinned;
     /* Diagnostic: log when hover state changes (not every tick) to avoid spam. */
-    if (inZone !== wasInside) {
-      diag('hover-zone-change', { inZone, point, triggerRect, hoverEnabled, mode: prefs.trigger.mode });
-    }
+    // (debug logging removed)
     const next = stepHover(
       h.hover,
       { now: Date.now(), inside: inZone, pinned: h.pinned },
@@ -1273,7 +1271,7 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
       h.pollMs = POLL_COLLAPSED_MS;
     }
     } catch (err) {
-      diag('hover-tick-error', { message: String((err as Error)?.message ?? err).slice(0, 300) });
+      // debug logging removed
     } finally {
       pending = false;
     }
