@@ -85,9 +85,11 @@ export default function SampleDayTimeline({
     onProgress?.(clamped);
   }, [onProgress]);
 
-  // Scroll-scrub subscription.
-  useMotionValueEvent(scrub ?? null, "change", (v: number) => {
-    if (!dragging) handleProgress(v);
+  // Scroll-scrub subscription. useMotionValueEvent requires a MotionValue,
+  // so we subscribe to an idle one when no scrub is provided.
+  const idleScrub = useMotionValue(0);
+  useMotionValueEvent(scrub ?? idleScrub, "change", (v: number) => {
+    if (!dragging && scrub) handleProgress(v);
   });
 
   // Drag handling on the ruler.
