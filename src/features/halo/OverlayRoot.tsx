@@ -947,8 +947,12 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
    * stopwatch and fall back to it; only use the local store when we have never
    * received a remote reading. */
   const lastGoodRemoteStopwatch = useRef<StopwatchPayload | null>(null);
-  if (remote?.stopwatch) lastGoodRemoteStopwatch.current = remote.stopwatch;
-  const swPayload = remote?.stopwatch ?? lastGoodRemoteStopwatch.current ?? liveStopwatch;
+  // Only accept a remote reading as "last good" if it has a non-zero display value.
+  // A zero reading during hydration (or a reset) must not overwrite a known-good value.
+  if (remote?.stopwatch && remote.stopwatch.displayMs > 0) lastGoodRemoteStopwatch.current = remote.stopwatch;
+  const swPayload = (remote?.stopwatch && remote.stopwatch.displayMs > 0)
+    ? remote.stopwatch
+    : (lastGoodRemoteStopwatch.current ?? liveStopwatch);
 
   /* The raw STORE snapshot for the interactive surfaces (FocusPageRow, StopwatchHero), which
    * need `paused` / `activeTier` / `reset` / `setPaused` — none of which exist on the flat wire
