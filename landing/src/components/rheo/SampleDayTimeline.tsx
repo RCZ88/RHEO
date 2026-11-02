@@ -135,7 +135,7 @@ export default function SampleDayTimeline({
   }));
 
   return (
-    <div style={{ width: "100%" }}>
+    <div data-motion="sample-day-timeline" style={{ width: "100%" }}>
       {/* The timeline. Two layers: underlay (full day, dim) + fill (scaled by progress). */}
       <div style={{ position: "relative", height: 120, background: "#050506", borderRadius: 8, overflow: "hidden" }}>
         {/* Underlay: every minute, dim */}

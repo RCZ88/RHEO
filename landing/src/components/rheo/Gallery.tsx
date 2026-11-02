@@ -213,6 +213,7 @@ export default function Gallery() {
       <div className="px-5 sm:px-10 lg:px-16 max-w-[1280px] mx-auto">
         <motion.div
           ref={headerRef}
+          data-motion="gallery-header-reveal"
           className="mb-8 max-w-[680px]"
           initial={reduced ? false : { opacity: 0, y: 16 }}
           animate={headerInView || reduced ? { opacity: 1, y: 0 } : {}}

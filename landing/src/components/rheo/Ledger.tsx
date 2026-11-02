@@ -102,7 +102,7 @@ function Cell({ fact, index }: { fact: Fact; index: number }) {
 
 export default function Ledger() {
   return (
-    <div className="ledger" role="list" aria-label="What RHEO sends off your machine">
+    <div data-motion="ledger-reveal" className="ledger" role="list" aria-label="What RHEO sends off your machine">
       {FACTS.map((f, i) => (
         <Cell key={f.claim} fact={f} index={i} />
       ))}

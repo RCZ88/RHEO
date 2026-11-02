@@ -18,6 +18,7 @@ export default function Hero() {
           play is NOT set (loop ban). intensity defaults to 0.5. */}
       <div
         aria-hidden
+        data-motion="hero-terrain"
         className="absolute inset-0 pointer-events-auto"
         style={{
           "--hairline-plate": "#050506",
@@ -26,7 +27,7 @@ export default function Hero() {
           "--hairline-mid": "#52525b",
           "--hairline-lo": "#27272a",
           "--hairline-stroke": "0.9",
-          opacity: 0.35,
+          opacity: 0.5,
         } as React.CSSProperties}
       >
         <Terrain label="Eighty-one pillars for the minutes of a day" />
