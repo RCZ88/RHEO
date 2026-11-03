@@ -30,12 +30,12 @@ export type MotionEntry = {
 // ── Hero ──────────────────────────────────────────────────────────────────
 export const HERO_MOTION: MotionEntry[] = [
   {
-    name: "hero-terrain",
+    name: "hero-dayfield",
     tier: "AFFORDANCE",
     component: "Hero.tsx",
-    description: "81 isometric pillars (hairline Terrain) that rise around the pointer.",
-    provenance: "Figure: Terrain. Eighty-one pillars for the minutes of a day. It answers your pointer; it is not your data.",
-    reducedMotion: "Static pillars, no pointer response.",
+    description: "81 pillars, each one a slice of a real day. Pointer-reactive.",
+    provenance: "TRUE — real day, bucketed into 81 pillars. It answers your pointer; the heights are your data's.",
+    reducedMotion: "Static pillars at real heights. No pointer response.",
   },
   {
     name: "hero-screenshot",

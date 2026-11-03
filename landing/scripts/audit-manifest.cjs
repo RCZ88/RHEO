@@ -2,7 +2,7 @@
 const { chromium } = require('/home/clementzhao/dev/rheo/node_modules/playwright');
 
 const MANIFEST_NAMES = [
-  'hero-terrain', 'hero-screenshot',
+  'hero-dayfield', 'hero-screenshot',
   'sample-day-timeline',
   'gallery-header-reveal',
   'console-typing',

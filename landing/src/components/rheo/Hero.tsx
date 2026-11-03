@@ -1,6 +1,6 @@
 "use client";
 
-import { Terrain } from "@lucasmarkes/hairline/react";
+import Dayfield from "./Dayfield";
 import DecryptedText from "./DecryptedText";
 import SessionClock from "./SessionClock";
 
@@ -16,21 +16,17 @@ export default function Hero() {
           day. It answers your pointer; it is not your data."
           Theme vars set to LAMINAR zinc so it rises out of the page floor.
           play is NOT set (loop ban). intensity defaults to 0.5. */}
+      {/* Dayfield — 81 pillars, each one a slice of a real day. TRUE tier:
+          "Real heights: one real day, bucketed into 81 pillars. It answers your
+          pointer; the heights are your data's." Replaces Terrain (AFFORDANCE)
+          per the Architect's Step 10. */}
       <div
         aria-hidden
-        data-motion="hero-terrain"
+        data-motion="hero-dayfield"
         className="absolute inset-0 pointer-events-auto"
-        style={{
-          "--hairline-plate": "#050506",
-          "--hairline-hi": "#f4f4f5",
-          "--hairline-edge": "#a1a1aa",
-          "--hairline-mid": "#52525b",
-          "--hairline-lo": "#27272a",
-          "--hairline-stroke": "0.9",
-          opacity: 0.5,
-        } as React.CSSProperties}
+        style={{ opacity: 0.6 }}
       >
-        <Terrain label="Eighty-one pillars for the minutes of a day" />
+        <Dayfield label="Eighty-one pillars, each one a slice of a real day" />
       </div>
 
       {/* ambient corner marks (instrument-frame feel) */}
