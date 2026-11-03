@@ -7850,6 +7850,8 @@ const ALLOWED_TABLES = new Set([
     'composition_execution_log', 'composition_event_outbox', 'composition_execution_status',
     'composition_settings',
     'schema_migrations',
+    'ai_chat_fts', 'ai_chat_fts_config', 'ai_chat_fts_content', 'ai_chat_fts_data', 'ai_chat_fts_docsize', 'ai_chat_fts_idx',
+    'ai_debug_fts', 'ai_debug_fts_config', 'ai_debug_fts_data', 'ai_debug_fts_docsize', 'ai_debug_fts_idx',
 ]);
 
 electron_1.ipcMain.handle('get-table-schema', (event, tableName) => {
@@ -23732,17 +23734,31 @@ if (mainWindow && !mainWindow.isDestroyed()) {
             res.end(JSON.stringify({ status: 'not found' }));
         }
     });
-    server.listen(browserServerPort, '127.0.0.1', () => {
-        console.log(`[DeskFlow] 🌐 Browser tracking server started on port ${browserServerPort} (localhost only)`);
-    });
-    server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-            console.warn(`[DeskFlow] ⚠️ Port ${browserServerPort} already in use, browser tracking unavailable`);
-        }
-        else {
-            console.error('[DeskFlow] Browser server error:', err.message);
-        }
-    });
+    const tryListen = (attempt: number) => {
+        const onListening = () => {
+            console.log(`[DeskFlow] 🌐 Browser tracking server started on port ${browserServerPort} (localhost only)`);
+            server.removeListener('error', onError);
+        };
+        const onError = (err: any) => {
+            if (err && err.code === 'EADDRINUSE' && attempt < 60) {
+                console.warn(`[DeskFlow] ⚠️ Port ${browserServerPort} in use (attempt ${attempt + 1}/60) — retrying in 1s`);
+                setTimeout(() => tryListen(attempt + 1), 1000);
+                return;
+            }
+            if (err && err.code === 'EADDRINUSE') {
+                console.warn(`[DeskFlow] ⚠️ Port ${browserServerPort} still in use after retries — browser tracking unavailable this session`);
+                browserServer = null;
+            } else if (err) {
+                console.error('[DeskFlow] Browser server error:', err.message);
+                browserServer = null;
+            }
+        };
+        server.once('listening', onListening);
+        server.once('error', onError);
+        try { server.listen(browserServerPort, '127.0.0.1'); }
+        catch (e: any) { onError(e); }
+    };
+    tryListen(0);
     browserServer = server;
     // FIX 2: Start the stale session flush timer
     startBrowserSessionFlushTimer();
@@ -26066,12 +26082,7 @@ electron_1.ipcMain.handle('training:set-prefs', (_event, patch: { minimumDayMinu
         appStartTime = Date.now();
     }
     
-    startBrowserTrackingServer();
-    
-    // Set auto-start only once (not every run) - but only if explicitly enabled by user
-    // Removed: electron_1.app.setLoginItemSettings auto-set on every run
-    
-    // Load browser tracking preferences
+    // Load browser tracking preferences FIRST
     if (userPreferences.browserTrackingPort) {
         browserServerPort = userPreferences.browserTrackingPort;
     }
@@ -26087,6 +26098,11 @@ electron_1.ipcMain.handle('training:set-prefs', (_event, patch: { minimumDayMinu
     if (userPreferences.appRecordingMode) {
         appRecordingMode = userPreferences.appRecordingMode;
     }
+
+    // Set auto-start only once (not every run) - but only if explicitly enabled by user
+    // Removed: electron_1.app.setLoginItemSettings auto-set on every run
+
+    startBrowserTrackingServer();
 
     // Create design caches directory
     try {
