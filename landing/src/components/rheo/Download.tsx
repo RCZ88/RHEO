@@ -88,60 +88,69 @@ export default function Download() {
             <Ledger />
           </div>
 
-          {/* Vault — the privacy story as a gesture. AFFORDANCE: "Figure: Vault.
-              Locked by default; the combination is yours. It is not your data."
-              Gated P2: cuttable without guilt. */}
-          <div
-            aria-hidden
-            data-motion="vault-figure"
-            className="mx-auto mt-10"
-            style={{
-              maxWidth: 280,
-              "--hairline-plate": "#050506",
-              "--hairline-hi": "#f4f4f5",
-              "--hairline-edge": "#a1a1aa",
-              "--hairline-mid": "#52525b",
-              "--hairline-lo": "#27272a",
-              "--hairline-stroke": "0.9",
-              opacity: 0.4,
-            } as React.CSSProperties}
-          >
-            <Vault label="Locked by default; the combination is yours" />
-          </div>
+          {/* Two figures, side by side, so the section doesn't read as
+              "something missing in the middle". Vault = locked by default.
+              Exploded = the four layers. Both are AFFORDANCE tier: they illustrate
+              the claim, they are not the claim. */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-8 mt-10">
+            <div
+              aria-hidden
+              data-motion="vault-figure"
+              className="flex flex-col items-center"
+              style={{
+                "--hairline-plate": "#050506",
+                "--hairline-hi": "#f4f4f5",
+                "--hairline-edge": "#a1a1aa",
+                "--hairline-mid": "#52525b",
+                "--hairline-lo": "#27272a",
+                "--hairline-stroke": "0.9",
+                opacity: 0.4,
+              } as React.CSSProperties}
+            >
+              <Vault label="Locked by default; the combination is yours" />
+              <p
+                className="mono"
+                style={{
+                  marginTop: 8,
+                  fontSize: 9,
+                  color: "#63636b",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                FIGURE — VAULT
+              </p>
+            </div>
 
-          {/* Exploded — the four layers of the local stack. AFFORDANCE: "DIAGRAM —
-              THE FOUR LAYERS: RENDERER · MAIN · SQLITE FILE · YOUR DISK. NO SERVER.
-              NOT A CAPTURE." Gate conditions: (a) labels attach to all four layers,
-              (b) themes into zinc via CSS variables, (c) caption is DIAGRAM class. */}
-          <div
-            aria-hidden
-            data-motion="exploded-figure"
-            className="mx-auto mt-10"
-            style={{
-              maxWidth: 320,
-              "--hairline-plate": "#050506",
-              "--hairline-hi": "#f4f4f5",
-              "--hairline-edge": "#a1a1aa",
-              "--hairline-mid": "#52525b",
-              "--hairline-lo": "#27272a",
-              "--hairline-stroke": "0.9",
-              opacity: 0.45,
-            } as React.CSSProperties}
-          >
-            <Exploded label="The four layers: renderer, main, SQLite file, your disk" />
+            <div
+              aria-hidden
+              data-motion="exploded-figure"
+              className="flex flex-col items-center"
+              style={{
+                "--hairline-plate": "#050506",
+                "--hairline-hi": "#f4f4f5",
+                "--hairline-edge": "#a1a1aa",
+                "--hairline-mid": "#52525b",
+                "--hairline-lo": "#27272a",
+                "--hairline-stroke": "0.9",
+                opacity: 0.45,
+              } as React.CSSProperties}
+            >
+              <Exploded label="The four layers: renderer, main, SQLite file, your disk" />
+              <p
+                className="mono"
+                style={{
+                  marginTop: 8,
+                  fontSize: 9,
+                  color: "#63636b",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                DIAGRAM — THE FOUR LAYERS
+              </p>
+            </div>
           </div>
-          <p
-            className="mono"
-            style={{
-              marginTop: 12,
-              fontSize: 10,
-              color: "#63636b",
-              letterSpacing: "0.08em",
-              textAlign: "center",
-            }}
-          >
-            DIAGRAM — THE FOUR LAYERS: RENDERER · MAIN · SQLITE FILE · YOUR DISK. NO SERVER. NOT A CAPTURE.
-          </p>
 
           {/* Proof link. The ledger's three claims are the summary; this is the
               full table of every outbound call, with file and line, so a reader
