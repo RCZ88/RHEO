@@ -11,7 +11,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { useDetectedOS } from "./use-detected-os";
 import { RELEASE_VERSION } from "./release";
 import OSLogo from "./OSLogo";
-import { Vault } from "@lucasmarkes/hairline/react";
+import { Vault, Exploded } from "@lucasmarkes/hairline/react";
 
 const OS_LIST = [
   // `size` and `hash` were placeholder fabrications ("78 MB", "a1b2c3d4e5f6…").
@@ -93,6 +93,7 @@ export default function Download() {
               Gated P2: cuttable without guilt. */}
           <div
             aria-hidden
+            data-motion="vault-figure"
             className="mx-auto mt-10"
             style={{
               maxWidth: 280,
@@ -107,6 +108,40 @@ export default function Download() {
           >
             <Vault label="Locked by default; the combination is yours" />
           </div>
+
+          {/* Exploded — the four layers of the local stack. AFFORDANCE: "DIAGRAM —
+              THE FOUR LAYERS: RENDERER · MAIN · SQLITE FILE · YOUR DISK. NO SERVER.
+              NOT A CAPTURE." Gate conditions: (a) labels attach to all four layers,
+              (b) themes into zinc via CSS variables, (c) caption is DIAGRAM class. */}
+          <div
+            aria-hidden
+            data-motion="exploded-figure"
+            className="mx-auto mt-10"
+            style={{
+              maxWidth: 320,
+              "--hairline-plate": "#050506",
+              "--hairline-hi": "#f4f4f5",
+              "--hairline-edge": "#a1a1aa",
+              "--hairline-mid": "#52525b",
+              "--hairline-lo": "#27272a",
+              "--hairline-stroke": "0.9",
+              opacity: 0.45,
+            } as React.CSSProperties}
+          >
+            <Exploded label="The four layers: renderer, main, SQLite file, your disk" />
+          </div>
+          <p
+            className="mono"
+            style={{
+              marginTop: 12,
+              fontSize: 10,
+              color: "#63636b",
+              letterSpacing: "0.08em",
+              textAlign: "center",
+            }}
+          >
+            DIAGRAM — THE FOUR LAYERS: RENDERER · MAIN · SQLITE FILE · YOUR DISK. NO SERVER. NOT A CAPTURE.
+          </p>
 
           {/* Proof link. The ledger's three claims are the summary; this is the
               full table of every outbound call, with file and line, so a reader

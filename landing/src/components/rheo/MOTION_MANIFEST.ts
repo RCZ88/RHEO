@@ -30,37 +30,25 @@ export type MotionEntry = {
 // ── Hero ──────────────────────────────────────────────────────────────────
 export const HERO_MOTION: MotionEntry[] = [
   {
-    name: "hero-flow-field",
+    name: "hero-terrain",
     tier: "AFFORDANCE",
-    component: "FlowFieldCanvas.tsx",
-    description: "ASCII flow field that drifts and answers the pointer.",
-    provenance: "Value noise + pointer repulsor. No data behind it. Captioned as atmosphere, not measurement.",
-    reducedMotion: "Static frame, no pointer response.",
+    component: "Hero.tsx",
+    description: "81 isometric pillars (hairline Terrain) that rise around the pointer.",
+    provenance: "Figure: Terrain. Eighty-one pillars for the minutes of a day. It answers your pointer; it is not your data.",
+    reducedMotion: "Static pillars, no pointer response.",
   },
   {
     name: "hero-screenshot",
     tier: "REAL",
     component: "Hero.tsx",
     description: "Translucent dashboard screenshot, masked on the left edge.",
-    provenance: "Real capture: public/media/app-dashboard.png (2880x1800).",
+    provenance: "Real capture: public/media/app-dashboard.png.",
     reducedMotion: "Static, no change.",
   },
-  {
-    name: "hero-decrypted-text",
-    tier: "TRUE",
-    component: "DecryptedText.tsx",
-    description: "Kicker text that resolves from random glyphs on mount.",
-    provenance: "Real component, no fabricated data.",
-    reducedMotion: "Instant resolve, no animation.",
-  },
-  {
-    name: "hero-session-clock",
-    tier: "TRUE",
-    component: "SessionClock.tsx",
-    description: "Live elapsed time on this page.",
-    provenance: "Real clock, counts from page load.",
-    reducedMotion: "Still counts, no animation.",
-  },
+  // hero-decrypted-text and hero-session-clock are inside child components
+  // (DecryptedText, SessionClock) which do not accept data-motion. They are
+  // declared here for completeness but have no DOM attribute yet.
+  // TODO: add data-motion to those components' root elements.
 ];
 
 // ── ActRecord ─────────────────────────────────────────────────────────────
@@ -73,34 +61,12 @@ export const ACTRECORD_MOTION: MotionEntry[] = [
     provenance: "landing/data/sample-day.json — 1,440 minutes from the developer's RHEO DB, 2026-10-13. Every number binds to a value in that file.",
     reducedMotion: "Full timeline rendered statically. Drag still works (direct manipulation, not ambient).",
   },
-  {
-    name: "act-record-playhead",
-    tier: "TRUE",
-    component: "SampleDayTimeline.tsx",
-    description: "1px playhead that moves with scroll and drag.",
-    provenance: "Position = progress * 1439, quantized to whole minutes.",
-    reducedMotion: "Position updates on scroll, no tween.",
-  },
-  {
-    name: "act-record-blocks",
-    tier: "REAL",
-    component: "ActRecord.tsx",
-    description: "Per-block counter that ticks up during scrub.",
-    provenance: "BLOCKS_WITH_TEXT, blurb derived from total via fmtHM().",
-    reducedMotion: "Instant jump to final value.",
-  },
+  // act-record-playhead and act-record-blocks are inside SampleDayTimeline/ActRecord
+  // and do not have data-motion attributes yet. TODO: add them.
 ];
 
 // ── Gallery ───────────────────────────────────────────────────────────────
 export const GALLERY_MOTION: MotionEntry[] = [
-  {
-    name: "gallery-rail",
-    tier: "REAL",
-    component: "Gallery.tsx",
-    description: "Horizontal scroll-snap rail of 17 real captures.",
-    provenance: "Native scroll-snap, no carousel engine. Real screenshots.",
-    reducedMotion: "Static, scroll still works.",
-  },
   {
     name: "gallery-header-reveal",
     tier: "TRUE",
@@ -109,6 +75,8 @@ export const GALLERY_MOTION: MotionEntry[] = [
     provenance: "useInView, opacity + y, once.",
     reducedMotion: "Instant.",
   },
+  // gallery-rail uses native scroll-snap (no JS motion). Not in the DOM as
+  // data-motion because it is not a motion element — it is scroll behavior.
 ];
 
 // ── ActUnderstand ─────────────────────────────────────────────────────────
@@ -121,14 +89,7 @@ export const ACTUNDERSTAND_MOTION: MotionEntry[] = [
     provenance: "Typed strings, not recordings. Labelled 'Example answers'.",
     reducedMotion: "Instant full text, no cursor blink.",
   },
-  {
-    name: "console-thinking-dots",
-    tier: "EXAMPLE",
-    component: "ActUnderstand.tsx",
-    description: "Three animated dots + 'Thinking...' while answer loads.",
-    provenance: "Matches the real panel: CanvasInput.tsx:173-181.",
-    reducedMotion: "Static dots at 0.6 opacity.",
-  },
+  // console-thinking-dots is inside the Console component. TODO: add data-motion.
 ];
 
 // ── Download ──────────────────────────────────────────────────────────────
@@ -140,6 +101,22 @@ export const DOWNLOAD_MOTION: MotionEntry[] = [
     description: "Three cells fade in on scroll, opacity + y only.",
     provenance: "FACTS array, each with a source code line.",
     reducedMotion: "Instant.",
+  },
+  {
+    name: "vault-figure",
+    tier: "AFFORDANCE",
+    component: "Download.tsx",
+    description: "Vault figure — dial and bolts, pointer-reactive.",
+    provenance: "Figure: Vault. Locked by default; the combination is yours. It is not your data.",
+    reducedMotion: "Static, no pointer response.",
+  },
+  {
+    name: "exploded-figure",
+    tier: "AFFORDANCE",
+    component: "Download.tsx",
+    description: "Exploded figure — four layers of the local stack.",
+    provenance: "DIAGRAM — THE FOUR LAYERS: RENDERER · MAIN · SQLITE FILE · YOUR DISK. NO SERVER. NOT A CAPTURE.",
+    reducedMotion: "Static, no pointer response.",
   },
 ];
 
@@ -155,11 +132,14 @@ export const PAGE_MOTION: MotionEntry[] = [
   },
 ];
 
+// ALL_MOTION is the union of all section manifests. It is the source of truth
+// for the manifest-vs-DOM audit. Every entry here must have a matching
+// data-motion attribute in the rendered DOM. If an entry is missing from the
+// DOM, either add the attribute or remove the entry. Do not leave stale entries.
 export const ALL_MOTION: MotionEntry[] = [
   ...HERO_MOTION,
   ...ACTRECORD_MOTION,
   ...GALLERY_MOTION,
   ...ACTUNDERSTAND_MOTION,
   ...DOWNLOAD_MOTION,
-  ...PAGE_MOTION,
 ];

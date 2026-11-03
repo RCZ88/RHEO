@@ -152,7 +152,7 @@ export default function Hero() {
           comes from brightness, not from a box. Translucent + a fade at the
           left edge lets the flow field show through and keeps the image as
           evidence rather than as a second hero. */}
-      <div className="hidden lg:block absolute top-1/2 -translate-y-1/2 right-6 w-[42%] z-5 pointer-events-none">
+      <div data-motion="hero-screenshot" className="hidden lg:block absolute top-1/2 -translate-y-1/2 right-6 w-[42%] z-5 pointer-events-none">
         <div
           className="relative"
           style={{
