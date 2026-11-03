@@ -23,9 +23,9 @@ import { useMotionValue, useMotionValueEvent, type MotionValue } from "framer-mo
  * class for this element is REAL EXPORT — the file, the date, the sample count.
  */
 
-type Sample = { minute: number; intensity: number; category: string | null };
+export type Sample = { minute: number; intensity: number; category: string | null };
 
-type SampleDay = {
+export type SampleDay = {
   provenance: { date: string; sample_count: number };
   summary: {
     top_category: string;
