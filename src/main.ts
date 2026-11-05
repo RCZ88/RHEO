@@ -7340,9 +7340,17 @@ function createWindow() {
     trackingInterval = setInterval(pollForeground, pollInterval);
     // Watchdog: verify tracking is alive every 30s, restart if dead
     const trackingWatchdog = setInterval(() => {
+        // Reset stuck pollInFlight flag (can get stuck after suspend)
+        if (pollInFlight) {
+            const stuckMs = Date.now() - lastPollTime;
+            if (stuckMs > 10000) {
+                console.warn(`[DeskFlow] pollInFlight stuck for ${Math.round(stuckMs/1000)}s - resetting`);
+                pollInFlight = false;
+            }
+        }
         if (!isTracking) return; // user intentionally disabled
         if (!trackingInterval) {
-            console.warn('[DeskFlow] ⚠️ Tracking interval missing — restarting polling');
+            console.warn('[DeskFlow] Tracking interval missing - restarting polling');
             trackingInterval = setInterval(pollForeground, pollInterval);
         }
         // Verify pollForeground is actually running by checking lastPollTime
@@ -24848,8 +24856,11 @@ try {
     });
 } catch { /* ignore */ }
 
-// Single instance lock — prevent duplicate RHEO processes
-const gotTheLock = electron_1.app.requestSingleInstanceLock();
+// Single instance lock — prevent duplicate RHEO processes.
+// Set RHEO_ALLOW_MULTIPLE=1 to allow concurrent instances (for testing/Probe MCP).
+// Each instance MUST use a distinct --user-data-dir to avoid DB corruption.
+const allowMultiple = process.env.RHEO_ALLOW_MULTIPLE === '1';
+const gotTheLock = allowMultiple ? true : electron_1.app.requestSingleInstanceLock();
 if (!gotTheLock) {
     electron_1.app.quit();
 } else {
