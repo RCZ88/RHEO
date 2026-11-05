@@ -100,24 +100,15 @@ function fmtHM(totalMin: number): string {
 export default function ActRecord() {
   const ref = useRef<HTMLDivElement>(null);
   const shouldAnimate = useShouldAnimate();
-  const reduced = !shouldAnimate;
-
   const { scrollYProgress: raw } = useScroll({
     target: ref,
     offset: ["start start", "end end"],
   });
-  // OWED 1. This was `useSpring(raw, { stiffness: 120, damping: 25 })`.
-  // A framer-motion spring drives transforms from its own physics — it consults
-  // neither the store nor the media query, which is exactly the signature the
-  // sampler found: max|ty|=15 IDENTICAL under (auto,reduce) and (off,no-preference).
-  // That is motion that governs itself, so no amount of store-gating reaches it.
-  //
-  // Constraint #5 bans springs regardless of attribution, so the replacement is owed
-  // on either branch of the hypothesis. The hook still runs (hooks cannot be
-  // conditional) but its value is bypassed under reduced motion, which is a real
-  // alternate path rather than a 0-duration animation.
+  // House curve: use raw scroll progress directly (no spring).
+  // The spring was governing itself (max|ty|=15 identical under auto/reduce).
+  // Raw progress lets the house easing [0.16,1,0.3,1] apply per-transform.
   const springP = useSpring(raw, { stiffness: 120, damping: 25 });
-  const p = shouldAnimate ? springP : raw;
+  const p = raw;
 
   // playhead top on vertical timeline (0%..100%)
   const playheadTop = useTransform(p, [0, 1], ["0%", "100%"]);
@@ -135,9 +126,9 @@ export default function ActRecord() {
 
   // ActRecord renders either the animated 300vh scrub or a static
   // collapsed layout when motion is off.
-  const sectionHeight = reduced ? "auto" : "300vh";
-  const stickyHeight = reduced ? undefined : "100dvh";
-  const showAnimated = !reduced;
+  const sectionHeight = shouldAnimate ? "300vh" : "auto";
+  const stickyHeight = shouldAnimate ? "100dvh" : undefined;
+  const showAnimated = shouldAnimate;
 
   useEffect(() => {
     const apply = () => {
@@ -431,7 +422,7 @@ export default function ActRecord() {
                     left: "50%",
                     top: "50%",
                     transform: "translate(-50%, -50%)",
-                    width: "min(440px, 80vw)",
+                    width: "min(1000px, 90vw)",
                   }
                 : { width: "min(640px, 100%)", marginTop: 24 }
             }

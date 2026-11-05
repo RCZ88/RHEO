@@ -23,6 +23,161 @@ const OS_LIST = [
   { key: "Linux", label: "Linux", arch: "x64 (tar.gz)", min: "glibc 2.31+ / x86_64", ext: ".tar.gz" },
 ] as const;
 
+
+// ── FigureInstrument — Vault/Layers tabbed figure ────────────────────────
+
+const VAULT_FACTS = [
+  "One database, three files: db, -wal, -shm. The combination is yours.",
+  "deskflow-audit-key.bin — the audit key is a file, not a secret in a keystore.",
+  "No account. No cloud. No subscription. Close RHEO before copying the folder.",
+];
+
+const LAYERS_FACTS = [
+  "Layer 1: Renderer — React UI in Electron's renderer process.",
+  "Layer 2: Main — Electron main process, IPC handlers, tracking, DB access.",
+  "Layer 3: SQLite file — deskflow-data.db + -wal + -shm on your disk.",
+  "Layer 4: Disk — local filesystem. No server in the stack.",
+  "Every outbound call listed at /docs/network — only api.github.com and api.exchangerate-api.com.",
+];
+
+function FigureInstrument({ rm }: { rm: boolean }) {
+  const [mode, setMode] = useState<"vault" | "layers">("vault");
+  const [readout, setReadout] = useState<string | null>(null);
+
+  const isVault = mode === "vault";
+  const defaultReadout = isVault
+    ? "One database, three files — db, -wal, -shm. The combination is yours."
+    : "Renderer → main → SQLite → your disk. No server in the stack.";
+
+  const facts = isVault ? VAULT_FACTS : LAYERS_FACTS;
+
+  return (
+    <div className="mx-auto mt-10" style={{ maxWidth: 480 }}>
+      <div
+        role="tablist"
+        aria-label="Figure mode"
+        style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 24 }}
+      >
+        {(["vault", "layers"] as const).map((m) => {
+          const active = m === mode;
+          return (
+            <button
+              key={m}
+              role="tab"
+              type="button"
+              id={`figure-tab-${m}`}
+              aria-selected={active}
+              aria-controls="figure-panel"
+              tabIndex={active ? 0 : -1}
+              data-mode={m}
+              onClick={() => setMode(m)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  const next = m === "vault" ? "layers" : "vault";
+                  setMode(next);
+                  document.getElementById(`figure-tab-${next}`)?.focus();
+                }
+              }}
+              className="mono"
+              style={{
+                fontSize: 11,
+                padding: "6px 10px",
+                borderRadius: 6,
+                cursor: "pointer",
+                background: active ? "#ffffff" : "transparent",
+                color: active ? "#050506" : "#a1a1aa",
+                border: `1px solid ${active ? "#ffffff" : "rgba(255,255,255,0.12)"}`,
+                transition: "background 0.16s cubic-bezier(0.16,1,0.3,1), color 0.16s cubic-bezier(0.16,1,0.3,1)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              {m === "vault" ? "Vault" : "Layers"}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        aria-hidden
+        data-motion={isVault ? "vault-figure" : "exploded-figure"}
+        onPointerLeave={() => setReadout(null)}
+        style={{
+          "--hairline-plate": "#050506",
+          "--hairline-hi": "#f4f4f5",
+          "--hairline-edge": "#a1a1aa",
+          "--hairline-mid": "#52525b",
+          "--hairline-lo": "#27272a",
+          "--hairline-stroke": "0.9",
+          opacity: 0.9,
+        } as React.CSSProperties}
+      >
+        {isVault ? (
+          <Vault label="Locked by default; the combination is yours" onRead={setReadout} />
+        ) : (
+          <Exploded label="The four layers: renderer, main, SQLite file, your disk" onRead={setReadout} />
+        )}
+      </div>
+
+      <p
+        className="mono"
+        style={{
+          marginTop: 12,
+          fontSize: 11,
+          color: "#63636b",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          textAlign: "center",
+        }}
+      >
+        {isVault ? "FIGURE — VAULT" : "DIAGRAM — THE FOUR LAYERS"}
+      </p>
+
+      <div
+        className="mono"
+        style={{
+          marginTop: 12,
+          minHeight: 20,
+          fontSize: 12,
+          textAlign: "center",
+          color: "#a1a1aa",
+        }}
+      >
+        <span style={{ color: "#63636b" }}>read </span>
+        {readout ?? defaultReadout}
+      </div>
+
+      <div
+        style={{
+          marginTop: 16,
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          alignItems: "center",
+        }}
+      >
+        {facts.map((f, i) => (
+          <p
+            key={i}
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: "#63636b",
+              textAlign: "center",
+              lineHeight: 1.5,
+              maxWidth: 400,
+            }}
+          >
+            {f}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 export default function Download() {
   // OWED 2. This file had NO reduced-motion awareness at all: eight ungated
   // `initial={{ opacity: 0 }}` objects, so a reduced-motion visitor got 27+
@@ -88,69 +243,9 @@ export default function Download() {
             <Ledger />
           </div>
 
-          {/* Two figures, side by side, so the section doesn't read as
-              "something missing in the middle". Vault = locked by default.
-              Exploded = the four layers. Both are AFFORDANCE tier: they illustrate
-              the claim, they are not the claim. */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-8 mt-10">
-            <div
-              aria-hidden
-              data-motion="vault-figure"
-              className="flex flex-col items-center"
-              style={{
-                "--hairline-plate": "#050506",
-                "--hairline-hi": "#f4f4f5",
-                "--hairline-edge": "#a1a1aa",
-                "--hairline-mid": "#52525b",
-                "--hairline-lo": "#27272a",
-                "--hairline-stroke": "0.9",
-                opacity: 0.4,
-              } as React.CSSProperties}
-            >
-              <Vault label="Locked by default; the combination is yours" />
-              <p
-                className="mono"
-                style={{
-                  marginTop: 8,
-                  fontSize: 9,
-                  color: "#63636b",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                FIGURE — VAULT
-              </p>
-            </div>
-
-            <div
-              aria-hidden
-              data-motion="exploded-figure"
-              className="flex flex-col items-center"
-              style={{
-                "--hairline-plate": "#050506",
-                "--hairline-hi": "#f4f4f5",
-                "--hairline-edge": "#a1a1aa",
-                "--hairline-mid": "#52525b",
-                "--hairline-lo": "#27272a",
-                "--hairline-stroke": "0.9",
-                opacity: 0.45,
-              } as React.CSSProperties}
-            >
-              <Exploded label="The four layers: renderer, main, SQLite file, your disk" />
-              <p
-                className="mono"
-                style={{
-                  marginTop: 8,
-                  fontSize: 9,
-                  color: "#63636b",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                DIAGRAM — THE FOUR LAYERS
-              </p>
-            </div>
-          </div>
+          {/* Single figure instrument with mode toggle.
+              VAULT | LAYERS — mirrors the ActUnderstand tablist pattern. */}
+          <FigureInstrument rm={rm} />
 
           {/* Proof link. The ledger's three claims are the summary; this is the
               full table of every outbound call, with file and line, so a reader
