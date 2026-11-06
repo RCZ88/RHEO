@@ -2,12 +2,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "export",
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.resend.com" },
       { protocol: "https", hostname: "plus.unsplash.com" },
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
+    unoptimized: true,
   },
 };
 
