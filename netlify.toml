@@ -32,9 +32,7 @@
 [build]
   base    = "landing"
   command = "npm run build"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+  publish = "out"
 
 [build.environment]
   # Pin Node. With no .nvmrc and no "engines", Netlify picks its own default,
