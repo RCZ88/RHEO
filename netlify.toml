@@ -39,6 +39,10 @@
   # which is not reproducible and is the usual cause of "works locally, fails on
   # the build server". Next 16 requires Node >= 20.9.
   NODE_VERSION = "22"
+  # Disable Netlify's automatic Next.js plugin — we use static export (output: export)
+  # and don't need serverless functions. Without this, the plugin overrides publish
+  # to .next instead of out.
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
 # Do NOT add [[plugins]] package = "@netlify/plugin-nextjs" here.
 # Netlify auto-installs the OpenNext adapter per release (currently >= 5.16.1,
