@@ -15,12 +15,13 @@
 # and changelog entry is written against src/. Move it out and it silently
 # drifts from the thing it describes.
 #
-# `base` scopes the BUILD, which is what actually matters: with base = "landing"
-# Netlify runs npm install / next build inside landing/ only. The Electron app's
-# src/ (21 MB), its public/ (385 MB on disk, 38 MB tracked) and its dist/ are
-# never installed, never compiled, and never uploaded as build output. The app
-# is built and shipped by CZ locally (AGENTS.md §0-0) and is not this site's
-# job.
+# NOTE: `base` is intentionally NOT set. Setting base = "landing" makes Netlify's
+# framework detector see Next.js in landing/package.json and auto-activate the
+# Next.js plugin, which overrides `publish` to `landing/.next` (the 404 we hit).
+# Instead we build from the repo root with an explicit `cd landing`, so framework
+# detection stays off the Next.js project and the static `landing/out/` is served.
+# The Electron app's src/ is never installed/compiled because the command only
+# touches landing/.
 #
 # `publish` is RELATIVE TO `base`. Writing "landing/.next" here resolves to
 # /landing/landing/.next and silently publishes nothing.
@@ -30,9 +31,13 @@
 # `turbopack.root` in landing/next.config.ts silences it if it ever matters.
 
 [build]
-  base    = "landing"
-  command = "npm run build"
-  publish = "out"
+  # No `base`: keeping base = "landing" makes Netlify's framework detector see
+  # Next.js in landing/package.json and auto-activate the Next.js plugin, which
+  # overrides `publish` to `landing/.next` (the 404). Building from the repo root
+  # with an explicit cd keeps framework detection off the Next.js project so the
+  # static `out/` directory is served.
+  command = "cd landing && npm run build"
+  publish = "landing/out"
 
 [build.environment]
   # Pin Node. With no .nvmrc and no "engines", Netlify picks its own default,
