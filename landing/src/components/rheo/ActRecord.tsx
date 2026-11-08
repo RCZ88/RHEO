@@ -197,18 +197,11 @@ export default function ActRecord() {
           </div>
 
           )}
-          {/* LEFT: per-phase text block (crossfade) */}
+          {/* LEFT: per-phase text block (crossfade) — flow column, not absolute island */}
           {showAnimated ? (
             <div
-              className="absolute left-5 sm:left-10 lg:left-16"
-              // Was top:"44%" + translateY(-50%): a VIEWPORT percentage sitting under a
-              // CONTENT-height header. Measured header 64..305 (241px) vs the phase block
-              // centred on 44% of the viewport ->
-              //   vh=720  phase 147..486  overlap 158px
-              //   vh=900  phase 227..566  overlap  78px
-              //   vh=1080 phase 306..645  clear only by 1px
-              // A deterministic offset below the header cannot collide at any height.
-              style={{ top: 320, maxWidth: 300 }}
+              className="relative"
+              style={{ maxWidth: 560, minHeight: 96, marginBottom: 40 }}
             >
               <div className="relative" style={{ minHeight: 180 }}>
                 <AnimatePresence mode="wait">
@@ -415,15 +408,10 @@ export default function ActRecord() {
               list. Measured: a 438x273 video covering "DEEP WORK", "09-12 - phase 2/4",
               "Unbroken focus...", and "MEETINGS". In flow it belongs after the list. */}
           <div
-            className={showAnimated ? "absolute" : "relative mx-auto w-full"}
+            className={showAnimated ? "relative mx-auto" : "relative mx-auto w-full"}
             style={
               showAnimated
-                ? {
-                    left: "50%",
-                    top: "50%",
-                    transform: "translate(-50%, -50%)",
-                    width: "min(1000px, 90vw)",
-                  }
+                ? { width: "min(1000px, 100%)", marginTop: 0 }
                 : { width: "min(640px, 100%)", marginTop: 24 }
             }
           >

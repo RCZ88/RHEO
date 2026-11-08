@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useInView } from "framer-motion";
+import { AnimatePresence, motion, useInView } from "framer-motion";
 import { useShouldAnimate } from "./use-motion-preference";
 import { Download as DownloadIcon } from "lucide-react";
 import { useRef, useState } from "react";
@@ -110,14 +110,44 @@ function FigureInstrument({ rm }: { rm: boolean }) {
           "--hairline-mid": "#52525b",
           "--hairline-lo": "#27272a",
           "--hairline-stroke": "0.9",
-          opacity: 0.9,
+          position: "relative",
+          minHeight: 220,
         } as React.CSSProperties}
       >
-        {isVault ? (
-          <Vault label="Locked by default; the combination is yours" onRead={setReadout} />
-        ) : (
-          <Exploded label="The four layers: renderer, main, SQLite file, your disk" onRead={setReadout} />
-        )}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={mode}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 0.9, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{
+              duration: isVault ? 0.32 : 0.4,
+              delay: isVault ? 0 : 0.12,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+          >
+            {isVault ? (
+              <Vault label="Locked by default; the combination is yours" onRead={setReadout} />
+            ) : (
+              <Exploded label="The four layers: renderer, main, SQLite file, your disk" onRead={setReadout} />
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        <p
+          className="mono"
+          style={{
+            marginTop: 12,
+            fontSize: 11,
+            color: "#63636b",
+            letterSpacing: "0.08em",
+            textAlign: "center",
+          }}
+        >
+          {isVault
+            ? "circle the dial to 40 — the bolts draw back"
+            : "move across to open the stack · move down to pick a layer"}
+        </p>
       </div>
 
       <p
@@ -158,8 +188,15 @@ function FigureInstrument({ rm }: { rm: boolean }) {
         }}
       >
         {facts.map((f, i) => (
-          <p
-            key={i}
+          <motion.p
+            key={`${mode}-${i}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.16,
+              delay: i * 0.06,
+              ease: [0.16, 1, 0.3, 1],
+            }}
             className="mono"
             style={{
               fontSize: 11,
@@ -170,7 +207,7 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             }}
           >
             {f}
-          </p>
+          </motion.p>
         ))}
       </div>
     </div>
