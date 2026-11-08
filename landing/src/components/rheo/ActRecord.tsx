@@ -173,7 +173,7 @@ export default function ActRecord() {
         className="sticky top-0 overflow-hidden"
         style={{ height: stickyHeight }}
       >
-        <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-20 pb-20">
+        <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-20 pb-20 flex flex-col items-start justify-center">
           {/* top-left header */}
           {/* The static (reduced-motion) branch renders this label + heading IN FLOW.
               Rendering them here as well put two 69px .display-h2 elements on top of
@@ -182,14 +182,14 @@ export default function ActRecord() {
               x=421 while this column ran to x=484, so the phase heading sat 63x31px on
               top of the media. 340px puts its right edge at 404, clear of 421. */}
           {showAnimated && (
-          <div className="absolute top-16 left-5 sm:left-10 lg:left-16 max-w-[340px]">
+          <div className="relative max-w-[560px]" style={{ marginBottom: 40 }}>
             <p className="mono-label" style={{ fontSize: 11 }}>
               <DecryptedText text="SECTION 02 / RECORD \u00b7 A SAMPLE DAY" speed={28} maxIterations={6} />
             </p>
             <h2 className="display-h2 mt-3">A DAY, REPLAYABLE.</h2>
             <p
               className="mt-4"
-              style={{ fontSize: 14, lineHeight: 1.6, color: "#a1a1aa", maxWidth: 340 }}
+              style={{ fontSize: 14, lineHeight: 1.6, color: "#a1a1aa", maxWidth: 560, minHeight: 40 }}
             >
               This page is scrubbed, not played. Drag time backward. In life you
               can&apos;t. Here, you can.
