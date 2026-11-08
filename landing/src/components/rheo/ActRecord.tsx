@@ -173,7 +173,7 @@ export default function ActRecord() {
         className="sticky top-0 overflow-hidden"
         style={{ height: stickyHeight }}
       >
-        <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-20 pb-20 flex flex-col items-start justify-center">
+        <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-12 pb-12 flex flex-col items-start justify-center">
           {/* top-left header */}
           {/* The static (reduced-motion) branch renders this label + heading IN FLOW.
               Rendering them here as well put two 69px .display-h2 elements on top of
@@ -182,7 +182,7 @@ export default function ActRecord() {
               x=421 while this column ran to x=484, so the phase heading sat 63x31px on
               top of the media. 340px puts its right edge at 404, clear of 421. */}
           {showAnimated && (
-          <div className="relative max-w-[560px]" style={{ marginBottom: 40 }}>
+          <div className="relative max-w-[560px]" style={{ marginBottom: 24 }}>
             <p className="mono-label" style={{ fontSize: 11 }}>
               <DecryptedText text="SECTION 02 / RECORD \u00b7 A SAMPLE DAY" speed={28} maxIterations={6} />
             </p>
@@ -201,7 +201,7 @@ export default function ActRecord() {
           {showAnimated ? (
             <div
               className="relative"
-              style={{ maxWidth: 560, minHeight: 96, marginBottom: 40 }}
+              style={{ maxWidth: 560, minHeight: 96, marginBottom: 24 }}
             >
               <div className="relative" style={{ minHeight: 180 }}>
                 <AnimatePresence mode="wait">
