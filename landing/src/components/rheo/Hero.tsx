@@ -16,15 +16,13 @@ export default function Hero() {
           day. It answers your pointer; it is not your data."
           Theme vars set to LAMINAR zinc so it rises out of the page floor.
           play is NOT set (loop ban). intensity defaults to 0.5. */}
-      {/* Dayfield — 81 pillars, each one a slice of a real day. TRUE tier:
-          "Real heights: one real day, bucketed into 81 pillars. It answers your
-          pointer; the heights are your data's." Replaces Terrain (AFFORDANCE)
-          per the Architect's Step 10. */}
+      {/* Dayfield — 81 pillars, each one a slice of a real day. TRUE tier.
+          Bottom band: own row, not overlay. Fixes aria-hidden + pointer-events-auto bug. */}
       <div
         aria-hidden
         data-motion="hero-dayfield"
-        className="absolute inset-0 pointer-events-auto"
-        style={{ opacity: 0.6 }}
+        className="mt-12"
+        style={{ height: 120, width: "100%", opacity: 0.8, pointerEvents: "none" }}
       >
         <Dayfield label="Eighty-one pillars, each one a slice of a real day" />
       </div>
