@@ -31,13 +31,9 @@
 # `turbopack.root` in landing/next.config.ts silences it if it ever matters.
 
 [build]
-  # No `base`: keeping base = "landing" makes Netlify's framework detector see
-  # Next.js in landing/package.json and auto-activate the Next.js plugin, which
-  # overrides `publish` to `landing/.next` (the 404). Building from the repo root
-  # with an explicit cd keeps framework detection off the Next.js project so the
-  # static `out/` directory is served.
-  command = "cd landing && npm run build"
-  publish = "landing/out"
+  base    = "landing"
+  command = "npm run build"
+  publish = "out"
 
 [build.environment]
   # Pin Node. With no .nvmrc and no "engines", Netlify picks its own default,
