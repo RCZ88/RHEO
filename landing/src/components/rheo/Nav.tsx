@@ -3,6 +3,7 @@
 import { motion, AnimatePresence, useScroll, useSpring, useTransform } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import NavClock from "./NavClock";
 import MotionChip from "./MotionChip";
 
@@ -10,6 +11,7 @@ const LINKS = [
   { label: "PRODUCT", href: "#hero" },
   { label: "METHOD", href: "#act-record" },
   { label: "DOWNLOAD", href: "#download" },
+  { label: "FEEDBACK", href: "/feedback" },
 ];
 
 const SECTION_IDS = ["hero", "manifesto", "act-record", "capabilities", "understand", "learn", "atlas", "flow", "download"];
@@ -99,8 +101,10 @@ export default function Nav() {
           <div className="hidden md:flex items-center gap-8">
             {LINKS.map((l) => {
               const isActive = active === l.href.replace("#", "");
+              const isRoute = l.href.startsWith("/");
+              const Comp = isRoute ? Link : "a";
               return (
-                <a
+                <Comp
                   key={l.label}
                   href={l.href}
                   className="mono-label transition-colors relative"
@@ -123,7 +127,7 @@ export default function Nav() {
                       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                     />
                   )}
-                </a>
+                </Comp>
               );
             })}
           </div>
