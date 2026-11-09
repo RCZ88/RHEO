@@ -1,0 +1,12 @@
+name: Feedback
+description: General feedback about RHEO
+title: "[Feedback] "
+labels: ["landing", "feedback"]
+body:
+  - type: textarea
+    id: body
+    attributes:
+      label: What's on your mind?
+      description: Tell us what you think about RHEO.
+    validations:
+      required: true

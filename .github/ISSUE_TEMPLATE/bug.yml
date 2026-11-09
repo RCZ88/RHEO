@@ -1,0 +1,22 @@
+name: Bug Report
+description: Report a bug in RHEO
+title: "[Bug] "
+labels: ["landing", "bug"]
+body:
+  - type: textarea
+    id: body
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected to happen.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      description: Your operating system (e.g., macOS 14, Windows 11)
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: RHEO version (e.g., v0.2.0)
