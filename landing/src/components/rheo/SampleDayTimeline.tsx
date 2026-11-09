@@ -37,6 +37,7 @@ export default function SampleDayTimeline({
   onProgress?: (p: number) => void;
 }) {
   const [data, setData] = useState<SampleDay | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -46,10 +47,30 @@ export default function SampleDayTimeline({
     : false;
 
   useEffect(() => {
-    fetch("/data/sample-day.json")
-      .then((r) => r.json())
-      .then((d: SampleDay) => { setData(d); setTimeout(() => setMounted(true), 100); })
-      .catch(() => setData(null));
+    let cancelled = false;
+    const load = (attempt = 0) => {
+      fetch("/data/sample-day.json")
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((d: SampleDay) => {
+          if (cancelled) return;
+          setData(d);
+          setTimeout(() => setMounted(true), 100);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          if (attempt < 2) {
+            setTimeout(() => load(attempt + 1), 1000 * (attempt + 1));
+          } else {
+            console.error("SampleDayTimeline: failed to load sample-day.json", err);
+            setError(err.message);
+          }
+        });
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const handleProgress = useCallback((p: number) => {
@@ -98,6 +119,13 @@ export default function SampleDayTimeline({
     handleProgress(newMinute / 1439);
   }, [handleProgress, progress]);
 
+  if (error) {
+    return (
+      <div className="mono" style={{ fontSize: 12, color: "#ef4444" }}>
+        Failed to load sample day: {error}
+      </div>
+    );
+  }
   if (!data) {
     return (
       <div className="mono" style={{ fontSize: 12, color: "#8a8a94" }}>

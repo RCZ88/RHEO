@@ -3,7 +3,7 @@
 import { AnimatePresence, motion, useInView } from "framer-motion";
 import { useShouldAnimate } from "./use-motion-preference";
 import { Download as DownloadIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DecryptedText from "./DecryptedText";
 import { Button } from "@/components/ui/button";
 import Ledger from "./Ledger";
@@ -43,6 +43,15 @@ const LAYERS_FACTS = [
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");
   const [readout, setReadout] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(true);
+
+  // Auto-play the figure tour on mount and on tab switch so users see it's interactive.
+  // The tour runs ~12s; after that, stop and let the user drive.
+  useEffect(() => {
+    setPlaying(true);
+    const timer = setTimeout(() => setPlaying(false), 4000);
+    return () => clearTimeout(timer);
+  }, [mode]);
 
   const isVault = mode === "vault";
   const defaultReadout = isVault
@@ -52,7 +61,7 @@ function FigureInstrument({ rm }: { rm: boolean }) {
   const facts = isVault ? VAULT_FACTS : LAYERS_FACTS;
 
   return (
-    <div className="mx-auto mt-10" style={{ maxWidth: 480 }}>
+    <div className="mx-auto mt-10" style={{ maxWidth: 560 }}>
       <div
         role="tablist"
         aria-label="Figure mode"
@@ -104,6 +113,10 @@ function FigureInstrument({ rm }: { rm: boolean }) {
         data-motion={isVault ? "vault-figure" : "exploded-figure"}
         onPointerLeave={() => setReadout(null)}
         style={{
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 12,
+          padding: 8,
+          background: "rgba(255,255,255,0.02)",
           "--hairline-plate": "#050506",
           "--hairline-hi": "#f4f4f5",
           "--hairline-edge": "#a1a1aa",
@@ -127,9 +140,9 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             }}
           >
             {isVault ? (
-              <Vault label="Locked by default; the combination is yours" onRead={setReadout} />
+              <Vault label="Locked by default; the combination is yours" onRead={setReadout} play={playing} />
             ) : (
-              <Exploded label="The four layers: renderer, main, SQLite file, your disk" onRead={setReadout} />
+              <Exploded label="The four layers: renderer, main, SQLite file, your disk" onRead={setReadout} play={playing} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -138,15 +151,16 @@ function FigureInstrument({ rm }: { rm: boolean }) {
           className="mono"
           style={{
             marginTop: 12,
-            fontSize: 11,
-            color: "#63636b",
-            letterSpacing: "0.08em",
+            fontSize: 12,
+            color: "#a1a1aa",
+            letterSpacing: "0.06em",
             textAlign: "center",
+            fontWeight: 500,
           }}
         >
           {isVault
-            ? "circle the dial to 40 — the bolts draw back"
-            : "move across to open the stack · move down to pick a layer"}
+            ? "↑ INTERACT: circle the dial to 40 — the bolts draw back"
+            : "↑ INTERACT: move across to open the stack · move down to pick a layer"}
         </p>
       </div>
 
