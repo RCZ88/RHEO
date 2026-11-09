@@ -40,17 +40,59 @@ const LAYERS_FACTS = [
   "Every outbound call listed at /docs/network — only api.github.com and api.exchangerate-api.com.",
 ];
 
+// Sweep utility: dispatch synthetic pointer events to drive hairline figures
+// through their genuine input channel (Path B from RESULT.md v3.0).
+function sweep(
+  el: HTMLElement,
+  points: Array<[number, number]>,
+  duration: number,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const rect = el.getBoundingClientRect();
+    const stepMs = 16;
+    const totalSteps = Math.ceil(duration / stepMs);
+    let step = 0;
+    const timer = setInterval(() => {
+      if (step >= totalSteps) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      const t = step / totalSteps;
+      const idx = Math.min(Math.floor(t * (points.length - 1)), points.length - 2);
+      const frac = t * (points.length - 1) - idx;
+      const [x0, y0] = points[idx];
+      const [x1, y1] = points[idx + 1];
+      const x = x0 + (x1 - x0) * frac;
+      const y = y0 + (y1 - y0) * frac;
+      const clientX = rect.left + (x / 400) * rect.width;
+      const clientY = rect.top + (y / 320) * rect.height;
+      el.dispatchEvent(
+        new PointerEvent("pointermove", {
+          clientX,
+          clientY,
+          bubbles: true,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true,
+        }),
+      );
+      step++;
+    }, stepMs);
+  });
+}
+
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");
   const [readout, setReadout] = useState<string | null>(null);
-  const [playing, setPlaying] = useState(true);
+  const [tourRunning, setTourRunning] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   // Auto-play the figure tour on mount and on tab switch so users see it's interactive.
   // The tour runs ~12s; after that, stop and let the user drive.
   useEffect(() => {
-    setPlaying(true);
-    const timer = setTimeout(() => setPlaying(false), 4000);
-    return () => clearTimeout(timer);
+    setReadout(null);
+    setPlaying(false);
   }, [mode]);
 
   const isVault = mode === "vault";
@@ -109,12 +151,13 @@ function FigureInstrument({ rm }: { rm: boolean }) {
       </div>
 
       <div
+        ref={stageRef}
         aria-hidden
         data-motion={isVault ? "vault-figure" : "exploded-figure"}
         onPointerLeave={() => setReadout(null)}
         style={{
           border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: 12,
+          borderRadius: 10,
           padding: 8,
           background: "rgba(255,255,255,0.02)",
           "--hairline-plate": "#050506",
@@ -140,9 +183,9 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             }}
           >
             {isVault ? (
-              <Vault label="Locked by default; the combination is yours" onRead={setReadout} play={playing} />
+              <Vault label="Locked by default; the combination is yours" onRead={setReadout} />
             ) : (
-              <Exploded label="The four layers: renderer, main, SQLite file, your disk" onRead={setReadout} play={playing} />
+              <Exploded label="The four layers: renderer, main, SQLite file, your disk" onRead={setReadout} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -162,6 +205,50 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             ? "↑ INTERACT: circle the dial to 40 — the bolts draw back"
             : "↑ INTERACT: move across to open the stack · move down to pick a layer"}
         </p>
+        <button
+          type="button"
+          disabled={tourRunning}
+          onClick={async () => {
+            const stage = stageRef.current;
+            if (!stage) return;
+            setTourRunning(true);
+            setReadout(isVault ? "running the tour…" : "running the tour…");
+            if (isVault) {
+              // Sweep around the dial to trigger setOpen(true)
+              const pts: Array<[number, number]> = [];
+              for (let i = 0; i <= 24; i++) {
+                const angle = (i / 24) * Math.PI * 2 - Math.PI / 2;
+                pts.push([200 + 80 * Math.cos(angle), 160 + 80 * Math.sin(angle)]);
+              }
+              await sweep(stage, pts, 400);
+              await new Promise((r) => setTimeout(r, 200));
+            } else {
+              // Sweep left to right to separate layers
+              const pts: Array<[number, number]> = [];
+              for (let i = 0; i <= 20; i++) {
+                pts.push([60 + i * 14, 160]);
+              }
+              await sweep(stage, pts, 640);
+            }
+            setTourRunning(false);
+            setReadout(null);
+          }}
+          className="mono"
+          style={{
+            marginTop: 8,
+            fontSize: 11,
+            color: tourRunning ? "#63636b" : "#8a8a94",
+            background: "transparent",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 6,
+            padding: "4px 10px",
+            cursor: tourRunning ? "not-allowed" : "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          {tourRunning ? "running…" : "run the tour"}
+        </button>
       </div>
 
       <p
@@ -315,6 +402,14 @@ export default function Download() {
               style={{ color: "#a1a1aa", textDecoration: "underline", textUnderlineOffset: 3 }}
             >
               /docs/network
+            </a>
+            {" · "}
+            <a
+              href="/feedback"
+              className="mono"
+              style={{ color: "#a1a1aa", textDecoration: "underline", textUnderlineOffset: 3 }}
+            >
+              feedback →
             </a>
           </motion.p>
 

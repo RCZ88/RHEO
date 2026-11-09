@@ -29,6 +29,25 @@ function fmt(minute: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+type Segment = { start: number; end: number; category: string | null; meanIntensity: number };
+
+function deriveSegments(samples: Sample[]): Segment[] {
+  const segs: Segment[] = [];
+  let i = 0;
+  while (i < samples.length) {
+    const cat = samples[i].category;
+    let j = i;
+    let sumI = 0;
+    while (j < samples.length && samples[j].category === cat) {
+      sumI += samples[j].intensity;
+      j++;
+    }
+    segs.push({ start: i, end: j, category: cat, meanIntensity: (j - i) > 0 ? sumI / (j - i) : 0 });
+    i = j;
+  }
+  return segs;
+}
+
 export default function SampleDayTimeline({
   scrub,
   onProgress,
@@ -41,6 +60,7 @@ export default function SampleDayTimeline({
   const [progress, setProgress] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [hoverMinute, setHoverMinute] = useState<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const reduced = typeof window !== "undefined"
     ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -119,6 +139,19 @@ export default function SampleDayTimeline({
     handleProgress(newMinute / 1439);
   }, [handleProgress, progress]);
 
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    const p = (e.clientX - rect.left) / rect.width;
+    const minute = Math.round(Math.min(Math.max(p, 0), 1) * 1439);
+    setHoverMinute(minute);
+  }, []);
+
+  const onPointerLeave = useCallback(() => {
+    setHoverMinute(null);
+  }, []);
+
   if (error) {
     return (
       <div className="mono" style={{ fontSize: 12, color: "#ef4444" }}>
@@ -134,23 +167,35 @@ export default function SampleDayTimeline({
     );
   }
 
-  const { samples, summary, provenance } = data;
+  const { samples, provenance } = data;
   const activeMinute = Math.round(progress * 1439);
   const activeSample = samples[activeMinute];
+  const segments = deriveSegments(samples);
 
-  const bars = samples.map((s) => ({
-    minute: s.minute,
-    height: Math.max(2, Math.min(1, s.intensity) * 100),
-    brightness: s.category ? (CAT_BRIGHTNESS[s.category] ?? 0.3) : 0,
-    category: s.category,
-  }));
+  // Client-side histogram
+  const hist: Record<string, number> = {};
+  let logged = 0;
+  for (const s of samples) {
+    if (s.category) {
+      hist[s.category] = (hist[s.category] || 0) + 1;
+      logged++;
+    }
+  }
+  const topCats = Object.entries(hist).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const factsText = topCats.map(([cat, mins]) => `${cat} ${mins}`).join(" · ") + ` · ${logged}/1,440 min logged`;
+
+  const W = 1000;
+  const CANVAS_H = 120;
+  const RULER_H = 20;
+  const PANEL_H = CANVAS_H + 1 + RULER_H; // 141
 
   return (
     <div data-motion="sample-day-timeline" style={{ width: "100%" }}>
-      {/* Fused panel: timeline canvas + divider + ruler = one instrument */}
       <div
         ref={panelRef}
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerLeave={onPointerLeave}
         role="slider"
         aria-label="Scrub the sample day"
         aria-valuemin={0}
@@ -167,74 +212,100 @@ export default function SampleDayTimeline({
           overflow: "hidden",
           cursor: dragging ? "grabbing" : "grab",
           userSelect: "none",
-          height: 153,
+          height: PANEL_H,
         }}
+        className="instrument"
       >
-        {/* Timeline canvas — 120px */}
-        <div style={{ position: "relative", height: 120, overflow: "hidden" }}>
-          {/* Underlay: every minute, dim */}
+        {/* Canvas — 120px */}
+        <div style={{ position: "relative", height: CANVAS_H, overflow: "hidden" }}>
+          {/* Bright layer (bottom): all segments at full brightness, static */}
           <svg
-            viewBox="0 0 1440 120"
+            viewBox={`0 0 ${W} ${CANVAS_H}`}
             preserveAspectRatio="none"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
           >
-            {bars.map((b) => (
-              <rect
-                key={b.minute}
-                x={b.minute}
-                y={120 - b.height}
-                width={1}
-                height={b.height}
-                fill={`rgba(255,255,255,${0.06 + b.brightness * 0.12})`}
-              />
-            ))}
+            {segments.map((seg, idx) => {
+              const brightness = seg.category ? (CAT_BRIGHTNESS[seg.category] ?? 0.3) : 0;
+              const x = (seg.start / 1440) * W;
+              const w = ((seg.end - seg.start) / 1440) * W;
+              const h = Math.max(8, (seg.category ? seg.meanIntensity : 0) * 100);
+              const fill = seg.category
+                ? `rgba(255,255,255,${0.25 + brightness * 0.5})`
+                : `rgba(255,255,255,0.03)`;
+              return (
+                <rect
+                  key={`bright-${idx}`}
+                  x={x}
+                  y={CANVAS_H - h}
+                  width={Math.max(1, w - 1)}
+                  height={h}
+                  fill={fill}
+                  style={{
+                    transformOrigin: "bottom",
+                    transform: mounted && !reduced ? "scaleY(1)" : "scaleY(1)",
+                    opacity: mounted ? 1 : 0,
+                    transition: mounted && !reduced
+                      ? `transform 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(idx * 20, 600)}ms, opacity 0.3s ease`
+                      : "none",
+                  }}
+                />
+              );
+            })}
           </svg>
 
-          {/* Fill layer: scaled by progress, brighter */}
+          {/* Dim layer (top): segments in overflow:hidden wrapper, translated by progress */}
           <div
             style={{
               position: "absolute",
               inset: 0,
-              transform: `scaleX(${progress})`,
-              transformOrigin: "left",
-              transition: dragging ? "none" : "transform 0.05s linear, opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
-              opacity: mounted ? 1 : 0,
+              overflow: "hidden",
+              transform: `translateX(${progress * 100}%)`,
+              transition: dragging ? "none" : "transform 0.05s linear",
             }}
           >
             <svg
-              viewBox="0 0 1440 120"
+              viewBox={`0 0 ${W} ${CANVAS_H}`}
               preserveAspectRatio="none"
-              style={{ width: "100%", height: "100%" }}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
             >
-              {bars.map((b) => (
-                <rect
-                  key={b.minute}
-                  x={b.minute}
-                  y={120 - b.height}
-                  width={1}
-                  height={b.height}
-                  fill={`rgba(255,255,255,${0.25 + b.brightness * 0.5})`}
-                />
-              ))}
+              {segments.map((seg, idx) => {
+                const brightness = seg.category ? (CAT_BRIGHTNESS[seg.category] ?? 0.3) : 0;
+                const x = (seg.start / 1440) * W;
+                const w = ((seg.end - seg.start) / 1440) * W;
+                const h = Math.max(8, (seg.category ? seg.meanIntensity : 0) * 100);
+                const fill = seg.category
+                  ? `rgba(255,255,255,${0.06 + brightness * 0.12})`
+                  : `rgba(255,255,255,0.02)`;
+                return (
+                  <rect
+                    key={`dim-${idx}`}
+                    x={x}
+                    y={CANVAS_H - h}
+                    width={Math.max(1, w - 1)}
+                    height={h}
+                    fill={fill}
+                  />
+                );
+              })}
             </svg>
           </div>
 
-          {/* Playhead — single element spanning the full 153px panel */}
+          {/* Playhead — 2px, spans full panel */}
           <div
             style={{
               position: "absolute",
               top: 0,
               bottom: 0,
               left: `${progress * 100}%`,
-              width: 1,
+              width: 2,
               background: "#ffffff",
-              opacity: 0.8,
+              opacity: 0.9,
               pointerEvents: "none",
               zIndex: 2,
             }}
           />
 
-          {/* HUD — top 20px dead zone (bars never reach above y=20) */}
+          {/* HUD — top 5px dead zone */}
           <div
             style={{
               position: "absolute",
@@ -249,12 +320,12 @@ export default function SampleDayTimeline({
             }}
           >
             <span className="mono" style={{ fontSize: 12, color: "#f4f4f5", letterSpacing: "0.04em" }}>
-              {String(Math.floor(activeMinute / 60)).padStart(2, "0")}:{String(activeMinute % 60).padStart(2, "0")}
+              {String(Math.floor((hoverMinute ?? activeMinute) / 60)).padStart(2, "0")}:{String((hoverMinute ?? activeMinute) % 60).padStart(2, "0")}
               <span style={{ color: "#63636b" }}> · </span>
-              <span style={{ color: "#a1a1aa" }}>{activeSample?.category || "—"}</span>
+              <span style={{ color: "#a1a1aa" }}>{(hoverMinute !== null ? samples[hoverMinute] : activeSample)?.category || "—"}</span>
             </span>
             <span className="mono" style={{ fontSize: 12, color: "#8a8a94" }}>
-              intensity {activeSample?.intensity ?? 0}
+              intensity {(hoverMinute !== null ? samples[hoverMinute] : activeSample)?.intensity ?? 0}
             </span>
           </div>
         </div>
@@ -262,9 +333,8 @@ export default function SampleDayTimeline({
         {/* Divider */}
         <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
 
-        {/* Ruler — 32px, marginTop 0 (now behind divider) */}
-        <div style={{ position: "relative", height: 32 }}>
-          {/* Hour marks */}
+        {/* Ruler — 20px */}
+        <div style={{ position: "relative", height: RULER_H }}>
           {Array.from({ length: 25 }, (_, i) => (
             <div
               key={i}
@@ -272,13 +342,12 @@ export default function SampleDayTimeline({
                 position: "absolute",
                 left: `${(i / 24) * 100}%`,
                 top: 0,
-                bottom: 0,
+                bottom: RULER_H - 6,
                 width: 1,
                 background: i % 6 === 0 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
               }}
             />
           ))}
-          {/* Hour labels */}
           {Array.from({ length: 5 }, (_, i) => {
             const h = i * 6;
             return (
@@ -288,7 +357,7 @@ export default function SampleDayTimeline({
                 style={{
                   position: "absolute",
                   left: `${(h / 24) * 100}%`,
-                  top: 18,
+                  top: 9,
                   fontSize: 9,
                   color: "#8a8a94",
                   transform: "translateX(-50%)",
@@ -301,18 +370,15 @@ export default function SampleDayTimeline({
         </div>
       </div>
 
-      {/* Facts line — renders the previously-unused summary */}
+      {/* Facts line — derived histogram */}
       <div
         className="mono"
         style={{ marginTop: 12, fontSize: 11, color: "#8a8a94", lineHeight: 1.5 }}
       >
-        {summary.top_category} · {summary.top_category_minutes} min ·
-        deep work {fmt(summary.deep_work_window.start_minute)}–{fmt(summary.deep_work_window.end_minute)}
-        ({summary.deep_work_window.minutes} min) ·
-        {summary.minutes_with_activity}/{provenance.sample_count} min active
+        {factsText}
       </div>
 
-      {/* Provenance line — unchanged text */}
+      {/* Provenance line */}
       <p
         className="mono"
         style={{
@@ -324,7 +390,7 @@ export default function SampleDayTimeline({
         }}
       >
         REAL EXPORT — {provenance.date} · {provenance.sample_count} minute samples ·
-        landing/data/sample-day.json · every number above is a value from that file
+        landing/data/sample-day.json · every number above is a value from that file · derived from the same file
       </p>
     </div>
   );

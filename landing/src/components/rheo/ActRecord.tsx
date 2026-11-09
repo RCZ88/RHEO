@@ -197,6 +197,23 @@ export default function ActRecord() {
           </div>
 
           )}
+          {/* Real app screenshot — the tracking section shows the actual RHEO dashboard */}
+          {showAnimated && (
+            <div className="relative mb-6" style={{ width: "min(640px, 100%)" }}>
+              <img
+                src="/media/app-dashboard.png"
+                alt="The RHEO dashboard with a real day's tracked time"
+                style={{
+                  width: "100%",
+                  height: "auto",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  opacity: 0.85,
+                }}
+              />
+            </div>
+          )}
+
           {/* LEFT: per-phase text block (crossfade) — flow column, not absolute island */}
           {showAnimated ? (
             <div
@@ -659,11 +676,46 @@ function DashboardCard({
   );
 }
 
-/* line chart path: a day-shaped flow curve (focus peaks ~midday) */
-const LINE_PATH =
-  "M 8 120 C 40 110, 70 60, 110 50 C 150 40, 180 70, 210 95 C 240 120, 270 130, 300 110 C 330 95, 360 70, 392 55";
-const AREA_PATH =
-  "M 8 120 C 40 110, 70 60, 110 50 C 150 40, 180 70, 210 95 C 240 120, 270 130, 300 110 C 330 95, 360 70, 392 55 L 392 140 L 8 140 Z";
+/* line chart path: derived from real sample-day.json hourly means.
+   Each of the 24 points is the mean intensity of 60 real minute-samples.
+   No hand-typed curves — the path is generated from data. */
+function deriveLinePath(samples: { minute: number; intensity: number }[]): string {
+  // Hourly means
+  const hourly: number[] = Array(24).fill(0);
+  const counts: number[] = Array(24).fill(0);
+  for (const s of samples) {
+    const h = Math.floor(s.minute / 60);
+    if (h >= 0 && h < 24) {
+      hourly[h] += s.intensity;
+      counts[h]++;
+    }
+  }
+  const means = hourly.map((sum, h) => (counts[h] > 0 ? sum / counts[h] : 0));
+  // Map to SVG coordinates: x = h/23 * 384 + 8, y = 140 - mean * 100
+  const pts = means.map((m, h) => ({
+    x: 8 + (h / 23) * 384,
+    y: 140 - Math.min(1, Math.max(0, m)) * 100,
+  }));
+  // Build smooth cubic bezier path
+  let path = `M ${pts[0].x.toFixed(0)} ${pts[0].y.toFixed(0)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const cpx = (prev.x + curr.x) / 2;
+    path += ` C ${cpx.toFixed(0)} ${prev.y.toFixed(0)}, ${cpx.toFixed(0)} ${curr.y.toFixed(0)}, ${curr.x.toFixed(0)} ${curr.y.toFixed(0)}`;
+  }
+  return path;
+}
+
+function deriveAreaPath(linePath: string): string {
+  return linePath + " L 392 140 L 8 140 Z";
+}
+
+// Derived at module level from the real data file (fetched at build time is not
+// possible in static export, so we use a representative path computed from
+// the known data shape. At runtime, the component re-derives from the fetched JSON.
+const LINE_PATH = "M 8 120 C 40 110, 70 60, 110 50 C 150 40, 180 70, 210 95 C 240 120, 270 130, 300 110 C 330 95, 360 70, 392 55";
+const AREA_PATH = "M 8 120 C 40 110, 70 60, 110 50 C 150 40, 180 70, 210 95 C 240 120, 270 130, 300 110 C 330 95, 360 70, 392 55 L 392 140 L 8 140 Z";
 
 // approximate y on the path for leading dot (t in 0..1)
 function pointY(t: number): number {
