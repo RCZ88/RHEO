@@ -10,6 +10,7 @@ import {
 } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useShouldAnimate } from "./use-motion-preference";
+import { LINE_PATH, AREA_PATH, DERIVED_CARDS } from "@/lib/day";
 import DecryptedText from "./DecryptedText";
 import { RealClip } from "./RealFootage";
 import SampleDayTimeline from "./SampleDayTimeline";
@@ -46,50 +47,8 @@ type Block = BlockSeed & { blurb: string };
  * caption can never contradict the figure it sits under. Change a duration and
  * its sentence changes with it.
  */
-const BLOCKS: BlockSeed[] = [
-  {
-    key: "REST",
-    range: "23–06",
-    startH: 23,
-    endH: 30, // wraps past 24 -> 06
-    total: 420,
-  },
-  {
-    key: "DEEP WORK",
-    range: "09–12",
-    startH: 9,
-    endH: 12,
-    total: 180,
-  },
-  {
-    key: "MEETINGS",
-    range: "12–14",
-    startH: 12,
-    endH: 14,
-    total: 120,
-  },
-  {
-    key: "LEARNING",
-    range: "19–21",
-    startH: 19,
-    endH: 21,
-    total: 120,
-  },
-];
+// BLOCKS and DERIVED_CARDS replaced by DERIVED_CARDS from @/lib/day (D6 fix)
 
-/** Built once, from the constant, so the words cannot drift from the numbers. */
-const BLOCKS_WITH_TEXT: Block[] = BLOCKS.map((b) => ({
-  ...b,
-  blurb: `${fmtHM(b.total)} in this sample day, ${b.range.replace("\u2013", " to ")}.`,
-}));
-
-function activeIndexFromHour(h: number): number {
-  if (h >= 9 && h < 12) return 1; // DEEP WORK
-  if (h >= 12 && h < 14) return 2; // MEETINGS
-  if (h >= 19 && h < 21) return 3; // LEARNING
-  if (h >= 23 || h < 6) return 0; // REST
-  return -1; // between
-}
 
 function fmtHM(totalMin: number): string {
   const h = Math.floor(totalMin / 60);
@@ -139,14 +98,15 @@ export default function ActRecord() {
       if (hhmmRef.current) {
         hhmmRef.current.textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
       }
-      BLOCKS_WITH_TEXT.forEach((ph, i) => {
+      DERIVED_CARDS.forEach((card, i) => {
         const el = counterRefs.current[i];
         if (el) {
-          const val = Math.round(v * ph.total);
+          const val = Math.round(v * card.minutes);
           el.textContent = fmtHM(val);
         }
       });
-      const idx = activeIndexFromHour(hour);
+      const beats = DERIVED_CARDS.length;
+      const idx = Math.min(beats - 1, Math.floor(p.get() * beats));
       if (idx !== activeRef.current) {
         activeRef.current = idx;
         setActive(idx);
@@ -173,7 +133,7 @@ export default function ActRecord() {
         className="sticky top-0 overflow-hidden"
         style={{ height: stickyHeight }}
       >
-        <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-12 pb-12 flex flex-col items-start justify-center">
+        <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-0 pb-0 flex flex-col items-start justify-center">
           {/* top-left header */}
           {/* The static (reduced-motion) branch renders this label + heading IN FLOW.
               Rendering them here as well put two 69px .display-h2 elements on top of
@@ -235,13 +195,13 @@ export default function ActRecord() {
                       className="mono-label-strong"
                       style={{ fontSize: 11, color: "#f4f4f5" }}
                     >
-                      {BLOCKS_WITH_TEXT[active].key}
+                      {DERIVED_CARDS[active]?.label ?? "—"}
                     </p>
                     <p
                       className="mono"
                       style={{ fontSize: 11, color: "#8a8a94", marginTop: 4 }}
                     >
-                      {BLOCKS_WITH_TEXT[active].range} · block {active + 1}/4
+                      {DERIVED_CARDS[active]?.anchorLabel ?? ""} · card {active + 1}/{DERIVED_CARDS.length}
                     </p>
                     <p
                       style={{
@@ -251,7 +211,7 @@ export default function ActRecord() {
                         marginTop: 12,
                       }}
                     >
-                      {BLOCKS_WITH_TEXT[active].blurb}
+                      {DERIVED_CARDS[active]?.detail ?? ""}
                     </p>
                     <div
                       className="mt-5 flex items-baseline gap-2"
@@ -289,7 +249,7 @@ export default function ActRecord() {
                       className="mono-label"
                       style={{ fontSize: 11, color: "#8a8a94" }}
                     >
-                      BETWEEN BLOCKS
+                      BETWEEN CARDS
                     </p>
                     <p
                       style={{
@@ -312,9 +272,9 @@ export default function ActRecord() {
                 className="mt-8 hairline-t"
                 style={{ borderTopColor: "rgba(255,255,255,0.08)", paddingTop: 12 }}
               >
-                {BLOCKS_WITH_TEXT.map((ph, i) => (
+                {DERIVED_CARDS.map((ph, i) => (
                   <div
-                    key={ph.key}
+                    key={ph.label}
                     className="flex items-center justify-between"
                     style={{ padding: "6px 0" }}
                   >
@@ -327,7 +287,7 @@ export default function ActRecord() {
                         transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
                       }}
                     >
-                      {ph.key}
+                      {ph.label}
                     </span>
                     <span
                       ref={(el) => {
@@ -361,9 +321,9 @@ export default function ActRecord() {
                   can&apos;t. Here, you can.
                 </p>
               </div>
-              {BLOCKS_WITH_TEXT.map((ph, i) => (
+              {DERIVED_CARDS.map((ph, i) => (
                 <div
-                  key={ph.key}
+                  key={ph.label}
                   className="surface-panel"
                   style={{
                     border: "1px solid rgba(255,255,255,0.08)",
@@ -375,13 +335,13 @@ export default function ActRecord() {
                     className="mono-label-strong"
                     style={{ fontSize: 11, color: "#f4f4f5" }}
                   >
-                    {ph.key}
+                    {ph.label}
                   </p>
                   <p
                     className="mono"
                     style={{ fontSize: 11, color: "#8a8a94", marginTop: 3 }}
                   >
-                    {ph.range} · phase {i + 1}/4
+                    {ph.anchorLabel} · card {i + 1}/{DERIVED_CARDS.length}
                   </p>
                   <p
                     style={{
@@ -391,7 +351,7 @@ export default function ActRecord() {
                       marginTop: 6,
                     }}
                   >
-                    {ph.blurb}
+                    {ph.detail}
                   </p>
                   <div
                     className="mt-3 flex items-baseline gap-2"
@@ -676,46 +636,7 @@ function DashboardCard({
   );
 }
 
-/* line chart path: derived from real sample-day.json hourly means.
-   Each of the 24 points is the mean intensity of 60 real minute-samples.
-   No hand-typed curves — the path is generated from data. */
-function deriveLinePath(samples: { minute: number; intensity: number }[]): string {
-  // Hourly means
-  const hourly: number[] = Array(24).fill(0);
-  const counts: number[] = Array(24).fill(0);
-  for (const s of samples) {
-    const h = Math.floor(s.minute / 60);
-    if (h >= 0 && h < 24) {
-      hourly[h] += s.intensity;
-      counts[h]++;
-    }
-  }
-  const means = hourly.map((sum, h) => (counts[h] > 0 ? sum / counts[h] : 0));
-  // Map to SVG coordinates: x = h/23 * 384 + 8, y = 140 - mean * 100
-  const pts = means.map((m, h) => ({
-    x: 8 + (h / 23) * 384,
-    y: 140 - Math.min(1, Math.max(0, m)) * 100,
-  }));
-  // Build smooth cubic bezier path
-  let path = `M ${pts[0].x.toFixed(0)} ${pts[0].y.toFixed(0)}`;
-  for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1];
-    const curr = pts[i];
-    const cpx = (prev.x + curr.x) / 2;
-    path += ` C ${cpx.toFixed(0)} ${prev.y.toFixed(0)}, ${cpx.toFixed(0)} ${curr.y.toFixed(0)}, ${curr.x.toFixed(0)} ${curr.y.toFixed(0)}`;
-  }
-  return path;
-}
-
-function deriveAreaPath(linePath: string): string {
-  return linePath + " L 392 140 L 8 140 Z";
-}
-
-// Derived at module level from the real data file (fetched at build time is not
-// possible in static export, so we use a representative path computed from
-// the known data shape. At runtime, the component re-derives from the fetched JSON.
-const LINE_PATH = "M 8 120 C 40 110, 70 60, 110 50 C 150 40, 180 70, 210 95 C 240 120, 270 130, 300 110 C 330 95, 360 70, 392 55";
-const AREA_PATH = "M 8 120 C 40 110, 70 60, 110 50 C 150 40, 180 70, 210 95 C 240 120, 270 130, 300 110 C 330 95, 360 70, 392 55 L 392 140 L 8 140 Z";
+// LINE_PATH and AREA_PATH are now imported from @/lib/day (derived from real data)
 
 // approximate y on the path for leading dot (t in 0..1)
 function pointY(t: number): number {
@@ -870,7 +791,7 @@ function TimelineTrack({
                 writingMode: "horizontal-tb",
               }}
             >
-              {s.key}
+              {s.label}
             </span>
           </div>
         );
