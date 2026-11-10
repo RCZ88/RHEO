@@ -404,6 +404,11 @@ button:focus-visible {
   outline-offset: 3px;
 }
 
+/* ---- Anchor band (ActRecord) reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .anchor-band { transition: none; }
+}
+
 /* ---- Skip to content link (screen readers / keyboard) ---- */
 .skip-link {
   position: fixed;

@@ -546,6 +546,20 @@ function DashboardCard({
             style={{ cx: dotCx, cy: dotCy }}
           />
         </svg>
+        {/* Anchor band — shows the active card's time range on the chart */}
+        <div
+          aria-hidden
+          className="anchor-band"
+          style={{
+            position: "absolute",
+            inset: 0,
+            transformOrigin: "0 50%",
+            background: "rgba(255,255,255,0.04)",
+            transform: `translateX(${(DERIVED_CARDS[active]?.anchorStart ?? 0) / 14.4}%) scaleX(${((DERIVED_CARDS[active]?.anchorEnd ?? 0) - (DERIVED_CARDS[active]?.anchorStart ?? 0)) / 1440})`,
+            transition: "transform 400ms cubic-bezier(0.16,1,0.3,1)",
+            pointerEvents: "none",
+          }}
+        />
       </div>
 
       {/* stat chips */}
