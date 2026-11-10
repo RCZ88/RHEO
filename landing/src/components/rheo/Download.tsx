@@ -121,7 +121,62 @@ function FigureInstrument({ rm }: { rm: boolean }) {
               aria-controls="figure-panel"
               tabIndex={active ? 0 : -1}
               data-mode={m}
-              onClick={() => setMode(m)}
+              onClick={async () => {
+                if (tourRunning) return;
+                const stage = stageRef.current;
+                if (!stage) { setMode(m); return; }
+                const switchingToLayers = m === "layers" && mode === "vault";
+                const switchingToVault = m === "vault" && mode === "layers";
+                if (switchingToLayers) {
+                  setTourRunning(true);
+                  setReadout("the vault opens onto the stack");
+                  const pts: Array<[number, number]> = [];
+                  for (let i = 0; i <= 24; i++) {
+                    const angle = (i / 24) * Math.PI * 2 - Math.PI / 2;
+                    pts.push([200 + 25 * Math.cos(angle), 160 + 25 * Math.sin(angle)]);
+                  }
+                  await sweep(stage, pts, 400);
+                  await new Promise((r) => setTimeout(r, 200));
+                  setMode(m);
+                  await new Promise((r) => setTimeout(r, 150));
+                  const newStage = stageRef.current;
+                  if (newStage) {
+                    const pts2: Array<[number, number]> = [];
+                    for (let i = 0; i <= 32; i++) {
+                      pts2.push([40 + i * 10.5, 160]);
+                    }
+                    await sweep(newStage, pts2, 640);
+                  }
+                  await new Promise((r) => setTimeout(r, 200));
+                  setReadout(null);
+                  setTourRunning(false);
+                } else if (switchingToVault) {
+                  setTourRunning(true);
+                  setReadout("the vault opens onto the stack");
+                  const pts: Array<[number, number]> = [];
+                  for (let i = 0; i <= 20; i++) {
+                    pts.push([340 - i * 14, 160]);
+                  }
+                  await sweep(stage, pts, 400);
+                  await new Promise((r) => setTimeout(r, 200));
+                  setMode(m);
+                  await new Promise((r) => setTimeout(r, 150));
+                  const newStage = stageRef.current;
+                  if (newStage) {
+                    const pts2: Array<[number, number]> = [];
+                    for (let i = 0; i <= 24; i++) {
+                      const angle = (i / 24) * Math.PI * 2 - Math.PI / 2;
+                      pts2.push([200 + 25 * Math.cos(angle), 160 + 25 * Math.sin(angle)]);
+                    }
+                    await sweep(newStage, pts2, 400);
+                  }
+                  await new Promise((r) => setTimeout(r, 200));
+                  setReadout(null);
+                  setTourRunning(false);
+                } else {
+                  setMode(m);
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
                   e.preventDefault();
@@ -212,24 +267,32 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             const stage = stageRef.current;
             if (!stage) return;
             setTourRunning(true);
-            setReadout(isVault ? "running the tour…" : "running the tour…");
+            setReadout(isVault ? "the vault opens onto the stack" : "the vault opens onto the stack");
             if (isVault) {
-              // Sweep around the dial to trigger setOpen(true)
+              // Sweep around the dial center (200,160) with radius 25
+              // to spin the dial to 40° (COMBO) → triggers setOpen(true) → bolts draw back
               const pts: Array<[number, number]> = [];
               for (let i = 0; i <= 24; i++) {
                 const angle = (i / 24) * Math.PI * 2 - Math.PI / 2;
-                pts.push([200 + 80 * Math.cos(angle), 160 + 80 * Math.sin(angle)]);
+                pts.push([200 + 25 * Math.cos(angle), 160 + 25 * Math.sin(angle)]);
               }
               await sweep(stage, pts, 400);
-              await new Promise((r) => setTimeout(r, 200));
+              // Hold so the user sees the opened vault
+              await new Promise((r) => setTimeout(r, 600));
             } else {
-              // Sweep left to right to separate layers
+              // Sweep left to right across the stage to separate layers
+              // GAP4 goes from 0.18 (rest) to 1.0 (fully open)
               const pts: Array<[number, number]> = [];
-              for (let i = 0; i <= 20; i++) {
-                pts.push([60 + i * 14, 160]);
+              for (let i = 0; i <= 32; i++) {
+                pts.push([40 + i * 10.5, 160]);
               }
               await sweep(stage, pts, 640);
+              // Hold so the user sees the exploded layers
+              await new Promise((r) => setTimeout(r, 400));
             }
+            // Reset pointer to leave state
+            stage.dispatchEvent(new PointerEvent("pointerleave", { bubbles: true, pointerId: 1, pointerType: "mouse" }));
+            await new Promise((r) => setTimeout(r, 200));
             setTourRunning(false);
             setReadout(null);
           }}
