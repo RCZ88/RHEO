@@ -157,7 +157,7 @@ function FigureInstrument({ rm }: { rm: boolean }) {
         onPointerLeave={() => setReadout(null)}
         style={{
           border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: 10,
+          borderRadius: 12,
           padding: 8,
           background: "rgba(255,255,255,0.02)",
           "--hairline-plate": "#050506",
