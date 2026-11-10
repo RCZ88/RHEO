@@ -76,7 +76,7 @@ function diag(event: string, detail?: Record<string, unknown>): void {
   } catch {
     /* diagnostics must never throw */
   }
-  console.log('[Halo]', event, detail ?? '');
+  // console.log removed to reduce terminal spam; file log retained for diagnosis
 }
 
 /** HALO §47 poll rates. Hover detection is not an animation clock. */
@@ -694,12 +694,23 @@ const region = surface;
    * `inside` (the raw sample), not `hovered`: `hovered` deliberately stays true through the
    * close grace, so forwarding it would add a second close delay in the renderer. */
   function pushHover(h: HaloHandle): void {
-    const primary = h.inApp ? BrowserWindow.getAllWindows()[0] : h.window;
+    // In in-app mode, find the main window. Fall back to getAllWindows() if mainWindow() is null.
+    let primary: BrowserWindow | null = null;
+    if (h.inApp) {
+      primary = activeDeps?.mainWindow?.() ?? null;
+      if (!primary || primary.isDestroyed()) {
+        const wins = BrowserWindow.getAllWindows();
+        primary = wins.find(w => !w.isDestroyed()) ?? null;
+      }
+    } else {
+      primary = h.window && !h.window.isDestroyed() ? h.window : null;
+    }
     const targets: BrowserWindow[] = [];
     if (primary && !primary.isDestroyed()) targets.push(primary);
     for (const w of activeDeps?.extraTargets?.() ?? []) {
       if (w && !w.isDestroyed() && w !== primary) targets.push(w);
     }
+    diag('push-hover', { targetCount: targets.length, hasPrimary: !!primary, primaryDestroyed: primary?.isDestroyed?.() ?? 'n/a', windowCount: BrowserWindow.getAllWindows().length, hasActiveDeps: !!activeDeps, hasExtra: (activeDeps?.extraTargets?.() ?? []).length > 0, inside: h.hover.inside, pinned: h.pinned, inApp: h.inApp });
     for (const target of targets) {
       try {
         target.webContents.send('halo:hover', { inside: h.hover.inside, pinned: h.pinned });
@@ -718,7 +729,7 @@ const region = surface;
  * showed the real tracked app, because every push stopped at the main window. */
 function islandRenderers(h: HaloHandle, deps: HaloDeps): BrowserWindow[] {
   const out: BrowserWindow[] = [];
-  const primary = h.inApp ? BrowserWindow.getAllWindows()[0] : h.window;
+  const primary = h.inApp ? deps.mainWindow?.() ?? null : h.window;
   if (primary && !primary.isDestroyed()) out.push(primary);
   for (const w of deps.extraTargets?.() ?? []) {
     if (w && !w.isDestroyed() && w !== primary) out.push(w);
@@ -787,7 +798,7 @@ function broadcastPrefs(prefs: HaloPrefs): void {
  * prefs push per pointer event: the host moves its own margin, and re-rendering the offscreen
  * surface 60 times a second buys nothing. Narrowing the target keeps a drag cheap. */
 function pushPrefsPrimary(h: HaloHandle, prefs: HaloPrefs): void {
-  const primary = h.inApp ? BrowserWindow.getAllWindows()[0] : h.window;
+  const primary = h.inApp ? h.deps.mainWindow?.() ?? null : h.window;
   if (!primary || primary.isDestroyed()) return;
   try {
     primary.webContents.send('halo:prefs', prefs);
@@ -958,7 +969,7 @@ function computeDragSnap(
   if (!baseCanvas || !baseDisplay) return null;
   const cx = baseCanvas.x + baseCanvas.width / 2 + (prefs.dragX ?? 0);
   const cy = baseCanvas.y + baseCanvas.height / 2 + (prefs.dragY ?? 0);
-  const { x: dx, y: dy, width: dw, height: dh } = baseDisplay;
+  const { x: dx, y: dy, width: dw } = baseDisplay;
   let edge: 'top' | 'left' | 'right';
   if (cx < dx + dw / 3) edge = 'left';
   else if (cx > dx + 2 * dw / 3) edge = 'right';
@@ -1027,6 +1038,7 @@ function stopPolling(h: HaloHandle): void {
  *    rate is switched by a plain field the tick reads. No reschedule from inside tick.
  */
 let lastCursorFallbackAtMs = 0;
+let lastHoverDiagAtMs = 0;
 let cursorFallbackBroken = false;
 /* The last point the NATIVE source confirmed, and when. Reused on rate-limited ticks so a
  * spawn budget never turns into "cursor unavailable" — which is the very failure this whole
@@ -1034,9 +1046,35 @@ let cursorFallbackBroken = false;
  * FSM's own open delay and leave margin, so staleness here is not observable. */
 let lastNativePoint: { x: number; y: number } | null = null;
 let lastNativePointAtMs = 0;
+let lastNativePointSource: string = 'none';
 
 const CURSOR_FALLBACK_MIN_INTERVAL_MS = 200;
 const CURSOR_POINT_MAX_AGE_MS = 300;
+
+/* FREEZE DETECTION — the general guard for the two-source selection.
+ *
+ * History on this box, both ways: kdotool once returned a FIXED (0,356) forever, and Electron's
+ * XWayland pointer is frozen whenever the cursor sits over a native Wayland window (measured:
+ * X answered (828,1220) unchanged across samples AND across app restarts while the user moved).
+ * A hard-coded preference between the two sources can only be right until the OTHER one breaks —
+ * that flip already shipped twice. So selection no longer trusts either source unconditionally.
+ *
+ * A source is PROVEN STALE the moment the cursor demonstrably moved (any other source reported a
+ * changed reading recently) while this source kept reporting the identical value for >3s. That is
+ * exactly the signature of a lying source: stillness while the user moves. Once proven, it is
+ * distrusted for 10s — and if it starts moving again it recovers automatically, because the mark
+ * expires and the proof condition re-fires only if it freezes while something else moves.
+ * Idleness is NOT a fault: a still cursor legitimately freezes BOTH sources, and `movedRecently`
+ * false is what keeps a genuinely-quiet cursor from being misjudged. */
+interface CursorSourceHealth {
+  lastRaw: { x: number; y: number } | null;
+  lastChangeAtMs: number;
+  distrustUntilMs: number;
+}
+const CURSOR_FREEZE_DISTRUST_MS = 10_000;
+const CURSOR_MOVE_GRACE_MS = 1_500;
+const CURSOR_STALL_MS = 3_000;
+const cursorSourceHealth = new Map<string, CursorSourceHealth>();
 
 /**
  * Read the REAL pointer position.
@@ -1059,20 +1097,33 @@ const CURSOR_POINT_MAX_AGE_MS = 300;
  * serves the CACHED point while one is fresh. `null` means "I do not know where the pointer
  * is", which the FSM reads as "not hovering" — the safe direction.
  */
+interface CursorReading {
+  source: string;
+  raw: { x: number; y: number };
+  normalized: { x: number; y: number };
+  transform: string;
+  timestamp: number;
+  fromCache: boolean;
+  rejectionReason?: string;
+}
+
 async function readCursorPoint(): Promise<{ x: number; y: number } | null> {
   const waylandSession = process.platform === 'linux' && !!process.env.WAYLAND_DISPLAY;
+  const displays = screen.getAllDisplays();
+  const primary = screen.getPrimaryDisplay();
+  const now = Date.now();
 
-  if (!waylandSession) {
-    try {
-      return screen.getCursorScreenPoint();
-    } catch {
-      /* some compositors throw even under X — fall through to the native read */
-    }
-  }
+  // --- Acquisition: raw reads from both sources ---
+  let electronRaw: { x: number; y: number } | null = null;
+  try { electronRaw = screen.getCursorScreenPoint(); } catch { /* some compositors throw */ }
 
-  if (!cursorFallbackBroken) {
-    const now = Date.now();
+  let nativeRaw: { x: number; y: number } | null = null;
+  let nativeSource = 'none';
+  if (waylandSession && !cursorFallbackBroken) {
+    // Cache check (bounded, source-tagged)
     if (lastNativePoint && now - lastNativePointAtMs < CURSOR_POINT_MAX_AGE_MS) {
+      // Return cached point but tag it
+      diag('cursor-cache-hit', { source: lastNativePointSource, ageMs: now - lastNativePointAtMs, point: lastNativePoint });
       return lastNativePoint;
     }
     if (now - lastCursorFallbackAtMs >= CURSOR_FALLBACK_MIN_INTERVAL_MS) {
@@ -1080,54 +1131,146 @@ async function readCursorPoint(): Promise<{ x: number; y: number } | null> {
       try {
         const p = await getLinuxCursorPoint();
         if (p) {
-          // kdotool may return coordinates in a different space than Electron's
-          // screen coordinates (common on Wayland/XWayland with DPI scaling or
-          // multi-monitor). Try the raw point first; if it's not near the window,
-          // try adding the primary display's bounds origin (panel offset).
-          const displays = screen.getAllDisplays();
-          const primary = screen.getPrimaryDisplay();
-          const candidates = [p, { x: p.x + primary.bounds.x, y: p.y + primary.bounds.y }];
-          for (const cand of candidates) {
-            const inBounds = displays.some(d =>
-              cand.x >= d.bounds.x && cand.x < d.bounds.x + d.bounds.width &&
-              cand.y >= d.bounds.y && cand.y < d.bounds.y + d.bounds.height
-            );
-            const win = h?.window;
-            const winBounds = win && !win.isDestroyed() ? win.getBounds() : null;
-            // Tighter check: the point must be within the window bounds + 100px margin.
-            // This rejects kdotool points that are in-bounds but far from the window
-            // (coordinate space mismatch).
-            const nearWindow = winBounds
-              ? cand.x >= winBounds.x - 100 && cand.x <= winBounds.x + winBounds.width + 100 &&
-                cand.y >= winBounds.y - 100 && cand.y <= winBounds.y + winBounds.height + 100
-              : true;
-            if (inBounds && nearWindow) {
-              lastNativePoint = cand;
-              lastNativePointAtMs = Date.now();
-              return cand;
-            }
-          }
-          // Neither candidate was plausible — fall through to XWayland cursor.
-          // kdotool returned an out-of-bounds point — try XWayland fallback.
+          nativeRaw = p;
+          nativeSource = 'kdotool';
         }
       } catch {
-        // No native source on this desktop. Stop trying rather than spawning per tick.
         cursorFallbackBroken = true;
       }
     }
   }
 
-  /* FALLBACK: if the native read (kdotool) failed or is unavailable, fall back to the X11
-   * pointer even on Wayland. A frozen point is not ideal, but it is strictly better than
-   * "I do not know" — the latter guarantees the island NEVER opens, which is the bug the
-   * user is hitting. With a frozen point the island at least opens while the cursor is over
-   * an XWayland window (RHEO itself, and any other X11 app), which is where the user spends
-   * most of their time. */
-  try {
-    return screen.getCursorScreenPoint();
-  } catch {
-    return lastNativePoint;
+  // --- Normalization: convert raw to Electron screen space ---
+  // On single-monitor (primary origin 0,0), native coords pass through.
+  // On multi-monitor, add primary display origin offset.
+  const normalize = (raw: { x: number; y: number }, source: string): CursorReading => {
+    /* Any NATIVE source needs the primary's origin added on multi-monitor; Electron readings
+     * are already global. NOTE the parentheses: `a && b || c` binds as `(a && b) || c` and was
+     * applying the offset to Electron readings too whenever the primary origin was non-zero. */
+    const offset = (source !== 'electron' && (primary.bounds.x !== 0 || primary.bounds.y !== 0))
+      ? { x: primary.bounds.x, y: primary.bounds.y }
+      : { x: 0, y: 0 };
+    const normalized = { x: raw.x + offset.x, y: raw.y + offset.y };
+    const inBounds = displays.some(d =>
+      normalized.x >= d.bounds.x && normalized.x < d.bounds.x + d.bounds.width &&
+      normalized.y >= d.bounds.y && normalized.y < d.bounds.y + d.bounds.height
+    );
+    return {
+      source,
+      raw,
+      normalized,
+      transform: offset.x === 0 && offset.y === 0 ? 'identity' : `+(${offset.x},${offset.y})`,
+      timestamp: now,
+      fromCache: false,
+      rejectionReason: inBounds ? undefined : 'out-of-display-bounds',
+    };
+  };
+
+  // --- Validation: display bounds only (NOT window proximity) ---
+  const readings: CursorReading[] = [];
+  if (electronRaw) {
+    const r = normalize(electronRaw, 'electron');
+    readings.push(r);
   }
+  if (nativeRaw) {
+    const r = normalize(nativeRaw, nativeSource);
+    readings.push(r);
+  }
+
+  // --- Selection: platform-aware ---
+  // --- Health update: who moved, and who kept reporting the same value ---
+  /* Only sources that produced a FRESH reading this tick participate. The native read is
+   * rate-limited, so on throttled ticks `nativeRaw` is null — uncounted stillness must never
+   * look frozen, or the limiter would mint distrust that was never earned. */
+  const healthKey = (source: string) => (source === 'electron' ? 'electron' : 'native');
+  for (const key of ['electron', 'native'] as const) {
+    if (!cursorSourceHealth.has(key)) {
+      cursorSourceHealth.set(key, { lastRaw: null, lastChangeAtMs: now, distrustUntilMs: 0 });
+    }
+  }
+  for (const reading of readings) {
+    const h = cursorSourceHealth.get(healthKey(reading.source))!;
+    if (h.lastRaw && (h.lastRaw.x !== reading.raw.x || h.lastRaw.y !== reading.raw.y)) {
+      h.lastChangeAtMs = now;
+    }
+    h.lastRaw = { x: reading.raw.x, y: reading.raw.y };
+  }
+  const movedRecently = [...cursorSourceHealth.values()].some(
+    hh => now - hh.lastChangeAtMs < CURSOR_MOVE_GRACE_MS,
+  );
+  const distrustReasons: string[] = [];
+  if (movedRecently) {
+    for (const [key, hh] of cursorSourceHealth) {
+      if (hh.lastRaw && now - hh.lastChangeAtMs > CURSOR_STALL_MS) {
+        if (now > hh.distrustUntilMs) {
+          distrustReasons.push(`${key} frozen@(${hh.lastRaw.x},${hh.lastRaw.y})`);
+        }
+        hh.distrustUntilMs = now + CURSOR_FREEZE_DISTRUST_MS;
+      }
+    }
+  }
+
+  // --- Selection: platform-aware, freeze-aware ---
+  /* On Wayland the compositor-native read (kdotool -> KWin) is FIRST: Electron's XWayland
+   * pointer is frozen whenever the cursor is over a native Wayland window (measured on this
+   * box: X answered (138,522) while KWin answered (679,933)). Freeze detection above retire a
+   * lying source automatically — including kdotool if it ever returns a fixed value again. */
+  const usable = readings.filter(r => !r.rejectionReason);
+  const fresh = usable.filter(r => cursorSourceHealth.get(healthKey(r.source))!.distrustUntilMs <= now);
+  const pool = fresh.length > 0 ? fresh : usable; // both distrusted — prefer "least wrong" over none
+  let selected: CursorReading | null = null;
+  const rejectionReasons: string[] = distrustReasons;
+
+  if (pool.length > 0) {
+    if (waylandSession) {
+      selected = pool.find(r => r.source !== 'electron') ?? pool[0];
+    } else {
+      // X11: Electron is free and correct, stays first.
+      selected = pool.find(r => r.source === 'electron') ?? pool[0];
+    }
+  } else {
+    rejectionReasons.push('no-valid-reading');
+  }
+
+  // --- Diagnostic logging (rate-limited, file-based) ---
+  diag('cursor-acquisition', {
+    waylandSession,
+    electronRaw,
+    nativeRaw,
+    nativeSource,
+    selectedSource: selected?.source ?? 'none',
+    selectedPoint: selected?.normalized ?? null,
+    rejectionReasons: rejectionReasons.length > 0 ? rejectionReasons : undefined,
+    displayBounds: displays.map(d => ({ x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height })),
+    primaryOrigin: { x: primary.bounds.x, y: primary.bounds.y },
+    cacheAge: lastNativePoint ? now - lastNativePointAtMs : null,
+    distrusts: distrustReasons.length > 0 ? distrustReasons : undefined,
+  });
+
+  if (!selected) {
+    // All readings invalid (e.g. momentarily outside every display). Do NOT hand the point to
+    // Electron blindly — a frozen corpse point winning by default is what killed hover for
+    // days. The freshest confirmed native point wins; Electron is the last resort.
+    if (lastNativePoint && now - lastNativePointAtMs < CURSOR_POINT_MAX_AGE_MS) {
+      diag('cursor-fallback-cached', { point: lastNativePoint, ageMs: now - lastNativePointAtMs });
+      return lastNativePoint;
+    }
+    if (electronRaw) {
+      diag('cursor-fallback-electron', { point: electronRaw });
+      return electronRaw;
+    }
+    diag('cursor-no-reading', {});
+    return null;
+  }
+
+  // --- Cache update (source-tagged) ---
+  if (selected.source !== 'electron') {
+    lastNativePoint = selected.normalized;
+    lastNativePointAtMs = now;
+    lastNativePointSource = selected.source;
+  }
+
+  return selected.normalized;
 }
 
 /**
@@ -1194,8 +1337,17 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
      *
      * With no cursor reading we treat it as OUTSIDE, which drives the FSM toward collapsed —
      * the safe direction for a stuck-open island. */
-    const triggerRect =
+    // Apply drag offset to the trigger rect so the hitbox follows the pill.
+    const baseTriggerRect =
       (h.expanded ? h.geometry.hotZoneExpanded : undefined) ?? h.geometry.hotZone;
+    const dragOffX = Math.round(Number.isFinite(prefs.dragX) ? prefs.dragX : 0);
+    const dragOffY = Math.round(Number.isFinite(prefs.dragY) ? prefs.dragY : 0);
+    const triggerRect = {
+      x: baseTriggerRect.x + dragOffX,
+      y: baseTriggerRect.y + dragOffY,
+      width: baseTriggerRect.width,
+      height: baseTriggerRect.height,
+    };
     /* THE LEAVE MARGIN IS HYSTERESIS, NOT PADDING.
      *
      * `pointInHotZone(..., leaveMarginPx)` used to be applied on EVERY sample, so the zone
@@ -1204,15 +1356,35 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
      * from 24px away; changing the sliders then moved a boundary 24px further out than
      * advertised. A margin that forgives the EDGE once you are inside is not the same number
      * as the edge itself, and the docs above already say so — this is that sentence, applied. */
-    const enterMargin = h.hover.inside ? hoverConfig.leaveMarginPx : 0;
+    // Small enter tolerance (4px) so a cursor 1px outside the exact boundary
+    // still triggers hover. The leave margin (24px) is separate hysteresis.
+    const enterMargin = h.hover.inside ? hoverConfig.leaveMarginPx : 4;
     const inZone =
       hoverEnabled && point !== null
         ? pointInHotZone(triggerRect, point.x, point.y, enterMargin)
         : false;
     const wasInside = h.hover.inside;
     const wasPinned = h.hover.pinned;
-    /* Diagnostic: log when hover state changes (not every tick) to avoid spam. */
-    // (debug logging removed)
+    /* Rate-limited hover diagnostic (file only, ~500ms). */
+    const hoverDiagNow = Date.now();
+    if (hoverDiagNow - lastHoverDiagAtMs >= 500 || inZone !== wasInside) {
+      lastHoverDiagAtMs = hoverDiagNow;
+      const winBounds = h?.window && !h.window.isDestroyed() ? h.window.getBounds() : null;
+      diag('hover-decision', {
+        point,
+        triggerRect,
+        windowBounds: winBounds,
+        hoverEnabled,
+        mode: prefs.trigger.mode,
+        padX: prefs.trigger.padX,
+        padY: prefs.trigger.padY,
+        inZone,
+        wasInside,
+        expanded: h.expanded,
+        intent: inZone ? 'pending' : 'none',
+        resident: prefs.resident,
+      });
+    }
     const next = stepHover(
       h.hover,
       { now: Date.now(), inside: inZone, pinned: h.pinned },
@@ -1864,12 +2036,24 @@ export function toggleHaloIsland(): void {
  * application currently has focus and the island never sees it.
  */
 export function sendHaloCommand(command: 'toggle-record' | 'show-dictation'): boolean {
-  if (!handle || handle.window.isDestroyed()) return false;
+  if (!handle) return false;
+  // In in-app mode `handle.window` is a placeholder whose `webContents.send` is a
+  // no-op, so the command would never reach the renderer that actually hosts the
+  // island (and the microphone owner). Address the real host window instead, the
+  // same way pushHover/pushSnapshot already do.
+  const target = handle.inApp
+    ? (BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null)
+    : handle.window;
+  if (!target || target.isDestroyed()) return false;
   handle.pinned = true;
   handle.expanded = true;
   applyClickRegion(handle, handle.prefs);
   pushHover(handle);
-  handle.window.webContents.send('halo:command', { command });
+  try {
+    target.webContents.send('halo:command', { command });
+  } catch {
+    /* renderer mid-reload; the next press retries */
+  }
   return true;
 }
 
@@ -1949,7 +2133,7 @@ export function reconcileHaloGeometry(): void {
 
 /** Tell the renderer the size main actually gave the window. See `reconcileHaloGeometry`. */
 function pushGeometry(h: HaloHandle): void {
-  const target = h.inApp ? BrowserWindow.getAllWindows()[0] : h.window;
+  const target = h.inApp ? h.deps.mainWindow?.() ?? null : h.window;
   if (!target || target.isDestroyed()) return;
   const g = h.geometry;
   target.webContents.send('halo:geometry', {

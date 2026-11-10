@@ -150,7 +150,9 @@ function normalize(p: unknown): AfkPrefs {
   const r = p as Partial<AfkPrefs>;
   return {
     thresholdMinutes: clampMinutes(r.thresholdMinutes),
-    action: AFK_ACTIONS.some(a => a.value === r.action) ? (r.action as AfkAction) : AFK_DEFAULTS.action,
+    action: AFK_ACTIONS.some((action) => action.value === r.action)
+      ? (r.action as AfkAction)
+      : AFK_DEFAULTS.action,
     enabled: typeof r.enabled === 'boolean' ? r.enabled : AFK_DEFAULTS.enabled,
     // Absent keys fall back to the previous hardcoded values, so a prefs blob
     // written by an older build keeps working and gains the new keys on write.
@@ -180,7 +182,20 @@ export function getAfkPrefs(): AfkPrefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...AFK_DEFAULTS };
-    return normalize(JSON.parse(raw));
+    let parsed: unknown = JSON.parse(raw);
+    /* MIGRATION at the LOAD boundary only — never inside `normalize()`, which also runs on
+     * every `setAfkPrefs` and would silently veto the user's own future choice of the same
+     * value. `reset-stopwatch` was shipped as the DEFAULT action for years, so stored blobs
+     * carry it without the user ever choosing it — and every AFK dip zeroed the stopwatch,
+     * which reads as "the stopwatch resets randomly". The default is `pause-only` now; a
+     * blob that merely bled that default in should not keep the destructive behaviour. */
+    if (parsed && typeof parsed === 'object' && (parsed as { action?: unknown }).action === 'reset-stopwatch') {
+      parsed = { ...parsed as object, action: 'pause-only' };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      } catch { /* private mode — the in-memory value below still applies */ }
+    }
+    return normalize(parsed);
   } catch {
     return { ...AFK_DEFAULTS };
   }
