@@ -5,12 +5,14 @@ import type { DictationPayload } from '../../shared/halo/types';
 /**
  * DictationActivity — the island's dictation surface.
  *
- * Uses the EXACT same card design as the per-field STT panel in
- * `src/components/VoiceInputWrapper.tsx` — same rounded-xl zinc card, same
- * terracotta waveform bars (rgba(232,134,107) centre, rgba(217,104,70) outer),
- * same w-px divider, same italic interim text, same mic button, same volume bar.
- * No halo tokens, no "reconnecting" logic, no cloud API — it runs on-device
- * via faster-whisper and the UI matches the rest of the app's STT.
+ * Rendered in the island's OWN row language (re-skinned 2026-11-12 per
+ * `agent/docs/halo/HALO_STATES.html` §5): a 44px hairline round button + name
+ * block + hairline divider + mono readout, on halo tokens only. It used to paint
+ * its own glass card (`backdrop-blur-xl shadow-xl`, terracotta rgba hexes, a
+ * second volume meter) — which is exactly why it read as a bolted-on
+ * mini-window floating inside the island rather than island content.
+ * No halo-independent styling: one meter (the wave), one accent
+ * (`--halo-accent` — its own comment reads "live, recording, active").
  */
 
 const BAR_COUNT = 16;
@@ -55,6 +57,16 @@ export const DictationActivity = memo(function DictationActivity({
   onSave,
   onCopy,
 }: DictationActivityProps) {
+  /* THE ISLAND OWNS THE FRAME — re-skinned 2026-11-12.
+   *
+   * This widget used to paint its own glass card (`backdrop-blur-xl shadow-xl border`) with a
+   * raw coral hex palette and a SECOND volume meter under the wave. That is why it read as a
+   * bolted-on floating mini-window instead of island content: LAMINAR bans glassmorphism on
+   * chrome, Gate C bans raw hex in a component, and one surface carries ONE meter. It now
+   * renders in the island's own row language from `agent/docs/halo/HALO_STATES.html` §5:
+   * a 44px hairline round button + a name block + a hairline divider + mono readout, all
+   * tokened (`--halo-accent` is the ONE accent — its comment reads "live, recording, active").
+   * The compact pill is the board-1 `dictation` kind exactly as designed: icon + wave + label. */
   if (!payload) {
     return (
       <div className="flex items-center gap-2 px-3" aria-busy="true" aria-label="Loading dictation">
@@ -68,127 +80,191 @@ export const DictationActivity = memo(function DictationActivity({
   const status = statusLine(payload);
   const canStart = !busy && !recording && !payload.engineMissing;
 
+  /* The wave IS the meter. One meter per surface — the separate volume bar is gone. */
+  const Wave = ({ height }: { height: number }) => (
+    <div className="flex items-end gap-[2px] flex-shrink-0" style={{ height }} aria-hidden="true">
+      {Array.from({ length: BAR_COUNT }, (_, i) => {
+        const value = recording ? (levelRef.current ?? 0) * (0.5 + 0.5 * Math.sin((i / BAR_COUNT) * Math.PI)) : 0;
+        const h = Math.max(2, Math.round(value * height));
+        const opacity = recording ? 0.45 + value * 0.55 : 1;
+        return (
+          <div
+            key={i}
+            className="rounded-full transition-all duration-75"
+            style={{
+              width: 3,
+              height: recording ? h : 2,
+              backgroundColor: recording ? 'var(--halo-accent)' : 'var(--halo-hairline)',
+              opacity,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+
+  /* COMPACT — board-1 `dictation` pill kind: mic + wave + label, nothing else. */
+  if (!expanded) {
+    return (
+      <div
+        className="flex items-center gap-2 px-3"
+        data-halo-dictation="compact"
+        role="group"
+        aria-label="Dictation"
+      >
+        {payload.engineMissing ? (
+          <MicOff style={{ width: 14, height: 14, color: 'var(--halo-muted)', flexShrink: 0 }} />
+        ) : recording ? (
+          <button
+            type="button"
+            onClick={onStop}
+            aria-label="Stop dictation"
+            className="grid place-items-center rounded-full"
+            style={{ width: 20, height: 20, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--halo-accent)' }}
+            title="Stop"
+          >
+            <Square className="fill-current" style={{ width: 9, height: 9 }} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={canStart ? onStart : undefined}
+            disabled={!canStart}
+            aria-label="Start dictation"
+            className="grid place-items-center rounded-full"
+            style={{
+              width: 20, height: 20, flexShrink: 0, background: 'none', border: 'none',
+              cursor: canStart ? 'pointer' : 'default', color: 'var(--halo-dim)', opacity: canStart ? 1 : 0.45,
+            }}
+            title="Start dictation"
+          >
+            <Mic style={{ width: 14, height: 14 }} />
+          </button>
+        )}
+        <Wave height={12} />
+        <span
+          className="truncate"
+          style={{
+            fontSize: 12,
+            color: status.tone === 'error' ? 'var(--halo-text, var(--halo-muted))' : 'var(--halo-muted)',
+          }}
+        >
+          {status.text}
+        </span>
+      </div>
+    );
+  }
+
+  /* EXPANDED — a Tools page row in the island's own language: 44px hairline button,
+   * name block, hairline divider, mono readout, ghost actions. No card of its own. */
   return (
     <div
-      className={expanded ? 'flex flex-col gap-2 p-4' : 'flex flex-col px-3 py-2'}
-      data-halo-dictation={expanded ? 'expanded' : 'compact'}
+      className="flex items-center gap-3"
+      data-halo-dictation="expanded"
       role="group"
       aria-label="Dictation"
     >
-      <div className="rounded-xl bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-zinc-700/50 shadow-xl shadow-black/20 overflow-hidden" style={{ padding: 10 }}>
-        <div className="flex items-center gap-2">
-          {/* Sound Wave — same as VoiceInputWrapper */}
-          <div className="flex-shrink-0 flex items-end gap-[2px]" style={{ height: 22 }} aria-hidden="true">
-            {Array.from({ length: BAR_COUNT }, (_, i) => {
-              const value = recording ? (levelRef.current ?? 0) * (0.5 + 0.5 * Math.sin((i / BAR_COUNT) * Math.PI)) : 0;
-              const h = Math.max(3, Math.round(value * 22));
-              const opacity = 0.4 + value * 0.6;
-              const isCenter = i >= 4 && i <= 11;
-              return (
-                <div
-                  key={i}
-                  className="rounded-full transition-all duration-75"
-                  style={{
-                    width: 3, height: recording ? h : 3,
-                    backgroundColor: isCenter ? `rgba(232,134,107,${opacity})` : `rgba(217,104,70,${opacity * 0.8})`,
-                  }}
-                />
-              );
-            })}
-          </div>
+      {recording ? (
+        <button
+          type="button"
+          onClick={onStop}
+          aria-label="Stop dictation"
+          className="grid place-items-center rounded-full transition-colors"
+          style={{
+            width: 44, height: 44, flexShrink: 0, cursor: 'pointer',
+            border: '1px solid var(--halo-accent-dim)',
+            color: 'var(--halo-accent)', background: 'none',
+          }}
+          title="Stop"
+        >
+          <Square className="fill-current" style={{ width: 12, height: 12 }} />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onStart}
+          disabled={!canStart}
+          aria-label={canStart ? 'Start dictation' : 'Dictation unavailable'}
+          className="grid place-items-center rounded-full transition-colors"
+          style={{
+            width: 44, height: 44, flexShrink: 0,
+            border: '1px solid var(--halo-hairline)',
+            color: payload.state === 'error' ? 'var(--halo-text, var(--halo-muted))' : 'var(--halo-dim)',
+            background: 'none',
+            cursor: canStart ? 'pointer' : 'not-allowed',
+            opacity: canStart ? 1 : 0.45,
+          }}
+          title={payload.engineMissing ? 'No speech engine available' : 'Start dictation'}
+        >
+          {payload.engineMissing ? <MicOff style={{ width: 16, height: 16 }} /> : <Mic style={{ width: 16, height: 16 }} />}
+        </button>
+      )}
 
-          <div className="w-px bg-zinc-700/50 flex-shrink-0" style={{ height: 16 }} />
+      {/* Name block — the same `.blk` language every other island row uses. */}
+      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+        <span
+          className="uppercase tracking-wide"
+          style={{ fontSize: 10, fontWeight: 500, color: 'var(--halo-muted)' }}
+        >
+          Dictation
+        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          {status.tone === 'error' ? (
+            <span className="flex items-center gap-1 min-w-0" style={{ fontSize: 12, color: 'var(--halo-text, var(--halo-muted))' }}>
+              <AlertCircle className="flex-shrink-0" style={{ width: 12, height: 12 }} />
+              <span className="truncate">{status.text}</span>
+            </span>
+          ) : (
+            <span
+              className="truncate"
+              style={{
+                fontSize: 12, fontStyle: status.tone === 'muted' ? 'italic' : 'normal',
+                color: status.tone === 'primary' ? 'var(--halo-text, var(--halo-muted))' : 'var(--halo-muted)',
+              }}
+            >
+              {status.text}
+            </span>
+          )}
+          <Wave height={14} />
+        </div>
+      </div>
 
-          {/* Interim text — same as VoiceInputWrapper */}
-          <div className="flex-1 min-w-0 text-[12px]">
-            {status.tone === 'error' ? (
-              <div className="flex items-center gap-1 text-red-400" style={{ fontSize: 12 }}>
-                <AlertCircle className="flex-shrink-0" style={{ width: 13, height: 13 }} />
-                <span className="truncate">{status.text}</span>
-              </div>
-            ) : (
-              <p className={`truncate ${status.tone === 'primary' ? 'text-zinc-300 italic' : 'text-zinc-500 italic'}`} style={{ fontSize: 12 }}>
-                {status.text}
-              </p>
-            )}
-          </div>
+      {/* Hairline divider — board 2 uses these BETWEEN groups, never horizontal. */}
+      <div style={{ width: 1, height: 24, background: 'var(--halo-hairline)', flexShrink: 0 }} />
 
-          {/* Elapsed — stopwatch readout */}
-          <span
-            className="font-mono text-[11px] tabular-nums flex-shrink-0 text-zinc-500"
-            aria-hidden="true"
+      <span className="font-mono tabular-nums flex-shrink-0" style={{ fontSize: 11, color: 'var(--halo-muted)' }} aria-hidden="true">
+        {recording ? elapsed(payload.elapsedMs) : '0:00'}
+      </span>
+
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {onCopy && payload.transcript && (
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label="Copy transcript"
+            className="grid place-items-center rounded-full transition-colors"
+            style={{ width: 28, height: 28, background: 'none', border: 'none', color: 'var(--halo-muted)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--halo-text, var(--halo-muted))'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--halo-muted)'; }}
+            title="Copy"
           >
-            {recording ? elapsed(payload.elapsedMs) : '0:00'}
-          </span>
-
-          {/* Controls — same as VoiceInputWrapper */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {onCopy && payload.transcript && (
-              <button
-                type="button"
-                onClick={onCopy}
-                aria-label="Copy transcript"
-                className="grid place-items-center rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors"
-                style={{ width: 22, height: 22 }}
-                title="Copy"
-              >
-                <Copy style={{ width: 12, height: 12 }} />
-              </button>
-            )}
-            {onSave && payload.transcript && (
-              <button
-                type="button"
-                onClick={onSave}
-                aria-label="Save transcript to library"
-                className="grid place-items-center rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors"
-                style={{ width: 22, height: 22 }}
-                title="Save"
-              >
-                <Save style={{ width: 12, height: 12 }} />
-              </button>
-            )}
-            {recording ? (
-              <button
-                type="button"
-                onClick={onStop}
-                aria-label="Stop dictation"
-                className="grid place-items-center rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors"
-                style={{ width: 24, height: 24 }}
-                title="Stop"
-              >
-                <Square className="fill-current" style={{ width: 9, height: 9 }} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onStart}
-                disabled={!canStart}
-                aria-label='Start dictation'
-                className={
-                  payload.state === 'error'
-                    ? 'grid place-items-center rounded-full bg-red-500/10 text-red-400 ring-1 ring-red-500/40 transition-all duration-150'
-                    : 'grid place-items-center rounded-full text-zinc-400 bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] ring-1 ring-zinc-800/60 hover:text-[#e8866b] hover:ring-[#d96846]/30 transition-all duration-150'
-                }
-                style={{ width: 24, height: 24 }}
-                title="Start dictation"
-              >
-                {payload.engineMissing ? <MicOff style={{ width: 13, height: 13 }} /> : <Mic style={{ width: 13, height: 13 }} />}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Volume bar — same as VoiceInputWrapper */}
-        <div className="mt-1.5 rounded-full bg-zinc-800 overflow-hidden" style={{ height: 3 }}>
-          <div
-            className="h-full rounded-full transition-all duration-100"
-            style={{
-              width: `${(levelRef.current ?? 0) * 100}%`,
-              backgroundColor: '#e8866b',
-              opacity: 0.6,
-            }}
-          />
-        </div>
+            <Copy style={{ width: 13, height: 13 }} />
+          </button>
+        )}
+        {onSave && payload.transcript && (
+          <button
+            type="button"
+            onClick={onSave}
+            aria-label="Save transcript to library"
+            className="grid place-items-center rounded-full transition-colors"
+            style={{ width: 28, height: 28, background: 'none', border: 'none', color: 'var(--halo-muted)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--halo-text, var(--halo-muted))'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--halo-muted)'; }}
+            title="Save"
+          >
+            <Save style={{ width: 13, height: 13 }} />
+          </button>
+        )}
       </div>
     </div>
   );
