@@ -1284,6 +1284,9 @@ const SNAPSHOT_PUSH_INTERVAL_MS = 1000;
 
 /** Timestamp of the last snapshot push, per process. See `SNAPSHOT_PUSH_INTERVAL_MS`. */
 let lastSnapshotPushAtMs = 0;
+/* Reset-forensics state for the push-side stopwatch diagnostic. */
+let lastPushedSwDisplay: number | null = null;
+let lastPushedSwDiagAt = 0;
 
 function startPolling(h: HaloHandle, deps: HaloDeps): void {
   stopPolling(h);
@@ -1425,6 +1428,19 @@ function startPolling(h: HaloHandle, deps: HaloDeps): void {
     if (nowMs - lastSnapshotPushAtMs >= SNAPSHOT_PUSH_INTERVAL_MS) {
       lastSnapshotPushAtMs = nowMs;
       pushSnapshot(h, deps);
+      /* RESET FORENSICS (push side): what the pill is actually FED. Rate-limited to 5s plus
+       * every display-zero transition, so a "resets to 0" repro shows whether the zero came
+       * from MAIN's payload or from the island's own local fallback. */
+      try {
+        const sw = (deps.snapshotProvider?.() as { stopwatch?: { displayMs?: number } | null } | undefined)?.stopwatch ?? null;
+        const swDisplay = sw && typeof sw === 'object' ? sw.displayMs ?? null : null;
+        const wentZero = swDisplay === 0 && lastPushedSwDisplay !== null && lastPushedSwDisplay > 0;
+        if (wentZero || Date.now() - lastPushedSwDiagAt > 5000) {
+          diag('sw-push', { displayMs: swDisplay, stopwatchNull: sw == null, wentZero });
+          lastPushedSwDiagAt = Date.now();
+        }
+        lastPushedSwDisplay = swDisplay;
+      } catch { /* diagnostics must never break the tick */ }
       primeExtraTargets(deps, prefs);
       /* A freshly-loaded renderer has missed every hover EDGE that fired before its preload
        * registered. The renderer dedupes identical signals, so re-stating the current hover

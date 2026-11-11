@@ -328,7 +328,7 @@ function saveSleepPattern(entry: SleepPatternEntry) {
   } catch (err) { console.error('[DeskFlow] Failed to save sleep pattern:', err); }
 }
 
-const SLEEP_DETECTION_MIN_GAP_MS = 45 * 60 * 1000; // 45 min gap to trigger detection
+const SLEEP_DETECTION_MIN_GAP_MS = 15 * 60 * 1000; // 15 min gap to trigger detection (was 45 min)
 
 /**
  * Bedtime is a USER SETTING, mirrored here from the renderer.
@@ -5403,12 +5403,14 @@ function getStats() {
         if (fs_1.default.existsSync(detPath)) {
             const existing = JSON.parse(fs_1.default.readFileSync(detPath, 'utf-8'));
             const ageMs = Date.now() - (existing.detectedAt || existing.gapEnd || 0);
-            if (existing.detected && !existing.checked && ageMs < 2 * 60 * 60 * 1000) {
+            if (existing.detected && !existing.checked && ageMs < 24 * 60 * 60 * 1000) {
                 console.log(`[DeskFlow] Skipping sleep detection — already pending review (age ${Math.round(ageMs / 60000)}min)`);
                 return;
             }
-            // Stale file older than 2h — clear it so new detection can proceed
-            if (existing.detected && !existing.checked && ageMs >= 2 * 60 * 60 * 1000) {
+            // Stale file older than 24h — clear it so new detection can proceed.
+            // Keep daemon-written wake times (which may be hours old by the time
+            // the user opens RHEO) instead of overwriting them with app-open time.
+            if (existing.detected && !existing.checked && ageMs >= 24 * 60 * 60 * 1000) {
                 console.log(`[DeskFlow] Clearing stale sleep detection file (age ${Math.round(ageMs / 60000)}min)`);
                 try { fs_1.default.unlinkSync(detPath); } catch {}
             }
@@ -5473,7 +5475,7 @@ let lastSuccessfulObservationTime = Date.now();
 let consecutiveNullPolls = 0;
 let MAX_SESSION_MS = 120 * 60 * 1000; // 120 minutes — cap for long sessions (was 30min)
 const MAX_LOGGED_SESSION_MS = 3600000; // 1 hour - cap logged sessions to prevent heatmap inflation
- let SLEEP_GAP_MS = 300000; // 5 minutes — gap threshold to detect system sleep (was 30s)
+ let SLEEP_GAP_MS = 120000; // 2 minutes — gap threshold to detect system sleep (was 5 min)
  const BROWSER_MAX_DELTA_MS = 10 * 60 * 1000; // 10 minutes — separate cap for browser delta (extension sends ~5s normally)
  const BROWSER_MAX_NULL_POLL = 60; // polls before closing a browser session when extension doesn't report
 // How far a periodic delta may sit from the row it belongs to. A periodic payload's
@@ -10240,6 +10242,28 @@ function fmtSrtTime(sec: number): string {
 function pad2(n: number): string {
     return String(n).padStart(2, '0');
 }
+
+electron_1.ipcMain.handle('get-today-tracked-seconds', () => {
+    try {
+        if (useJson) {
+            const today = new Date().toISOString().split('T')[0];
+            return jsonLogs
+                .filter(l => !l.is_browser_tracking && l.timestamp.startsWith(today))
+                .reduce((sum, l) => sum + Math.floor(l.duration_ms / 1000), 0);
+        }
+        const today = new Date().toISOString().split('T')[0];
+        const row = db.prepare(`
+            SELECT COALESCE(SUM(duration_ms), 0) / 1000 as total_sec
+            FROM logs
+            WHERE date(timestamp) = ?
+              AND (is_browser_tracking IS NULL OR is_browser_tracking = 0)
+        `).get(today) as { total_sec: number } | undefined;
+        return row?.total_sec || 0;
+    } catch (err: any) {
+        console.error('[DeskFlow] get-today-tracked-seconds failed:', err.message);
+        return 0;
+    }
+});
 
 electron_1.ipcMain.handle('get-daily-stats', (event, period = 'week') => {
     try {
@@ -18062,6 +18086,257 @@ electron_1.ipcMain.handle('brain:stats', async () => {
     return contextBrain.getBrainStats();
 });
 
+electron_1.ipcMain.handle('brain:get-graph', async (_event, opts?: any) => {
+    try {
+        const { assembleGraph } = require('./main/ai/graphAssembler')
+        const entities = contextBrain.getEntitiesList(opts || {}).items || []
+        const facts = contextBrain.getFactsList({ currentOnly: true, limit: opts?.maxFacts || 1000 }).items || []
+        const captures = (db.prepare('SELECT COUNT(*) as c FROM ai_context_captures').get() as any)?.c || 0
+        const episodes = contextBrain.getEpisodes ? contextBrain.getEpisodes(undefined, opts?.maxNodes || 500) : []
+        const result = assembleGraph({
+            entities: entities.map((e: any) => ({ id: e.id, type: e.type, name: e.name, source: e.source, state: e.state, aliases: e.aliases })),
+            facts: facts.map((f: any) => ({ id: f.id, subjectId: f.subjectId, objectId: f.objectId, objectLiteral: f.objectLiteral, predicate: f.predicate, sourceEpisodeId: f.sourceEpisodeId, validTo: f.validTo })),
+            episodes: (episodes || []).map((e: any) => ({ id: e.id, source: e.source, created_at: e.created_at })),
+            captures,
+            maxNodes: opts?.maxNodes,
+            maxFacts: opts?.maxFacts,
+            includeSynthetic: opts?.includeSynthetic !== false,
+            types: opts?.types,
+        })
+        return result
+    } catch (e: any) {
+        console.error('[BRAIN-GRAPH] assemble failed:', e?.message)
+        return { status: 'error', nodes: [], links: [], stats: { entities: 0, realEdges: 0, syntheticEdges: 0, orphans: 0, episodes: 0, captures: 0, generatedInMs: 0, truncated: false }, truncated: false, error: e?.message }
+    }
+})
+
+// brainLogger init
+try { require('./main/ai/brainLogger').init() } catch {}
+
+electron_1.ipcMain.handle('brain:logs', async (_event, opts?: any) => {
+    try {
+        const bl = require('./main/ai/brainLogger')
+        return { entries: bl.getEntries(opts || {}) }
+    } catch (e: any) { return { entries: [], error: e?.message } }
+})
+electron_1.ipcMain.handle('brain:log-level', async (_event, opts?: any) => {
+    try {
+        const bl = require('./main/ai/brainLogger')
+        if (opts?.level) bl.setLevel(opts.level)
+        return { level: opts?.level || 'info' }
+    } catch (e: any) { return { error: e?.message } }
+})
+electron_1.ipcMain.handle('brain:logs-clear', async () => {
+    try { require('./main/ai/brainLogger').clearRing(); return { ok: true } }
+    catch (e: any) { return { ok: false, error: e?.message } }
+})
+electron_1.ipcMain.handle('brain:logs-export', async () => {
+    try { const p = require('./main/ai/brainLogger').exportToFile(); return { path: p } }
+    catch (e: any) { return { path: '', error: e?.message } }
+})
+
+electron_1.ipcMain.handle('brain:export-subgraph', async (_event, opts?: any) => {
+    try {
+        const rootId = opts?.rootId
+        const entityIds = opts?.entityIds || []
+        const depth = opts?.depth || 2
+        const budget = opts?.tokenBudget || 1200
+        const entities = contextBrain.getEntitiesList({ limit: 500 }).items || []
+        const facts = contextBrain.getFactsList({ currentOnly: true, limit: 1000 }).items || []
+        const entityMap = new Map(entities.map((e: any) => [e.id, e]))
+
+        // BFS from root or explicit set
+        const selected = new Set<string>(entityIds)
+        if (rootId && entityMap.has(rootId)) {
+            const queue: Array<{ id: string; d: number }> = [{ id: rootId, d: 0 }]
+            const visited = new Set<string>([rootId])
+            selected.add(rootId)
+            while (queue.length) {
+                const { id, d } = queue.shift()!
+                if (d >= depth) continue
+                for (const f of facts) {
+                    if (f.subjectId === id && f.objectId && entityMap.has(f.objectId)) {
+                        if (!visited.has(f.objectId)) { visited.add(f.objectId); selected.add(f.objectId); queue.push({ id: f.objectId, d: d + 1 }) }
+                    }
+                    if (f.objectId === id && entityMap.has(f.subjectId)) {
+                        if (!visited.has(f.subjectId)) { visited.add(f.subjectId); selected.add(f.subjectId); queue.push({ id: f.subjectId, d: d + 1 }) }
+                    }
+                }
+            }
+        }
+        // If no root/explicit, take top by degree
+        if (selected.size === 0) {
+            const deg = new Map<string, number>()
+            for (const f of facts) {
+                if (f.objectId) { deg.set(f.subjectId, (deg.get(f.subjectId) || 0) + 1); deg.set(f.objectId, (deg.get(f.objectId) || 0) + 1) }
+            }
+            Array.from(entityMap.keys()).sort((a, b) => (deg.get(b) || 0) - (deg.get(a) || 0)).slice(0, 20).forEach(id => selected.add(id))
+        }
+
+        // Fill by degree desc
+        const deg = new Map<string, number>()
+        for (const f of facts) {
+            if (f.objectId && selected.has(f.subjectId) && selected.has(f.objectId)) {
+                deg.set(f.subjectId, (deg.get(f.subjectId) || 0) + 1)
+                deg.set(f.objectId, (deg.get(f.objectId) || 0) + 1)
+            }
+        }
+        const selectedArr = Array.from(selected).filter(id => entityMap.has(id))
+
+        // Build text
+        const lines: string[] = ['# Brain subgraph', '']
+        lines.push('## Entities')
+        for (const id of selectedArr) {
+            const e = entityMap.get(id)
+            lines.push(`- ${e.name} (${e.type})`)
+        }
+        lines.push('')
+        lines.push('## Facts')
+        let tokens = 0
+        const usedFacts: string[] = []
+        for (const f of facts) {
+            if (!selected.has(f.subjectId)) continue
+            if (f.objectId && !selected.has(f.objectId)) continue
+            const srcName = entityMap.get(f.subjectId)?.name || f.subjectId
+            const tgt = f.objectId ? (entityMap.get(f.objectId)?.name || f.objectId) : f.objectLiteral
+            const line = `- ${srcName} — ${f.predicate} → ${tgt}`
+            if (tokens + Math.ceil(line.length / 4) > budget) break
+            lines.push(line)
+            tokens += Math.ceil(line.length / 4)
+            usedFacts.push(f.id)
+        }
+        lines.push('')
+        lines.push('## Recent episodes')
+        const eps = contextBrain.getEpisodes ? contextBrain.getEpisodes(undefined, 5) : []
+        for (const ep of (eps || []).slice(0, 5)) {
+            lines.push(`- ${(ep.content || '').slice(0, 200)}`)
+        }
+
+        const text = lines.join('\n')
+        return { text, entities: selectedArr.length, facts: usedFacts.length, episodes: Math.min(5, (eps || []).length), tokensEst: Math.ceil(text.length / 4) }
+    } catch (e: any) {
+        return { text: '', entities: 0, facts: 0, episodes: 0, tokensEst: 0, error: e?.message }
+    }
+})
+
+electron_1.ipcMain.handle('brain:enrich-prompt', async (_event, opts?: any) => {
+    try {
+        const prompt = opts?.prompt || ''
+        const budget = opts?.tokenBudget || 800
+        const health = await (async () => { try { const h = db.prepare('SELECT COUNT(*) as c FROM context_entities').get().c; return h > 0 } catch { return false } })()
+        if (!health) return { enriched: prompt, usedFacts: 0, tokensEst: Math.ceil(prompt.length / 4) }
+        const facts = contextBrain.getFactsList({ currentOnly: true, limit: 200 }).items || []
+        const entities = contextBrain.getEntitiesList({ limit: 500 }).items || []
+        const entityMap = new Map(entities.map((e: any) => [e.id, e]))
+        const tokens = prompt.toLowerCase().split(/\W+/).filter(Boolean)
+        const scored = facts.map((f: any) => {
+            const hay = `${entityMap.get(f.subjectId)?.name || f.subjectId} ${f.predicate} ${f.objectLiteral}`.toLowerCase()
+            const overlap = tokens.reduce((acc: number, t: string) => acc + (hay.includes(t) ? 1 : 0), 0)
+            return { f, score: overlap }
+        }).filter((x: any) => x.score > 0).sort((a: any, b: any) => b.score - a.score)
+        const lines: string[] = [prompt, '', '--- Brain context ---']
+        let used = 0, tok = 0
+        for (const { f } of scored) {
+            const srcName = entityMap.get(f.subjectId)?.name || f.subjectId
+            const line = `- ${srcName}: ${f.predicate} ${f.objectLiteral}`
+            if (tok + Math.ceil(line.length / 4) > budget) break
+            lines.push(line); tok += Math.ceil(line.length / 4); used++
+        }
+        const enriched = used > 0 ? lines.join('\n') : prompt
+        return { enriched, usedFacts: used, tokensEst: Math.ceil(enriched.length / 4) }
+    } catch (e: any) {
+        return { enriched: opts?.prompt || '', usedFacts: 0, tokensEst: 0, error: e?.message }
+    }
+})
+
+electron_1.ipcMain.handle('brain:run-extraction', async (_event, opts?: any) => {
+    try {
+        const { runNow } = require('./main/ai/contextScheduler')
+        const r = await runNow('extraction')
+        return { processed: r?.processed ?? 0, ok: true }
+    } catch (e: any) { return { processed: 0, ok: false, error: e?.message } }
+})
+
+electron_1.ipcMain.handle('brain:evaluate', async () => {
+    const checks: any[] = []
+    const skip = (name: string, reason: string) => checks.push({ name, pass: true, skipped: true, value: null, threshold: null, detail: reason })
+    try {
+        const entityCount = db.prepare('SELECT COUNT(*) as c FROM context_entities').get().c
+        const factCount = db.prepare('SELECT COUNT(*) as c FROM context_facts').get().c
+        const factWithObject = db.prepare('SELECT COUNT(*) as c FROM context_facts WHERE object_id IS NOT NULL').get().c
+        const episodeCount = db.prepare('SELECT COUNT(*) as c FROM context_episodes').get().c
+        const captureCount = db.prepare('SELECT COUNT(*) as c FROM ai_context_captures').get().c
+        const captureWithEpisode = db.prepare("SELECT COUNT(*) as c FROM ai_context_captures WHERE episode_status = 'episode_written'").get().c
+        const orphanFacts = db.prepare('SELECT COUNT(*) as c FROM context_facts f LEFT JOIN context_entities e ON f.subject_id = e.id WHERE e.id IS NULL').get().c
+        const totalJobs = db.prepare('SELECT COUNT(*) as c FROM context_extraction_jobs').get().c
+        const completedJobs = db.prepare("SELECT COUNT(*) as c FROM context_extraction_jobs WHERE status = 'completed'").get().c
+        const failedJobs = db.prepare("SELECT COUNT(*) as c FROM context_extraction_jobs WHERE status = 'failed'").get().c
+        const embeddedCount = (() => { try { return db.prepare('SELECT COUNT(*) as c FROM context_embeddings').get().c } catch { return 0 } })()
+        const schedState = (() => { try { return db.prepare("SELECT value FROM context_scheduler_state WHERE key = 'signal_decay.lastRun'").get()?.value } catch { return null } })()
+        const profileState = (() => { try { return db.prepare("SELECT value FROM context_scheduler_state WHERE key = 'profile.lastRebuild'").get()?.value } catch { return null } })()
+
+        checks.push({ name: 'entities_exist', pass: entityCount > 0, value: entityCount, threshold: 1, detail: entityCount > 0 ? 'ok' : 'no entities' })
+        checks.push({ name: 'edges_exist', pass: factWithObject > 0, value: factWithObject, threshold: 1, detail: factWithObject > 0 ? 'ok' : 'no real edges (objectId missing)' })
+        checks.push({ name: 'no_orphan_facts', pass: orphanFacts === 0, value: orphanFacts, threshold: 0, detail: orphanFacts === 0 ? 'ok' : `${orphanFacts} orphan facts` })
+
+        if (totalJobs < 5) {
+            skip('extraction_success_rate', `only ${totalJobs} jobs (need >=5)`)
+        } else {
+            const rate = totalJobs > 0 ? completedJobs / totalJobs : 0
+            checks.push({ name: 'extraction_success_rate', pass: rate > 0.8, value: rate, threshold: 0.8, detail: `${completedJobs}/${totalJobs}` })
+        }
+
+        // capture_to_entity_latency: needs logger deltas — skip for now
+        skip('capture_to_entity_latency', 'logger delta tracking not wired yet')
+
+        const decayOk = schedState ? (Date.now() - Number(schedState) < 7 * 3600 * 1000) : false
+        checks.push({ name: 'signal_decay_ran', pass: schedState ? decayOk : false, value: schedState ? Number(schedState) : null, threshold: 7 * 3600 * 1000, detail: schedState ? (decayOk ? 'ok' : 'stale') : 'no recorded run' })
+
+        const profileOk = profileState ? (Date.now() - Number(profileState) < 25 * 3600 * 1000) : false
+        checks.push({ name: 'profile_fresh', pass: profileState ? profileOk : false, value: profileState ? Number(profileState) : null, threshold: 25 * 3600 * 1000, detail: profileState ? (profileOk ? 'ok' : 'stale') : 'no recorded rebuild' })
+
+        const embCoverage = episodeCount > 0 ? embeddedCount / episodeCount : 0
+        checks.push({ name: 'embeddings_coverage', pass: episodeCount === 0 ? true : embCoverage > 0.5, value: embCoverage, threshold: 0.5, detail: `${embeddedCount}/${episodeCount}` })
+
+        // mcp server up
+        let mcpUp = false
+        try {
+            const http = require('http')
+            mcpUp = await new Promise((resolve) => {
+                const req = http.get('http://127.0.0.1:54322', (res: any) => { resolve(res.statusCode === 200) })
+                req.on('error', () => resolve(false))
+                req.setTimeout(1000, () => { req.destroy(); resolve(false) })
+            })
+        } catch {}
+        checks.push({ name: 'mcp_server_up', pass: mcpUp, value: mcpUp, threshold: true, detail: mcpUp ? 'ok' : 'not responding on 54322' })
+
+        const nonSkipped = checks.filter(c => !c.skipped)
+        const pass = nonSkipped.every(c => c.pass)
+        return { pass, checks }
+    } catch (e: any) {
+        return { pass: false, checks, error: e?.message }
+    }
+})
+
+electron_1.ipcMain.handle('brain:health', async () => {
+    try {
+        const entityCount = db.prepare('SELECT COUNT(*) as c FROM context_entities').get().c;
+        const factCount = db.prepare('SELECT COUNT(*) as c FROM context_facts').get().c;
+        const factWithObject = db.prepare('SELECT COUNT(*) as c FROM context_facts WHERE object_id IS NOT NULL').get().c;
+        const episodeCount = db.prepare('SELECT COUNT(*) as c FROM context_episodes').get().c;
+        const captureCount = db.prepare('SELECT COUNT(*) as c FROM ai_context_captures').get().c;
+        const pendingJobs = db.prepare("SELECT COUNT(*) as c FROM context_extraction_jobs WHERE status = 'pending'").get().c;
+        const orphanFacts = db.prepare('SELECT COUNT(*) as c FROM context_facts f LEFT JOIN context_entities e ON f.subject_id = e.id WHERE e.id IS NULL').get().c;
+        const status = entityCount === 0 ? 'red' : (factWithObject === 0 ? 'amber' : 'green');
+        const reason = entityCount === 0
+            ? (captureCount === 0 ? 'no captures yet' : 'captures exist but no entities extracted')
+            : (factWithObject === 0 ? 'entities exist but no edges (objectId missing)' : 'healthy');
+        return { status, reason, entities: entityCount, facts: factCount, factsWithObject: factWithObject, episodes: episodeCount, captures: captureCount, pendingJobs, orphanFacts };
+    } catch (e: any) {
+        return { status: 'red', reason: 'health check failed', error: e?.message };
+    }
+});
+
 electron_1.ipcMain.handle('brain:export', async () => {
     return contextBrain.exportContextBundle();
 });
@@ -23062,6 +23337,7 @@ if (mainWindow && !mainWindow.isDestroyed()) {
                 try {
                     const payload = JSON.parse(body);
                     const captures = Array.isArray(payload?.captures) ? payload.captures : [];
+                    try { require('./main/ai/brainLogger').info('EXT', 'capture.received', { count: captures.length, providers: [...new Set(captures.map((c: any) => c.provider))] }) } catch {}
                     if (!captures.length) {
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ received: 0, ok: 0, failed: 0, results: [] }));
@@ -23121,6 +23397,7 @@ if (mainWindow && !mainWindow.isDestroyed()) {
                                     console.warn('[ai-context] chat library ingest failed:', libErr?.message);
                                 }
                                 db.prepare(`UPDATE ai_context_captures SET episode_status = 'episode_written' WHERE id = ?`).run(info.lastInsertRowid);
+                                try { require('./main/ai/brainLogger').info('EXT', 'capture.inserted', { id: info.lastInsertRowid, dedupKey }) } catch {}
                                 results.push({ dedup_key: dedupKey, status: 'ok', episodeId: `ep_${info.lastInsertRowid}` });
                             } catch (epErr: any) {
                                 console.error('[ai-context] episode write failed', { dedup_key: dedupKey, err: epErr });
@@ -23147,6 +23424,41 @@ if (mainWindow && !mainWindow.isDestroyed()) {
                     res.end(JSON.stringify({ status: 'error', message: 'Invalid payload' }));
                 }
             });
+        }
+        else if (req.method === 'GET' && req.url.split('?')[0] === '/brain/health') {
+            try {
+                const entityCount = (db.prepare('SELECT COUNT(*) as c FROM context_entities').get() as any)?.c || 0;
+                const factCount = (db.prepare('SELECT COUNT(*) as c FROM context_facts').get() as any)?.c || 0;
+                const factWithObject = (db.prepare('SELECT COUNT(*) as c FROM context_facts WHERE object_id IS NOT NULL').get() as any)?.c || 0;
+                const episodeCount = (db.prepare('SELECT COUNT(*) as c FROM context_episodes').get() as any)?.c || 0;
+                const captureCount = (db.prepare('SELECT COUNT(*) as c FROM ai_context_captures').get() as any)?.c || 0;
+                const pendingJobs = (db.prepare("SELECT COUNT(*) as c FROM context_extraction_jobs WHERE status = 'pending'").get() as any)?.c || 0;
+                const lastCapture = (db.prepare('SELECT MAX(captured_at) as ts FROM ai_context_captures').get() as any)?.ts || null;
+                const lastEpisode = (db.prepare('SELECT MAX(created_at) as ts FROM context_episodes').get() as any)?.ts || null;
+                const orphanFacts = (db.prepare('SELECT COUNT(*) as c FROM context_facts f LEFT JOIN context_entities e ON f.subject_id = e.id WHERE e.id IS NULL').get() as any)?.c || 0;
+                const status = entityCount === 0 ? 'red'
+                    : (factWithObject === 0 ? 'amber' : 'green');
+                const reason = entityCount === 0
+                    ? (captureCount === 0 ? 'no captures yet' : 'captures exist but no entities extracted')
+                    : (factWithObject === 0 ? 'entities exist but no edges (objectId missing)' : 'healthy');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    status, reason,
+                    entities: entityCount,
+                    facts: factCount,
+                    factsWithObject: factWithObject,
+                    episodes: episodeCount,
+                    captures: captureCount,
+                    pendingJobs: pendingJobs,
+                    orphanFacts: orphanFacts,
+                    lastCapture: lastCapture,
+                    lastEpisode: lastEpisode,
+                    ts: Date.now(),
+                }));
+            } catch (err: any) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: 'red', reason: 'health check failed', error: err?.message }));
+            }
         }
         else if (req.method === 'GET' && req.url === '/extension/poll') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -23198,7 +23510,8 @@ if (mainWindow && !mainWindow.isDestroyed()) {
                     episodeStatus: cap.episode_status || 'pending',
                     extraction: extraction
                         ? { jobId: extraction.id, status: extraction.status, attempts: extraction.attempts,
-                            entitiesCreated: undefined, factsCreated: undefined }
+                            entitiesCreated: episode ? (db.prepare('SELECT COUNT(DISTINCT subject_id) as c FROM context_facts WHERE source_episode_id = ?').get(episode.id)?.c ?? 0) : 0,
+                            factsCreated: episode ? (db.prepare('SELECT COUNT(*) as c FROM context_facts WHERE source_episode_id = ?').get(episode.id)?.c ?? 0) : 0 }
                         : { status: 'queued' },
                     error: cap.error_message || null,
                 }));
@@ -25349,7 +25662,17 @@ if (!gotTheLock) {
       /* The renderer owns the stopwatch clock and the mic, so it reports up here and main
          * republishes. Registered before the island is created so the first snapshot is not
          * lost to a startup race. */
-      let lastAppStopwatchReportAt = 0;
+      /* Reset-forensics state for the report-stream handler above. */
+      interface SwDiag {
+        island: boolean;
+        acceptedDisplay: number | null;
+        reportedDisplay: number | null;
+        reset: number | null;
+        rev: number | null;
+        paused: boolean | null;
+      }
+      let lastSwReportDiag: SwDiag | null = null;
+      let lastSwReportDiagAt = 0;
       electron_1.ipcMain.on('halo:report-stream', (e: any, payload: any) => {
         if (!payload || typeof payload !== 'object') return;
         /* SOURCE-AWARE: the app window (index.html) is the single writer of the stopwatch.
@@ -25359,7 +25682,6 @@ if (!gotTheLock) {
          * the app has not reported recently (i.e. the app is closed / --minimized). */
         const senderUrl = (e?.sender?.getURL?.() || '') as string;
         const isIslandSender = senderUrl.includes('halo.html');
-        const appRecentlyReported = Date.now() - lastAppStopwatchReportAt < 4000;
         if (isIslandSender) {
             // The island is a READER of the stopwatch, never a writer. Honouring its report
             // (even when the app has been quiet for >4s) let a hydrating island publish a
@@ -25404,8 +25726,30 @@ if (!gotTheLock) {
                 }
                 // else: reject the zero flash, keep previous
             }
+            /* RESET FORENSICS — every transition worth noticing, plus a 10s heartbeat so a
+             * silent path is distinguishable from a quiet one. A "resets to 0 every ~4s" repro
+             * must show up here as either an accepted zero report, a resetCount jump, or a
+             * push whose stopwatch field went null/zero — the log names which. */
+            const nowSw = (haloStopwatchPayload as any) ?? null;
+            const swDiag = {
+                island: isIslandSender,
+                acceptedDisplay: nowSw?.displayMs ?? null,
+                reportedDisplay: raw && typeof raw === 'object' ? (raw as any).displayMs ?? null : null,
+                reset: nowSw?.resetCount ?? null,
+                rev: nowSw?.revision ?? null,
+                paused: nowSw?.paused ?? null,
+            };
+            const prevSwDiag = lastSwReportDiag;
+            const wentZero = swDiag.acceptedDisplay === 0 && (prevSwDiag?.acceptedDisplay ?? 0) > 0;
+            const resetBump = prevSwDiag != null && swDiag.reset !== prevSwDiag.reset;
+            const heartbeat = Date.now() - lastSwReportDiagAt > 10_000;
+            if (wentZero || resetBump || heartbeat) {
+                haloDiag('sw-report', { ...swDiag, wentZero, resetBump });
+                lastSwReportDiag = swDiag;
+                lastSwReportDiagAt = Date.now();
+            }
         }
-        if (!isIslandSender && 'stopwatch' in payload) lastAppStopwatchReportAt = Date.now();
+        // The app window is the single stopwatch writer; island reports are rejected above.
         if ('dictation' in payload) haloDictationPayload = payload.dictation ?? haloDictationPayload;
       });
 
