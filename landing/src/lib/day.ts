@@ -98,8 +98,12 @@ export function deriveAreaPath(samples: Sample[], W: number, H: number): string 
 }
 
 // ── module-scope derived consts ──────────────────────────────────────
-export const LINE_PATH = deriveLinePath(SAMPLES, 392, 140);
-export const AREA_PATH = deriveAreaPath(SAMPLES, 392, 140);
+// V6-1: one geometry constant, three consumers (line path, area path,
+// chart viewBox, anchor band). 392 was a 2% skew against the 400-wide viewBox.
+export const CHART_W = 400;
+export const CHART_H = 140;
+export const LINE_PATH = deriveLinePath(SAMPLES, CHART_W, CHART_H);
+export const AREA_PATH = deriveAreaPath(SAMPLES, CHART_W, CHART_H);
 export const DERIVED_CARDS = deriveCards(SAMPLES);
 
 // ── realness probes (dev only) ────────────────────────────────────────

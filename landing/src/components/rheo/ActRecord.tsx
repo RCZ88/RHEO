@@ -4,908 +4,449 @@ import {
   AnimatePresence,
   motion,
   useScroll,
-  useSpring,
   useTransform,
   type MotionValue,
 } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useShouldAnimate } from "./use-motion-preference";
-import { LINE_PATH, AREA_PATH, DERIVED_CARDS } from "@/lib/day";
-import DecryptedText from "./DecryptedText";
-import { RealClip } from "./RealFootage";
+import {
+  LINE_PATH,
+  AREA_PATH,
+  DERIVED_CARDS,
+  SAMPLES,
+  CHART_W,
+  CHART_H,
+  hasApp,
+  hhmm,
+} from "@/lib/day";
 import SampleDayTimeline from "./SampleDayTimeline";
 
-/** The authored half. Everything here is a literal — that is the whole problem. */
-type BlockSeed = {
-  key: string;
-  range: string;
-  startH: number;
-  endH: number; // may exceed 24 for wrap (REST)
-  total: number; // minutes
-};
-
-/** A seed plus the sentence derived from it. */
-type Block = BlockSeed & { blurb: string };
-
 /**
- * BLOCKS, not phases. "Phase" means three different things in this product and
- * using one word for a different thing is a claim problem too:
- *   - a life era with dates and reflections  -> life_phases, the Life screen
- *   - Learn / Burn-down training mode        -> phaseRules.ts, user-set
- *   - the four blocks below                  -> THIS, a hand-typed sample day
- * Renaming this one removes the collision. "Phases" in this section was a third
- * meaning nobody could disambiguate while scrolling.
+ * "a day, replayable" — V1–V6 single instrument stack (GLM round 03).
+ * Panes are gone. One vertically centered stack in the 300vh sticky:
+ * meta row → headline → chart panel (line + area + anchor band + playhead
+ * + readout) → readings index → active card (crossfade + scroll-bound
+ * counter) → scroll hint. SampleDayTimeline (the category-segment
+ * instrument, GLM V3: "SampleDayTimeline already owns the category-segment
+ * instrument") stays mounted under the chart panel.
  *
- * WHY THESE NUMBERS ARE NOT REAL. Every value here is a literal. Nothing queries
- * the database for them, they were typed by hand, and they sum to exactly 840
- * minutes (14 hours) — the shape of an illustration, not a measurement. Rendered
- * as a live record beside scrubbed footage, they read as YOUR day, which is the
- * same failure as the retired 1,204,032 s stopwatch counter. Hence the
- * `A SAMPLE DAY` label that both branches now carry.
- *
- * The blurbs are DERIVED from the numbers rather than typed next to them, so a
- * caption can never contradict the figure it sits under. Change a duration and
- * its sentence changes with it.
+ * Every rendered number derives from @/lib/day — no typed literals.
+ * Scrub mapping (RESULT-actrecord-rhythm §1.3 + V3):
+ *   active = floor((p + 0.03) * beats)   — the index leads the card at b−0.03
+ *   counter lerps cards[i-1]→cards[i] inside the b±0.03 boundary zone.
  */
-// BLOCKS and DERIVED_CARDS replaced by DERIVED_CARDS from @/lib/day (D6 fix)
 
+const EASE = [0.16, 1, 0.3, 1] as const;
+const ZONE = 0.03; // boundary zone ±0.03 in scrub-progress space
+const fmtInt = (n: number) => n.toLocaleString("en-US");
 
-function fmtHM(totalMin: number): string {
-  const h = Math.floor(totalMin / 60);
-  const m = Math.round(totalMin % 60);
-  return `${h}h ${String(m).padStart(2, "0")}m`;
-}
+const RECORDED = SAMPLES.filter(hasApp).length;
+const NULLS = SAMPLES.length - RECORDED;
 
 export default function ActRecord() {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const shouldAnimate = useShouldAnimate();
+  const prm = !shouldAnimate;
   const { scrollYProgress: raw } = useScroll({
     target: ref,
     offset: ["start start", "end end"],
   });
-  // House curve: use raw scroll progress directly (no spring).
-  // The spring was governing itself (max|ty|=15 identical under auto/reduce).
-  // Raw progress lets the house easing [0.16,1,0.3,1] apply per-transform.
-  const springP = useSpring(raw, { stiffness: 120, damping: 25 });
+  // Raw scroll progress (house decision, kept from the previous cycle:
+  // the spring governed itself; raw lets the house easing apply per-transform).
   const p = raw;
 
-  // playhead top on vertical timeline (0%..100%)
-  const playheadTop = useTransform(p, [0, 1], ["0%", "100%"]);
-  // mini timeline fill width
-  const miniFill = useTransform(p, [0, 1], ["0%", "100%"]);
-  // line chart path draw
-  const pathLength = p;
+  // line chart draw — full-drawn in the reduced-motion static branch
+  const draw: MotionValue<number> | 1 = shouldAnimate ? p : 1;
 
-  // refs for direct DOM text updates (no per-frame re-render)
-  const hhmmRef = useRef<HTMLSpanElement>(null);
+  // refs for direct DOM updates (no per-frame re-render)
   const counterRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const readoutRef = useRef<HTMLSpanElement>(null);
   const activeRef = useRef(0);
 
-  const [active, setActive] = useState(1); // start in DEEP WORK mid-scrub? default -1
+  const [active, setActive] = useState(0);
 
-  // ActRecord renders either the animated 300vh scrub or a static
-  // collapsed layout when motion is off.
-  const sectionHeight = shouldAnimate ? "300vh" : "auto";
-  const stickyHeight = shouldAnimate ? "100dvh" : undefined;
-  const showAnimated = shouldAnimate;
+  // measured plot width → playhead translateX per frame (transform, not left)
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [plotW, setPlotW] = useState(0);
+  useEffect(() => {
+    const el = plotRef.current;
+    if (!el) return;
+    const measure = () => setPlotW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const playheadX = useTransform(p, (v) => v * plotW);
 
   useEffect(() => {
     const apply = () => {
       const v = p.get();
-      const hour = v * 24;
-      const hh = Math.floor(hour);
-      const mm = Math.floor((hour - hh) * 60);
-      if (hhmmRef.current) {
-        hhmmRef.current.textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-      }
-      DERIVED_CARDS.forEach((card, i) => {
-        const el = counterRefs.current[i];
-        if (el) {
-          const val = Math.round(v * card.minutes);
-          el.textContent = fmtHM(val);
-        }
-      });
       const beats = DERIVED_CARDS.length;
-      const idx = Math.min(beats - 1, Math.floor(p.get() * beats));
+
+      // active index leads the card: switch at b−0.03
+      const idx = Math.min(
+        beats - 1,
+        Math.max(0, Math.floor((v + ZONE) * beats)),
+      );
+
+      // scroll-bound counter: exact minutes outside boundary zones;
+      // inside, lerp cards[idx-1] → cards[idx] (direction-aware by construction)
+      let minutes = DERIVED_CARDS[idx].minutes;
+      if (idx > 0) {
+        const bd = idx / beats;
+        // epsilon: at exactly v = bd−ZONE the lerp starts (t=0, outgoing's value);
+        // without it the float in (v + ZONE) can flip idx while v ≤ bd−ZONE and
+        // the counter jumps cards[idx-1]→cards[idx] with no lerp (probe-caught).
+        if (v > bd - ZONE - 1e-9) {
+          const t = Math.min(1, Math.max(0, (v - (bd - ZONE)) / (ZONE * 2)));
+          minutes = Math.round(
+            DERIVED_CARDS[idx - 1].minutes +
+              (DERIVED_CARDS[idx].minutes - DERIVED_CARDS[idx - 1].minutes) * t,
+          );
+        }
+      }
+      const cel = counterRefs.current[idx];
+      if (cel) cel.textContent = `${minutes}`;
+
+      // readout — the "replayable" promise made literal (V1):
+      // hhmm(m) · SAMPLES[m].category ?? 'NULL'
+      const m = Math.min(SAMPLES.length - 1, Math.floor(v * SAMPLES.length));
+      const rel = readoutRef.current;
+      if (rel) {
+        const cat = SAMPLES[m]?.category;
+        rel.textContent = `${hhmm(m)} · ${cat ?? "NULL"}`;
+      }
+
       if (idx !== activeRef.current) {
         activeRef.current = idx;
         setActive(idx);
       }
     };
-
-    // sync counters from spring.get() on mount AND on every change
     apply();
     const unsub = p.on("change", apply);
     return () => unsub();
   }, [p]);
 
-  // ActRecord always renders the animated scrub experience.
-  // Reduced-motion no longer swaps to a static fallback.
+  // Jump the scrub so the requested reading is mid-beat by construction (V2).
+  const jumpToReading = (i: number) => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const beats = DERIVED_CARDS.length;
+    window.scrollTo({
+      top:
+        window.scrollY +
+        r.top +
+        ((i + 0.5) / beats) * (r.height - window.innerHeight),
+      behavior: prm ? "auto" : "smooth",
+    });
+  };
+
+  const transition = { duration: prm ? 0 : 0.22, ease: EASE };
+
   return (
     <section
       id="act-record"
       ref={ref}
       className="relative surface-page"
-      style={{ height: sectionHeight }}
+      style={{ height: shouldAnimate ? "300vh" : "auto" }}
     >
-      {/* sticky inner viewport */}
-      <div
-        className="sticky top-0 overflow-hidden"
-        style={{ height: stickyHeight }}
-      >
-        <div className="relative h-full max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-16 pt-0 pb-0 flex flex-col items-start justify-center">
-          {/* top-left header */}
-          {/* The static (reduced-motion) branch renders this label + heading IN FLOW.
-              Rendering them here as well put two 69px .display-h2 elements on top of
-              each other: measured at y=-4 and y=12, with 6 further elements overlapping. */}
-          {/* max-w 420 -> 340: at 1280 the absolutely-centred 438px clip starts at
-              x=421 while this column ran to x=484, so the phase heading sat 63x31px on
-              top of the media. 340px puts its right edge at 404, clear of 421. */}
-          {showAnimated && (
-          <div className="relative max-w-[560px]" style={{ marginBottom: 24 }}>
-            <p className="mono-label" style={{ fontSize: 11 }}>
-              <DecryptedText text="SECTION 02 / RECORD \u00b7 A SAMPLE DAY" speed={28} maxIterations={6} />
-            </p>
-            <h2 className="display-h2 mt-3">A DAY, REPLAYABLE.</h2>
-            <p
-              className="mt-4"
-              style={{ fontSize: 14, lineHeight: 1.6, color: "#a1a1aa", maxWidth: 560, minHeight: 40 }}
-            >
-              This page is scrubbed, not played. Drag time backward. In life you
-              can&apos;t. Here, you can.
-            </p>
+      <div className={shouldAnimate ? "sticky top-0 overflow-hidden ar-sticky" : ""}>
+        <div className="ar-sticky-inner relative mx-auto flex h-full max-w-[1280px] flex-col items-start justify-center px-5 sm:px-10 lg:px-16">
+          {/* meta row — every number derived at render (V1) */}
+          <div
+            className="mono flex w-full items-center justify-between"
+            style={{ fontSize: 11, color: "#8a8a94", letterSpacing: "0.08em" }}
+          >
+            <span>ACTRECORD · {fmtInt(SAMPLES.length)} MIN</span>
+            <span>
+              {fmtInt(RECORDED)} RECORDED · {fmtInt(NULLS)} NULL
+            </span>
           </div>
 
-          )}
-          {/* Real app screenshot — the tracking section shows the actual RHEO dashboard */}
-          {showAnimated && (
-            <div className="relative mb-6" style={{ width: "min(640px, 100%)" }}>
-              <img
-                src="/media/app-dashboard.png"
-                alt="The RHEO dashboard with a real day's tracked time"
+          {/* headline — the fixed frame (V1 pairing) */}
+          <h2
+            className="display-h2 ar-h2 mt-3"
+            style={{ color: "#f4f4f5", textTransform: "none", fontWeight: 500 }}
+          >
+            a day, replayable
+          </h2>
+
+          {/* chart panel — full container width */}
+          <div
+            className="w-full"
+            style={{
+              marginTop: 32,
+              marginBottom: 16,
+              borderRadius: "var(--panel-radius)",
+              border: "1px solid rgba(138,138,148,0.16)",
+              background: "rgba(255,255,255,0.02)",
+              padding: "12px 10px",
+            }}
+          >
+            {/* plot area */}
+            <div ref={plotRef} className="ar-chart relative w-full">
+              <svg
+                viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+                width="100%"
+                height="100%"
+                preserveAspectRatio="none"
+                aria-hidden
+                style={{ display: "block", position: "absolute", inset: 0 }}
+              >
+                {[40, 80, 120].map((y) => (
+                  <line
+                    key={y}
+                    x1={0}
+                    x2={CHART_W}
+                    y1={y}
+                    y2={y}
+                    stroke="rgba(255,255,255,0.05)"
+                    strokeWidth={1}
+                  />
+                ))}
+                <line
+                  x1={0}
+                  x2={CHART_W}
+                  y1={CHART_H}
+                  y2={CHART_H}
+                  stroke="rgba(255,255,255,0.16)"
+                  strokeWidth={1}
+                />
+                <motion.path
+                  d={AREA_PATH}
+                  fill="rgba(255,255,255,0.04)"
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6 }}
+                />
+                <motion.path
+                  d={LINE_PATH}
+                  fill="none"
+                  stroke="#f4f4f5"
+                  strokeOpacity={0.9}
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ pathLength: draw }}
+                />
+              </svg>
+
+              {/* anchor band — active card's real time range (V3: band + playhead suffice) */}
+              <div
+                aria-hidden
+                className="anchor-band"
                 style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  opacity: 0.85,
+                  position: "absolute",
+                  inset: 0,
+                  transformOrigin: "0 50%",
+                  background: "rgba(255,255,255,0.04)",
+                  transform: `translateX(${((DERIVED_CARDS[active]?.anchorStart ?? 0) / 1440) * 100}%) scaleX(${((DERIVED_CARDS[active]?.anchorEnd ?? 0) - (DERIVED_CARDS[active]?.anchorStart ?? 0)) / 1440})`,
+                  transition: prm ? "none" : "transform 400ms cubic-bezier(0.16,1,0.3,1)",
+                  pointerEvents: "none",
                 }}
               />
-            </div>
-          )}
 
-          {/* LEFT: per-phase text block (crossfade) — flow column, not absolute island */}
-          {showAnimated ? (
-            <div
-              className="relative"
-              style={{ maxWidth: 560, minHeight: 96, marginBottom: 24 }}
-            >
-              <div className="relative" style={{ minHeight: 180 }}>
-                <AnimatePresence mode="wait">
-                {/* tight crossfade: out [b-0.03,b] → gap ~0.01 → in [b+0.01,b+0.05] */}
-                {active >= 0 ? (
-                  <motion.div
-                    key={active}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    <p
-                      className="mono-label-strong"
-                      style={{ fontSize: 11, color: "#f4f4f5" }}
-                    >
-                      {DERIVED_CARDS[active]?.label ?? "—"}
-                    </p>
-                    <p
-                      className="mono"
-                      style={{ fontSize: 11, color: "#8a8a94", marginTop: 4 }}
-                    >
-                      {DERIVED_CARDS[active]?.anchorLabel ?? ""} · card {active + 1}/{DERIVED_CARDS.length}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: 16,
-                        lineHeight: 1.5,
-                        color: "#f4f4f5",
-                        marginTop: 12,
-                      }}
-                    >
-                      {DERIVED_CARDS[active]?.detail ?? ""}
-                    </p>
-                    <div
-                      className="mt-5 flex items-baseline gap-2"
-                      style={{
-                        borderTop: "1px solid rgba(255,255,255,0.08)",
-                        paddingTop: 12,
-                      }}
-                    >
-                      <span
-                        className="mono"
-                        style={{ fontSize: 11, color: "#8a8a94" }}
-                      >
-                        recorded
-                      </span>
-                      <span
-                        ref={(el) => {
-                          counterRefs.current[active] = el;
-                        }}
-                        className="mono tabular-nums"
-                        style={{ fontSize: 22, color: "#ffffff", letterSpacing: "-0.01em" }}
-                      >
-                        0h 00m
-                      </span>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="transition"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    <p
-                      className="mono-label"
-                      style={{ fontSize: 11, color: "#8a8a94" }}
-                    >
-                      BETWEEN CARDS
-                    </p>
-                    <p
-                      style={{
-                        fontSize: 16,
-                        lineHeight: 1.5,
-                        color: "#8a8a94",
-                        marginTop: 12,
-                      }}
-                    >
-                      Time between commitments — transitions, drift, the gaps
-                      that hold a day together.
-                    </p>
-                  </motion.div>
-                )}
-                </AnimatePresence>
-              </div>
+              {/* playhead — 2px full plot height, scroll-bound, no transition (V1) */}
+              <motion.div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  width: 2,
+                  background: "rgba(244,244,245,0.9)",
+                  x: playheadX,
+                  pointerEvents: "none",
+                }}
+              />
 
-              {/* all-phase counters list */}
-              <div
-                className="mt-8 hairline-t"
-                style={{ borderTopColor: "rgba(255,255,255,0.08)", paddingTop: 12 }}
+              {/* readout — sample truth at the playhead (V1) */}
+              <span
+                ref={readoutRef}
+                className="mono"
+                style={{
+                  position: "absolute",
+                  top: 8,
+                  right: 10,
+                  fontSize: 10,
+                  color: "#a1a1aa",
+                  letterSpacing: "0.08em",
+                  pointerEvents: "none",
+                }}
               >
-                {DERIVED_CARDS.map((ph, i) => (
-                  <div
-                    key={ph.label}
-                    className="flex items-center justify-between"
-                    style={{ padding: "6px 0" }}
-                  >
-                    <span
-                      className="mono"
-                      style={{
-                        fontSize: 11,
-                        color: active === i ? "#f4f4f5" : "#8a8a94",
-                        letterSpacing: "0.08em",
-                        transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
-                      }}
-                    >
-                      {ph.label}
-                    </span>
-                    <span
-                      ref={(el) => {
-                        counterRefs.current[i] = el;
-                      }}
-                      className="mono tabular-nums"
-                      style={{
-                        fontSize: 11,
-                        color: active === i ? "#f4f4f5" : "#8a8a94",
-                        transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
-                      }}
-                    >
-                      0h 00m
-                    </span>
-                  </div>
-                ))}
-              </div>
+                00:00 · NULL
+              </span>
             </div>
-          ) : (
-            /* RM STATIC LAYOUT: compact stacked panels, full width, all content visible */
-            <div className="flex flex-col gap-6 w-full max-w-[1280px]">
-              <div className="flex flex-col gap-3">
-                <p className="mono-label" style={{ fontSize: 11 }}>
-                  <DecryptedText text="SECTION 02 / RECORD \u00b7 A SAMPLE DAY" speed={28} maxIterations={6} />
-                </p>
-                <h2 className="display-h2">A DAY, REPLAYABLE.</h2>
-                <p
-                  style={{ fontSize: 14, lineHeight: 1.6, color: "#a1a1aa" }}
+
+            {/* axis */}
+            <div
+              className="flex w-full items-center justify-between"
+              style={{ marginTop: 6 }}
+            >
+              {["00", "06", "12", "18", "24"].map((t) => (
+                <span
+                  key={t}
+                  className="mono"
+                  style={{ fontSize: 9, color: "#8a8a94", letterSpacing: "0.06em" }}
                 >
-                  This page is scrubbed, not played. Drag time backward. In life you
-                  can&apos;t. Here, you can.
-                </p>
-              </div>
-              {DERIVED_CARDS.map((ph, i) => (
-                <div
-                  key={ph.label}
-                  className="surface-panel"
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 12,
-                    padding: "14px 16px",
-                  }}
-                >
-                  <p
-                    className="mono-label-strong"
-                    style={{ fontSize: 11, color: "#f4f4f5" }}
-                  >
-                    {ph.label}
-                  </p>
-                  <p
-                    className="mono"
-                    style={{ fontSize: 11, color: "#8a8a94", marginTop: 3 }}
-                  >
-                    {ph.anchorLabel} · card {i + 1}/{DERIVED_CARDS.length}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 15,
-                      lineHeight: 1.5,
-                      color: "#a1a1aa",
-                      marginTop: 6,
-                    }}
-                  >
-                    {ph.detail}
-                  </p>
-                  <div
-                    className="mt-3 flex items-baseline gap-2"
-                    style={{
-                      borderTop: "1px solid rgba(255,255,255,0.08)",
-                      paddingTop: 8,
-                    }}
-                  >
-                    <span
-                      className="mono"
-                      style={{ fontSize: 11, color: "#8a8a94" }}
-                    >
-                      recorded
-                    </span>
-                    <span
-                      className="mono tabular-nums"
-                      style={{ fontSize: 20, color: "#ffffff", letterSpacing: "-0.01em" }}
-                    >
-                      0h 00m
-                    </span>
-                  </div>
-                </div>
+                  {t}
+                </span>
               ))}
             </div>
-          )}
+          </div>
 
-          {/* CENTER: the real RHEO dashboard, captured from a running instance */}
-          {/* POSITION SWITCH, not a second element. The static (reduced-motion) layout is a
-              stacked column of height:auto, so this box — absolutely centred for the 300vh
-              sticky scrub — resolved top:50% against a short section and landed on the phase
-              list. Measured: a 438x273 video covering "DEEP WORK", "09-12 - phase 2/4",
-              "Unbroken focus...", and "MEETINGS". In flow it belongs after the list. */}
-          <div
-            className={showAnimated ? "relative mx-auto" : "relative mx-auto w-full"}
-            style={
-              showAnimated
-                ? { width: "min(1000px, 100%)", marginTop: 0 }
-                : { width: "min(640px, 100%)", marginTop: 24 }
-            }
-          >
+          {/* the category-segment instrument — GLM V3 keeps it as the owner of
+              minute-resolution category rects; this chart stays hourly. */}
+          <div className="w-full" style={{ marginBottom: 24 }}>
             <SampleDayTimeline scrub={p} />
           </div>
 
-          {/* RIGHT: vertical 24h timeline */}
-          <div
-            // Same position switch as the clip. The reduced-motion layout is a
-            // stacked column whose content spans the full 1280px, so this rail
-            // pinned at right-4 sat ON TOP of the phase list — measured: the blurb
-            // "Unbroken focus. The record marks it sharply." against the rail's own
-            // "REST" label, 18x5px. In flow it follows the list instead.
-            className={showAnimated ? "absolute right-4 lg:right-10" : "mx-auto"}
-            style={
-              showAnimated
-                ? { top: "50%", transform: "translateY(-50%)", height: "min(62vh, 540px)", width: 96 }
-                : { height: "min(62vh, 540px)", width: 96 }
-            }
+          {/* readings index — derived labels, clickable, mid-beat scroll (V2) */}
+          <nav
+            aria-label="readings"
+            className="ar-index flex w-full items-center"
+            style={{ marginBottom: 24 }}
           >
-            <TimelineTrack
-              playheadTop={playheadTop}
-              hhmmRef={hhmmRef}
-              p={p}
-            />
+            {DERIVED_CARDS.map((c, i) => (
+              <div key={c.id} className="flex items-center">
+                {i > 0 && (
+                  <span
+                    className="mono"
+                    aria-hidden
+                    style={{ fontSize: 11, color: "#63636b", paddingRight: 24 }}
+                  >
+                    ·
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="mono-label instrument"
+                  aria-current={active === i ? "true" : undefined}
+                  onClick={() => jumpToReading(i)}
+                  style={{
+                    fontSize: 11,
+                    color: "#f4f4f5",
+                    opacity: active === i ? 1 : 0.45,
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    letterSpacing: "0.08em",
+                    transition: prm ? "none" : "opacity 200ms cubic-bezier(0.16,1,0.3,1)",
+                  }}
+                >
+                  {c.label}
+                </button>
+              </div>
+            ))}
+          </nav>
+
+          {/* active card — crossfade zone (V1/V3) */}
+          <div className="ar-cardzone relative w-full" style={{ marginTop: 24 }}>
+            <AnimatePresence initial={false}>
+              {shouldAnimate ? (
+                <motion.div
+                  key={active}
+                  className="ar-card-fade absolute inset-0"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={transition}
+                >
+                  <ActiveCard idx={active} counterRefs={counterRefs} />
+                </motion.div>
+              ) : (
+                /* reduced-motion static branch: all four readings in flow,
+                   counters at their exact minutes — nothing scroll-bound */
+                <div className="flex w-full flex-col" style={{ gap: 16 }}>
+                  {DERIVED_CARDS.map((c, i) => (
+                    <ActiveCard
+                      key={c.id}
+                      idx={i}
+                      staticMinutes={c.minutes}
+                      counterRefs={counterRefs}
+                    />
+                  ))}
+                </div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* progress scrub hint */}
-          <div
-            className="absolute bottom-6 left-5 sm:left-10 lg:left-16 right-5 sm:right-10 lg:right-16 flex items-center justify-between"
+          {/* scroll hint (V1) */}
+          <p
+            className="mono"
+            style={{
+              marginTop: 24,
+              fontSize: 10,
+              color: "#63636b",
+              letterSpacing: "0.1em",
+            }}
           >
-            <span className="mono-label" style={{ fontSize: 10 }}>
-              ← scrub time
-            </span>
-            <ScrubbyProgress p={p} />
-            <span className="mono-label" style={{ fontSize: 10 }}>
-              replay →
-            </span>
-          </div>
+            SCROLL · {DERIVED_CARDS.length} READINGS
+          </p>
         </div>
       </div>
     </section>
   );
 }
 
-/* ---------- Dashboard card ---------- */
-function DashboardCard({
-  pathLength,
-  miniFill,
-  active,
+/* ---------- active reading card ---------- */
+function ActiveCard({
+  idx,
+  counterRefs,
+  staticMinutes,
 }: {
-  pathLength: MotionValue<number>;
-  miniFill: MotionValue<string>;
-  active: number;
+  idx: number;
+  counterRefs: React.MutableRefObject<(HTMLSpanElement | null)[]>;
+  /** reduced-motion branch: exact minutes as initial content, never scrubbed */
+  staticMinutes?: number;
 }) {
-  const CHIPS = ["FOCUS", "MEETINGS", "LEARNING", "REST"];
-  const chipIndex = active < 0 ? -1 : active;
-
-  // leading-edge dot position, derived from path progress (pure function of p)
-  const dotCx = useTransform(pathLength, (v) => 8 + v * 384);
-  const dotCy = useTransform(pathLength, (v) => pointY(v));
+  const card = DERIVED_CARDS[idx] ?? DERIVED_CARDS[0];
+  const isQuiet = card.id === "quiet";
+  const share = Math.round(card.shareOfActive * 100);
 
   return (
-    <div
-      className="sheen-top surface-panel"
-      style={{
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 16,
-        padding: 18,
-      }}
-    >
-      {/* header row */}
-      <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
-        <div className="flex items-center gap-2">
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "#ffffff",
-              display: "inline-block",
-            }}
-          />
-          <span className="mono" style={{ fontSize: 11, color: "#a1a1aa", letterSpacing: "0.08em" }}>
-            RHEO · TODAY
-          </span>
-        </div>
-        <span className="mono-label" style={{ fontSize: 10 }}>
-          live
-        </span>
-      </div>
-
-      {/* SVG line chart */}
-      <div
-        style={{
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 10,
-          background: "#050506",
-          padding: 10,
-          marginBottom: 12,
-        }}
+    <div>
+      {/* per-beat display line — the label is the card's headline (V1 pairing) */}
+      <p
+        className="display-h2 ar-label"
+        style={{ color: "#f4f4f5", textTransform: "uppercase", fontWeight: 500 }}
       >
-        <svg
-          viewBox="0 0 400 160"
-          width="100%"
-          height="120"
-          preserveAspectRatio="none"
-          aria-hidden
-          style={{ display: "block" }}
-        >
-          {/* gridlines */}
-          {[40, 80, 120].map((y) => (
-            <line
-              key={y}
-              x1={0}
-              x2={400}
-              y1={y}
-              y2={y}
-              stroke="rgba(255,255,255,0.05)"
-              strokeWidth={1}
-            />
-          ))}
-          {/* baseline */}
-          <line
-            x1={0}
-            x2={400}
-            y1={140}
-            y2={140}
-            stroke="rgba(255,255,255,0.16)"
-            strokeWidth={1}
-          />
-          {/* area fill */}
-          <motion.path
-            d={AREA_PATH}
-            fill="rgba(255,255,255,0.06)"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          />
-          {/* main line — drawn by scroll progress */}
-          <motion.path
-            d={LINE_PATH}
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ pathLength }}
-          />
-          {/* playhead dot at the line's leading edge — moves with p */}
-          <motion.circle
-            r={3}
-            fill="#ffffff"
-            style={{ cx: dotCx, cy: dotCy }}
-          />
-        </svg>
-        {/* Anchor band — shows the active card's time range on the chart */}
-        <div
-          aria-hidden
-          className="anchor-band"
-          style={{
-            position: "absolute",
-            inset: 0,
-            transformOrigin: "0 50%",
-            background: "rgba(255,255,255,0.04)",
-            transform: `translateX(${(DERIVED_CARDS[active]?.anchorStart ?? 0) / 14.4}%) scaleX(${((DERIVED_CARDS[active]?.anchorEnd ?? 0) - (DERIVED_CARDS[active]?.anchorStart ?? 0)) / 1440})`,
-            transition: "transform 400ms cubic-bezier(0.16,1,0.3,1)",
-            pointerEvents: "none",
-          }}
-        />
-      </div>
+        {card.label}
+      </p>
 
-      {/* stat chips */}
-      <div className="grid grid-cols-4 gap-2" style={{ marginBottom: 12 }}>
-        {CHIPS.map((c, i) => {
-          const isActive = chipIndex === i;
-          return (
-            <div
-              key={c}
-              style={{
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 6,
-                padding: "8px 6px",
-                background: isActive ? "rgba(255,255,255,0.04)" : "transparent",
-                transition:
-                  "background 0.25s cubic-bezier(0.16,1,0.3,1), border-color 0.25s cubic-bezier(0.16,1,0.3,1)",
-                borderColor: isActive
-                  ? "rgba(255,255,255,0.16)"
-                  : "rgba(255,255,255,0.08)",
-              }}
-            >
-              <div
-                className="mono"
-                style={{
-                  fontSize: 9,
-                  color: isActive ? "#f4f4f5" : "#8a8a94",
-                  letterSpacing: "0.1em",
-                  transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
-                }}
-              >
-                {c}
-              </div>
-              <div
-                className="mono tabular-nums"
-                style={{
-                  fontSize: 13,
-                  color: isActive ? "#ffffff" : "#a1a1aa",
-                  marginTop: 4,
-                  transition: "color 0.25s cubic-bezier(0.16,1,0.3,1)",
-                }}
-              >
-                {chipIndex === i ? "▶" : ""}
-                {chipIndex === i ? " now" : " ·"}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* segmented mini timeline bar */}
-      <div
-        style={{
-          position: "relative",
-          height: 22,
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 6,
-          overflow: "hidden",
-          background: "#050506",
-        }}
-      >
-        {/* phase segments as hairline blocks */}
-        <MiniTimelineSegments />
-        {/* progress fill overlay */}
-        <motion.div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: miniFill,
-            background: "rgba(255,255,255,0.14)",
-          }}
-        />
-        {/* hour ticks */}
-        <div className="flex justify-between absolute inset-0 px-1 items-center pointer-events-none">
-          {["00", "06", "12", "18", "24"].map((t) => (
-            <span
-              key={t}
-              className="mono"
-              style={{ fontSize: 8, color: "#8a8a94", letterSpacing: "0.06em" }}
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// LINE_PATH and AREA_PATH are now imported from @/lib/day (derived from real data)
-
-// approximate y on the path for leading dot (t in 0..1)
-function pointY(t: number): number {
-  // sample the same cubic-ish curve via simple interpolation between known knots
-  const knots: [number, number][] = [
-    [0, 120],
-    [0.27, 50],
-    [0.52, 95],
-    [0.75, 110],
-    [1, 55],
-  ];
-  // find segment
-  for (let i = 0; i < knots.length - 1; i++) {
-    const [t0, y0] = knots[i];
-    const [t1, y1] = knots[i + 1];
-    if (t >= t0 && t <= t1) {
-      const k = (t - t0) / (t1 - t0);
-      const s = k * k * (3 - 2 * k); // smoothstep
-      return y0 + (y1 - y0) * s;
-    }
-  }
-  return 55;
-}
-
-function MiniTimelineSegments() {
-  // phases on 0..24 → 0..100% of bar
-  const segs = [
-    { h0: 0, h1: 6, key: "REST" },
-    { h0: 9, h1: 12, key: "DEEP WORK" },
-    { h0: 12, h1: 14, key: "MEETINGS" },
-    { h0: 19, h1: 21, key: "LEARNING" },
-    { h0: 23, h1: 24, key: "REST" },
-  ];
-  return (
-    <>
-      {segs.map((s, i) => (
-        <div
-          key={i}
-          style={{
-            position: "absolute",
-            left: `${(s.h0 / 24) * 100}%`,
-            width: `${((s.h1 - s.h0) / 24) * 100}%`,
-            top: 0,
-            bottom: 0,
-            borderRight: "1px solid rgba(255,255,255,0.16)",
-          }}
-        />
-      ))}
-    </>
-  );
-}
-
-/* ---------- Vertical 24h timeline track ---------- */
-function TimelineTrack({
-  playheadTop,
-  hhmmRef,
-  p,
-}: {
-  playheadTop: MotionValue<string>;
-  hhmmRef: React.RefObject<HTMLSpanElement | null>;
-  p: MotionValue<number>;
-}) {
-  const inviteOpacity = useTransform(p, [0, 0.04, 0.08], [1, 1, 0]);
-  const segments = [
-    { h0: 0, h1: 6, key: "REST" },
-    { h0: 9, h1: 12, key: "DEEP WORK" },
-    { h0: 12, h1: 14, key: "MEETINGS" },
-    { h0: 19, h1: 21, key: "LEARNING" },
-    { h0: 23, h1: 24, key: "REST" },
-  ];
-  return (
-    <div
-      style={{
-        position: "relative",
-        height: "100%",
-        width: "100%",
-      }}
-    >
-      {/* main vertical hairline */}
-      <div
-        style={{
-          position: "absolute",
-          left: 24,
-          top: 0,
-          bottom: 0,
-          width: 1,
-          background: "rgba(255,255,255,0.08)",
-        }}
-      />
-      {/* hour ticks */}
-      {Array.from({ length: 25 }, (_, i) => i).map((t) => {
-        const isLabel = [0, 6, 12, 18, 24].includes(t);
-        return (
-          <div
-            key={t}
-            style={{
-              position: "absolute",
-              left: isLabel ? 8 : 18,
-              top: `${(t / 24) * 100}%`,
-              width: isLabel ? 16 : 6,
-              height: 1,
-              background: isLabel
-                ? "rgba(255,255,255,0.16)"
-                : "rgba(255,255,255,0.08)",
-              transform: "translateY(-0.5px)",
-            }}
-          />
-        );
-      })}
-      {/* hour labels */}
-      {[0, 6, 12, 18, 24].map((t) => (
+      {/* counter — the card's hero: scroll-bound integer + mono suffixes (V1/V3) */}
+      <div className="flex items-baseline" style={{ gap: 10, marginTop: 6 }}>
         <span
-          key={t}
-          className="mono"
-          style={{
-            position: "absolute",
-            left: 0,
-            top: `${(t / 24) * 100}%`,
-            transform: "translateY(-50%)",
-            fontSize: 10,
-            color: "#8a8a94",
-            letterSpacing: "0.08em",
+          ref={(el) => {
+            counterRefs.current[idx] = el;
           }}
+          className="mono ar-counter tabular-nums"
+          style={{ color: "#f4f4f5", letterSpacing: "-0.01em", lineHeight: 1 }}
         >
-          {String(t).padStart(2, "0")}
+          {staticMinutes ?? card.minutes}
         </span>
-      ))}
+        <span className="mono" style={{ fontSize: 11, color: "#8a8a94" }}>
+          MIN
+        </span>
+        {!isQuiet && (
+          <span className="mono" style={{ fontSize: 11, color: "#8a8a94" }}>
+            · {share}% OF RECORDED
+          </span>
+        )}
+      </div>
 
-      {/* phase segment blocks (labeled) */}
-      {segments.map((s, i) => {
-        const top = (s.h0 / 24) * 100;
-        const height = ((s.h1 - s.h0) / 24) * 100;
-        return (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: 30,
-              top: `${top}%`,
-              height: `${height}%`,
-              width: 50,
-              borderLeft: "1px solid rgba(255,255,255,0.16)",
-              paddingLeft: 6,
-            }}
-          >
-            <span
-              className="mono"
-              style={{
-                fontSize: 9,
-                color: "#8a8a94",
-                letterSpacing: "0.1em",
-                writingMode: "horizontal-tb",
-              }}
-            >
-              {s.label}
-            </span>
-          </div>
-        );
-      })}
-
-      {/* playhead dot */}
-      <motion.div
-        style={{
-          position: "absolute",
-          left: 18,
-          top: playheadTop,
-          transform: "translateY(-50%)",
-          zIndex: 2,
-        }}
+      {/* anchor line — copy honesty rule: labeled range, never bare (§1.2.6) */}
+      <p
+        className="mono"
+        style={{ fontSize: 11, color: "#8a8a94", marginTop: 10, letterSpacing: "0.08em" }}
       >
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "#ffffff",
-            boxShadow: "0 0 0 3px #050506",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            left: 14,
-            top: "50%",
-            transform: "translateY(-50%)",
-            padding: "2px 6px",
-            background: "#0a0a0c",
-            border: "1px solid rgba(255,255,255,0.16)",
-            borderRadius: 4,
-            whiteSpace: "nowrap",
-          }}
-        >
-          <span
-            ref={hhmmRef}
-            className="mono tabular-nums"
-            style={{ fontSize: 10, color: "#f4f4f5", letterSpacing: "0.06em" }}
-          >
-            00:00
-          </span>
-        </div>
-
-        {/* resting invitation — disappears once scrubbing starts */}
-        <motion.div
-          style={{
-            position: "absolute",
-            // Deterministic boundary. This label was `left: 14` off an 8x8 dot
-            // marker, so a 194px nowrap phrase started at x=1256 and ran to x=1450 —
-            // 10px PAST the 1440 viewport, and straight across the rail's own phase
-            // labels ("MEETINGS" 1261..1308). Overlap measured at 47x5px.
-            // Anchored with right:100% + a gap it grows leftward into the empty
-            // gutter between the clip and the rail, so its right edge is the dot's
-            // left edge minus a fixed 10px at every viewport.
-            right: "100%",
-            marginRight: 10,
-            top: "calc(100% + 8px)",
-            whiteSpace: "nowrap",
-            opacity: inviteOpacity,
-            pointerEvents: "none",
-          }}
-        >
-          <span
-            className="mono"
-            style={{ fontSize: 11, color: "#8a8a94", letterSpacing: "0.1em" }}
-          >
-            SCROLL TO REPLAY THE DAY
-          </span>
-        </motion.div>
-      </motion.div>
-    </div>
-  );
-}
-
-/* ---------- small scrubby progress pill ---------- */
-function ScrubbyProgress({ p }: { p: MotionValue<number> }) {
-  const width = useTransform(p, [0, 1], ["0%", "100%"]);
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: "min(280px, 40vw)",
-        height: 2,
-        background: "rgba(255,255,255,0.08)",
-        margin: "0 12px",
-      }}
-    >
-      <motion.div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width,
-          background: "#ffffff",
-        }}
-      />
+        {isQuiet
+          ? `NO INPUT — ${card.anchorLabel}`
+          : `LONGEST STRETCH ${card.anchorLabel} · ${card.runs} ${card.runs === 1 ? "SESSION" : "SESSIONS"}`}
+      </p>
     </div>
   );
 }

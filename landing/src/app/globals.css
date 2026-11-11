@@ -2088,3 +2088,31 @@ html[data-motion="on"]  .hero-enter {
    spending it unseen. No-JS visitors never set the flag, so they never pause —
    which is correct: they were never covered either. */
 html[data-preload] .hero-enter { animation-play-state: paused; }
+
+/* ════════════════════════════════════════════════════════════════════
+   ActRecord — "a day, replayable" instrument stack (RESULT V1–V6, GLM
+   round 03). Responsive values live here because clamp() alone cannot
+   switch spec'd desktop vs <1024 values. Single easing everywhere.
+   ════════════════════════════════════════════════════════════════════ */
+.ar-sticky { height: 100vh; height: 100svh; }
+.ar-sticky-inner { padding-block: clamp(24px, 6vh, 96px); }
+.ar-h2 { font-size: clamp(28px, 4vw, 40px); }
+.ar-chart { height: clamp(140px, 24vh, 200px); }
+.ar-index { gap: 24px; }
+.ar-cardzone { min-height: 148px; }
+.ar-label { font-size: clamp(22px, 2.6vw, 32px); }
+.ar-counter { font-size: 44px; }
+
+@media (max-width: 1023px) {
+  .ar-sticky-inner { padding-block: clamp(20px, 5vh, 64px); }
+  .ar-h2 { font-size: clamp(24px, 7vw, 28px); }
+  .ar-chart { height: clamp(110px, 18vh, 160px); }
+  .ar-index { gap: 16px; }
+  .ar-cardzone { min-height: 116px; }
+  .ar-label { font-size: clamp(20px, 6vw, 24px); }
+  .ar-counter { font-size: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ar-index button, .ar-card-fade { transition: none !important; }
+}

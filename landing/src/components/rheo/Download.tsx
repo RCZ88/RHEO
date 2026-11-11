@@ -40,47 +40,105 @@ const LAYERS_FACTS = [
   "Every outbound call listed at /docs/network — only api.github.com and api.exchangerate-api.com.",
 ];
 
-// Sweep utility: dispatch synthetic pointer events to drive hairline figures
-// through their genuine input channel (Path B from RESULT.md v3.0).
-function sweep(
+// Synthetic pointer primitives (Path B; GLM round 03 V4/V5).
+// Per-event rect re-read; buttons =1 while pressed (0 on up); down at pts[0],
+// move at pts[1..], up at pts[last]. Points are px offsets from the stage
+// element's top-left, already scaled by k.
+type Pt = [number, number];
+
+function dispatchPointer(
   el: HTMLElement,
-  points: Array<[number, number]>,
-  duration: number,
-): Promise<void> {
+  type: "pointerdown" | "pointermove" | "pointerup",
+  x: number,
+  y: number,
+) {
+  const rect = el.getBoundingClientRect();
+  el.dispatchEvent(
+    new PointerEvent(type, {
+      clientX: rect.left + x,
+      clientY: rect.top + y,
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+      isPrimary: true,
+      pointerType: "mouse",
+      buttons: type === "pointerup" ? 0 : 1,
+    }),
+  );
+}
+
+// Synchronous pass — reduced-motion: every step dispatched in one frame
+// (state still changes; all 32 steps kept for angle-delta integrators).
+function sweep(el: HTMLElement, points: Pt[]): Promise<void> {
+  for (let i = 0; i < points.length; i++) {
+    const type =
+      i === 0 ? "pointerdown" : i === points.length - 1 ? "pointerup" : "pointermove";
+    dispatchPointer(el, type, points[i][0], points[i][1]);
+  }
+  return Promise.resolve();
+}
+
+// Timed pass — 40ms-grid steps (GLM V5).
+function sweepTimed(el: HTMLElement, points: Pt[], stepMs: number): Promise<void> {
   return new Promise((resolve) => {
-    const rect = el.getBoundingClientRect();
-    const stepMs = 16;
-    const totalSteps = Math.ceil(duration / stepMs);
-    let step = 0;
+    let i = 0;
     const timer = setInterval(() => {
-      if (step >= totalSteps) {
+      if (i >= points.length) {
         clearInterval(timer);
         resolve();
         return;
       }
-      const t = step / totalSteps;
-      const idx = Math.min(Math.floor(t * (points.length - 1)), points.length - 2);
-      const frac = t * (points.length - 1) - idx;
-      const [x0, y0] = points[idx];
-      const [x1, y1] = points[idx + 1];
-      const x = x0 + (x1 - x0) * frac;
-      const y = y0 + (y1 - y0) * frac;
-      const clientX = rect.left + (x / 400) * rect.width;
-      const clientY = rect.top + (y / 320) * rect.height;
-      el.dispatchEvent(
-        new PointerEvent("pointermove", {
-          clientX,
-          clientY,
-          bubbles: true,
-          pointerId: 1,
-          pointerType: "mouse",
-          isPrimary: true,
-        }),
-      );
-      step++;
+      const type =
+        i === 0 ? "pointerdown" : i === points.length - 1 ? "pointerup" : "pointermove";
+      dispatchPointer(el, type, points[i][0], points[i][1]);
+      i++;
     }, stepMs);
   });
 }
+
+// Figure-space constants (GLM V4). Center = LAP bbox: x (128+272)/2,
+// y (118+206)/2. Orbit R1=25 sits between RD=17 and the LAP orbit 44–73;
+// pointerdown at R0=12 (< RD, on the dial). Full CW lap guarantees crossing
+// the 40° COMBO reference whether it is an absolute dial angle or cumulative.
+const DIAL_CENTER: Pt = [200, 162];
+const R0 = 12;
+const R1 = 25;
+const STEPS = 32;
+const STEP_MS = 20;
+
+// k scales figure space → stage px, read from the LIVE SVG (never assume 1).
+function scaleK(stage: HTMLElement): number {
+  const svg = stage.querySelector("svg");
+  const vbW = svg?.viewBox.baseVal.width || 400;
+  const px = svg?.getBoundingClientRect().width || stage.clientWidth;
+  return px / vbW;
+}
+
+function dialLap(k: number): Pt[] {
+  const [cx, cy] = DIAL_CENTER;
+  const pts: Pt[] = [];
+  for (let i = 0; i <= STEPS; i++) {
+    const t = i / STEPS;
+    const th = ((180 + 360 * t) * Math.PI) / 180; // increasing θ = CW in y-down space
+    const r = R0 + (R1 - R0) * Math.min(1, (t * STEPS) / 3); // radial ramp over first 3 steps
+    pts.push([(cx + r * Math.cos(th)) * k, (cy + r * Math.sin(th)) * k]);
+  }
+  return pts;
+}
+
+// GAP4 sweep across the stage at dial-center height: x 40→360 open, 360→40 close.
+function layersSweep(k: number, reverse = false): Pt[] {
+  const y = DIAL_CENTER[1] * k;
+  const n = reverse ? 24 : STEPS;
+  const pts: Pt[] = [];
+  for (let i = 0; i <= n; i++) {
+    const x = reverse ? 360 - (320 * i) / n : 40 + (320 * i) / n;
+    pts.push([x * k, y]);
+  }
+  return pts;
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");
@@ -92,8 +150,48 @@ function FigureInstrument({ rm }: { rm: boolean }) {
   // The tour runs ~12s; after that, stop and let the user drive.
   useEffect(() => {
     setReadout(null);
-    setPlaying(false);
   }, [mode]);
+
+  // V5 narrative timing. VAULT→LAYERS 2,360ms: dial lap 640 → open settle 320
+  // → crossfade window 520 (out 320 / in 400 @ delay 120) → layers sweep 640
+  // → settle 240. LAYERS→VAULT 2,000ms: collapse sweep 480 → hold 240
+  // → crossfade 520 → re-open dial lap 640 → settle 120. Under reduced motion
+  // every duration is 0 (synchronous dispatch; holds skipped). We drive
+  // pointer only — hairline owns the figure's internal springs.
+  const runNarrative = async (target: "layers" | "vault") => {
+    const stage = stageRef.current;
+    if (!stage) {
+      setMode(target);
+      return;
+    }
+    setTourRunning(true);
+    setReadout("the vault opens onto the stack");
+    const k = scaleK(stage);
+    if (target === "layers") {
+      await (rm ? sweep(stage, dialLap(k)) : sweepTimed(stage, dialLap(k), STEP_MS));
+      if (!rm) await wait(320);
+      setMode("layers");
+      if (!rm) await wait(520); // crossfade window; incoming handlers attach on mount
+      const s2 = stageRef.current ?? stage;
+      const k2 = scaleK(s2);
+      await (rm ? sweep(s2, layersSweep(k2)) : sweepTimed(s2, layersSweep(k2), STEP_MS));
+      if (!rm) await wait(240);
+    } else {
+      await (rm ? sweep(stage, layersSweep(k, true)) : sweepTimed(stage, layersSweep(k, true), STEP_MS));
+      if (!rm) await wait(240);
+      setMode("vault");
+      if (!rm) await wait(520);
+      const s2 = stageRef.current ?? stage;
+      const k2 = scaleK(s2);
+      await (rm ? sweep(s2, dialLap(k2)) : sweepTimed(s2, dialLap(k2), STEP_MS));
+      if (!rm) await wait(120);
+    }
+    stage.dispatchEvent(
+      new PointerEvent("pointerleave", { bubbles: true, pointerId: 1, pointerType: "mouse" }),
+    );
+    setReadout(null);
+    setTourRunning(false);
+  };
 
   const isVault = mode === "vault";
   const defaultReadout = isVault
@@ -121,68 +219,18 @@ function FigureInstrument({ rm }: { rm: boolean }) {
               aria-controls="figure-panel"
               tabIndex={active ? 0 : -1}
               data-mode={m}
-              onClick={async () => {
-                if (tourRunning) return;
-                const stage = stageRef.current;
-                if (!stage) { setMode(m); return; }
-                const switchingToLayers = m === "layers" && mode === "vault";
-                const switchingToVault = m === "vault" && mode === "layers";
-                if (switchingToLayers) {
-                  setTourRunning(true);
-                  setReadout("the vault opens onto the stack");
-                  const pts: Array<[number, number]> = [];
-                  for (let i = 0; i <= 24; i++) {
-                    const angle = (i / 24) * Math.PI * 2 - Math.PI / 2;
-                    pts.push([200 + 25 * Math.cos(angle), 160 + 25 * Math.sin(angle)]);
-                  }
-                  await sweep(stage, pts, 400);
-                  await new Promise((r) => setTimeout(r, 200));
-                  setMode(m);
-                  await new Promise((r) => setTimeout(r, 150));
-                  const newStage = stageRef.current;
-                  if (newStage) {
-                    const pts2: Array<[number, number]> = [];
-                    for (let i = 0; i <= 32; i++) {
-                      pts2.push([40 + i * 10.5, 160]);
-                    }
-                    await sweep(newStage, pts2, 640);
-                  }
-                  await new Promise((r) => setTimeout(r, 200));
-                  setReadout(null);
-                  setTourRunning(false);
-                } else if (switchingToVault) {
-                  setTourRunning(true);
-                  setReadout("the vault opens onto the stack");
-                  const pts: Array<[number, number]> = [];
-                  for (let i = 0; i <= 20; i++) {
-                    pts.push([340 - i * 14, 160]);
-                  }
-                  await sweep(stage, pts, 400);
-                  await new Promise((r) => setTimeout(r, 200));
-                  setMode(m);
-                  await new Promise((r) => setTimeout(r, 150));
-                  const newStage = stageRef.current;
-                  if (newStage) {
-                    const pts2: Array<[number, number]> = [];
-                    for (let i = 0; i <= 24; i++) {
-                      const angle = (i / 24) * Math.PI * 2 - Math.PI / 2;
-                      pts2.push([200 + 25 * Math.cos(angle), 160 + 25 * Math.sin(angle)]);
-                    }
-                    await sweep(newStage, pts2, 400);
-                  }
-                  await new Promise((r) => setTimeout(r, 200));
-                  setReadout(null);
-                  setTourRunning(false);
-                } else {
-                  setMode(m);
-                }
+              aria-disabled={tourRunning}
+              onClick={() => {
+                if (tourRunning || m === mode) return;
+                void runNarrative(m);
               }}
               onKeyDown={(e) => {
                 if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
                   e.preventDefault();
                   const next = m === "vault" ? "layers" : "vault";
-                  setMode(next);
+                  if (tourRunning) return;
                   document.getElementById(`figure-tab-${next}`)?.focus();
+                  void runNarrative(next);
                 }
               }}
               className="mono"
@@ -190,7 +238,9 @@ function FigureInstrument({ rm }: { rm: boolean }) {
                 fontSize: 11,
                 padding: "6px 10px",
                 borderRadius: 6,
-                cursor: "pointer",
+                cursor: tourRunning ? "default" : "pointer",
+                opacity: tourRunning ? 0.45 : 1,
+                pointerEvents: tourRunning ? "none" : "auto",
                 background: active ? "#ffffff" : "transparent",
                 color: active ? "#050506" : "#a1a1aa",
                 border: `1px solid ${active ? "#ffffff" : "rgba(255,255,255,0.12)"}`,
@@ -230,10 +280,10 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             key={mode}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 0.9, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
+            exit={{ opacity: 0, y: -8, transition: { duration: rm ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] } }}
             transition={{
-              duration: isVault ? 0.32 : 0.4,
-              delay: isVault ? 0 : 0.12,
+              duration: rm ? 0 : 0.4,
+              delay: rm ? 0 : 0.12,
               ease: [0.16, 1, 0.3, 1],
             }}
           >
@@ -263,36 +313,25 @@ function FigureInstrument({ rm }: { rm: boolean }) {
         <button
           type="button"
           disabled={tourRunning}
+          aria-disabled={tourRunning}
           onClick={async () => {
             const stage = stageRef.current;
             if (!stage) return;
             setTourRunning(true);
-            setReadout(isVault ? "the vault opens onto the stack" : "the vault opens onto the stack");
+            setReadout(isVault ? "the vault opens onto the stack" : "the stack closes onto the vault");
+            const k = scaleK(stage);
             if (isVault) {
-              // Sweep around the dial center (200,160) with radius 25
-              // to spin the dial to 40° (COMBO) → triggers setOpen(true) → bolts draw back
-              const pts: Array<[number, number]> = [];
-              for (let i = 0; i <= 24; i++) {
-                const angle = (i / 24) * Math.PI * 2 - Math.PI / 2;
-                pts.push([200 + 25 * Math.cos(angle), 160 + 25 * Math.sin(angle)]);
-              }
-              await sweep(stage, pts, 400);
-              // Hold so the user sees the opened vault
-              await new Promise((r) => setTimeout(r, 600));
+              // dial lap to 40° (COMBO) → bolts draw back; settle 320 (V4/V5)
+              await (rm ? sweep(stage, dialLap(k)) : sweepTimed(stage, dialLap(k), STEP_MS));
+              if (!rm) await wait(320);
             } else {
-              // Sweep left to right across the stage to separate layers
-              // GAP4 goes from 0.18 (rest) to 1.0 (fully open)
-              const pts: Array<[number, number]> = [];
-              for (let i = 0; i <= 32; i++) {
-                pts.push([40 + i * 10.5, 160]);
-              }
-              await sweep(stage, pts, 640);
-              // Hold so the user sees the exploded layers
-              await new Promise((r) => setTimeout(r, 400));
+              // GAP4 0.18 → 1.0 across the stage; settle 240
+              await (rm ? sweep(stage, layersSweep(k)) : sweepTimed(stage, layersSweep(k), STEP_MS));
+              if (!rm) await wait(240);
             }
-            // Reset pointer to leave state
-            stage.dispatchEvent(new PointerEvent("pointerleave", { bubbles: true, pointerId: 1, pointerType: "mouse" }));
-            await new Promise((r) => setTimeout(r, 200));
+            stage.dispatchEvent(
+              new PointerEvent("pointerleave", { bubbles: true, pointerId: 1, pointerType: "mouse" }),
+            );
             setTourRunning(false);
             setReadout(null);
           }}
@@ -301,6 +340,7 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             marginTop: 8,
             fontSize: 11,
             color: tourRunning ? "#63636b" : "#8a8a94",
+            opacity: tourRunning ? 0.45 : 1,
             background: "transparent",
             border: "1px solid rgba(255,255,255,0.12)",
             borderRadius: 6,
