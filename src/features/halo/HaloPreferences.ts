@@ -29,21 +29,21 @@
  * sparse index map, and a stale entry naming a kind that no longer exists is simply
  * dropped instead of corrupting the sequence.
  */
-/** The three tab pages the expanded island can show, in the handoff's §5 order.
+/** The FOUR tab pages the expanded island can show, in the governing spec's §3–§5 order
+ *  (`agent/docs/halo/HALO_STATES.html`).
  *
- *  `now` WAS HERE. It was a whole page for "App / Website / AI usage", and the same app and
- *  website were ALSO the two halves of the Focus row's `STOPWATCH · Figma` eyebrow — two
- *  screens printing one fact, which is how the Focus page ended up looking like a stopwatch
- *  widget while the actual Focus FEATURE ran somewhere else entirely.
+ *  HISTORY, so nobody re-argues this: `now` WAS here, was removed 2026-10 when its content
+ *  (tracked app + website) was folded into the Focus page — that merge is in the git log and
+ *  was done against a genuine instruction of that cycle. On 2026-11-12 the user asked "why is
+ *  it that there's only 3 pages on the thing?", and the governing design file defines FOUR
+ *  pages — Focus, Now, Deadlines, Tools — with a full state table for Now (§3: app + website,
+ *  not-in-a-browser, private window, nothing active). So `now` is RESTORED to the spec: the
+ *  tracked app and site still also live on the Focus page's eyebrow row, but the Now page is
+ *  the dedicated three-block screen the spec draws (App | Website | AI usage).
  *
- *  The user's instruction: "move it to the Focus thing … the focus doesn't look like a focus
- *  because it's not even connected to the Focus feature." So `now` is gone: the tracked app and
- *  site live on Focus (where they already were), and Focus now also renders the real session.
- *
- *  `normalizeHaloPages` drops ids it does not recognise, so a persisted
- *  `["focus","now","deadlines","tools"]` degrades to `["focus","deadlines","tools"]` by itself —
- *  no migration, and no stale tab. */
-export type HaloPageId = 'focus' | 'deadlines' | 'tools';
+ *  `normalizeHaloPages` accepts ids it knows, so an older persisted 3-page order is repaired
+ *  by inserting the missing page at its canonical position — no data loss, no stale tab. */
+export type HaloPageId = 'focus' | 'now' | 'deadlines' | 'tools';
 
 export interface HaloPagePrefs {
   /** User sequence. Normalised by de-dupe + appending anything missing, like `order`. */
@@ -392,7 +392,7 @@ export const HALO_DEFAULT_ORDER: string[] = [...HALO_ORDERABLE];
 export const HALO_PREFS_KEY = 'haloIsland';
 
 /** The handoff §5 page order. */
-export const HALO_DEFAULT_PAGE_ORDER: HaloPageId[] = ['focus', 'deadlines', 'tools'];
+export const HALO_DEFAULT_PAGE_ORDER: HaloPageId[] = ['focus', 'now', 'deadlines', 'tools'];
 
 /** The items `HALO_SETTINGS.html` offers as the pill's main item. */
 export const HALO_PILL_RESIDENTS: readonly HaloPillResident[] = [
@@ -403,7 +403,7 @@ export const HALO_PILL_RESIDENTS: readonly HaloPillResident[] = [
   'hud',
 ];
 
-export const HALO_PAGE_IDS: readonly HaloPageId[] = ['focus', 'deadlines', 'tools'];
+export const HALO_PAGE_IDS: readonly HaloPageId[] = ['focus', 'now', 'deadlines', 'tools'];
 export const HALO_ANCHORS = ['left', 'center', 'right'] as const;
 /** §8: Windows floats 8px below the edge; GNOME must clear a 32px top bar. */
 export const HALO_OFFSET_Y_MIN = 0;
@@ -520,14 +520,13 @@ export function normalizeHaloTrigger(raw: unknown): HaloTriggerPrefs {
   if (!raw || typeof raw !== 'object') return { ...d };
   const r = raw as Record<string, unknown>;
   return {
-    // Force 'click' -> 'hover': users who had 'click' from an old default
-    // reported hover "not working" because they didn't know the setting existed.
-    // 'hover' is the intended default; users who want click-only can re-select it.
-    mode: r.mode === 'click' ? 'hover' : pickEnum(r.mode, HALO_TRIGGER_MODES, d.mode),
-    // Reset absurd padding (max 240) to 0 — a 240px pad made the hot zone
-    // 678×272, which is not what any user wants. Users can re-add padding.
-    padX: (r.padX === 240 || r.padX === HALO_PAD_X_MAX) ? 0 : Math.round(clampNumber(r.padX, 0, HALO_PAD_X_MAX, d.padX)),
-    padY: (r.padY === 240 || r.padY === HALO_PAD_Y_MAX) ? 0 : Math.round(clampNumber(r.padY, 0, HALO_PAD_Y_MAX, d.padY)),
+    // Condition-based legacy correction (NOT a versioned migration — no
+    // preference-version field exists). Only migrate when ALL three old-default
+    // values are present simultaneously (mode='click' AND padX=240 AND padY=240).
+    // This indicates the old buggy default, not a deliberate user choice.
+    mode: (r.mode === 'click' && r.padX === 240 && r.padY === 240) ? 'hover' : pickEnum(r.mode, HALO_TRIGGER_MODES, d.mode),
+    padX: (r.mode === 'click' && r.padX === 240 && r.padY === 240) ? 0 : Math.round(clampNumber(r.padX, 0, HALO_PAD_X_MAX, d.padX)),
+    padY: (r.mode === 'click' && r.padX === 240 && r.padY === 240) ? 0 : Math.round(clampNumber(r.padY, 0, HALO_PAD_Y_MAX, d.padY)),
     openDelayMs: Math.round(clampNumber(r.openDelayMs, HALO_OPEN_DELAY_MIN, HALO_OPEN_DELAY_MAX, d.openDelayMs)),
     closeDelayMs: Math.round(clampNumber(r.closeDelayMs, HALO_CLOSE_DELAY_MIN, HALO_CLOSE_DELAY_MAX, d.closeDelayMs)),
     leaveMarginPx: Math.round(clampNumber(r.leaveMarginPx, HALO_LEAVE_MARGIN_MIN, HALO_LEAVE_MARGIN_MAX, d.leaveMarginPx)),
@@ -626,7 +625,20 @@ function normalizeHaloPages(raw: unknown): HaloPagePrefs {
     seen.add(id);
     order.push(id);
   }
-  for (const id of HALO_DEFAULT_PAGE_ORDER) if (!seen.has(id)) order.push(id);
+  /* REPAIR, not append-at-end: an old 3-page order saved before `now` was restored would
+   * otherwise come back as the LAST tab. Inserting each missing page BEFORE the first kept
+   * page that canonically follows it reproduces the spec order for the known case
+   * ([focus, deadlines, tools] + missing now → focus, NOW, deadlines, tools) while leaving
+   * a user-chosen sequence otherwise untouched. */
+  const canonicalIndex = (id: HaloPageId) => HALO_PAGE_IDS.indexOf(id);
+  for (const id of HALO_DEFAULT_PAGE_ORDER) {
+    if (order.includes(id)) continue;
+    let at = order.length;
+    for (let i = 0; i < order.length; i++) {
+      if (canonicalIndex(order[i]) > canonicalIndex(id)) { at = i; break; }
+    }
+    order.splice(at, 0, id);
+  }
 
   const hidden: HaloPageId[] = [];
   for (const k of Array.isArray(r.hidden) ? (r.hidden as unknown[]) : []) {

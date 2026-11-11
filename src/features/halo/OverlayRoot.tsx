@@ -7,6 +7,7 @@ import { FocusPageRow, type HaloFocusState } from './FocusPageRow';
 import { PillEdge } from './PillEdge';
 import { PillSubject } from './PillSubject';
 import { SchedulePageRow, formatDeadlineDue, type HaloLifePayload } from './SchedulePageRow';
+import { NowPageRow } from './NowPageRow';
 import { getAfkPrefs, isPassiveCategory } from '../../lib/afk';
 import { DictationIsland } from './DictationIsland';
 import './halo.css';
@@ -22,6 +23,7 @@ import {
   surfaceTransformOrigin,
   visibleOrder,
   HALO_DEFAULT_PAGE_ORDER,
+  HALO_PREFS_KEY,
   type HaloPrefs,
 } from './HaloPreferences';
 import { HaloTabRail, nextVisiblePage, visiblePages, type HaloPage } from './HaloTabRail';
@@ -488,6 +490,16 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Set by DictationIsland so a global-shortcut command can toggle recording. */
   const recordToggleRef = useRef<(() => void) | null>(null);
+  /** Pending toggle requested before DictationIsland was mounted (e.g. shortcut pressed on another tab). */
+  const pendingToggleRef = useRef(false);
+  const registerToggle = useCallback((fn: (() => void) | null) => {
+    recordToggleRef.current = fn;
+    if (pendingToggleRef.current && fn) {
+      pendingToggleRef.current = false;
+      // Defer one tick so the component is fully mounted before we call into the hook.
+      setTimeout(() => { try { fn(); } catch { /* ignore */ } }, 0);
+    }
+  }, []);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* THE LAST HOVER SIGNAL MAIN SENT, as `inside:pinned`.
    *
@@ -775,12 +787,23 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   useEffect(() => {
     if (!bridge?.onCommand) return;
     return bridge.onCommand(({ command }) => {
-      if (command === 'toggle-record') recordToggleRef.current?.();
+      if (command === 'toggle-record') {
+        // Make sure the island is open and on the page that hosts the microphone owner
+        // before we ask it to toggle; otherwise the toggle is a no-op.
+        pendingToggleRef.current = true;
+        open();
+        setTab('tools');
+        // If DictationIsland is already mounted, toggle immediately as well.
+        recordToggleRef.current?.();
+      }
       /* Dictation lives on the TOOLS page now (Figma §5), so the shortcut selects that page
          instead of a tab that no longer exists. */
-      if (command === 'show-dictation') setTab('tools');
+      if (command === 'show-dictation') {
+        open();
+        setTab('tools');
+      }
     });
-  }, []);
+  }, [open]);
 
   /* THE PULL THAT MAKES `enabled: false` AUTHORITATIVE AT FIRST PAINT.
    *
@@ -841,81 +864,6 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     return () => window.removeEventListener('pointerdown', onDown);
   }, [pinned]);
 
-  /* PRESS-AND-DRAG — reposition the island from the pill itself. Bounded: slop-gated
-   * (HALO \u00a752), pointer-captured (\u00a753), clamped to \u00b1600px, terminates on release, and the
-   * trailing click is suppressed so a drag never toggles the stopwatch. The final resting
-   * position snaps to a predefined edge/anchor/gap (no freeform residue, \u00a7127). Only the
-   * island window drags. */
-  useEffect(() => {
-    if (inApp || !bridge?.drag) return;
-    const SLOP = 6;
-    const INTERACTIVE =
-      'button, a, input, select, textarea, [role="button"], [role="radio"], [role="slider"], [role="tab"], [role="switch"], [role="menuitem"], [data-no-drag]';
-    let pending = false;
-    let engaged = false;
-    let startX = 0;
-    let startY = 0;
-    let pointerId = -1;
-    let suppressClick = false;
-    let captureEl: Element | null = null;
-
-    const onDown = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      const t = e.target as HTMLElement | null;
-      const surface = t?.closest('.halo-surface') as HTMLElement | null;
-      if (!surface) return;
-      if (t?.closest(INTERACTIVE)) return;
-      pending = true;
-      engaged = false;
-      startX = e.clientX;
-      startY = e.clientY;
-      pointerId = e.pointerId;
-      captureEl = surface;
-    };
-    const onMove = (e: PointerEvent) => {
-      if (!pending || e.pointerId !== pointerId) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      if (!engaged) {
-        if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
-        engaged = true;
-        suppressClick = true;
-        try { captureEl?.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-        bridge.drag?.({ phase: 'begin', dx: 0, dy: 0 });
-      }
-      bridge.drag?.({ phase: 'update', dx: Math.round(dx), dy: Math.round(dy) });
-    };
-    const finish = (e: PointerEvent) => {
-      if (!pending || e.pointerId !== pointerId) return;
-      if (engaged) {
-        bridge.drag?.({ phase: 'end', dx: 0, dy: 0 });
-      }
-      pending = false;
-      engaged = false;
-      pointerId = -1;
-      captureEl = null;
-      try { (e.target as Element)?.releasePointerCapture?.(e.pointerId); } catch { /* ignore */ }
-    };
-    const onClickCapture = (e: MouseEvent) => {
-      if (!suppressClick) return;
-      suppressClick = false;
-      e.stopPropagation();
-      e.preventDefault();
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
-    window.addEventListener('click', onClickCapture, true);
-    return () => {
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
-      window.removeEventListener('click', onClickCapture, true);
-    };
-  }, [inApp]);
-
 // Escape collapses — a keyboard user must not need a mouse to close this.
     // §5 also gives the expanded panel Ctrl+Left / Ctrl+Right to switch pages. Only Escape
     // was handled, so the keyboard path to pages 2-4 did not exist.
@@ -947,12 +895,24 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
    * stopwatch and fall back to it; only use the local store when we have never
    * received a remote reading. */
   const lastGoodRemoteStopwatch = useRef<StopwatchPayload | null>(null);
-  // Only accept a remote reading as "last good" if it has a non-zero display value.
-  // A zero reading during hydration (or a reset) must not overwrite a known-good value.
+  const lastSeenResetCount = useRef<number>(remote?.stopwatch?.resetCount ?? 0);
+  // A reset bumps resetCount. When that happens, the remote reading is now a
+  // legitimate zero and must NOT be masked by the last non-zero value — otherwise
+  // the Reset button appears to do nothing. Clear the stale "last good" so the
+  // new (possibly zero) reading wins.
+  const resetHappened = !!remote?.stopwatch && remote.stopwatch.resetCount !== lastSeenResetCount.current;
+  if (resetHappened) {
+    lastGoodRemoteStopwatch.current = null;
+    lastSeenResetCount.current = remote!.stopwatch!.resetCount;
+  }
+  // Only accept a remote reading as "last good" if it has a non-zero display
+  // value (so a transient null/late push doesn't flash the timer to 0).
   if (remote?.stopwatch && remote.stopwatch.displayMs > 0) lastGoodRemoteStopwatch.current = remote.stopwatch;
-  const swPayload = (remote?.stopwatch && remote.stopwatch.displayMs > 0)
-    ? remote.stopwatch
-    : (lastGoodRemoteStopwatch.current ?? liveStopwatch);
+  const swPayload = resetHappened
+    ? (remote?.stopwatch ?? liveStopwatch)
+    : (remote?.stopwatch && remote.stopwatch.displayMs > 0)
+      ? remote.stopwatch
+      : (lastGoodRemoteStopwatch.current ?? liveStopwatch);
 
   /* The raw STORE snapshot for the interactive surfaces (FocusPageRow, StopwatchHero), which
    * need `paused` / `activeTier` / `reset` / `setPaused` — none of which exist on the flat wire
@@ -1042,7 +1002,7 @@ const inBrowser = currentApp.category === 'Browser';
       ...opts,
     });
 
-    const out: IslandActivity[] = [mk('stopwatch', stopwatch)];
+    const out: IslandActivity[] = [mk('stopwatch', swPayload)];
     /* `critical` — RESULT.md §2.10, `role: emergency_interrupt`, and the ONLY lane-1 entry in
      * §1.8's precedence table. The kind, its payload type, its lane (`critical: 'toast'`) and
      * its precedence rank already existed in slotModel.ts; nothing ever PRODUCED one, so the
@@ -1130,7 +1090,7 @@ const inBrowser = currentApp.category === 'Browser';
     if (producers.hud) out.push(mk('hud', producers.hud));
     if (producers.deadline) out.push(mk('nextDeadline', producers.deadline));
     return out;
-  }, [stopwatch, currentApp, remote?.dictation, producers, afkPrefs]);
+  }, [swPayload, storeSnap, currentApp, remote?.dictation, producers, afkPrefs]);
 
   /* User layout: which widgets are on, in what order, how many at once. `visibleOrder`
    * drops hidden kinds; the model's `maxVisible` then caps the roster.
@@ -1594,7 +1554,7 @@ const inBrowser = currentApp.category === 'Browser';
    * redundant — rendering it too produces a duplicate pill of a different size. The host owns
    * the single pill; the in-app mount only keeps the stopwatch clock alive (hooks above already
    * ran, so reporting to main is unaffected). */
-  if (inApp && prefs.enabled && prefs.resident !== 'off') return null;
+  if (inApp && prefs.enabled) return null;
 
   return (
     <div className="halo-root" data-halo-root="true" data-phase={expanded ? 'expanded' : 'compact'}>
@@ -1606,6 +1566,8 @@ const inBrowser = currentApp.category === 'Browser';
           // preference, so it forces the same short non-spring path `motionReduced` selects.
           transition={reduce ? STATIC_TRANSITION : surfaceTransition}
           className={`halo-surface halo-shape-${prefs.shape} ${expanded ? 'halo-expanded' : 'halo-compact'}`}
+          onMouseEnter={() => { if (hoverTriggered) open(); }}
+          onMouseLeave={() => { if (!pinned) close(); }}
           onWheel={onSurfaceWheel}
           data-edge={prefs.edge}
           data-pinned={pinned}
@@ -1871,47 +1833,48 @@ const inBrowser = currentApp.category === 'Browser';
           <div
             data-halo-pill-body="true"
             onPointerDown={(e) => {
-              const t = setTimeout(() => {
-                const s = dragStartRef.current;
-                if (s && !s.moved) {
-                  (window as any).haloBridge?.drag?.({ phase: 'begin', dx: 0, dy: 0 });
-                }
-              }, 350);
-              dragStartRef.current = { px: e.screenX, py: e.screenY, x: baseDragX, y: baseDragY, t: Date.now(), timer: t, moved: false };
+              if (e.button !== 0) return;
+              dragStartRef.current = {
+                px: e.clientX,
+                py: e.clientY,
+                x: baseDragX,
+                y: baseDragY,
+                t: Date.now(),
+                timer: null,
+                moved: false,
+              };
             }}
             onPointerMove={(e) => {
               const s = dragStartRef.current;
               if (!s) return;
-              const elapsed = Date.now() - s.t;
-              if (elapsed < 350) return;
-              const dx = e.screenX - s.px;
-              const dy = e.screenY - s.py;
-              if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-              if (!dragging) {
+              const dx = e.clientX - s.px;
+              const dy = e.clientY - s.py;
+              if (!s.moved) {
+                if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+                s.moved = true;
                 setDragging(true);
                 try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch {}
-                (window as any).haloBridge?.drag?.({ phase: 'begin', dx: 0, dy: 0 });
+                bridge?.drag?.({ phase: 'begin', dx: 0, dy: 0 });
               }
-              s.moved = true;
-              (window as any).haloBridge?.drag?.({ phase: 'update', dx, dy });
+              bridge?.drag?.({ phase: 'update', dx: Math.round(dx), dy: Math.round(dy) });
               const clamp = (n: number) => Math.max(-600, Math.min(600, Math.round(n)));
               setDragPreview({ x: clamp(s.x + dx), y: clamp(s.y + dy) });
             }}
-            onPointerUp={async (e) => {
+            onPointerUp={(e) => {
               const s = dragStartRef.current;
               if (s?.timer) clearTimeout(s.timer);
-              if (dragging) {
+              if (s?.moved) {
                 try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch {}
-                (window as any).haloBridge?.drag?.({ phase: 'end', dx: 0, dy: 0 });
+                bridge?.drag?.({ phase: 'end', dx: 0, dy: 0 });
                 setDragPreview(null);
                 setDragging(false);
-              } else {
-                // short click: do nothing special (normal click handling remains)
               }
               dragStartRef.current = null;
             }}
             onPointerCancel={() => {
-              if (dragStartRef.current?.timer) clearTimeout(dragStartRef.current.timer);
+              const s = dragStartRef.current;
+              if (s?.timer) clearTimeout(s.timer);
+              if (s?.moved) bridge?.drag?.({ phase: 'end', dx: 0, dy: 0 });
               setDragPreview(null);
               setDragging(false);
               dragStartRef.current = null;
@@ -1976,7 +1939,10 @@ const inBrowser = currentApp.category === 'Browser';
          * deleted while its `halo:set-pinned` IPC stayed wired. */}
         {expanded && prefs.uiVersion === 'legacy' && (
           <LegacyHaloRail
-            tab={tab === 'deadlines' ? 'focus' : tab}
+            /* The legacy rail only knows the two tabs it shipped with ('focus' | 'tools');
+             * 'now' and 'deadlines' both fold onto 'focus' there, exactly as 'deadlines'
+             * always did. The Figma rail below renders all four properly. */
+            tab={tab === 'tools' ? 'tools' : 'focus'}
             onSelect={(next) => setTab(next)}
             pinned={pinned}
             onTogglePin={togglePin}
@@ -2111,6 +2077,17 @@ const inBrowser = currentApp.category === 'Browser';
           </div>
         )}
 
+        {/* ══ THE NOW PAGE — HALO_STATES.html §3 ═══════════════════════════════════
+         * Restored 2026-11-12: the governing spec defines FOUR pages and §3 is a full state
+         * table for Now (app + website, not-in-a-browser, private window, nothing active).
+         * `currentApp` is main's REAL foreground heartbeat (`NowPayload`) — the same payload
+         * the Focus eyebrow row reads — so the two pages cannot disagree about what is on
+         * screen. The AI block renders only when its producer delivered (NowPageRow's honesty
+         * rule), and the whole thing is one fixed-height row like every other page. */}
+        {expanded && tab === 'now' && (
+          <NowPageRow currentApp={currentApp} ai={producers.ai} />
+        )}
+
         {/* ══ THE SCHEDULE PAGE — a compact LIFE → SCHEDULE view ══════════════════
          *
          * WHAT THIS REPLACED. The page used to print ONE deadline as three labelled figures —
@@ -2152,7 +2129,7 @@ const inBrowser = currentApp.category === 'Browser';
 
         {expanded && tab === 'tools' && (
           <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
-            <DictationIsland expanded={expanded} />
+            <DictationIsland expanded={expanded} registerToggle={registerToggle} />
             <span aria-hidden="true" style={DIVIDER} />
             <button
               type="button"
@@ -2209,4 +2186,3 @@ const inBrowser = currentApp.category === 'Browser';
     </div>
   );
 }
-

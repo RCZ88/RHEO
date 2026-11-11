@@ -18,16 +18,19 @@
 import type { KeyboardEvent } from 'react';
 import {
   AlarmClock,
+  AppWindow,
   CalendarClock,
   Mic,
   type LucideIcon,
 } from 'lucide-react';
 
-/* THREE PAGES, NOT FOUR. `now` was removed with its content folded into `focus` — see the
- * note on `HaloPageId` in HaloPreferences.ts for why. */
-export type HaloPage = 'focus' | 'deadlines' | 'tools';
+/* FOUR PAGES — the governing spec (`agent/docs/halo/HALO_STATES.html` §1–§5) defines exactly
+ * four, and on 2026-11-12 the user asked "why is it that there's only 3 pages on the thing?"
+ * The old three-page comment here documented the `now`-into-focus merge; that decision is
+ * superseded and `now` is back (see HaloPreferences.ts). */
+export type HaloPage = 'focus' | 'now' | 'deadlines' | 'tools';
 
-export const HALO_PAGES: HaloPage[] = ['focus', 'deadlines', 'tools'];
+export const HALO_PAGES: HaloPage[] = ['focus', 'now', 'deadlines', 'tools'];
 
 interface PageMeta {
   label: string;
@@ -36,6 +39,9 @@ interface PageMeta {
 
 const PAGE_META: Record<HaloPage, PageMeta> = {
   focus: { label: 'Focus', icon: AlarmClock },
+  /* §3 "Now page states" — what is on screen RIGHT NOW: the app, the site, AI usage. The
+   * window icon is the row's own (`nameRow('win', …)` in the spec's Now table). */
+  now: { label: 'Now', icon: AppWindow },
   /* The label is SCHEDULE, not Deadlines. The page is a compact Life → Schedule view: the
    * nearest recurring class block AND every open deadline with the alarm set on it. Calling it
    * "Deadlines" while it leads with a class schedule was the same lie as "TODAY" over a

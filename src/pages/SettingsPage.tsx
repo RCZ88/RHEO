@@ -12,6 +12,7 @@ import {
   type AmbientPrefs,
 } from '../lib/ambient';
 import { consumeSectionHint, scrollToSection } from '../lib/deepNav';
+import { getLifeDraftAccentPrefs, setLifeDraftAccentPrefs } from '../lib/lifeDraftAccent';
 // Leaf module, not the `@/pages/registry` barrel: the barrel re-exports
 // `usePageSurface`, which imports React and reads `import.meta.env`. Importing it
 // here would make a plain data import drag the whole React hook chain in, which
@@ -368,6 +369,7 @@ import {
   HALO_SCALE_MIN,
   HALO_OFFSET_Y_MAX,
   HALO_OFFSET_Y_MIN,
+  HALO_DEFAULT_PAGE_ORDER,
   HALO_PILL_RESIDENTS,
   HALO_SIZE_TOKENS,
   isWidgetVisible,
@@ -2024,13 +2026,16 @@ externalSelect: 'Enter',
    * It also normalises before writing, so what lands on disk is always a value the island
    * will accept — a partially-edited object can never be persisted half-formed.
    */
-  /* Settings copy for the three handoff §5 pages. The `hint` is the one-line description shown
-   * under the name, taken from the handoff's own wording for each page.
+  /* Settings copy for the governing spec's four pages (`agent/docs/halo/HALO_STATES.html`
+   * §1–§5). The `hint` is the one-line description shown under the name, taken from each
+   * page's own section.
    *
-   * `now` was removed: its app/website readout folded into Focus, which is where the tracked
-   * target already lived, and Focus now also shows the real focus session and its lock. */
+   * HISTORY: `now` was removed in an earlier cycle (its app/website readout folded into
+   * Focus) and restored 2026-11-12 when the user asked "why is it that there's only 3 pages
+   * on the thing?" — the spec defines four pages and §3 is a full state table for Now. */
   const HALO_PAGE_LABELS: Record<HaloPageId, { label: string; hint: string }> = {
     focus: { label: 'Focus', hint: 'Stopwatch, what is being tracked, the focus session and its lock' },
+    now: { label: 'Now', hint: 'The app and website on screen right now, plus AI usage' },
     deadlines: { label: 'Schedule', hint: 'Nearest class block and open deadlines with their alarms' },
     tools: { label: 'Tools', hint: 'Dictation and console' },
   };
@@ -2041,12 +2046,12 @@ externalSelect: 'Enter',
     nextDeadline: { label: 'Next deadline', hint: 'Your closest open deadline' },
     hud: { label: 'Console', hint: 'Running console sessions' },
   };
-  /* The stored sequence, falling back to the handoff order so an install that never touched
+  /* The stored sequence, falling back to the spec's §5 order so an install that never touched
    * these settings still renders all four pages. `normalizeHaloPages` already guarantees the
    * array is complete, de-duped and never fully hidden. */
   const haloPages: HaloPageId[] = haloPrefs.pages?.order?.length
     ? haloPrefs.pages.order
-    : (['focus', 'deadlines', 'tools'] as HaloPageId[]);
+    : [...HALO_DEFAULT_PAGE_ORDER];
   const haloHidden: HaloPageId[] = haloPrefs.pages?.hidden ?? [];
 
   /* THE HITBOX DIAGRAM MUST DRAW THE REAL PILL.
@@ -2228,6 +2233,7 @@ externalSelect: 'Enter',
   }, []);
   // Global ambient background (the tinted wash). Live — no save bar.
   const [ambientPrefs, setAmbientPrefsState] = useState<AmbientPrefs>(getAmbientPrefs);
+  const [lifeDraftAccentEnabled, setLifeDraftAccentEnabled] = useState<boolean>(getLifeDraftAccentPrefs().enabled);
   useEffect(() => {
     const onAmbient = () => setAmbientPrefsState(getAmbientPrefs());
     window.addEventListener('ambient-prefs-changed', onAmbient);
@@ -2771,6 +2777,27 @@ externalSelect: 'Enter',
                 </div>
               </>
             )}
+          </GlassCard>
+
+          <GlassCard className="space-y-6">
+            <SectionHeader title="Life — Draft Accent" icon={<Sparkles className="w-5 h-5" />} />
+            <p className="text-xs text-zinc-500 mb-4">
+              When on, drafts in Life (Notes + River) render with the amber accent. When off, they stay neutral zinc.
+            </p>
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <label className="text-sm font-medium text-zinc-300">Draft accent</label>
+                <p className="text-xs text-zinc-500">Amber styling for draft cards</p>
+              </div>
+              <SettingsSwitch
+                checked={lifeDraftAccentEnabled}
+                label="Life draft accent"
+                onChange={(v) => {
+                  setLifeDraftAccentPrefs({ enabled: v });
+                  setLifeDraftAccentEnabled(v);
+                }}
+              />
+            </div>
           </GlassCard>
 
           <GlassCard className="space-y-6">
