@@ -1,19 +1,27 @@
-// RHEO Dashboard — CardLibrary (Full Customization UI)
-// Customizable card library: browse, add/remove, resize, rearrange,
-// preview, save/load presets. Uses shadcn base-nova + motion v12 + lucide.
+// RHEO Dashboard — CardLibrary (Workbench revamp — direction C)
+// Customization UI where every card shows its real shape first: per-widget
+// identity (accent + kicker + preview kind), on-card opt-in switch, dashboard-
+// accurate size chips, live dashboard mirror. Sources: Vengeance expandable-bento
+// (card→overlay preview), Animate UI motion law (exits faster than entrances,
+// transform/opacity only), Uiverse knob mechanic re-skinned to LAMINAR.
+//
+// LAMINAR: chrome single-hue (--page-accent); each card's OWN accent is data
+// identity from widgetTheme.ts, one signal per card; radii 8/12/pill; no glass,
+// no springs; prefers-reduced-motion honored.
 //
 // Stack: shadcn/ui (base-nova) · motion v12 · lucide-react · Tailwind v4
-// LAMINAR: tween easing, token colors, no spring physics, no glass on chrome.
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode, type DragEvent as ReactDragEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Activity, Calendar, Sparkles, Target, AlertCircle, Zap, BarChart3,
   Pin, Moon, Brain, Orbit, Clock, Flame, ArrowRight, CalendarDays, Box,
-  Check, Eye, X, Search, Grid3X3, List, ChevronDown, GripVertical,
+  Check, Eye, X, Search, Grid3X3, List, ChevronDown,
   Plus, Trash2, Save, RotateCcw, LayoutDashboard, Filter,
+  Bot, Terminal, Wallet, Globe, Shield, Trophy, BookOpen, ClipboardCheck,
+  CalendarSync, Layers, Gauge,
 } from 'lucide-react';
-import { WidgetRegistry, DEFAULT_LAYOUT, type DashboardLayoutConfig, type WidgetConfig, type WidgetSize } from './WidgetRegistry';
+import { WidgetRegistry, DEFAULT_LAYOUT, type DashboardLayoutConfig, type WidgetConfig } from './WidgetRegistry';
 import { DashboardDataProvider, type DashboardData } from './DashboardContext';
 import { getWidgetTheme } from './widgetTheme';
 import './registerWidgets';
@@ -28,6 +36,8 @@ const PRESETS_KEY = 'dashboard_widget_presets';
 const ICON_MAP: Record<string, any> = {
   Activity, Calendar, Sparkles, Target, AlertCircle, Zap, BarChart3,
   Pin, Moon, Brain, Orbit, Clock, Flame, ArrowRight, CalendarDays, Box,
+  Bot, Terminal, Wallet, Globe, Shield, Trophy, BookOpen, ClipboardCheck,
+  CalendarSync, Layers, Gauge,
 };
 
 function getIcon(name: string): any {
@@ -45,20 +55,6 @@ const CATEGORIES: { value: WidgetConfig['category']; label: string; icon: any }[
   { value: 'system', label: 'System', icon: Box },
 ];
 
-// Size presets for widget resizing (cols × rows)
-const SIZE_PRESETS: WidgetSize[] = [
-  { cols: 1, rows: 1 },
-  { cols: 2, rows: 1 },
-  { cols: 3, rows: 1 },
-  { cols: 4, rows: 1 },
-  { cols: 6, rows: 1 },
-  { cols: 1, rows: 2 },
-  { cols: 2, rows: 2 },
-  { cols: 3, rows: 2 },
-  { cols: 1, rows: 3 },
-  { cols: 2, rows: 3 },
-];
-
 // ── Persistence ────────────────────────────────────────────────────────────
 
 function readLocal<T>(key: string): T | null {
@@ -67,14 +63,6 @@ function readLocal<T>(key: string): T | null {
     return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
-  }
-}
-
-function writeLocal(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Storage full — silent fail
   }
 }
 
@@ -96,7 +84,7 @@ async function persistLayout(layout: DashboardLayoutConfig): Promise<boolean> {
   let ok = true;
   try {
     localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
-  } catch {
+  } catch (err) {
     console.warn('[CardLibrary] localStorage save failed:', err);
     ok = false;
   }
@@ -166,49 +154,194 @@ function isValidLayout(v: any): v is DashboardLayoutConfig {
   return !!v && Array.isArray(v.widgetOrder) && typeof v.widgetVisibility === 'object' && v.widgetVisibility !== null;
 }
 
-// ── Size helpers ────────────────────────────────────────────────────────────
+// ── Workbench data: sizes straight from the live dashboard geometry ────────
+//
+// The v4 gridPositions the old resize control wrote are NOT read by the
+// dashboard (it renders ROW_TEMPLATES + the shared layout store), so a size
+// chosen there was theater. The honest "size" of a card is the w×h share its
+// row template gives it — displayed here, never edited.
 
-function getAvailableSizes(widget: WidgetConfig): WidgetSize[] {
-  const result: WidgetSize[] = [];
-  for (const preset of SIZE_PRESETS) {
-    if (preset.cols >= widget.minSize.cols && preset.cols <= widget.maxSize.cols &&
-        preset.rows >= widget.minSize.rows && preset.rows <= widget.maxSize.rows) {
-      result.push(preset);
-    }
+const TEMPLATE_SIZE: Map<string, { w: number; h: number }> = new Map();
+for (const row of ROW_TEMPLATES) {
+  for (const cell of row.cells) TEMPLATE_SIZE.set(cell.id, { w: cell.w, h: cell.h });
+}
+for (const opt of OPT_IN_WIDGETS) TEMPLATE_SIZE.set(opt.id, { w: opt.w, h: opt.h });
+
+function templateSizeLabel(id: string, fallback: string): string {
+  const t = TEMPLATE_SIZE.get(id);
+  return t ? `${t.w}×${t.h}` : fallback;
+}
+
+/** Wide cards — the row-template widgets that span most of a dashboard row. */
+const WIDE_CARDS = new Set<string>([
+  'status-band', 'schedule-hero', 'insight-strip', 'tier-breakdown',
+  'pinned-activities', 'productivity-chart', 'activity-feed', 'momentum-hero',
+  'app-ecosystem', 'schedule', 'insights', 'recent-sessions',
+  'unified-goals', 'schedule-sync', 'health-widget', 'drilldown',
+]);
+
+/** Preview archetype per widget — the shape its data actually takes. */
+type PreviewKind = 'live' | 'bars' | 'ring' | 'rows' | 'orbit' | 'terminal' | 'stats';
+const PREVIEW_KIND: Record<string, PreviewKind> = {
+  'status-band': 'live',
+  'productivity-chart': 'bars', 'sleep-bar': 'bars', 'streak': 'bars', 'health-widget': 'bars',
+  'momentum-hero': 'ring', 'goals-card': 'ring', 'focus-card': 'ring', 'quick-focus': 'ring',
+  'mastery-ring': 'ring', 'momentum-orb': 'ring', 'momentum-score': 'ring',
+  'deadlines-card': 'rows', 'notes-card': 'rows', 'activity-feed': 'rows', 'recent-sessions': 'rows',
+  'schedule-hero': 'rows', 'schedule': 'rows', 'unified-goals': 'rows', 'schedule-sync': 'rows',
+  'insight-strip': 'rows', 'insights': 'rows', 'daily-survey': 'rows', 'vcalendar': 'rows',
+  'app-ecosystem': 'orbit', 'tier-breakdown': 'orbit', 'pinned-activities': 'orbit',
+  'browser-widget': 'orbit', 'brain-widget': 'orbit',
+  'console-widget': 'terminal',
+  'ai-usage': 'stats', 'finance-widget': 'stats', 'learn-widget': 'stats',
+  'longest-focus': 'stats', 'covenant-widget': 'stats', 'spotlight': 'stats', 'drilldown': 'stats',
+};
+
+/** Deterministic per-id seed so same-kind cards still differ from each other. */
+function seedOf(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
+  return h;
+}
+
+// ── Workbench preview shapes (CSS-only, one accent per card) ────────────────
+
+function PreviewShape({ kind, accent, wide, seed }: { kind: PreviewKind; accent: string; wide: boolean; seed: number }) {
+  const fill = (hue: string) => `linear-gradient(180deg, ${hue}, color-mix(in srgb, ${hue} 10%, transparent))`;
+  const hair = 'rgba(250,250,250,0.09)';
+
+  if (kind === 'live') {
+    return (
+      <div className="wl-pv" style={{ height: wide ? 76 : 62 }}>
+        <div className="flex items-center gap-2 h-full px-3">
+          <span className="wl-dot" style={{ background: accent }} />
+          <span className="font-mono text-[15px] font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            00:42:17
+          </span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 rounded-full"
+            style={{ color: accent, background: `color-mix(in srgb, ${accent} 14%, transparent)` }}>
+            Tier II
+          </span>
+        </div>
+      </div>
+    );
   }
-  return result;
-}
 
-function sizeLabel(size: WidgetSize): string {
-  return `${size.cols}×${size.rows}`;
-}
+  if (kind === 'bars') {
+    const hs = [0, 1, 2, 3, 4, 5].map(i => 28 + ((seed * (i + 3)) % 52));
+    return (
+      <div className="wl-pv" style={{ height: wide ? 76 : 62 }}>
+        <div className="flex items-end gap-[5px] h-full px-3 pb-2 pt-2">
+          {hs.map((h, i) => (
+            <i key={i} className="wl-bar flex-1" style={{ height: `${h}%`, background: fill(accent) }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
-// ── Visual column picker ─────────────────────────────────────────────────────
+  if (kind === 'ring') {
+    const pct = 52 + (seed % 38);
+    return (
+      <div className="wl-pv" style={{ height: wide ? 76 : 62 }}>
+        <div className="flex items-center justify-center h-full relative">
+          <span className="wl-ring" style={{
+            width: wide ? 54 : 44, height: wide ? 54 : 44,
+            background: `conic-gradient(${accent} 0 ${pct}%, rgba(250,250,250,0.08) ${pct}% 100%)`,
+          }} />
+          <span className="absolute font-mono text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {pct}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
-function ColumnPicker({ columns, onChange }: { columns: number; onChange: (n: number) => void }) {
-  const vals = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  if (kind === 'rows') {
+    const widths = [100, 62 + (seed % 20), 40 + (seed % 18)];
+    return (
+      <div className="wl-pv" style={{ height: wide ? 76 : 62 }}>
+        <div className="flex flex-col justify-center gap-[7px] h-full px-3">
+          {widths.map((w, i) => (
+            <i key={i} className="block h-[6px] rounded-[3px]" style={{ width: `${w}%`, background: i === 0 ? fill(accent) : hair }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === 'orbit') {
+    const flexes = [3, 2, 1].map((f, i) => (f + ((seed >> i) % 2)));
+    return (
+      <div className="wl-pv" style={{ height: wide ? 76 : 62 }}>
+        <div className="flex gap-[6px] h-full px-3 py-3">
+          {flexes.map((f, i) => (
+            <i key={i} style={{
+              flex: f, borderRadius: 6,
+              background: i === 0
+                ? `color-mix(in srgb, ${accent} 26%, transparent)`
+                : 'rgba(250,250,250,0.07)',
+            }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === 'terminal') {
+    return (
+      <div className="wl-pv" style={{ height: wide ? 76 : 62 }}>
+        <div className="flex flex-col justify-center gap-[6px] h-full px-3 font-mono text-[9px] leading-none">
+          <span style={{ color: 'var(--text-muted)' }}>~ rheo ▸ <span style={{ color: 'var(--text-secondary)' }}>build</span></span>
+          <span style={{ color: accent }}>▸ <span className="wl-caret" style={{ background: accent }} /></span>
+        </div>
+      </div>
+    );
+  }
+
+  // stats — hero numeral + two supporting rows
+  const n = 3 + (seed % 7);
   return (
-    <div className="flex items-center gap-2">
-      <LayoutDashboard size={13} className="text-[var(--text-muted)] shrink-0" />
-      <span className="text-[11px] text-[var(--text-muted)]">Columns</span>
-      <div className="flex items-center gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] p-0.5">
-        {vals.map(v => (
-          <button
-            key={v}
-            onClick={() => onChange(v)}
-            aria-label={`${v} columns`}
-            aria-pressed={columns === v}
-            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[12px] font-mono font-medium transition-colors ${
-              columns === v
-                ? 'bg-[var(--page-accent-20)] text-[var(--page-accent)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            {v}
-          </button>
-        ))}
+    <div className="wl-pv" style={{ height: wide ? 76 : 62 }}>
+      <div className="flex items-center gap-3 h-full px-3">
+        <span className="font-mono text-[19px] font-semibold tracking-tight" style={{ color: accent }}>{n}.{seed % 9}</span>
+        <div className="flex flex-col gap-[6px] flex-1">
+          <i className="block h-[5px] rounded-[3px] w-[72%]" style={{ background: hair }} />
+          <i className="block h-[5px] rounded-[3px] w-[44%]" style={{ background: hair }} />
+        </div>
       </div>
     </div>
+  );
+}
+
+// ── On-card switch (Uiverse knob mechanic, LAMINAR skin) ────────────────────
+
+function WorkbenchSwitch({ on, locked, accent, onChange, label }: {
+  on: boolean; locked: boolean; accent: string; onChange: () => void; label: string;
+}) {
+  if (locked) {
+    return (
+      <span className="font-mono text-[9px] uppercase tracking-[0.12em] px-2 py-1 rounded-full shrink-0"
+        style={{ color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
+        Always on
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`${on ? 'Remove' : 'Add'} ${label} ${on ? 'from' : 'to'} dashboard`}
+      onClick={e => { e.stopPropagation(); onChange(); }}
+      className={`wl-sw shrink-0 ${on ? 'wl-sw-on' : ''}`}
+      style={on ? {
+        background: `color-mix(in srgb, ${accent} 16%, transparent)`,
+        borderColor: `color-mix(in srgb, ${accent} 40%, transparent)`,
+      } : undefined}
+    >
+      <i className="wl-sw-knob" style={on ? { background: accent } : undefined} />
+    </button>
   );
 }
 
@@ -216,6 +349,7 @@ function ColumnPicker({ columns, onChange }: { columns: number; onChange: (n: nu
 
 type ViewMode = 'grid' | 'list';
 type CategoryFilter = 'all' | WidgetConfig['category'];
+type StateFilter = 'all' | 'on' | 'off';
 
 /** Natural (un-squeezed) render size for a widget inside a preview cell. */
 const PREVIEW_NATURAL_W = 300;
@@ -243,18 +377,17 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
   const [savedLayout, setSavedLayout] = useState<DashboardLayoutConfig>(DEFAULT_LAYOUT);
   const [presets, setPresets] = useState<Array<{ id: string; name: string; layout: DashboardLayoutConfig; updatedAt: number }>>([]);
   const [activePresetId, setActivePresetId] = useState<string>('default');
-  const [editMode, setEditMode] = useState(true); // Always editable in this version
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [stateFilter, setStateFilter] = useState<StateFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [presetName, setPresetName] = useState('');
   const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const [dragSource, setDragSource] = useState<{ widgetId: string } | null>(null);
   const [dragOverDashboard, setDragOverDashboard] = useState(false);
-  const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
-  const [resizingWidget, setResizingWidget] = useState<string | null>(null);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const dragCounterRef = useRef(0);
@@ -273,6 +406,14 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
     setGridW(el.getBoundingClientRect().width);
     return () => ro.disconnect();
   }, []);
+
+  // Close the preset popover on outside click
+  useEffect(() => {
+    if (!presetMenuOpen) return;
+    const close = () => setPresetMenuOpen(false);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [presetMenuOpen]);
 
   // ── Load saved state ─────────────────────────────────────────────────────
 
@@ -298,35 +439,27 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
   // Truth comes from useDashboardLayout — the SAME hook the dashboard renders
   // with. Reading it from the library's own layout was why the two disagreed and
   // cards appeared on the dashboard that the user had never switched on.
-  const visibleWidgets = allWidgets.filter(w => {
-    const dashId = toDashboardId(w.id);
-    if (!dashId) return false;                 // no dashboard equivalent -> not "on"
-    return isVisible(dashId);
-  });
-  const hiddenWidgets = allWidgets.filter(w => {
-    const dashId = toDashboardId(w.id);
-    if (!dashId) return false;                 // cannot render at all -> don't offer it
-    return !isVisible(dashId);
-  });
+  const isOn = useCallback((id: string): boolean => {
+    const dashId = toDashboardId(id);
+    return !!dashId && isVisible(dashId);
+  }, [isVisible]);
 
-  const filteredHiddenWidgets = hiddenWidgets.filter(w => {
+  const visibleWidgets = allWidgets.filter(w => isOn(w.id));
+
+  const matchesFilters = (w: WidgetConfig, onState: boolean) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return w.name.toLowerCase().includes(q) || w.description.toLowerCase().includes(q);
+      if (!w.name.toLowerCase().includes(q) && !w.description.toLowerCase().includes(q)) return false;
     }
-    if (categoryFilter !== 'all') {
-      return w.category === categoryFilter;
-    }
+    if (categoryFilter !== 'all' && w.category !== categoryFilter) return false;
+    if (stateFilter === 'on' && !onState) return false;
+    if (stateFilter === 'off' && onState) return false;
     return true;
-  });
+  };
 
-  const filteredVisibleWidgets = visibleWidgets.filter(w => {
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return w.name.toLowerCase().includes(q) || w.description.toLowerCase().includes(q);
-    }
-    return true;
-  });
+  const workbenchWidgets = allWidgets
+    .filter(w => !!toDashboardId(w.id))      // cannot render at all -> not offered
+    .filter(w => matchesFilters(w, isOn(w.id)));
 
   const isWidgetVisible = (id: string): boolean => {
     return layout.widgetVisibility[id] !== false && layout.widgetOrder.includes(id);
@@ -416,40 +549,6 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
     }
   }, [addWidget, removeWidget, toggleVisible]);
 
-  const resizeWidget = useCallback((widgetId: string, size: WidgetSize) => {
-    const config = WidgetRegistry.get(widgetId);
-    const current = layout.gridPositions[widgetId] || { col: 0, row: 0, colSpan: 1, rowSpan: 1 };
-    setLayout(prev => ({
-      ...prev,
-      gridPositions: {
-        ...prev.gridPositions,
-        [widgetId]: {
-          ...current,
-          colSpan: Math.max(config?.minSize?.cols || 1, Math.min(prev.columns, size.cols)),
-          rowSpan: Math.max(config?.minSize?.rows || 1, Math.min(6, size.rows)),
-        },
-      },
-    }));
-    setSavedLayout(prev => ({
-      ...prev,
-      gridPositions: {
-        ...prev.gridPositions,
-        [widgetId]: {
-          ...current,
-          colSpan: Math.max(config?.minSize?.cols || 1, Math.min(prev.columns, size.cols)),
-          rowSpan: Math.max(config?.minSize?.rows || 1, Math.min(6, size.rows)),
-        },
-      },
-    }));
-    setActivePresetId('custom');
-  }, [layout]);
-
-  const setColumns = useCallback((columns: number) => {
-    setLayout(prev => ({ ...prev, columns: Math.max(4, Math.min(12, columns)) }));
-    setSavedLayout(prev => ({ ...prev, columns: Math.max(4, Math.min(12, columns)) }));
-    setActivePresetId('custom');
-  }, []);
-
   const resetToDefault = useCallback(() => {
     setLayout(DEFAULT_LAYOUT);
     setSavedLayout(DEFAULT_LAYOUT);
@@ -473,6 +572,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       await persistPresets(updated);
       setActivePresetId(newPreset.id);
       setPresetName('');
+      setPresetMenuOpen(false);
     } catch {
       setSaveError('Failed to save preset');
     }
@@ -483,6 +583,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
     setLayout(preset.layout);
     setSavedLayout(preset.layout);
     setActivePresetId(preset.id);
+    setPresetMenuOpen(false);
     onChanged?.(preset.layout);
   }, [onChanged]);
 
@@ -538,16 +639,16 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
   // ── Render: Header ────────────────────────────────────────────────────────
 
   const renderHeader = () => (
-    <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center justify-between mb-3">
       <div className="min-w-0">
         <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--page-accent)]">
           Dashboard Cards
         </div>
-        <h1 className="text-[18px] font-semibold text-[var(--text-primary)] mt-0.5">
-          Customize your dashboard
+        <h1 className="text-[17px] font-semibold text-[var(--text-primary)] mt-0.5">
+          Compose your dashboard
         </h1>
-        <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
-          Add cards from the library on the left. Drag to reorder on the right.
+        <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+          Every card shows its real shape — flip a switch to place it.
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -564,7 +665,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
           disabled={!dirty}
         >
           <Save size={13} />
-          Save
+          Save layout
         </button>
         <button
           onClick={() => onClose?.()}
@@ -581,53 +682,66 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
 
   const renderToolbar = () => {
     const activePreset = presets.find(p => p.id === activePresetId);
+    const seg = (value: StateFilter, label: string) => (
+      <button
+        onClick={() => setStateFilter(value)}
+        aria-pressed={stateFilter === value}
+        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+          stateFilter === value
+            ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+        }`}
+      >
+        {label}
+      </button>
+    );
     return (
-      <div className="flex flex-wrap items-center gap-3 mb-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-3">
+      <div className="flex flex-wrap items-center gap-3 mb-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-2.5">
         {/* Search */}
-        <div className="relative flex-1 min-w-[160px] max-w-[240px]">
+        <div className="relative flex-1 min-w-[150px] max-w-[220px]">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search cards..."
-            className="w-full rounded-lg border border-[var(--border-subtle)] bg-transparent pl-8 pr-3 py-1.5 text-[12px] text-[var(--text-primary)] placeholder:[var(--text-muted)] focus:border-[var(--page-accent)]/50 focus:outline-none"
+            placeholder="Search cards…"
+            className="w-full rounded-lg border border-[var(--border-subtle)] bg-transparent pl-8 pr-3 py-1.5 text-[12px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--page-accent)]/50 focus:outline-none"
           />
         </div>
 
+        {/* State segmented control — All / Off / On */}
+        <div className="flex items-center gap-0.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] p-0.5">
+          {seg('all', 'All')}
+          {seg('off', 'Off')}
+          {seg('on', 'On')}
+        </div>
+
         {/* Category filters */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           <Filter size={13} className="text-[var(--text-muted)]" />
           {CATEGORIES.map(cat => (
             <button
               key={cat.value}
-              onClick={() => setCategoryFilter(cat.value)}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+              onClick={() => setCategoryFilter(categoryFilter === cat.value ? 'all' : cat.value)}
+              aria-pressed={categoryFilter === cat.value}
+              className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium transition-colors ${
                 categoryFilter === cat.value
                   ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)] border border-[var(--page-accent)]/30'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
               }`}
             >
               <cat.icon size={12} />
               {cat.label}
             </button>
           ))}
-          <button
-            onClick={() => setCategoryFilter('all')}
-            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-              categoryFilter === 'all'
-                ? 'bg-zinc-800 text-white border border-zinc-700'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            All
-          </button>
         </div>
 
         {/* View mode */}
         <div className="flex items-center gap-1 border-l border-[var(--border-subtle)] pl-3 ml-1">
           <button
             onClick={() => setViewMode('grid')}
+            aria-pressed={viewMode === 'grid'}
+            aria-label="Grid view"
             className={`p-1.5 rounded-md transition-colors ${
               viewMode === 'grid' ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
@@ -636,6 +750,8 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
           </button>
           <button
             onClick={() => setViewMode('list')}
+            aria-pressed={viewMode === 'list'}
+            aria-label="List view"
             className={`p-1.5 rounded-md transition-colors ${
               viewMode === 'list' ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
@@ -644,224 +760,235 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
           </button>
         </div>
 
-        {/* Column picker */}
-        <div className="flex items-center gap-2 border-l border-[var(--border-subtle)] pl-3 ml-1">
-          <ColumnPicker columns={layout.columns} onChange={setColumns} />
-        </div>
-
-        {/* Active preset */}
+        {/* Active preset — functional popover */}
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-[11px] text-[var(--text-muted)]">
-            {visibleWidgets.length} of {allWidgets.length} cards
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">
+            {visibleWidgets.length}/{allWidgets.filter(w => !!toDashboardId(w.id)).length} on
           </span>
-          {activePreset && (
-            <div className="relative">
-              <button
-                onClick={() => {}}
-                className="flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1 text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              >
-                {activePreset.name}
-                <ChevronDown size={12} />
-              </button>
-            </div>
-          )}
+          <div className="relative">
+            <button
+              onClick={e => { e.stopPropagation(); setPresetMenuOpen(o => !o); }}
+              aria-expanded={presetMenuOpen}
+              className="flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1 text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            >
+              {activePreset ? activePreset.name : 'Custom'}
+              <ChevronDown size={12} />
+            </button>
+            <AnimatePresence>
+              {presetMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute right-0 top-full mt-1 z-30 min-w-[180px] rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] p-1 shadow-lg"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {presets.length === 0 ? (
+                    <p className="px-2 py-1.5 text-[11px] text-[var(--text-muted)]">
+                      No saved presets yet — save one below.
+                    </p>
+                  ) : (
+                    presets.map(p => (
+                      <div key={p.id} className="flex items-center gap-1">
+                        <button
+                          onClick={() => applyPreset(p)}
+                          className={`flex-1 text-left px-2 py-1.5 rounded-md text-[11px] transition-colors ${
+                            activePresetId === p.id
+                              ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
+                              : 'text-[var(--text-secondary)] hover:bg-white/[0.04] hover:text-[var(--text-primary)]'
+                          }`}
+                        >
+                          {p.name}
+                          <span className="ml-1.5 font-mono text-[9px] text-[var(--text-muted)]">
+                            {p.layout.widgetOrder.filter(id => p.layout.widgetVisibility[id] !== false).length} cards
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => deletePreset(p.id)}
+                          aria-label={`Delete preset ${p.name}`}
+                          className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--error)]"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     );
   };
 
-  // ── Render: Available Widgets Panel ───────────────────────────────────────
+  // ── Render: Workbench (available + placed, per-card identity) ─────────────
 
-  const renderAvailableWidgets = () => (
+  const renderWorkbenchCard = (widget: WidgetConfig, idx: number) => {
+    const theme = getWidgetTheme(widget.id);
+    const WidgetIcon = getIcon(widget.icon);
+    const on = isOn(widget.id);
+    const locked = widget.id === 'status-band';
+    const wide = WIDE_CARDS.has(widget.id);
+    const kind = PREVIEW_KIND[widget.id] ?? 'stats';
+
+    return (
+      <motion.div
+        key={widget.id}
+        draggable
+        onDragStart={e => handleDragStart(e as unknown as ReactDragEvent<HTMLDivElement>, widget.id)}
+        onDragEnd={() => handleDragEnd()}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, transition: { duration: 0.1 } }}
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1], delay: Math.min(idx * 0.03, 0.3) }}
+        className={`wl-card relative rounded-xl border bg-[var(--color-card)] overflow-hidden cursor-pointer ${wide ? 'col-span-2' : ''} ${
+          on ? 'wl-card-on' : 'wl-card-off'
+        }`}
+        style={on ? { borderColor: `color-mix(in srgb, ${theme.accent} 38%, transparent)` } : undefined}
+        onClick={() => setPreviewId(widget.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setPreviewId(widget.id); } }}
+        aria-label={`${widget.name} — ${on ? 'on' : 'off'} dashboard, open preview`}
+      >
+        {/* head */}
+        <div className="flex items-center gap-2 px-2.5 pt-2.5 pb-2">
+          <div
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors"
+            style={{
+              backgroundColor: on ? theme.tint : 'transparent',
+              borderColor: on ? `color-mix(in srgb, ${theme.accent} 30%, transparent)` : 'var(--border-subtle)',
+              color: on ? theme.accent : 'var(--text-muted)',
+            }}
+          >
+            <WidgetIcon size={12} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-[8px] uppercase tracking-[0.14em] leading-none" style={{ color: on ? theme.accent : 'var(--text-muted)' }}>
+              {theme.kicker}
+            </div>
+            <div className="text-[11.5px] font-semibold text-[var(--text-primary)] truncate mt-0.5 leading-tight">
+              {widget.name}
+            </div>
+          </div>
+          <WorkbenchSwitch
+            on={on}
+            locked={locked}
+            accent={theme.accent}
+            onChange={() => toggleWidget(widget.id)}
+            label={widget.name}
+          />
+        </div>
+
+        {/* the card's own live-shape preview */}
+        <PreviewShape kind={kind} accent={theme.accent} wide={wide} seed={seedOf(widget.id)} />
+
+        {/* foot — real dashboard size + preview action */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5">
+          <span className="font-mono text-[9px] text-[var(--text-muted)] border border-[var(--border-subtle)] rounded px-1.5 py-0.5">
+            {templateSizeLabel(widget.id, `${widget.defaultSize?.cols ?? 1}×${widget.defaultSize?.rows ?? 1}`)}
+          </span>
+          <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            {widget.category}
+          </span>
+          <span className="ml-auto flex items-center gap-1 text-[10px] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity">
+            <Eye size={10} />
+            Preview
+          </span>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const renderWorkbench = () => (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2.5">
         <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
-          Available Cards
+          Card Workbench
           <span className="ml-2 text-[11px] font-normal text-[var(--text-muted)]">
-            ({filteredHiddenWidgets.length})
+            ({workbenchWidgets.length})
           </span>
         </h2>
-        <span className="text-[11px] text-[var(--text-muted)]">
-          Click a card to add it
+        <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-[0.1em]">
+          previews always live
         </span>
       </div>
 
-      {filteredHiddenWidgets.length === 0 ? (
+      {workbenchWidgets.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--color-card-50)] p-8 text-center min-h-[200px]">
           <Box size={24} className="text-[var(--text-muted)] mb-2 opacity-50" />
           <p className="text-[12px] text-[var(--text-secondary)]">
-            {searchQuery || categoryFilter !== 'all'
-              ? 'No matching cards found.'
+            {searchQuery || categoryFilter !== 'all' || stateFilter !== 'all'
+              ? 'No cards match this filter.'
               : 'All cards are already on your dashboard.'}
           </p>
+          {(searchQuery || categoryFilter !== 'all' || stateFilter !== 'all') && (
+            <button
+              onClick={() => { setSearchQuery(''); setCategoryFilter('all'); setStateFilter('all'); }}
+              className="mt-2 text-[11px] text-[var(--page-accent)] hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 flex-1 min-h-0 content-start overflow-y-auto">
-          {filteredHiddenWidgets.map(widget => {
-            const theme = getWidgetTheme(widget.id);
-            const WidgetIcon = getIcon(widget.icon);
-            const availableSizes = getAvailableSizes(widget);
-
-            return (
-              <motion.div
-                key={widget.id}
-                draggable
-                onDragStart={e => handleDragStart(e, widget.id)}
-                onDragEnd={handleDragEnd}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                className={`group relative rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-3 cursor-pointer transition-colors duration-150 hover:-translate-y-0.5 hover:border-[var(--page-accent)]/30 ${
-                  dragSource?.widgetId === widget.id ? 'ring-2 ring-[var(--page-accent)]/50 scale-105' : ''
-                }`}
-                onClick={() => addWidget(widget.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    addWidget(widget.id);
-                  }
-                }}
-                aria-label={`Add ${widget.name} to dashboard`}
-                aria-pressed={isWidgetVisible(widget.id)}
-              >
-                {/* Drag handle */}
-                <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <GripVertical size={12} className="text-[var(--text-muted)]" />
-                </div>
-
-                {/* Icon */}
-                <div className="flex items-center gap-2.5 mb-2">
-                  <div
-                    className="flex h-8 w-8 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: theme.tint, color: theme.accent }}
-                  >
-                    <WidgetIcon size={15} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                      {theme.kicker}
-                    </div>
-                    <div className="text-[12px] font-semibold text-[var(--text-primary)] truncate">
-                      {widget.name}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <p className="text-[11px] text-[var(--text-secondary)] leading-snug line-clamp-2 mb-2">
-                  {widget.description}
-                </p>
-
-                {/* Size indicator */}
-                {availableSizes.length > 0 && (
-                  <div className="flex items-center gap-1 mb-2">
-                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                      Size:
-                    </span>
-                    <span className="text-[10px] font-mono text-[var(--text-secondary)]">
-                      {sizeLabel(widget.defaultSize)}
-                    </span>
-                    <span className="text-[10px] text-[var(--text-muted)]">
-                      ({widget.category})
-                    </span>
-                  </div>
-                )}
-
-                {/* Add button */}
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); addWidget(widget.id); }}
-                  className="mt-1 w-full flex items-center justify-center gap-1 rounded-md border border-[var(--page-accent)]/30 bg-[var(--page-accent-10)] px-2 py-0.5 text-[10px] font-medium text-[var(--page-accent)] hover:bg-[var(--page-accent-20)] transition-colors"
-                >
-                  <Plus size={10} />
-                  Add to dashboard
-                </button>
-
-                {/* Preview button */}
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); setPreviewId(widget.id); }}
-                  className="mt-0.5 w-full flex items-center justify-center gap-1 rounded-md border border-[var(--border-subtle)] px-2 py-0.5 text-[9px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
-                >
-                  <Eye size={9} />
-                  Preview
-                </button>
-              </motion.div>
-            );
-          })}
+        <div className="grid grid-cols-2 gap-2.5 flex-1 min-h-0 content-start overflow-y-auto pr-1 group">
+          {workbenchWidgets.map((w, i) => renderWorkbenchCard(w, i))}
         </div>
       ) : (
-        <div className="space-y-1 flex-1 min-h-0 content-start overflow-y-auto">
-          {filteredHiddenWidgets.map(widget => {
+        <div className="space-y-1 flex-1 min-h-0 content-start overflow-y-auto pr-1">
+          {workbenchWidgets.map((widget, i) => {
             const theme = getWidgetTheme(widget.id);
             const WidgetIcon = getIcon(widget.icon);
-
+            const on = isOn(widget.id);
+            const locked = widget.id === 'status-band';
             return (
               <motion.div
                 key={widget.id}
-                draggable
-                onDragStart={e => handleDragStart(e, widget.id)}
-                onDragEnd={handleDragEnd}
-                initial={{ opacity: 0, x: -8 }}
+                initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                className={`group flex items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:-translate-x-0.5 hover:border-[var(--page-accent)]/30 ${
-                  dragSource?.widgetId === widget.id ? 'ring-2 ring-[var(--page-accent)]/50' : ''
+                exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1], delay: Math.min(i * 0.02, 0.2) }}
+                onClick={() => setPreviewId(widget.id)}
+                className={`group flex items-center gap-2.5 rounded-xl border bg-[var(--color-card)] px-3 py-2 cursor-pointer transition-colors hover:border-[var(--page-accent)]/30 ${
+                  on ? '' : 'opacity-70'
                 }`}
-                onClick={() => addWidget(widget.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    addWidget(widget.id);
-                  }
-                }}
+                style={on ? { borderColor: `color-mix(in srgb, ${theme.accent} 38%, transparent)` } : undefined}
               >
-                <GripVertical size={14} className="text-[var(--text-muted)] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-
                 <div
-                  className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
+                  className="flex h-6 w-6 items-center justify-center rounded-md shrink-0"
                   style={{ backgroundColor: theme.tint, color: theme.accent }}
                 >
-                  <WidgetIcon size={13} />
+                  <WidgetIcon size={12} />
                 </div>
-
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[12px] font-semibold text-[var(--text-primary)] truncate">
-                      {widget.name}
-                    </span>
-                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                      {sizeLabel(widget.defaultSize)}
+                    <span className="text-[12px] font-semibold text-[var(--text-primary)] truncate">{widget.name}</span>
+                    <span className="font-mono text-[9px] text-[var(--text-muted)] border border-[var(--border-subtle)] rounded px-1 py-px">
+                      {templateSizeLabel(widget.id, `${widget.defaultSize?.cols ?? 1}×${widget.defaultSize?.rows ?? 1}`)}
                     </span>
                   </div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                    {theme.kicker} · {widget.category}
-                  </div>
-                  <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                    {widget.description}
-                  </p>
+                  <p className="text-[10.5px] text-[var(--text-secondary)] truncate">{widget.description}</p>
                 </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={e => { e.stopPropagation(); addWidget(widget.id); }}
-                    className="p-1.5 rounded-md bg-[var(--page-accent-15)] text-[var(--page-accent)] hover:opacity-90 transition-opacity"
-                    aria-label="Add to dashboard"
-                  >
-                    <Plus size={11} />
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); setPreviewId(widget.id); }}
-                    className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
-                    aria-label="Preview"
-                  >
-                    <Eye size={11} />
-                  </button>
-                </div>
+                <span className="font-mono text-[9px] tracking-[0.08em] w-8 text-right" style={{ color: on ? 'var(--success)' : 'var(--text-muted)' }}>
+                  {on ? 'ON' : 'OFF'}
+                </span>
+                <WorkbenchSwitch
+                  on={on}
+                  locked={locked}
+                  accent={theme.accent}
+                  onChange={() => toggleWidget(widget.id)}
+                  label={widget.name}
+                />
+                <button
+                  onClick={e => { e.stopPropagation(); setPreviewId(widget.id); }}
+                  className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
+                  aria-label={`Preview ${widget.name}`}
+                >
+                  <Eye size={11} />
+                </button>
               </motion.div>
             );
           })}
@@ -870,12 +997,13 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
     </div>
   );
 
-  // ── Render: Dashboard Preview Panel ───────────────────────────────────────
+  // ── Render: Dashboard Preview Panel (real components, real geometry) ──────
 
   // Preview placement — derived from ROW_TEMPLATES (the 1:1 mirror of DashboardPage's
   // real geometry in widgetRegistry.tsx), NOT from the stale v4 gridPositions. Cells
   // carry the template's width share (w) and height unit (h), which is what makes the
   // preview's dimensions match the live dashboard instead of an invented mosaic.
+  const previewGroups: Array<Array<{ widgetId: string; colSpan: number; bc: number; height: number }>> = [];
   const previewLookup: Map<string, { col: number; row: number; colSpan: number; rowSpan: number; bc: number; height: number }> = new Map();
   {
     const groups: Array<{ bc: number; cells: Array<{ widgetId: string; colStart: number; colSpan: number; height: number }> }> = [];
@@ -901,6 +1029,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       groups.push({ bc: 12, cells: [{ widgetId: opt.id, colStart: 0, colSpan: opt.w, height: opt.h * PREVIEW_ROW_H }] });
     }
     for (const g of groups) {
+      previewGroups.push(g.cells.map(c => ({ widgetId: c.widgetId, colSpan: c.colSpan, bc: g.bc, height: c.height })));
       for (const c of g.cells) {
         previewLookup.set(c.widgetId, { col: 0, row: 0, colSpan: c.colSpan, rowSpan: Math.max(1, Math.round(c.height / PREVIEW_ROW_H)), bc: g.bc, height: c.height });
       }
@@ -909,18 +1038,16 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
 
   const renderDashboardPreview = () => (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2.5">
         <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
           Your Dashboard
           <span className="ml-2 text-[11px] font-normal text-[var(--text-muted)]">
-            ({visibleWidgets.length})
+            ({visibleWidgets.length} · real components)
           </span>
-          </h2>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-[var(--text-muted)]">
-            Hover a card for options
-          </span>
-        </div>
+        </h2>
+        <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-[0.1em]">
+          hover a cell to remove
+        </span>
       </div>
 
       {visibleWidgets.length === 0 ? (
@@ -930,7 +1057,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
             Your dashboard is empty.
           </p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1">
-            Add cards from the available list on the left.
+            Flip a switch on any card in the workbench.
           </p>
         </div>
       ) : (
@@ -942,7 +1069,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onDragEnd={handleDragEnd}
+          onDragEnd={() => handleDragEnd()}
         >
           {/* Drop overlay */}
           <AnimatePresence>
@@ -966,142 +1093,81 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
               invented grid, so the preview's dimensions match reality. */}
           <div className="p-3 flex-1 min-h-0 overflow-y-auto">
             <div className="flex flex-col" style={{ gap: 8 }}>
-              {visibleWidgets.map(widget => {
-                const position = previewLookup.get(widget.id) ?? { col: 0, row: 0, colSpan: 1, rowSpan: 1, bc: layout.columns, height: 68 };
-                const currentSize = { cols: position.colSpan, rows: position.rowSpan };
-                const availableSizes = getAvailableSizes(widget);
-                const selectedSize = availableSizes.find(s => s.cols === currentSize.cols && s.rows === currentSize.rows);
+              {previewGroups.map((group, gi) => (
+                <div key={`row-${gi}`} className="flex" style={{ gap: 8 }}>
+                  {group.map(cell => {
+                    const widget = visibleWidgets.find(w => w.id === cell.widgetId);
+                    if (!widget) return null;
+                    const position = previewLookup.get(widget.id) ?? { col: 0, row: 0, colSpan: cell.colSpan, rowSpan: Math.max(1, Math.round(cell.height / PREVIEW_ROW_H)), bc: cell.bc, height: cell.height };
+                    const theme = getWidgetTheme(widget.id);
 
-                const FallbackComponent = WidgetRegistry.get(widget.id)?.component;
+                    const RealComponent = WidgetRegistry.get(widget.id)?.component;
 
-                // Scale the widget to fit its dashboard-accurate cell. The widget
-                // renders at NATURAL_W/NATURAL_H (its real proportions) and is scaled
-                // down to the size the live dashboard would give it, so the preview
-                // mirrors real dimensions instead of an invented grid.
-                const GAP = 8;
-                const cellW = gridW > 0
-                  ? (gridW - GAP * (position.bc - 1)) / position.bc * position.colSpan + GAP * (position.colSpan - 1)
-                  : 0;
-                const scale = cellW > 0 ? Math.min(cellW / PREVIEW_NATURAL_W, position.height / PREVIEW_NATURAL_H) : 0;
-                const cellH = position.height;
+                    // Scale the widget to fit its dashboard-accurate cell. The widget
+                    // renders at NATURAL_W/NATURAL_H (its real proportions) and is scaled
+                    // down to the size the live dashboard would give it, so the preview
+                    // mirrors real dimensions instead of an invented grid.
+                    const GAP = 8;
+                    const cellW = gridW > 0
+                      ? (gridW - GAP * (position.bc - 1)) / position.bc * position.colSpan + GAP * (position.colSpan - 1)
+                      : 0;
+                    const scale = cellW > 0 ? Math.min(cellW / PREVIEW_NATURAL_W, position.height / PREVIEW_NATURAL_H) : 0;
+                    const cellH = position.height;
 
-                return (
-                  <motion.div
-                    key={widget.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                    className="relative group rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] overflow-hidden"
-                    style={{
-                      width: cellW,
-                      height: cellH,
-                    }}
-                  >
-                    {/* Remove button */}
-                    <button
-                      type="button"
-                      onClick={() => removeWidget(widget.id)}
-                      className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--error-15)] text-[var(--error)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--error-25)]"
-                      aria-label={`Remove ${widget.name}`}
-                    >
-                      <X size={10} />
-                    </button>
-
-                    {/* Actual widget component preview — real component, real context data,
-                        laid out at natural size then scaled to fit the cell */}
-                    {FallbackComponent ? (
-                      <div
-                        className="overflow-hidden"
-                        style={{ height: cellH }}
+                    return (
+                      <motion.div
+                        key={widget.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.97 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                        className="relative group rounded-lg border bg-[var(--color-card)] overflow-hidden"
+                        style={{
+                          width: cellW,
+                          height: cellH,
+                          borderColor: `color-mix(in srgb, ${theme.accent} 24%, transparent)`,
+                        }}
                       >
-                        <div
-                          style={{
-                            width: PREVIEW_NATURAL_W,
-                            height: PREVIEW_NATURAL_H,
-                            transform: scale ? `scale(${scale})` : undefined,
-                            transformOrigin: 'top left',
-                            pointerEvents: 'none',
-                          }}
-                        >
-                          <FallbackComponent />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-2.5 flex items-center justify-center h-full">
-                        <p className="text-[10px] text-[var(--text-muted)]">{widget.name}</p>
-                      </div>
-                    )}
-
-                    {/* Size indicator + resize controls */}
-                    <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between gap-1 bg-gradient-to-t from-[var(--color-card)] via-[var(--color-card)]/90 to-transparent pt-4 pb-1 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[9px] font-mono text-[var(--text-muted)]">
-                        {sizeLabel(currentSize)}
-                        {selectedSize ? ` · ${availableSizes.length} opts` : ''}
-                      </span>
-                      {editMode && availableSizes.length > 1 && (
+                        {/* Remove button */}
                         <button
-                          onClick={e => {
-                            e.stopPropagation();
-                            setResizingWidget(widget.id);
-                            setSelectedSizeId(`${widget.id}-size`);
-                          }}
-                          className="flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--color-card)] px-1.5 py-0.5 text-[9px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--page-accent)]/30 transition-colors"
+                          type="button"
+                          onClick={() => removeWidget(widget.id)}
+                          className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--error-15)] text-[var(--error)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--error-25)]"
+                          aria-label={`Remove ${widget.name}`}
                         >
-                          <Grid3X3 size={8} />
-                          Resize
-                          <ChevronDown size={8} />
+                          <X size={10} />
                         </button>
-                      )}
-                    </div>
 
-                    {/* Size dropdown */}
-                    <AnimatePresence initial={false}>
-                      {resizingWidget === widget.id && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                          transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                          className="absolute bottom-full left-1 mb-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] p-1.5 shadow-lg z-20 min-w-[120px]"
-                        >
-                          <div className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] px-1.5 py-0.5">
-                            Choose size
-                          </div>
-                          {availableSizes.map(size => (
-                            <button
-                              key={`${size.cols}-${size.rows}`}
-                              onClick={() => {
-                                resizeWidget(widget.id, size);
-                                setResizingWidget(null);
+                        {/* Actual widget component preview — real component, real context data,
+                            laid out at natural size then scaled to fit the cell */}
+                        {RealComponent ? (
+                          <div
+                            className="overflow-hidden"
+                            style={{ height: cellH }}
+                          >
+                            <div
+                              style={{
+                                width: PREVIEW_NATURAL_W,
+                                height: PREVIEW_NATURAL_H,
+                                transform: scale ? `scale(${scale})` : undefined,
+                                transformOrigin: 'top left',
+                                pointerEvents: 'none',
                               }}
-                              className={`flex items-center justify-between w-full px-1.5 py-1 rounded-md text-left transition-colors ${
-                                selectedSize?.cols === size.cols && selectedSize?.rows === size.rows
-                                  ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
-                                  : 'hover:bg-white/[0.04]'
-                              }`}
                             >
-                              <span className="text-[10px] font-medium">
-                                {sizeLabel(size)}
-                              </span>
-                              <Check
-                                size={8}
-                                className={selectedSize?.cols === size.cols && selectedSize?.rows === size.rows ? 'text-[var(--page-accent)]' : 'opacity-0'}
-                              />
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Drag handle for reorder (visual only — full DnD in WidgetGrid) */}
-                    <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <GripVertical size={8} className="text-[var(--text-muted)]" />
-                    </div>
-                  </motion.div>
-                );
-              })}
+                              <RealComponent />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 flex items-center justify-center h-full">
+                            <p className="text-[10px] text-[var(--text-muted)]">{widget.name}</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -1117,8 +1183,9 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
     if (!widget) return null;
     const theme = getWidgetTheme(previewId);
     const WidgetIcon = getIcon(widget.icon);
-    const visible = isWidgetVisible(previewId);
-    const Fallback = widget.component;
+    const visible = isOn(previewId);
+    const locked = previewId === 'status-band';
+    const RealComponent = widget.component;
 
     return (
       <motion.div
@@ -1130,11 +1197,12 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
         onClick={() => setPreviewId(null)}
       >
         <motion.div
-          className="relative w-full max-w-[640px] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] overflow-hidden shadow-2xl"
-          initial={{ opacity: 0, scale: 0.95, y: 16 }}
+          className="relative w-full max-w-[640px] rounded-xl border bg-[var(--color-card)] overflow-hidden shadow-2xl"
+          style={{ borderColor: `color-mix(in srgb, ${theme.accent} 30%, transparent)` }}
+          initial={{ opacity: 0, scale: 0.96, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 16 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, scale: 0.96, y: 12 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -1147,7 +1215,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
                 <WidgetIcon size={16} />
               </div>
               <div>
-                <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--page-accent)]">
+                <div className="font-mono text-[10px] uppercase tracking-wider" style={{ color: theme.accent }}>
                   {theme.kicker}
                 </div>
                 <h3 className="text-[14px] font-semibold text-[var(--text-primary)]">
@@ -1171,12 +1239,11 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
             </p>
 
             <div className="flex items-center gap-4 text-[11px] text-[var(--text-muted)] mb-4">
-              <span className="flex items-center gap-1">
-                <Box size={10} />
-                {sizeLabel(widget.defaultSize)}
+              <span className="font-mono border border-[var(--border-subtle)] rounded px-1.5 py-0.5">
+                {templateSizeLabel(previewId, `${widget.defaultSize?.cols ?? 1}×${widget.defaultSize?.rows ?? 1}`)}
               </span>
               <span className="flex items-center gap-1">
-                <CalendarDays size={10} />
+                <Box size={10} />
                 {widget.category}
               </span>
               <span className={`flex items-center gap-1 ${visible ? 'text-[var(--success)]' : ''}`}>
@@ -1185,9 +1252,16 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
               </span>
             </div>
 
-            {/* Live preview or fallback */}
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-white/[0.02] p-4 min-h-[120px]">
-              {previews?.[previewId] ?? (Fallback ? <Fallback /> : (
+            {/* Live component preview — the real thing, real data context */}
+            <div
+              className="rounded-xl border bg-white/[0.02] p-4 min-h-[160px]"
+              style={{ borderColor: `color-mix(in srgb, ${theme.accent} 18%, transparent)` }}
+            >
+              {previews?.[previewId] ?? (RealComponent ? (
+                <div style={{ width: PREVIEW_NATURAL_W + 40, transform: 'scale(1)', transformOrigin: 'top left' }}>
+                  <RealComponent />
+                </div>
+              ) : (
                 <div className="flex flex-col items-center justify-center text-center h-full min-h-[100px]">
                   <WidgetIcon size={32} className="text-[var(--text-muted)] mb-2 opacity-40" />
                   <p className="text-[11px] text-[var(--text-muted)]">
@@ -1201,14 +1275,20 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-5 py-3">
             <button
-              onClick={() => { toggleWidget(previewId); setPreviewId(null); }}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-medium transition-colors ${
+              onClick={() => { if (!locked) { toggleWidget(previewId); setPreviewId(null); } }}
+              disabled={locked}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 visible
                   ? 'border border-[var(--border-subtle)] bg-[var(--color-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--error)]/30'
                   : 'bg-[var(--page-accent)] text-white hover:opacity-90'
               }`}
             >
-              {visible ? (
+              {locked ? (
+                <>
+                  <Check size={13} />
+                  Always on
+                </>
+              ) : visible ? (
                 <>
                   <Trash2 size={13} />
                   Remove from dashboard
@@ -1232,14 +1312,14 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
     );
   };
 
-  // ── Render: Presets Panel ──────────────────────────────────────────────────
+  // ── Render: Presets Panel ─────────────────────────────────────────────────
 
   const renderPresetsPanel = () => {
     const customPresets = presets.filter(p => p.id !== 'default');
 
     return (
-      <div className="mt-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] p-3.5">
+        <div className="flex items-center justify-between mb-2.5">
           <h3 className="text-[12px] font-semibold text-[var(--text-secondary)]">
             Layout Presets
           </h3>
@@ -1249,9 +1329,9 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
               value={presetName}
               onChange={e => setPresetName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveAsPreset(); }}
-              placeholder="Name this layout..."
+              placeholder="Name this layout…"
               maxLength={40}
-              className="flex-1 min-w-[160px] rounded-md border border-[var(--border-subtle)] bg-transparent px-2.5 py-1.5 text-[11px] text-[var(--text-primary)] placeholder:[var(--text-muted)] focus:border-[var(--page-accent)]/50 focus:outline-none"
+              className="flex-1 min-w-[160px] rounded-md border border-[var(--border-subtle)] bg-transparent px-2.5 py-1.5 text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--page-accent)]/50 focus:outline-none"
             />
             <button
               onClick={saveAsPreset}
@@ -1259,7 +1339,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
               className="flex items-center gap-1 rounded-md bg-[var(--page-accent-15)] border border-[var(--page-accent)]/30 px-2.5 py-1.5 text-[11px] font-medium text-[var(--page-accent)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-90"
             >
               {isSavingPreset ? (
-                <span className="animate-pulse">Saving...</span>
+                <span className="animate-pulse">Saving…</span>
               ) : (
                 <>
                   <Save size={11} />
@@ -1271,48 +1351,41 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
         </div>
 
         {customPresets.length > 0 ? (
-          <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {customPresets.map(preset => (
               <div
                 key={preset.id}
-                className="flex items-center justify-between group rounded-lg border border-[var(--border-subtle)] bg-white/[0.02] px-3 py-2 transition-colors hover:border-[var(--page-accent)]/20"
+                className="flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-white/[0.02] pl-3 pr-1.5 py-1 transition-colors hover:border-[var(--page-accent)]/25"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <button
-                    onClick={() => applyPreset(preset)}
-                    className={`text-[11px] font-medium transition-colors ${
-                      activePresetId === preset.id
-                        ? 'text-[var(--page-accent)]'
-                        : 'text-[var(--text-primary)] hover:text-[var(--page-accent)]'
-                    }`}
-                  >
-                    {preset.name}
-                  </button>
-                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                    {preset.layout.widgetOrder.filter(id => preset.layout.widgetVisibility[id] !== false).length} cards · {preset.layout.columns} cols
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {activePresetId !== preset.id && (
-                    <button
-                      onClick={() => deletePreset(preset.id)}
-                      className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error-10)] transition-colors"
-                      aria-label={`Delete preset ${preset.name}`}
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  )}
-                  <Check
-                    size={11}
-                    className={`${activePresetId === preset.id ? 'text-[var(--page-accent)]' : 'opacity-0'}`}
-                  />
-                </div>
+                <button
+                  onClick={() => applyPreset(preset)}
+                  className={`text-[11px] font-medium transition-colors ${
+                    activePresetId === preset.id
+                      ? 'text-[var(--page-accent)]'
+                      : 'text-[var(--text-primary)] hover:text-[var(--page-accent)]'
+                  }`}
+                >
+                  {preset.name}
+                </button>
+                <span className="font-mono text-[9px] text-[var(--text-muted)]">
+                  {preset.layout.widgetOrder.filter(id => preset.layout.widgetVisibility[id] !== false).length}
+                </span>
+                {activePresetId === preset.id && (
+                  <Check size={10} className="text-[var(--page-accent)]" />
+                )}
+                <button
+                  onClick={() => deletePreset(preset.id)}
+                  className="p-0.5 rounded-full text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+                  aria-label={`Delete preset ${preset.name}`}
+                >
+                  <Trash2 size={10} />
+                </button>
               </div>
             ))}
           </div>
         ) : (
           <p className="text-[11px] text-[var(--text-muted)] italic">
-            No saved presets yet. Save your current layout above.
+            No saved presets yet — name the current layout above to keep it.
           </p>
         )}
       </div>
@@ -1326,8 +1399,36 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       className="relative w-full h-full max-w-[1600px] max-h-[92vh] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col min-h-0"
       onClick={e => e.stopPropagation()}
     >
+      {/* Workbench motion + switch styles — scoped to this surface, reduced-motion aware */}
+      <style>{`
+        .wl-card { transition: border-color .15s ease, transform .15s cubic-bezier(.16,1,.3,1), opacity .2s ease; }
+        .wl-card:hover { transform: translateY(-2px); }
+        .wl-card:focus-visible { outline: none; box-shadow: 0 0 0 1.5px var(--page-accent); }
+        .wl-card-off .wl-pv { filter: grayscale(1); opacity: .55; }
+        .wl-card-off { opacity: .78; }
+        .wl-pv { border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); background: color-mix(in srgb, var(--color-card) 82%, #000); position: relative; overflow: hidden; }
+        .wl-bar { border-radius: 3px 3px 0 0; transform-origin: bottom; transition: transform .2s cubic-bezier(.16,1,.3,1); }
+        .wl-card:hover .wl-bar { transform: scaleY(1.12); }
+        .wl-ring { border-radius: 9999px; -webkit-mask: radial-gradient(circle, transparent 55%, #000 56%); mask: radial-gradient(circle, transparent 55%, #000 56%); }
+        .wl-dot { width: 7px; height: 7px; border-radius: 9999px; animation: wl-pulse 2s ease-in-out infinite; }
+        @keyframes wl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+        .wl-caret { display: inline-block; width: 5px; height: 9px; margin-left: 1px; animation: wl-blink 1.1s steps(1) infinite; }
+        @keyframes wl-blink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
+        .wl-sw { position: relative; width: 30px; height: 17px; border-radius: 9999px; background: var(--color-card); border: 1px solid var(--border-subtle); cursor: pointer; transition: background .15s ease, border-color .15s ease; padding: 0; }
+        .wl-sw:hover { border-color: var(--text-muted); }
+        .wl-sw-knob { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 9999px; background: var(--text-muted); transition: transform .15s cubic-bezier(.16,1,.3,1), background .15s ease; }
+        .wl-sw-on .wl-sw-knob { transform: translateX(13px); }
+        .wl-sw:focus-visible { outline: none; box-shadow: 0 0 0 1.5px var(--page-accent); }
+        @media (prefers-reduced-motion: reduce) {
+          .wl-card, .wl-bar, .wl-sw, .wl-sw-knob { transition: none !important; }
+          .wl-dot, .wl-caret { animation: none !important; }
+          .wl-card:hover { transform: none; }
+          .wl-card:hover .wl-bar { transform: none; }
+        }
+      `}</style>
+
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-2.5 border-b border-[var(--border-subtle)]">
+      <div className="flex-shrink-0 px-4 pt-3 pb-2 border-b border-[var(--border-subtle)]">
         {renderHeader()}
       </div>
 
@@ -1336,17 +1437,17 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
         {renderToolbar()}
       </div>
 
-      {/* Main content — two columns */}
+      {/* Main content — workbench left, live mirror right */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="flex h-full">
-          {/* Available widgets — left panel */}
-          <div className="w-[380px] flex-shrink-0 border-r border-[var(--border-subtle)] min-h-0">
+        <div className="flex h-full gap-4 px-4 py-2 min-h-0">
+          {/* Workbench — left panel */}
+          <div className="w-[480px] flex-shrink-0 border-r border-[var(--border-subtle)] pr-4 min-h-0">
             <div className="h-full min-h-0 overflow-hidden">
-              {renderAvailableWidgets()}
+              {renderWorkbench()}
             </div>
           </div>
 
-          {/* Dashboard preview — right panel */}
+          {/* Dashboard mirror — right panel */}
           <div className="flex-1 min-w-0">
             <div className="h-full min-h-0 overflow-hidden">
               {renderDashboardPreview()}
@@ -1370,11 +1471,45 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       )}
 
       {/* Preview modal */}
-      {previewId && renderPreviewModal()}
+      <AnimatePresence>
+        {previewId && renderPreviewModal()}
+      </AnimatePresence>
     </div>
   );
 
-  if (!data) return null;
+  if (!data) {
+    // Loading state — the menu never silently vanishes while data resolves.
+    return (
+      <div className="relative w-full h-full max-w-[1600px] max-h-[92vh] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col min-h-0 p-6">
+        <div className="animate-pulse flex flex-col gap-3 h-full">
+          <div className="h-8 w-64 rounded-lg bg-white/[0.05]" />
+          <div className="h-11 rounded-xl bg-white/[0.04]" />
+          <div className="flex-1 grid grid-cols-2 gap-2.5 content-start">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-40 rounded-xl bg-white/[0.04]" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Standalone overlay hoisted out of the ternary below: JSX narrowing would
+  // otherwise reduce `onClose` to `undefined` in the else-branch and turn the
+  // optional call into TS2349 ("Type 'never' has no call signatures").
+  const standaloneOverlay = (
+    <motion.div
+      key="card-library-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.12 }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+      onClick={() => onClose?.()}
+    >
+      {innerContent}
+    </motion.div>
+  );
 
   return (
     <DashboardDataProvider value={data}>
@@ -1384,17 +1519,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
         innerContent
       ) : (
         // Standalone: render full overlay
-        <motion.div
-          key="card-library-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.12 }}
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
-          onClick={() => onClose?.()}
-        >
-          {innerContent}
-        </motion.div>
+        standaloneOverlay
       )}
     </AnimatePresence>
     </DashboardDataProvider>
