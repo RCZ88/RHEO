@@ -22,7 +22,7 @@ export const OWNERSHIP_CHECK_INTERVAL_MS = 10_000;
 // Mirrors src/main.ts:5066-5071 so history stays comparable with app-written rows.
 export const MAX_SESSION_MS = 120 * 60_000;
 export const MAX_LOGGED_SESSION_MS = 60 * 60_000;
-export const SLEEP_GAP_MS = 5 * 60_000;
+export const SLEEP_GAP_MS = 2 * 60_000;
 
 // AFK detection: if no foreground change for this long, consider user AFK.
 // Matches app's afkThresholdSeconds (default 5 min, synced via userPreferences).
@@ -37,6 +37,17 @@ export const KEEPALIVE_EXTEND_MS = 90_000;
 
 // ── Browser ingest ───────────────────────────────────────────────────────────
 export const BROWSER_PORT = Number(process.env.RHEO_TRACKER_PORT || 54321);
+
+// Mirrors src/main.ts:5479/5485 so BOTH writers bound a session the same way.
+// A delta payload is capped tightly (the extension already caps its own at 5 min;
+// 10 min is headroom for a suspended service worker). A session merge window is
+// how long a periodic delta may look back for the row it belongs to — past that
+// the session is over and a new row starts.
+export const BROWSER_MAX_DELTA_MS = 10 * 60_000;
+export const BROWSER_SESSION_MERGE_WINDOW_MS = 10 * 60_000;
+// A snapshot carries the session's CUMULATIVE total. It is bounded by the same
+// ceiling as every other row (1 h), exactly as the app does it.
+export const BROWSER_SNAPSHOT_CEILING_MS = MAX_LOGGED_SESSION_MS;
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 const LOG_PREFIX = '[rheo-tracker]';

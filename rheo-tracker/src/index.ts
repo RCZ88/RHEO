@@ -25,6 +25,8 @@ import type { HeartbeatPatch } from './ownership';
 import * as session from './session';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import { persistSleepDetection } from './sleepDetection';
+import { captureColdBootWake } from './bootGap';
 
 (globalThis as Record<string, unknown>).__rheoTrackerBootedAt = new Date().toISOString();
 
@@ -167,6 +169,21 @@ await claimOwnershipIfFree();
 // Register AFK event handler — writes events to a queue file the app polls.
 session.onAfkEvent((event) => {
   enqueueAfkEvent(event);
+});
+
+// COLD BOOT: the laptop was truly powered off overnight. Record the previous
+// session's last observation → kernel boot time as the device-off/device-on
+// pair, so the sleep popup's Device On input is the real power-on moment —
+// not whenever the app happened to be opened.
+captureColdBootWake(USER_DATA);
+
+// The daemon is alive across suspend while the Electron window is not. Persist
+// the real device-off/device-on pair now; App.tsx will display it whenever the
+// user next opens RHEO rather than treating that app-open as the wake time.
+session.onSleepGap(({ gapStartMs, gapEndMs }) => {
+  if (persistSleepDetection(USER_DATA, gapStartMs, gapEndMs)) {
+    log(`saved sleep detection from ${new Date(gapStartMs).toISOString()} to ${new Date(gapEndMs).toISOString()}`);
+  }
 });
 
 // ── Poll loop ────────────────────────────────────────────────────────────────

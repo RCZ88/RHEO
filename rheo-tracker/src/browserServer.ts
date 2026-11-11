@@ -1,7 +1,16 @@
 import * as http from 'node:http';
-import { BROWSER_PORT, log, warn } from './config';
+import {
+  BROWSER_PORT,
+  BROWSER_MAX_DELTA_MS,
+  BROWSER_SNAPSHOT_CEILING_MS,
+  log,
+  warn,
+} from './config';
 import { categorizeApp, categorizeDomain } from './categories';
-import { commitLog } from './db';
+import {
+  commitBrowserPayload,
+  isProfileTrackingAllowed,
+} from './db';
 import { current } from './session';
 
 /**
@@ -40,6 +49,45 @@ function appForBrowser(browserName: string | undefined): string {
   return lower.replace(/\s*browser$/, '').replace(/[^a-z0-9]/g, '') || 'browser';
 }
 
+// ── FOCUS RESOLUTION ────────────────────────────────────────────────────────
+// Copied from src/main.ts:8928-8959 (BROWSER_PROCESS_NAMES + isAppMatchingBrowser)
+// so BOTH writers reach the SAME verdict for the same payload. The two processes
+// trade ownership of tracking; if their focus rules differed, a session the app
+// accepted would be skipped by the daemon (or vice versa) and totals would jump
+// at every app start/close.
+//
+// The firefox entry is fork-rich ON PURPOSE (see the app's comment): Zen ships a
+// stock Firefox UA in some builds, the OS names the process "zen", and the
+// extension may self-report "Firefox" — a bare ["firefox"] list rejects every
+// payload from a healthy extension. The over-claim tradeoff is the app's own,
+// made 2026-10-16.
+const BROWSER_PROCESS_NAMES: Record<string, string[]> = {
+  comet: ['chrome', 'comet', 'chromium'],
+  chrome: ['chrome', 'chromium'],
+  brave: ['brave', 'chrome'],
+  edge: ['msedge', 'edge'],
+  opera: ['opera'],
+  vivaldi: ['vivaldi'],
+  firefox: ['firefox', 'firefox-esr', 'zen', 'zen-browser', 'zenbrowser', 'floorp', 'librewolf', 'waterfox', 'mullvad', 'basilisk', 'ghost-browser'],
+  arc: ['arc'],
+  safari: ['safari'],
+  zen: ['zen', 'zen-browser', 'zenbrowser'],
+};
+
+function getBrowserProcessNames(browserName: string): string[] {
+  const key = (browserName || '').toLowerCase();
+  return BROWSER_PROCESS_NAMES[key] || [key];
+}
+
+function isAppMatchingBrowser(appName: string, browserName: string): boolean {
+  if (!appName || !browserName) return false;
+  const appLower = appName.toLowerCase().replace(/\.exe$/i, '');
+  const browserLower = browserName.toLowerCase();
+  return appLower.includes(browserLower) ||
+    browserLower.includes(appLower) ||
+    getBrowserProcessNames(browserName).some((p) => appLower.includes(p));
+}
+
 function writeJson(res: http.ServerResponse, code: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(code, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) });
@@ -64,15 +112,68 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-function ingest(payload: BrowserPayload): { ok: boolean; reason?: string } {
+/**
+ * What a payload MEANS (browser-extension/background.js:488-529 tab switch,
+ * :532-573 periodic delta) — the two shapes do NOT mean the same thing:
+ *
+ *   periodic   : is_periodic=true,  timestamp = SYNC time (changes each tick),
+ *                active_duration_ms = delta since the last sync (<= 5 min).
+ *   tab switch : is_periodic=false, timestamp = SESSION START (constant),
+ *                active_duration_ms = the CUMULATIVE session total.
+ *
+ * The old ingest ran `delta_ms || active_duration_ms`. A tab switch's delta_ms
+ * is 0 — falsy — so every snapshot resolved to the WHOLE session, and since
+ * every payload was INSERTed blind, a session re-delivered N times became N
+ * full-length rows. 252 rows at one timestamp = 252 h of a 24-h day. The
+ * collapse and the blind insert had to BOTH go: magnitude is now selected by
+ * shape, and the write goes through commitBrowserPayload(), which adopts /
+ * raises / adds against the database as the session registry.
+ */
+function ingest(payload: BrowserPayload): { ok: boolean; reason?: string; replay?: boolean } {
   const domain = (payload.domain || '').trim();
-  const duration = Math.floor(payload.delta_ms || payload.active_duration_ms || 0);
+  const isPeriodic = payload.is_periodic === true;
+  // Shape selection — never `||` across the two fields again. A snapshot's
+  // delta_ms is 0 BY DESIGN; reading it as "no duration" and falling through to
+  // active_duration_ms is precisely the collapse that manufactured 600-hour days.
+  const magnitudeMs = Math.floor(
+    isPeriodic
+      ? (payload.delta_ms ?? payload.active_duration_ms ?? 0)
+      : (payload.active_duration_ms ?? 0),
+  );
   if (!domain) return { ok: false, reason: 'missing domain' };
-  if (duration < 1000) return { ok: false, reason: 'sub-second payload' };
+  if (magnitudeMs < 1000) return { ok: false, reason: 'sub-second payload' };
 
-  // The extension sends a DELTA, and the app's browser_sessions aggregate sums
-  // this column. Sending the cumulative session total instead would count the
-  // same seconds once per tick — quadratic growth within a single tab visit.
+  // FOCUS GATE — mirrors src/main.ts:24162. The extension's flag is a hint, not
+  // the authority, and it can be stale-false (UA misdetect: Zen reporting as
+  // "Firefox" can never match its own alias list, so a healthy extension
+  // foregrounds as unfocused). So: when the extension says focused, track. When
+  // it says NOT focused, the daemon's own foreground read decides, using the
+  // same fork-rich alias table the app uses. Without this gate a browser in the
+  // BACKGROUND reported periodic deltas every 30 s and away-time was logged as
+  // website time; with a bare-substring gate, a misdetected Zen tracked nothing.
+  if (payload.is_browser_focused === false) {
+    const fg = current();
+    if (!isAppMatchingBrowser(fg.app || '', appForBrowser(payload.browserName))) {
+      return { ok: false, reason: 'browser not focused' };
+    }
+  }
+
+  // A profile the user paused must contribute nothing, whichever process is
+  // the writer. Same rule the app enforces in handleBrowserData.
+  const profileId = payload.profileId || null;
+  const browserName = payload.browserName || null;
+  if (!isProfileTrackingAllowed(profileId, browserName)) {
+    return { ok: false, reason: 'profile paused' };
+  }
+
+  // The extension sends a DELTA for periodic payloads, and the app's
+  // browser_sessions aggregate sums what we credit — crediting the cumulative
+  // total here would count the same seconds once per tick.
+  const magnitude = Math.min(
+    magnitudeMs,
+    isPeriodic ? BROWSER_MAX_DELTA_MS : BROWSER_SNAPSHOT_CEILING_MS,
+  );
+
   const timestamp = payload.timestamp && !Number.isNaN(Date.parse(payload.timestamp))
     ? new Date(payload.timestamp).toISOString()
     : new Date().toISOString();
@@ -81,33 +182,35 @@ function ingest(payload: BrowserPayload): { ok: boolean; reason?: string } {
   const category = categorizeDomain(domain);
   const title = (payload.title || domain).slice(0, 300);
 
-  const ok = commitLog(
-    {
-      timestamp,
-      app: browser,
-      category,
-      duration_ms: duration,
-      title,
-      url: payload.url ?? null,
-      domain,
-      tab_id: typeof payload.tab_id === 'number' ? payload.tab_id : null,
-      is_browser_tracking: 1,
-      platform: 'linux',
-      source: 'auto',
-    },
-    {
-      timestamp,
-      app: browser,
-      category,
-      duration_ms: duration,
-      domain,
-      is_browser_tracking: 1,
-    },
+  const result = commitBrowserPayload({
+    timestamp,
+    app: browser,
+    category,
+    magnitudeMs: magnitude,
+    isPeriodic,
+    title,
+    url: payload.sanitized_url || payload.url || null,
+    domain,
+    tab_id: typeof payload.tab_id === 'number' ? payload.tab_id : null,
+    browser_name: browserName,
+    profile_id: profileId,
+  });
+  if (!result.ok) return { ok: false, reason: result.reason || 'DB write failed' };
+  log(
+    `browser ${domain} ${Math.round(magnitude / 1000)}s ` +
+    `${isPeriodic ? 'delta' : 'snapshot'} ` +
+    `+${Math.round(result.addedMs / 1000)}s ` +
+    `via ${browserName || 'unknown'}${profileId ? ` / ${profileId.slice(0, 8)}` : ''}` +
+    `${result.replay ? ' (replay skipped)' : ''}`,
   );
-  if (!ok) return { ok: false, reason: 'DB write failed' };
-  log(`browser ${domain} ${Math.round(duration / 1000)}s via ${payload.browserName || 'unknown'}`);
-  return { ok: true };
+  return { ok: true, replay: result.replay };
 }
+
+/** Exported for the ingest probe (agent/probes/tracking-daemon-browser.probe.mjs)
+ *  so the real payload path can be driven against a scratch DB. Not used by the
+ *  server itself, which calls it from the /browser-data handler. */
+export { ingest };
+export { setCurrentForTest } from './session';
 
 /**
  * Resolves with the listening server, or null if the port was unavailable.

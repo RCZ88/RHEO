@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RHEO Browser Bridge",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Bridge between RHEO and AI chat websites. Captures conversations, injects context, shows capture status and content creation tools directly on ChatGPT, Claude, Gemini, Perplexity, and You.com.",
   "permissions": [
     "tabs",

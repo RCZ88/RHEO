@@ -35,6 +35,12 @@ let state = {
   activeTabIsPrivate: false,
   sessionStart: Date.now(),
   lastPeriodicSync: Date.now(),  // Track last sync time for delta calculation
+  /* Delta credit the server FAILED to accept (it was down, restarting, or the
+   * app↔daemon port handoff was mid-flight). Added back into the next
+   * successful sync so a short outage no longer silently drops tracked time.
+   * Capped at 10 min — beyond that no receiver can credit a single periodic
+   * payload anyway (their delta caps are 10 min). */
+  pendingDeltaMs: 0,
   isTrackingEnabled: true,
   serverHealthy: false,
   isBrowserFocused: true,        // Track if browser window has focus
@@ -52,6 +58,7 @@ async function saveState() {
       deskflow_activeTabDomain: state.activeTabDomain,
       deskflow_sessionStart: state.sessionStart,
       deskflow_lastPeriodicSync: state.lastPeriodicSync,
+      deskflow_pendingDeltaMs: state.pendingDeltaMs,
       deskflow_isTrackingEnabled: state.isTrackingEnabled,
       deskflow_isBrowserFocused: state.isBrowserFocused,
       deskflow_profileId: state.profileId,
@@ -71,6 +78,7 @@ async function loadState() {
       'deskflow_activeTabDomain',
       'deskflow_sessionStart',
       'deskflow_lastPeriodicSync',
+      'deskflow_pendingDeltaMs',
       'deskflow_isTrackingEnabled',
       'deskflow_isBrowserFocused',
       'deskflow_profileId',
@@ -83,6 +91,7 @@ async function loadState() {
     if (data.deskflow_activeTabDomain) state.activeTabDomain = data.deskflow_activeTabDomain;
     if (data.deskflow_sessionStart) state.sessionStart = data.deskflow_sessionStart;
     if (data.deskflow_lastPeriodicSync) state.lastPeriodicSync = data.deskflow_lastPeriodicSync;
+    if (data.deskflow_pendingDeltaMs) state.pendingDeltaMs = data.deskflow_pendingDeltaMs;
     // CRITICAL FIX: If lastPeriodicSync is not set, initialize to now to prevent huge delta on first sync
     if (!data.deskflow_lastPeriodicSync) state.lastPeriodicSync = Date.now();
     if (data.deskflow_isTrackingEnabled !== undefined) state.isTrackingEnabled = data.deskflow_isTrackingEnabled;
@@ -196,6 +205,20 @@ const BROWSER_PROCESS_NAMES = {
   'arc':       ['arc'],
   'safari':    ['safari'],
 };
+
+// ── CONFIGURABLE BROWSER LIST ───────────────────────────────────────────────
+// Every browser brand the system can recognize, offered to the user in the
+// popup's identity section. This is the extension-side half of "configure the
+// list of browser applications": when two Firefox-family browsers are installed
+// (Firefox + Zen is the common pair) and one ships a stock UA, its extension
+// auto-detects as "Firefox" and can never match the foreground process —
+// tracking then reports nothing, or the wrong browser. Pinning the real brand
+// here fixes attribution for THIS installation without touching the other.
+const KNOWN_BROWSER_NAMES = [
+  'Comet', 'Arc', 'Edge', 'Opera', 'Brave', 'Vivaldi', 'Chrome', 'Chromium',
+  'Zen', 'LibreWolf', 'Waterfox', 'Floorp', 'Mullvad', 'Basilisk', 'Pale Moon',
+  'Firefox', 'Safari',
+];
 
 // ── PINNED IDENTITY OVERRIDE ────────────────────────────────────────────────
 // A misdetected identity is not recoverable from the UA, so it is pinned
@@ -337,8 +360,10 @@ function shouldExclude(url, domain) {
 }
 
 // --- Send data to RHEO ---
+// Returns TRUE only when the server accepted the payload. Callers use that to
+// know whether the time it carried was actually credited.
 async function sendToDeskFlow(data) {
-  if (!state.isTrackingEnabled) return;
+  if (!state.isTrackingEnabled) return false;
 
   try {
     const response = await fetch(`${DESKFLOW_SERVER}/browser-data`, {
@@ -351,9 +376,11 @@ async function sendToDeskFlow(data) {
     if (response.ok) {
       state.serverHealthy = true;
       console.log('[RHEO] ✅ Synced:', data.domain, `(${Math.round(data.active_duration_ms / 1000)}s)`);
+      return true;
     } else {
       state.serverHealthy = false;
       console.warn('[RHEO] ⚠️ Server returned', response.status, response.statusText);
+      return false;
     }
   } catch (err) {
     state.serverHealthy = false;
@@ -362,6 +389,7 @@ async function sendToDeskFlow(data) {
     } else {
       console.debug('[RHEO] ⚠️ Server unreachable:', err.message);
     }
+    return false;
   }
 }
 
@@ -467,6 +495,10 @@ async function updateActiveTab(tabId) {
     state.activeTabUrl = sanitizeUrl(tab.url);
     state.activeTabTitle = tab.title || domain;
     state.activeTabDomain = domain;
+    /* The privacy flag must follow the tab too. Only webNavigation.onCompleted
+     * set it, so a switch into (or out of) a private window left the LAST tab's
+     * flag on the new session and the Halo could show a private domain. */
+    state.activeTabIsPrivate = isPrivateTab(tab);
     state.sessionStart = Date.now();
     // CRITICAL FIX: Reset lastPeriodicSync when switching to new domain to prevent huge delta
     state.lastPeriodicSync = Date.now();
@@ -539,13 +571,21 @@ async function periodicSync() {
 
   // Calculate DELTA (new time since last sync), not total duration
   const deltaMs = Date.now() - state.lastPeriodicSync;
-  
+
   // Only sync if we've accumulated at least MIN_SESSION_MS of new activity
   if (deltaMs < MIN_SESSION_MS) return;
 
   // Cap delta at 5 minutes to prevent sleep-time artifacts
   const MAX_DELTA_MS = 5 * 60 * 1000;
   const cappedDelta = Math.min(deltaMs, MAX_DELTA_MS);
+
+  // FAILED-SYNC CREDIT. If the previous sync could not be delivered (server
+  // down, app restarting, port handoff), that time was tracked but never
+  // credited. Carry it here and send it with the next successful sync.
+  // Cap: 10 min — past that no receiver credits a single periodic payload.
+  const MAX_PENDING_MS = 10 * 60 * 1000;
+  const pendingMs = Math.min(state.pendingDeltaMs || 0, MAX_PENDING_MS);
+  const sendMs = Math.min(cappedDelta + pendingMs, MAX_DELTA_MS);
 
   const data = {
     url: state.activeTabUrl,
@@ -554,10 +594,10 @@ async function periodicSync() {
     title: state.activeTabTitle,
     tab_id: state.activeTabId,
     timestamp: new Date(state.lastPeriodicSync).toISOString(),
-    active_duration_ms: cappedDelta,        // Now sending DELTA, not total
+    active_duration_ms: sendMs,             // DELTA + uncredited carry, not total
     sanitized_url: sanitizeUrl(state.activeTabUrl),
     is_periodic: true,
-    delta_ms: cappedDelta,                   // Explicit delta for desktop app
+    delta_ms: sendMs,                       // Explicit delta for desktop app
     is_browser_focused: state.isBrowserFocused, // Tell desktop app if browser is focused
     profileId: state.profileId,               // Which browser profile is active
     browserName: BROWSER_NAME,  // WHICH browser sent this. Without it the app cannot
@@ -565,11 +605,23 @@ async function periodicSync() {
                                // visiting the same domain collapse into one row.
   };
 
-  // Update last sync time after preparing data
+  // Update last sync time BEFORE the await: two overlapping alarm ticks must
+  // never both read the same lastPeriodicSync and send the same delta twice.
   state.lastPeriodicSync = Date.now();
   await saveState();
 
-  await sendToDeskFlow(data);
+  const ok = await sendToDeskFlow(data);
+
+  // Settle the carry AFTER the send so the outcome decides where it goes.
+  if (ok) {
+    // Whatever portion of `sendMs` came from the carry is now credited.
+    const consumed = Math.max(0, sendMs - cappedDelta);
+    state.pendingDeltaMs = Math.max(0, pendingMs - consumed);
+  } else {
+    // Server never got it — keep the time for the next tick.
+    state.pendingDeltaMs = Math.min(pendingMs + cappedDelta, MAX_PENDING_MS);
+  }
+  if (state.pendingDeltaMs !== pendingMs) await saveState();
 }
 
 // ========================================
@@ -611,6 +663,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     state.activeTabUrl = sanitizeUrl(url);
     state.activeTabTitle = tab.title || state.activeTabTitle;
     state.activeTabDomain = domain;
+    state.activeTabIsPrivate = isPrivateTab(tab);
     state.sessionStart = Date.now();
 
     await saveState();
@@ -939,6 +992,26 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
         health = await r.json().catch(() => null);
       } catch (e) { health = { error: e && e.message }; }
       return { ok: granted && reachable, permissions: granted, reachable, health };
+    })();
+  }
+  // ── Browser identity configuration (popup ↔ background) ──
+  // The identity lives in the background's storage-resolved state; the popup can
+  // only reach it through a message. This is the "which browser app is this
+  // installation" control: a Firefox-family fork that ships a stock UA (Zen does
+  // in some builds) is otherwise unpinnable except from the service-worker
+  // console, which no user will ever open.
+  if (msg && msg.type === 'DESKFLOW_GET_IDENTITY') {
+    return (async () => {
+      await loadState();
+      const id = globalThis.rheoIdentity();
+      return { ...id, knownBrowsers: KNOWN_BROWSER_NAMES };
+    })();
+  }
+  if (msg && msg.type === 'DESKFLOW_SET_BROWSER_NAME') {
+    return (async () => {
+      const name = await globalThis.rheoSetBrowserName(msg.name || '');
+      await identifyBrowser();
+      return { ok: true, name };
     })();
   }
   if (msg?.type === 'FOCUS_CHECK' && sender.tab) checkTabFocus(sender.tab.id, msg.domain);

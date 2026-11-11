@@ -396,7 +396,7 @@
     </div>
 
     <div class="ftr">
-      <span class="ftr-text">RHEO Bridge v1.8.0</span>
+      <span class="ftr-text">RHEO Bridge v1.9.0</span>
       <span class="ftr-pill" id="browserPill">chrome</span>
     </div>
   </div>
@@ -428,7 +428,7 @@
     </div>
 
     <div class="ftr">
-      <span class="ftr-text">RHEO Bridge v1.8.0</span>
+      <span class="ftr-text">RHEO Bridge v1.9.0</span>
       <span class="ftr-pill" id="browserPill2">chrome</span>
     </div>
   </div>
@@ -457,7 +457,7 @@
     </div>
 
     <div class="ftr">
-      <span class="ftr-text">RHEO Bridge v1.8.0</span>
+      <span class="ftr-text">RHEO Bridge v1.9.0</span>
       <span class="ftr-pill" id="browserPill3">chrome</span>
     </div>
   </div>
@@ -492,8 +492,30 @@
       <button class="dk-ext-flush-btn" id="flushNowBtn" style="width:100%;margin-top:10px;">Flush Now</button>
     </div>
 
+    <!-- ── Browser identity: which browser app THIS installation is ──────────
+         Auto-detection reads the User-Agent, and Firefox-family forks that
+         ship a stock UA (Zen does in some builds) detect as "Firefox" — then
+         they can never match their own foreground process, so website time
+         lands on the wrong browser or nowhere. This pins the real brand per
+         installation, which is the extension-side half of configuring the
+         list of browser applications. -->
+    <div class="ai-sec" style="margin:10px 16px 0;">
+      <div class="ai-hdr"><span class="ai-hdr-icon">◈</span> Browser identity</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px;">
+        Detected: <span id="identityDetected" style="color:var(--muted);font-weight:600;">…</span>
+      </div>
+      <select id="identitySelect"
+        style="width:100%;padding:7px 9px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:12px;margin-bottom:6px;">
+      </select>
+      <div style="display:flex;gap:6px;">
+        <button id="identitySave" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.06);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Save identity</button>
+        <button id="identityReset" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:12px;cursor:pointer;">Auto-detect</button>
+      </div>
+      <div id="identityNote" style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.4;"></div>
+    </div>
+
     <div class="ftr">
-      <span class="ftr-text">RHEO Bridge v1.8.0</span>
+      <span class="ftr-text">RHEO Bridge v1.9.0</span>
       <span class="ftr-pill" id="browserPill4">chrome</span>
     </div>
   </div>

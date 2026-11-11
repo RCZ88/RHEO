@@ -34,7 +34,7 @@ document.querySelectorAll('.dk-ext-tab').forEach(btn => {
     if (panel) panel.classList.add('dk-ext-tab-content--active');
     if (activeTab === 'capture') refreshCaptureList();
     if (activeTab === 'topics') loadTopics();
-    if (activeTab === 'status') loadStatus();
+    if (activeTab === 'status') { loadStatus(); loadIdentity(); }
   });
 });
 
@@ -290,6 +290,78 @@ $('flushNowBtn')?.addEventListener('click', async () => {
   } catch {}
 });
 
+// ── Browser identity (Status tab) ──
+// Firefox-family forks that ship a stock user agent (Zen does in some builds)
+// auto-detect as "Firefox" and can then never match their own foreground
+// process, so their website time lands on the wrong browser or nowhere. This
+// section pins the real brand for THIS installation; the resolved name is
+// what every payload's `browserName` field carries.
+function flashIdentity(text, ok) {
+  const note = $('identityNote');
+  if (!note) return;
+  note.textContent = text;
+  note.style.color = ok ? 'var(--emerald)' : 'var(--rose)';
+  setTimeout(() => { note.style.color = ''; loadIdentity(); }, 2500);
+}
+
+async function loadIdentity() {
+  const sel = $('identitySelect');
+  const det = $('identityDetected');
+  const note = $('identityNote');
+  if (!sel) return;
+
+  let id = null;
+  try { id = await chrome.runtime.sendMessage({ type: 'DESKFLOW_GET_IDENTITY' }); } catch (e) { id = null; }
+  if (!id) {
+    if (det) det.textContent = 'unavailable';
+    if (note) note.textContent = 'Could not reach the extension worker. Reload the extension and reopen this popup.';
+    return;
+  }
+
+  // Detected badge: name plus how confident we are, so a guess is visible.
+  if (det) {
+    const how = id.overridden ? 'pinned'
+      : id.exact ? 'detected'
+      : 'guessed \u2014 no fork token in this browser\u2019s user agent';
+    det.textContent = `${id.name} · ${how}`;
+  }
+
+  // Populate the list once; re-select the saved value on every load.
+  if (!sel.options.length) {
+    for (const name of (id.knownBrowsers || [])) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    }
+  }
+  sel.value = id.name;
+
+  if (note) {
+    note.textContent = id.overridden
+      ? `Pinned to ${id.name}. \u201cAuto-detect\u201d goes back to the user-agent guess.`
+      : 'Wrong name shown above? Some Firefox-family browsers (e.g. Zen) ship a stock Firefox user agent and are misidentified \u2014 pin the real name here so time is credited to the right browser.';
+  }
+}
+
+$('identitySave')?.addEventListener('click', async () => {
+  const sel = $('identitySelect');
+  if (!sel || !sel.value) return;
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'DESKFLOW_SET_BROWSER_NAME', name: sel.value });
+    if (res && res.ok) await loadIdentity();
+    else flashIdentity('Could not save the identity.', false);
+  } catch (e) { flashIdentity('Could not save the identity.', false); }
+});
+
+$('identityReset')?.addEventListener('click', async () => {
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'DESKFLOW_SET_BROWSER_NAME', name: '' });
+    if (res && res.ok) await loadIdentity();
+    else flashIdentity('Could not switch back to auto-detect.', false);
+  } catch (e) { flashIdentity('Could not switch back to auto-detect.', false); }
+});
+
 // ── Tracking toggle ──
 function toggleTracking() {
   chrome.storage.local.get('deskflow_isTrackingEnabled', (data) => {
@@ -320,7 +392,8 @@ $('trackToggle').addEventListener('click', toggleTracking);
 $('trackToggle').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTracking(); } });
 setInterval(refresh, 1000);
 refresh();
-fetchCaptureCount();
+refreshCaptureList();
+loadIdentity();
 
 // ── Connect gate (Firefox / Zen MV3) ────────────────────────────────────────
 // Firefox grants declared host_permissions only if the user opts in. Until they

@@ -84,6 +84,13 @@ export interface AfkEvent {
   durationMs?: number;
 }
 
+export interface SleepGapEvent {
+  /** Last tracker observation before the machine stopped running. */
+  gapStartMs: number;
+  /** First tracker observation after the machine woke. */
+  gapEndMs: number;
+}
+
 const stats: Stats = { polls: 0, rowsWritten: 0, lastRow: null, lastSuccessfulPollAt: null };
 
 // ── AFK detection state ───────────────────────────────────────────────────────
@@ -92,6 +99,7 @@ type AfkState = 'active' | 'afk';
 let afkState: AfkState = 'active';
 let afkStartMs = 0;
 let afkEventCallback: ((event: AfkEvent) => void) | null = null;
+let sleepGapCallback: ((event: SleepGapEvent) => void) | null = null;
 
 /**
  * Subscribe to AFK events. The daemon will call this when AFK starts/ends.
@@ -99,6 +107,11 @@ let afkEventCallback: ((event: AfkEvent) => void) | null = null;
  */
 export function onAfkEvent(callback: (event: AfkEvent) => void): void {
   afkEventCallback = callback;
+}
+
+/** Subscribe to wake gaps. This is independent of whether an app session was open. */
+export function onSleepGap(callback: (event: SleepGapEvent) => void): void {
+  sleepGapCallback = callback;
 }
 
 function emitAfkEvent(event: AfkEvent): void {
@@ -117,6 +130,17 @@ export function current(): { app: string | null; category: string | null; title:
     category: open?.category ?? null,
     title: open?.title ?? null,
   };
+}
+
+/** Test hook ONLY (agent/probes/tracking-daemon-browser.probe.mjs): injects the
+ *  foreground observation current() returns, without running the poll loop.
+ *  Never called by the daemon itself. */
+export function setCurrentForTest(app: string | null): void {
+  if (app === null) {
+    open = null;
+    return;
+  }
+  open = { app, title: null, category: categorizeApp(app), startedAtMs: Date.now() };
 }
 
 interface OpenSession {
@@ -199,11 +223,24 @@ export function feed(result: { ok: boolean; observation: { app: string; title: s
   // suspended. Detect it BEFORE the attempt clock advances, and flush at the
   // last SUCCESSFUL observation — never at `now`. Do not backfill the gap: the
   // user was asleep, not working.
-  if (open && wallGap > SLEEP_GAP_MS) {
-    flush(`sleep gap of ${Math.round(wallGap / 1000)}s`, lastSuccessfulObservationMs);
+  if (wallGap > SLEEP_GAP_MS) {
+    // `lastPollAttemptMs` is the last moment the daemon was demonstrably alive.
+    // It is the device-off timestamp; the current tick is the device-on
+    // timestamp. Do not use the later time when RHEO is opened.
+    const gapStartMs = lastPollAttemptMs;
+    if (open) {
+      flush(`sleep gap of ${Math.round(wallGap / 1000)}s`, lastSuccessfulObservationMs);
+    }
     warn(`detected a ${Math.round(wallGap / 60_000)} min gap — flushed without backfill`);
     open = null;
     nullPolls = 0;
+    if (sleepGapCallback) {
+      try {
+        sleepGapCallback({ gapStartMs, gapEndMs: now });
+      } catch (err) {
+        warn('sleep gap callback failed:', (err as Error).message);
+      }
+    }
     // Keep the AFK event stream balanced (every start has an end), but end the
     // absence at the last observation, not at wake time.
     if (afkState === 'afk') {
