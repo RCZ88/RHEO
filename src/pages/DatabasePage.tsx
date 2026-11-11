@@ -57,6 +57,7 @@ export default function DatabasePage() {
   const [activeTab, setActiveTab] = useState<'browse'|'architecture'|'erd'|'changes'>('browse');
   const [tables, setTables] = useState<string[]>([]);
   const [tableCounts, setTableCounts] = useState<Record<string, number>>({});
+  const [colCounts, setColCounts] = useState<Record<string, number>>({});
   const [selectedTable, setSelectedTable] = useState('');
   const [tableSchema, setTableSchema] = useState<any[]>([]);
   const [erdSchema, setErdSchema] = useState<ErdSchema | null>(null);
@@ -107,6 +108,7 @@ export default function DatabasePage() {
         if (api.getDatabaseTableStats) {
           const stats = await api.getDatabaseTableStats();
           if (stats?.counts) setTableCounts(stats.counts);
+          if (stats?.columnCounts) setColCounts(stats.columnCounts);
           setDbStats({
             totalRows: stats?.totalRows ?? 0,
             indexCount: stats?.indexCount ?? 0,
@@ -227,7 +229,7 @@ export default function DatabasePage() {
             // display:contents -> this wrapper adds no box of its own
             <div data-section="database.browse" className="contents">
             <BrowseTab tablesByCategory={tablesByCategory} tableSearch={tableSearch} setTableSearch={setTableSearch}
-              selectedTable={selectedTable} setSelectedTable={setSelectedTable} tableCounts={tableCounts}
+              selectedTable={selectedTable} setSelectedTable={setSelectedTable} tableCounts={tableCounts} colCounts={colCounts}
               tableSchema={tableSchema} tableData={displayRows} tableLoading={tableLoading}
               totalRows={totalRows} tableDataPage={tableDataPage} hasNextPage={hasNextPage}
               fetchTableData={fetchTableData} exportCSV={exportCSV} fetchRecentChanges={fetchRecentChanges}
@@ -237,7 +239,14 @@ export default function DatabasePage() {
             </div>
           )}
           {activeTab === 'architecture' && (
-            <GlassCard className="flex-1 p-4 overflow-hidden h-full min-h-0" data-section="database.architecture">
+            // `flex flex-col` is load-bearing: GlassCard's inner wrapper is only a flex
+            // child when the card itself is a flex column. Without it the wrapper is
+            // auto-height, the view root's `h-full` resolves to auto, the canvas's
+            // height comes from min-height alone (indefinite), and the SVG's
+            // `height="100%"` fails — the diagram renders as a ~150px default-size
+            // strip at the top of a black canvas. The ERD card below carries the same
+            // classes and renders fine; this one was simply missing them.
+            <GlassCard className="flex-1 p-4 overflow-hidden h-full min-h-0 flex flex-col" data-section="database.architecture">
               <ArchitectureView tables={tables} tableCounts={tableCounts}
                 onSelectTable={(t) => { setSelectedTable(t); setActiveTab('browse'); }} />
             </GlassCard>
@@ -261,8 +270,33 @@ export default function DatabasePage() {
 }
 
 
-function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTable, setSelectedTable, tableCounts, tableSchema, tableData, tableLoading, totalRows, tableDataPage, hasNextPage, fetchTableData, exportCSV, fetchRecentChanges, setActiveTab, PAGE_SIZE, dbStats, countsLoading, tableCount, maxTableRows }: any) {
+function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTable, setSelectedTable, tableCounts, colCounts, tableSchema, tableData, tableLoading, totalRows, tableDataPage, hasNextPage, fetchTableData, exportCSV, fetchRecentChanges, setActiveTab, PAGE_SIZE, dbStats, countsLoading, tableCount, maxTableRows }: any) {
   const accent = 'var(--page-accent)';
+  // Sort state for the table list. Applied WITHIN each category group so the
+  // category headers — the list's organizing structure — stay intact; only the
+  // order inside each group changes.
+  const [sortKey, setSortKey] = useState<'name' | 'rows' | 'cols'>('name');
+  const [sortAsc, setSortAsc] = useState(true);
+  const SORT_CHIPS: { key: 'name' | 'rows' | 'cols'; label: string; title: string; ascFirst: boolean; dirLabels: [string, string] }[] = [
+    { key: 'name', label: 'Name', title: 'Sort alphabetically', ascFirst: true,  dirLabels: ['A→Z', 'Z→A'] },
+    { key: 'rows', label: 'Rows', title: 'Sort by row count',    ascFirst: false, dirLabels: ['0→9', '9→0'] },
+    { key: 'cols', label: 'Cols', title: 'Sort by column count', ascFirst: false, dirLabels: ['0→9', '9→0'] },
+  ];
+  const pickSort = (k: 'name' | 'rows' | 'cols') => {
+    const chip = SORT_CHIPS.find(c => c.key === k);
+    if (sortKey === k) setSortAsc(v => !v);
+    else { setSortKey(k); setSortAsc(chip?.ascFirst ?? true); }
+  };
+  const sortTables = (tbls: string[]) => {
+    const byName = (a: string, b: string) => a.localeCompare(b);
+    if (sortKey === 'name') return [...tbls].sort((a, b) => sortAsc ? byName(a, b) : byName(b, a));
+    const counts = sortKey === 'rows' ? tableCounts : colCounts;
+    return [...tbls].sort((a, b) => {
+      const d = (counts[b] ?? 0) - (counts[a] ?? 0);
+      if (d !== 0) return sortAsc ? -d : d;
+      return byName(a, b); // ties keep alphabetical order, so the list never shuffles unpredictably
+    });
+  };
   return (
     <>
       {/* The rail answers "what's in here" before the list asks you to scroll. */}
@@ -279,6 +313,23 @@ function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTabl
               className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600" />
           </VoiceInputWrapper>
         </div>
+        {/* Sort chips — the active chip spells out its direction (A→Z, 9→0) so
+            "reversed" is a visible state, not something you discover by clicking. */}
+        <div className="flex items-center gap-1 flex-wrap mb-1.5" role="group" aria-label="Sort tables">
+          {SORT_CHIPS.map(s => {
+            const active = sortKey === s.key;
+            const label = active ? (sortAsc ? s.dirLabels[0] : s.dirLabels[1]) : s.label;
+            return (
+              <button key={s.key} onClick={() => pickSort(s.key)} title={s.title}
+                className={`px-2 py-1 rounded-md text-[10px] transition-colors border ${
+                  active ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                         : 'text-zinc-500 light:text-zinc-600 hover:text-zinc-300 light:hover:text-zinc-800 hover:bg-zinc-800/40 border-transparent'
+                } ${active && s.key !== 'name' && countsLoading ? 'animate-pulse' : ''}`}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
           {Object.entries(tablesByCategory).map(([cat, tbls]: [string, string[]]) => (
             <div key={cat}>
@@ -289,7 +340,7 @@ function BrowseTab({ tablesByCategory, tableSearch, setTableSearch, selectedTabl
                 </span>
                 <span className="text-[9px] text-zinc-600">({tbls.length})</span>
               </div>
-              {tbls.map(table => (
+              {sortTables(tbls).map(table => (
                 <button key={table} onClick={() => setSelectedTable(table)}
                   className={`w-full text-left px-2.5 py-1 rounded-lg text-xs transition-colors ${
                     selectedTable === table ? 'bg-purple-500/15 text-purple-300' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
@@ -554,8 +605,15 @@ function ArchitectureView({ tables, tableCounts, onSelectTable }: {
           <button onClick={() => { setZoom(fitScale); setPan({ ...fitPan }); }} className="px-2.5 h-7 rounded-lg bg-zinc-800/60 light:bg-white border border-zinc-700/50 light:border-zinc-300 text-[10px] text-zinc-500 light:text-zinc-600 hover:text-white light:hover:text-zinc-900 hover:border-zinc-600 light:hover:border-zinc-400 transition-colors">Fit</button>
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-hidden rounded-xl border border-zinc-800/50 relative" style={{ cursor: dragging ? 'grabbing' : 'grab', background: 'var(--arch-canvas)', minHeight: 'min(68vh, 720px)' }}>
-        <svg ref={svgRef} width="100%" height="100%" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={() => setDragging(false)} onMouseLeave={() => { setDragging(false); setHoveredTable(null); setHoveredFk(null); }}>
+      {/* The SVG is absolutely positioned so it always fills whatever the container
+          resolves to — percentage height against a flex item whose height comes from
+          flex-basis rather than a definite parent is exactly the resolution failure
+          that clipped this diagram to its top ~150px. minHeight stays only as a
+          collapse guard: the real height now comes down the flex chain from the card
+          (which is definite), and the old `min(68vh,720px)` floor overflowed the card
+          and pushed the legend out of view once that chain was repaired. */}
+      <div ref={containerRef} className="flex-1 overflow-hidden rounded-xl border border-zinc-800/50 relative" style={{ cursor: dragging ? 'grabbing' : 'grab', background: 'var(--arch-canvas)', minHeight: 320 }}>
+        <svg ref={svgRef} className="absolute inset-0" width="100%" height="100%" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={() => setDragging(false)} onMouseLeave={() => { setDragging(false); setHoveredTable(null); setHoveredFk(null); }}>
           <defs>
             {ARCH_GROUPS.map(g => (
               <linearGradient key={`grad-${g.id}`} id={`grad-${g.id}`} x1="0" y1="0" x2="0" y2="1">

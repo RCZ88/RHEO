@@ -7922,7 +7922,7 @@ electron_1.ipcMain.handle('get-database-tables', () => {
  * UNION ALL statement answers all of them at once.
  */
 electron_1.ipcMain.handle('get-database-table-stats', () => {
-    if (useJson || !db) return { counts: {}, totalRows: 0, tableCount: 0, indexCount: 0, fkCount: 0, dbBytes: 0 };
+    if (useJson || !db) return { counts: {}, columnCounts: {}, totalRows: 0, tableCount: 0, indexCount: 0, fkCount: 0, dbBytes: 0 };
     try {
         const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all() as any[])
             .map((t) => t.name);
@@ -7950,9 +7950,15 @@ electron_1.ipcMain.handle('get-database-table-stats', () => {
         const totalRows = Object.values(counts).reduce((s, n) => s + n, 0);
         const indexCount = (db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='index' AND name LIKE 'idx%'").get() as any)?.n ?? 0;
         let fkCount = 0;
+        const columnCounts: Record<string, number> = {};
         for (const n of names) {
             try {
                 fkCount += (db.prepare(`PRAGMA foreign_key_list("${n.replace(/"/g, '""')}")`).all() as any[]).length;
+            } catch { /* table unreadable */ }
+            // Column counts ride the same in-process PRAGMA pass as fkCount so the
+            // browse list can sort by schema size without one IPC hop per table.
+            try {
+                columnCounts[n] = (db.prepare(`PRAGMA table_info("${n.replace(/"/g, '""')}")`).all() as any[]).length;
             } catch { /* table unreadable */ }
         }
 
@@ -7963,10 +7969,10 @@ electron_1.ipcMain.handle('get-database-table-stats', () => {
             dbBytes = Number(pageCount) * Number(pageSize);
         } catch { /* non-fatal */ }
 
-        return { counts, totalRows, tableCount: names.length, indexCount, fkCount, dbBytes };
+        return { counts, columnCounts, totalRows, tableCount: names.length, indexCount, fkCount, dbBytes };
     } catch (err) {
         console.error('[DeskFlow] get-database-table-stats error:', err);
-        return { counts: {}, totalRows: 0, tableCount: 0, indexCount: 0, fkCount: 0, dbBytes: 0, error: err.message };
+        return { counts: {}, columnCounts: {}, totalRows: 0, tableCount: 0, indexCount: 0, fkCount: 0, dbBytes: 0, error: err.message };
     }
 });
 
