@@ -2320,6 +2320,27 @@ export function getHaloFootprint(): HaloFootprint | null {
 }
 
 /**
+ * Re-push the lane without an island event.
+ *
+ * WHY AN EXPORTED RE-PUSH EXISTS: `pushFootprint` translates the pill's screen rect into
+ * viewport coordinates using `main.getContentBounds()` — so the APP WINDOW MOVING invalidates
+ * every number in the cached payload. The push points above all fire on ISLAND events (hover
+ * flip, prefs, show/hide), which do not fire when the user restores a maximized window or drags
+ * it half off a display: the top bar would keep yielding around a spot the pill no longer
+ * occupies, or worse, sit under a pill the lane claimed to have cleared. `main.ts` calls this
+ * (debounced) from the main window's move/resize/maximize handlers — the same four events that
+ * already save window state.
+ */
+export function pushHaloFootprint(): void {
+  if (!handle || handle.window.isDestroyed()) return;
+  try {
+    pushFootprint(handle, handle.prefs);
+  } catch {
+    /* a lane is a nicety; the next island event re-pushes */
+  }
+}
+
+/**
  * Re-read every preference and push it to a LIVE island.
  *
  * WHY THIS HAD TO BE WRITTEN

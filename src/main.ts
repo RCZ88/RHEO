@@ -119,7 +119,7 @@ import { migrateConnectors } from "./services/connectors/migrate";
 import {
     CATALOGUE_VERSION, capabilities, getTrigger, getAction, isValidAutomation, matches,
 } from "./shared/automationCatalogue";
-import { createHaloIsland, registerHaloIpc, reconcileHaloGeometry, toggleHaloIsland, sendHaloCommand, configureHaloPrefs, destroyHaloIsland, handleHaloDrag, pushHaloMove } from "./main/halo/haloIsland";
+import { createHaloIsland, registerHaloIpc, reconcileHaloGeometry, toggleHaloIsland, sendHaloCommand, configureHaloPrefs, destroyHaloIsland, handleHaloDrag, pushHaloMove, pushHaloFootprint } from "./main/halo/haloIsland";
 import { OffscreenHaloRenderer } from "./main/halo/offscreenRenderer";
 import { KwinBridge } from "./main/halo/offscreenRenderer";
 import { HALO_PREFS_KEY } from "./features/halo/HaloPreferences";
@@ -7413,6 +7413,27 @@ function createWindow() {
     mainWindow.on('move', saveWindowStateDebounced);
     mainWindow.on('maximize', saveWindowStateDebounced);
     mainWindow.on('unmaximize', saveWindowStateDebounced);
+
+    /* THE PILL'S HOLE MUST FOLLOW THE WINDOW, NOT JUST THE ISLAND.
+     *
+     * `pushFootprint` translates the pill's screen rect with `main.getContentBounds()`, so a
+     * moved/restored/maximized window invalidates the numbers the top bar is currently laying
+     * out around. Island events re-push, but they do not fire when the WINDOW moves — the lane
+     * would keep pointing at a spot the pill no longer covers until the next hover or pref
+     * change. Same four events that already save window state, debounced so a drag (which
+     * emits a move storm) costs at most one IPC per 120ms. */
+    let haloFootprintPushTimer: ReturnType<typeof setTimeout> | null = null;
+    const pushHaloFootprintDebounced = () => {
+      if (haloFootprintPushTimer) return;
+      haloFootprintPushTimer = setTimeout(() => {
+        haloFootprintPushTimer = null;
+        try { pushHaloFootprint(); } catch { /* a lane is a nicety */ }
+      }, 120);
+    };
+    mainWindow.on('resize', pushHaloFootprintDebounced);
+    mainWindow.on('move', pushHaloFootprintDebounced);
+    mainWindow.on('maximize', pushHaloFootprintDebounced);
+    mainWindow.on('unmaximize', pushHaloFootprintDebounced);
     
     if (savedState?.maximized) {
         mainWindow.maximize();

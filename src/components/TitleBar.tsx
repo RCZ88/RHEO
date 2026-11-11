@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Minus, Square, X, Bell, MousePointer2 } from 'lucide-react';
+import { useIslandFootprint } from '../features/halo/islandFootprint';
 
 // Live accessor — resolved fresh each call so the preload bridge is always visible
 const api = () => (window as any)?.deskflowAPI ?? null;
@@ -155,6 +156,83 @@ export default function TitleBar({
     onOpenNotifPanel?.();
   };
 
+  // ── THE TITLE BAR YIELDS TO THE PILL — the lane model's missing row ──────────
+  //
+  // The `h-16` toolbar below already dodges the island (`useIslandLane` in App.tsx: the pill
+  // is a notch, the bar is [left lane][hole][right lane]). This `h-7` row had NO dodge, so a
+  // pill anchored left or right — or the widened EXPANDED panel on hover — sat directly over
+  // the bell and the minimize/maximize/close buttons with the app unable to do anything about
+  // it. A center-anchored pill only ever covers empty drag space here, which is why the
+  // default setup looked fine while any other anchor covered real controls.
+  //
+  // THE FIX IS A SHIFT, NOT A GRID: the row is [flex-1 drag space][fixed controls pinned to
+  // the right edge], so when the pill's horizontal span would reach the controls, the cluster
+  // slides LEFT by exactly the overlap (+ clearance) and everything it contains stays visible
+  // and clickable. Anything less than that — pill elsewhere in the row, island off, bar
+  // hidden, pill vertically clear — shifts by 0 and reproduces the original row exactly.
+  //
+  // THE STABLE ANCHOR, because a naive version of this runs away: the cluster's unshifted
+  // start is `rowWidth - clusterWidth` (its right edge is pinned to the row's right edge by
+  // the flex-1 spacer, whatever the current margin is). Deriving the shift from the MEASURED
+  // (already-shifted) position would feed the output back into the input and double it on
+  // every measurement — the same self-referential trap the ZoomPan fit loop hit.
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const clusterRef = useRef<HTMLDivElement | null>(null);
+  const island = useIslandFootprint();
+  const [clusterShift, setClusterShift] = useState(0);
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        const row = rowRef.current;
+        const cluster = clusterRef.current;
+        if (!row || !cluster || !island || !island.visible) { setClusterShift(0); return; }
+        const rowRect = row.getBoundingClientRect();
+        const cRect = cluster.getBoundingClientRect();
+        const rowW = rowRect.width;
+        const clusterW = cRect.width;
+        if (!(rowW > 0) || !(clusterW > 0) || !(island.width > 0)) { setClusterShift(0); return; }
+        /* Vertical overlap against THIS row's strip only — the toolbar row below has its own
+         * lane, and a pill parked below the title bar must not shift controls nothing covers.
+         * A hidden (height 0) row fails this test by construction. */
+        if (island.y + island.height <= rowRect.top || island.y >= rowRect.bottom) { setClusterShift(0); return; }
+        const pillLeft = island.x - rowRect.left;
+        const pillRight = pillLeft + island.width;
+        const unshiftedStart = rowW - clusterW;
+        const CLEARANCE = 12; // matches islandFootprint.ts CLEARANCE so both lanes agree
+        /* Probe-verified (shift-probe): the pill threatens the cluster when its span (plus
+         * clearance) crosses the cluster's unshifted start; the shift then places the
+         * cluster's RIGHT edge at `pillLeft - CLEARANCE` — fully clear of the pill, whatever
+         * its width or anchor. `rowW - pillLeft + CLEARANCE` is that shift.
+         * CAPPED at the row start: a wide EXPANDED panel on a narrow window may be wider than
+         * the row minus the controls. Pushing the cluster past the window's left edge would
+         * clip the close button out of the window — a coverage you cannot escape is better
+         * than controls you cannot click at all. */
+        const shift =
+          pillRight + CLEARANCE <= unshiftedStart
+            ? 0
+            : Math.min(unshiftedStart, Math.max(0, Math.round(rowW - pillLeft + CLEARANCE)));
+        setClusterShift((prev) => (prev === shift ? prev : shift));
+      } catch {
+        setClusterShift(0);
+      }
+    };
+    read();
+    let ro: ResizeObserver | null = null;
+    try {
+      ro = new ResizeObserver(read);
+      if (rowRef.current) ro.observe(rowRef.current);
+      if (clusterRef.current) ro.observe(clusterRef.current);
+    } catch {
+      /* no ResizeObserver: the window resize listener below still covers a window resize */
+    }
+    window.addEventListener('resize', read);
+    return () => {
+      try { ro?.disconnect(); } catch { /* already gone */ }
+      window.removeEventListener('resize', read);
+    };
+  }, [island]);
+
   // ── Original refresh logic ──
   const buildTitleBar = () => (
     <div
@@ -170,11 +248,21 @@ export default function TitleBar({
         WebkitAppRegion: 'drag',
       }}
       data-titlebar-drag
+      ref={rowRef}
     >
       <div className="flex-1 h-full" />
       <div
         className="flex items-center h-full shrink-0"
-        style={{ WebkitAppRegion: 'no-drag' }}
+        style={{
+          WebkitAppRegion: 'no-drag',
+          /* THE DODGE. Slides the cluster left of the pill's span when it would be covered;
+           * 0 (and therefore visually identical to before) in every other case. Transform-
+           * style transition, no bounce — LAMINAR motion rules. The gap this leaves at the
+           * right edge is drag region, which is exactly what the pill displaces. */
+          marginRight: clusterShift,
+          transition: 'margin-right 140ms cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
+        ref={clusterRef}
       >
         <button
           onClick={handleNotifyClick}
