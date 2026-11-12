@@ -2,8 +2,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Target, Flame, Plus, Bell, Trash2, CheckCircle2, ChevronDown, ChevronUp,
-  CalendarDays, Calendar, NotebookPen, TrendingUp, ChevronLeft, ChevronRight,
+  Target, Flame, Plus, Trash2, CheckCircle2, ChevronDown, ChevronUp,
+  NotebookPen, TrendingUp, ChevronRight,
   Sparkles, Lightbulb, Timer, Code2, Activity, Pencil, X, Wand2, Clock,
   RefreshCw, Layers,
 } from 'lucide-react';
@@ -18,19 +18,19 @@ import { GoalAICoach } from '../../../components/goals/GoalAICoach';
 import { WeeklyGoalsView } from '../../../components/goals/WeeklyGoalsView';
 import { useFocusGoals } from '../../../hooks/useFocusGoals';
 import { NumberTicker } from '../../../components/ui/number-ticker';
-import { BorderBeam } from '../../../components/ui/border-beam';
-import { AnimatedCircularProgressBar } from '../../../components/ui/animated-circular-progress-bar';
+import confetti from 'canvas-confetti';
+
 import { VoiceInputWrapper } from '../../../components/VoiceInputWrapper';
-import type { Goal, LongTermGoal, GoalCategory, Deadline, Reminder, ScheduleEntry } from '../../../components/dashboard/types';
+import type { Goal, LongTermGoal, GoalCategory } from '../../../components/dashboard/types';
 import type { GoalStatus } from '../../../types/goals';
 import { Button } from '../../../components/ui/button';
 import { ConnectionExplorer } from '../../../components/goals/ConnectionExplorer';
-import { scaleOf } from '../../../lib/riverMath';
+
 import { loadCompletions } from '../../covenant/storage';
 import { GoalLanguageParser } from '@/components/goals/GoalLanguageParser';
 import { ProgressRing } from '@/components/ai/canvas/cards/ProgressRing';
 
-import { goalKind, isWeeklyish, type GoalKind } from '@/components/goals/goalPredicates';
+import { goalKind, type GoalKind } from '@/components/goals/goalPredicates';
 import { todayStr, addDaysStr, mondayOf, daysUntil } from '@/lib/week';
 import { formatTime, prettyDate } from '@/lib/format';
 import { covenantStreak, covenantDoneDates } from '@/lib/covenant';
@@ -83,40 +83,9 @@ function buildPrompts(data: DailyReflection, streak: number): string[] {
   return prompts.slice(0, 4);
 }
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function formatPhaseRange(sy?: number|null, sm?: number|null, ey?: number|null, em?: number|null): string {
-  const start = sy ? `${MONTH_ABBR[(sm || 1) - 1] ?? ''} ${sy}` : '';
-  if (!ey) return start ? `${start} — present` : '';
-  const end = `${MONTH_ABBR[(em || 12) - 1] ?? ''} ${ey}`;
-  return start ? `${start} — ${end}` : end;
-}
 
-type CalendarSide = 'left' | 'right';
 
-// Side preference persisted in the preference store (mirror CardLibrary pattern, W-4).
-// No new localStorage key (R-59 / G-GL-4).
-export function useCalendarSide(): [CalendarSide, () => void] {
-  const [side, setSide] = useState<CalendarSide>('right');
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const api = (window as any).deskflowAPI;
-        if (!api?.getPreferences) return;
-        const prefs = await api.getPreferences();
-        const stored = prefs?.['gold_calendar_side'];
-        if (alive && stored?.schemaVersion === 1) { const v = stored.side; if (v === 'left' || v === 'right') setSide(v); }
-      } catch { /* keep default */ }
-    })();
-    return () => { alive = false; };
-  }, []);
-  const toggle = useCallback(() => setSide(s => {
-    const next = s === 'left' ? 'right' : 'left';
-    try { (window as any).deskflowAPI?.setPreference?.('gold_calendar_side', { schemaVersion: 1, side: next }); } catch { /* ignore */ }
-    return next;
-  }), []);
-  return [side, toggle];
-}
+
 
 export const defaultCriteria: CriteriaForm = {
   title: '', description: '', category: 'work', period: 'daily',
@@ -193,7 +162,6 @@ export function criteriaToGoal(c: CriteriaForm, date: string, existingId?: strin
   };
 }
 
-interface RadarMark { color: string; label: string; }
 
 /* ═══════════════════ unique UI pieces ═══════════════════ */
 
@@ -266,7 +234,6 @@ function GroupHeader({ id, icon, title, count, noun }: {
    smudge that swallowed its own contents. Measured on the streak pill, the
    Flame sat at 1.01:1 and the Sealed check at 1.10:1 against it. The token
    pair keeps the glass read in both themes. */
-const GLASS = 'bg-[rgba(24,24,27,0.60)] light:bg-[var(--ws-surface-raised)] backdrop-blur-xl border border-[rgba(63,63,70,0.40)] light:border-[var(--ws-border)]';
 
 /* — GoldHeader: opens on the date itself, ledger-style — */
 function GoldHeader({ date, done, total, tracked, bestStreak }: {
@@ -296,7 +263,7 @@ function GoldHeader({ date, done, total, tracked, bestStreak }: {
       <div className="flex items-center gap-3">
         {bestStreak > 0 && (
           <div className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <BorderBeam duration={4} size={120} colorFrom="#fbbf24" colorTo="#f59e0b" borderWidth={1.5} className="opacity-40" />
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-amber-400/40" aria-hidden="true" />
             <Flame size={13} className="text-amber-400" />
             <span className="text-[12px] font-semibold text-amber-300 tabular-nums">
               <NumberTicker value={bestStreak} className="text-amber-300" suffix="d" />
@@ -306,102 +273,6 @@ function GoldHeader({ date, done, total, tracked, bestStreak }: {
         <DayRing date={date} done={done} total={total} />
       </div>
     </div>
-  );
-}
-
-/* — WeekBoard: 7 day-columns, habit dot-chips, click to navigate — */
-function WeekBoard({ weekDates, weekGoals, selectedDate, onPick, onToggleDay }: {
-  weekDates: string[];
-  weekGoals: Record<string, Goal[]>;
-  selectedDate: string;
-  onPick: (d: string) => void;
-  onToggleDay: (g: Goal) => void;
-}) {
-  const today = todayStr();
-  const dowNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  /* regroup weeklyish rows by (parentId || title) across the week */
-  const groups = useMemo(() => {
-    const map = new Map<string, { key: string; title: string; category: GoalCategory; days: Record<string, Goal> }>();
-    for (const [date, list] of Object.entries(weekGoals || {})) {
-      if (!Array.isArray(list)) continue;
-      for (const g of list) {
-        if (!isWeeklyish(g)) continue;
-        const key = g.parentId || g.title;
-        if (!map.has(key)) map.set(key, { key, title: g.title, category: g.category, days: {} });
-        map.get(key)!.days[date] = g;
-      }
-    }
-    return [...map.values()];
-  }, [weekGoals]);
-
-  return (
-    <WarmCard ambient>
-      <div className="text-[12px] font-medium text-zinc-400 mb-3 flex items-center gap-1.5">
-        <CalendarDays size={13} className="text-amber-400" />
-        The Week
-        <span className="text-zinc-600 font-normal ml-1">habits & weekly goals</span>
-      </div>
-      <div className="grid grid-cols-7 gap-1.5">
-        {weekDates.map((date, i) => {
-          const isToday = date === today;
-          const isSelected = date === selectedDate;
-          const dayList = weekGoals[date] || [];
-          const dailyCount = dayList.filter(g => !isWeeklyish(g)).length;
-          return (
-            <button
-              key={date}
-              onClick={() => onPick(date)}
-              className={`relative flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border transition-all duration-200 min-h-[92px] ${
-                isSelected
-                  ? 'bg-amber-500/10 border-amber-500/30'
-                  : isToday
-                    ? 'bg-zinc-800/40 border-zinc-700/40'
-                    : 'bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] border-transparent hover:bg-zinc-800/30 hover:border-zinc-800/50'
-              }`}
-            >
-              <span className={`text-[9px] uppercase tracking-wider ${isToday ? 'text-amber-400' : 'text-zinc-600'}`}>
-                {dowNames[i]}
-              </span>
-              <span className={`text-[14px] font-semibold tabular-nums ${isSelected ? 'text-amber-300' : isToday ? 'text-zinc-200' : 'text-zinc-500'}`}>
-                {new Date(date + 'T00:00:00').getDate()}
-              </span>
-              {/* habit dot-chips for this day */}
-              <span className="flex flex-col items-center gap-1">
-                {groups.slice(0, 4).map(grp => {
-                  const inst = grp.days[date];
-                  if (!inst) return null;
-                  const isDone = inst.status === 'done';
-                  return (
-                    <span
-                      key={grp.key}
-                      role="button"
-                      tabIndex={0}
-                      onClick={e => { e.stopPropagation(); onToggleDay(inst); }}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); onToggleDay(inst); } }}
-                      title={`${grp.title}${isDone ? ' ✓' : ''}`}
-                      className="w-2.5 h-2.5 rounded-[3px] border transition-transform hover:scale-125"
-                      style={{
-                        background: isDone ? CATEGORY_DOTS[grp.category]?.dot : 'transparent',
-                        borderColor: isDone ? CATEGORY_DOTS[grp.category]?.dot : `${CATEGORY_DOTS[grp.category]?.dot}55`,
-                      }}
-                    />
-                  );
-                })}
-              </span>
-              {dailyCount > 0 && (
-                <span className="absolute bottom-1 text-[8px] text-zinc-600 tabular-nums">{dailyCount} daily</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {groups.length === 0 && (
-        <p className="text-[11px] text-zinc-600 text-center mt-2">
-          No habits or weekly goals this week — create a goal with period "Weekly" to see it here.
-        </p>
-      )}
-    </WarmCard>
   );
 }
 
@@ -434,11 +305,17 @@ export const PRIORITY_OPTIONS: { value: number; label: string }[] = [
    The prop is deleted rather than repointed: `longTermGoals` is already the
    component's real source, and the group header below now counts that same
    array, so the number and the list are the same fact. */
-function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
+function TheVault({ longTermGoals, todayGoals, onSave, onDelete, addRequest, onAddConsumed, editRequest, onEditConsumed }: {
   longTermGoals: LongTermGoal[];
   todayGoals: Goal[];
   onSave: (form: LTGForm, existing?: LongTermGoal) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
+  // §3.6 quick-add handoff — consumed by opening the inline form once.
+  addRequest?: boolean;
+  onAddConsumed?: () => void;
+  // §3.7 entity deep-link — open THIS goal's edit form once.
+  editRequest?: string | null;
+  onEditConsumed?: () => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -447,6 +324,30 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
   const [saving, setSaving] = useState(false);
 
   const startAdd = () => { setForm(emptyLTGForm); setEditingId(null); setAdding(true); };
+  // §3.6 — consume the quick-add handoff: open the inline create form, whose
+  // title input already autofocuses.
+  useEffect(() => {
+    if (addRequest) {
+      startAdd();
+      onAddConsumed?.();
+    }
+    // startAdd is a stable local closure over setters; consumed prevents re-open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addRequest]);
+  /* §3.7 — consume the entity deep-link: open THAT goal's edit form via the
+     same path the pencil button uses, and bring the vault on screen. Unknown
+     id (deleted since the chip was made) → consume anyway; never wedge. */
+  useEffect(() => {
+    if (!editRequest || longTermGoals.length === 0) return;
+    const ltg = longTermGoals.find(g => g.id === editRequest);
+    if (ltg) {
+      startEdit(ltg);
+      try { document.getElementById('gold-vault')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch { /* ignore */ }
+    }
+    onEditConsumed?.();
+    // startEdit is a stable local closure over setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRequest, longTermGoals]);
   const startEdit = (ltg: LongTermGoal) => {
     setForm({
       title: ltg.title,
@@ -475,7 +376,7 @@ function TheVault({ longTermGoals, todayGoals, onSave, onDelete }: {
 
   return (
     <WarmCard ambient>
-      <div className="text-[12px] font-medium text-zinc-400 mb-2 flex items-center gap-1.5">
+      <div id="gold-vault" className="text-[12px] font-medium text-zinc-400 mb-2 flex items-center gap-1.5">
         <TrendingUp size={13} className="text-amber-400" />
         The Vault
         <span className="text-zinc-600 font-normal ml-1">long-term</span>
@@ -775,20 +676,25 @@ function ReflectionCard({ date, data, summary, streak, onSave }: {
    GoldPage also mounts standalone at `/gold`, where there is no River to switch
    to — so when the prop is absent the button is not rendered at all, rather than
    rendering a control that cannot work. */
-export default function GoldPage({ embedded, onManagePhases }: {
-  embedded?: boolean
+export default function GoldPage({ onManagePhases, vaultAddRequest, onVaultAddConsumed, focusGoalId, onFocusConsumed }: {
   /** Provided only when Gold is rendered inside LifePage, which owns the view mode. */
   onManagePhases?: () => void
+  // §3.6 quick-add handoff: LifePage marks a pending goal add; TheVault opens
+  // (and autofocuses) its own form once per signal.
+  vaultAddRequest?: boolean
+  onVaultAddConsumed?: () => void
+  /** §3.7 — entity deep-link: a goal:// chip carries the goal id. */
+  focusGoalId?: string | null
+  onFocusConsumed?: () => void
 }) {
   const api = (window as any).deskflowAPI;
-  const [side, toggleSide] = useCalendarSide();
+  const side = 'right' as const;
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [weekGoals, setWeekGoals] = useState<Record<string, Goal[]>>({});
   const [longTermGoals, setLongTermGoals] = useState<LongTermGoal[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+
   const [reviewSummary, setReviewSummary] = useState('');
   const [reflection, setReflection] = useState<DailyReflection>(emptyReflection);
   const [weekReflections, setWeekReflections] = useState<Record<string, DailyReflection>>({});
@@ -797,6 +703,12 @@ export default function GoldPage({ embedded, onManagePhases }: {
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /* §3.7 — entity deep-link: the routine/daily goal to highlight + scroll to,
+     the LTG id handed to The Vault's edit form, and the LTG-load flag the
+     deep-link effect waits on. */
+  const [goalHighlightId, setGoalHighlightId] = useState<string | null>(null);
+  const [vaultEditRequest, setVaultEditRequest] = useState<string | null>(null);
+  const [ltgsLoaded, setLtgsLoaded] = useState(false);
   const [newCriteria, setNewCriteria] = useState<CriteriaForm>(defaultCriteria);
   const [editCriteria, setEditCriteria] = useState<CriteriaForm>(defaultCriteria);
   /* ONE flag shared by all three groups was wrong twice over: the Habits
@@ -809,9 +721,8 @@ export default function GoldPage({ embedded, onManagePhases }: {
   const [showLangParser, setShowLangParser] = useState(false);
   // Schedule default = per-day (only the selected day's fixed blocks).
   // Toggle to show the whole week's fixed schedule at once.
-  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
-  const [todos, setTodos] = useState<{ id: string; text: string; done: boolean; createdAt: string; goalId?: string; scheduleId?: string; deadlineId?: string; parentTodoId?: string; dueDate?: string }[]>([]);
-  const [expandedHierarchy, setExpandedHierarchy] = useState<Set<string>>(new Set());
+
+
 
   const { focusState, activeGoalIds, getAccumulatedSeconds } = useFocusGoals(goals);
 
@@ -880,27 +791,62 @@ export default function GoldPage({ embedded, onManagePhases }: {
     })();
   }, [selectedDate, loadGoals, loadWeek, api]);
 
+  /* §3.7 — consume the entity deep-link once data has settled.
+     • LTG           → The Vault opens that goal's edit form (its canonical surface).
+     • routine/daily → highlight + scroll to the card; if the card is not on
+       screen (e.g. a daily dated another day), jump selectedDate to the goal's
+       own date and let the reload re-enter this effect.
+     Unknown id (deleted since the chip was made) → consume; never wedge. */
+  useEffect(() => {
+    if (!focusGoalId || loading || !ltgsLoaded) return;
+    const ltg = longTermGoals.find(l => l.id === focusGoalId);
+    if (ltg) {
+      setVaultEditRequest(focusGoalId);
+      onFocusConsumed?.();
+      return;
+    }
+    const goal = goals.find(g => g.id === focusGoalId);
+    if (!goal) { onFocusConsumed?.(); return; }
+    setGoalHighlightId(focusGoalId);
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`gold-goal-${focusGoalId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        onFocusConsumed?.();
+        return;
+      }
+      const gDate = (goal as any).date as string | undefined;
+      if (gDate && gDate !== selectedDate) setSelectedDate(gDate);
+      else onFocusConsumed?.();
+    }, 160);
+    return () => window.clearTimeout(t);
+    // Consumed above; selectedDate only feeds the date-jump fallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusGoalId, loading, ltgsLoaded, goals, longTermGoals]);
+
+  /* The flash highlight self-clears on its OWN timer — clearing it inside the
+     consume effect above would be cancelled by that effect's cleanup when the
+     payload is consumed, leaving the ring on permanently. */
+  useEffect(() => {
+    if (!goalHighlightId) return;
+    const c = window.setTimeout(() => setGoalHighlightId(null), 2400);
+    return () => window.clearTimeout(c);
+  }, [goalHighlightId]);
+
   const loadLongTerm = useCallback(async () => {
     try {
       const res = await api.getLongtermGoals();
       setLongTermGoals(res.goals || []);
     } catch { /* non-critical */ }
+    finally {
+      /* §3.7: the deep-link effect waits on this flag, so a zero-LTG user must
+         still flip it — otherwise the link would wait forever. */
+      setLtgsLoaded(true);
+    }
   }, [api]);
 
   useEffect(() => {
     loadLongTerm();
-    (async () => {
-      try { const res = await api.getReminders(); setReminders(res.reminders || []); } catch {}
-    })();
-    (async () => {
-      try { const res = await api.getDeadlines({ days: 60 }); setDeadlines(res.deadlines || []); } catch {}
-    })();
-    (async () => {
-      try { const res = await api.getSchedule(); setSchedule(res.entries || []); } catch {}
-    })();
-    (async () => {
-      try { const res = await api.todoList?.(); if (res?.success) setTodos(res.todos || []); } catch {}
-    })();
   }, [api, loadLongTerm]);
 
   /* ── CRUD (optimistic) ── */
@@ -930,7 +876,7 @@ export default function GoldPage({ embedded, onManagePhases }: {
     }
     try {
       await api.saveGoal(selectedDate, goal);
-      confetti({ particleCount: 50, spread: 80, startVelocity: 35, colors: ['#fbbf24', '#f59e0b', '#34d399', '#a78bfa'] });
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) confetti({ particleCount: 50, spread: 80, startVelocity: 35, colors: ['#fbbf24', '#f59e0b', '#34d399', '#a78bfa'] });
       loadGoals(selectedDate);
       loadWeek(selectedDate);
     } catch { setGoals(prev => prev.filter(g => g.id !== goal.id)); setError('Failed to save goal'); }
@@ -942,7 +888,7 @@ export default function GoldPage({ embedded, onManagePhases }: {
     const newStatus = goal.status === 'done' ? 'active' : 'done';
     const completedAt = newStatus === 'done' ? new Date().toISOString() : undefined;
     setGoals(prev => prev.map(g => (g.id === id ? { ...g, status: newStatus as any, completedAt } : g)));
-    if (newStatus === 'done') confetti({ particleCount: 60, spread: 90, startVelocity: 40, colors: ['#8b5cf6', '#a78bfa', '#34d399', '#fbbf24'] });
+    if (newStatus === 'done' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) confetti({ particleCount: 60, spread: 90, startVelocity: 40, colors: ['#8b5cf6', '#a78bfa', '#34d399', '#fbbf24'] });
     try { await api.saveGoal(selectedDate, { ...goal, status: newStatus, completedAt }); loadGoals(selectedDate); loadWeek(selectedDate); }
     catch { setGoals(prev => prev.map(g => (g.id === id ? goal : g))); }
   };
@@ -1017,37 +963,6 @@ export default function GoldPage({ embedded, onManagePhases }: {
     }
   };
 
-  const handleToggleDay = async (goal: Goal) => {
-    const newStatus = goal.status === 'done' ? 'active' : 'done';
-    const completedAt = newStatus === 'done' ? new Date().toISOString() : undefined;
-    setWeekGoals(prev => ({
-      ...prev,
-      [goal.date]: (prev[goal.date] || []).map(g => (g.id === goal.id ? { ...g, status: newStatus as any, completedAt } : g)),
-    }));
-    if (goal.date === selectedDate) {
-      setGoals(prev => prev.map(g => (g.id === goal.id ? { ...g, status: newStatus as any, completedAt } : g)));
-    }
-    if (newStatus === 'done') confetti({ particleCount: 35, spread: 60, startVelocity: 28, colors: ['#fbbf24', '#34d399'] });
-    try { await api.saveGoal(goal.date, { ...goal, status: newStatus, completedAt }); }
-    catch { loadWeek(selectedDate); loadGoals(selectedDate); }
-  };
-
-  /* ── reminders ── */
-  const createReminder = async (text: string, dueDate?: string) => {
-    try {
-      const res = await api.createReminder({ text, dueDate: dueDate || selectedDate });
-      if (res.reminder) setReminders(prev => [...prev, { ...res.reminder, due_date: res.reminder.dueDate, created_at: new Date().toISOString() }]);
-    } catch {}
-  };
-  const toggleReminder = async (id: string, done: boolean) => {
-    setReminders(prev => prev.map(r => (r.id === id ? { ...r, done } : r)));
-    try { await api.toggleReminder(id, done); } catch {}
-  };
-  const deleteReminder = async (id: string) => {
-    setReminders(prev => prev.filter(r => r.id !== id));
-    try { await api.deleteReminder(id); } catch {}
-  };
-
   /* ── long-term goals (Vault) ── */
   const handleLTGSave = useCallback(async (form: LTGForm, existing?: LongTermGoal) => {
     try {
@@ -1108,7 +1023,6 @@ export default function GoldPage({ embedded, onManagePhases }: {
   const completedDailies = dailies.filter(g => g.status === 'done')
   const habitGoals = buckets.habit
   const routineGoals = buckets.routine
-  const vaultGoals = buckets.vault
   /* AI-suggested goals used to be filtered out with no way to reach them, so 11
      rows in the live DB were unreachable. They are a REVIEW QUEUE: the point is
      to accept the ones you want and dismiss the rest. */
@@ -1250,26 +1164,13 @@ export default function GoldPage({ embedded, onManagePhases }: {
   }), [selectedDate, weekDates, weekGoals, weekReflections, goals, habitMisses, habitTitles]);
 
 
-  const radarMarks = useMemo(() => {
-    const m = new Map<string, RadarMark[]>();
-    const push = (date: string, mark: RadarMark) => {
-      if (!m.has(date)) m.set(date, []);
-      m.get(date)!.push(mark);
-    };
-    deadlines.forEach(d => { if (d.due_date && d.status !== 'completed') push(d.due_date, { color: '#f43f5e', label: d.title }); });
-    reminders.forEach(r => { if (r.due_date) push(r.due_date, { color: '#fbbf24', label: r.text }); });
-    longTermGoals.forEach(l => { if (l.deadline) push(l.deadline, { color: '#a78bfa', label: l.title }); });
-    todos.forEach(t => { if (t.dueDate && !t.done) push(t.dueDate, { color: '#a1a1aa', label: t.text }); });
-    return m;
-  }, [deadlines, reminders, longTermGoals, todos]);
-
   /* ── one goal row ──
      Extracted because the Today / Habits / Routines groups all render the same
      card. It was inline JSX copied three times in this same commit's precursor,
      which meant the "live focus timer" badge and the connection chip had to be
      kept in sync by hand in three places. */
   const renderGoalCard = (goal: Goal) => (
-    <div key={goal.id} className="relative">
+    <div key={goal.id} id={`gold-goal-${goal.id}`} className={`relative rounded-xl transition-shadow duration-300 ${goalHighlightId === goal.id ? 'ring-2 ring-amber-400/60 shadow-[0_0_24px_rgba(251,191,36,0.12)]' : ''}`}>
       {editingId === goal.id ? (
         <WarmCard ambient>
           <CriteriaBuilder value={editCriteria!} onChange={setEditCriteria!} onSave={handleEditSave}
@@ -1286,7 +1187,7 @@ export default function GoldPage({ embedded, onManagePhases }: {
           {activeGoalIds.includes(goal.id) && goal.target.type === 'time' && (
             <div className="absolute bottom-1.5 right-3 flex items-center gap-1 text-[10px] text-amber-400">
               <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
               </span>
               +{formatTime(getAccumulatedSeconds(goal.id))} live
@@ -1322,7 +1223,7 @@ export default function GoldPage({ embedded, onManagePhases }: {
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300"
           >
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
             </span>
             {focusState.isBroken
@@ -1363,7 +1264,7 @@ export default function GoldPage({ embedded, onManagePhases }: {
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setShowLangParser(!showLangParser)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all duration-150 ${
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors duration-150 ${
                   showLangParser ? 'bg-violet-500/15 text-violet-300 border-violet-500/30' : 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] text-zinc-400 border-zinc-700/50 hover:border-zinc-600'
                 }`}
               >
@@ -1371,7 +1272,7 @@ export default function GoldPage({ embedded, onManagePhases }: {
               </button>
               <button
                 onClick={() => { setIsAdding(!isAdding); setNewCriteria(defaultCriteria); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all duration-150 ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors duration-150 ${
                   isAdding ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
                 }`}
               >
@@ -1539,6 +1440,10 @@ export default function GoldPage({ embedded, onManagePhases }: {
               todayGoals={todayGoals}
               onSave={handleLTGSave}
               onDelete={handleLTGDelete}
+              addRequest={vaultAddRequest}
+              onAddConsumed={onVaultAddConsumed}
+              editRequest={vaultEditRequest}
+              onEditConsumed={() => setVaultEditRequest(null)}
             />
           </section>
 

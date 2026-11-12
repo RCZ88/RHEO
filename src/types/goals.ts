@@ -115,6 +115,9 @@ export interface LongTermGoal {
   status?: string;
   source?: string;
   links?: GoalLink[];
+  /** Row created_at, surfaced by the IPC layer (`get-longterm-goals` spreads
+   *  it in). Optional so legacy producers that omit it still type-check. */
+  createdAt?: string;
 }
 
 // Legacy GoalStore status mapping

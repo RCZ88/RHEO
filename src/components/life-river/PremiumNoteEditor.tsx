@@ -3,10 +3,6 @@ import {
   Bold, Italic, Code2, Link2, List, ListOrdered, Quote, Heading1, Heading2,
   Paperclip, Sparkles, Eye, Pencil, Copy, Check, CheckSquare, X, FileText, MessageSquare,
 } from 'lucide-react'
-import {
-  Bold, Italic, Code2, Link2, List, ListOrdered, Quote, Heading1, Heading2,
-  Paperclip, Sparkles, Eye, Pencil, Copy, Check, X, FileText, MessageSquare,
-} from 'lucide-react';
 import { NoteContent } from './NoteContent';
 import { buildToken, insertTokenAtCursor, type AttachmentKind } from '@/features/notes/attachments';
 
@@ -30,14 +26,13 @@ import { buildToken, insertTokenAtCursor, type AttachmentKind } from '@/features
  */
 
 import { GoalPicker } from '@/components/goals/GoalPicker';
-
+import { motion } from 'framer-motion';
 /* Goal titles via the same getGoalsBatch window GoalPicker reads, so the note
    rail shows the goal's name without adding an IPC channel. */
 async function goalTitleFor(goalId: string): Promise<string | null> {
   const api = (window as any).deskflowAPI;
   if (!api?.getGoalsBatch) return null;
   const d = new Date();
-  const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const end = new Date(d.getTime() + 120 * 864e5);
   const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
   const res = await api.getGoalsBatch('2000-01-01', endStr);
@@ -56,6 +51,26 @@ const INK = {
   active: 'text-zinc-100',
   chip: 'bg-zinc-900/60 light:bg-[var(--ws-surface-raised)] border-zinc-800/60',
 };
+
+interface InsertItem { id: string; label: string; keywords: string[]; token: (q: string) => string; /** §7.4-P2: entity items open a picker instead of inserting an unresolved empty token. */ kind?: 'goal' | 'phase' | 'todo' | 'note'; }
+const INSERT_ITEMS: InsertItem[] = [
+  { id: 'H1', label: 'Heading 1', keywords: ['heading', 'h1', '#'], token: () => '# ' },
+  { id: 'H2', label: 'Heading 2', keywords: ['heading', 'h2', '##'], token: () => '## ' },
+  { id: 'H3', label: 'Heading 3', keywords: ['heading', 'h3', '###'], token: () => '### ' },
+  { id: 'BQ', label: 'Quote', keywords: ['quote', 'blockquote', '>'], token: () => '> ' },
+  { id: 'UL', label: 'Bulleted list', keywords: ['list', 'bullet', '-'], token: () => '- ' },
+  { id: 'OL', label: 'Numbered list', keywords: ['list', 'numbered'], token: () => '1. ' },
+  { id: 'CB', label: 'Code block', keywords: ['code', 'fence', '```'], token: () => '```\n\n```' },
+  { id: 'HR', label: 'Divider', keywords: ['divider', 'hr', '---'], token: () => '---\n' },
+  { id: 'TASK', label: 'Task checkbox', keywords: ['task', 'todo', 'checkbox'], token: () => '- [ ] ' },
+  { id: 'LINK', label: 'Link', keywords: ['link', 'url'], token: () => '[](https://)' },
+  { id: 'GOAL', label: 'Goal attachment', keywords: ['goal', 'attachment', '[['], token: () => '[[goal:]]', kind: 'goal' },
+  { id: 'PHASE', label: 'Phase attachment', keywords: ['phase', 'attachment'], token: () => '[[phase:]]', kind: 'phase' },
+  { id: 'TODO_REF', label: 'Todo attachment', keywords: ['todo', 'ref', 'attachment'], token: () => '[[todo:]]', kind: 'todo' },
+  { id: 'NOTE_REF', label: 'Note attachment', keywords: ['note', 'ref', 'attachment'], token: () => '[[note:]]', kind: 'note' },
+  { id: 'FILE_REF', label: 'File attachment', keywords: ['file', 'attachment'], token: () => '[[file:]]' },
+  { id: 'LINK_REF', label: 'Link attachment', keywords: ['link', 'attachment'], token: () => '[[link:]]' },
+];
 
 interface Props {
   value: string;
@@ -77,6 +92,14 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
   const [insertMenuOpen, setInsertMenuOpen] = useState(false);
   const [insertMenuPos, setInsertMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [insertQuery, setInsertQuery] = useState('');
+  /* §7.4-P2 — entity tokens open a PICKER and insert the id-filled token,
+     so the reader renders a resolved chip instead of a dead `[[goal:]]`.
+     The panel reuses the insert menu's anchor (insertMenuPos) and Escape
+     closes it, same grammar as the rest of the editor. */
+  const [entityPicker, setEntityPicker] = useState<null | 'goal' | 'phase' | 'todo' | 'note'>(null);
+  const [entityOptions, setEntityOptions] = useState<Array<{ id: string; label: string; hint?: string }>>([]);
+  const [entityLoading, setEntityLoading] = useState(false);
+  const [entityQuery, setEntityQuery] = useState('');
   const [todos, setTodos] = useState<{ id: string; text: string; done: number }[]>([]);
   const todoLinks = links.filter(l => l.url.startsWith('todo://'));
   const attachedTodoIds = new Set(todoLinks.map(l => l.url.slice('todo://'.length)));
@@ -183,17 +206,13 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
     });
   }, [value, onChange]);
 
-  /* ── shortcuts: the ones a text editor already teaches ── */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      const k = e.key.toLowerCase();
-      if (k === 'b') { e.preventDefault(); wrap('**', '**', 'bold'); }
-      else if (k === 'i') { e.preventDefault(); wrap('_', '_', 'italic'); }
-      else if (k === 'k') { e.preventDefault(); wrap('[', '](https://)', 'link text'); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+  /* ── shortcuts: scoped to the textarea so they never fire from inputs elsewhere ── */
+  const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); wrap('**', '**', 'bold'); }
+    else if (k === 'i') { e.preventDefault(); wrap('_', '_', 'italic'); }
+    else if (k === 'k') { e.preventDefault(); wrap('[', '](https://)', 'link text'); }
   }, [wrap]);
 
   /* ── attach a file path as a link so it opens like any other reference ── */
@@ -222,32 +241,96 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
   }, [value, onChange]);
 
   const handleInsertToken = useCallback((token: string) => {
-    const start = taRef.current?.selectionStart ?? 0;
-    const end = taRef.current?.selectionEnd ?? 0;
+    const ta = taRef.current;
+    const start = ta?.selectionStart ?? 0;
+    const end = ta?.selectionEnd ?? 0;
+    let cutStart = start;
     const before = value.slice(0, start);
-    const after = value.slice(end);
-    onChange(before + token + after);
-    // Move cursor after the inserted token
+    const triggerIdx = before.lastIndexOf('[[');
+    if (triggerIdx !== -1) {
+      const between = before.slice(triggerIdx + 2);
+      if (!between.includes('\n')) cutStart = triggerIdx;
+    }
+    const next = value.slice(0, cutStart) + token + value.slice(end);
+    onChange(next);
     setTimeout(() => {
-      if (taRef.current) {
-        taRef.current.focus();
-        taRef.current.setSelectionRange(start + token.length, start + token.length);
+      if (ta) {
+        ta.focus();
+        const caret = cutStart + token.length;
+        ta.setSelectionRange(caret, caret);
       }
     }, 0);
     setInsertMenuOpen(false);
   }, [value, onChange]);
 
-  const openInsertMenu = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
-    const target = e.currentTarget;
-    const rect = target.getBoundingClientRect();
-    setInsertMenuPos({ x: rect.left, y: rect.bottom + 4 });
-    setInsertMenuOpen(true);
-    setInsertQuery('');
-  }, []);
 
   const closeInsertMenu = useCallback(() => {
     setInsertMenuOpen(false);
   }, []);
+
+  /* ── §7.4-P2 entity picker ────────────────────────────────────────────────
+     Each attachment kind loads from the API that feature already exposes —
+     zero new write paths, same sources the pickers elsewhere in the app use. */
+  const ENTITY_LABEL: Record<'goal' | 'phase' | 'todo' | 'note', string> = {
+    goal: 'goal', phase: 'phase', todo: 'todo', note: 'note',
+  };
+
+  const openEntityPicker = useCallback(async (kind: 'goal' | 'phase' | 'todo' | 'note') => {
+    setInsertMenuOpen(false);
+    setEntityPicker(kind);
+    setEntityQuery('');
+    setEntityOptions([]);
+    setEntityLoading(true);
+    const api = (window as any).deskflowAPI;
+    try {
+      let opts: Array<{ id: string; label: string; hint?: string }> = [];
+      if (kind === 'goal') {
+        // Same wide-window batch GoalPicker uses — routines are not day-bound,
+        // so the window starts at 2000 and ends ~120 days out (routines only).
+        const today = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const end = new Date(today); end.setDate(end.getDate() + 120);
+        const endStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+        const res = await api?.getGoalsBatch?.('2000-01-01', endStr);
+        opts = ((res?.goals ?? []) as any[])
+          .filter(g => !g.parent_id)
+          .map(g => ({ id: String(g.id), label: String(g.title ?? g.id), hint: g.status ? String(g.status) : undefined }));
+      } else if (kind === 'phase') {
+        const res = await api?.lifePhaseGet?.();
+        opts = ((res?.data ?? []) as any[]).map(p => ({
+          id: String(p.id), label: String(p.title ?? p.id),
+          hint: `${p.startMonth}/${p.startYear} → ${p.endYear ? `${p.endMonth}/${p.endYear}` : 'now'}`,
+        }));
+      } else if (kind === 'todo') {
+        const res = await api?.todoList?.({});
+        opts = ((res?.todos ?? []) as any[]).map(t => ({ id: String(t.id), label: String(t.text ?? t.id), hint: t.done ? 'done' : 'open' }));
+      } else {
+        const res = await api?.notesList?.({ includeDrafts: true });
+        opts = ((res?.notes ?? []) as any[]).map(n => {
+          const title = String(n.title ?? '').trim();
+          const firstLine = String(n.content ?? '').split('\n')[0]?.replace(/^#+\s*/, '').trim();
+          return { id: String(n.id), label: title || firstLine || String(n.id) };
+        });
+      }
+      // Newest/first ordering is each API's default; no re-sort needed here.
+      setEntityOptions(opts);
+    } catch {
+      setEntityOptions([]);
+    } finally {
+      setEntityLoading(false);
+    }
+  }, []);
+
+  const insertEntityToken = useCallback((kind: 'goal' | 'phase' | 'todo' | 'note', id: string) => {
+    setEntityPicker(null);
+    handleInsertToken(`[[${kind}:${id}]]`);
+  }, [handleInsertToken]);
+
+  const filteredEntityOptions = useMemo(() => {
+    if (!entityQuery.trim()) return entityOptions;
+    const q = entityQuery.toLowerCase();
+    return entityOptions.filter(o => o.label.toLowerCase().includes(q) || (o.hint ?? '').toLowerCase().includes(q));
+  }, [entityOptions, entityQuery]);
 
   const filteredInsertItems = useMemo(() => {
     if (!insertQuery.trim()) return INSERT_ITEMS;
@@ -356,7 +439,12 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
             {filteredInsertItems.map(item => (
               <button
                 key={item.id}
-                onClick={() => handleInsertToken(item.token(''))}
+                onClick={() => {
+                  /* §7.4-P2: entity attachments open their picker; markers and
+                     URL items insert directly as before. */
+                  if (item.kind) void openEntityPicker(item.kind);
+                  else handleInsertToken(item.token(''));
+                }}
                 className="w-full px-2 py-1.5 text-sm text-left text-zinc-200 hover:bg-zinc-800 rounded flex items-center gap-2"
                 onMouseDown={e => e.preventDefault()}
               >
@@ -367,6 +455,69 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
             {filteredInsertItems.length === 0 && (
               <div className="px-2 py-2 text-sm text-zinc-500">No matches</div>
             )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* §7.4-P2 — entity picker: same anchor, stacking and Escape grammar as
+          the insert menu. Picking inserts the ID-FILLED token so the reader
+          renders a resolved chip with the entity's real title, not a dead
+          `[[goal:]]`. */}
+      {entityPicker && insertMenuPos && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15 }}
+          role="dialog"
+          aria-label={`Pick a ${ENTITY_LABEL[entityPicker]} to attach`}
+          style={{ left: insertMenuPos.x, top: insertMenuPos.y }}
+          className="absolute z-50 w-64 p-1.5 rounded-lg border border-zinc-700 bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] shadow-lg"
+        >
+          <div className="flex items-center gap-1.5 px-1 mb-1">
+            <input
+              value={entityQuery}
+              onChange={e => setEntityQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { e.preventDefault(); setEntityPicker(null); }
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const kind = entityPicker;
+                  const first = filteredEntityOptions[0];
+                  if (kind && first) insertEntityToken(kind, first.id);
+                }
+              }}
+              placeholder={`Search ${ENTITY_LABEL[entityPicker]}s…`}
+              className="w-full px-2 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded text-zinc-100 placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-[var(--page-accent)]"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setEntityPicker(null)}
+              aria-label="Close picker"
+              className="shrink-0 flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            {entityLoading && <div className="px-2 py-2 text-sm text-zinc-500">Loading…</div>}
+            {!entityLoading && filteredEntityOptions.length === 0 && (
+              <div className="px-2 py-2 text-sm text-zinc-500">
+                No {ENTITY_LABEL[entityPicker]}s yet.
+              </div>
+            )}
+            {!entityLoading && filteredEntityOptions.map(o => (
+              <button
+                key={o.id}
+                onClick={() => { if (entityPicker) insertEntityToken(entityPicker, o.id); }}
+                className="w-full px-2 py-1.5 text-sm text-left text-zinc-200 hover:bg-zinc-800 rounded flex items-center justify-between gap-2"
+                onMouseDown={e => e.preventDefault()}
+              >
+                <span className="truncate">{o.label}</span>
+                {o.hint && <span className="shrink-0 text-[10px] uppercase tracking-wider text-zinc-500">{o.hint}</span>}
+              </button>
+            ))}
           </div>
         </motion.div>
       )}
@@ -399,6 +550,7 @@ export function PremiumNoteEditor({ value, onChange, links, onLinksChange, files
             }
           }}
           onKeyDown={e => {
+            handleEditorKeyDown(e);
             if (e.key === 'Escape' && insertMenuOpen) { setInsertMenuOpen(false); return; }
           }}
           placeholder="Write anything. Markdown works — **bold**, # headings, - lists, > quotes, `code`."

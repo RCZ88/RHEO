@@ -2,11 +2,11 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   User, Network, Brain, RefreshCw, ChevronDown,
-  Zap, ExternalLink, MousePointerClick, Sparkles, Box, Layers,
+  Zap, ExternalLink, MousePointerClick, Sparkles,
 } from 'lucide-react'
 import { ProfileTab } from '../../../components/life/ProfileTab'
+import { useLifePhases } from '../../../hooks/useLifePhases'
 import { SelfErrorBoundary } from './SelfErrorBoundary'
-import { DotPattern } from '../../../components/ui/dot-pattern'
 import { NeuralFlow } from '../context-brain/NeuralFlow'
 import { BrainVisualization } from '../context-brain/BrainVisualization'
 import { ActivityFeed } from '../context-brain/ActivityFeed'
@@ -14,8 +14,6 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui
 import { fireNode } from '../context-brain/physics/avalanche'
 import type { BrainActivityEvent } from '../context-brain/BrainVisualization'
 import type { GraphNode, GraphLink } from '../context-graph/types'
-import { ContextGraph } from '../../../components/life/ContextGraph'
-import { webglSupported } from '../../../lib/webgl'
 
 /* reducedMotion hook */
 function useReducedMotion(): boolean {
@@ -31,6 +29,18 @@ function useReducedMotion(): boolean {
     return () => mq.removeEventListener('change', onChange)
   }, [])
   return reduced
+}
+
+/** D3 — "Reflected today / yesterday / N days ago / <date>" for the reflection
+ *  meta line. Delta-based (one clock: Date.now()) so no UTC day arithmetic. */
+function relativeDay(iso: string): string {
+  const t = new Date(iso).getTime()
+  if (!Number.isFinite(t)) return 'earlier'
+  const days = Math.floor((Date.now() - t) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 30) return `${days} days ago`
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 const fadeSlideUp = {
@@ -84,6 +94,7 @@ export function SelfOrchestrator() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState(false)
   const [mgmtExpanded, setMgmtExpanded] = useState(false)
+  const lifePhases = useLifePhases()
 
   const reducedMotion = useReducedMotion()
 
@@ -95,8 +106,6 @@ export function SelfOrchestrator() {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
   const [activity, setActivity] = useState<BrainActivityEvent[]>([])
-
-  const [graphView, setGraphView] = useState<'2d' | '3d'>('2d')
 
   const flowDataPoints = useMemo(
     () => (graphNodes as any[])
@@ -147,84 +156,36 @@ export function SelfOrchestrator() {
       const api = (window as any).deskflowAPI
       if (!api) { setGraphLoading(false); return }
 
-      const nodeMap = new Map<string, GraphNode>()
-      const edgeList: GraphLink[] = []
-
-      const entityResult = await api.brainGetEntities?.({ limit: 300 })
-      const entityItems = entityResult?.items || entityResult || []
-      for (const entity of entityItems) {
-        if (!entity?.id || nodeMap.has(entity.id)) continue
-        nodeMap.set(entity.id, {
-          id: entity.id,
-          name: entity.name || entity.id,
-          type: entity.type || 'concept',
-          state: 'neutral',
-          degree: 0,
-          facts: [],
-          source: entity.source || 'brain',
-          x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
-        })
+      const result = await api.brainGetGraph?.({ maxNodes: 300, maxFacts: 500 })
+      if (!result || result.status === 'error') {
+        setGraphError(true)
+        setGraphLoading(false)
+        return
       }
 
-      const factsResult = await api.brainGetFacts?.({ currentOnly: true, limit: 500 })
-      const factItems = factsResult?.items || factsResult || []
-      for (const fact of factItems) {
-        const subjectId = fact?.subjectId
-        if (!subjectId) continue
-        if (!nodeMap.has(subjectId)) {
-          nodeMap.set(subjectId, {
-            id: subjectId,
-            name: subjectId.replace('ent_', '').replace(/_/g, ' '),
-            type: 'concept',
-            state: fact.validTo ? 'neutral' : 'active',
-            degree: 0, facts: [],
-            source: 'brain',
-            x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
-          })
-        }
-        const node = nodeMap.get(subjectId)!
-        node.facts.push({ predicate: fact.predicate, value: fact.objectLiteral || '' })
-        if (!fact.validTo) node.state = 'active'
+      const nodes = (result.nodes || []).map((n: any) => ({
+        id: n.id,
+        name: n.name || n.id,
+        type: n.type || 'concept',
+        state: n.state || 'neutral',
+        degree: n.degree || 0,
+        facts: n.facts || [],
+        source: n.source || 'brain',
+        x: n.x ?? 0, y: n.y ?? 0, z: n.z ?? 0,
+        vx: n.vx ?? 0, vy: n.vy ?? 0, vz: n.vz ?? 0,
+        lastFiredAt: n.lastFiredAt,
+        lastFiredPeak: n.lastFiredPeak,
+      }))
+      const links = (result.links || []).map((l: any) => ({
+        source: l.source,
+        target: l.target,
+        predicate: l.predicate || 'relates',
+      }))
 
-        if (fact.objectId && !nodeMap.has(fact.objectId)) {
-          nodeMap.set(fact.objectId, {
-            id: fact.objectId,
-            name: fact.objectId.replace('ent_', '').replace(/_/g, ' '),
-            type: 'concept',
-            state: 'neutral',
-            degree: 0, facts: [],
-            source: 'brain',
-            x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
-          })
-        }
-        if (fact.objectId) {
-          edgeList.push({ source: subjectId, target: fact.objectId, predicate: fact.predicate })
-        }
-      }
-
-      try {
-        const learnNodes = await api.learnGetNodes?.()
-        if (learnNodes && Array.isArray(learnNodes)) {
-          for (const ln of learnNodes.slice(0, 30)) {
-            const id = `learn_${ln.id || ln.slug}`
-            if (nodeMap.has(id)) continue
-            nodeMap.set(id, {
-              id,
-              name: ln.title || ln.name || ln.slug || 'Lesson',
-              type: 'concept',
-              state: 'neutral',
-              degree: 0,
-              facts: [{ predicate: 'is_lesson', value: ln.part || 'general' }],
-              source: 'workspace',
-              x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
-            })
-          }
-        }
-      } catch { /* learn nodes are optional */ }
-
-      setGraphNodes(Array.from(nodeMap.values()))
-      setGraphLinks(edgeList)
-      console.log(`[SelfOrchestrator] graph: ${nodeMap.size} entities, ${edgeList.length} facts`)
+      setGraphNodes(nodes)
+      setGraphLinks(links)
+      console.log(`[SelfOrchestrator] graph: ${nodes.length} entities, ${links.length} links, status=${result.status}`)
+      return
     } catch (e) {
       console.error('[SelfOrchestrator] graph load failed:', e)
       setGraphError(true)
@@ -234,6 +195,11 @@ export function SelfOrchestrator() {
   }, [])
 
   useEffect(() => { loadGraphData() }, [loadGraphData])
+
+  useEffect(() => {
+    const unsub = (window as any).deskflowAPI?.onAiContextCaptured?.(() => { loadGraphData() })
+    return () => { if (typeof unsub === 'function') unsub() }
+  }, [loadGraphData])
 
   const prevStatesRef = useRef<Map<string, string> | null>(null)
   useEffect(() => {
@@ -269,7 +235,7 @@ export function SelfOrchestrator() {
           window.dispatchEvent(new Event('braingraph:fire'))
         }
       } catch { /* a failed poll must not tear the page down */ }
-    }, 1500)
+    }, 15000)
     return () => { mounted = false; clearInterval(interval) }
   }, [graphNodes])
 
@@ -299,21 +265,6 @@ export function SelfOrchestrator() {
     : hasGraph ? 'populated'
     : 'empty'
 
-  const graph3DData = useMemo(() => ({
-    nodes: graphNodes.map(n => ({
-      id: n.id,
-      name: n.name,
-      type: n.type,
-      x: n.x ?? 0,
-      y: n.y ?? 0,
-      z: n.z ?? 0,
-      facts: n.facts || [],
-    })),
-    edges: graphLinks.map(l => ({ from: l.source, to: l.target, predicate: l.predicate })),
-  }), [graphNodes, graphLinks])
-
-  const can3D = webglSupported()
-
   return (
     <SelfErrorBoundary>
       <div className="relative w-full" data-section="life.self.brain">
@@ -324,9 +275,6 @@ export function SelfOrchestrator() {
             dataPoints={flowDataPoints}
             respectReducedMotion={!reducedMotion}
           />
-        </div>
-        <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
-          <DotPattern opacity={0.02} radius={0.8} gap={30} className="text-[var(--page-accent)]" />
         </div>
 
         {/* Masthead */}
@@ -379,9 +327,9 @@ export function SelfOrchestrator() {
           )}
         </header>
 
-        {/* Stage: graph (left, large) + identity/readout (right rail) */}
+        {/* Stage: graph takes the FULL width (no side panel squishing it). */}
         <motion.div
-          className="relative z-10 px-5 pb-5 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-5 items-start"
+          className="relative z-10 px-5 pb-5 flex flex-col gap-5"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
@@ -392,36 +340,10 @@ export function SelfOrchestrator() {
             variants={fadeSlideUp}
             className="flex flex-col gap-5 min-w-0"
           >
-            {/* View toggle */}
-            <div className="flex items-center gap-2" data-section="life.self.viewToggle">
-              <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium">View</span>
-              <div className="flex items-center gap-1 rounded-lg border border-[var(--ws-border)] p-0.5">
-                <button
-                  onClick={() => setGraphView('2d')}
-                  aria-pressed={graphView === '2d'}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:outline-none ${graphView === '2d' ? 'bg-[var(--ws-surface-raised)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                >
-                  <Layers size={11} /> 2D
-                </button>
-                <button
-                  onClick={() => setGraphView('3d')}
-                  aria-pressed={graphView === '3d'}
-                  disabled={!can3D}
-                  title={can3D ? '3D view' : 'WebGL not available on this machine'}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${graphView === '3d' ? 'bg-[var(--ws-surface-raised)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                >
-                  <Box size={11} /> 3D
-                </button>
-              </div>
-              {!can3D && (
-                <span className="text-[10px] text-[var(--text-muted)]">3D unavailable (no WebGL)</span>
-              )}
-            </div>
-
             <div
               ref={graphContainerRef}
               className="relative rounded-xl overflow-hidden border-t border-[var(--ws-border)]"
-              style={{ height: 'clamp(460px, 58vh, 720px)' }}
+              style={{ height: 'clamp(320px, 52vh, 420px)' }}
               data-section="life.self.graph"
             >
               {graphState === 'empty' && (
@@ -447,34 +369,58 @@ export function SelfOrchestrator() {
                   </div>
                 </div>
               )}
-              {graphView === '2d' ? (
-                <BrainVisualization
-                  nodes={graphNodes}
-                  links={graphLinks}
-                  width={graphW}
-                  height={graphH}
-                  state={graphState}
-                  onNodeHover={handleNodeHover}
-                  onNodeClick={handleNodeClick}
-                  onActivity={handleActivity}
-                  hoveredNode={hoveredNode}
-                  selectedNode={selectedNode}
-                  selectionSet={selectedNodeIds}
-                  reducedMotion={reducedMotion}
-                />
-              ) : can3D ? (
-                <div className="w-full h-full" style={{ background: 'var(--ws-surface-sunken)', borderRadius: 12, overflow: 'hidden' }}>
-                  <ContextGraph data={graph3DData} onNodeClick={(n) => {
-                    const node = graphNodes.find(g => g.id === n.id) || null
-                    handleNodeClick(node)
-                  }} />
-                </div>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-[var(--text-muted)] text-xs">
-                  3D view requires WebGL, which is unavailable here. Switch to 2D.
-                </div>
-              )}
+              <BrainVisualization
+                nodes={graphNodes}
+                links={graphLinks}
+                width={graphW}
+                height={graphH}
+                state={graphState}
+                onNodeHover={handleNodeHover}
+                onNodeClick={handleNodeClick}
+                onActivity={handleActivity}
+                hoveredNode={hoveredNode}
+                selectedNode={selectedNode}
+                selectionSet={selectedNodeIds}
+                reducedMotion={reducedMotion}
+              />
             </div>
+
+            {/* Reflection (below the brain visualization) */}
+            <Card className="gap-0 py-0" data-section="life.self.reflection" aria-label="Reflection">
+              <CardHeader className="px-4 pt-3 pb-2 border-b border-[var(--ws-border)] grid-rows-[auto]">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={12} className="text-[var(--page-accent)]" aria-hidden="true" />
+                  <CardTitle>Reflection</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 py-3">
+                {lifePhases.summary ? (
+                  <>
+                    <p className="warmth-serif text-[14px] leading-relaxed text-foreground/90 italic">{lifePhases.summary}</p>
+                    {/* D3: reflection meta — when it was written and against how
+                        many phases. Only shown when the payload carries it. */}
+                    {(lifePhases.summaryUpdatedAt || lifePhases.summaryPhaseCount != null) && (
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        {lifePhases.summaryUpdatedAt
+                          ? `Reflected ${relativeDay(lifePhases.summaryUpdatedAt)}`
+                          : 'Reflected earlier'}
+                        {lifePhases.summaryPhaseCount != null ? ` · ${lifePhases.summaryPhaseCount} ${lifePhases.summaryPhaseCount === 1 ? 'phase' : 'phases'}` : ''}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[12px] text-muted-foreground">No reflection yet.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => lifePhases.summarize()}
+                  disabled={lifePhases.loading}
+                  className="mt-2 text-[12px] text-[var(--page-accent)]"
+                >
+                  {lifePhases.loading ? 'Reflecting…' : 'Reflect on my phases'}
+                </button>
+              </CardContent>
+            </Card>
 
             {/* Avalanche readout */}
             <Card
@@ -491,74 +437,70 @@ export function SelfOrchestrator() {
                   </span>
                 </div>
               </CardHeader>
-              <div className="h-[132px] overflow-y-auto">
+              <div className="h-[220px] overflow-y-auto">
                 <ActivityFeed
                   nodes={graphNodes}
                   activity={activity}
                   reducedMotion={reducedMotion}
+                  onReplay={(originId) => {
+                    const node = graphNodes.find(n => n.id === originId) || null
+                    if (node) handleNodeClick(node)
+                  }}
                 />
               </div>
             </Card>
           </motion.div>
 
-          {/* ── RIGHT RAIL: identity + legend + governance ── */}
-          <motion.aside
-            custom={1}
-            variants={fadeSlideUp}
-            data-section="life.self.identity"
-            aria-label="Identity"
-            className="flex flex-col gap-5 min-w-0"
-          >
-            <Card className="gap-0 py-0">
-              <CardHeader className="px-4 pt-4 pb-2">
-                <div className="flex items-center gap-2">
-                  <User size={13} className="text-[var(--page-accent)]" aria-hidden="true" />
-                  <CardTitle>Identity</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 pt-0">
-                <div className="min-w-0">
-                  <ProfileTab />
-                </div>
+          {/* ── Identity (full width below the graph) ── */}
+          <Card className="gap-0 py-0" data-section="life.self.identity">
+            <CardHeader className="px-4 pt-4 pb-2">
+              <div className="flex items-center gap-2">
+                <User size={13} className="text-[var(--page-accent)]" aria-hidden="true" />
+                <CardTitle>Identity</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              <div className="min-w-0">
+                <ProfileTab />
+              </div>
+              <div className="mt-4 pt-4 border-t border-[var(--ws-border)]" data-section="life.self.legend">
+                <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium mb-2">
+                  Reading the graph
+                </p>
+                <dl className="flex flex-col gap-1.5 text-[11px]">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-[var(--text-muted)]">Selected</dt>
+                    <dd className="text-[var(--text-primary)] truncate font-mono min-w-0" data-selection-name="">
+                      {selectedNode ? selectedNode.name : '—'}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-[var(--text-muted)]">Connections</dt>
+                    <dd className="text-[var(--text-primary)] font-mono tabular-nums">
+                      {selectedNode ? (selectedNode.degree || 0) : '—'}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-[var(--text-muted)]">Activity</dt>
+                    <dd
+                      className="font-mono tabular-nums"
+                      style={{ color: hoveredNode ? 'var(--color-amber-400)' : undefined }}
+                      data-avalanche-state={hoveredNode ? 'firing' : 'rest'}
+                    >
+                      {hoveredNode ? 'firing' : 'at rest'}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="text-[10px] text-[var(--text-muted)] mt-3 leading-relaxed">
+                  Amber means an event is firing right now. Drag a node to rearrange;
+                  arrow keys move between them.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-                <div className="mt-4 pt-4 border-t border-[var(--ws-border)]" data-section="life.self.legend">
-                  <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium mb-2">
-                    Reading the graph
-                  </p>
-                  <dl className="flex flex-col gap-1.5 text-[11px]">
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-[var(--text-muted)]">Selected</dt>
-                      <dd className="text-[var(--text-primary)] truncate font-mono min-w-0" data-selection-name="">
-                        {selectedNode ? selectedNode.name : '—'}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-[var(--text-muted)]">Connections</dt>
-                      <dd className="text-[var(--text-primary)] font-mono tabular-nums">
-                        {selectedNode ? (selectedNode.degree || 0) : '—'}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-[var(--text-muted)]">Activity</dt>
-                      <dd
-                        className="font-mono tabular-nums"
-                        style={{ color: hoveredNode ? 'var(--color-amber-400)' : undefined }}
-                        data-avalanche-state={hoveredNode ? 'firing' : 'rest'}
-                      >
-                        {hoveredNode ? 'firing' : 'at rest'}
-                      </dd>
-                    </div>
-                  </dl>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-3 leading-relaxed">
-                    Amber means an event is firing right now. Drag a node to rearrange;
-                    arrow keys move between them.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Governance drawer */}
-            <Card className="gap-0 py-0" data-section="life.self.governance">
+          {/* ── Governance (full width below) ── */}
+          <Card className="gap-0 py-0" data-section="life.self.governance">
               <button
                 onClick={() => setMgmtExpanded(v => !v)}
                 aria-expanded={mgmtExpanded}
@@ -602,22 +544,9 @@ export function SelfOrchestrator() {
                   >
                     <CardContent className="px-4 py-4 pt-3">
                       <div className="flex items-center gap-4 flex-wrap">
-                        {([
-                          ['episodes', 'Episodes'],
-                          ['entities', 'Entities'],
-                          ['currentFacts', 'Active facts'],
-                          ['facts', 'All-time facts'],
-                        ] as const).map(([k, label]) => (
-                          <div key={k} className="flex flex-col gap-0.5">
-                            <span className="text-[18px] font-semibold font-mono tabular-nums text-[var(--text-primary)] min-w-[3ch]">
-                              {statsLoading ? '—' : (stats?.[k] ?? 0)}
-                            </span>
-                            <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)]">{label}</span>
-                          </div>
-                        ))}
                         <button
                           onClick={() => { window.location.hash = '#/ai' }}
-                          className="ml-auto flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-medium text-[var(--text-primary)] hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:outline-none"
+                          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-medium text-[var(--text-primary)] hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-[var(--page-accent)] focus-visible:outline-none"
                           style={{ borderTop: '1px solid var(--page-accent)' }}
                         >
                           <Brain size={12} /> Open in AI Assistant
@@ -634,7 +563,6 @@ export function SelfOrchestrator() {
                 )}
               </AnimatePresence>
             </Card>
-          </motion.aside>
         </motion.div>
       </div>
     </SelfErrorBoundary>

@@ -13,6 +13,20 @@ export interface LifePhasesState {
   error: string | null
   summary: string | null
   summaryUpdatedAt: string | null
+  /** D3: how many phases the current reflection was generated against. */
+  summaryPhaseCount: number | null
+}
+
+/** D3 — the summary payload may be the new {text, at, phaseCount} object or a
+ *  legacy bare string; accept both so old stored data keeps rendering. */
+function parseSummaryPayload(data: unknown): { text: string | null; at: string | null; phaseCount: number | null } {
+  if (!data) return { text: null, at: null, phaseCount: null }
+  if (typeof data === 'string') return { text: data, at: null, phaseCount: null }
+  const obj = data as { text?: unknown; at?: unknown; phaseCount?: unknown }
+  const text = typeof obj.text === 'string' ? obj.text : null
+  const at = typeof obj.at === 'string' ? obj.at : null
+  const phaseCount = typeof obj.phaseCount === 'number' && Number.isFinite(obj.phaseCount) ? obj.phaseCount : null
+  return { text, at, phaseCount }
 }
 
 export function useLifePhases() {
@@ -21,6 +35,7 @@ export function useLifePhases() {
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
   const [summaryUpdatedAt, setSummaryUpdatedAt] = useState<string | null>(null)
+  const [summaryPhaseCount, setSummaryPhaseCount] = useState<number | null>(null)
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -39,8 +54,10 @@ export function useLifePhases() {
       ])
       if (!mounted.current) return
       setPhases(sortPhases((phasesRes.data as LifePhase[]) ?? []))
-      setSummary((summaryRes.data as string) ?? null)
-      if (summaryRes.data) setSummaryUpdatedAt(new Date().toISOString())
+      const parsed = parseSummaryPayload(summaryRes.data)
+      setSummary(parsed.text)
+      setSummaryUpdatedAt(parsed.at)
+      setSummaryPhaseCount(parsed.phaseCount)
       setLoading(false)
     } catch (e) {
       if (!mounted.current) return
@@ -129,7 +146,7 @@ export function useLifePhases() {
   }, [])
 
   const reflect = useCallback(
-    async (phase: LifePhase, answers: string[], variation?: string): Promise<{ text: string; confidence: 'grounded' | 'sparse' } | null> => {
+    async (phase: LifePhase, answers: string[], variation?: string, captions?: { headerImageCaption: string; photoCaptions: string[]; milestonePhotoCaptions: string[] }): Promise<{ title?: string | null; text: string; confidence: 'grounded' | 'sparse' } | null> => {
       try {
         const res = await api().lifePhaseAiReflect({
           phaseId: phase.id,
@@ -145,15 +162,19 @@ export function useLifePhases() {
           lessonsLearned: phase.lessonsLearned ?? null,
           impactNotes: phase.impactNotes ?? null,
           variation: variation ?? null,
+          headerImageCaption: captions?.headerImageCaption ?? '',
+          photoCaptions: captions?.photoCaptions ?? [],
+          milestonePhotoCaptions: captions?.milestonePhotoCaptions ?? [],
         })
         if (!res.ok) {
           setError(res.error ?? 'Reflection failed')
           return null
         }
-        const text = (res.data?.reflection ?? '') as string
+        const text = (res.data?.reflection ?? res.data?.text ?? '') as string
+        const title = (res.data?.title ?? null) as string | null
         const confidence = (res.data?.confidence === 'sparse' ? 'sparse' : 'grounded') as 'grounded' | 'sparse'
-        setPhases(prev => sortPhases(prev.map(p => (p.id === phase.id ? { ...p, reflection: text, reflectionSource: 'ai', reflectionGeneratedAt: new Date().toISOString() } : p))))
-        return { text, confidence }
+        setPhases(prev => sortPhases(prev.map(p => (p.id === phase.id ? { ...p, reflection: text, reflectionTitle: title, reflectionSource: 'ai', reflectionGeneratedAt: new Date().toISOString() } : p))))
+        return { title, text, confidence }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Reflection failed')
         return null
@@ -194,7 +215,10 @@ export function useLifePhases() {
       }
       const text = (res.data as string) ?? ''
       setSummary(text)
+      // D3 meta is optimistic here (phaseCount from the phases we sent; the
+      // canonical values land in life_timeline_meta via the handler).
       setSummaryUpdatedAt(new Date().toISOString())
+      setSummaryPhaseCount(phases.length)
       return text
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Summary failed')
@@ -208,6 +232,7 @@ export function useLifePhases() {
     error,
     summary,
     summaryUpdatedAt,
+    summaryPhaseCount,
     setSummary,
     load,
     savePhase,

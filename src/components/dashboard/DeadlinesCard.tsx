@@ -11,13 +11,13 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '../ui/input';
+import { TimeField } from '../ui/TimeField';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import type { Reminder } from './types';
 import { Select, SelectItem } from '../ui/select';
 import { VoiceInputWrapper } from '../VoiceInputWrapper';
 import { ReminderEditorSheet } from './ReminderEditorSheet';
-import { DateTimePicker } from '../ui/DateTimePicker';
 import DateTimeRangePicker from '../ui/DateTimeRangePicker';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
@@ -448,44 +448,10 @@ export function DeadlinesCard({
                 {addType === 'deadline' ? (
                   <>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="h-9 px-3 text-xs flex-1 justify-start rounded-md light:bg-white light:border-[var(--ws-border-strong)]/80 border light:border-[var(--ws-border-strong)] light:text-[var(--text-secondary)] hover:light:text-[var(--text-primary)] hover:border-zinc-600 transition-colors text-left min-w-[140px]">
-                            {newDl.dueDate ? format(newDl.dueDate, 'PPP') : "Pick due date"}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 light:bg-white light:border-[var(--ws-border-strong)] light:border-[var(--ws-border-strong)]">
-                          <CalendarComponent
-                            mode="single"
-                            selected={newDl.dueDate}
-                            onSelect={date => setNewDl(p => ({ ...p, dueDate: date }))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      {/* The deadline's own TIME. There was no field for it at all —
-                          `deadlines` had no time column, so "due Tuesday at 14:00"
-                          could not be expressed anywhere in the app. All-day stays
-                          the default; an empty value stays an all-day deadline. */}
-                      <DateTimePicker
-                        value={newDl.dueDate
-                          ? `${newDl.dueDate.getFullYear()}-${String(newDl.dueDate.getMonth()+1).padStart(2,'0')}-${String(newDl.dueDate.getDate()).padStart(2,'0')}T${newDl.dueTime || '09:00'}`
-                          : ''}
-                        onChange={v => {
-                          const t = v.slice(11, 16);
-                          const d = v.slice(0, 10);
-                          if (d && d.length === 10) {
-                            const [y, m, dd] = d.split('-').map(Number);
-                            setNewDl(p => ({ ...p, dueDate: new Date(y, m - 1, dd), dueTime: t }));
-                          }
-                        }}
-                        placeholder="Add a time"
-                        className="w-[150px]"
-                      />
-                      {/* The SPAN. Defaults its start to the day the deadline was
-                          added for, which is the whole point: a deadline you are
-                          entering while looking at Tuesday should open on
-                          Tuesday, not on today and certainly not on a demo month. */}
+                      {/* Single date/time entry point: the span picker. Its start
+                          becomes the deadline's own date + time, so there is no
+                          second "due date" / "add a time" control to disagree
+                          with it. */}
                       <button
                         type="button"
                         onClick={() => setSpanOpen(o => !o)}
@@ -494,9 +460,9 @@ export function DeadlinesCard({
                       >
                         {span.startDate && span.endDate
                           ? `${span.startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} → ${span.endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-                          : 'Set start → finish'}
+                          : 'Choose dates & time'}
                       </button>
-                      <Select value={newDl.priority} onValueChange={v => setNewDl(p => ({ ...p, priority: v as Priority }))} className="w-[100px]">
+                      <Select value={newDl.priority} onValueChange={(v: string) => setNewDl(p => ({ ...p, priority: v as Priority }))} className="w-[100px]">
                         {PRIORITIES.map(p => (
                           <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                         ))}
@@ -535,11 +501,13 @@ export function DeadlinesCard({
                             />
                           </PopoverContent>
                         </Popover>
-                        <Input
-                          type="time"
+                        <TimeField
+                          size="sm"
+                          className="w-[90px]"
                           value={newDl.remindAtTime}
-                          onChange={e => setNewDl(p => ({ ...p, remindAtTime: e.target.value }))}
-                          className="h-8 w-[90px] light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-amber-500/50 text-[11px]"
+                          onChange={v => setNewDl(p => ({ ...p, remindAtTime: v }))}
+                          startAriaLabel="Reminder hour"
+                          endAriaLabel="Reminder minute"
                         />
                       </div>
                     )}
@@ -562,17 +530,18 @@ export function DeadlinesCard({
                         />
                       </PopoverContent>
                     </Popover>
-                    <Input
-                      type="time"
+                    <TimeField
+                      className="w-[100px]"
                       value={newDl.remindAtTime}
-                      onChange={e => setNewDl(p => ({ ...p, remindAtTime: e.target.value }))}
-                      className="h-9 w-[100px] light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-amber-500/50 text-[13px]"
+                      onChange={v => setNewDl(p => ({ ...p, remindAtTime: v }))}
+                      startAriaLabel="Reminder hour"
+                      endAriaLabel="Reminder minute"
                     />
                   </div>
                 )}
 
                 <div className="flex items-center gap-2">
-                  <Select value={newDl.category} onValueChange={v => setNewDl(p => ({ ...p, category: v as DeadlineCategory }))} className="w-[120px]">
+                  <Select value={newDl.category} onValueChange={(v: string) => setNewDl(p => ({ ...p, category: v as DeadlineCategory }))} className="w-[120px]">
                     <SelectItem value="" disabled>Category</SelectItem>
                     {CATEGORIES.map(c => (
                       <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
@@ -649,7 +618,7 @@ export function DeadlinesCard({
                           <CalendarComponent mode="single" selected={editDate} onSelect={setEditDate} initialFocus />
                         </PopoverContent>
                       </Popover>
-                      <Select value={editForm.priority} onValueChange={v => setEditForm(p => ({ ...p, priority: v as Priority }))} className="w-[100px] light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border)]">
+                      <Select value={editForm.priority} onValueChange={(v: string) => setEditForm(p => ({ ...p, priority: v as Priority }))} className="w-[100px] light:bg-[var(--ws-surface-sunken)] light:border-[var(--ws-border)]">
                         {PRIORITIES.map(p => (
                           <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                         ))}
@@ -680,11 +649,13 @@ export function DeadlinesCard({
                             <CalendarComponent mode="single" selected={editRemindAtDate} onSelect={setEditRemindAtDate} initialFocus />
                           </PopoverContent>
                         </Popover>
-                        <Input
-                          type="time"
+                        <TimeField
+                          size="sm"
+                          className="w-[90px]"
                           value={editRemindAtTime}
-                          onChange={e => setEditRemindAtTime(e.target.value)}
-                          className="h-8 w-[90px] light:bg-white light:border-[var(--ws-border-strong)]/80 light:border-[var(--ws-border-strong)] focus-visible:ring-amber-500/50 text-[11px]"
+                          onChange={v => setEditRemindAtTime(v)}
+                          startAriaLabel="Reminder hour"
+                          endAriaLabel="Reminder minute"
                         />
                       </div>
                     )}
@@ -763,7 +734,7 @@ export function DeadlinesCard({
                           ) : (
                             <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border shrink-0 ${meta.bg} ${meta.text} ${meta.border}`}>
                               <Clock size={11} />
-                              {daysLeft < 0 ? `${Math.abs(daysLeft)}d ago` :
+                              {(daysLeft ?? 0) < 0 ? `${Math.abs(daysLeft ?? 0)}d ago` :
                                daysLeft === 0 ? 'Today' :
                                daysLeft === 1 ? '1d' :
                                `${daysLeft}d`}
@@ -934,22 +905,27 @@ export function DeadlinesCard({
         overflow and stacking context — it would be clipped by the card's own
         rounded border, and its scrim would only cover the card. */}
     {spanOpen && (
-      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 p-4 overflow-y-auto overscroll-contain">
-        <div className="my-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-popover)] p-4 shadow-xl">
+      <div
+        className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 p-4 overflow-y-auto overscroll-contain"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose deadline dates and time"
+        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setSpanOpen(false); } }}
+        ref={el => { if (el) el.focus(); }}
+        tabIndex={-1}
+      >
+        <div className="relative my-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-popover)] p-4 shadow-xl">
+          {/* Explicit close affordance + Escape both dismiss the modal. */}
+          <button
+            type="button"
+            onClick={() => setSpanOpen(false)}
+            aria-label="Close date picker"
+            className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-black/10 hover:text-[var(--text-primary)] transition-colors"
+          >
+            <X size={14} />
+          </button>
           <DateTimeRangePicker
             timeFormat="24h"
-            /* Copy comes from the caller — this picker edits a DEADLINE's span,
-               so it says so. It must not present itself as a generic "date
-               range", because the same control is reused elsewhere and the words
-               would then be wrong there. */
-            labels={{
-              range: 'When this runs',
-              time: 'Start and finish time',
-              pickStart: 'Drag from the day it starts',
-              pickEnd: 'Drag to the day it finishes',
-              start: 'Starts',
-              end: 'Finishes',
-            }}
             initialValue={{
               startDate: span.startDate ?? newDl.dueDate ?? new Date(),
               endDate: span.endDate ?? newDl.dueDate ?? new Date(),
@@ -957,7 +933,6 @@ export function DeadlinesCard({
               endTime: span.endTime,
             }}
             onApply={applySpan}
-            onChange={applySpan}
           />
           <div className="flex justify-end mt-3">
             <Button size="sm" variant="ghost" onClick={() => setSpanOpen(false)}>Done</Button>

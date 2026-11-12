@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { HeartHandshake, Images, Layers, Map, BookOpen, Plus, FileClock, Pencil, Mic, Target, Sparkles, User, Network, Brain, Calendar, Activity} from 'lucide-react'
+import { HeartHandshake, Images, Layers, Map, BookOpen, Plus, FileClock, Pencil, Target, Sparkles, User, Calendar, Activity} from 'lucide-react'
 
 
 import { cn } from '@/lib/utils'
@@ -26,16 +26,12 @@ import MemoriesPage from '../../features/memories/MemoriesPage'
 import GoldPage from '../../features/warmth/gold/GoldPage'
 import { SchedulePage } from '../../features/warmth/schedule/SchedulePage'
 import { TrainingPage } from '../../features/warmth/training/TrainingPage'
-import { ProfileTab } from '../../components/life/ProfileTab'
-import { BrainManagementView } from './context-brain/BrainManagementView'
-import { NeuralFlow } from './context-brain/NeuralFlow'
+
 import { SelfOrchestrator } from './self/SelfOrchestrator'
 import { TimePanel } from '@/components/TimePanel'
 import { confetti } from '../../components/ui/confetti'
-import { NumberTicker } from '../../components/ui/number-ticker'
-import { DotPattern } from '../../components/ui/dot-pattern'
-import { Skeleton } from '../../components/ui/skeleton'
-import { SectionHeader } from '../../components/SectionHeader'
+
+
 import { useLifePhases } from '@/hooks/useLifePhases'
 import { useCovenant } from '../../features/covenant/useCovenant'
 import { useMemories, type LoadedMemory } from '../../features/memories/useMemories'
@@ -78,77 +74,43 @@ const crossfade = {
   transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] as const },
 }
 
-const pillTransition = { type: 'spring' as const, stiffness: 400, damping: 32 }
+const pillTransition = { duration: 0.25, ease: [0.19, 1, 0.22, 1] as [number, number, number, number] }
 
-const SELF_CARD_CLASS = "rounded-xl border border-zinc-800/50 bg-zinc-900/50 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-6 shadow-2xl shadow-black/20"
 
-function SelfStatStrip() {
-  const [stats, setStats] = useState<{ episodes: number; entities: number; currentFacts: number } | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const data = await (window as any).deskflowAPI?.brainStats?.()
-        if (!cancelled && data) {
-          setStats({ episodes: data.episodes ?? 0, entities: data.entities ?? 0, currentFacts: data.currentFacts ?? 0 })
-        }
-      } catch { /* non-critical */ }
-      if (!cancelled) setLoading(false)
-    })()
-    return () => { cancelled = true }
-  }, [])
-
-  const items = [
-    { label: 'Episodes', sublabel: 'Brain', value: stats?.episodes ?? 0, icon: Brain, color: 'var(--color-violet-400)' },
-    { label: 'Entities', sublabel: 'Network', value: stats?.entities ?? 0, icon: Network, color: 'var(--color-emerald-400)' },
-    { label: 'Current Facts', sublabel: 'Active', value: stats?.currentFacts ?? 0, icon: Sparkles, color: 'var(--color-amber-400)' },
-  ]
-
-  return (
-    <div className="grid grid-cols-3 gap-3 min-h-[120px]">
-      {items.map(it => (
-        <div key={it.label} className={`${SELF_CARD_CLASS} relative overflow-hidden`}>
-          <DotPattern opacity={0.05} radius={0.8} gap={16} className="absolute inset-0 text-[var(--color-violet-400)]" />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
-              <it.icon className="w-4 h-4" style={{ color: it.color }} />
-              <span className="text-[11px] uppercase tracking-wider text-zinc-500 light:text-[var(--text-muted)]">{it.sublabel}</span>
-            </div>
-            <div className="text-2xl font-bold font-mono" style={{ color: it.color }}>
-              {loading ? <Skeleton className="h-6 w-16" /> : <NumberTicker value={it.value} />}
-            </div>
-            <div className="text-[12px] text-zinc-400 light:text-[var(--text-faint)] mt-1">{it.label}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
+/** §3.7 — payload of a cross-page entity deep-link (rheo:navigate). */
+export interface LifeDeepLink {
+  tab?: string;
+  noteId?: string;
+  goalId?: string;
+  phaseId?: string;
 }
 
-export default function LifePage() {
+export interface LifePageProps {
+  initialTab?: PageTab;
+  /** Entity payload forwarded by the shell's rheo:navigate listener. */
+  deepLink?: LifeDeepLink;
+  /** Called once the link has been routed into local state. */
+  onDeepLinkConsumed?: () => void;
+}
+export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: LifePageProps = {}) {
   useEffect(() => { startPhaseClock(); }, [])
   const { phases, loading, error, savePhase, reflect } = useLifePhases()
   const covenant = useCovenant()
   const memories = useMemories()
 
-  /* This used to sit in the render body, so it fired on EVERY re-render —
-     the console filled with the same line. A ref guard inside an effect means
-     exactly once per mount: React StrictMode remounts the same instance
-     (ref survives, still one line), while a real navigation creates a new
-     instance and logs again. */
-  const bootLogged = useRef(false)
-  useEffect(() => {
-    if (bootLogged.current) return
-    bootLogged.current = true
-    console.log('[LifePage] v2.0 loaded')
-  }, [])
-
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try { return (localStorage.getItem('life-view-mode') as ViewMode) || 'river' } catch { return 'river' }
   })
-  const [pageTab, setPageTab] = useState<PageTab>('covenant')
+  const [pageTab, setPageTab] = useState<PageTab>(() => {
+    try {
+      const v = localStorage.getItem('life-page-tab') as PageTab | null
+      const valid = ['covenant','memories','gold','notes','schedule','training','self'] as PageTab[]
+      return v && valid.includes(v) ? v : 'covenant'
+    } catch { return 'covenant' }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('life-page-tab', pageTab) } catch { /* ignore */ }
+  }, [pageTab])
 
   // Deep-nav landing, delegated to the page registry.
   //
@@ -172,6 +134,48 @@ export default function LifePage() {
     },
   });
 
+  // Deep-nav from rheo:navigate (shell-level listener routes here via props).
+  useEffect(() => {
+    // Validate against PAGE_TABS on read — a bogus tab must never reach state
+    // (§3.1 of the Life revamp spec; guards against renamed tabs).
+    if (initialTab && PAGE_TABS.some(t => t.key === initialTab)) {
+      setPageTab(initialTab);
+      setViewMode('pages');
+    }
+  }, [initialTab]);
+
+  // §3.7 — entity deep-links. A chip used to carry only the tab, so "jump to
+  // goal X" landed on the Goals tab and nowhere near goal X. The shell now
+  // forwards the whole payload; it is COPIED into local state (and consumption
+  // reported) immediately, because the shell clears its copy right after this
+  // effect — the child tabs below must keep reading a value that survives
+  // until THEY have consumed their own field.
+  const [pendingLink, setPendingLink] = useState<LifeDeepLink | null>(null);
+  useEffect(() => {
+    if (!deepLink) return;
+    setPendingLink(deepLink);
+    if (deepLink.tab && PAGE_TABS.some(t => t.key === deepLink.tab)) {
+      setPageTab(deepLink.tab as PageTab);
+      setViewMode('pages');
+    }
+    if (deepLink.phaseId) {
+      // A phase lives in the river view (CoreSample/RiverMap); the Self tab
+      // shows reflection meta, not the phase entity. This is the same jump
+      // GoldPage.onManagePhases already performs for phase management.
+      setViewMode('river');
+      setLens('phases');
+    }
+    onDeepLinkConsumed?.();
+    // onDeepLinkConsumed only clears the shell copy (idempotent); excluded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink]);
+
+  const consumeLinkField = useCallback((field: 'noteId' | 'goalId') => {
+    setPendingLink(p => (p ? { ...p, [field]: undefined } : p));
+  }, []);
+  const onNoteLinkConsumed = useCallback(() => consumeLinkField('noteId'), [consumeLinkField]);
+  const onGoalLinkConsumed = useCallback(() => consumeLinkField('goalId'), [consumeLinkField]);
+
   const [lens, setLens] = useState<LensId>('phases')
   const [zoomStop, setZoomStop] = useState('Life')
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null)
@@ -186,7 +190,6 @@ export default function LifePage() {
     try { return (localStorage.getItem('life-redirect-mode') as 'instant' | 'confirm') || 'instant' } catch { return 'instant' }
   })
   const [confirmRedirect, setConfirmRedirect] = useState<{ lens: LensId; label: string } | null>(null)
-  const [goldVersion, setGoldVersion] = useState(0)
   const [expandedPhaseId, setExpandedPhaseId] = useState<string | null>(null)
   const [expandedMode, setExpandedMode] = useState<'system' | 'manual'>('system')
 
@@ -221,7 +224,6 @@ export default function LifePage() {
         await api.saveGoalsBatch([{ ...goal, links }])
       }
     }
-    setGoldVersion(v => v + 1)
   }, [ltgs])
 
   const handleDetachMemory = useCallback(async (memoryId: string) => {
@@ -235,7 +237,6 @@ export default function LifePage() {
       const links = ((goal as any).links || []).filter((l: any) => l?.type !== 'life-phase')
       await api.saveGoalsBatch([{ ...goal, links }])
     }
-    setGoldVersion(v => v + 1)
   }, [ltgs])
 
   const setMode = useCallback((m: ViewMode) => {
@@ -252,7 +253,8 @@ export default function LifePage() {
   }, [setMode])
 
   const feedRef = useRef<HTMLDivElement>(null)
-  const { scrollY } = useScroll({ container: feedRef })
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const { scrollY } = useScroll({ container: scrollRef })
   const mapOpacity = useTransform(scrollY, [0, 200], [1, 0.85])
   const mapScale = useTransform(scrollY, [0, 300], [1, 0.97])
 
@@ -299,14 +301,22 @@ export default function LifePage() {
     }
   }, [setMode])
 
+  // §3.6 quick-add honesty — the handoff. Quick-add navigates into the target
+  // tab AND marks the pending add; the tab consumes the signal by opening (and
+  // autofocusing) its own add form. Navigation, not a second writer.
+  const [pendingAdd, setPendingAdd] = useState<LensId | null>(null)
+
   const redirectToPageForAdd = useCallback((type: 'covenant' | 'gold' | 'memory') => {
     const lensMap: Record<string, LensId> = { covenant: 'covenant', gold: 'gold', memory: 'memories' }
     setLens(lensMap[type] || 'phases')
     if (redirectMode === 'instant') {
       redirectToPage(type)
+      setPendingAdd(type)
     } else {
       const labelMap: Record<string, string> = { covenant: 'Covenant', gold: 'Goal', memory: 'Memory' }
-      setConfirmRedirect({ lens: type, label: labelMap[type] || type })
+      // The confirm dialog carries a LensId, so map the add-type to its lens
+      // ('memory' → 'memories') the same way setLens does above.
+      setConfirmRedirect({ lens: lensMap[type] || 'phases', label: labelMap[type] || type })
     }
   }, [redirectMode, redirectToPage])
 
@@ -318,6 +328,7 @@ export default function LifePage() {
     }
     if (redirectMode === 'instant') {
       redirectToPage(nextLens)
+      setPendingAdd(nextLens)
     } else {
       const labelMap: Record<string, string> = { covenant: 'Covenant', gold: 'Goal', memories: 'Memory' }
       setConfirmRedirect({ lens: nextLens, label: labelMap[nextLens] || nextLens })
@@ -367,7 +378,7 @@ export default function LifePage() {
       .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
   }, [phases])
 
-  const todayISO = new Date().toISOString().slice(0, 10)
+  const todayISO = todayStr()
 
   const covenantCount = covenant.commitments?.length ?? 0
   const covenantCompletionsToday =
@@ -393,6 +404,19 @@ export default function LifePage() {
       scrollToPhase(id)
     }
   }, [phases, scrollToPhase])
+
+  // §3.7 — scroll the deep-linked phase into view once the river has rendered
+  // it. Depends on `phases` so a landing that beats the fetch still scrolls
+  // when the data arrives. scrollToPhase already selects + highlights the card.
+  useEffect(() => {
+    const phaseId = pendingLink?.phaseId;
+    if (!phaseId || phases.length === 0) return;
+    const t = window.setTimeout(() => {
+      scrollToPhase(phaseId);
+      setPendingLink(p => (p ? { ...p, phaseId: undefined } : p));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [pendingLink, phases.length, scrollToPhase]);
 
   const toggleGoal = useCallback(
     async (goal: Goal) => {
@@ -615,6 +639,7 @@ export default function LifePage() {
           descendant registered, and the wrapper's motion child does register
           through context and does fire its exit. */}
       <ErrorBoundary key={`${viewMode}:${pageTab}`}>
+      <div className="flex-1 min-h-0 flex flex-col">
       {viewMode === 'pages' ? (
         /* ═══ OLD 3-TAB MODE ═══ */
         /* Schedule is full-bleed: its shell owns the whole content box and
@@ -624,12 +649,12 @@ export default function LifePage() {
           <AnimatePresence mode="wait">
             {pageTab === 'covenant' && (
               <motion.div key="covenant" {...crossfade} className="w-full" data-section="life.covenant">
-                <CovenantPage embedded />
+                <CovenantPage embedded addRequest={pendingAdd === 'covenant'} onAddConsumed={() => setPendingAdd(null)} />
               </motion.div>
             )}
             {pageTab === 'memories' && (
               <motion.div key="memories" {...crossfade} className="w-full" data-section="life.memories">
-                <MemoriesPage embedded />
+                <MemoriesPage embedded addRequest={pendingAdd === 'memories'} onAddConsumed={() => setPendingAdd(null)} />
               </motion.div>
             )}
             {pageTab === 'gold' && (
@@ -639,12 +664,12 @@ export default function LifePage() {
                     at `/gold`, where no River exists — and because a window event
                     this page would have to listen for was the kind of channel that
                     silently does nothing when one half is renamed. */}
-                <GoldPage onManagePhases={() => { setViewMode('river'); setLens('phases') }} />
+                <GoldPage onManagePhases={() => { setViewMode('river'); setLens('phases') }} vaultAddRequest={pendingAdd === 'gold'} onVaultAddConsumed={() => setPendingAdd(null)} focusGoalId={pendingLink?.goalId ?? null} onFocusConsumed={onGoalLinkConsumed} />
               </motion.div>
             )}
             {pageTab === 'notes' && (
               <motion.div key="notes" {...crossfade} className="w-full" data-section="life.notes" data-tutorial="life.notes">
-                <NotesTab />
+                <NotesTab focusNoteId={pendingLink?.noteId ?? null} onFocusConsumed={onNoteLinkConsumed} />
               </motion.div>
             )}
             {pageTab === 'schedule' && (
@@ -733,7 +758,7 @@ export default function LifePage() {
             />
           </motion.div>
 
-          <div className="flex-1 min-w-0 min-h-0 overflow-auto p-5 ws-scroll relative z-10">
+          <div ref={scrollRef} className="flex-1 min-w-0 min-h-0 overflow-auto pl-5 pr-0 ws-scroll relative z-10">
             <div className="w-full space-y-8">
               <motion.div
                 initial={{ opacity: 0, y: 40 }}
@@ -761,7 +786,7 @@ export default function LifePage() {
                 <div
                   data-lens-indicator
                   data-section="life.lenses"
-                  className={`flex flex-col gap-3 rounded-xl border bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl px-5 py-4 md:flex-row md:items-center md:justify-between ${LENS_META[lens].activeClass}`}
+                  className={`flex flex-col gap-3 rounded-xl border bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] px-5 py-4 md:flex-row md:items-center md:justify-between ${LENS_META[lens].activeClass}`}
                 >
                   <div className="flex items-center gap-3">
                     <LensIcon className="h-4 w-4" />
@@ -815,11 +840,6 @@ export default function LifePage() {
                     <span className="flex items-center gap-2">
                       <Layers className="h-4 w-4" />
                       New Phase
-                    </span>
-
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-1 text-[10px] text-amber-300">
-                      <Mic className="h-3 w-3" />
-                      voice
                     </span>
                   </button>
 
@@ -966,7 +986,7 @@ export default function LifePage() {
                 <div
                   data-drafts-shelf
                   data-section="life.drafts"
-                  className="rounded-xl border border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] backdrop-blur-xl p-5"
+                  className="rounded-xl border border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] p-5"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -1065,10 +1085,14 @@ export default function LifePage() {
                       allPhases={phases}
                       covenant={{ commitments: covenant.commitments, completions: covenant.completions }}
                       memories={memories.items}
+                      memoriesLoading={memories.loading}
+                      onUploadMemory={memories.upload}
+                      onBackfillThumbnails={memories.backfillThumbnails}
+                      scrollContainerRef={scrollRef}
                       longTermGoals={ltgs}
                       onActiveChange={setActivePhaseId}
                       onSave={p => { savePhase(p) }}
-                      onReflect={(p, answers, variation) => reflect(p, answers, variation)}
+                      onReflect={(p, answers, variation, captions) => reflect(p, answers, variation, captions)}
                       onKeepReflection={handleKeepReflection}
                       onOpenMemory={setViewing}
                       onJump={scrollToPhase}
@@ -1120,7 +1144,7 @@ export default function LifePage() {
 
           {/* Confirm Redirect Dialog */}
           {confirmRedirect && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setConfirmRedirect(null)}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/80 p-4" onClick={() => setConfirmRedirect(null)} role="dialog" aria-modal="true" aria-labelledby="confirm-redirect-title">
               <div className="w-full max-w-sm bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-base font-semibold text-zinc-100 mb-2">Switch to Pages mode?</h3>
                 <p className="text-[13px] text-zinc-400 mb-5">
@@ -1134,7 +1158,7 @@ export default function LifePage() {
                     Cancel
                   </button>
                   <button
-                    onClick={() => { redirectToPage(confirmRedirect.lens); setConfirmRedirect(null) }}
+                    onClick={() => { redirectToPage(confirmRedirect.lens); setPendingAdd(confirmRedirect.lens); setConfirmRedirect(null) }}
                     className="h-9 rounded-lg bg-amber-400/15 border border-amber-400/30 px-4 text-sm text-amber-100 hover:bg-amber-400/25 transition-colors"
                   >
                     Go to page
@@ -1145,6 +1169,7 @@ export default function LifePage() {
           )}
         </div>
       )}
+      </div>
       </ErrorBoundary>
       </div>
     </div>

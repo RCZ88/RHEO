@@ -1,5 +1,6 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef } from "react";
 import "./DateTimeRangePicker.css";
+import { TimeField } from "./TimeField";
 
 type DateTimeRange = {
   startDate: Date;
@@ -11,36 +12,7 @@ type DateTimeRange = {
 type Props = {
   initialValue?: DateTimeRange;
   onApply?: (value: DateTimeRange) => void;
-  /** Fires on EVERY change of the selection, not only on "Apply range".
-   *  A caller that embeds this picker inside a modal needs the newest value even
-   *  when the user dismisses the modal with the modal's own button — otherwise
-   *  the range they just picked is silently thrown away (which is exactly what
-   *  "Done" used to do). */
-  onChange?: (value: DateTimeRange) => void;
   timeFormat?: "24h" | "12h";
-  /** Copy for WHAT THIS PICKER IS SETTING, supplied by the caller. Defaults are
-   *  deliberately generic: the component must not claim to know it is editing a
-   *  "date range", because the same control edits a deadline's span, a habit's
-   *  window and a class block, and each of those is called something else. */
-  labels?: Partial<PickerLabels>;
-};
-
-export interface PickerLabels {
-  range: string;
-  time: string;
-  pickStart: string;
-  pickEnd: string;
-  start: string;
-  end: string;
-}
-
-const DEFAULT_LABELS: PickerLabels = {
-  range: "Start and finish",
-  time: "Time",
-  pickStart: "Pick a start day",
-  pickEnd: "Pick a finish day",
-  start: "Start",
-  end: "Finish",
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -49,10 +21,6 @@ const dateKey = (date: Date) =>
 const sameDay = (a: Date, b: Date) => dateKey(a) === dateKey(b);
 const atMidnight = (date: Date) =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-function formatDate(date: Date) {
-  return `${date.getMonth() + 1} / ${date.getDate()} / ${date.getFullYear()}`;
-}
 
 function parseTime(value: string) {
   const [hour = "09", minute = "00"] = value.split(":");
@@ -85,295 +53,40 @@ function Arrow({ direction }: { direction: "left" | "right" }) {
   );
 }
 
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M7.5 3.5v3M16.5 3.5v3M3.5 9h17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function buildCalendarDays(month: Date) {
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const startOffset = first.getDay();
   const gridStart = new Date(first);
   gridStart.setDate(first.getDate() - startOffset);
 
-  const days = Array.from({ length: 42 }, (_, index) => {
+  return Array.from({ length: 42 }, (_, index) => {
     const day = new Date(gridStart);
     day.setDate(gridStart.getDate() + index);
     return day;
   });
-  /* 35 cells when the trailing week holds no day of this month. A sixth empty
-     row is 35px of popover height that buys nothing, and in a short modal it is
-     exactly the row that pushes the last week out of reach. */
-  if (days.slice(-7).every(day => day.getMonth() !== month.getMonth())) days.length = 35;
-  return days;
-}
-function TimeColumn({
-  label,
-  value,
-  values,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  values: number[];
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="dt-time-column">
-      <span className="dt-time-column-label">{label}</span>
-      <div className="dt-time-wheel" role="listbox" aria-label={label}>
-        {values.map((number) => (
-          <button
-            type="button"
-            role="option"
-            aria-selected={number === value}
-            className={`dt-time-option ${number === value ? "is-selected" : ""}`}
-            key={number}
-            onClick={() => onChange(number)}
-          >
-            {pad(number)}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TimeEditor({
-  label,
-  value,
-  onChange,
-  format,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  format: "24h" | "12h";
-}) {
-  const parsed = parseTime(value);
-  const [activePart, setActivePart] = useState<"hour" | "minute">("hour");
-  const hours = format === "24h"
-    ? Array.from({ length: 24 }, (_, i) => i)
-    : Array.from({ length: 12 }, (_, i) => i + 1);
-  const displayHour = format === "24h" ? parsed.hour : parsed.hour % 12 || 12;
-
-  const setHour = (next: number) => {
-    const hour24 = format === "24h"
-      ? next
-      : (next % 12) + (parsed.hour >= 12 ? 12 : 0);
-    onChange(`${pad(hour24)}:${pad(parsed.minute)}`);
-  };
-
-  const setMinute = (next: number) => {
-    onChange(`${pad(parsed.hour)}:${pad(next)}`);
-  };
-
-  const setPeriod = (period: "AM" | "PM") => {
-    let hour = parsed.hour % 12;
-    if (period === "PM") hour += 12;
-    onChange(`${pad(hour)}:${pad(parsed.minute)}`);
-  };
-
-  return (
-    <section className="dt-time-editor" aria-label={label}>
-      <div className="dt-time-editor-heading">
-        <span className="dt-eyebrow">{label}</span>
-        <span className="dt-time-zone">LOCAL TIME</span>
-      </div>
-
-      <div className="dt-time-readout">
-        <button
-          type="button"
-          aria-label="Edit hour"
-          aria-pressed={activePart === "hour"}
-          className={`dt-time-digit ${activePart === "hour" ? "is-active" : ""}`}
-          onClick={() => setActivePart("hour")}
-        >
-          {pad(displayHour)}
-        </button>
-        <span className="dt-time-colon">:</span>
-        <button
-          type="button"
-          aria-label="Edit minute"
-          aria-pressed={activePart === "minute"}
-          className={`dt-time-digit ${activePart === "minute" ? "is-active" : ""}`}
-          onClick={() => setActivePart("minute")}
-        >
-          {pad(parsed.minute)}
-        </button>
-        {format === "12h" && (
-          <div className="dt-period-toggle" aria-label="AM or PM">
-            {(["AM", "PM"] as const).map((period) => (
-              <button
-                type="button"
-                key={period}
-                aria-pressed={(parsed.hour >= 12 ? "PM" : "AM") === period}
-                className={(parsed.hour >= 12 ? "PM" : "AM") === period ? "is-active" : ""}
-                onClick={() => setPeriod(period)}
-              >
-                {period}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="dt-time-selector">
-        <TimeColumn
-          label={activePart === "hour" ? "HOUR" : "HOUR"}
-          value={displayHour}
-          values={hours}
-          onChange={setHour}
-        />
-        <div className="dt-time-selector-divider" />
-        <TimeColumn
-          label="MINUTE"
-          value={parsed.minute}
-          values={Array.from({ length: 12 }, (_, i) => i * 5)}
-          onChange={setMinute}
-        />
-      </div>
-      <p className="dt-time-hint">
-        Select an hour or minute above. Minute steps are 5 minutes.
-      </p>
-    </section>
-  );
 }
 
 export default function DateTimeRangePicker({
   initialValue,
   onApply,
-  onChange,
   timeFormat = "24h",
-  labels,
 }: Props) {
-  const L = { ...DEFAULT_LABELS, ...labels };
+  const rootRef = useRef<HTMLDivElement>(null);
   const today = atMidnight(new Date());
-  /* Defaults to TODAY, not the 7–15 Oct 2026 the reference screenshot happened
-     to show. A hardcoded demo range means the picker always opens on a month in
-     the past for a real user. When a caller knows the date the item belongs to
-     (a deadline added for a given day) it passes `initialValue` and that wins. */
-  const initialStart = initialValue?.startDate ?? atMidnight(new Date());
-  const initialEnd = initialValue?.endDate ?? atMidnight(addDays(initialStart, 1));
+  const initialStart = initialValue?.startDate ?? new Date(2026, 9, 7);
+  const initialEnd = initialValue?.endDate ?? new Date(2026, 9, 15);
 
   const [startDate, setStartDate] = useState(atMidnight(initialStart));
   const [endDate, setEndDate] = useState(atMidnight(initialEnd));
   const [visibleMonth, setVisibleMonth] = useState(
     new Date(initialStart.getFullYear(), initialStart.getMonth(), 1),
   );
-  const [calendarOpen, setCalendarOpen] = useState(true);
   const [selectingEnd, setSelectingEnd] = useState(false);
   const [startTime, setStartTime] = useState(initialValue?.startTime ?? "09:00");
+
+  // (outside-click dismissal removed — was causing the calendar to close on
+  //  every mousedown, including the toggle button's, producing open/close flicker)
   const [endTime, setEndTime] = useState(initialValue?.endTime ?? "17:30");
-  const [activeTime, setActiveTime] = useState<"start" | "end">("start");
-  /* Mode: "range" (start→end) or "single" (one date + one time; start is
-     auto-filled so the caller always gets a complete range). */
-  const [mode, setMode] = useState<"range" | "single">("range");
-
-  /* ── DRAG TO EXTEND THE RANGE (apple-design §2 direct manipulation) ──
-     Two clicks to set a range is precise but costs a re-aim, and the reference
-     interaction people actually expect from a month grid is one drag. Tracking
-     is 1:1 with the pointer and honours the cell the pointer entered, not the
-     one it started on.
-
-     §10: a ~10px threshold before the drag commits, so a click that wobbles
-     cannot be mistaken for a range. §9: dragging past the last day of the month
-     rubber-bands rather than hard-stopping, and we simply hold the last day. */
-  const [dragging, setDragging] = useState(false);
-  /* The pointerdown that starts a drag ALSO starts a click, and the two must not
-     fight. Committing the range on pointerdown destroyed the start of a
-     start→end selection: click 15, click 20, and the range came out 20→20
-     because the second pointerdown had already overwritten the 15. So the
-     pointerdown records an anchor and nothing else; the range only moves once
-     the pointer has actually travelled DRAG_THRESHOLD_PX. */
-  const dragOrigin = useRef<{ x: number; y: number; day: Date } | null>(null);
-  const didDrag = useRef(false);
-
-  const DRAG_THRESHOLD_PX = 10;
-
-  function beginDrag(day: Date, e: React.PointerEvent) {
-    dragOrigin.current = { x: e.clientX, y: e.clientY, day };
-    didDrag.current = false;
-  }
-
-  function extendDrag(day: Date, e: React.PointerEvent) {
-    const o = dragOrigin.current;
-    if (!o) return;
-    // Hover is not a drag: without a held button a pointerenter must be inert.
-    if ((e.buttons & 1) === 0) return;
-    if (
-      Math.abs(e.clientX - o.x) < DRAG_THRESHOLD_PX &&
-      Math.abs(e.clientY - o.y) < DRAG_THRESHOLD_PX
-    ) return;
-
-    didDrag.current = true;
-    const picked = atMidnight(day);
-    if (!dragging) {
-      /* First cell past the threshold: the range is anchored on the cell the
-         drag STARTED on, not on whatever was selected before. */
-      const anchor = atMidnight(o.day);
-      setDragging(true);
-      setSelectingEnd(false);
-      setStartDate(picked < anchor ? picked : anchor);
-      setEndDate(picked < anchor ? anchor : picked);
-    } else if (picked < startDate) setStartDate(picked);
-    else setEndDate(picked);
-
-    // §9: dragging past the last day of the month rubber-bands rather than
-    // hard-stopping, and we simply hold the last day.
-    if (picked.getMonth() !== visibleMonth.getMonth()) {
-      setVisibleMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
-    }
-  }
-
-  function endDrag() {
-    dragOrigin.current = null;
-    if (!dragging) return;
-    setDragging(false);
-    setSelectingEnd(false);
-    // Same-day range needs an end time later than its start, or the span is
-    // negative and every downstream duration is nonsense.
-    if (atMidnight(startDate).getTime() === atMidnight(endDate).getTime() && endTime <= startTime) {
-      const [h, m] = startTime.split(":").map(Number);
-      const shifted = new Date(2000, 0, 1, h + 1, m, 0, 0);
-      setEndTime(`${String(shifted.getHours()).padStart(2, "0")}:${String(shifted.getMinutes()).padStart(2, "0")}`);
-    }
-  }
-
-  /* A drag can be released outside every day cell — over the header, off the
-     popover, past the window edge. Without this the range stays half-open until
-     the next click. The ref keeps the listener pointed at the newest closure
-     (endDrag reads startDate/endDate/startTime/endTime), and it is only mounted
-     while a drag is live. */
-  const endDragRef = useRef(endDrag);
-  endDragRef.current = endDrag;
-  useEffect(() => {
-    if (!dragging) return;
-    const stop = () => endDragRef.current();
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
-    return () => {
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-    };
-  }, [dragging]);
-
-  // Escape and outside-click dismissal — the source listed both as "production
-  // considerations"; without them the picker is a trap once open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCalendarOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
-  /* In single mode, endTime always tracks startTime. */
-  useEffect(() => {
-    if (mode === "single") setEndTime(startTime);
-  }, [mode, startTime]);
 
   const days = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
   const monthTitle = visibleMonth.toLocaleDateString("en-US", {
@@ -383,14 +96,6 @@ export default function DateTimeRangePicker({
 
   function selectDate(day: Date) {
     const picked = atMidnight(day);
-    if (mode === "single") {
-      setStartDate(picked);
-      setEndDate(picked);
-      if (picked.getMonth() !== visibleMonth.getMonth()) {
-        setVisibleMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
-      }
-      return;
-    }
     if (!selectingEnd) {
       setStartDate(picked);
       setEndDate(picked);
@@ -410,75 +115,16 @@ export default function DateTimeRangePicker({
     setSelectingEnd(false);
   }
 
-  /* Live commit. The explicit "Apply range" button still exists for the popover,
-     but the CURRENT selection is pushed on every change so an enclosing modal
-     can close at any moment without losing it. Deliberately not listing
-     `onChange` as a dependency: callers pass an inline handler, and re-firing on
-     its identity would run this on every parent render. */
-  useEffect(() => {
-    if (mode === "single") {
-      onChange?.({ startDate, endDate: startDate, startTime, endTime: startTime });
-    } else {
-      onChange?.({ startDate, endDate, startTime, endTime });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, startTime, endTime, mode]);
-
   function apply() {
-    if (mode === "single") {
-      onApply?.({ startDate, endDate: startDate, startTime, endTime: startTime });
-    } else {
-      onApply?.({ startDate, endDate, startTime, endTime });
-    }
-    setCalendarOpen(false);
+    onApply?.({ startDate, endDate, startTime, endTime });
   }
 
-  const activeTimeValue = activeTime === "start" ? startTime : endTime;
-  const setActiveTimeValue = activeTime === "start" ? setStartTime : setEndTime;
 
   return (
-    <div className="dt-picker">
-      {/* Mode toggle: range (start→end) or single (one date + one time) */}
-      <div className="dt-mode-toggle" role="tablist" aria-label="Picker mode">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "range"}
-          className={mode === "range" ? "is-active" : ""}
-          onClick={() => setMode("range")}
-        >
-          Range
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "single"}
-          className={mode === "single" ? "is-active" : ""}
-          onClick={() => setMode("single")}
-        >
-          Single
-        </button>
-      </div>
-
+    <div className="dt-picker" ref={rootRef}>
       <div className="dt-date-section">
-        <label className="dt-field-label" htmlFor="dt-range-input">{L.range}</label>
-        <button
-          id="dt-range-input"
-          type="button"
-          className="dt-range-input"
-          aria-expanded={calendarOpen}
-          onClick={() => setCalendarOpen((open) => !open)}
-        >
-          <span>
-            {mode === "single"
-              ? formatDate(startDate)
-              : `${formatDate(startDate)} · ${formatDate(endDate)}`}
-          </span>
-          <CalendarIcon />
-        </button>
-
-        {calendarOpen && (
-          <div className="dt-calendar-popover">
+        <label className="dt-field-label" htmlFor="dt-range-input">Date range</label>
+        <div className="dt-calendar-popover">
             <div className="dt-calendar-header">
               <button
                 type="button"
@@ -529,10 +175,7 @@ export default function DateTimeRangePicker({
                       weekday: "long", month: "long", day: "numeric", year: "numeric",
                     })}
                     aria-pressed={isStart || isEnd}
-                    onClick={() => (didDrag.current ? undefined : selectDate(day))}
-                    onPointerDown={e => beginDrag(day, e)}
-                    onPointerEnter={e => extendDrag(day, e)}
-                    onPointerUp={endDrag}
+                    onClick={() => selectDate(day)}
                   >
                     {day.getDate()}
                   </button>
@@ -540,71 +183,47 @@ export default function DateTimeRangePicker({
               })}
             </div>
             <div className="dt-calendar-footer">
-              <span>{selectingEnd ? L.pickEnd : L.pickStart}</span>
-              <button type="button" onClick={() => setCalendarOpen(false)}>Done</button>
+              <span>{selectingEnd ? "Choose an end date" : "Choose a start date"}</span>
             </div>
           </div>
-        )}
 
-        <p className="dt-field-note">
-          {mode === "single" ? "Choose a date." : "Choose a start date, then an end date."}
-        </p>
+        <p className="dt-field-note">Choose a start date, then an end date.</p>
       </div>
 
+      {/* Compact time row — the old design spent ~420px of vertical space on a
+          digit readout plus two scrollable hour/minute wheel columns. Two
+          TimeField dropdowns do the same job in one 36px row and match the
+          Schedule form's time controls. */}
       <div className="dt-time-section">
         <div className="dt-section-title-row">
           <div>
             <span className="dt-eyebrow">SCHEDULE</span>
-            <h3>{L.time}</h3>
+            <h3>Time window</h3>
           </div>
           <span className="dt-duration-chip">
             {formatTime(startTime, timeFormat)} <span>to</span> {formatTime(endTime, timeFormat)}
           </span>
         </div>
 
-        {mode === "range" && (
-          <div className="dt-time-tabs" role="tablist" aria-label="Choose which time to edit">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTime === "start"}
-              className={activeTime === "start" ? "is-active" : ""}
-              onClick={() => setActiveTime("start")}
-            >
-              <span className="dt-tab-dot dt-tab-dot-start" />
-              <span><small>STARTS</small><strong>{formatTime(startTime, timeFormat)}</strong></span>
-            </button>
-            <span className="dt-time-tab-connector" />
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTime === "end"}
-              className={activeTime === "end" ? "is-active" : ""}
-              onClick={() => setActiveTime("end")}
-            >
-              <span className="dt-tab-dot dt-tab-dot-end" />
-              <span><small>ENDS</small><strong>{formatTime(endTime, timeFormat)}</strong></span>
-            </button>
-          </div>
-        )}
-
-        <TimeEditor
-          label={mode === "single" ? "TIME" : (activeTime === "start" ? "START TIME" : "END TIME")}
-          value={mode === "single" ? startTime : activeTimeValue}
-          onChange={mode === "single" ? setStartTime : setActiveTimeValue}
-          format={timeFormat}
-        />
+        <div className="dt-time-inline" role="group" aria-label="Start and end times">
+          <label className="dt-time-inline-field">
+            <span className="dt-eyebrow">STARTS</span>
+            <TimeField value={startTime} onChange={setStartTime} startAriaLabel="Start hour" endAriaLabel="Start minute" />
+          </label>
+          <label className="dt-time-inline-field">
+            <span className="dt-eyebrow">ENDS</span>
+            <TimeField value={endTime} onChange={setEndTime} startAriaLabel="End hour" endAriaLabel="End minute" />
+          </label>
+        </div>
       </div>
 
       <div className="dt-actions">
         <span className="dt-selection-summary">
-          {mode === "single"
-            ? startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-            : `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+          {startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          {" – "}
+          {endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
         </span>
-        <button type="button" className="dt-apply-button" onClick={apply}>
-          {mode === "single" ? "Apply" : "Apply range"} <span>↗</span>
-        </button>
+        <button type="button" className="dt-apply-button" onClick={apply}>Apply range <span>↗</span></button>
       </div>
     </div>
   );

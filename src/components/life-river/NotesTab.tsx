@@ -48,11 +48,34 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr + 'Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
-const GROUP_COLORS: Record<string, string> = {
-  'Personal': '#fbbf24', 'Work': '#3b82f6', 'Ideas': '#a855f7', 'Health': '#22c55e',
-  'Finance': '#10b981', 'Learning': '#06b6d4', 'Projects': '#f97316',
+import { getCategoryStyle } from '@/lib/CategoryColors';
+
+const GROUP_TO_CATEGORY: Record<string, string> = {
+  'Personal': 'personal', 'Work': 'work', 'Ideas': 'Design', 'Health': 'health',
+  'Finance': 'finance', 'Learning': 'learning', 'Projects': 'Productivity',
+};
+
+function getGroupColor(name: string): string {
+  const cat = GROUP_TO_CATEGORY[name];
+  if (cat) {
+    const style = getCategoryStyle(cat);
+    // Extract the hue from the Tailwind class (e.g., 'text-amber-400' → '#fbbf24')
+    const colorMap: Record<string, string> = {
+      'violet': '#a78bfa', 'sky': '#38bdf8', 'teal': '#2dd4bf', 'lime': '#a3e635',
+      'indigo': '#818cf8', 'fuchsia': '#e879f9', 'orange': '#fb923c', 'blue': '#60a5fa',
+      'amber': '#fbbf24', 'emerald': '#34d399', 'cyan': '#22d3ee', 'rose': '#fb7185',
+      'red': '#f87171', 'pink': '#f472b6', 'zinc': '#a1a1aa', 'stone': '#a8a29e',
+    };
+    const match = style.text.match(/text-(\w+)-/);
+    if (match && colorMap[match[1]]) return colorMap[match[1]];
+  }
+  // Fallback to original hex values
+  const GROUP_COLORS: Record<string, string> = {
+    'Personal': '#fbbf24', 'Work': '#3b82f6', 'Ideas': '#a855f7', 'Health': '#22c55e',
+    'Finance': '#10b981', 'Learning': '#06b6d4', 'Projects': '#f97316',
+  };
+  return GROUP_COLORS[name] || '#71717a';
 }
-function getGroupColor(name: string): string { return GROUP_COLORS[name] || '#71717a' }
 
 // Swatch palette for picking a group/tag color (like focus-group picker).
 const TAG_PALETTE = ['#fbbf24', '#3b82f6', '#a855f7', '#22c55e', '#10b981', '#06b6d4', '#f97316', '#ef4444', '#ec4899', '#eab308', '#8b5cf6', '#64748b']
@@ -183,7 +206,7 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
     // began inside the note and dragged past the edge, release, and the note
     // vanished — the selection was the accident, not the intent.
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/80 p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-zinc-950 light:bg-[var(--ws-surface-95)] border border-zinc-800 rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -290,7 +313,7 @@ function NoteDetailView({ note, onClose, onEdit, onDelete, prefs }: { note: Note
                 const name = fp.split(/[\\/]/).pop() || fp
                 return (
                   <button key={i} onClick={() => handleOpenFile(fp)} className="flex items-center gap-2 text-[13px] text-zinc-300 hover:text-amber-300 transition-colors w-full text-left group">
-                    <span className="shrink-0 w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-500">📄</span>
+                    <span className="shrink-0 w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-zinc-500"><FileText size={10} /></span>
                     <span className="truncate">{name}</span>
                     <ExternalLink size={11} className="shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
@@ -474,7 +497,7 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
   const isExistingGroup = groupName.trim() !== '' && existingGroups.includes(groupName.trim())
 
   return (
-    <div className={cn("fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity", open ? "opacity-100" : "opacity-0 pointer-events-none")} onClick={() => handleClose(false)}>
+    <div className={cn("fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/80 p-4 transition-opacity", open ? "opacity-100" : "opacity-0 pointer-events-none")} onClick={() => handleClose(false)}>
       {/* The EDITOR was max-w-lg (512px) — narrower than the read view — so the
           surface you actually type into was the smallest thing on the page, and
           the two-column layout had ~200px of writing space. It now owns a real
@@ -628,30 +651,27 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
             </button>
             {showLinkPicker && (
               <div className="rounded-lg border border-zinc-700/50 bg-zinc-950 light:bg-[var(--ws-surface-50)] p-3 space-y-2">
-                {phases.length > 0 && (
-                  <div>
-                    <div className="text-[10px] text-zinc-500 mb-1">Phases</div>
-                    <div className="flex flex-wrap gap-1">{phases.slice(0, 6).map(p => {
-                      const linked = links.some(l => l.url === `phase://${p.id}`)
-                      return <button key={p.id} type="button" onClick={() => {
-                        if (linked) removeLink(`phase://${p.id}`)
-                        else setLinks(prev => [...prev, { url: `phase://${p.id}` }])
-                      }} className={cn("px-2 py-0.5 rounded-full text-[10px] border transition-colors", linked ? "border-amber-500/40 bg-amber-500/15 text-amber-300" : "border-zinc-700/50 bg-zinc-800/40 text-zinc-400 hover:text-zinc-300")}>{p.title}</button>
-                    })}</div>
-                  </div>
-                )}
-                {goals.length > 0 && (
-                  <div>
-                    <div className="text-[10px] text-zinc-500 mb-1">Goals</div>
-                    <div className="flex flex-wrap gap-1">{goals.slice(0, 6).map(g => {
-                      const linked = links.some(l => l.url === `goal://${g.id}`)
-                      return <button key={g.id} type="button" onClick={() => {
-                        if (linked) removeLink(`goal://${g.id}`)
-                        else setLinks(prev => [...prev, { url: `goal://${g.id}` }])
-                      }} className={cn("px-2 py-0.5 rounded-full text-[10px] border transition-colors", linked ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" : "border-zinc-700/50 bg-zinc-800/40 text-zinc-400 hover:text-zinc-300")}>{g.title}</button>
-                    })}</div>
-                  </div>
-                )}
+                {/* Related rail — consolidated: phases + goals in one visual group */}
+                <div className="flex flex-wrap gap-1.5">
+                  {phases.slice(0, 6).map(p => {
+                    const linked = links.some(l => l.url === `phase://${p.id}`)
+                    return <button key={p.id} type="button" onClick={() => {
+                      if (linked) removeLink(`phase://${p.id}`)
+                      else setLinks(prev => [...prev, { url: `phase://${p.id}` }])
+                    }} className={cn("px-2 py-0.5 rounded-full text-[10px] border transition-colors", linked ? "border-amber-500/40 bg-amber-500/15 text-amber-300" : "border-zinc-700/50 bg-zinc-800/40 text-zinc-400 hover:text-zinc-300")}>
+                      <Layers size={9} className="inline mr-0.5" />{p.title}
+                    </button>
+                  })}
+                  {goals.slice(0, 6).map(g => {
+                    const linked = links.some(l => l.url === `goal://${g.id}`)
+                    return <button key={g.id} type="button" onClick={() => {
+                      if (linked) removeLink(`goal://${g.id}`)
+                      else setLinks(prev => [...prev, { url: `goal://${g.id}` }])
+                    }} className={cn("px-2 py-0.5 rounded-full text-[10px] border transition-colors", linked ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" : "border-zinc-700/50 bg-zinc-800/40 text-zinc-400 hover:text-zinc-300")}>
+                      <Target size={9} className="inline mr-0.5" />{g.title}
+                    </button>
+                  })}
+                </div>
                 {phases.length === 0 && goals.length === 0 && <p className="text-[11px] text-zinc-500">No phases or goals yet</p>}
               </div>
             )}
@@ -668,7 +688,7 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
                   const name = fp.split(/[\\/]/).pop() || fp
                   return (
                     <div key={fp} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-zinc-800/40 border border-zinc-700/50 text-[11px] text-zinc-300">
-                      <span className="shrink-0 text-zinc-500">📄</span>
+                      <span className="shrink-0 text-zinc-500"><FileText size={10} /></span>
                       <span className="truncate flex-1">{name}</span>
                       <button onClick={() => removeFile(fp)} className="text-zinc-500 hover:text-zinc-300 shrink-0"><X size={10} /></button>
                     </div>
@@ -692,10 +712,23 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
 }
 
 // ── Draft Card ──
-function DraftCard({ note, onResume, onDiscard }: { note: Note; onResume: (n: Note) => void; onDiscard: (id: string) => void }) {
+export function DraftCard({ note, onResume, onDiscard }: { note: Note; onResume: (n: Note) => void; onDiscard: (id: string) => void }) {
+  // D5: draft accent responds to the Settings toggle. When off, drafts render neutral.
+  let accentEnabled = true;
+  try {
+    const raw = localStorage.getItem('deskflow-life-draft-accent');
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (typeof p?.enabled === 'boolean') accentEnabled = p.enabled;
+    }
+  } catch { /* default on */ }
+  const accent = accentEnabled;
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-dashed border-amber-500/30 bg-amber-500/[0.04] p-4 transition-colors hover:bg-amber-500/[0.07]">
-      <span className="pointer-events-none absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-amber-400/60 to-transparent" />
+    <div className={cn(
+      "group relative overflow-hidden rounded-xl border border-dashed p-4 transition-colors",
+      accent ? "border-amber-500/30 bg-amber-500/[0.04] hover:bg-amber-500/[0.07]" : "border-zinc-700/50 bg-zinc-800/20 hover:bg-zinc-800/30",
+    )}>
+      {accent && <span className="pointer-events-none absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-amber-400/60 to-transparent" />}
       <div className="flex items-start justify-between gap-2 mb-2">
         <h4 className="warmth-serif text-[14px] text-zinc-200 line-clamp-1">{note.title || 'Untitled draft'}</h4>
         <button onClick={() => onDiscard(note.id)} className="text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={12} /></button>
@@ -703,7 +736,7 @@ function DraftCard({ note, onResume, onDiscard }: { note: Note; onResume: (n: No
       <p className="text-[12px] text-zinc-500 line-clamp-2 mb-3">{note.content || 'Empty draft...'}</p>
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-zinc-600 font-mono">{formatDistanceToNow(note.updated_at)}</span>
-        <button onClick={() => onResume(note)} className="text-[11px] text-amber-400 hover:text-amber-300 transition-colors">Resume</button>
+        <button onClick={() => onResume(note)} className={cn("text-[11px] transition-colors", accent ? "text-amber-400 hover:text-amber-300" : "text-zinc-400 hover:text-zinc-200")}>Resume</button>
       </div>
     </div>
   )
@@ -725,17 +758,15 @@ function NoteCard({ note, onClick, onDragStart, onDragEnd }: { note: Note; onCli
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       whileHover={{ y: -3 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => onClick(note)}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', note.id); onDragStart?.(note.id) }}
       onDragEnd={onDragEnd}
-      className="group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-5 pl-6 text-left backdrop-blur-xl transition-colors hover:border-zinc-700 w-full cursor-grab active:cursor-grabbing"
+      className="group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] p-5 pl-6 text-left transition-colors hover:border-zinc-700 w-full cursor-grab active:cursor-grabbing"
     >
       {/* group-color accent rail */}
       <span className="pointer-events-none absolute left-0 top-0 h-full w-1" style={{ background: `linear-gradient(to bottom, ${groupColor}, ${groupColor}00)` }} />
-      {/* hover glow in group color */}
-      <span className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" style={{ boxShadow: `0 0 28px -8px ${groupColor}66, inset 0 0 0 1px ${groupColor}33` }} />
       <div className="flex items-start justify-between gap-3">
         <h4 className="warmth-serif text-[15px] font-medium text-zinc-100 line-clamp-1 flex-1">{note.title || 'Untitled'}</h4>
         {note.is_draft && <FileClock className="w-4 h-4 text-zinc-500 shrink-0" />}
@@ -752,8 +783,8 @@ function NoteCard({ note, onClick, onDragStart, onDragEnd }: { note: Note; onCli
           <span className="text-[11px] text-zinc-500 font-mono shrink-0">{formatDistanceToNow(note.updated_at)}</span>
         </div>
         <div className="flex gap-1 shrink-0">
-          {linkCount > 0 && <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-[10px] text-sky-400">🔗{linkCount}</span>}
-          {fileCount > 0 && <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400">📄{fileCount}</span>}
+          {linkCount > 0 && <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-[10px] text-sky-400 inline-flex items-center gap-0.5"><Link2 size={9} />{linkCount}</span>}
+          {fileCount > 0 && <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 inline-flex items-center gap-0.5"><FileText size={9} />{fileCount}</span>}
           {safeTags.slice(0, 2).map(tag => {
             const tc = getTagColor(tag, note.tag_colors)
             return <span key={tag} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ backgroundColor: `${tc}1a`, color: tc }}>#{tag}</span>
@@ -767,7 +798,11 @@ function NoteCard({ note, onClick, onDragStart, onDragEnd }: { note: Note; onCli
 }
 
 // ── Main NotesTab ──
-export function NotesTab() {
+export function NotesTab({ focusNoteId, onFocusConsumed }: {
+  /** §3.7 — a note:// chip deep-link: open THIS note's editor once. */
+  focusNoteId?: string | null;
+  onFocusConsumed?: () => void;
+} = {}) {
   const [notes, setNotes] = useState<Note[]>([])
   const [groups, setGroups] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -799,6 +834,28 @@ export function NotesTab() {
   }, [])
 
   useEffect(() => { loadNotes() }, [loadNotes])
+
+  /* §3.7 — entity deep-link: open the linked note once the list is loaded.
+     Active filters could hide the note, so they are cleared first (which
+     refetches); if it is still missing from the unfiltered list it was deleted
+     since the chip was made — consume anyway, so the link can never wedge the
+     tab. Opening mirrors the DraftCard resume path (editor, not detail view). */
+  useEffect(() => {
+    if (!focusNoteId || loading) return
+    const note = notes.find(n => n.id === focusNoteId)
+    if (note) {
+      setEditingNote(note)
+      setEditorOpen(true)
+      setSelectedNote(null)
+      onFocusConsumed?.()
+    } else if (!search && !filterTag && !filterGroup) {
+      onFocusConsumed?.()
+    } else {
+      setSearch(''); setFilterTag(null); setFilterGroup(null)
+    }
+    // onFocusConsumed only clears the parent's pending field (stable).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNoteId, loading, notes, search, filterTag, filterGroup])
 
   /* A quick-captured note is written behind this tab's back, so refresh when
      one lands — otherwise the list looks stale until you switch tabs. */
@@ -861,7 +918,7 @@ export function NotesTab() {
   }
 
   return (
-    <div className="space-y-4" data-lifephase="notes-tab">
+    <div className="space-y-4" data-lifephase="notes-tab" data-section="life.notes">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -883,11 +940,7 @@ export function NotesTab() {
       <div className="flex flex-wrap items-center gap-1.5">
         {groups.map(g => <button key={g} onClick={() => setFilterGroup(filterGroup === g ? null : g)} className={cn('px-2 py-1 rounded-full text-[11px] font-medium border transition-colors', filterGroup === g ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-zinc-700/50 bg-zinc-800/40 text-zinc-400 hover:text-zinc-300')}><span className="inline-block w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: getGroupColor(g) }} />{g}</button>)}
         {allTags.slice(0, 8).map(t => <button key={t} onClick={() => setFilterTag(filterTag === t ? null : t)} className={cn('px-2 py-1 rounded-full text-[11px] border transition-colors', filterTag === t ? 'border-zinc-500 bg-zinc-700/50 text-zinc-200' : 'border-zinc-700/50 bg-zinc-800/40 text-zinc-500 hover:text-zinc-300')}>#{t}</button>)}
-        {/* Create new group */}
-        <div className="flex items-center gap-1 ml-1">
-          <Input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') createGroup() }} placeholder="New group..." className="w-24 h-7 text-[11px] px-2" />
-          {newGroupName.trim() && <button onClick={createGroup} className="h-7 px-2 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] hover:bg-amber-500/25 transition-colors">Create</button>}
-        </div>
+
       </div>
 
       {/* Drafts */}
@@ -915,7 +968,7 @@ export function NotesTab() {
               >
                 <span className="relative flex h-2.5 w-2.5 shrink-0">
                   <span className="absolute inline-flex h-full w-full rounded-full opacity-60" style={{ backgroundColor: getGroupColor(groupName) }} />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getGroupColor(groupName), boxShadow: `0 0 10px ${getGroupColor(groupName)}` }} />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getGroupColor(groupName) }} />
                 </span>
                 <h3 className="warmth-serif text-sm font-medium text-zinc-200">{groupName}</h3>
                 <span className="text-[11px] text-zinc-600">{groupNotes.length}</span>

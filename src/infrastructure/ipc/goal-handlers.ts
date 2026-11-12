@@ -4,6 +4,7 @@
  */
 
 import { ipcMain, BrowserWindow } from 'electron';
+const episodeWriters = require('../../main/ai/episodeWriters');
 
 // ── WHY THIS IS A STATIC IMPORT, NOT require() ─────────────────────────────
 // These were `require('../../…')` calls. That path is correct for the SOURCE
@@ -243,6 +244,9 @@ ipcMain.handle('delete-goal', async (_event, goalId: string) => {
   try {
     const goalRow = db!.prepare('SELECT * FROM goals WHERE id = ?').get(goalId) as any;
     db!.prepare('DELETE FROM goals WHERE id = ?').run(goalId);
+    // D6 hygiene: the link hub must not keep rows pointing at a dead goal —
+    // entity:get-links would otherwise report a stale "linked to goal X".
+    try { db!.prepare('DELETE FROM entity_links WHERE goal_id = ?').run(goalId); } catch { /* table may not exist yet */ }
     if (goalRow) {
       try { episodeWriters.writeGoalEpisode({ id: goalId, title: goalRow.title || goalId, category: goalRow.category }, 'deleted'); } catch {}
       // Closes the emission hole: goals.goal.deleted was a live-advertised
@@ -317,13 +321,16 @@ function mapLifePhaseRow(r: any) {
     reflectionGeneratedAt: r.reflection_generated_at || null,
     status: r.status || 'complete',
     scale: r.scale ?? null,
+    reflectionTitle: r.reflection_title || null,
+    reflectionAnswers: parseObj(r.reflection_answers),
+    reflectionEntries: parseObj(r.reflection_entries),
     updatedAt: r.updated_at,
   };
 }
 
 const LIFE_PHASE_INSERT = `
-  INSERT OR REPLACE INTO life_phases (id, title, description, category, start_month, start_year, end_month, end_year, magnitude, color, reflection, era_trends, impact_notes, milestones, connections, people, mood_start, mood_end, mood_tags, feelings_note, lessons_learned, header_image_memory_id, color_source, reflection_source, reflection_generated_at, status, scale, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  INSERT OR REPLACE INTO life_phases (id, title, description, category, start_month, start_year, end_month, end_year, magnitude, color, reflection, era_trends, impact_notes, milestones, connections, people, mood_start, mood_end, mood_tags, feelings_note, lessons_learned, header_image_memory_id, color_source, reflection_source, reflection_generated_at, status, scale, reflection_title, reflection_answers, reflection_entries, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
 `;
 
 function upsertLifePhase(phase: any) {
@@ -339,6 +346,9 @@ function upsertLifePhase(phase: any) {
     phase.colorSource || 'category', phase.reflectionSource || null,
     phase.reflectionGeneratedAt || null, phase.status || 'complete',
     phase.scale ?? null,
+    phase.reflectionTitle ?? null,
+    JSON.stringify(phase.reflectionAnswers ?? null),
+    JSON.stringify(phase.reflectionEntries ?? null),
   );
 }
 
@@ -373,8 +383,21 @@ ipcMain.handle('lifePhase:get', async () => {
 
 ipcMain.handle('lifePhase:getSummary', async () => {
   try {
-    const row = db!.prepare('SELECT value FROM life_timeline_meta WHERE key = ?').get('summary') as any;
-    return { ok: true, data: row?.value || null };
+    // D3 shape: { text, at, phaseCount }. `summary` stores the bare TEXT (the
+    // old contract — any legacy reader of the table still gets a string), and
+    // `summary.updatedAt` / `summary.phaseCount` carry the reflection meta.
+    const meta = db!.prepare('SELECT key, value FROM life_timeline_meta WHERE key IN (?, ?, ?)').all('summary', 'summary.updatedAt', 'summary.phaseCount') as any[];
+    const byKey = new Map(meta.map((r: any) => [r.key, r.value]));
+    const text = byKey.get('summary') || null;
+    if (!text) return { ok: true, data: null };
+    return {
+      ok: true,
+      data: {
+        text,
+        at: byKey.get('summary.updatedAt') || null,
+        phaseCount: Number.parseInt(String(byKey.get('summary.phaseCount') ?? ''), 10) || null,
+      },
+    };
   } catch (err: any) { return { ok: false, error: err.message }; }
 });
 
@@ -433,6 +456,9 @@ ipcMain.handle('lifePhase:aiSummarize', async (_event, phases: any[]) => {
     const content = await runLifePhaseAI(systemPrompt, userMsg, 250);
     db!.prepare('INSERT OR REPLACE INTO life_timeline_meta (key, value) VALUES (?, ?)').run('summary', content);
     db!.prepare('INSERT OR REPLACE INTO life_timeline_meta (key, value) VALUES (?, ?)').run('summary.updatedAt', new Date().toISOString());
+    // D3: record how many phases this reflection was generated against, so the
+    // Reflection card can say "reflected on N phases".
+    db!.prepare('INSERT OR REPLACE INTO life_timeline_meta (key, value) VALUES (?, ?)').run('summary.phaseCount', String((phases || []).length));
     return { ok: true, data: content };
   } catch (err: any) { return { ok: false, error: err.message }; }
 });
@@ -705,15 +731,27 @@ ipcMain.handle('lifePhase:aiReflect', async (_event, params: any) => {
       ? `What I was doing then: ${periodContext.goals?.completedCount ?? 0} goals completed; focus groups ${(periodContext.focusGroups || []).map((f: any) => `${f.name} (${Math.round((f.totalMs || 0) / 3600000)}h)`).join(', ') || 'none'}; activities ${(periodContext.externalActivities || []).map((a: any) => `${a.label} (${Math.round((a.totalMs || 0) / 3600000)}h)`).join(', ') || 'none'}.`
       : '';
     const variationLine = variation ? `\nVariation request: ${variation}` : '';
-    const systemPrompt = 'Write as a perceptive, warm friend who has read this person\'s own words about this chapter — not a corporate summary bot, not a therapist, not a hype machine. Reference specific things they wrote (a milestone, a person, a lesson). One tight paragraph, 60-120 words. Never invent facts, numbers, or events not present in the input. If mood data suggests hardship, acknowledge it honestly before naming what came out of it. First person, no clichés, no self-help tone. End with one sentence pointing toward what this chapter made possible next.' + variationLine;
-    const userMsg = `Chapter: "${title || ''}" (${category || 'growth'}). Story: ${story || '(none)'}. Milestones: ${milestoneTxt || '(none)'}. People: ${peopleTxt || '(none)'}. Mood: start ${moodStart ?? 'n/a'}, end ${moodEnd ?? 'n/a'}${moodTags.length ? `, tags: ${moodTags.join(', ')}` : ''}. Feelings: ${feelingsNote || '(none)'}. Lessons: ${lessonsLearned || '(none)'}. Impact: ${impactNotes || '(none)'}.${legacy ? ` My three answers: 1) ${answers[0] || ''} 2) ${answers[1] || ''} 3) ${answers[2] || ''}` : ''} ${contextSummary}`;
-    const content = await runLifePhaseAI(systemPrompt, userMsg, 350);
+    const headerImageCaption = (req.headerImageCaption || '') as string;
+    const photoCaptions = (req.photoCaptions || []) as string[];
+    const milestonePhotoCaptions = (req.milestonePhotoCaptions || []) as string[];
+    const extra = [
+      headerImageCaption ? `Cover photo caption: ${headerImageCaption}` : '',
+      photoCaptions.length ? `Photo captions from this period: ${photoCaptions.join('; ')}` : '',
+      milestonePhotoCaptions.length ? `Moments with photos: ${milestonePhotoCaptions.join('; ')}` : '',
+    ].filter(Boolean).join('\\n');
+    const systemPrompt = 'Write as a perceptive, warm friend who has read this person\'s own words about this chapter — not a corporate summary bot, not a therapist, not a hype machine. Reference specific things they wrote (a milestone, a person, a lesson). Write a short title and then the reflection. Output format, exactly:\\nTITLE: <3 to 6 words>\\n<blank line>\\n<the reflection, 1 to 3 short paragraphs, 120 to 220 words in total>\\nIf photo captions or moments are given, name one or two of them as concrete details. Never invent a photo, a place, or an event that is not in the input. If mood data suggests hardship, acknowledge it honestly before naming what came out of it. First person, no clichés, no self-help tone. End with one sentence pointing toward what this chapter made possible next.' + variationLine;
+    const userMsg = `Chapter: "${title || ''}" (${category || 'growth'}). Story: ${story || '(none)'}. Milestones: ${milestoneTxt || '(none)'}. People: ${peopleTxt || '(none)'}. Mood: start ${moodStart ?? 'n/a'}, end ${moodEnd ?? 'n/a'}${moodTags.length ? `, tags: ${moodTags.join(', ')}` : ''}. Feelings: ${feelingsNote || '(none)'}. Lessons: ${lessonsLearned || '(none)'}. Impact: ${impactNotes || '(none)'}.${legacy ? ` My three answers: 1) ${answers[0] || ''} 2) ${answers[1] || ''} 3) ${answers[2] || ''}` : ''} ${contextSummary}` + (extra ? `\\n${extra}` : '');
+    const raw = await runLifePhaseAI(systemPrompt, userMsg, 700);
+
+    const m = raw.match(/^\\s*TITLE:\\s*(.+)\\n+([\\s\\S]+)$/i);
+    const parsedTitle = m ? m[1].trim() : null;
+    const parsedText = m ? m[2].trim() : raw.trim();
 
     // Groundedness heuristic: enough concrete input to write specifics.
     const signalLen = (story?.length || 0) + (milestones?.length || 0) * 40 + (people?.length || 0) * 30 + (lessonsLearned?.length || 0) + (feelingsNote?.length || 0);
     const confidence = signalLen >= 120 ? 'grounded' : 'sparse';
 
-    return { ok: true, data: { reflection: content, confidence } };
+    return { ok: true, data: { reflection: parsedText, title: parsedTitle, confidence } };
   } catch (err: any) { return { ok: false, error: err.message }; }
 });
 
@@ -861,11 +899,19 @@ ipcMain.handle('save-goals-batch', async (_event, goals: any[]) => {
 
 ipcMain.handle('link-goal-to-entity', async (_event, goalId: string, link: { type: 'problem' | 'request'; id: string; label?: string }) => {
   try {
-    const row = db!.prepare('SELECT * FROM goals WHERE id = ?').get(goalId) as any;
+    // D6 unification: goal↔entity links persist through `entity_links` (the one
+    // generic link hub), not the legacy `goals.links` JSON column — nothing ever
+    // read those JSON entries, and entity_links already feeds goalGetConnections
+    // and goal:connections-bulk. Same upsert contract as `entity:link`.
+    if (!goalId || !link?.type || !link?.id) return { success: false, error: 'A goal, a link type and an entity id are required.' };
+    const row = db!.prepare('SELECT id FROM goals WHERE id = ?').get(goalId) as any;
     if (!row) return { success: false, error: 'Goal not found' };
-    const links = JSON.parse(row.links || '[]');
-    links.push(link);
-    db!.prepare('UPDATE goals SET links = ? WHERE id = ?').run(JSON.stringify(links), goalId);
+    const id = 'lnk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    db!.prepare(`
+      INSERT INTO entity_links (id, feature, entity_id, goal_id, label, meta)
+      VALUES (?, ?, ?, ?, ?, NULL)
+      ON CONFLICT(feature, entity_id, goal_id) DO UPDATE SET label = excluded.label
+    `).run(id, link.type, link.id, goalId, link.label || null);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -874,10 +920,9 @@ ipcMain.handle('link-goal-to-entity', async (_event, goalId: string, link: { typ
 
 ipcMain.handle('unlink-goal-from-entity', async (_event, goalId: string, type: 'problem' | 'request', entityId: string) => {
   try {
-    const row = db!.prepare('SELECT * FROM goals WHERE id = ?').get(goalId) as any;
-    if (!row) return { success: false, error: 'Goal not found' };
-    const links = JSON.parse(row.links || '[]').filter((l: any) => !(l.type === type && l.id === entityId));
-    db!.prepare('UPDATE goals SET links = ? WHERE id = ?').run(JSON.stringify(links), goalId);
+    // D6: the delete half of the unified path — remove the entity_links row.
+    if (!goalId || !type || !entityId) return { success: false, error: 'A goal, a link type and an entity id are required.' };
+    db!.prepare('DELETE FROM entity_links WHERE feature = ? AND entity_id = ? AND goal_id = ?').run(type, entityId, goalId);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -2041,6 +2086,9 @@ ipcMain.handle('notes:update', async (_event, data: { id: string; title?: string
 ipcMain.handle('notes:delete', async (_event, id: string) => {
   try {
     db!.prepare('DELETE FROM notes WHERE id = ?').run(id);
+    // D6 hygiene: the note's entity_links row (feature 'note') would otherwise
+    // keep counting toward its old goal's connection total forever.
+    try { db!.prepare('DELETE FROM entity_links WHERE feature = ? AND entity_id = ?').run('note', id); } catch { /* table may not exist yet */ }
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
