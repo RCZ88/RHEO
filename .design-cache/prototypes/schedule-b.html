@@ -1,0 +1,95 @@
+<!doctype html>
+<!-- schedule-b — "AGENDA STACK" · warm, editorial rows (Motion L2 reactive)
+     The live ScheduleCard grammar, finished: lead-well rows, stagger-in,
+     armed delete = inline "Sure?" swap, always-visible controls on focus. -->
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schedule — B · Agenda stack</title>
+<style>
+:root{
+  --bg:#0b0b0e; --surface:#121215; --surface-2:#17171b; --border:#26262b; --border-sub:#1e1e23;
+  --ink:#e4e4e7; --muted:#8f8f96; --faint:#5c5c63;
+  --accent:#b0593f; --accent-soft:rgba(176,89,63,.12);
+  --amber:#fbbf24; --error:#ef4444;
+  --r-s:8px; --r-m:12px; --r-pill:999px;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,sans-serif;padding:28px}
+.mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.mast{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+h1{font-size:15px;font-weight:600}
+.kick{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.nav{display:flex;align-items:center;gap:4px;margin-left:auto}
+.nav button{height:30px;min-width:30px;border-radius:var(--r-s);border:0;background:transparent;color:var(--muted);cursor:pointer}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.today{height:30px;padding:0 12px;border-radius:var(--r-s);font-size:12px;font-weight:500;color:var(--accent);background:var(--accent-soft)}
+.add{height:30px;padding:0 12px;border-radius:var(--r-s);border:1px solid var(--border);background:var(--surface);font-size:12px;cursor:pointer}
+.add:hover{border-color:var(--accent)}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:16px}
+.day{background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-m);padding:8px 9px;transition:border-color .15s,background .15s}
+.day:hover{background:var(--surface-2)}
+.day.sel{border-color:var(--accent);box-shadow:inset 0 2px 0 var(--accent);background:var(--surface)}
+.day .d{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.day .n{font-size:15px;font-weight:550;margin-top:2px}
+.day.sel .n{color:var(--accent)}
+.dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--accent);margin-right:3px;vertical-align:2px}
+.emptycol{border:1px dashed var(--border);border-radius:var(--r-s);margin-top:6px;padding:7px 0;text-align:center}
+.emptycol span{font-size:10px;color:var(--faint)}
+.emptycol button{display:block;margin:4px auto 0;font-size:10px;color:var(--muted);background:none;border:0;cursor:pointer}
+.emptycol button:hover{color:var(--accent)}
+.rows{display:flex;flex-direction:column;gap:8px;max-width:640px}
+.row{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-m);padding:10px 12px;opacity:0;transform:translateY(6px);animation:in .18s ease-out forwards}
+.row:nth-child(2){animation-delay:.05s}.row:nth-child(3){animation-delay:.1s}.row:nth-child(4){animation-delay:.15s}
+@keyframes in{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.row{animation:none;opacity:1;transform:none}}
+.lead{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:var(--r-s);background:var(--surface-2);color:var(--accent)}
+.row h3{font-size:13px;font-weight:550}
+.row p{font-size:11px;color:var(--muted);margin-top:1px}
+.ctl{margin-left:auto;display:flex;gap:6px;opacity:.25;transition:opacity .12s}
+.row:hover .ctl,.row:focus-within .ctl,.row.armed .ctl{opacity:1}
+.ctl button{height:26px;min-width:26px;border-radius:var(--r-s);border:1px solid var(--border-sub);background:transparent;color:var(--muted);cursor:pointer;font-size:11px}
+.ctl button:hover{color:var(--ink);border-color:var(--border)}
+.sure{height:26px;padding:0 10px;border-radius:var(--r-pill);font-size:11px;font-weight:600;color:var(--error);border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08)}
+.row.armed{border-color:rgba(239,68,68,.3)}
+.cap{margin-top:18px;font-size:11px;color:var(--faint)}
+</style>
+</head>
+<body>
+  <div class="mast">
+    <div><div class="kick">Life · Schedule</div><h1>Wednesday, Nov 12</h1></div>
+    <div class="nav"><button>‹</button><button class="today">Today</button><button>›</button><button class="add">＋ Add block</button></div>
+  </div>
+  <div class="week">
+    <div class="day"><span class="d">Mon</span><span class="n">10</span></div>
+    <div class="day"><span class="d">Tue</span><span class="n">11</span></div>
+    <div class="day sel"><span class="d">Wed</span><span class="n">12</span></div>
+    <div class="day"><span class="d">Thu</span><span class="n">13</span><div class="emptycol"><span>Nothing planned</span><button>＋ Add</button></div></div>
+    <div class="day"><span class="d">Fri</span><span class="n">14</span></div>
+    <div class="day"><span class="d">Sat</span><span class="n">15</span></div>
+    <div class="day"><span class="d">Sun</span><span class="n">16</span></div>
+  </div>
+  <div class="rows">
+    <div class="row" style="background:var(--accent-soft);border-color:rgba(176,89,63,.3)">
+      <span class="lead">▶</span>
+      <div><h3>Lecture — Systems</h3><p class="mono">08:30 – 10:00 · Hall B · now</p></div>
+    </div>
+    <div class="row">
+      <span class="lead">11</span>
+      <div><h3>Study — thesis</h3><p class="mono">11:15 – 12:30 · 1h 15m · goal-linked</p></div>
+      <div class="ctl"><button aria-label="Edit entry">✎</button><button aria-label="Delete entry">🗑</button></div>
+    </div>
+    <div class="row armed">
+      <span class="lead">12</span>
+      <div><h3>Meeting — advisor</h3><p class="mono">12:30 – 13:15</p></div>
+      <div class="ctl"><button aria-label="Edit entry">✎</button><button class="sure">Sure?</button></div>
+    </div>
+    <div class="row">
+      <span class="lead">14</span>
+      <div><h3>Lab — networks</h3><p class="mono">14:00 – 15:30 · Hall C</p></div>
+      <div class="ctl"><button aria-label="Edit entry">✎</button><button aria-label="Delete entry">🗑</button></div>
+    </div>
+  </div>
+  <div class="cap">B · Agenda stack — the week is an index, the day is a stack. Continues the shipped grammar; cheapest to land; motion L2 reactive (stagger-in, no bounce).</div>
+</body>
+</html>

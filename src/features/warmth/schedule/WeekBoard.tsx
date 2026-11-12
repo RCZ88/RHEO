@@ -329,12 +329,20 @@ export function WeekBoard({
                 {shown.map((row) => {
                   const Icon = ROW_ICON[row.kind];
                   return (
-                    <li key={row.id}
-                      className="rounded-md border p-1.5"
-                      style={{ borderColor: 'var(--border-subtle)' }}
-                      title={`${ROW_WORD[row.kind]}: ${row.title}`}
-                    >
-                      <div className="flex items-start gap-1">
+                    /* An index entry must be followable: clicking a row goes to
+                       that day — the same destination the "+N more" overflow
+                       button below already uses (apple-design §7: one row and
+                       its overflow lead to the same place, so the board and
+                       the agenda panel stay one grammar). The affordance is
+                       hover-bg + pointer + focus ring, not colour alone. */
+                    <li key={row.id} className="rounded-md border" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectDate(date)}
+                        aria-label={`Go to ${DAY_LETTER[weekday]} ${d.getDate()} — ${row.title}`}
+                        title={`${ROW_WORD[row.kind]}: ${row.title}`}
+                        className="flex w-full cursor-pointer items-start gap-1 rounded-md p-1.5 text-left transition-colors duration-150 hover:bg-[var(--color-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--page-accent)]"
+                      >
                         <Icon className="w-3 h-3 shrink-0 mt-0.5 text-[var(--text-muted)]" aria-hidden />
                         <span className="min-w-0 flex-1">
                           <span className={cn(
@@ -356,7 +364,7 @@ export function WeekBoard({
                             </span>
                           )}
                         </span>
-                      </div>
+                      </button>
                     </li>
                   );
                 })}

@@ -4,13 +4,14 @@
 // no stagger, no pulsing, no rainbow. Flat data tool.
 // ============================================================
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { AnimatePresence } from "motion/react";
 import {
   Calendar, Clock, MapPin, Plus, X, Edit3, Trash2, Loader2,
   BookOpen, FlaskConical, Brain, FileText, Users, MoreHorizontal
 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
+import { TimeField } from '../../components/ui/TimeField';
 import { LocationAutocomplete } from '../../components/ui/LocationAutocomplete';
 import { Button } from '../../components/ui/button';
 import { Select, SelectItem } from '../../components/ui/select';
@@ -89,9 +90,17 @@ interface ScheduleCardProps {
   hideDaySelector?: boolean;
 }
 
-export function ScheduleCard({
+export interface ScheduleCardHandle {
+  /** Opens the inline add form. Exists so a sibling panel (WeekBoard's
+   *  empty-column Add) can start the SAME flow instead of growing a second
+   *  one — two independent ways to add is how this card ended up with a
+   *  header button and a footer button for one value. */
+  openAdd: () => void;
+}
+
+export const ScheduleCard = forwardRef<ScheduleCardHandle, ScheduleCardProps>(function ScheduleCard({
   entries, selectedDate, selectedDay: selectedDayProp, loading = false, error = null, onAdd, onUpdate, onDelete, linkedGoals, showAll = false, onDayChange, hideDaySelector = false, onOpenGoalHub,
-}: ScheduleCardProps) {
+}, ref) {
   const theme = getWidgetTheme('schedule-hero');
   const selectedDay = selectedDayProp ?? new Date().getDay();
   const [isAdding, setIsAdding] = useState(false);
@@ -157,6 +166,11 @@ export function ScheduleCard({
 
   const startAdd = () => { resetForm(); setForm(p => ({ ...p, day: selectedDay.toString() })); setShowFormError(''); setIsAdding(true); setEditingId(null); };
 
+  /* Deliberately NO deps array: the handle refreshes every render, so `openAdd`
+     can never close over a stale `selectedDay` — the same staleness the
+     form-follows-day effect below exists to guard against. */
+  useImperativeHandle(ref, () => ({ openAdd: startAdd }));
+
   const startEdit = (entry: ScheduleEntry) => {
     setEditingId(entry.id);
     setForm({
@@ -220,14 +234,6 @@ export function ScheduleCard({
           <Plus size={13} /> Add entry
         </button>
       }
-      footer={
-        <button
-          onClick={startAdd}
-          className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-        >
-          + Add entry
-        </button>
-      }
     >
       <div className="flex flex-col gap-3 min-h-[320px]">
         {/* The add affordance has to be visible WITHOUT scrolling. It used to
@@ -235,7 +241,9 @@ export function ScheduleCard({
             day has zero entries) and the card FOOTER — which sits below a
             `min-h-[320px]` body inside a panel that scrolls. So on any day that
             already had a block, selecting that day showed no way to add
-            another: the button existed, under the fold. One control, at the
+            another: the button existed, under the fold. The footer copy was
+            then removed outright: with the header control it was two identical
+            add affordances for one value on one card. One control, at the
             top, always. */}
         {!isAdding && !editingId && (
           <div className="flex shrink-0 items-center justify-between gap-2">
@@ -333,9 +341,12 @@ export function ScheduleCard({
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 flex-1">
-                  <Input type="time" value={form.start} onChange={e => setForm(p => ({ ...p, start: e.target.value }))} className="bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9" />
+                  {/* TimeField replaces the native `<input type="time">`, whose
+                      two-field spinner glitches on Linux Chromium (swallowed
+                      keystrokes, mis-opened dropdowns). Same "HH:MM" format. */}
+                  <TimeField value={form.start} onChange={v => setForm(p => ({ ...p, start: v }))} startAriaLabel="Start hour" endAriaLabel="Start minute" />
                   <span className="text-[var(--text-muted)] text-xs">to</span>
-                  <Input type="time" value={form.end} onChange={e => setForm(p => ({ ...p, end: e.target.value }))} className="bg-[var(--color-card)] border-[var(--border-subtle)] text-[13px] h-9" />
+                  <TimeField value={form.end} onChange={v => setForm(p => ({ ...p, end: v }))} startAriaLabel="End hour" endAriaLabel="End minute" />
                 </div>
                 {/* Same defect, same fix: a category is stored as a snake_case
                     enum, so without a label map the trigger printed
@@ -410,11 +421,23 @@ export function ScheduleCard({
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => startEdit(currentEntry)} className="w-6 h-6 rounded border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors">
-                    <Edit3 size={10} />
+                  <button onClick={() => startEdit(currentEntry)} aria-label={`Edit entry ${currentEntry.title}`} className="w-6 h-6 rounded border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors">
+                    <Edit3 size={10} aria-hidden />
                   </button>
-                  <button onClick={() => handleDelete(currentEntry.id)} className={`w-6 h-6 rounded flex items-center justify-center transition-colors border ${deleteConfirmId === currentEntry.id ? 'border-[var(--error)] text-[var(--error)]' : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--error)]'}`}>
-                    <Trash2 size={10} />
+                  {/* Destructive confirm, made legible: the armed state is a
+                      WORD ("Sure?") replacing the icon in place — same anchor,
+                      per apple-design §7 — not a border colour the user has to
+                      be hovering to notice (the old armed state was invisible
+                      without pointer-over, and colour alone). Second click
+                      confirms; the 3s disarm timer below still applies. */}
+                  <button
+                    onClick={() => handleDelete(currentEntry.id)}
+                    aria-label={deleteConfirmId === currentEntry.id ? `Confirm delete ${currentEntry.title}` : `Delete entry ${currentEntry.title}`}
+                    className={`flex h-6 shrink-0 items-center justify-center rounded border transition-colors ${deleteConfirmId === currentEntry.id
+                      ? 'w-auto border-[var(--error)] bg-[var(--error-muted)] px-2 text-[10px] font-semibold text-[var(--error)]'
+                      : 'w-6 border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--error)]'}`}
+                  >
+                    {deleteConfirmId === currentEntry.id ? 'Sure?' : <Trash2 size={10} aria-hidden />}
                   </button>
                 </div>
               </div>
@@ -459,12 +482,12 @@ export function ScheduleCard({
                          in {minsUntil}m
                        </span>
                      )}
-                     <div className={`flex items-center gap-1 transition-opacity ${dayIsPast ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
-                       <button onClick={() => startEdit(entry)} className="w-6 h-6 rounded border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors">
-                         <Edit3 size={10} />
+                     <div className={`flex items-center gap-1 transition-opacity ${dayIsPast ? 'opacity-0' : deleteConfirmId === entry.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+                       <button onClick={() => startEdit(entry)} aria-label={`Edit entry ${entry.title}`} className="w-6 h-6 rounded border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors">
+                         <Edit3 size={10} aria-hidden />
                        </button>
-                       <button onClick={() => handleDelete(entry.id)} className={`w-6 h-6 rounded flex items-center justify-center transition-colors border ${deleteConfirmId === entry.id ? 'border-[var(--error)] text-[var(--error)]' : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--error)]'}`}>
-                         <Trash2 size={10} />
+                       <button onClick={() => handleDelete(entry.id)} aria-label={deleteConfirmId === entry.id ? `Confirm delete ${entry.title}` : `Delete entry ${entry.title}`} className={`flex h-6 shrink-0 items-center justify-center rounded border transition-colors ${deleteConfirmId === entry.id ? 'w-auto border-[var(--error)] bg-[var(--error-muted)] px-2 text-[10px] font-semibold text-[var(--error)]' : 'w-6 border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--error)]'}`}>
+                         {deleteConfirmId === entry.id ? 'Sure?' : <Trash2 size={10} aria-hidden />}
                        </button>
                      </div>
                    </div>
@@ -494,4 +517,4 @@ export function ScheduleCard({
       </div>
     </WidgetCard>
   );
-}
+});

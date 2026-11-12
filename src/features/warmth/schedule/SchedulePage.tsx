@@ -1,5 +1,5 @@
 // src/features/warmth/schedule/SchedulePage.tsx
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ActivitiesSheet } from './activities/ActivitiesSheet';
 import { ScheduleLayoutShell } from './ScheduleLayoutShell';
@@ -305,6 +305,19 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
     if (!Number.isNaN(d.getTime())) setSelectedDay(d.getDay());
   }, []);
 
+  /* The board's empty columns advertise "＋ Add" — WeekBoard renders that
+     affordance whenever `onAddToDay` is present, but no caller ever passed the
+     prop, so it was code that promised an action and delivered nothing in
+     every week. Wiring it here: selecting the column IS the navigation, and
+     the agenda card's own add form opens underneath it (one flow, not a
+     second one — the rAF gives the day-selection re-render one frame so
+     `openAdd` aims at the column the user just clicked). */
+  const scheduleCardRef = useRef<{ openAdd: () => void } | null>(null);
+  const handleAddToDay = useCallback((date: string) => {
+    handleBoardSelectDate(date);
+    requestAnimationFrame(() => scheduleCardRef.current?.openAdd());
+  }, [handleBoardSelectDate]);
+
   const [weekGoals, setWeekGoals] = useState<Record<string, Goal[]>>({});
   const { focusState, activeGoalIds } = useFocusGoals(goals);
 
@@ -466,7 +479,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
 
   /* ── render ── */
   return (
-    <div className={embedded ? 'w-full h-full min-h-0 overflow-hidden' : 'w-full max-w-[1600px] mx-auto px-4 py-6 min-h-0'} style={embedded ? undefined : { height: 'calc(100vh - 2rem)' }}>
+    <div data-section="life.schedule" className={embedded ? 'w-full h-full min-h-0 overflow-hidden' : 'w-full max-w-[1600px] mx-auto px-4 py-6 min-h-0'} style={embedded ? undefined : { height: 'calc(100vh - 2rem)' }}>
 
       {/* ═══ MASTHEAD ═══ identity + the one date navigator + focus ribbon ═══
           LAMINAR §2: one signal hue per surface, resolved from --page-accent
@@ -548,6 +561,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
                   <WeekBoard
                     selectedDate={selectedDate}
                     onSelectDate={handleBoardSelectDate}
+                    onAddToDay={handleAddToDay}
                     dates={boardDates}
                     schedule={schedule}
                     deadlines={deadlines}
@@ -573,6 +587,7 @@ export function SchedulePage({ embedded }: SchedulePageProps) {
                     todayDay={new Date().getDay()}
                   />
                   <ScheduleCard
+                    ref={scheduleCardRef}
                     entries={todaySchedule}
                     selectedDate={selectedDate}
                     selectedDay={selectedDay}

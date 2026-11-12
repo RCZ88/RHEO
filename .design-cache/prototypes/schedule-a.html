@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- schedule-a — "TIMETABLE" · grid-first, dense, instrument calm (Motion L1)
+     Blocks live ON the day's clock: proportional bars on a hairline grid.
+     Delete grammar: armed row's right edge swaps to a solid "Sure?" chip. -->
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schedule — A · Timetable</title>
+<style>
+:root{
+  --bg:#0b0b0e; --surface:#121215; --surface-2:#17171b; --border:#26262b; --border-sub:#1e1e23;
+  --ink:#e4e4e7; --muted:#8f8f96; --faint:#5c5c63;
+  --accent:#b0593f; --accent-soft:rgba(176,89,63,.12);
+  --amber:#fbbf24; --error:#ef4444;
+  --r-s:8px; --r-m:12px; --r-pill:999px;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,sans-serif;padding:28px;}
+.mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.mast{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+h1{font-size:15px;font-weight:600;letter-spacing:.01em}
+.kick{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.nav{display:flex;align-items:center;gap:4px;margin-left:auto}
+.nav button{height:30px;min-width:30px;border-radius:var(--r-s);border:0;background:transparent;color:var(--muted);cursor:pointer}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.today{height:30px;padding:0 12px;border-radius:var(--r-s);font-size:12px;font-weight:500;color:var(--accent);background:var(--accent-soft)}
+.add{height:30px;padding:0 12px;border-radius:var(--r-s);border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--ink);cursor:pointer}
+.add:hover{border-color:var(--accent)}
+.rail{display:flex;gap:2px;margin-bottom:14px}
+.rail b{flex:1;text-align:center;padding:7px 0;border-radius:var(--r-s);font-size:11px;font-weight:500;color:var(--muted)}
+.rail b.on{color:var(--ink);background:var(--surface-2);box-shadow:inset 0 -2px 0 var(--accent)}
+.wrap{display:grid;grid-template-columns:1fr 280px;gap:16px}
+.grid{position:relative;background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-m);padding:10px 0 10px 52px;min-height:520px}
+.hour{position:relative;height:56px;border-bottom:1px solid var(--border-sub)}
+.hour span{position:absolute;left:-46px;top:-7px;font-size:10px;color:var(--faint)}
+.bar{position:absolute;left:64px;right:12px;border-radius:var(--r-s);background:var(--surface-2);border:1px solid var(--border);border-left:2px solid var(--accent);padding:6px 10px;overflow:hidden;transition:border-color .15s}
+.bar:hover{border-color:var(--border);background:#1c1c21}
+.bar h3{font-size:12.5px;font-weight:550}
+.bar p{font-size:10.5px;color:var(--muted);margin-top:1px}
+.bar .t{position:absolute;left:-14px;top:6px;font-size:9.5px;color:var(--faint);writing-mode:vertical-rl;transform:rotate(180deg)}
+.sure{position:absolute;right:6px;top:50%;transform:translateY(-50%);height:22px;padding:0 9px;border-radius:var(--r-pill);font-size:10.5px;font-weight:600;color:var(--error);border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);opacity:0;transition:opacity .12s}
+.bar:hover .sure,.bar.armed .sure{opacity:1}
+.bar.armed{border-color:rgba(239,68,68,.35)}
+.now{position:absolute;left:8px;right:8px;height:1px;background:var(--accent);opacity:.55}
+.now::after{content:'';position:absolute;left:-4px;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-m);padding:12px}
+.card h4{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.up{display:flex;gap:8px;align-items:baseline;padding:5px 0;font-size:12px}
+.up .t{font-size:10.5px;color:var(--muted)}
+.empty{border:1px dashed var(--border);border-radius:var(--r-s);padding:14px;text-align:center;color:var(--muted);font-size:12px}
+.empty button{margin-top:8px;height:28px;padding:0 10px;border-radius:var(--r-s);font-size:11px;color:var(--accent);background:var(--accent-soft);border:0;cursor:pointer}
+.cap{margin-top:18px;font-size:11px;color:var(--faint)}
+</style>
+</head>
+<body>
+  <div class="mast">
+    <div><div class="kick">Life · Schedule</div><h1>Wednesday's Schedule</h1></div>
+    <div class="nav"><button>‹</button><button class="today">Today</button><button>›</button><button class="add">＋ Add block</button></div>
+  </div>
+  <div class="rail"><b>S</b><b>M</b><b class="on">T</b><b>W</b><b>T</b><b>F</b><b>S</b></div>
+  <div class="wrap">
+    <div class="grid">
+      <div class="hour"><span class="mono">07</span></div>
+      <div class="hour"><span class="mono">08</span><div class="bar" style="top:2px;height:52px"><span class="t mono">08:30</span><h3>Lecture — Systems</h3><p class="mono">08:30 – 10:00 · 1h 30m · Hall B</p></div></div>
+      <div class="hour"><span class="mono">09</span></div>
+      <div class="hour"><span class="mono">10</span></div>
+      <div class="hour"><span class="mono">11</span><div class="bar" style="top:2px;height:78px"><span class="t mono">11:15</span><h3>Study — thesis</h3><p class="mono">11:15 – 12:30 · 1h 15m</p></div></div>
+      <div class="hour"><span class="mono">12</span><div class="bar armed" style="top:2px;height:44px"><span class="t mono">12:30</span><h3>Meeting — advisor</h3><p class="mono">12:30 – 13:15</p><button class="sure">Sure?</button></div></div>
+      <div class="hour"><span class="mono">13</span></div>
+      <div class="hour"><span class="mono">14</span><div class="bar" style="top:2px;height:52px"><span class="t mono">14:00</span><h3>Lab — networks</h3><p class="mono">14:00 – 15:30 · Hall C</p></div></div>
+      <div class="hour"><span class="mono">15</span></div>
+      <div class="now" style="top:394px"></div>
+    </div>
+    <div class="side">
+      <div class="card"><h4>Upcoming</h4>
+        <div class="up"><span class="mono t">14:00</span><span>Lab — networks</span></div>
+        <div class="up"><span class="mono t">16:00</span><span>Gym block</span></div>
+      </div>
+      <div class="card"><h4>Deadlines</h4>
+        <div class="up"><span class="mono t">Fri</span><span>Thesis draft</span></div>
+      </div>
+      <div class="card"><h4>Thursday</h4>
+        <div class="empty">Nothing on Thu<button>＋ Add first block</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="cap">A · Timetable — the day is a clock; blocks occupy it. Densest option; strongest for heavy users, coldest mood. Motion L1 (hover only).</div>
+</body>
+</html>

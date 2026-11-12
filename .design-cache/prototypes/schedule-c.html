@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- schedule-c — "WEEK-FIRST" · the week is the page (uptime-card grammar)
+     7 columns with time-positioned bands; hover brightens a spread, not one
+     cell; click a column = drill-in detail band. Now-line spans the week. -->
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schedule — C · Week-first</title>
+<style>
+:root{
+  --bg:#0b0b0e; --surface:#121215; --surface-2:#17171b; --border:#26262b; --border-sub:#1e1e23;
+  --ink:#e4e4e7; --muted:#8f8f96; --faint:#5c5c63;
+  --accent:#b0593f; --accent-soft:rgba(176,89,63,.12);
+  --amber:#fbbf24; --error:#ef4444;
+  --r-s:8px; --r-m:12px; --r-pill:999px;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,sans-serif;padding:28px}
+.mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.mast{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+h1{font-size:15px;font-weight:600}
+.kick{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.nav{display:flex;align-items:center;gap:4px;margin-left:auto}
+.nav button{height:30px;min-width:30px;border-radius:var(--r-s);border:0;background:transparent;color:var(--muted);cursor:pointer}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.today{height:30px;padding:0 12px;border-radius:var(--r-s);font-size:12px;font-weight:500;color:var(--accent);background:var(--accent-soft)}
+.add{height:30px;padding:0 12px;border-radius:var(--r-s);border:1px solid var(--border);background:var(--surface);font-size:12px;cursor:pointer}
+.add:hover{border-color:var(--accent)}
+.board{position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:14px}
+.col{background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-m);min-height:300px;padding:8px;position:relative;transition:border-color .12s,background .12s,transform .12s}
+.col:hover{background:#17171c;border-color:#2e2e34;transform:translateY(-1px)}
+.col.sel{border-color:var(--accent);box-shadow:inset 0 2px 0 var(--accent)}
+.col .d{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.col .n{font-size:15px;font-weight:550;margin-top:2px}
+.col.sel .n{color:var(--accent)}
+.col .tag{font-size:8.5px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase}
+.band{position:relative;border-radius:var(--r-s);background:var(--surface-2);border:1px solid var(--border);border-left:2px solid var(--accent);padding:5px 7px;font-size:10.5px;line-height:1.25;overflow:hidden}
+.band .t{color:var(--muted);font-size:9px;display:block}
+.band.amber{border-left-color:var(--amber)}
+.band.amber .t{color:var(--amber)}
+.gutter{position:relative;padding-left:34px;margin-bottom:14px}
+.gutter .h{position:absolute;left:0;font-size:9.5px;color:var(--faint)}
+.detail{background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-m);padding:12px 14px}
+.detail h4{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.dr{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12.5px;border-top:1px solid var(--border-sub)}
+.dr:first-of-type{border-top:0}
+.dr .t{font-size:10.5px;color:var(--muted);min-width:86px}
+.sure{margin-left:auto;height:22px;padding:0 9px;border-radius:var(--r-pill);font-size:10.5px;font-weight:600;color:var(--error);border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08)}
+.cap{margin-top:16px;font-size:11px;color:var(--faint)}
+</style>
+</head>
+<body>
+  <div class="mast">
+    <div><div class="kick">Life · Schedule</div><h1>Week of Nov 10</h1></div>
+    <div class="nav"><button>‹</button><button class="today">Today</button><button>›</button><button class="add">＋ Add block</button></div>
+  </div>
+  <div class="gutter"><span class="h mono" style="top:8px">08</span><span class="h mono" style="top:118px">12</span><span class="h mono" style="top:228px">16</span><span class="h mono" style="top:290px">19</span></div>
+  <div class="board">
+    <div class="col"><span class="d">Mon</span><span class="n">10</span>
+      <div class="band" style="margin-top:40px">Systems<span class="t mono">08:30–10:00</span></div>
+      <div class="band amber" style="margin-top:8px">Gym<span class="t mono">17:00</span></div>
+    </div>
+    <div class="col"><span class="d">Tue</span><span class="n">11</span>
+      <div class="band" style="margin-top:96px">Thesis<span class="t mono">10:00–13:00</span></div>
+    </div>
+    <div class="col sel"><span class="d">Wed</span><span class="n">12</span><span class="tag">Today</span>
+      <div class="band" style="margin-top:40px">Systems<span class="t mono">08:30–10:00</span></div>
+      <div class="band" style="margin-top:8px">Advisor<span class="t mono">12:30–13:15</span></div>
+      <div class="band" style="margin-top:8px">Networks<span class="t mono">14:00–15:30</span></div>
+    </div>
+    <div class="col"><span class="d">Thu</span><span class="n">13</span>
+      <div style="border:1px dashed var(--border);border-radius:var(--r-s);padding:8px 0;text-align:center;font-size:10px;color:var(--faint)">Nothing planned</div>
+    </div>
+    <div class="col"><span class="d">Fri</span><span class="n">14</span>
+      <div class="band" style="margin-top:118px">Standup<span class="t mono">09:30</span></div>
+      <div class="band" style="margin-top:8px">Thesis due<span class="t mono">23:59</span></div>
+    </div>
+    <div class="col"><span class="d">Sat</span><span class="n">15</span></div>
+    <div class="col"><span class="d">Sun</span><span class="n">16</span>
+      <div class="band amber" style="margin-top:150px">Meal prep<span class="t mono">18:00</span></div>
+    </div>
+  </div>
+  <div class="detail">
+    <h4>Wednesday 12 — drill-in</h4>
+    <div class="dr"><span class="t mono">08:30–10:00</span><span>Lecture — Systems</span><button class="sure">Sure?</button></div>
+    <div class="dr"><span class="t mono">12:30–13:15</span><span>Meeting — advisor</span><button class="sure">Sure?</button></div>
+    <div class="dr"><span class="t mono">14:00–15:30</span><span>Lab — networks · Hall C</span><button class="sure">Sure?</button></div>
+  </div>
+  <div class="cap">C · Week-first — the week IS the page; the day is a drill-in. Boldest; restructures the shell; most work, and overlaps WeekBoard's job.</div>
+</body>
+</html>
