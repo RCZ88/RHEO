@@ -284,5 +284,12 @@ export async function initDatabase() {
     await db.execute({ sql: `ALTER TABLE pairing_codes ADD COLUMN user_id TEXT`, args: [] })
   } catch { /* already exists */ }
 
+  // Migration: add unlock_count to phone_telemetry (the phone counts one per
+  // return-to-foreground; the old table had nowhere to put it, so the field
+  // was accumulated client-side and silently dropped on every push).
+  try {
+    await db.execute({ sql: `ALTER TABLE phone_telemetry ADD COLUMN unlock_count INTEGER`, args: [] })
+  } catch { /* already exists */ }
+
   console.log("[db] schema initialized")
 }

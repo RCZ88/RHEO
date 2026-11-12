@@ -12,6 +12,9 @@ const pushSchema = z.object({
     session_started_at: z.string().optional(),
     foreground_seconds: z.number().int().min(0).default(0),
     background_seconds: z.number().int().min(0).default(0),
+    // Counted on the phone as one per return-to-foreground. Optional so older
+    // clients that never send it keep working; older ROWS store NULL.
+    unlock_count: z.number().int().min(0).optional(),
   }).optional(),
   battery: z.object({
     level_percent: z.number().min(0).max(100).optional(),
@@ -46,7 +49,7 @@ export async function phoneRoutes(app: FastifyInstance) {
 
       const id = randomUUID()
       await db.execute({
-        sql: `INSERT INTO phone_telemetry (id, user_id, device_id, recorded_at, deskflow_foreground_sec, deskflow_background_sec, battery_level, battery_state, platform, platform_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO phone_telemetry (id, user_id, device_id, recorded_at, deskflow_foreground_sec, deskflow_background_sec, unlock_count, battery_level, battery_state, platform, platform_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           id,
           userId,
@@ -54,6 +57,7 @@ export async function phoneRoutes(app: FastifyInstance) {
           recorded_at,
           deskflow_usage?.foreground_seconds ?? 0,
           deskflow_usage?.background_seconds ?? 0,
+          deskflow_usage?.unlock_count ?? null,
           battery?.level_percent ?? null,
           battery?.state ?? null,
           device?.platform ?? null,
