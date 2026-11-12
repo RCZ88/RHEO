@@ -25816,9 +25816,22 @@ if (!gotTheLock) {
                 const nextRev = next.revision ?? 0;
                 const nextDisplay = next.displayMs ?? 0;
                 const prevDisplay = prev?.displayMs ?? 0;
-                // Reject stale revisions within the same store epoch.
-                const staleRev = nextRev > 0 && prevRev > 0 && nextRev <= prevRev;
-                if (staleRev) {
+                // THE FREEZE FIX (proven by sw-report forensics 2026-11-12: app reported
+                // 3285647→3327672 rising while main kept 3129000 — every per-second report
+                // rejected). `revision` only increments on authoritative mutations
+                // (start/stop/sync/reset), NOT on per-second ticks, so `nextRev <= prevRev`
+                // was TRUE on every tick and the cache froze forever at the last accepted
+                // value — the pill "stuck", and the expanded panel kept snapping back to the
+                // same stale number ("resets to whatever the pill is showing").
+                //
+                // A report is STALE only if it would move the clock BACKWARDS without an
+                // epoch change: an older revision, or the same epoch (same revision AND same
+                // resetCount) with a lower display. Rising ticks — the normal path — and
+                // any revision/reset bump are accepted. The zero-flash guard below still
+                // applies to accepted reports.
+                const stale = nextRev > 0 && prevRev > 0 && nextRev < prevRev
+                    || (nextRev === prevRev && nextReset === prevReset && nextDisplay < prevDisplay);
+                if (stale) {
                     // keep previous
                 } else if (nextReset !== prevReset || nextDisplay > 0 || prevDisplay === 0) {
                     haloStopwatchPayload = next;

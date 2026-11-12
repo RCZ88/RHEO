@@ -146,7 +146,13 @@ active,
         gap: 4,
         /* INSET, not full-bleed — the frame is 560 wide and the rail 534, so 13px per side. */
         marginInline: inset,
+        /* THE 4-TAB RULE. Four labelled tabs + the pin need ~510px at Medium, and a clamped
+         * display hands this panel less. The rail must SHRINK (labels truncate, targets stay
+         * 44px) — never overflow the fixed 134px panel, and never grow the panel taller. The
+         * buttons themselves do the truncating; this only lets the row give way. */
+        minWidth: 0,
         height: 44,
+        flexShrink: 0,
         /* NO PADDING. The rail is 44 tall and every tab must be a 44x44 touch target; `padding: 4`
          * shrank the buttons to 36, which is why they felt small and hard to hit. The rail is
          * full-bleed inside its own 44px box. */
@@ -176,7 +182,7 @@ active,
             data-active={isActive ? 'true' : 'false'}
           >
             <Icon size={14} aria-hidden="true" />
-            {!iconOnly && <span>{label}</span>}
+            {!iconOnly && <span className="halo-tab-label">{label}</span>}
           </button>
         );
       })}

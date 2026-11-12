@@ -786,6 +786,79 @@ html.light .halo-root {
 	background: transparent;
 }
 
+/* THE 4-TAB RULE (2026-11-14). Four labelled tabs + the pin need ~510px at Medium, and a
+ * clamped display hands the panel less. The tab TRUNCATES — the icon stays, the label
+ * ellipsises — so the rail can give way horizontally without ever growing the panel taller
+ * or pushing the pin out of the window. min-width keeps the 44px touch target (board 4:
+ * 44x44 at EVERY size); the label span is what actually shrinks. */
+.halo-tab > svg {
+	flex-shrink: 0;
+}
+
+.halo-tab-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ══ DRAG DISCOVERABILITY — the hold-to-drag gesture existed in the shipped build and was
+   invisible ("WHERES THE SOMETHING THAT I CAN DRAGG TO ADJUST THE POSITION???").
+
+   The affordance is a hint chip that fades in BELOW the pill after a 400ms hover — long
+   enough to never flicker on a passing cursor, early enough to be found while looking for
+   it. Absolute + pointer-events:none, so it shifts NOTHING and eats NO clicks: the pill's
+   own gesture chain is untouched. While dragging it hides (data-halo-dragging on the pill
+   body). All transform/opacity — PAINT Gate E. `:has()` is the whole state machine: no JS
+   timers, no hover state in React. */
+.halo-drag-hint {
+	position: absolute;
+	left: 50%;
+	top: calc(100% + 6px);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	padding: 0 10px;
+	border: 1px solid var(--halo-border);
+	border-radius: 999px;
+	background: var(--halo-bg-raised);
+	box-shadow: var(--halo-shadow);
+	color: var(--halo-muted);
+	font-size: var(--halo-t-label);
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateX(-50%) translateY(-3px);
+	transition: opacity 150ms var(--halo-move-ease, cubic-bezier(0.16, 1, 0.3, 1)) 400ms,
+		transform 150ms var(--halo-move-ease, cubic-bezier(0.16, 1, 0.3, 1)) 400ms;
+	z-index: 10;
+}
+
+/* Hover the pill (and not be mid-drag) → the chip speaks. 400ms is in the transition DELAY,
+   so both the enter and the exit are plain CSS. */
+.halo-surface:has([data-halo-dragging='false']:hover) .halo-drag-hint {
+	opacity: 1;
+	transform: translateX(-50%) translateY(0);
+}
+
+/* A drag in progress hides it instantly — the user has already found it. */
+.halo-surface:has([data-halo-dragging='true']) .halo-drag-hint {
+	transition-delay: 0ms;
+	opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.halo-drag-hint {
+		/* The fade stays (it is an opacity change, not movement); the translate does not. */
+		transform: translateX(-50%);
+		transition: opacity 150ms ease 400ms;
+	}
+	.halo-surface:has([data-halo-dragging='false']:hover) .halo-drag-hint {
+		transform: translateX(-50%);
+	}
+}
+
 .halo-tab--icon-only {
 	flex: 1;
 	padding-inline: 0;

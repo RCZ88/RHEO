@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
-import { Mic, Pause, Pin, Play, RotateCcw, Timer } from 'lucide-react';
+import { GripHorizontal, Mic, Pause, Pin, Play, RotateCcw, Timer } from 'lucide-react';
 import { StopwatchHero } from './StopwatchHero';
 import { CompactPill, type CompactKind } from './CompactPill';
 import { FocusPageRow, type HaloFocusState } from './FocusPageRow';
@@ -1369,6 +1369,13 @@ const inBrowser = currentApp.category === 'Browser';
    * correct default for the common case (a display wide enough to fit it unchanged) and it
    * costs one frame on the clamped one. */
   const squeeze = geom.squeeze || 1;
+  /* THE 4-TAB RULE, RENDERER HALF. When main had to clamp the box (`squeeze < 1`), the type
+   * floor (11px) keeps the labels at full width while the panel narrows — so labelled tabs
+   * can no longer be guaranteed to fit next to the pin. The layout adapts the way sizes.ts
+   * prescribes ("the LAYOUT adapts — padding, gaps, which rows show — not the font"): labels
+   * drop, icons stay, every target remains 44px. Unclamped presets keep their designed
+   * labels (Small is already icon-only via `iconOnlyTabs`). */
+  const railIconOnly = size.iconOnlyTabs || squeeze < 0.999;
   const width = expanded ? geom.expanded.width : geom.compact.width;
   const height = expanded ? geom.expanded.height : geom.compact.height;
 
@@ -1832,6 +1839,16 @@ const inBrowser = currentApp.category === 'Browser';
         {!expanded && showPill && (
           <div
             data-halo-pill-body="true"
+            /* DRAG DISCOVERABILITY. The hold-and-drag gesture has shipped since the curation
+             * round, but nothing on the pill said so — "WHERES THE SOMETHING THAT I CAN DRAGG
+             * TO ADJUST THE POSITION???". Three answers, all zero-layout-shift:
+             *   1. cursor: grab (below, already) — the pointer itself says "movable".
+             *   2. this native title — the fallback for AT and for any environment where the
+             *      CSS :has() chip cannot resolve.
+             *   3. the `.halo-drag-hint` chip below the pill (CSS-driven, 400ms hover delay),
+             *      which reads the data attribute set here. */
+            title="Hold + drag to move · double-click to reset"
+            data-halo-dragging={dragging ? 'true' : 'false'}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               dragStartRef.current = {
@@ -1925,6 +1942,16 @@ const inBrowser = currentApp.category === 'Browser';
                 />
               }
             />
+          </div>
+        )}
+
+        {/* THE DRAG HINT — a sibling of the pill body, not a child, because `.halo-compact`
+         * clips its children (`overflow: hidden`) and the chip lives BELOW the pill. Pure CSS
+         * state machine via :has() — see the `.halo-drag-hint` block in halo.css. */}
+        {!expanded && showPill && (
+          <div className="halo-drag-hint" aria-hidden="true">
+            <GripHorizontal size={11} aria-hidden="true" />
+            <span>Hold + drag to move · double-click to reset</span>
           </div>
         )}
 
@@ -2151,11 +2178,19 @@ const inBrowser = currentApp.category === 'Browser';
 
         {/* ══ THE FIGMA LAYOUT — bottom, raised, inset ═════════════════════════════ */}
         {expanded && prefs.uiVersion === 'figma' && (
-          <div className="flex items-center" style={{ gap: 6 }}>
+          <div
+            className="flex items-center"
+            /* THE RAIL IS SACRED. `marginTop: auto` pins the row to the panel's bottom edge no
+             * matter what the content rows above it do, and `flexShrink: 0` refuses to let the
+             * column compress the 44px band — the two ways a rail could ever leave the window.
+             * The page rows are fixed-height with their own internal scroll, so the pinning is
+             * a no-op at the designed heights and pure insurance everywhere else. */
+            style={{ gap: 6, flexShrink: 0, marginTop: 'auto', minWidth: 0 }}
+          >
             <HaloTabRail
               active={tab}
               onSelect={setTab}
-              iconOnly={size.iconOnlyTabs}
+              iconOnly={railIconOnly}
               inset={size.padding}
               order={visiblePageSeq}
               hidden={prefs.pages?.hidden}
