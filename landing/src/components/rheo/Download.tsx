@@ -35,18 +35,18 @@ const VAULT_FACTS = [
 // ── LAYERS instrument (GLM RESULT.md L1–L7) ─────────────────────────────
 // Replaces the hairline Exploded figure in the LAYERS tab with a hand-built,
 // clickable stack of four recognizable zinc objects plus a separate
-// Connections control (not a fifth layer). Sweep integration (L5): pointer
-// events dispatched on the STAGE bubble UP to it, so the listener attaches to
-// the stage element — never this component's root — and maps figure x 40→360
-// (scaled by k) to separation rest 0.18 → open 1.0. Selection never replays
-// the sweep; one selection at a time; clicking the active item returns to the
-// overview. Exact copy below is verbatim from GLM's L3.
+// Connections control (not a fifth layer). Sweep integration (L5): real
+// pointer moves bubble up to the stage element and the synthetic sweep is
+// dispatched on it directly, so the listener attaches to the stage — it maps
+// figure x 40→360 (k = stage width / 400) to separation rest 0.18 → open 1.0.
+// Selection never replays the sweep; one selection at a time; clicking the
+// active item returns to the overview. Exact copy below is verbatim from GLM's L3.
 
 type LayerId = "renderer" | "main" | "sqlite" | "disk";
 type LayerSelection = LayerId | "connections";
 
 const REST_SEP = 0.18;
-const LAYERS_VB_W = 400; // reference svg viewBox width → k = pxWidth / 400
+const LAYERS_VB_W = 400; // the stage is 400 figure units wide (GAP4, shared with dispatchPointer)
 
 const NET_LINK = { color: "#f4f4f5", textDecoration: "underline", textUnderlineOffset: 3 } as const;
 
@@ -215,21 +215,18 @@ function LayersStack({
   selected: LayerSelection | null;
   onSelect: (s: LayerSelection | null) => void;
 }) {
-  // k calibration target: during a narrative sweep, scaleK(stage) reads the
-  // first svg inside the stage — which is THIS reference in layers mode — so
-  // figure x 40→360 maps to its 10%→90% width. Computing xFig the same way
-  // here makes the sweep dispatch and a real pointer hover the exact same
-  // roundtrip (L5).
-  const refRef = useRef<SVGSVGElement>(null);
+  // GAP4 mapping shared with dispatchPointer: the stage is 400 figure units
+  // wide (k = rect.width / 400), so the synthetic sweep and a real pointer
+  // hover are the exact same roundtrip — x 40 → separation rest 0.18, x 360 →
+  // open 1.0 (L5).
   const [sep, setSep] = useState(REST_SEP);
 
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
     const onMove = (e: PointerEvent) => {
-      const w = refRef.current?.getBoundingClientRect().width || stage.clientWidth;
-      const k = w / LAYERS_VB_W;
-      const xFig = (e.clientX - stage.getBoundingClientRect().left) / k;
+      const r = stage.getBoundingClientRect();
+      const xFig = (e.clientX - r.left) / (r.width / LAYERS_VB_W);
       const t = Math.min(1, Math.max(0, (xFig - 40) / 320));
       setSep(REST_SEP + (1 - REST_SEP) * t);
     };
@@ -250,15 +247,6 @@ function LayersStack({
 
   return (
     <div style={{ position: "relative" }}>
-      <svg
-        ref={refRef}
-        viewBox={`0 0 ${LAYERS_VB_W} 220`}
-        width="100%"
-        height={220}
-        aria-hidden="true"
-        focusable="false"
-        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-      />
       {/* the four layers — native buttons in a group, NOT a nested tablist (L2) */}
       <div
         role="group"
@@ -430,35 +418,58 @@ function LayerDetail({ selected, rm }: { selected: LayerSelection | null; rm: bo
   );
 }
 
-// Synthetic pointer primitives (Path B; GLM round 03 V4/V5).
-// Per-event rect re-read; buttons =1 while pressed (0 on up); down at pts[0],
-// move at pts[1..], up at pts[last]. Points are px offsets from the stage
-// element's top-left, already scaled by k.
+// Synthetic pointer primitives (Path B; rev-2 per GLM round 05, live-measured).
+// Every dispatch happens ON the figure's own stage element — hairline's
+// pointer() listeners sit on the descendant [data-hairline] stage, and
+// parent-targeted events never enter a child's propagation path (the old
+// panel-container dispatch reached the figure zero times on the live site).
+// Coordinates are FIGURE space (svg viewBox units, 400 wide); each event
+// re-reads the rect and scales by k = rect.width / 400, so the synthetic
+// sweep and a real pointer hover share one mapping at every window size.
+//
+// Why the vault lap is adaptive (all measured on the deployed figure,
+// hairline@0.5.1):
+//  · open needs |wrap(a−40)| < 0.8 AND |w| < 6 — a fast crossing never fires;
+//    the dial must SETTLE on detent 40.
+//  · the true dial center is (178.79, 180.56); the old orbit (200,162) R25
+//    did not enclose it (distance 28.2 > 25, winding 0) — the dial wobbled
+//    and coasted to detent 00. It never opened.
+//  · WMAX2 = 150 dial-units/s caps travel at ~96 units per 640ms; a full-turn
+//    catch (+110 from rest 30) needs ≥1.1s → N = round(Δ/1.93) × 20ms.
+//  · velocity profile accel .12 / hold .46 / decel .26 / creep .16 keeps the
+//    creep tail under the |w| < 6 open gate; the settle spring snaps the
+//    catch ~+212..244ms after the final pointerup.
 type Pt = [number, number];
 
 function dispatchPointer(
   el: HTMLElement,
-  type: "pointerdown" | "pointermove" | "pointerup",
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointerleave",
   x: number,
   y: number,
 ) {
-  const rect = el.getBoundingClientRect();
+  const rect = el.getBoundingClientRect(); // per event, like the reference
+  const k = rect.width / 400;
   el.dispatchEvent(
     new PointerEvent(type, {
-      clientX: rect.left + x,
-      clientY: rect.top + y,
+      clientX: rect.left + x * k,
+      clientY: rect.top + y * k,
       bubbles: true,
       cancelable: true,
       pointerId: 1,
       isPrimary: true,
       pointerType: "mouse",
-      buttons: type === "pointerup" ? 0 : 1,
+      buttons: type === "pointerup" || type === "pointerleave" ? 0 : 1,
     }),
   );
 }
 
-// Synchronous pass — reduced-motion: every step dispatched in one frame
-// (state still changes; all 32 steps kept for angle-delta integrators).
+/** The vault figure's own stage: hairline sets data-hairline="vault" on it. */
+function figureStage(stage: HTMLElement): HTMLElement | null {
+  return stage.querySelector<HTMLElement>('[data-hairline="vault"]');
+}
+
+// Synchronous pass — reduced motion: every step dispatched in one frame
+// (state still changes; integrators see every position).
 function sweep(el: HTMLElement, points: Pt[]): Promise<void> {
   for (let i = 0; i < points.length; i++) {
     const type =
@@ -468,7 +479,7 @@ function sweep(el: HTMLElement, points: Pt[]): Promise<void> {
   return Promise.resolve();
 }
 
-// Timed pass — 40ms-grid steps (GLM V5).
+// Timed pass — 20ms-grid steps.
 function sweepTimed(el: HTMLElement, points: Pt[], stepMs: number): Promise<void> {
   return new Promise((resolve) => {
     let i = 0;
@@ -486,44 +497,159 @@ function sweepTimed(el: HTMLElement, points: Pt[], stepMs: number): Promise<void
   });
 }
 
-// Figure-space constants (GLM V4). Center = LAP bbox: x (128+272)/2,
-// y (118+206)/2. Orbit R1=25 sits between RD=17 and the LAP orbit 44–73;
-// pointerdown at R0=12 (< RD, on the dial). Full CW lap guarantees crossing
-// the 40° COMBO reference whether it is an absolute dial angle or cumulative.
-const DIAL_CENTER: Pt = [200, 162];
-const R0 = 12;
-const R1 = 25;
-const STEPS = 32;
+/* ── Dial lap: measured constants (hairline@0.5.1, vault mount) ── */
+
+const DIAL_CENTER: Pt = [178.79, 180.56]; // tick-ring centroid, stage units
+const R_MIN = 12; // grab radius (< RD 17, on the dial)
+const R_MAX = 30; // orbit radius — encloses the dial center
+const DEG_PER_UNIT = 4.68; // pointer degrees per dial unit (measured, R30 orbit)
+const UNITS_PER_STEP = 1.93; // dial travel per 20ms step (clamp-limited, measured)
+const OPEN_DETENT = 40;
 const STEP_MS = 20;
 
-// k scales figure space → stage px, read from the LIVE SVG (never assume 1).
-function scaleK(stage: HTMLElement): number {
-  const svg = stage.querySelector("svg");
-  const vbW = svg?.viewBox.baseVal.width || 400;
-  const px = svg?.getBoundingClientRect().width || stage.clientWidth;
-  return px / vbW;
-}
-
-function dialLap(k: number): Pt[] {
-  const [cx, cy] = DIAL_CENTER;
-  const pts: Pt[] = [];
-  for (let i = 0; i <= STEPS; i++) {
-    const t = i / STEPS;
-    const th = ((180 + 360 * t) * Math.PI) / 180; // increasing θ = CW in y-down space
-    const r = R0 + (R1 - R0) * Math.min(1, (t * STEPS) / 3); // radial ramp over first 3 steps
-    pts.push([(cx + r * Math.cos(th)) * k, (cy + r * Math.sin(th)) * k]);
+// velocity shape as a fraction of mean: accel .12 / hold .46 / decel .26 / creep .16
+function vShape(t: number): number {
+  if (t < 0.12) {
+    const u = t / 0.12;
+    return 0.5 * (1 - Math.cos(Math.PI * u));
   }
-  return pts;
+  if (t < 0.58) return 1;
+  if (t < 0.84) {
+    const u = (t - 0.58) / 0.26;
+    return 1 + (0.03 - 1) * 0.5 * (1 - Math.cos(Math.PI * u));
+  }
+  return 0.03; // creep: ~3% of mean → dial w converges under the open gate
 }
 
-// GAP4 sweep across the stage at dial-center height: x 40→360 open, 360→40 close.
-function layersSweep(k: number, reverse = false): Pt[] {
-  const y = DIAL_CENTER[1] * k;
-  const n = reverse ? 24 : STEPS;
+// normalized position p(t) in [0,1] (trapezoid integral, numerically normalized)
+function posAt(t: number): number {
+  const M = 200;
+  const f = (x: number) => {
+    let s = 0;
+    for (let j = 0; j < M; j++)
+      s += 0.5 * (vShape((x * j) / M) + vShape((x * (j + 1)) / M)) / M;
+    return s * x;
+  };
+  return f(t) / f(1);
+}
+
+const orbit = (deg: number, rad: number): Pt => {
+  const th = (deg * Math.PI) / 180;
+  return [DIAL_CENTER[0] + rad * Math.cos(th), DIAL_CENTER[1] + rad * Math.sin(th)];
+};
+
+/**
+ * Probe the dial's resting position: hover at the grab point (last2 === null
+ * after a leave, so this moves nothing), wait two rAF (the read updates on
+ * hairline's board tick), parse "dial NN" from the onRead stream.
+ */
+async function probeDial(
+  stage: HTMLElement,
+  readRef: { current: string },
+): Promise<number> {
+  dispatchPointer(stage, "pointermove", ...orbit(180, R_MIN));
+  await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  const m = /dial (\d+)/.exec(readRef.current);
+  return m ? parseInt(m[1], 10) : 30; // fresh mounts rest at REST16 = 30
+}
+
+/**
+ * The dial lap. Adaptive full turn that creeps into detent 40 and lets the
+ * settle spring snap the catch: setOpen fires ~+212..244ms after the last
+ * pointer event (measured), bolts complete ≤800ms (stagger |i−from|·50 +
+ * 700ms tween). Reduced motion: synchronous dispatch — the move handler
+ * snaps per move, so the dial lands in the catch basin in one frame.
+ */
+async function dialLap(
+  stage: HTMLElement,
+  readRef: { current: string },
+  rm: boolean,
+): Promise<void> {
+  // normalize: if the user left the dial coasting, let it rest first
+  dispatchPointer(stage, "pointerleave", ...orbit(180, R_MIN));
+  const restDeadline = performance.now() + 2500;
+  while (/dial/.test(readRef.current) && performance.now() < restDeadline) {
+    await new Promise<void>((r) => setTimeout(r, 60));
+  }
+  const a0 = await probeDial(stage, readRef);
+
+  let delta = (OPEN_DETENT - a0 + 100) % 100; // dial units to travel
+  if (delta < 60) delta += 100; // guarantee a full-turn gesture
+  const N = Math.max(31, Math.round(delta / UNITS_PER_STEP));
+  const T = N * 20; // ms
+  const theta = DEG_PER_UNIT * delta; // pointer degrees, CW from 180°
+  const point = (i: number, t: number): Pt => {
+    const rad = R_MIN + (R_MAX - R_MIN) * Math.min(1, i / 3); // grab, then orbit
+    return orbit(180 + theta * posAt(t), rad);
+  };
+
+  if (rm) {
+    for (let i = 0; i <= N; i++) {
+      const [x, y] = point(i, i / N);
+      dispatchPointer(
+        stage,
+        i === 0 ? "pointerdown" : i === N ? "pointerup" : "pointermove",
+        x,
+        y,
+      );
+    }
+    dispatchPointer(stage, "pointerleave", ...point(N, 1));
+    return;
+  }
+
+  const t0 = performance.now();
+  let i = 0;
+  await new Promise<void>((resolve) => {
+    const iv = setInterval(() => {
+      if (i > N) {
+        clearInterval(iv);
+        resolve();
+        return;
+      }
+      // wall-clock t: interval jitter self-corrects
+      const t = Math.min(1, (performance.now() - t0) / T);
+      const [x, y] = point(i, t);
+      dispatchPointer(
+        stage,
+        i === 0 ? "pointerdown" : i === N ? "pointerup" : "pointermove",
+        x,
+        y,
+      );
+      i++;
+    }, 20);
+  });
+  dispatchPointer(stage, "pointerleave", ...point(N, 1));
+}
+
+/**
+ * Q4 dev assert — the ONLY open signature: setOpen(true) → light() toggles
+ * class "hi" on the three moving-bolt silhouettes.
+ *   open           → stage.querySelectorAll("path.sil.hi").length === 3
+ *   closed + hover → 1 (dial silhouette)
+ *   closed + idle  → 0 sil + 1 path.nf.hi (the 40 tick)
+ * The onRead string ("dial 40 · open") is NOT stable at rest ("rest") — never
+ * assert on it.
+ */
+function assertVaultOpens(stage: HTMLElement, msAfterLapEnd = 600): void {
+  if (process.env.NODE_ENV === "production") return;
+  setTimeout(() => {
+    const n = stage.querySelectorAll("path.sil.hi").length;
+    if (n !== 3) {
+      console.error(
+        `[hairline] vault did not open within ${msAfterLapEnd}ms of lap end (path.sil.hi = ${n}, expected 3)`,
+      );
+    }
+  }, msAfterLapEnd);
+}
+
+// GAP4 sweep across the stage at mid height: x 40→360 opens the stack,
+// 360→40 collapses it (figure space; dispatchPointer scales per event).
+function layersSweep(reverse = false): Pt[] {
+  const n = reverse ? 24 : 32;
   const pts: Pt[] = [];
   for (let i = 0; i <= n; i++) {
     const x = reverse ? 360 - (320 * i) / n : 40 + (320 * i) / n;
-    pts.push([x * k, y]);
+    pts.push([x, 162]);
   }
   return pts;
 }
@@ -533,12 +659,19 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");
   const [readout, setReadout] = useState<string | null>(null);
+  // Narrative caption, separate from the live read stream: the figure's
+  // onRead("dial NN") fires ~16ms into a lap and would clobber the caption if
+  // they shared one setter (GLM round 05).
+  const [narr, setNarr] = useState<string | null>(null);
   const [tourRunning, setTourRunning] = useState(false);
   // LAYERS selection: renderer|main|sqlite|disk|connections, null = overview.
   // Cleared when a mode transition begins (L5); the LayersStack remount in a
   // crossfade also resets it.
   const [selected, setSelected] = useState<LayerSelection | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  // Synchronous mirror of the figure's read stream — the lap's rest-poll and
+  // probe read this directly (state updates are async).
+  const readRef = useRef("");
 
   // Auto-play the figure tour on mount and on tab switch so users see it's interactive.
   // The tour runs ~12s; after that, stop and let the user drive.
@@ -552,12 +685,15 @@ function FigureInstrument({ rm }: { rm: boolean }) {
     setReadout(selected ? LAYER_COPY[selected].headline : null);
   }, [selected, mode]);
 
-  // V5 narrative timing. VAULT→LAYERS 2,360ms: dial lap 640 → open settle 320
-  // → crossfade window 520 (out 320 / in 400 @ delay 120) → layers sweep 640
-  // → settle 240. LAYERS→VAULT 2,000ms: collapse sweep 480 → hold 240
-  // → crossfade 520 → re-open dial lap 640 → settle 120. Under reduced motion
-  // every duration is 0 (synchronous dispatch; holds skipped). We drive
-  // pointer only — hairline owns the figure's internal springs.
+  // Rev-2 narrative timing (GLM round 05, live-measured). VAULT→LAYERS ≈2,975ms:
+  // adaptive dial lap (~1.14s from rest 30; clamp-limited travel needs ≥1.1s
+  // for a full-turn catch) → open settle 400 (bolts ~87% at 300ms) → crossfade
+  // 520 (sync overlap) → layers sweep 640 → settle 240. LAYERS→VAULT ≈2,935ms:
+  // collapse sweep 480 → hold 240 → crossfade 520 → lap → open settle 400 →
+  // settle 120. Reduced motion: synchronous dispatch, holds skipped — but two
+  // rAFs still bridge each setMode so the incoming figure's listeners exist
+  // before its lap/sweep dispatches. We drive pointer only — hairline owns the
+  // figure's internal springs.
   const runNarrative = async (target: "layers" | "vault") => {
     const stage = stageRef.current;
     if (!stage) {
@@ -566,30 +702,45 @@ function FigureInstrument({ rm }: { rm: boolean }) {
     }
     setTourRunning(true);
     setSelected(null); // L5: clear selection when a mode transition begins
-    setReadout("the vault opens onto the stack");
-    const k = scaleK(stage);
+    setNarr(target === "layers" ? "the vault opens onto the stack" : "the stack closes onto the vault");
+    const settleCrossfade = () =>
+      rm
+        ? new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+        : wait(520);
     if (target === "layers") {
-      await (rm ? sweep(stage, dialLap(k)) : sweepTimed(stage, dialLap(k), STEP_MS));
-      if (!rm) await wait(320);
+      // dial lap on the vault's OWN stage, then the crossfade onto the stack
+      const vStage = figureStage(stage);
+      if (vStage) {
+        await dialLap(vStage, readRef, rm);
+        assertVaultOpens(vStage);
+      }
+      if (!rm) await wait(400); // open settle
       setMode("layers");
-      if (!rm) await wait(520); // crossfade window; incoming handlers attach on mount
+      await settleCrossfade();
       const s2 = stageRef.current ?? stage;
-      const k2 = scaleK(s2);
-      await (rm ? sweep(s2, layersSweep(k2)) : sweepTimed(s2, layersSweep(k2), STEP_MS));
+      await (rm ? sweep(s2, layersSweep(false)) : sweepTimed(s2, layersSweep(false), STEP_MS));
       if (!rm) await wait(240);
     } else {
-      await (rm ? sweep(stage, layersSweep(k, true)) : sweepTimed(stage, layersSweep(k, true), STEP_MS));
+      await (rm ? sweep(stage, layersSweep(true)) : sweepTimed(stage, layersSweep(true), STEP_MS));
       if (!rm) await wait(240);
       setMode("vault");
-      if (!rm) await wait(520);
+      await settleCrossfade();
+      // re-open lap on the freshly mounted vault (rests at 30)
       const s2 = stageRef.current ?? stage;
-      const k2 = scaleK(s2);
-      await (rm ? sweep(s2, dialLap(k2)) : sweepTimed(s2, dialLap(k2), STEP_MS));
-      if (!rm) await wait(120);
+      const vStage = figureStage(s2);
+      if (vStage) {
+        await dialLap(vStage, readRef, rm);
+        assertVaultOpens(vStage);
+      }
+      if (!rm) {
+        await wait(400); // open settle
+        await wait(120);
+      }
     }
     stage.dispatchEvent(
       new PointerEvent("pointerleave", { bubbles: true, pointerId: 1, pointerType: "mouse" }),
     );
+    setNarr(null);
     setReadout(null);
     setTourRunning(false);
   };
@@ -674,25 +825,36 @@ function FigureInstrument({ rm }: { rm: boolean }) {
           minHeight: 220,
         } as React.CSSProperties}
       >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={mode}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 0.9, y: 0 }}
-            exit={{ opacity: 0, y: -8, transition: { duration: rm ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] } }}
-            transition={{
-              duration: rm ? 0 : 0.4,
-              delay: rm ? 0 : 0.12,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-          >
-            {isVault ? (
-              <Vault label="Locked by default; the combination is yours" onRead={setReadout} />
-            ) : (
-              <LayersStack rm={rm} stageRef={stageRef} selected={selected} onSelect={setSelected} />
-            )}
-          </motion.div>
-        </AnimatePresence>
+        {/* sync crossfade (GLM round 05): out 320 / in 400 @ delay 120 overlap
+            in one grid cell — 520ms window, the incoming figure mounts at once */}
+        <div style={{ display: "grid" }}>
+          <AnimatePresence>
+            <motion.div
+              key={mode}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 0.9, y: 0 }}
+              exit={{ opacity: 0, y: -8, transition: { duration: rm ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] } }}
+              transition={{
+                duration: rm ? 0 : 0.4,
+                delay: rm ? 0 : 0.12,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{ gridArea: "1 / 1" }}
+            >
+              {isVault ? (
+                <Vault
+                  label="Locked by default; the combination is yours"
+                  onRead={(v) => {
+                    readRef.current = v;
+                    setReadout(v);
+                  }}
+                />
+              ) : (
+                <LayersStack rm={rm} stageRef={stageRef} selected={selected} onSelect={setSelected} />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
         <p
           className="mono"
@@ -717,20 +879,25 @@ function FigureInstrument({ rm }: { rm: boolean }) {
             const stage = stageRef.current;
             if (!stage) return;
             setTourRunning(true);
-            setReadout(isVault ? "the vault opens onto the stack" : "the stack closes onto the vault");
-            const k = scaleK(stage);
+            setNarr(isVault ? "the vault opens onto the stack" : "the stack closes onto the vault");
             if (isVault) {
-              // dial lap to 40° (COMBO) → bolts draw back; settle 320 (V4/V5)
-              await (rm ? sweep(stage, dialLap(k)) : sweepTimed(stage, dialLap(k), STEP_MS));
-              if (!rm) await wait(320);
+              // adaptive dial lap on the vault's own stage → bolts draw back;
+              // 500ms wait covers the open (+~250) and bolts (~87% at 300ms)
+              const vStage = figureStage(stage);
+              if (vStage) {
+                await dialLap(vStage, readRef, rm);
+                assertVaultOpens(vStage);
+              }
+              if (!rm) await wait(500);
             } else {
               // GAP4 0.18 → 1.0 across the stage; settle 240
-              await (rm ? sweep(stage, layersSweep(k)) : sweepTimed(stage, layersSweep(k), STEP_MS));
+              await (rm ? sweep(stage, layersSweep(false)) : sweepTimed(stage, layersSweep(false), STEP_MS));
               if (!rm) await wait(240);
             }
             stage.dispatchEvent(
               new PointerEvent("pointerleave", { bubbles: true, pointerId: 1, pointerType: "mouse" }),
             );
+            setNarr(null);
             setTourRunning(false);
             setReadout(null);
           }}
@@ -778,7 +945,7 @@ function FigureInstrument({ rm }: { rm: boolean }) {
         }}
       >
         <span style={{ color: "#63636b" }}>read </span>
-        {readout ?? defaultReadout}
+        {narr ?? readout ?? defaultReadout}
       </div>
 
       {isVault ? (
