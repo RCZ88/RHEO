@@ -111,12 +111,12 @@ export const DOWNLOAD_MOTION: MotionEntry[] = [
     reducedMotion: "Static, no pointer response.",
   },
   {
-    name: "exploded-figure",
+    name: "layers-stack",
     tier: "AFFORDANCE",
     component: "Download.tsx",
-    description: "Exploded figure — four layers of the local stack.",
-    provenance: "DIAGRAM — THE FOUR LAYERS: RENDERER · MAIN · SQLITE FILE · YOUR DISK. NO SERVER. NOT A CAPTURE.",
-    reducedMotion: "Static, no pointer response.",
+    description: "Four recognizable objects representing RHEO's local activity-record path.",
+    provenance: "DIAGRAM, not a live system view. Represents renderer, main, SQLite files and local disk. Outbound destinations are documented at /docs/network.",
+    reducedMotion: "Static diagram. Selection remains functional without animation.",
   },
 ];
 
