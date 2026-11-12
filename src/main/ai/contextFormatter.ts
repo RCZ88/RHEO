@@ -6,13 +6,21 @@ export function formatBrainContext(topic: string, result: any): string {
   const lines: string[] = [];
   lines.push(`## Memory — ${topic} (from Context Brain)`);
 
+  // RESULT-2C: show entity NAMES, never raw subjectId/objectId hashes. The
+  // name map comes from the retrieval result's own entities array.
+  const nameOf = (id?: string | null): string => {
+    if (!id) return '?';
+    const e = (result?.entities || []).find((x: any) => x?.id === id);
+    return e?.name || id;
+  };
+
   const facts = (result?.facts || []).slice(0, 8);
   if (facts.length > 0) {
     lines.push('### Facts');
     for (const f of facts) {
       const confidence = typeof f.confidence === 'number' ? f.confidence.toFixed(2) : '?';
-      const objectValue = f.objectLiteral ?? f.objectId ?? '?';
-      lines.push(`- ${f.subjectId} ${f.predicate} ${objectValue} (confidence: ${confidence})`);
+      const objectValue = f.objectLiteral ?? nameOf(f.objectId);
+      lines.push(`- ${nameOf(f.subjectId)} ${f.predicate} ${objectValue} (confidence: ${confidence})`);
     }
   }
 

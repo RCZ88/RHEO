@@ -16,6 +16,26 @@ import * as embeddings from './embeddingService'
 let timers: Array<ReturnType<typeof setInterval>> = []
 let started = false
 let lastRun: Record<string, number> = {}
+let dbRef: any = null
+
+export function setSchedulerDb(db: any) { dbRef = db }
+
+// R2 caveat (RESULT-2C): brain:evaluate reads numeric timestamps from the
+// context_scheduler_state key/value table (`signal_decay.lastRun`,
+// `profile.lastRebuild`) — but that table did not exist and run times were
+// only held in this module's memory, so evaluate could never see a recorded
+// run. Persist after every real run.
+function persistRun(key: string): void {
+  try {
+    if (!dbRef) return
+    dbRef.prepare('CREATE TABLE IF NOT EXISTS context_scheduler_state (key TEXT PRIMARY KEY, value TEXT)').run()
+    dbRef.prepare(
+      'INSERT INTO context_scheduler_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    ).run(key, String(Date.now()))
+  } catch (err: any) {
+    console.warn('[ContextScheduler] state persist failed:', err?.message)
+  }
+}
 
 function logWorker(name: string, detail: string) {
   console.log(`[ContextScheduler] ${name}: ${detail}`)
@@ -47,6 +67,7 @@ function runDecayRecalc() {
       }
     }
     if (updated > 0) logWorker('decay', `re-scored ${updated} signal(s)`)
+    persistRun('signal_decay.lastRun')
   } catch (err: any) {
     console.warn('[ContextScheduler] decay error:', err?.message)
   }
@@ -77,6 +98,7 @@ function runNightlyRebuild() {
   try {
     userContext.rebuildProfile()
     logWorker('rebuild', 'full profile projection rebuilt')
+    persistRun('profile.lastRebuild')
   } catch (err: any) {
     console.warn('[ContextScheduler] rebuild error:', err?.message)
   }

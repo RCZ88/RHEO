@@ -10,6 +10,8 @@ let dbRef: any = null;
 
 export function setBrainDb(db: any) { dbRef = db; }
 
+import { cardinalityOf } from './predicates'
+
 // ═══ Episode Management ═══
 
 export interface Episode {
@@ -22,14 +24,28 @@ export interface Episode {
   metadata?: Record<string, any>
 }
 
-export function logEpisode(source: string, content: string, sourceRef?: string, metadata?: Record<string, any>): string {
+export function logEpisode(source: string, content: string, sourceRef?: string, metadata?: Record<string, any>, occurredAt?: string): string {
   if (!dbRef) return ''
   const id = `ep_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const now = new Date().toISOString()
+  // F7 (RESULT-2C): a historical capture may carry its real timestamp. Validate
+  // it and preserve the instant it names; never silently replace an invalid or
+  // future-stamped value with now — say so instead.
+  let occurred = now
+  if (occurredAt) {
+    const t = new Date(occurredAt).getTime()
+    if (Number.isNaN(t)) {
+      console.warn(`[Brain] logEpisode: invalid occurredAt "${occurredAt}" for ${source} episode — falling back to now`)
+    } else if (t > Date.now() + 60000) {
+      console.warn(`[Brain] logEpisode: occurredAt in the future (${occurredAt}) for ${source} episode — clamping to now`)
+    } else {
+      occurred = new Date(t).toISOString()
+    }
+  }
   dbRef.prepare(`
     INSERT INTO context_episodes (id, source, source_ref, content, occurred_at, ingested_at, metadata)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, source, sourceRef || null, content, now, now, metadata ? JSON.stringify(metadata) : null)
+  `).run(id, source, sourceRef || null, content, occurred, now, metadata ? JSON.stringify(metadata) : null)
   return id
 }
 
@@ -122,14 +138,24 @@ export function addFact(subjectId: string, predicate: string, objectLiteral: str
   const id = `fact_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const now = new Date().toISOString()
 
-  // Check for existing current fact with same subject+predicate
-  const existing = dbRef.prepare(
-    'SELECT id FROM context_facts WHERE subject_id = ? AND predicate = ? AND valid_to IS NULL'
-  ).get(subjectId, predicate)
+  if (cardinalityOf(predicate) === 'multi') {
+    // F12 (RESULT-2C): multi-valued predicate — different active objects must
+    // coexist ("discussed" is one of many topics). Only an exact
+    // (subject, predicate, object) match deduplicates.
+    const dup = dbRef.prepare(
+      'SELECT id FROM context_facts WHERE subject_id = ? AND predicate = ? AND valid_to IS NULL AND object_id IS ? AND object_literal = ?'
+    ).get(subjectId, predicate, objectId || null, objectLiteral)
+    if (dup) return dup.id
+  } else {
+    // Check for existing current fact with same subject+predicate
+    const existing = dbRef.prepare(
+      'SELECT id FROM context_facts WHERE subject_id = ? AND predicate = ? AND valid_to IS NULL'
+    ).get(subjectId, predicate)
 
-  if (existing) {
-    // Close the old fact (bitemporal contradiction handling)
-    dbRef.prepare('UPDATE context_facts SET valid_to = ? WHERE id = ?').run(now, existing.id)
+    if (existing) {
+      // Close the old fact (bitemporal contradiction handling)
+      dbRef.prepare('UPDATE context_facts SET valid_to = ? WHERE id = ?').run(now, existing.id)
+    }
   }
 
   dbRef.prepare(`
@@ -462,7 +488,7 @@ export function getEpisodesList(opts: { source?: string; search?: string; limit?
   // Enrich with extraction status from jobs table if it exists
   try {
     const jobRows = dbRef.prepare('SELECT episode_id, status FROM context_extraction_jobs').all()
-    const jobMap = new Map(jobRows.map((j: any) => [j.episode_id, j.status]))
+    const jobMap = new Map<string, string>(jobRows.map((j: any) => [j.episode_id, j.status]))
     for (const it of items) it.extractionStatus = jobMap.get(it.id) || 'none'
   } catch { /* jobs table may not exist yet */ }
   return { items, total }

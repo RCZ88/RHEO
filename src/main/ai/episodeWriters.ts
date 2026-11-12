@@ -5,13 +5,21 @@
  */
 
 import * as brain from './contextBrain'
+import { redactSecrets } from './redact'
+import { extractConcepts } from './conceptExtraction'
 
 // Sources worth LLM enrichment (sparse + descriptive). Routine sources
 // (finance transactions, chat turns, terminal) are covered by regex signals.
 const EXTRACTION_SOURCES = new Set(['goals', 'life_phase', 'deadlines', 'connector', 'manual', 'external_ai', 'voice_note', 'reflection'])
 
+// B2 (RESULT-M6 WP-B): redact secrets at the episode boundary — before text is
+// stored, embedded, extracted or served. Every writer in this file logs
+// through logEp, never through brain.logEpisode directly.
+const logEp = (source: string, content: string, ref?: string, meta?: Record<string, any>, occurredAt?: string) =>
+  brain.logEpisode(source, redactSecrets(content), ref, meta, occurredAt)
+
 function logAndQueue(source: string, content: string, sourceRef?: string, metadata?: Record<string, any>): string {
-  const epId = brain.logEpisode(source, content, sourceRef, metadata)
+  const epId = logEp(source, content, sourceRef, metadata)
   if (epId && EXTRACTION_SOURCES.has(source) && content.length >= 40) {
     brain.createExtractionJob(epId)
   }
@@ -26,7 +34,7 @@ function logAndQueue(source: string, content: string, sourceRef?: string, metada
 // Goal Coach / AI Health Check buttons, which go through a different path).
 export function writeGoalEpisode(goal: any, action: 'created' | 'completed' | 'updated' | 'deleted') {
   const content = `Goal ${action}: "${goal.title}" (${goal.category || 'general'}) — status: ${goal.status || 'pending'}${goal.description ? ` — ${goal.description}` : ''}`
-  const epId = brain.logEpisode('goals', content, goal.id, { goalId: goal.id, action, category: goal.category })
+  const epId = logEp('goals', content, goal.id, { goalId: goal.id, action, category: goal.category })
 
   // Extract entity
   const entityId = brain.upsertEntity('goal', goal.title, [goal.category].filter(Boolean))
@@ -54,7 +62,7 @@ export function writeFinanceEpisode(type: 'transaction' | 'budget' | 'wallet' | 
       content = `Subscription ${action}: ${data.name} — ${data.price} ${data.currency || 'IDR'}/${data.billing_cycle || 'monthly'}`
       break
   }
-  const epId = brain.logEpisode('finance', content, data.id, { type, action })
+  const epId = logEp('finance', content, data.id, { type, action })
   if (epId && content.length >= 20) {
     try { brain.createExtractionJob(epId); } catch (_e) { /* best-effort */ }
   }
@@ -78,7 +86,7 @@ export function writeDeadlineEpisode(deadline: any, action: 'created' | 'updated
 // ═══ Terminal Session Episode Writer ═══
 export function writeTerminalEpisode(session: any, message: string, role: 'user' | 'agent') {
   const content = `[Terminal ${role}] ${message.slice(0, 500)}`
-  const epId = brain.logEpisode('terminal', content, session.id, {
+  const epId = logEp('terminal', content, session.id, {
     sessionId: session.id,
     agentType: session.agent_type,
     topic: session.topic,
@@ -99,7 +107,7 @@ export function writeAiChatEpisode(messages: Array<{ role: string; content: stri
   for (const msg of messages) {
     if (!msg.content || msg.content.length < 10) continue
     const content = `[AI Chat ${msg.role}] ${msg.content.slice(0, 1000)}`
-    const epId = brain.logEpisode('deskflow_ai', content, threadDate, { threadDate, role: msg.role })
+    const epId = logEp('deskflow_ai', content, threadDate, { threadDate, role: msg.role })
     if (epId && content.length >= 20) {
       try { brain.createExtractionJob(epId); } catch (_e) { /* best-effort */ }
     }
@@ -108,25 +116,30 @@ export function writeAiChatEpisode(messages: Array<{ role: string; content: stri
 
 // ═══ Life Phase Episode Writer ═══
 export function writeLifePhaseEpisode(phase: any, action: 'created' | 'updated' | 'reflected') {
-  const content = `Life phase ${action}: "${phase.title}" (${phase.category || 'general'}) — ${phase.start_year}/${phase.start_month} to ${phase.end_year || 'ongoing'}/${phase.end_month || '?'}`
+  // Accept both DB rows (snake_case) and LifePhase objects (camelCase).
+  const sy = phase.start_year ?? phase.startYear
+  const sm = phase.start_month ?? phase.startMonth
+  const ey = phase.end_year ?? phase.endYear
+  const em = phase.end_month ?? phase.endMonth
+  const content = `Life phase ${action}: "${phase.title}" (${phase.category || 'general'}) — ${sy}/${sm} to ${ey || 'ongoing'}/${em || '?'}`
   const epId = logAndQueue('life_phase', content, phase.id)
 
   const entityId = brain.upsertEntity('concept', phase.title, [phase.category].filter(Boolean))
-  if (phase.reflection) brain.addFact(entityId, 'has_reflection', phase.reflection.slice(0, 200), epId)
-  if (phase.milestones) {
-    try {
-      const milestones = JSON.parse(phase.milestones)
-      for (const m of milestones.slice(0, 5)) {
-        brain.addFact(entityId, 'milestone', m.title || m, epId)
-      }
-    } catch {}
+  if (phase.reflection) brain.addFact(entityId, 'has_reflection', String(phase.reflection).slice(0, 200), epId)
+  let milestones: any[] = []
+  try {
+    milestones = typeof phase.milestones === 'string' ? JSON.parse(phase.milestones) : (Array.isArray(phase.milestones) ? phase.milestones : [])
+  } catch { /* bad JSON: skip milestones */ }
+  for (const m of milestones.slice(0, 5)) {
+    const label = typeof m === 'string' ? m : (m?.label || m?.title)
+    if (label) brain.addFact(entityId, 'milestone', String(label).slice(0, 200), epId)
   }
 }
 
 // ═══ Connector Episode Writer ═══
 export function writeConnectorEpisode(connector: any, items: any[], action: 'synced' | 'new_items') {
   const content = `Connector ${action}: ${connector.displayName || connector.name} — ${items.length} items`
-  const epId = logAndQueue('connector', content, connector.id, {
+  logAndQueue('connector', content, connector.id, {
     connectorType: connector.type,
     provider: connector.provider,
     itemCount: items.length,
@@ -148,12 +161,12 @@ export function writeAiContextEpisode(capture: { id?: number; provider: string; 
   const summary = capture.messages.map(m => `${m.role}: ${m.content.slice(0, 200)}`).join('\n');
   const content = `External AI conversation on ${providerName}${capture.title ? ` (${capture.title})` : ''}${capture.url ? `\nURL: ${capture.url}` : ''}\nMessages: ${capture.messages.length}\n\n${summary.slice(0, 1500)}`;
   const sourceRef = capture.id ? `ai_context_capture:${capture.id}` : (capture.url || providerName);
-  const epId = brain.logEpisode('external_ai', content, sourceRef, {
+  const epId = logEp('external_ai', content, sourceRef, {
     provider: providerName,
     messageCount: capture.messages.length,
     url: capture.url,
     title: capture.title,
-  });
+  }, capture.timestamp);
   if (epId && content.length >= 40) {
     brain.createExtractionJob(epId);
   }
@@ -162,6 +175,21 @@ export function writeAiContextEpisode(capture: { id?: number; provider: string; 
   if (entityId && epId) {
     brain.addFact(entityId, 'has_conversation', `External AI conversation (${capture.messages.length} messages)`, epId);
   }
+
+  // Lightweight concept extraction so the graph shows real structure even before
+  // the (optional) LLM extraction worker runs. F11 (RESULT-2C): this used to
+  // carry its own inline copy of the extractor while the shared deterministic
+  // extractor also existed — the swap means exactly ONE extractor runs at
+  // capture time.
+  try {
+    const fullText = (capture.messages || []).map((m: any) => m.content || '').join(' ').slice(0, 4000)
+    for (const c of extractConcepts(fullText, providerName)) {
+      const cid = brain.upsertEntity('concept', c, [])
+      if (cid && entityId && epId) {
+        brain.addFact(entityId, 'discussed', c, epId, cid)
+      }
+    }
+  } catch (e) { /* never let extraction break capture */ }
 }
 
 // ── Content Engine → Context Brain ──────────────────────────
@@ -179,7 +207,7 @@ export function writeContentEngineEpisode(p: {
   const source = 'content_engine';
   const content = `[${p.kind}] ${p.title}\n${p.detail || ''}`.slice(0, 1500);
   const sourceRef = p.refId != null ? `content:${p.kind}:${p.refId}` : undefined;
-  const epId = brain.logEpisode(source, content, sourceRef, { kind: p.kind, ...(p.extra || {}) });
+  const epId = logEp(source, content, sourceRef, { kind: p.kind, ...(p.extra || {}) });
   if (epId && content.length >= 40) brain.createExtractionJob(epId);
   const entityId = brain.upsertEntity('content_asset', p.title.slice(0, 80), [p.kind, 'content_engine']);
   if (entityId && epId) {
@@ -201,7 +229,7 @@ export function writeLearnLessonEpisode(p: {
   const source = 'learn_lesson';
   const content = `[learn] ${p.title}${p.topic ? ` (topic: ${p.topic})` : ''}\n${p.summary || ''}`.slice(0, 1500);
   const sourceRef = `learn:lesson:${p.lessonId}`;
-  const epId = brain.logEpisode(source, content, sourceRef, { lessonId: p.lessonId, topic: p.topic });
+  const epId = logEp(source, content, sourceRef, { lessonId: p.lessonId, topic: p.topic });
   if (epId && content.length >= 40) brain.createExtractionJob(epId);
   const entityId = brain.upsertEntity('lesson', p.title.slice(0, 80), [p.topic || 'learn', 'lyceum']);
   if (entityId && epId) brain.addFact(entityId, 'taught_in', p.topic || 'learn', epId);

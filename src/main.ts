@@ -18002,13 +18002,16 @@ function initContextSystem() {
         } catch (e: any) { console.warn('[ContextBrain] LLM caller wiring failed:', e?.message); }
         // Start background schedulers
         try {
-            const { startSchedulers } = require('./main/ai/contextScheduler');
+            const { setSchedulerDb, startSchedulers } = require('./main/ai/contextScheduler');
+            setSchedulerDb(db);
             startSchedulers();
         } catch (e: any) { console.warn('[ContextBrain] Scheduler start failed:', e?.message); }
         // History backfill — mine existing data into the brain (idempotent)
         try {
             const { setContextDb, runContextBackfill } = require('./main/ai/contextBackfill');
             setContextDb(db);
+            // brainContext (prompt enrichment policy layer) needs the same db handle
+            try { const { setBrainContextDb } = require('./main/ai/brainContext'); setBrainContextDb(db); } catch (e: any) { console.warn('[BrainContext] init failed:', e?.message); }
             setTimeout(() => { try { runContextBackfill() } catch {} }, 3000);
         } catch (e: any) { console.warn('[ContextBackfill] init failed:', e?.message); }
         // Rebuild profile on startup from existing data
@@ -18249,28 +18252,15 @@ electron_1.ipcMain.handle('brain:export-subgraph', async (_event, opts?: any) =>
 electron_1.ipcMain.handle('brain:enrich-prompt', async (_event, opts?: any) => {
     try {
         const prompt = opts?.prompt || ''
-        const budget = opts?.tokenBudget || 800
-        const health = await (async () => { try { const h = db.prepare('SELECT COUNT(*) as c FROM context_entities').get().c; return h > 0 } catch { return false } })()
-        if (!health) return { enriched: prompt, usedFacts: 0, tokensEst: Math.ceil(prompt.length / 4) }
-        const facts = contextBrain.getFactsList({ currentOnly: true, limit: 200 }).items || []
-        const entities = contextBrain.getEntitiesList({ limit: 500 }).items || []
-        const entityMap = new Map(entities.map((e: any) => [e.id, e]))
-        const tokens = prompt.toLowerCase().split(/\W+/).filter(Boolean)
-        const scored = facts.map((f: any) => {
-            const hay = `${entityMap.get(f.subjectId)?.name || f.subjectId} ${f.predicate} ${f.objectLiteral}`.toLowerCase()
-            const overlap = tokens.reduce((acc: number, t: string) => acc + (hay.includes(t) ? 1 : 0), 0)
-            return { f, score: overlap }
-        }).filter((x: any) => x.score > 0).sort((a: any, b: any) => b.score - a.score)
-        const lines: string[] = [prompt, '', '--- Brain context ---']
-        let used = 0, tok = 0
-        for (const { f } of scored) {
-            const srcName = entityMap.get(f.subjectId)?.name || f.subjectId
-            const line = `- ${srcName}: ${f.predicate} ${f.objectLiteral}`
-            if (tok + Math.ceil(line.length / 4) > budget) break
-            lines.push(line); tok += Math.ceil(line.length / 4); used++
-        }
-        const enriched = used > 0 ? lines.join('\n') : prompt
-        return { enriched, usedFacts: used, tokensEst: Math.ceil(enriched.length / 4) }
+        const budget = Math.max(100, Math.min(4000, opts?.tokenBudget || 800))
+        // RESULT-2C: delegate to the brainContext policy builder (shared
+        // retrieval + source gates + redaction + budget) instead of the
+        // keyword-overlap-only implementation. IPC return shape unchanged.
+        const { buildBrainContext } = require('./main/ai/brainContext')
+        const ctx = buildBrainContext({ query: prompt, tokenBudget: budget })
+        if (!ctx.text) return { enriched: prompt, usedFacts: 0, tokensEst: Math.ceil(prompt.length / 4) }
+        const enriched = prompt + '\n\n--- Brain context ---\n' + ctx.text
+        return { enriched, usedFacts: ctx.used.length, tokensEst: Math.ceil(enriched.length / 4) }
     } catch (e: any) {
         return { enriched: opts?.prompt || '', usedFacts: 0, tokensEst: 0, error: e?.message }
     }
@@ -18342,6 +18332,40 @@ electron_1.ipcMain.handle('brain:evaluate', async () => {
         return { pass, checks }
     } catch (e: any) {
         return { pass: false, checks, error: e?.message }
+    }
+})
+
+// WP-F F4 (RESULT-M6): history backfill over IPC. Ungated parts run now:
+//   - the existing miners (runContextBackfill, watermark-drained)
+//   - captures backfill (backfillCaptures) — match-first, dryRun/abort-guarded;
+//     the real RUN waits on CZ even though the code is in.
+//   - legacy fact relink (relinkLegacyFacts) — same policy.
+// Gated parts (R-4 / R-5) are feature-detected: when their functions are
+// added to the module, this handler picks them up with no edit here.
+electron_1.ipcMain.handle('brain:backfill', async (_event, opts?: { dryRun?: boolean; force?: boolean; skipMiners?: boolean }) => {
+    try {
+        const mod = require('./main/ai/contextBackfill')
+        const out: any = {}
+        if (!opts?.skipMiners) {
+            try { out.miners = await mod.runContextBackfill() } catch (e: any) { out.miners = { ok: false, error: e?.message } }
+        }
+        try { out.captures = mod.backfillCaptures({ dryRun: opts?.dryRun, force: opts?.force }) } catch (e: any) { out.captures = { error: e?.message } }
+        try { out.relink = mod.relinkLegacyFacts(!!opts?.dryRun) } catch (e: any) { out.relink = { error: e?.message } }
+        // R-5-gated: signals engine passes (supersession + decay retirement)
+        if (typeof mod.runSupersessionPass === 'function') {
+            try { out.supersession = await mod.runSupersessionPass() } catch (e: any) { out.supersession = { error: e?.message } }
+        }
+        if (typeof mod.retireDecayedSignals === 'function') {
+            try { out.retired = mod.retireDecayedSignals() } catch (e: any) { out.retired = { error: e?.message } }
+        }
+        // R-4-gated: full embedding reindex
+        if (typeof mod.reindexAll === 'function') {
+            try { out.reindex = await mod.reindexAll() } catch (e: any) { out.reindex = { error: e?.message } }
+        }
+        console.log('[Brain] brain:backfill', opts?.dryRun ? '(dry run)' : '', JSON.stringify(out.captures || {}))
+        return { ok: true, ...out }
+    } catch (e: any) {
+        return { ok: false, error: e?.message }
     }
 })
 

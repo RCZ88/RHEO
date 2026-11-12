@@ -90,6 +90,17 @@ export interface DeskflowAPI {
   brainGetEntityHistory: (name: string) => Promise<any>
   brainLogEpisode: (source: string, content: string, sourceRef?: string) => Promise<any>
   brainStats: () => Promise<any>
+  brainHealth: () => Promise<any>
+  brainGetGraph: (opts?: any) => Promise<any>
+  brainLogs: (opts?: any) => Promise<any>
+  brainSetLogLevel: (opts?: any) => Promise<any>
+  brainLogsClear: () => Promise<any>
+  brainLogsExport: () => Promise<any>
+  brainRunExtraction: (opts?: any) => Promise<any>
+  brainEvaluate: () => Promise<any>
+  brainBackfill: (opts?: { dryRun?: boolean; force?: boolean; skipMiners?: boolean }) => Promise<any>
+  brainExportSubgraph: (opts?: any) => Promise<any>
+  brainEnrichPrompt: (opts?: any) => Promise<any>
   brainExport: () => Promise<any>
   brainGetEpisodes: (opts?: any) => Promise<any>
   brainGetEntities: (opts?: any) => Promise<any>
