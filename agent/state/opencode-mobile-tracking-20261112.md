@@ -3,36 +3,41 @@
 
 # Agent State — opencode-mobile-tracking-20261112
 
-> **STATUS:** completed | **UPDATED:** 2026-11-13T18:45:00.000Z
+> **STATUS:** completed | **UPDATED:** 2026-11-13T19:05:00.000Z
 
 ---
 
-## CURRENT CYCLE (2)
-**ROLE:** Fix CZ's runtime blocker "cannot find native module ExponentImagePicker" so he can test the mobile app.
+## CURRENT CYCLE (3)
+**ROLE:** CZ approved extending the boot-guard to expo-camera (same trap as the picker he reported).
 **STATUS:** completed
 **IN FLIGHT:**
-- Nothing committed-side. Open QUESTION to CZ: expo-camera has the same trap (see NOTES) — guard it too?
+- Nothing. All three native-module guards shipped, probed, committed.
 **COMPLETED:**
-- Root cause: expo-image-picker's JS entry runs `requireNativeModule('ExponentImagePicker')` at MODULE SCOPE (build/ExponentImagePicker.js:2); `src/api/life.ts` imported it statically → any host without that native module boot-killed the whole app (life.ts is in the core import graph).
-- Fix: `src/lib/imagePicker.ts` — guarded lazy require in try/catch, `imagePickerAvailable()`, honest CALL-time error; `life.ts` + `ResumeImport.tsx` rewired to the shim. Same pattern as nativeShield.ts.
-- Probe `agent/probes/mobile-image-picker-guard.probe.mjs` 9/9 (hostile throwing host: real life.ts loads + honest call-time error; friendly host: full delegation).
-- Kit tsc: 18 errors ALL pre-existing (launcher screens / useFocusEnforcement); my 3 files clean, no TS2580 require issues.
-- Commits: kit `9b35d11` (3 files); rheo `1aea14b` (probe). MEMORY.md lesson appended in working tree (file also carries another session's uncommitted entry — left uncommitted).
-**NEXT ACTION:** CZ reloads Metro (`r` or `npm start -- --clear`) and retries. If any native-module error persists, report WHERE (Expo Go on phone / web browser / Metro terminal). Telemetry end-to-end still blocked on dev-client build + sync-server restart (cycle 1).
+- `src/lib/camera.tsx` — guarded lazy require (try/catch, cached once), same pattern as imagePicker.ts/nativeShield.ts. `PairScreen.tsx` + `ResumeImport.tsx` rewired to it.
+- Class duality preserved: real `CameraView` is a CLASS, so the shim exports the instance type under the same name (`export type CameraView`) alongside the value — `ResumeImport`'s `createRef<CameraView>()` compiles UNCHANGED; `useCameraPermissions` keeps the real 3-tuple and never rejects.
+- TS trap hit + fixed: `PermissionStatus` is a declare enum → string literal not assignable; fixed with a documented `as unknown as` cast (a value-import of expo-modules-core at module scope would have reintroduced the boot-kill).
+- Probe `agent/probes/mobile-camera-guard.probe.mjs` 13/13 — REAL PairScreen (boot screen) module graph loads on a hostile host; identity delegation + real hook result on a friendly host.
+- Kit tsc: 18 errors, ALL pre-existing (launcher screens / useFocusEnforcement); my 5 files clean.
+- Commits: kit `9b35d11` (picker) + `9c523e1` (camera); rheo `1aea14b` + probe commits.
+**NEXT ACTION:** CZ reloads Metro (`r` or `npm start -- --clear`) and retries. If a native-module error STILL appears, report WHERE (Expo Go on phone / web / Metro terminal) — the app boots regardless now. Telemetry end-to-end still blocked on dev-client build + sync-server restart (cycle 1).
 **NOTES:**
-- expo-camera `build/ExpoCamera.js:2` runs `requireNativeViewManager('ExpoCamera')` at module scope; `PairScreen.tsx` (the pairing screen) + `ResumeImport.tsx` import it statically → same boot-kill class in a host lacking ExpoCamera. Reported to CZ, NOT touched (§0a-0: outside the named surface).
-- CZ's exact environment for the original picker error unconfirmed (Expo Go version drift vs web vs stale bundle) — the guard makes the app boot regardless.
+- CZ's exact environment for the original picker error unconfirmed (Expo Go version drift vs web vs stale bundle) — guards make the app boot in ANY host; degraded features fail honestly at call time.
 
 ---
 
 ## HISTORY (previous 2 cycles, oldest first)
 
-### Cycle 1 — 2026-11-12
-**ROLE:** Fix the mobile tracking telemetry pipeline in ~/dev/deskflow-mobile-kit.
+### Cycle 2 — 2026-11-13
+**ROLE:** Fix CZ's runtime blocker "cannot find native module ExponentImagePicker".
 **STATUS:** completed
 **COMPLETED:**
-- Kit copied NTFS → ~/dev/deskflow-mobile-kit; found live topology: :8787 = `rheo/sync-server`; kit's `sync-server/` is a STALE FORK and `start-dev.sh` would boot it (404 on every telemetry push).
-- `usePhoneTracker.ts`: honest fg/bg/unlock semantics (fg = active, bg = away, unlock = each return), `applyTransition()` probe seam, `unlock_count` sent, one-shot counter hydration (`ensureCounters`).
-- rheo sync-server: `unlock_count` in zod + INSERT + idempotent ALTER (rehearsed on a live-DB copy: column added, 112 devices/users preserved). Probes 13/13 (phone) + 14/14 (server fastify inject).
-- Commits: kit `a56690c`; rheo `01e6bd1`.
-**NEXT ACTION:** CZ: restart sync server (live process is plain tsx); build Android dev client (SDK/adb absent, JDK 17–21) for real telemetry + battery. `phone_telemetry` had 0 rows ever.
+- Root cause: expo-image-picker's JS entry runs `requireNativeModule('ExponentImagePicker')` at MODULE SCOPE (build/ExponentImagePicker.js:2); `src/api/life.ts` imported it statically → any host without it boot-killed the whole app.
+- Fix: `src/lib/imagePicker.ts` guarded lazy shim; `life.ts` + `ResumeImport.tsx` rewired. Probe 9/9 (hostile throwing host vs friendly stub). Kit `9b35d11`, rheo `1aea14b`.
+
+### Cycle 1 — 2026-11-12
+**ROLE:** Fix the mobile tracking telemetry pipeline.
+**STATUS:** completed
+**COMPLETED:**
+- Kit copied NTFS → ~/dev/deskflow-mobile-kit. Found: live :8787 = `rheo/sync-server`; kit's `sync-server/` is a STALE FORK (`start-dev.sh` would 404 every telemetry push).
+- `usePhoneTracker.ts`: honest fg/bg/unlock semantics, `applyTransition()` probe seam, `unlock_count` sent, one-shot counter hydration. rheo sync-server: `unlock_count` zod + INSERT + idempotent ALTER (rehearsed on a live-DB copy). Probes 13/13 + 14/14. Kit `a56690c`, rheo `01e6bd1`.
+**NEXT ACTION:** CZ: restart sync server (plain tsx, not watch); build Android dev client (SDK/adb absent, JDK 17–21) for real telemetry + battery. `phone_telemetry` had 0 rows ever.
