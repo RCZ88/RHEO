@@ -371,7 +371,7 @@ function detectSleepGap(gapStart: number, gapEnd: number): { isSleep: boolean; s
   const gapMs = gapEnd - gapStart;
   const gapMinutes = gapMs / (1000 * 60);
   
-  if (gapMinutes < 45) return null; // Too short to be sleep
+  if (gapMinutes < 15) return null; // Too short to be sleep
   if (!isWithinSleepHours(gapStart) && !isWithinSleepHours(gapEnd)) {
     // Check if gap extends through sleep hours
     const startH = new Date(gapStart).getHours();
@@ -17980,6 +17980,14 @@ function initMemorySystem() {
 function initContextSystem() {
     try {
         userContextService.setContextDb(db);
+        // D6 (WP-D): every new/updated signal gets embedded for semantic search.
+        // The listener indirection avoids an import cycle with embeddingService.
+        try {
+            userContextService.setSignalListener((id: string, content: string) => {
+                require('./main/ai/embeddingService').embedSignal(id, content);
+            });
+            console.log('[ContextBrain] signal→embedding listener wired');
+        } catch (e: any) { console.warn('[ContextBrain] embedding listener wiring failed:', e?.message); }
         // Wire LLM extraction caller (provider chain)
         try {
             const extraction = require('./main/ai/entityExtraction');
@@ -18090,6 +18098,17 @@ electron_1.ipcMain.handle('context:get-growth', async () => {
 });
 
 // ========== Context Brain ==========
+electron_1.ipcMain.handle('brain:mcp-info', async (_event) => {
+    // A1 (RESULT-M6): connection info for the Debug panel. The token is the
+    // default-deny credential — it was generated on first MCP server start.
+    try {
+        const mcp = require('./main/ai/contextBrainMCP');
+        return { url: 'http://127.0.0.1:54322', token: mcp.getMcpToken(), tokenPath: mcp.getMcpTokenPath() };
+    } catch (e: any) {
+        return { url: 'http://127.0.0.1:54322', token: '', error: e?.message };
+    }
+});
+
 electron_1.ipcMain.handle('brain:search', async (_event, query: string, strategies?: string[]) => {
     return contextBrain.retrieve(query, strategies);
 });
@@ -22909,7 +22928,10 @@ electron_1.ipcMain.handle('ai-chat:send', async (event, data: { threadDate: stri
     if (!message || !message.trim()) return { success: false, error: 'Empty message' };
 
     // 1. Load chat history (last 50 messages)
-    const history = db.prepare('SELECT id, role, content, parsed_json, created_at FROM ai_chat_messages WHERE thread_date = ? ORDER BY created_at ASC LIMIT 50').all(threadDate) as any[];
+    // A2 (RESULT-M6): ORDER BY created_at loses messages written in the same
+    // second — and the LIMIT applied to the wrong end, so threads that reached
+    // 52 messages silently lost their middle. id DESC LIMIT 50 + reverse.
+    const history = (db.prepare('SELECT id, role, content, parsed_json, created_at FROM ai_chat_messages WHERE thread_date = ? ORDER BY id DESC LIMIT 50').all(threadDate) as any[]).reverse();
 
     // 2. Gather app context
     const today = todayStr();
@@ -22942,6 +22964,22 @@ electron_1.ipcMain.handle('ai-chat:send', async (event, data: { threadDate: stri
       else aiUsageContext = 'No AI usage today.';
     } catch { aiUsageContext = 'No AI usage data.'; }
 
+    // 2b. Brain context (never allowed to break chat)
+    // R-7 (CZ decision): injection is OFF by default — the ~700-token block
+    // was too big. Only an explicit preference enables it; 'compact' uses a
+    // ~280-token budget so it can be evaluated without the full cost.
+    let brainBlock = '';
+    let contextUsed: any[] = [];
+    const enrichment = (userPreferences as any)?.brainEnrichment;
+    if (enrichment === 'full' || enrichment === 'compact') {
+      try {
+        const { buildBrainContext } = require('./main/ai/brainContext');
+        const ctx = buildBrainContext({ query: message, tokenBudget: enrichment === 'compact' ? 280 : 700 });
+        brainBlock = ctx.text;
+        contextUsed = ctx.used;
+      } catch (e: any) { console.warn('[BrainContext] skipped:', e?.message); }
+    }
+
     // 3. Build system prompt with context
     const systemPrompt = `You are DeskFlow AI, an assistant integrated into the user's productivity tracker. You help them plan, review, and understand their productivity data.
 
@@ -22963,7 +23001,7 @@ ${aiUsageContext}
 
 **Planning notes:**
 ${planningContext}
-
+${brainBlock ? '\n' + brainBlock + '\n' : ''}
 ## Your Output Format
 You MUST respond with a JSON object on the first line, then your natural language response on subsequent lines.
 The JSON must follow this schema:
@@ -23017,10 +23055,13 @@ For type "error": data = { message: string, recovery?: string }`;
     } catch {}
 
     // 7. Save all messages + upsert thread metadata
+    // R-6 (CZ-approved): the old save DELETEd every row and reinserted —
+    // which threw away ids and made the same-second ordering loss in A2
+    // worse every send. Upsert the thread, insert only the 2 new messages.
     const preview = message.slice(0, 80);
     const now = Date.now();
     const tx = db.transaction(() => {
-      // Upsert thread metadata
+      const prior = (db.prepare('SELECT COUNT(*) AS c FROM ai_chat_messages WHERE thread_date = ?').get(threadDate) as any).c as number;
       db.prepare(`
         INSERT INTO ai_chat_threads (thread_date, message_count, last_message_at, preview, updated_at)
         VALUES (?, ?, ?, ?, ?)
@@ -23029,18 +23070,24 @@ For type "error": data = { message: string, recovery?: string }`;
           last_message_at = excluded.last_message_at,
           preview = excluded.preview,
           updated_at = excluded.updated_at
-      `).run(threadDate, history.length + 2, now, preview, now);
-
-      // Save messages
-      db.prepare('DELETE FROM ai_chat_messages WHERE thread_date = ?').run(threadDate);
-      const insert = db.prepare('INSERT INTO ai_chat_messages (thread_date, role, content, parsed_json, created_at) VALUES (?, ?, ?, ?, datetime(\'now\'))');
-      for (const histMsg of history) {
-        insert.run(threadDate, histMsg.role, histMsg.content, histMsg.parsed_json);
-      }
+      `).run(threadDate, prior + 2, now, preview, now);
+      const insert = db.prepare("INSERT INTO ai_chat_messages (thread_date, role, content, parsed_json, created_at) VALUES (?, ?, ?, ?, datetime('now'))");
       insert.run(threadDate, 'user', message, null);
       insert.run(threadDate, 'assistant', finalContent, parsedJson ? JSON.stringify(parsedJson) : null);
     });
     tx();
+
+    // Learn from what the USER said. Never from the assistant reply.
+    // Local regex signals only — nothing leaves the machine (E2, R-2/R-7).
+    try {
+      const uc = require('./main/ai/userContextService');
+      if (message.trim().length >= 20) {
+        for (const s of uc.extractSignalsFromText(message, 'chat')) {
+          uc.addSignal(s.signalType, s.content, 'chat', s.confidence, { sourceRef: `chat:${threadDate}` });
+        }
+        uc.scheduleProfileRebuild();
+      }
+    } catch {}
 
     return {
       success: true,
@@ -23050,6 +23097,7 @@ For type "error": data = { message: string, recovery?: string }`;
         parsed_json: parsedJson,
         created_at: new Date().toISOString(),
       },
+      contextUsed,
     };
   } catch (err: any) {
     event.sender.send('provider-chunk', { delta: null, error: err.message, done: true });

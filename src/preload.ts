@@ -2314,6 +2314,7 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
 
   // ========== Context Brain ==========
   brainSearch: (query: string, strategies?: string[]) => ipcRenderer.invoke('brain:search', query, strategies),
+  brainMcpInfo: () => ipcRenderer.invoke('brain:mcp-info'),
   brainGetEntity: (name: string) => ipcRenderer.invoke('brain:get-entity', name),
   brainGetEntityHistory: (name: string) => ipcRenderer.invoke('brain:get-entity-history', name),
   brainLogEpisode: (source: string, content: string, sourceRef?: string) => ipcRenderer.invoke('brain:log-episode', source, content, sourceRef),

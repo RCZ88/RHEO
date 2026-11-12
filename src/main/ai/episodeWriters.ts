@@ -63,9 +63,8 @@ export function writeFinanceEpisode(type: 'transaction' | 'budget' | 'wallet' | 
       break
   }
   const epId = logEp('finance', content, data.id, { type, action })
-  if (epId && content.length >= 20) {
-    try { brain.createExtractionJob(epId); } catch (_e) { /* best-effort */ }
-  }
+  // R-2 (CZ-approved): NO LLM extraction for finance — routine sources get
+  // regex signals only, and finance text never leaves the machine.
 
   if (type === 'wallet') {
     const entityId = brain.upsertEntity('tool', data.name, ['wallet', 'finance'])
@@ -91,9 +90,7 @@ export function writeTerminalEpisode(session: any, message: string, role: 'user'
     agentType: session.agent_type,
     topic: session.topic,
   })
-  if (epId && content.length >= 20) {
-    try { brain.createExtractionJob(epId); } catch (_e) { /* best-effort */ }
-  }
+  // R-2: no LLM extraction for terminal sessions — regex signals only.
 
   // Only extract entities from agent messages (more structured)
   if (role === 'agent' && session.topic) {
@@ -107,10 +104,8 @@ export function writeAiChatEpisode(messages: Array<{ role: string; content: stri
   for (const msg of messages) {
     if (!msg.content || msg.content.length < 10) continue
     const content = `[AI Chat ${msg.role}] ${msg.content.slice(0, 1000)}`
-    const epId = logEp('deskflow_ai', content, threadDate, { threadDate, role: msg.role })
-    if (epId && content.length >= 20) {
-      try { brain.createExtractionJob(epId); } catch (_e) { /* best-effort */ }
-    }
+    logEp('deskflow_ai', content, threadDate, { threadDate, role: msg.role })
+    // R-2: no LLM extraction for chat lines — regex signals only.
   }
 }
 

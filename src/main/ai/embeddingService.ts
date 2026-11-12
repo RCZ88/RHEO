@@ -10,8 +10,12 @@
  */
 
 import * as brain from './contextBrain'
+import * as userContext from './userContextService'
 
-const DIM = 256
+// D1 (WP-D, R-4): 256 → 512. Random overlap at 512 dims is ~0.044, so
+// MIN_SEMANTIC_SCORE = 0.12 is ~2.7 sigma — real matches only.
+const DIM = 512
+const MIN_SEMANTIC_SCORE = 0.12
 
 // ═══ Hashing ═══
 function hashString(str: string): number {
@@ -39,13 +43,17 @@ function tokenize(text: string): string[] {
 export function embedText(text: string): number[] {
   const vec = new Array(DIM).fill(0)
   const tokens = tokenize(text)
-  // TF weighting with hashing trick
+  // D2 (WP-D, R-4): signed hashing — collisions cancel instead of piling up —
+  // plus adjacent-bigram terms so short phrases survive tokenization.
+  const add = (term: string, w: number) => {
+    const h = hashString(term)
+    const sign = (hashString(term + '#') & 1) ? 1 : -1
+    vec[h % DIM] += sign * w
+  }
   const counts = new Map<string, number>()
   for (const t of tokens) counts.set(t, (counts.get(t) || 0) + 1)
-  for (const [t, c] of counts) {
-    const idx = hashString(t) % DIM
-    vec[idx] += 1 + Math.log(c)
-  }
+  for (const [t, c] of counts) add(t, 1 + Math.log(c))
+  for (let i = 0; i + 1 < tokens.length; i++) add(tokens[i] + ' ' + tokens[i + 1], 0.6)
   // L2 normalize
   let norm = 0
   for (const v of vec) norm += v * v
@@ -63,24 +71,41 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
 // ═══ Embedding storage ═══
 
+// D3 (WP-D): in-memory cache so a query does not rebuild every vector.
+let cache: Array<{ refId: string; refType: string; vec: Float32Array }> | null = null
+export function invalidateEmbeddingCache() { cache = null }
+function loadCache() {
+  if (!cache) {
+    cache = brain.getAllEmbeddings()
+      .filter(e => e.vec.length === DIM) // old 256-d vectors are ignored until reindexed
+      .map(e => ({ refId: e.refId, refType: e.refType, vec: Float32Array.from(e.vec) }))
+  }
+  return cache
+}
+
 export function embedEpisode(episodeId: string, content: string): void {
   const vec = embedText(content)
   brain.storeEmbedding(episodeId, 'episode', vec)
+  invalidateEmbeddingCache()
 }
 
 export function embedSignal(signalId: string, content: string): void {
   const vec = embedText(content)
   brain.storeEmbedding(signalId, 'signal', vec)
+  invalidateEmbeddingCache()
 }
 
 // ═══ Search ═══
 
 export function searchEmbeddings(query: string, limit: number = 10): Array<{ refId: string; refType: string; score: number }> {
-  const queryVec = embedText(query)
-  const all = getRawEmbeddings()
-  const scored = all
-    .map(({ refId, refType, vec }) => ({ refId, refType, score: cosineSimilarity(queryVec, vec) }))
-    .filter(r => r.score > 0.05)
+  const queryVec = Float32Array.from(embedText(query))
+  const scored = loadCache()
+    .map(({ refId, refType, vec }) => {
+      let dot = 0
+      for (let i = 0; i < queryVec.length; i++) dot += queryVec[i] * vec[i]
+      return { refId, refType, score: dot } // both normalized → dot = cosine
+    })
+    .filter(r => r.score >= MIN_SEMANTIC_SCORE)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
   return scored
@@ -93,20 +118,32 @@ function getRawEmbeddings(): Array<{ refId: string; refType: string; vec: number
 
 // ═══ Reindex ═══
 
-export function reindexEpisodes(): { processed: number; skipped: number } {
-  const episodes = brain.getEpisodes(undefined, 2000)
-  let processed = 0
-  let skipped = 0
-  for (const ep of episodes) {
-    const existing = brain.getEmbedding(ep.id)
-    if (existing) { skipped++; continue }
-    embedEpisode(ep.id, ep.content)
-    processed++
+// D4 (WP-D): re-embed old-dimension vectors and include signals. Note the
+// lenOf helper: brain.getEmbedding's real return type is ASSUMED (R1), so it
+// accepts both a raw array and a { vec } wrapper shape.
+export function reindexAll(): { episodes: number; signals: number; skipped: number } {
+  let episodes = 0, signals = 0, skipped = 0
+  const lenOf = (v: any) => Array.isArray(v) ? v.length : (v?.vec?.length ?? v?.length ?? 0)
+  for (const ep of brain.getEpisodes(undefined, 5000)) {
+    if (lenOf(brain.getEmbedding(ep.id)) === DIM) { skipped++; continue }
+    embedEpisode(ep.id, ep.content); episodes++
   }
-  return { processed, skipped }
+  for (const s of userContext.getSignals(undefined, undefined, 5000)) {
+    if (lenOf(brain.getEmbedding(s.id)) === DIM) { skipped++; continue }
+    embedSignal(s.id, s.content); signals++
+  }
+  invalidateEmbeddingCache()
+  return { episodes, signals, skipped }
+}
+
+export function reindexEpisodes(): { processed: number; skipped: number } {
+  const r = reindexAll()
+  return { processed: r.episodes, skipped: r.skipped }
 }
 
 // ═══ Optional transformers.js lazy load (NOT installed by default) ═══
+
+// Downloads a model from the network on first use. Do not call without an explicit user opt-in.
 
 let semanticModel: any = null
 let semanticAttempted = false
@@ -137,19 +174,22 @@ export async function semanticEmbed(text: string): Promise<number[] | null> {
 
 // ═══ Hybrid retrieval (keyword + embedding) ═══
 
+// D5 (WP-D): rank fusion (RRF) instead of mixing raw scores — keyword scores
+// and cosine similarities live on different scales, so the old weighted sum
+// compared apples to seconds.
 export function hybridSearch(query: string, limit: number = 15): Array<{ type: string; id: string; score: number }> {
-  const keyword = brain.keywordSearch(query, limit)
-  const semantic = searchEmbeddings(query, limit)
+  const K = 60
   const merged = new Map<string, { type: string; id: string; score: number }>()
-
-  for (const k of keyword) {
-    merged.set(`${k.type}:${k.id}`, { type: k.type, id: k.id, score: k.score * 0.55 })
+  const add = (type: string, id: string, rank: number) => {
+    const k = `${type}:${id}`
+    const cur = merged.get(k)
+    const s = 1 / (K + rank + 1)
+    if (cur) cur.score += s
+    else merged.set(k, { type, id, score: s })
   }
-  for (const s of semantic) {
-    const type = s.refType === 'episode' ? 'episode' : 'signal'
-    const existing = merged.get(`${type}:${s.refId}`)
-    if (existing) existing.score = Math.min(1, existing.score + s.score * 0.3)
-    else merged.set(`${type}:${s.refId}`, { type, id: s.refId, score: s.score * 0.3 })
-  }
-  return Array.from(merged.values()).sort((a, b) => b.score - a.score).slice(0, limit)
+  brain.keywordSearch(query, limit * 2).forEach((k, i) => add(k.type, k.id, i))
+  searchEmbeddings(query, limit * 2).forEach((s, i) => add(s.refType === 'episode' ? 'episode' : 'signal', s.refId, i))
+  const max = 2 / (K + 1)
+  return Array.from(merged.values()).map(m => ({ ...m, score: Math.min(1, m.score / max) }))
+    .sort((a, b) => b.score - a.score).slice(0, limit)
 }

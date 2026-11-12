@@ -86,6 +86,7 @@ export interface DeskflowAPI {
 
   // ── Context Brain ──
   brainSearch: (query: string, strategies?: string[]) => Promise<any>
+  brainMcpInfo: () => Promise<{ url: string; token: string; tokenPath?: string; error?: string }>
   brainGetEntity: (name: string) => Promise<any>
   brainGetEntityHistory: (name: string) => Promise<any>
   brainLogEpisode: (source: string, content: string, sourceRef?: string) => Promise<any>

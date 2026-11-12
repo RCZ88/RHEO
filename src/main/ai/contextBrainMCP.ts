@@ -9,8 +9,13 @@
  */
 
 import * as http from 'http'
+import * as crypto from 'crypto'
+import * as fs from 'fs'
+import * as path from 'path'
 import * as brain from './contextBrain'
 import * as userContext from './userContextService'
+import * as embeddingService from './embeddingService'
+import { buildBrainContext } from './brainContext'
 
 const PORT = 54322
 
@@ -30,12 +35,59 @@ function isRateLimited(ip: string): boolean {
   return false
 }
 
+// A1 (RESULT-M6, CZ-approved R-1): default-DENY with a generated token. The old
+// behavior — "no env var means open server" — let any local process (or a
+// CSRFing web page) read the user's whole context graph.
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`])
+let tokenCache: string | null = null
+
+/** Env var wins. Otherwise a token file in userData, created on first start. */
+export function getMcpToken(): string {
+  if (tokenCache) return tokenCache
+  const env = process.env.DESKFLOW_MCP_TOKEN
+  if (env) return (tokenCache = env)
+  let dir = process.cwd()
+  try { dir = require('electron').app.getPath('userData') } catch { /* not in electron */ }
+  const file = path.join(dir, 'mcp-token.txt')
+  try { tokenCache = fs.readFileSync(file, 'utf8').trim() } catch { /* create below */ }
+  if (!tokenCache) {
+    tokenCache = crypto.randomBytes(24).toString('hex')
+    fs.writeFileSync(file, tokenCache + '\n', { mode: 0o600 })
+  }
+  return tokenCache
+}
+
+/** Path of the token file, for the brain:mcp-info Debug panel. */
+export function getMcpTokenPath(): string {
+  let dir = process.cwd()
+  try { dir = require('electron').app.getPath('userData') } catch { /* not in electron */ }
+  return path.join(dir, 'mcp-token.txt')
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const A = Buffer.from(a)
+  const B = Buffer.from(b)
+  return A.length === B.length && A.length > 0 && crypto.timingSafeEqual(A, B)
+}
+
 function checkToken(req: http.IncomingMessage): boolean {
-  // Optional token: set env DESKFLOW_MCP_TOKEN to require it
-  const expected = process.env.DESKFLOW_MCP_TOKEN
-  if (!expected) return true
-  const provided = req.headers['x-deskflow-mcp-token']
-  return provided === expected
+  const expected = getMcpToken()
+  const x = String(req.headers['x-deskflow-mcp-token'] || '')
+  const auth = String(req.headers.authorization || '')
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  return safeEqual(x, expected) || safeEqual(bearer, expected)
+}
+
+/** Stops browser pages (CSRF) and DNS rebinding. Returns a reason string or null. */
+function badRequestShape(req: http.IncomingMessage): string | null {
+  if (!ALLOWED_HOSTS.has(String(req.headers.host || ''))) return 'bad host'
+  if (req.headers.origin) return 'browser origin not allowed'
+  return null
+}
+
+const clampInt = (v: any, min: number, max: number, def: number) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.floor(n))) : def
 }
 
 // ═══ MCP Protocol Handlers ═══
@@ -61,12 +113,12 @@ function handleToolsList(): any {
       tools: [
         {
           name: 'search_context',
-          description: 'Search the user\'s context memory using keyword, graph, or hybrid strategies. Returns ranked facts, episodes, and related entities.',
+          description: 'Search the user\'s context memory using keyword, graph, hybrid (rank fusion), or semantic strategies. Returns ranked facts, episodes, and related entities. Note: semantic and hybrid return ids and scores only (text resolution coming).',
           inputSchema: {
             type: 'object',
             properties: {
               query: { type: 'string', description: 'Search query' },
-              strategy: { type: 'string', enum: ['keyword', 'graph', 'hybrid', 'all'], default: 'keyword', description: 'Retrieval strategy' },
+              strategy: { type: 'string', enum: ['keyword', 'graph', 'hybrid', 'semantic', 'all'], default: 'keyword', description: 'Retrieval strategy' },
               limit: { type: 'number', default: 20, description: 'Max results' },
             },
             required: ['query'],
@@ -151,16 +203,78 @@ function handleToolsList(): any {
             required: ['title', 'content'],
           },
         },
+        {
+          name: 'get_context_for_prompt',
+          description: 'Build a compact block of the user\'s own local context (profile, rules, relevant facts, notes) for injecting into a prompt. Budgeted. Finance and terminal data are never included.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              prompt: { type: 'string', description: 'The prompt or question to gather context for' },
+              token_budget: { type: 'number', default: 800, description: 'Max tokens (100-4000)' },
+            },
+            required: ['prompt'],
+          },
+        },
+        {
+          name: 'list_signals',
+          description: 'List the user\'s context signals (preferences, corrections, rules, habits) with their active/superseded state.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', description: 'Filter by signal type, e.g. preference, correction, rule' },
+              include_inactive: { type: 'boolean', default: false, description: 'Include inactive/superseded signals' },
+              limit: { type: 'number', default: 20 },
+            },
+          },
+        },
+        {
+          name: 'correct_signal',
+          description: 'Correct a stored signal: reject a wrong one, confirm a right one, or replace it with better wording.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'The signal id' },
+              action: { type: 'string', enum: ['reject', 'confirm', 'replace'] },
+              replacement: { type: 'string', description: 'New content (required for replace)' },
+            },
+            required: ['id', 'action'],
+          },
+        },
       ],
     },
   }
 }
 
+/** A1: cheap duplicate guard for write-in tools — same source + normalized content within the last 50. */
+function isRecentDuplicate(source: string, content: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  const target = norm(content)
+  return brain.getEpisodes(source, 50).some(e => norm(e.content) === target)
+}
+
 function handleToolsCall(name: string, args: any): any {
   switch (name) {
     case 'search_context': {
+      const limit = clampInt(args.limit, 1, 100, 20)
+      if (args.strategy === 'semantic' || args.strategy === 'hybrid') {
+        // E3: rank-fusion hybrid (and pure semantic) via embeddingService. Text
+        // resolution needs a getEpisode(id) helper that does not exist yet (R1),
+        // so these return ids + scores only — stated in the tool description.
+        const hits = args.strategy === 'semantic'
+          ? embeddingService.searchEmbeddings(args.query, limit)
+          : embeddingService.hybridSearch(args.query, limit)
+        return {
+          jsonrpc: '2.0',
+          result: {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ query: args.query, strategy: args.strategy, hits }, null, 2),
+            }],
+          },
+        }
+      }
       let strategies = ['keyword']
-      if (args.strategy === 'all' || args.strategy === 'hybrid') strategies = ['keyword', 'graph']
+      if (args.strategy === 'all') strategies = ['keyword', 'graph']
       else if (args.strategy === 'graph') strategies = ['graph']
       const result = brain.retrieve(args.query, strategies)
       return {
@@ -171,7 +285,7 @@ function handleToolsCall(name: string, args: any): any {
             text: JSON.stringify({
               query: args.query,
               strategy: result.strategy,
-              facts: result.facts.slice(0, args.limit || 20).map(f => ({
+              facts: result.facts.slice(0, limit).map(f => ({
                 predicate: f.predicate,
                 value: f.objectLiteral || f.objectId,
                 confidence: f.confidence,
@@ -236,7 +350,11 @@ function handleToolsCall(name: string, args: any): any {
       }
     }
     case 'log_episode': {
-      const epId = brain.logEpisode(args.source || 'external_ai', args.content)
+      const content = String(args.content || '').slice(0, 8000)
+      if (isRecentDuplicate(args.source || 'external_ai', content)) {
+        return { jsonrpc: '2.0', result: { content: [{ type: 'text', text: 'Memory already stored' }] } }
+      }
+      const epId = brain.logEpisode(args.source || 'external_ai', content)
       if (epId && (args.content || '').length >= 40) brain.createExtractionJob(epId)
       return {
         jsonrpc: '2.0',
@@ -246,8 +364,11 @@ function handleToolsCall(name: string, args: any): any {
       }
     }
     case 'add_memory': {
-      const content = (args.content || '').trim()
+      const content = (args.content || '').trim().slice(0, 8000)
       if (!content) return { jsonrpc: '2.0', error: { code: -32602, message: 'content is required' } }
+      if (isRecentDuplicate(args.source || 'external_ai', content)) {
+        return { jsonrpc: '2.0', result: { content: [{ type: 'text', text: 'Memory already stored' }] } }
+      }
       const epId = brain.logEpisode(args.source || 'external_ai', content)
       if (epId && content.length >= 40) brain.createExtractionJob(epId)
       return {
@@ -256,35 +377,98 @@ function handleToolsCall(name: string, args: any): any {
       }
     }
     case 'add_reflection': {
-      const title = (args.title || '').trim()
-      const content = (args.content || '').trim()
+      const title = (args.title || '').trim().slice(0, 120)
+      const content = (args.content || '').trim().slice(0, 8000)
       const severity = args.severity || 'warn'
       if (!title || !content) return { jsonrpc: '2.0', error: { code: -32602, message: 'title and content are required' } }
+      // A1: ALSO log an episode so the reflection is searchable and counts as
+      // the 'reflection' source (already in EXTRACTION_SOURCES). The repo file
+      // write only happens in unpackaged dev builds — a packaged app has no
+      // repo agent/ folder to write into.
+      let fileNote = 'episode only (packaged app)'
       try {
-        const fs = require('fs')
-        const path = require('path')
-        // Locate repo root: walk up from this file to find package.json / agent dir.
-        let root = __dirname
-        for (let i = 0; i < 6; i++) {
-          if (fs.existsSync(path.join(root, 'agent', 'skills', 'agent-reflect', 'logs'))) break
-          const parent = path.dirname(root)
-          if (parent === root) break
-          root = parent
-        }
-        const logDir = path.join(root, 'agent', 'skills', 'agent-reflect', 'logs')
-        fs.mkdirSync(logDir, { recursive: true })
-        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-        const safeTitle = title.replace(/[^a-z0-9]+/gi, '_').slice(0, 60)
-        const file = path.join(logDir, `${stamp}_${safeTitle}.md`)
-        const header = `<!-- agent-reflection | severity: ${severity} | source: in_terminal_agent | ${stamp} -->\n# ${title}\n\n`
-        fs.writeFileSync(file, header + content + '\n', 'utf-8')
-        return {
-          jsonrpc: '2.0',
-          result: { content: [{ type: 'text', text: `Reflection logged: ${path.basename(file)}` }] },
+        if (!require('electron').app.isPackaged) {
+          // Locate repo root: walk up from this file to find package.json / agent dir.
+          let root = __dirname
+          for (let i = 0; i < 6; i++) {
+            if (fs.existsSync(path.join(root, 'agent', 'skills', 'agent-reflect', 'logs'))) break
+            const parent = path.dirname(root)
+            if (parent === root) break
+            root = parent
+          }
+          const logDir = path.join(root, 'agent', 'skills', 'agent-reflect', 'logs')
+          fs.mkdirSync(logDir, { recursive: true })
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+          const safeTitle = title.replace(/[^a-z0-9]+/gi, '_').slice(0, 60)
+          const file = path.join(logDir, `${stamp}_${safeTitle}.md`)
+          const header = `<!-- agent-reflection | severity: ${severity} | source: in_terminal_agent | ${stamp} -->\n# ${title}\n\n`
+          fs.writeFileSync(file, header + content + '\n', 'utf-8')
+          fileNote = path.basename(file)
         }
       } catch (e: any) {
-        return { jsonrpc: '2.0', error: { code: -32603, message: `Failed to write reflection: ${e.message}` } }
+        console.warn('[ContextBrainMCP] reflection file write skipped:', e?.message)
       }
+      brain.logEpisode('reflection', `${title}\n${content}`.slice(0, 1500), undefined, { severity })
+      return {
+        jsonrpc: '2.0',
+        result: { content: [{ type: 'text', text: `Reflection logged: ${fileNote}` }] },
+      }
+    }
+    case 'get_context_for_prompt': {
+      // E3: budgeted brain context. No way to request finance or terminal —
+      // the builder's ALWAYS_DENY source gate makes that impossible by design.
+      const budget = clampInt(args.token_budget, 100, 4000, 800)
+      const ctx = buildBrainContext({ query: String(args.prompt || ''), tokenBudget: budget })
+      return {
+        jsonrpc: '2.0',
+        result: {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({ text: ctx.text, tokens_est: ctx.tokensEst, used: ctx.used.length }, null, 2),
+          }],
+        },
+      }
+    }
+    case 'list_signals': {
+      const signals = userContext.getSignals(args.type || undefined, undefined, clampInt(args.limit, 1, 100, 20), !!args.include_inactive)
+      return {
+        jsonrpc: '2.0',
+        result: {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(signals.map(s => ({
+              id: s.id,
+              signal_type: s.signalType,
+              content: s.content,
+              confidence: s.confidence,
+              active: s.active,
+              superseded_by: s.supersededBy ?? null,
+              occurrences: s.occurrenceCount,
+            })), null, 2),
+          }],
+        },
+      }
+    }
+    case 'correct_signal': {
+      const id = String(args.id || '')
+      if (!id) return { jsonrpc: '2.0', error: { code: -32602, message: 'id is required' } }
+      if (args.action === 'reject') {
+        userContext.rejectSignal(id)
+        return { jsonrpc: '2.0', result: { content: [{ type: 'text', text: `Signal ${id} rejected (inactive, confidence 0)` }] } }
+      }
+      if (args.action === 'confirm') {
+        userContext.setSignalConfidence(id, 1)
+        return { jsonrpc: '2.0', result: { content: [{ type: 'text', text: `Signal ${id} confirmed (confidence 1)` }] } }
+      }
+      if (args.action === 'replace') {
+        const replacement = String(args.replacement || '').trim().slice(0, 8000)
+        if (!replacement) return { jsonrpc: '2.0', error: { code: -32602, message: 'replacement is required for replace' } }
+        const old = userContext.getSignals(undefined, undefined, 500, true).find(s => s.id === id)
+        if (!old) return { jsonrpc: '2.0', error: { code: -32602, message: `Signal ${id} not found` } }
+        userContext.addSignal(old.signalType, replacement, 'correction', 1.0, { supersedes: id })
+        return { jsonrpc: '2.0', result: { content: [{ type: 'text', text: `Signal ${id} superseded by the replacement` }] } }
+      }
+      return { jsonrpc: '2.0', error: { code: -32602, message: `Unknown action: ${args.action}` } }
     }
     case 'get_stats': {
       const stats = brain.getBrainStats()
@@ -337,7 +521,7 @@ function handleToolsCall(name: string, args: any): any {
       }
     }
     case 'get_recent_signals': {
-      const signals = userContext.getSignals(undefined, undefined, args.limit || 10)
+      const signals = userContext.getSignals(undefined, undefined, clampInt(args.limit, 1, 50, 10))
       return {
         jsonrpc: '2.0',
         result: {
@@ -377,7 +561,8 @@ function handleResourcesList(): any {
 function handleResourcesRead(uri: string): any {
   switch (uri) {
     case 'context://recent-episodes': {
-      const episodes = brain.getEpisodes(undefined, 20)
+      // A1/E3 source gate: finance and terminal episode text never leaves the machine.
+      const episodes = brain.getEpisodes(undefined, 60).filter(e => e.source !== 'finance' && e.source !== 'terminal').slice(0, 20)
       return {
         jsonrpc: '2.0',
         result: {
@@ -468,10 +653,11 @@ export function startMcpServer(): http.Server | null {
   const server = http.createServer((req, res) => {
     const ip = (req.socket.remoteAddress || 'local').replace('::ffff:', '')
 
-    // Token auth
-    if (!checkToken(req)) {
-      res.writeHead(401, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Unauthorized' } }))
+    // A1: shape checks FIRST (host + origin) — stops CSRF/rebinding before anything else.
+    const shape = badRequestShape(req)
+    if (shape) {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32003, message: shape } }))
       return
     }
 
@@ -488,22 +674,44 @@ export function startMcpServer(): http.Server | null {
       return
     }
 
+    if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) {
+      res.writeHead(415)
+      res.end('Content-Type must be application/json')
+      return
+    }
+
+    // Token auth (default-deny since R-1)
+    if (!checkToken(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Unauthorized' } }))
+      return
+    }
+
     let body = ''
     let tooLarge = false
     req.on('data', chunk => {
       body += chunk
-      if (body.length > 100000) { tooLarge = true; req.destroy() }
+      if (body.length > 100000 && !tooLarge) {
+        tooLarge = true
+        // Reply BEFORE destroying so the client actually receives the 413.
+        res.writeHead(413)
+        res.end('Payload too large')
+        req.destroy()
+      }
     })
     req.on('end', () => {
+      if (tooLarge) return
+      // A1: parse errors and handler errors are DIFFERENT json-rpc codes.
+      let msg: any
       try {
-        if (tooLarge) {
-          res.writeHead(413)
-          res.end('Payload too large')
-          return
-        }
-        const msg = JSON.parse(body)
-        let response: any
-
+        msg = JSON.parse(body)
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' } }))
+        return
+      }
+      let response: any
+      try {
         switch (msg.method) {
           case 'initialize': response = handleInitialize(); break
           case 'tools/list': response = handleToolsList(); break
@@ -511,20 +719,20 @@ export function startMcpServer(): http.Server | null {
           case 'resources/list': response = handleResourcesList(); break
           case 'resources/read': response = handleResourcesRead(msg.params?.uri); break
           case 'notifications/initialized': response = null; break
+          case 'ping': response = { jsonrpc: '2.0', result: {} }; break
           default: response = { jsonrpc: '2.0', error: { code: -32601, message: `Method not found: ${msg.method}` } }
         }
+      } catch (e: any) {
+        response = { jsonrpc: '2.0', error: { code: -32603, message: String(e?.message || 'Internal error').slice(0, 200) } }
+      }
 
-        if (response) {
-          response.id = msg.id
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(response))
-        } else {
-          res.writeHead(204)
-          res.end()
-        }
-      } catch (e) {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' } }))
+      if (response) {
+        response.id = msg.id
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(response))
+      } else {
+        res.writeHead(204)
+        res.end()
       }
     })
   })

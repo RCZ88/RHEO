@@ -37,6 +37,8 @@ export interface GraphLink {
   source: string
   target: string
   predicate: string
+  /** G1 (RESULT-M6): true when the edge is inferred from co-occurrence, not a stored fact link. */
+  synthetic?: boolean
 }
 
 export const TYPE_COLORS: Record<string, string> = {
@@ -47,6 +49,9 @@ export const TYPE_COLORS: Record<string, string> = {
   tool: '#8b5cf6',
   concept: '#06b6d4',
   life_phase: '#ec4899',
+  ai_provider: '#14b8a6',
+  content_asset: '#eab308',
+  lesson: '#84cc16',
   default: '#71717a',
 }
 
