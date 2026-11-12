@@ -60,3 +60,20 @@ export const STATE_COLORS: Record<string, string> = {
   blocked: '#ef4444',
   neutral: '#fafafa',
 }
+
+// ── D6 (RESULT_PART2_3D.md) — shared 2D/3D constants ─────────────────────────
+// Pinned to the literals BrainGraph.tsx actually draws with (via graphTokens.ts
+// fallbacks, which mirror src/index.css): the selection ring is `P.labelStrong`
+// = `--text-primary` (fallback [250,250,250] = #fafafa) at 0.95 alpha, and the
+// firing halo is `P.spike` = `--color-amber-400` (fallback [245,158,11] =
+// #f59e0b). 2D resolves these from live CSS per frame; 3D materials cannot, so
+// they read these constants. If a token value changes, change these with it.
+/** Selection ring hue — the ONE accent the graph surface uses (2D ring and 3D ring). */
+export const SELECTION_ACCENT = '#fafafa'
+/** Firing hue — amber. Amber appears ONLY on firing nodes, never on selection, never on chrome. */
+export const FIRING_AMBER = '#f59e0b'
+/** 3D caps — see WP-3D-I of RESULT_PART2_3D.md. */
+export const CAP_3D_NODES = 150
+export const CAP_3D_LINKS = 300
+export const CAP_3D_LABELS = 12
+export type GraphViewMode = '2d' | '3d'

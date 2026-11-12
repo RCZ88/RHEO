@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react'
 import { Search, Network, Wifi, X } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { BrainGraph } from './BrainGraph'
@@ -6,9 +6,10 @@ import { NeuralFlow } from './NeuralFlow'
 import { EntityDetailPanel } from '../context-graph/EntityDetailPanel'
 import { NumberTicker } from '../../../components/ui/number-ticker'
 import { DotPattern } from '../../../components/ui/dot-pattern'
-import type { GraphNode, GraphLink } from '../context-graph/types'
-import { TYPE_COLORS } from '../context-graph/types'
-import { computeCascade, getNodeGlow, fireNode } from './physics/avalanche'
+import type { GraphNode, GraphLink, GraphViewMode } from '../context-graph/types'
+import { TYPE_COLORS, SELECTION_ACCENT } from '../context-graph/types'
+import { capFor3D } from './graph3d/layout'
+import { computeCascade, getNodeGlow, fireNode, now as avalancheNow } from './physics/avalanche'
 import { hexRGB, rgb } from './graphTokens'
 
 /**
@@ -111,6 +112,16 @@ export function BrainVisualization(props: BrainVisualizationProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set())
 
+  // ── D6 (WP-3D-F): persisted 2D | 3D mode. Default is 2D — existing behavior
+  // untouched; `three` is fetched only when the user first flips to 3D. ──
+  const [mode, setMode] = useState<GraphViewMode>(() =>
+    (typeof localStorage !== 'undefined' && localStorage.getItem('rheo.brain.view3d') === '1') ? '3d' : '2d')
+  const switchMode = useCallback((m: GraphViewMode) => {
+    setMode(m)
+    try { localStorage.setItem('rheo.brain.view3d', m === '3d' ? '1' : '0') } catch { /* private mode */ }
+  }, [])
+  const GraphScene3D = useMemo(() => lazy(() => import('./GraphScene3D')), [])
+
   const hovered = isControlled && hoveredNode !== undefined ? hoveredNode : internalHovered
   const selected = isControlled && selectedNode !== undefined ? selectedNode : internalSelected
   const activeSelection = selectionSet ?? internalSelectionIds
@@ -124,13 +135,13 @@ export function BrainVisualization(props: BrainVisualizationProps) {
    * canvas and restarted rAF. The graph samples its own clock per frame; this
    * tick exists only so the ambient field's node bias stays current.
    */
-  const [now, setNow] = useState(() => Date.now())
+  const [now, setNow] = useState(() => avalancheNow())
   useEffect(() => {
     if (reducedMotion) {
-      setNow(Date.now())
+      setNow(avalancheNow())
       return
     }
-    const interval = setInterval(() => setNow(Date.now()), 200)
+    const interval = setInterval(() => setNow(avalancheNow()), 200)
     return () => clearInterval(interval)
   }, [reducedMotion])
 
@@ -161,7 +172,7 @@ export function BrainVisualization(props: BrainVisualizationProps) {
       // `lastFiredAt` onto the node objects it is handed, which is the ONLY
       // thing that makes `getNodeGlow` non-zero and therefore the only reason
       // the firing animation renders at all.
-      const nowMs = Date.now()
+      const nowMs = avalancheNow()
       const cascade = computeCascade(node.id, nodes as any, links, nowMs)
       if (cascade.events.length > 0) {
         // Safety net: the origin always fires, even if it was inside its
@@ -200,6 +211,21 @@ export function BrainVisualization(props: BrainVisualizationProps) {
     }),
     [links, visibleIds],
   )
+
+  // ── D6: the same pure cap the renderer applies, for the honest count line
+  // in the hint row (identical numbers, one function). Only in 3D mode. ──
+  const cap3d = useMemo(
+    () => (mode === '3d' ? capFor3D(filteredNodes, filteredLinks) : null),
+    [mode, filteredNodes, filteredLinks],
+  )
+
+  // 3D selects by id; route it through the SAME handler BrainGraph uses so the
+  // toggle/cascade/EntityDetailPanel flow is identical (WP-3D-D §4.1).
+  const handle3DSelect = useCallback((id: string | null) => {
+    if (!id) { handleNodeClick(null); return }
+    const node = filteredNodes.find(n => n.id === id) ?? null
+    handleNodeClick(node)
+  }, [handleNodeClick, filteredNodes])
 
   // ── Legend data ──
   const typeCounts = useMemo(() => {
@@ -328,18 +354,61 @@ export function BrainVisualization(props: BrainVisualizationProps) {
           <DotPattern opacity={0.015} radius={0.6} gap={28} className="text-[var(--page-accent)]" />
         </div>
 
-        <BrainGraph
-          nodes={filteredNodes}
-          links={filteredLinks}
-          width={width}
-          height={height}
-          onNodeHover={handleNodeHover}
-          onNodeClick={handleNodeClick}
-          hoveredNode={hovered}
-          selectedNode={selected}
-          selectionSet={activeSelection}
-          reducedMotion={reducedMotion}
-        />
+        {/* ── D6 view-mode toggle: segmented pill, top-center, no overlap with
+            stats (top-3 right) or search (top-3 left). Default 2D. ── */}
+        {!hideChrome && (
+          <div
+            className="absolute left-1/2 top-3 -translate-x-1/2 z-20 flex items-center rounded-full p-0.5"
+            style={{ background: RAISED, border: HAIRLINE }}
+            data-section="life.self.graph.viewtoggle"
+            role="group"
+            aria-label="Graph view mode"
+          >
+            {(['2d', '3d'] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => switchMode(m)}
+                aria-pressed={mode === m}
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--page-accent)] ${
+                  mode === m
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {mode === '3d'
+          ? (
+            <Suspense fallback={null}>
+              <GraphScene3D
+                nodes={filteredNodes}
+                links={filteredLinks}
+                selectedId={selected?.id ?? null}
+                onSelect={handle3DSelect}
+                accent={SELECTION_ACCENT}
+                reducedMotion={reducedMotion}
+              />
+            </Suspense>
+          )
+          : (
+            <BrainGraph
+              nodes={filteredNodes}
+              links={filteredLinks}
+              width={width}
+              height={height}
+              onNodeHover={handleNodeHover}
+              onNodeClick={handleNodeClick}
+              hoveredNode={hovered}
+              selectedNode={selected}
+              selectionSet={activeSelection}
+              reducedMotion={reducedMotion}
+            />
+          )}
 
         {/* ── Search ── */}
         {!hideChrome && (
@@ -439,12 +508,18 @@ export function BrainVisualization(props: BrainVisualizationProps) {
           </div>
         )}
 
-        {/* ── Hint ── */}
+        {/* ── Hint (D6: 3D copy swaps in; the count line appears only when the
+            3D cap actually culled something — never otherwise) ── */}
         {!hideChrome && (
-          <div className="absolute bottom-3 right-3 z-20 text-[10px] text-[var(--text-muted)] font-mono pointer-events-none">
-            {isFiltered
-              ? `${filteredNodes.length} of ${nodes.length} shown`
-              : 'Click to inspect · drag to rearrange · arrows to navigate'}
+          <div className="absolute bottom-3 right-3 z-20 text-[10px] text-[var(--text-muted)] font-mono pointer-events-none text-right">
+            {mode === '3d'
+              ? 'drag to orbit · right-drag to pan · scroll to zoom · drag a node to move it · double-click background to recenter'
+              : isFiltered
+                ? `${filteredNodes.length} of ${nodes.length} shown`
+                : 'Click to inspect · drag to rearrange · arrows to navigate'}
+            {mode === '3d' && cap3d && (cap3d.droppedNodes > 0 || cap3d.droppedLinks > 0) && (
+              <div className="mt-0.5">{cap3d.nodes.length} of {nodes.length} entities shown in 3D</div>
+            )}
           </div>
         )}
 
