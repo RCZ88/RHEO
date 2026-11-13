@@ -52,6 +52,11 @@ export const LANE_OF: Record<ActivityKind, Lane> = {
   dictation: 'live',
   focus: 'live',
   afkGap: 'live',
+  /* HALO_FIT: the external session rides ON the resident stopwatch (it only
+   * exists while displaySource === 'external'), so it is resident, not live.
+   * The next block is upcoming-time context — live state like afkGap. */
+  external: 'resident',
+  nextBlock: 'live',
 
   critical: 'toast',
   hud: 'resident',
@@ -665,6 +670,11 @@ export const SURFACES: CuratedSurface[] = [
   { kind: 'now', lane: 'resident', icon: 'target', compactChars: 12, liveOnly: false, route: '/activity' },
   { kind: 'dictation', lane: 'live', icon: 'mic', compactChars: 5, liveOnly: false, route: null },
   { kind: 'focus', lane: 'live', icon: 'target', compactChars: 6, liveOnly: false, route: null },
+  /* HALO_FIT promoted kinds. `external` reuses the stopwatchSite pill layout
+   * ([dot][clock] | [Dumbbell][name]) because it IS a session readout;
+   * `nextBlock` is [CalendarClock][title][in 8m]. Both route into Life. */
+  { kind: 'external', lane: 'resident', icon: 'dumbbell', compactChars: 14, liveOnly: false, route: '/life' },
+  { kind: 'nextBlock', lane: 'live', icon: 'calendar-clock', compactChars: 12, liveOnly: false, route: '/life' },
   { kind: 'afkGap', lane: 'live', icon: 'coffee', compactChars: 6, liveOnly: true, route: '/activity' },
   { kind: 'aiUsage', lane: 'resident', icon: 'sparkles', compactChars: 6, liveOnly: false, route: '/ai' },
   { kind: 'hud', lane: 'toast', icon: 'terminal', compactChars: 7, liveOnly: false, route: '/penguin-console' },

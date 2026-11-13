@@ -78,6 +78,14 @@ export type ActivityKind =
   | 'nextDeadline'
   | 'pinnedActivity'
   | 'clock'
+  /* HALO_FIT promoted kinds (island-feature-fit RESULT, priority queue):
+   *  - `external`   rank 9 resident companion — the active external session
+   *                 (Gym / Study / …), drawn only while the stopwatch's clock
+   *                 is itself sourced from that session.
+   *  - `nextBlock`  rank 6 "next up" — the nearest Life schedule block, shown
+   *                 as live context ahead of the plain running stopwatch. */
+  | 'external'
+  | 'nextBlock'
   /* HALO spec section 6 compact kinds (HALO_STATES.html board 1). */
   | 'website'
   | 'private'
@@ -246,6 +254,19 @@ export interface ExternalPayload {
   type?: string | null;
   /** epoch ms the session started; null when the stored stamp could not be parsed. */
   startedAtMs?: number | null;
+}
+
+/**
+ * `nextBlock` — the nearest Life schedule block (`halo:get-life` already computes
+ * it; this is the pill-shaped projection). `isNow` means the block is happening
+ * right now and the pill reads "now"; otherwise the pill reads "in Xm".
+ */
+export interface NextBlockPayload {
+  title: string;
+  location?: string | null;
+  startsAtMs: number;
+  endsAtMs: number;
+  isNow: boolean;
 }
 
 /** `focus` — no producer exists yet; shape per the RESULT's countdown spec. */

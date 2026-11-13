@@ -14,6 +14,7 @@ export const PRIORITY = {
   directUserFeedback: 800,
   recording: 750,
   focusCountdown: 600,
+  nextBlock: 550,
   stopwatchRunning: 500,
   afkGap: 450,
   nowApp: 350,
@@ -39,6 +40,20 @@ export function priorityForKind(kind: ActivityKind): number {
       return PRIORITY.recording;
     case 'focus':
       return PRIORITY.focusCountdown;
+    case 'nextBlock':
+      // DEVIATION 3 — 550, between focus (600) and the running stopwatch (500).
+      // "Your class starts in 8 minutes" outranks the accumulating stopwatch
+      // precisely because the stopwatch does not interrupt anything (see
+      // DEVIATION 2 below) while a block start is a real upcoming boundary.
+      // It still loses to a live focus countdown, which the user started on
+      // purpose. Documented deviation, not a silent new band.
+      return PRIORITY.nextBlock;
+    case 'external':
+      // The external session is the resident COMPANION: it only ever drives the
+      // pill while the stopwatch clock itself is sourced from it
+      // (displaySource === 'external'), so in the general priority table it
+      // ranks as ambient context — same band as the app-derived 'now'.
+      return PRIORITY.nowApp;
     case 'stopwatch':
       return PRIORITY.stopwatchRunning;
     case 'afkGap':

@@ -1,4 +1,4 @@
-import { AppWindow, Bot, CalendarDays, Globe, Lock, Mic, SquareTerminal, TriangleAlert } from 'lucide-react';
+import { AppWindow, Bot, CalendarClock, CalendarDays, Dumbbell, Globe, Lock, Mic, SquareTerminal, TriangleAlert } from 'lucide-react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { NowPayload, StopwatchPayload } from '../../shared/halo/types';
 
@@ -47,9 +47,16 @@ export interface CompactPillProps {
   deadlineTitle?: string;
   /** `nextDeadline` / `critical` only — e.g. "34d overdue". */
   deadlineDue?: string;
+  /** `external` only — the active external activity's name (Gym / Study / …). */
+  externalName?: string;
+  /** `nextBlock` only — the schedule block title. */
+  blockTitle?: string;
+  /** `nextBlock` only — "in 8m" / "now"; the pill never computes this itself. */
+  blockIn?: string;
 }
 
-/** The ten kinds `HALO_STATES.html` board 1 declares, in the file's own order. */
+/** Board 1's ten kinds, in the file's own order, plus the two HALO_FIT-promoted kinds
+ * (`external`, `nextBlock`) which reuse the board-1 grammar rather than inventing one. */
 export type CompactKind =
   | 'stopwatch'
   | 'stopwatchSite'
@@ -60,7 +67,10 @@ export type CompactKind =
   | 'aiUsage'
   | 'hud'
   | 'nextDeadline'
-  | 'critical';
+  | 'critical'
+  /* HALO_FIT promoted kinds — layouts argued in the two branches below. */
+  | 'external'
+  | 'nextBlock';
 
 const DIVIDER = (h: number): CSSProperties => ({
   width: 1,
@@ -82,6 +92,9 @@ export function CompactPill(props: CompactPillProps): ReactElement {
     hudCount,
     deadlineTitle = 'IT DIV Test',
     deadlineDue = '34d overdue',
+    externalName,
+    blockTitle,
+    blockIn,
   } = props;
 
   /* `width: 100%` + a bounded parent is what makes the name's flex-shrink meaningful: the row
@@ -307,6 +320,37 @@ export function CompactPill(props: CompactPillProps): ReactElement {
         <span style={DIVIDER(fBody)} aria-hidden="true" />
         {icon(Globe)}
         {name(domain, 'var(--halo-muted)')}
+      </span>
+    );
+  }
+
+  /* HALO_FIT — `external`: the stopwatchSite layout, with the Dumbbell. This kind only
+   * exists while the stopwatch's clock IS the external session (displaySource ===
+   * 'external'), so the [dot][clock] | [icon][name] grammar is not a lookalike — the
+   * clock on the left and the name on the right are the same two facts this kind is
+   * about. A missing name falls back to the activity type, then to "Session". */
+  if (kind === 'external') {
+    return (
+      <span style={row}>
+        <span style={dotStyle} aria-hidden="true" />
+        {clock()}
+        <span style={DIVIDER(fBody)} aria-hidden="true" />
+        {icon(Dumbbell)}
+        {name(externalName || 'Session', 'var(--halo-muted)')}
+      </span>
+    );
+  }
+
+  /* HALO_FIT — `nextBlock`: [CalendarClock][title][in 8m]. No clock and no dot — this
+   * pill is ABOUT an upcoming boundary, not an accumulating duration, so the mono
+   * suffix carries the only number. `blockIn` arrives preformatted ("in 8m" / "now");
+   * an absent one renders the title alone rather than an invented "soon". */
+  if (kind === 'nextBlock') {
+    return (
+      <span style={row}>
+        {icon(CalendarClock)}
+        {name(blockTitle || 'Next block', 'var(--halo-muted)')}
+        {blockIn && mut(blockIn, true)}
       </span>
     );
   }

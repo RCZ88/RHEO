@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
+import { LayoutGroup, AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { GripHorizontal, Mic, Pause, Pin, Play, RotateCcw, Timer } from 'lucide-react';
 import { StopwatchHero } from './StopwatchHero';
 import { CompactPill, type CompactKind } from './CompactPill';
@@ -59,7 +59,7 @@ import {
 } from '../../shared/halo/slotModel';
 import { AmbientCard, AmbientDot, AmbientPip } from './AmbientCard';
 import { formatStopwatch, reloadFromStorage, startStopwatchDriver, stopwatch, type StopwatchSnapshot } from '../../lib/stopwatchStore';
-import type { AiUsagePayload, ExternalPayload, HudPayload, NextDeadlinePayload, IslandActivity } from '../../shared/halo/types';
+import type { AiUsagePayload, ExternalPayload, HudPayload, NextBlockPayload, NextDeadlinePayload, IslandActivity } from '../../shared/halo/types';
 
 /**
  * OverlayRoot — the island surface.
@@ -288,6 +288,9 @@ const BOARD1_PILL_KINDS = new Set<CompactKind>([
   'hud',
   'nextDeadline',
   'critical',
+  /* HALO_FIT promoted kinds — both have a designed pill layout in CompactPill. */
+  'external',
+  'nextBlock',
 ]);
 
 export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
@@ -1106,8 +1109,32 @@ const inBrowser = currentApp.category === 'Browser';
       }
     if (producers.hud) out.push(mk('hud', producers.hud));
     if (producers.deadline) out.push(mk('nextDeadline', producers.deadline));
+    /* `nextBlock` — HALO_FIT's rank-6 "next up". `life.schedule` ALREADY carries the
+     * nearest recurring block with absolute epoch stamps and `isNow`, so this is pure
+     * projection: the pill admits a block only inside a 15-minute approach window,
+     * because a class eight hours out is timetable content, not island content.
+     * `isNow` blocks stay too — "happening now" is the most useful version of the
+     * fact. No new producer, no new table. */
+    const sched = life?.schedule;
+    if (sched && sched.title && sched.startsAtMs != null && sched.endsAtMs != null) {
+      if (sched.isNow || sched.startsAtMs - t <= 15 * 60_000) {
+        out.push(
+          mk(
+            'nextBlock',
+            {
+              title: sched.title,
+              ...(sched.location != null ? { location: sched.location } : {}),
+              startsAtMs: sched.startsAtMs,
+              endsAtMs: sched.endsAtMs,
+              isNow: sched.isNow === true,
+            } satisfies NextBlockPayload,
+            { persistent: false },
+          ),
+        );
+      }
+    }
     return out;
-  }, [swPayload, storeSnap, currentApp, remote?.dictation, producers, afkPrefs]);
+  }, [swPayload, storeSnap, currentApp, remote?.dictation, producers, afkPrefs, life]);
 
   /* User layout: which widgets are on, in what order, how many at once. `visibleOrder`
    * drops hidden kinds; the model's `maxVisible` then caps the roster.
@@ -1548,20 +1575,64 @@ const inBrowser = currentApp.category === 'Browser';
   }, [sessionActive, focus?.ok]);
 
 
-  /* …UNLESS SOMETHING ELSE IS LIVE.
+  /* THE PILL KIND CHAIN — four candidates, loudest wins:
    *
    * `composed.toast` is the slot model's highest-precedence activity (§5 priority: transient
    * beats persistent), and it is what the expanded strip shows first. The pill must agree with
    * it, or hovering up reveals a card about one thing while the pill you just left said another.
    *
-   * Only the six kinds with a board-1 pill DESIGN take over. The rest (`now`, `focus`,
-   * `tierBreakdown`, `afkGap`, `clock`, `pinnedActivity`) have no board-1 pill in
-   * HALO_STATES.html — the file draws ten, and inventing an eleventh is exactly the drift this
-   * probe exists to catch. So an unknown kind leaves the pill on its app-derived default rather
-   * than rendering something no design specifies. */
-  const pillKind: CompactKind = BOARD1_PILL_KINDS.has(composed.toast?.kind as CompactKind)
-    ? (composed.toast!.kind as CompactKind)
-    : compactKind;
+   *   1. toastBoard1     an INTERRUPT with a board-1 design (that rule, unchanged).
+   *   2. externalOverride the resident companion: while the stopwatch's clock IS the
+   *                      external session (`displaySource === 'external'`), the pill
+   *                      names what the clock is counting. This outranks the live slot
+   *                      because it is a property of the resident clock itself.
+   *   3. liveBoard1      a LIVE state with a board-1 design, EXCLUDING the two kinds
+   *                      that already render as their own pip (dictation, afkGap) —
+   *                      promoting them here would draw the same fact twice.
+   *   4. compactKind     the app-derived default.
+   *
+   * `nextBlock` reaches the pill through (3): it is live-lane state in the slot model,
+   * priority 550 beats the app-derived default and loses only to real interrupts. */
+  const toastBoard1 =
+    composed.toast && BOARD1_PILL_KINDS.has(composed.toast.kind as CompactKind)
+      ? (composed.toast.kind as CompactKind)
+      : null;
+  const externalOverride =
+    producers.external && swPayload.displaySource === 'external' ? 'external' : null;
+  const liveBoard1 =
+    composed.live &&
+    composed.live.kind !== 'dictation' &&
+    composed.live.kind !== 'afkGap' &&
+    BOARD1_PILL_KINDS.has(composed.live.kind as CompactKind)
+      ? (composed.live.kind as CompactKind)
+      : null;
+  const pillKind: CompactKind = toastBoard1 ?? externalOverride ?? liveBoard1 ?? compactKind;
+
+  /* The pill's two HALO_FIT payloads, formatted where `now` already ticks every second:
+   * "in 8m" while approaching, the literal "now" while the block is happening. */
+  const sched = life?.schedule;
+  const blockTitle = sched?.title ?? undefined;
+  const blockIn =
+    sched
+      ? sched.isNow
+        ? 'now'
+        : (() => {
+            const ms = sched.startsAtMs - now;
+            if (ms <= 0) return 'now';
+            if (ms < 60_000) return 'in <1m';
+            return `in ${Math.floor(ms / 60_000)}m`;
+          })()
+      : undefined;
+
+  /* When the stopwatch's clock SOURCE flips to the external session, pull the producer
+   * immediately — otherwise the pill would switch to `external` with the name still up
+   * to 30 s stale, showing "Session" where "Gym" belongs. */
+  const prevDisplaySource = useRef(swPayload.displaySource);
+  useEffect(() => {
+    if (swPayload.displaySource === prevDisplaySource.current) return;
+    prevDisplaySource.current = swPayload.displaySource;
+    if (swPayload.displaySource === 'external') void pullRef.current?.();
+  }, [swPayload.displaySource]);
 
   // ONE OFF, NOT TWO.
   //
@@ -1942,21 +2013,35 @@ const inBrowser = currentApp.category === 'Browser';
               deadlineTitle={trackedDeadline?.title ?? null}
               fBody={size.fBody}
               fallback={
-                <CompactPill
-                  kind={pillKind}
-                  stopwatch={swPayload}
-                  now={currentApp}
-                  fBody={size.fBody}
-                  listening={producers.dictation?.state === 'recording'}
-                  usageFraction={producers.ai?.usageFraction}
-                  hudCount={producers.hud?.activeSessions ?? undefined}
-                  deadlineTitle={producers.deadline?.title}
-                  deadlineDue={
-                    producers.deadline?.deltaMs !== undefined
-                      ? formatDeadlineDue(producers.deadline.deltaMs)
-                      : undefined
-                  }
-                />
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={pillKind}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={reduce ? { duration: 0 } : { duration: 0.15, ease: 'easeOut' }}
+                    style={{ display: 'block', width: '100%', minWidth: 0 }}
+                  >
+                    <CompactPill
+                      kind={pillKind}
+                      stopwatch={swPayload}
+                      now={currentApp}
+                      fBody={size.fBody}
+                      listening={producers.dictation?.state === 'recording'}
+                      usageFraction={producers.ai?.usageFraction}
+                      hudCount={producers.hud?.activeSessions ?? undefined}
+                      deadlineTitle={producers.deadline?.title}
+                      deadlineDue={
+                        producers.deadline?.deltaMs !== undefined
+                          ? formatDeadlineDue(producers.deadline.deltaMs)
+                          : undefined
+                      }
+                      externalName={producers.external?.name}
+                      blockTitle={pillKind === 'nextBlock' ? blockTitle : undefined}
+                      blockIn={pillKind === 'nextBlock' ? blockIn : undefined}
+                    />
+                  </motion.span>
+                </AnimatePresence>
               }
             />
           </div>
