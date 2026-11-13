@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Clapperboard,
   FileText,
@@ -14,10 +14,11 @@ import {
 
 import { PageShell } from '@/components/PageShell';
 import { LABS, type Lab, type LabAiPath } from '@/components/labs/labRegistry';
+import CovenantPage from '@/features/covenant/CovenantPage';
 import { cn } from '@/lib/utils';
 
 console.log(
-  '%c[LabsPage] v1.0 loaded',
+  '%c[LabsPage] v1.1 loaded (hosts the Covenant surface moved from /life)',
   'color: #fbbf24; font-weight: bold',
 );
 console.log('[LabsPage] registry:', LABS.map((l) => `${l.id} ${l.name}`));
@@ -225,6 +226,10 @@ function LabPlate({ lab }: { lab: Lab }) {
 }
 
 export default function LabsPage() {
+  /* The §3.6 quick-add handoff survives the move: /labs?add=covenant opens (and
+     autofocuses) the parked page's own form, exactly what the old tab did. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const covenantAddRequest = searchParams.get('add') === 'covenant';
   return (
     <PageShell page="labs" variant="default" className="p-6 space-y-6">
       <header className="space-y-2">
@@ -235,11 +240,13 @@ export default function LabsPage() {
           Build surfaces
         </h1>
         <p className="max-w-2xl text-[13px] leading-relaxed text-[var(--text-secondary)]">
-          Three surfaces that were built outside the app&rsquo;s design system and
-          now live together on purpose. Each one runs the same round trip: you
+          Surfaces that were built outside the app&rsquo;s design system and
+          live together on purpose. Each plate runs the same round trip: you
           put in something rough, it builds a prompt, an AI answers, and an
           artifact comes out. They are collected here rather than spread across
-          the sidebar so they can be found and, over time, brought back into line.
+          the sidebar so they can be found and, over time, brought back into
+          line — along with features that moved here from the main nav, parked
+          below the plates.
         </p>
       </header>
 
@@ -249,6 +256,36 @@ export default function LabsPage() {
         ))}
       </div>
 
+      {/* Parked surface — Covenant. CZ 2026-11-14: demoted from the Life tab
+          rail (its streaks and commitments duplicated what Gold already shows)
+          and parked here, data intact. It is a manifest section (labs.covenant
+          in pages/studio.ts), not a plate — it has no AI round trip to report,
+          so shoehorning it into LabPlate would make the hub lie. */}
+      <section
+        id="covenant"
+        data-section="labs.covenant"
+        aria-labelledby="covenant-heading"
+        className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-5"
+      >
+        <header className="mb-4 max-w-2xl space-y-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            Parked · moved from the Life tab rail
+          </p>
+          <h2 id="covenant-heading" className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">
+            Covenant
+          </h2>
+          <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+            Commitments, the keep/skip journal and the streak. Parked here
+            because Goals already carries the streak surfaces it duplicated —
+            your data is untouched, and the Dashboard widget still reads it.
+          </p>
+        </header>
+        <CovenantPage
+          embedded
+          addRequest={covenantAddRequest}
+          onAddConsumed={() => setSearchParams({}, { replace: true })}
+        />
+      </section>
 
       <footer className="border-t border-[var(--border-default)] pt-4">
         <p className="max-w-2xl text-[12px] leading-relaxed text-[var(--text-muted)]">

@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { HeartHandshake, Images, Layers, Map, BookOpen, Plus, FileClock, Pencil, Target, Sparkles, User, Calendar, Activity} from 'lucide-react'
+import { Images, Layers, Map, BookOpen, Plus, FileClock, Pencil, Target, Sparkles, User, Calendar, Activity} from 'lucide-react'
 
 
 import { cn } from '@/lib/utils'
@@ -21,7 +22,6 @@ import type { LensId } from '@/components/life-river/RingCanvas'
 import type { LifePhase } from '@/lib/riverMath'
 import lifePage from '@/pages/registry/pages/life'
 import { usePageSurface } from '@/pages/registry'
-import CovenantPage from '../../features/covenant/CovenantPage'
 import MemoriesPage from '../../features/memories/MemoriesPage'
 import GoldPage from '../../features/warmth/gold/GoldPage'
 import { SchedulePage } from '../../features/warmth/schedule/SchedulePage'
@@ -42,15 +42,21 @@ import { CurrentCanvas } from '../../components/CurrentCanvas'
 import { renderNetwork } from '../../lib/renderers/network'
 import { startPhaseClock } from '../../lib/currentPhase'
 
+/* §7b version stamp — proves the bundle carrying the covenant→Labs move is live. */
+console.log('%c[LifePage] v2.1 loaded (covenant tab retired — feature parked at /labs)', 'color: #fbbf24; font-weight: bold')
+
 const toStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const todayStr = () => toStr(new Date())
 
 type ViewMode = 'pages' | 'river'
-type PageTab = 'covenant' | 'memories' | 'gold' | 'notes' | 'schedule' | 'training' | 'self'
+/* Covenant moved to Labs (CZ 2026-11-14) — demoted from the rail because Gold
+   already carries the goals + streak surfaces it duplicated. The tab id is
+   retired here; the persisted value resolves via the manifest tabAlias and
+   deep links redirect at the shell. The feature lives at /labs. */
+type PageTab = 'memories' | 'gold' | 'notes' | 'schedule' | 'training' | 'self'
 
-const PAGE_TABS: { key: PageTab; label: string; icon: typeof HeartHandshake; accent: string }[] = [
-  { key: 'covenant', label: 'Covenant', icon: HeartHandshake, accent: 'var(--color-clay-400)' },
+const PAGE_TABS: { key: PageTab; label: string; icon: typeof Images; accent: string }[] = [
   { key: 'memories', label: 'Memories', icon: Images, accent: 'var(--color-mem-400)' },
   /* Label is 'Goals' to match `pages/registry/pages/life.ts` and RESULT.md §1.2.
    * They disagreed: the palette said 'Goals', the rendered tab bar said 'Gold',
@@ -94,6 +100,7 @@ export interface LifePageProps {
 }
 export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: LifePageProps = {}) {
   useEffect(() => { startPhaseClock(); }, [])
+  const navigate = useNavigate()
   const { phases, loading, error, savePhase, reflect } = useLifePhases()
   const covenant = useCovenant()
   const memories = useMemories()
@@ -104,9 +111,9 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
   const [pageTab, setPageTab] = useState<PageTab>(() => {
     try {
       const v = localStorage.getItem('life-page-tab') as PageTab | null
-      const valid = ['covenant','memories','gold','notes','schedule','training','self'] as PageTab[]
-      return v && valid.includes(v) ? v : 'covenant'
-    } catch { return 'covenant' }
+      const valid = ['memories','gold','notes','schedule','training','self'] as PageTab[]
+      return v && valid.includes(v) ? v : 'gold'
+    } catch { return 'gold' }
   })
   useEffect(() => {
     try { localStorage.setItem('life-page-tab', pageTab) } catch { /* ignore */ }
@@ -245,12 +252,18 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
   }, [])
 
   const handleOpenPage = useCallback((page: string) => {
-    const tabMap: Record<string, PageTab> = { memories: 'memories', gold: 'gold', covenant: 'covenant', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'gold' }
+    /* Covenant moved to Labs (CZ 2026-11-14): the name resolves to the parked
+       page instead of a tab that no longer exists. */
+    if (page === 'covenant') {
+      navigate('/labs#covenant')
+      return
+    }
+    const tabMap: Record<string, PageTab> = { memories: 'memories', gold: 'gold', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'gold' }
     if (tabMap[page]) {
       setPageTab(tabMap[page])
       setMode('pages')
     }
-  }, [setMode])
+  }, [setMode, navigate])
 
   const feedRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -293,13 +306,20 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
   }, [])
 
   const redirectToPage = useCallback((lens: LensId) => {
-    const tabMap: Record<string, PageTab> = { covenant: 'covenant', gold: 'gold', memories: 'memories', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'gold' }
+    /* Covenant moved to Labs (CZ 2026-11-14): with the tab gone from the rail,
+       the covenant lens's redirect hands off to the parked page instead — and
+       the ?add intent opens its form, same contract the old tab honoured. */
+    if (lens === 'covenant') {
+      navigate('/labs?add=covenant#covenant')
+      return
+    }
+    const tabMap: Record<string, PageTab> = { gold: 'gold', memories: 'memories', profile: 'self', graph: 'self', brain: 'self', schedule: 'schedule', habits: 'gold' }
     const tab = tabMap[lens]
     if (tab) {
       setPageTab(tab)
       setMode('pages')
     }
-  }, [setMode])
+  }, [setMode, navigate])
 
   // §3.6 quick-add honesty — the handoff. Quick-add navigates into the target
   // tab AND marks the pending add; the tab consumes the signal by opening (and
@@ -310,8 +330,11 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
     const lensMap: Record<string, LensId> = { covenant: 'covenant', gold: 'gold', memory: 'memories' }
     setLens(lensMap[type] || 'phases')
     if (redirectMode === 'instant') {
-      redirectToPage(type)
-      setPendingAdd(type)
+      /* Route through the lens map, not the raw add-type: 'memory' was never a
+         LensId, so the memory handoff silently never opened its form. */
+      const lens = lensMap[type] || 'phases'
+      redirectToPage(lens)
+      setPendingAdd(lens)
     } else {
       const labelMap: Record<string, string> = { covenant: 'Covenant', gold: 'Goal', memory: 'Memory' }
       // The confirm dialog carries a LensId, so map the add-type to its lens
@@ -647,11 +670,6 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
            plus padding. */
         <div className={`flex-1 min-h-0 ${pageTab === 'schedule' ? 'overflow-hidden' : 'overflow-auto p-5'}`}>
           <AnimatePresence mode="wait">
-            {pageTab === 'covenant' && (
-              <motion.div key="covenant" {...crossfade} className="w-full" data-section="life.covenant">
-                <CovenantPage embedded addRequest={pendingAdd === 'covenant'} onAddConsumed={() => setPendingAdd(null)} />
-              </motion.div>
-            )}
             {pageTab === 'memories' && (
               <motion.div key="memories" {...crossfade} className="w-full" data-section="life.memories">
                 <MemoriesPage embedded addRequest={pendingAdd === 'memories'} onAddConsumed={() => setPendingAdd(null)} />

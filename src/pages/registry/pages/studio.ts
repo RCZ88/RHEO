@@ -76,6 +76,11 @@ const labs: PageManifest = {
   hint: 'Hub for the externally-built surfaces',
 
   sections: [
+    /* Parked surface — the Covenant tab moved here from /life (CZ 2026-11-14,
+       redundant with Gold's goals + streak work). Rendered by LabsPage as an
+       embedded section, not a plate: it has no AI round trip, so shoehorning it
+       into LabPlate would make the hub lie. */
+    { id: 'labs.covenant', label: 'Labs — Covenant', icon: 'Anchor', keywords: ['covenant', 'commitments', 'promises', 'vows', 'streak'] },
     { id: 'labs.content-engine', label: 'Labs — Content Engine', icon: 'Workflow', route: '/studio', tab: 'engine', keywords: ['content engine', 'pipeline', 'studio', 'framework'] },
     { id: 'labs.resume', label: 'Labs — Resume Builder', icon: 'FileText', route: '/resume', keywords: ['resume', 'cv', 'builder'] },
     { id: 'labs.lecture', label: 'Labs — Lecture', icon: 'GraduationCap', route: '/lecture', keywords: ['lecture', 'slides', 'decks', 'slidesmind'] },

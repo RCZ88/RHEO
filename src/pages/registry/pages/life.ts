@@ -25,8 +25,8 @@ const life: PageManifest = {
   label: 'Life',
   icon: 'Heart',
   group: 'Navigation',
-  keywords: ['life', 'warmth', 'phases', 'river', 'gold', 'memories', 'notes', 'habits', 'covenant', 'self'],
-  hint: 'Goals, covenant, memories, notes, schedule, training, self',
+  keywords: ['life', 'warmth', 'phases', 'river', 'gold', 'memories', 'notes', 'habits', 'self'],
+  hint: 'Goals, memories, notes, schedule, training, self',
 
   tabs: {
     variable: 'pageTab',
@@ -39,16 +39,14 @@ const life: PageManifest = {
        `/life-activeTab` value written by an older build. Without this, all three
        are rejected against `validIds` and the page silently falls back to its
        default tab. See `usePageSurface.resolveTabId`. */
-    tabAliases: { habits: 'gold' },
-    default: 'covenant',
+    /* covenant joined the alias table when its tab moved to Labs (CZ
+       2026-11-14): an older build's persisted `/life-activeTab` value of
+       'covenant' must resolve to a live tab — same reason `habits` is here.
+       URL entries carrying ?tab=covenant are redirected to /labs by the shell
+       (CovenantTabRedirect), so the alias only fires for persisted state. */
+    tabAliases: { habits: 'gold', covenant: 'gold' },
+    default: 'gold',
     items: [
-      {
-        id: 'covenant',
-        label: 'Covenant',
-        icon: 'Anchor',
-        section: 'life.covenant',
-        keywords: ['covenant', 'promises', 'commitments', 'agreements', 'vows'],
-      },
       {
         id: 'memories',
         label: 'Memories',
